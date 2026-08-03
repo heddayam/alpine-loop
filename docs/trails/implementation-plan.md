@@ -1,12 +1,12 @@
 # Alpine Search hiking-data implementation plan
 
-Status: T0–T7 fixture pipeline implemented; Gate C real-data validation open
+Status: T7.1 real-data pilot accepted; T7.2 full-region Gate C build open
 Primary integration branch: `codex/trails-data`
 First production slice: Yosemite–Stanislaus
 Current evidence: [coverage-spike.md](./coverage-spike.md)
 
-Immediate next task: T7.1 Gate C real-data corridor pilot. Do not begin T8 or
-T9 until T7.1 and T7.2 are accepted.
+Immediate next task: T7.2 full Yosemite–Stanislaus production build and Gate C
+review. Do not begin T8 or T9 until T7.2 is accepted.
 
 ## Objective
 
@@ -470,6 +470,7 @@ pipeline mechanics but does not pass Gate C as a production regional corpus.
 Owner: integration hardening agent
 Branch: `codex/trails-gate-c-pilot`
 Dependencies: implemented T6 and T7 fixture pipeline
+Status: accepted and integrated as `b4724f1` on 2026-08-03
 
 Goal: prove the complete pipeline on a deliberately small, real
 Yosemite–Stanislaus corridor before downloading or processing the entire
@@ -537,18 +538,100 @@ Scope limits:
   account instead of adding credentials speculatively.
 - Do not publish the small corridor pilot as the final regional artifact.
 
+Acceptance evidence: the real Happy Isles–Mist Trail pilot produced 433
+segments, 434 nodes, two searchable named trails, and one mapped trailhead in a
+single connected component. Four NPS lines were reconciled into 316 OSM
+topology edges. All segments retain field provenance; 318 segments had complete
+3DEP metrics, with no unexplained conflicts, ambiguous snaps, isolated
+segments, or reported elevation outliers. Two builds were byte-identical. The
+pilot and full test/lint gates passed.
+
 #### T7.2: Full Yosemite–Stanislaus production build and Gate C review
 
-Owner: integration agent
-Branch: `codex/trails-data`
+Owner: full-region data agent
+Branch: `codex/trails-gate-c-region`
 Dependencies: accepted T7.1
 
-Run the hardened pipeline against the complete cached Yosemite–Stanislaus
-inputs, generate `data/trails/generated/yosemite-stanislaus/**` twice, and
-manually review the final QA report. Record expected source counts, explain
-material exclusions/conflicts, confirm credible access for every searchable
-trail, review isolated components, confirm useful elevation coverage, and
-verify static artifact sizes. Gate C passes only after this review is accepted.
+Goal: prepare complete cached Yosemite–Stanislaus inputs, run the hardened
+pipeline at regional scale, and deliver production artifacts plus a reviewable
+Gate C report. T7.2 owns data preparation and data-pipeline scaling only; it
+does not add application API or UI work.
+
+Owned files:
+
+- A new explicit full-region refresh/preparation script under `scripts/trails/`
+- Regional-scale changes required in `scripts/trails/sources/osm.mjs`,
+  `scripts/trails/elevation/**`, `scripts/trails/build-region.mjs`, and
+  `scripts/trails/qa/report.mjs`
+- Targeted offline tests and small fixtures for new preparation/reader logic
+- `data/trails/generated/yosemite-stanislaus/**`
+- Root package scripts and README instructions for the reproducible workflow
+
+Required work:
+
+1. Prepare region-bounded USGS, USFS, NPS, and OSM snapshots beneath the
+   ignored `.cache/trails/yosemite-stanislaus/` tree. Record source URLs,
+   retrieval timestamps, bounds, source counts, and snapshot hashes in the
+   build input or a source manifest.
+2. Keep OSM extraction bounded and memory-safe. The T7.1 PBF reader can retain
+   large public-road working sets; do not pass a statewide PBF through that
+   path without measuring and fixing its memory behavior or preparing a
+   bounded regional extract first.
+3. Prepare full-region 3DEP coverage with a cached raster/tiled representation
+   suitable for regional scale. Do not create millions of point-API requests or
+   rely on one enormous JSON grid. Normal builds must remain offline after the
+   explicit preparation command.
+4. Preserve T7.1 regional filtering, topology reconciliation, access-point
+   ingestion, endpoint consistency, and field provenance behavior across the
+   full dataset.
+5. Make elevation QA meaningful for OSM-fragmented geometry. The pilot skipped
+   grade plausibility checks on 431 of 433 segments because they were shorter
+   than 50 meters. Add a documented aggregate/windowed check or equivalent so
+   short graph edges cannot hide elevation spikes.
+6. Measure every output artifact in raw and gzip-compressed form. The pilot's
+   field-provenance sidecar was about 3.1 MB for only 433 segments; compact,
+   partition, or deduplicate provenance metadata if the regional result is not
+   practical for static delivery. Keep metadata/index loading separate from
+   lazy detailed geometry and provenance where appropriate.
+7. Generate the production artifacts twice from identical cached inputs and
+   verify byte-identical outputs and hashes.
+
+Acceptance:
+
+- The complete regional source manifest is reproducible and contains non-zero
+  USGS, USFS, NPS, and OSM records or a written, evidence-backed explanation
+  for an unavailable source.
+- Every output segment is in region, has valid endpoint topology, calculated
+  length, deterministic identity, and field provenance.
+- Every searchable named trail has at least one credible connected access
+  point; explicitly private, closed, or foot-prohibited data is not searchable.
+- At least 95% of routable output segments and 100% of segments referenced by
+  searchable named trails have complete elevation metrics, unless the final QA
+  report identifies a small, source-backed no-data exception for manual review.
+- Elevation outlier QA covers both long lines and short OSM edges; skipped
+  per-edge checks are compensated by documented aggregate checks.
+- All merge conflicts, ambiguous snaps, out-of-region omissions, disconnected
+  access candidates, isolated components, and elevation outliers are counted
+  and either resolved or explicitly explained.
+- Artifact raw/gzip sizes and estimated static-delivery behavior are reported;
+  no unexpectedly large artifact is accepted without an explicit partitioning
+  or lazy-loading decision.
+- Two production builds are byte-identical. Targeted tests, full `npm test`,
+  and lint pass.
+- Deliver one focused commit, exact refresh/build/test commands, source and QA
+  summaries, artifact-size table, and any remaining Gate C decision requiring
+  integrator review.
+
+Scope limits:
+
+- Do not modify T9/T10 application search, API, map, or UI files.
+- Do not commit raw PBF, agency snapshots, DEM files, credentials, or other
+  cache inputs.
+- Do not use Overpass or require an OSM account. Prefer public downloads and
+  existing public agency endpoints; report a genuine authentication blocker
+  before requesting credentials.
+- Do not weaken conservative access/restriction rules merely to increase trail
+  counts or elevation coverage.
 
 #### T8: Regional expansion
 
@@ -655,6 +738,23 @@ Do not let the UI agent invent data fields or read raw source artifacts.
 > the pilot twice, run targeted tests plus full test and lint gates, and deliver
 > one focused commit, the exact commands used, QA findings, and any blocker that
 > must be resolved before T7.2.
+
+### Gate C full-region agent
+
+> Read `docs/trails/implementation-plan.md` completely and execute T7.2 only.
+> Start from `codex/trails-data` at or after commit `b4724f1`, using an isolated
+> worktree on branch `codex/trails-gate-c-region`. Do not start T8, T9, T10, or
+> modify application API/UI files. First inspect Git state and preserve all
+> unrelated user files. Prepare complete, bounded Yosemite–Stanislaus USGS,
+> USFS, NPS, OSM, access-point, and 3DEP inputs beneath the ignored cache using
+> one explicit refresh/preparation workflow; all subsequent builds and tests
+> must be offline. Address the T7.2 regional-scale requirements, especially
+> memory-safe bounded OSM processing, full 3DEP raster coverage, meaningful
+> elevation outlier QA for short OSM edges, and practical static sizing of the
+> provenance sidecar. Build the production artifacts twice and verify exact
+> equality. Do not commit raw source data or credentials. Deliver one focused
+> commit, exact commands, source/QA summaries, artifact raw and gzip sizes, test
+> results, and any remaining decision required before Gate C can be accepted.
 
 ## Integration gates
 
