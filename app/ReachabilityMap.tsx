@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Origin = { lat: number; lng: number; label: string };
+type MapType = "terrain" | "roadmap" | "satellite";
 type MapsConfigResponse = { apiKey?: string; error?: { message?: string } };
 type IsochroneResponse = {
   isochrone?: { geoJson?: object };
@@ -94,7 +95,7 @@ function fitGeoJson(map: google.maps.Map, geoJson: object) {
   } else {
     extendBounds(candidate.coordinates, bounds);
   }
-  if (!bounds.isEmpty()) map.fitBounds(bounds, 72);
+  if (!bounds.isEmpty()) map.fitBounds(bounds, 48);
 }
 
 export function ReachabilityMap() {
@@ -115,6 +116,20 @@ export function ReachabilityMap() {
   const [retryToken, setRetryToken] = useState(0);
   const [usageRemaining, setUsageRemaining] = useState<number | null>(null);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
+  const [mapType, setMapType] = useState<MapType>("terrain");
+  const [showReachability, setShowReachability] = useState(true);
+
+  const applyOverlayStyle = useCallback((map: google.maps.Map | null, visible: boolean) => {
+    map?.data.setStyle({
+      fillColor: "#e36d36",
+      fillOpacity: 0.28,
+      strokeColor: "#b9461d",
+      strokeOpacity: 1,
+      strokeWeight: 2,
+      clickable: false,
+      visible,
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -140,19 +155,13 @@ export function ReachabilityMap() {
           clickableIcons: false,
           streetViewControl: false,
           mapTypeControl: false,
-          fullscreenControl: true,
+          fullscreenControl: false,
           zoomControl: true,
+          zoomControlOptions: { position: google.maps.ControlPosition.LEFT_TOP },
           gestureHandling: "greedy",
-          controlSize: 34,
+          controlSize: 30,
         });
-        map.data.setStyle({
-          fillColor: "#e4622e",
-          fillOpacity: 0.24,
-          strokeColor: "#c44920",
-          strokeOpacity: 0.95,
-          strokeWeight: 2,
-          clickable: false,
-        });
+        applyOverlayStyle(map, true);
         mapRef.current = map;
         setMapReady(true);
       } catch (caught) {
@@ -165,7 +174,16 @@ export function ReachabilityMap() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [applyOverlayStyle]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setMapTypeId(mapType);
+  }, [mapType]);
+
+  useEffect(() => {
+    applyOverlayStyle(mapRef.current, showReachability);
+  }, [applyOverlayStyle, showReachability]);
 
   const selectOrigin = useCallback((nextOrigin: Origin) => {
     setOrigin(nextOrigin);
@@ -179,13 +197,25 @@ export function ReachabilityMap() {
     }
   }, []);
 
+  const clearOrigin = useCallback(() => {
+    requestIdRef.current += 1;
+    markerRef.current?.setMap(null);
+    markerRef.current = null;
+    clearDataLayer(mapRef.current);
+    setOrigin(null);
+    setShownDuration(null);
+    setError(null);
+    mapRef.current?.setCenter(BAY_AREA_CENTER);
+    mapRef.current?.setZoom(9);
+  }, []);
+
   useEffect(() => {
     if (!mapReady || !autocompleteContainerRef.current) return;
     const element = new google.maps.places.PlaceAutocompleteElement({
       componentRestrictions: { country: "us" },
       locationBias: { center: BAY_AREA_CENTER, radius: 160000 },
     });
-    element.setAttribute("placeholder", "Search an address or place");
+    element.setAttribute("placeholder", "Enter coordinates or a location name");
     element.setAttribute("aria-label", "Search for a starting location");
 
     const handleSelect = async (event: Event) => {
@@ -251,13 +281,12 @@ export function ReachabilityMap() {
         const payload = (await response.json()) as IsochroneResponse;
         const geoJson = payload.isochrone?.geoJson;
         if (!response.ok || !geoJson) {
-          throw new Error(
-            payload.error ?? "That reachability area could not be calculated.",
-          );
+          throw new Error(payload.error ?? "That reachability area could not be calculated.");
         }
         if (requestId !== requestIdRef.current || !mapRef.current) return;
         clearDataLayer(mapRef.current);
         mapRef.current.data.addGeoJson(geoJson);
+        applyOverlayStyle(mapRef.current, showReachability);
         if (fitNextContourRef.current) {
           fitGeoJson(mapRef.current, geoJson);
           fitNextContourRef.current = false;
@@ -286,7 +315,7 @@ export function ReachabilityMap() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [duration, mapReady, origin, retryToken]);
+  }, [applyOverlayStyle, duration, mapReady, origin, retryToken, showReachability]);
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -315,66 +344,122 @@ export function ReachabilityMap() {
   const statusMessage = error
     ? error
     : isLoading
-      ? `Mapping the ${duration}-minute drive area…`
+      ? `Calculating the ${duration}-minute drive area…`
       : shownDuration
-        ? `Showing the area reachable within ${shownDuration} minutes.`
+        ? `${shownDuration}-minute outbound drive area is active.`
         : origin
-          ? "Adjust the travel time to explore farther."
-          : "Choose a starting point to draw your reachability area.";
+          ? "Adjust the travel time to recalculate the area."
+          : "Search or use your location to create a drive-time area.";
 
   return (
-    <main className="map-shell">
-      <div ref={mapContainerRef} className="map-canvas" role="region" aria-label="Bay Area reachability map" />
-      {!mapReady && (
-        <div className="map-loading" aria-hidden="true">
-          <div className="terrain-rings" />
-          <span>Loading terrain</span>
+    <main className="map-workspace">
+      <header className="workspace-bar">
+        <div className="workspace-brand">
+          <span className="compass-mark" aria-hidden="true"><i /></span>
+          <strong>ALPINE</strong><span>SEARCH</span>
         </div>
-      )}
-
-      <section className="control-panel" aria-label="Reachability controls">
-        <header className="brand-row">
-          <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
-          <div><p className="eyebrow">Bay Area field tool</p><h1>Alpine Search</h1></div>
-          <span className="mode-badge">Drive</span>
-        </header>
-
-        <div className="panel-section location-section">
-          <label className="field-label">Starting point</label>
-          <div ref={autocompleteContainerRef} className="autocomplete-host" aria-live="polite">
-            {!mapReady && <div className="search-placeholder">Loading search…</div>}
-          </div>
-          <button type="button" className="location-button" onClick={useCurrentLocation} disabled={isLocating || !mapReady}>
-            <span className="location-dot" aria-hidden="true" />
-            {isLocating ? "Finding your location…" : "Use my current location"}
+        <div className="workspace-search" ref={autocompleteContainerRef} aria-live="polite">
+          {!mapReady && <div className="search-placeholder">Enter coordinates or a location name</div>}
+        </div>
+        <nav className="workspace-tools" aria-label="Map utilities">
+          <button type="button" onClick={useCurrentLocation} disabled={isLocating || !mapReady}>
+            <span aria-hidden="true">◎</span>{isLocating ? "Locating" : "Locate"}
           </button>
-          {origin && <p className="origin-label">From: {origin.label}</p>}
-        </div>
+          <button type="button" onClick={clearOrigin} disabled={!origin}>
+            <span aria-hidden="true">×</span>Clear
+          </button>
+          <span className="workspace-mode">Drive planner</span>
+        </nav>
+      </header>
 
-        <div className="panel-section time-section">
-          <div className="slider-heading">
-            <label htmlFor="travel-time">Travel time</label>
-            <output htmlFor="travel-time">{duration} min</output>
+      <aside className="objects-panel" aria-label="Drive area controls">
+        <div className="panel-heading"><strong>Drive Area</strong><span>⌃</span></div>
+
+        <section className="object-card object-card--active">
+          <div className="object-card-title">
+            <span className="contour-swatch" aria-hidden="true" />
+            <div><strong>Drive-time area</strong><small>Outbound · traffic-free</small></div>
+            <button type="button" className="icon-button" onClick={clearOrigin} aria-label="Remove drive-time area">×</button>
           </div>
-          <input id="travel-time" type="range" min="5" max="60" step="5" value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!origin} aria-valuetext={`${duration} minutes`} />
-          <div className="slider-scale" aria-hidden="true"><span>5</span><span>15</span><span>30</span><span>45</span><span>60 min</span></div>
-        </div>
 
-        <div className={`status-card${error ? " status-card--error" : ""}`} role="status" aria-live="polite">
-          <span className="status-indicator" aria-hidden="true" />
-          <p>{statusMessage}</p>
-          {error && origin && <button type="button" onClick={() => setRetryToken((value) => value + 1)}>Retry</button>}
-        </div>
+          <div className="object-field">
+            <span className="field-caption">Starting point</span>
+            <p>{origin?.label ?? "No location selected"}</p>
+            <button type="button" className="text-button" onClick={useCurrentLocation} disabled={isLocating || !mapReady}>
+              ◎ {isLocating ? "Finding location…" : "Use my current location"}
+            </button>
+          </div>
 
-        <footer className="panel-footer">
-          <span>Traffic-free baseline</span><span aria-hidden="true">·</span><span>Outbound drive</span>
-          {usageRemaining !== null && usageLimit !== null && (
-            <span className="usage-budget">{usageRemaining.toLocaleString()} of {usageLimit.toLocaleString()} free calls left</span>
-          )}
+          <div className="object-field">
+            <div className="slider-heading">
+              <label htmlFor="travel-time">Travel time</label>
+              <output htmlFor="travel-time">{duration} min</output>
+            </div>
+            <input
+              id="travel-time"
+              type="range"
+              min="5"
+              max="60"
+              step="5"
+              value={duration}
+              onChange={(event) => setDuration(Number(event.target.value))}
+              disabled={!origin}
+              aria-valuetext={`${duration} minutes`}
+            />
+            <div className="slider-scale" aria-hidden="true"><span>5</span><span>30</span><span>60</span></div>
+          </div>
+
+          <div className={`object-status${error ? " object-status--error" : ""}`} role="status" aria-live="polite">
+            <span className={isLoading ? "status-pulse" : "status-dot"} aria-hidden="true" />
+            <p>{statusMessage}</p>
+            {error && origin && <button type="button" onClick={() => setRetryToken((value) => value + 1)}>Retry</button>}
+          </div>
+        </section>
+
+        <section className="compact-layers" aria-label="Map layers">
+          <div className="subsection-heading"><strong>Map Layers</strong><span>{showReachability ? "2 active" : "1 active"}</span></div>
+          <div className="base-layer-preview">
+            <span className={`base-thumb base-thumb--${mapType}`} aria-hidden="true" />
+            <div><small>Base layer</small><strong>{mapType === "terrain" ? "Topo Terrain" : mapType === "roadmap" ? "Road Map" : "Satellite"}</strong></div>
+          </div>
+          <div className="layer-segment" role="group" aria-label="Base map style">
+            {(["terrain", "roadmap", "satellite"] as MapType[]).map((type) => (
+              <button key={type} type="button" className={mapType === type ? "is-active" : ""} onClick={() => setMapType(type)}>
+                {type === "terrain" ? "Topo" : type === "roadmap" ? "Road" : "Sat"}
+              </button>
+            ))}
+          </div>
+          <label className="layer-row layer-row--active">
+            <input type="checkbox" checked={showReachability} onChange={(event) => setShowReachability(event.target.checked)} />
+            <span className="layer-symbol layer-symbol--area" aria-hidden="true" />
+            <span><strong>Drive-time area</strong><small>{duration} minute contour</small></span>
+          </label>
+          <div className="layer-row">
+            <span className="fake-check" aria-hidden="true">✓</span><span className="layer-symbol layer-symbol--terrain" aria-hidden="true" />
+            <span><strong>Terrain relief</strong><small>Hillshade and elevation</small></span>
+          </div>
+        </section>
+
+        <div className="panel-spacer" />
+
+        <footer className="objects-footer">
+          <strong>Usage</strong>
+          <span>{usageRemaining !== null && usageLimit !== null ? `${usageRemaining.toLocaleString()} / ${usageLimit.toLocaleString()} calls left` : "Protected monthly limit"}</span>
         </footer>
+      </aside>
+
+      <section className="map-stage" aria-label="Reachability map workspace">
+        <div ref={mapContainerRef} className="map-canvas" role="region" aria-label="Bay Area reachability map" />
+        {!mapReady && (
+          <div className="map-loading" aria-hidden="true"><div className="terrain-rings" /><span>Loading topo map</span></div>
+        )}
+        <div className="coordinate-readout">
+          <strong>{origin ? `${origin.lat.toFixed(5)}, ${origin.lng.toFixed(5)}` : "37.77490, -122.41940"}</strong>
+          <span>{origin ? "Selected origin" : "Bay Area · WGS84"}</span>
+        </div>
+        <div className="map-legend" aria-hidden="true"><span /> {shownDuration ?? duration} min drive area</div>
       </section>
 
-      <div className="map-legend" aria-hidden="true"><span /> Reachable area</div>
     </main>
   );
 }
