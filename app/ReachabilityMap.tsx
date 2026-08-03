@@ -5,9 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Origin = { lat: number; lng: number; label: string };
 type MapsConfigResponse = { apiKey?: string; error?: { message?: string } };
 type IsochroneResponse = {
-  geoJson?: object;
-  usage?: { limit: number; remaining: number; resetsAt: string };
-  error?: { code?: string; message?: string };
+  isochrone?: { geoJson?: object };
+  error?: string;
 };
 type PlaceSelectEvent = Event & {
   placePrediction?: { toPlace(): google.maps.places.Place };
@@ -183,10 +182,10 @@ export function ReachabilityMap() {
   useEffect(() => {
     if (!mapReady || !autocompleteContainerRef.current) return;
     const element = new google.maps.places.PlaceAutocompleteElement({
-      includedRegionCodes: ["us"],
+      componentRestrictions: { country: "us" },
       locationBias: { center: BAY_AREA_CENTER, radius: 160000 },
     });
-    element.placeholder = "Search an address or place";
+    element.setAttribute("placeholder", "Search an address or place");
     element.setAttribute("aria-label", "Search for a starting location");
 
     const handleSelect = async (event: Event) => {
@@ -238,7 +237,7 @@ export function ReachabilityMap() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/isochrone", {
+        const response = await fetch("/api/isochrones", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
@@ -250,22 +249,25 @@ export function ReachabilityMap() {
           cache: "no-store",
         });
         const payload = (await response.json()) as IsochroneResponse;
-        if (!response.ok || !payload.geoJson) {
+        const geoJson = payload.isochrone?.geoJson;
+        if (!response.ok || !geoJson) {
           throw new Error(
-            payload.error?.message ?? "That reachability area could not be calculated.",
+            payload.error ?? "That reachability area could not be calculated.",
           );
         }
         if (requestId !== requestIdRef.current || !mapRef.current) return;
         clearDataLayer(mapRef.current);
-        mapRef.current.data.addGeoJson(payload.geoJson);
+        mapRef.current.data.addGeoJson(geoJson);
         if (fitNextContourRef.current) {
-          fitGeoJson(mapRef.current, payload.geoJson);
+          fitGeoJson(mapRef.current, geoJson);
           fitNextContourRef.current = false;
         }
         setShownDuration(duration);
-        if (payload.usage) {
-          setUsageRemaining(payload.usage.remaining);
-          setUsageLimit(payload.usage.limit);
+        const remaining = Number(response.headers.get("X-RateLimit-Remaining"));
+        const limit = Number(response.headers.get("X-RateLimit-Limit"));
+        if (Number.isFinite(remaining) && Number.isFinite(limit)) {
+          setUsageRemaining(remaining);
+          setUsageLimit(limit);
         }
       } catch (caught) {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;

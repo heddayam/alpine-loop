@@ -2,50 +2,47 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseIsochroneRequest } from "../app/api/isochrones/request.ts";
 
-const validRequest = {
-  location: { latitude: 39.6403, longitude: -106.3742 },
-  travelDuration: "1800s",
-  travelMode: "DRIVE",
-  travelDirection: "FROM",
-  routingPreference: "TRAFFIC_UNAWARE",
-  enableSmoothing: true,
-  polygonFidelity: "MEDIUM",
-};
-
-test("accepts and sanitizes a valid Google Isochrones request", () => {
-  assert.deepEqual(parseIsochroneRequest({ ...validRequest, ignored: "field" }), {
-    ok: true,
-    body: validRequest,
-  });
-});
-
-test("rejects invalid origins before they consume quota", () => {
+test("constructs the fixed outbound driving request", () => {
   assert.deepEqual(
     parseIsochroneRequest({
-      ...validRequest,
-      location: { latitude: 91, longitude: -106.3742 },
+      latitude: 37.7749,
+      longitude: -122.4194,
+      durationMinutes: 30,
     }),
     {
-      ok: false,
-      error: "location must contain valid latitude and longitude values.",
+      ok: true,
+      body: {
+        location: { latitude: 37.7749, longitude: -122.4194 },
+        travelDuration: "1800s",
+        travelMode: "DRIVE",
+        travelDirection: "FROM",
+        routingPreference: "TRAFFIC_UNAWARE",
+        enableSmoothing: true,
+        polygonFidelity: "MEDIUM",
+      },
     },
   );
-
-  const withTwoOrigins = parseIsochroneRequest({
-    ...validRequest,
-    place: "places/example",
-  });
-  assert.equal(withTwoOrigins.ok, false);
 });
 
-test("enforces Google's duration limits before they consume quota", () => {
-  const drive = parseIsochroneRequest({ ...validRequest, travelDuration: "3601s" });
-  const walk = parseIsochroneRequest({
-    ...validRequest,
-    travelMode: "WALK",
-    travelDuration: "7201s",
-  });
+test("accepts the 5 and 60 minute boundaries", () => {
+  assert.equal(
+    parseIsochroneRequest({ latitude: 37.7, longitude: -122.4, durationMinutes: 5 }).ok,
+    true,
+  );
+  assert.equal(
+    parseIsochroneRequest({ latitude: 37.7, longitude: -122.4, durationMinutes: 60 }).ok,
+    true,
+  );
+});
 
-  assert.equal(drive.ok, false);
-  assert.equal(walk.ok, false);
+test("rejects invalid coordinates and unsupported increments", () => {
+  for (const body of [
+    { latitude: 91, longitude: -122.4, durationMinutes: 30 },
+    { latitude: 37.7, longitude: -181, durationMinutes: 30 },
+    { latitude: 37.7, longitude: -122.4, durationMinutes: 4 },
+    { latitude: 37.7, longitude: -122.4, durationMinutes: 61 },
+    { latitude: 37.7, longitude: -122.4, durationMinutes: 33 },
+  ]) {
+    assert.equal(parseIsochroneRequest(body).ok, false);
+  }
 });

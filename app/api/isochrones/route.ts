@@ -35,7 +35,11 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error }, { status: 400 });
   }
 
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey =
+    process.env.GOOGLE_MAPS_SERVER_API_KEY ??
+    (process.env.NODE_ENV === "development"
+      ? process.env.GOOGLE_MAPS_API_KEY
+      : undefined);
   if (!apiKey) {
     return Response.json(
       { error: "Isochrone service is not configured." },
@@ -79,7 +83,29 @@ export async function POST(request: Request) {
       body: JSON.stringify(parsed.body),
     });
 
-    return new Response(upstream.body, {
+    if (!upstream.ok) {
+      const messages: Record<number, string> = {
+        400: "Google could not calculate that travel area.",
+        401: "The isochrone service key is not authorized.",
+        403: "Enable the Isochrones API and check the server-key restrictions.",
+        404: "Move the starting point closer to a drivable road and try again.",
+        429: "Google's short-term request quota has been reached. Try again soon.",
+      };
+      return Response.json(
+        {
+          error:
+            messages[upstream.status] ??
+            "Google's reachability service could not complete the request.",
+        },
+        {
+          status: upstream.status === 429 ? 429 : 502,
+          headers: quotaHeaders(reservation.remaining),
+        },
+      );
+    }
+
+    const payload = await upstream.text();
+    return new Response(payload, {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: {

@@ -31,6 +31,16 @@ export async function reserveGoogleIsochroneRequest(
     throw new Error("The API usage database is unavailable.");
   }
 
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS api_usage (
+      provider TEXT NOT NULL,
+      period TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (provider, period)
+    )`,
+  ).run();
+
   const period = utcMonth(date);
   const row = await env.DB.prepare(
     `INSERT INTO api_usage (provider, period, count, updated_at)

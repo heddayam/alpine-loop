@@ -1,106 +1,44 @@
-# vinext-starter
+# Alpine Search
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A responsive Bay Area driving-time map built with Google Maps and Google's
+Isochrones API.
 
-## Prerequisites
-
-- Node.js `>=22.13.0`
-
-## Quick Start
+## Local development
 
 ```bash
 npm install
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Set `GOOGLE_MAPS_API_KEY` in `.env` for local development. The site supports
+separate browser and server credentials through `GOOGLE_MAPS_BROWSER_API_KEY`
+and `GOOGLE_MAPS_SERVER_API_KEY`.
 
-## Included Shape
+## Cost safety
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+All isochrone requests go through `POST /api/isochrones`. The server atomically
+reserves each upstream attempt in D1 before contacting Google, fails closed if
+the counter is unavailable, and stops at **9,000 requests per UTC month**. This
+leaves a 1,000-request buffer below Google's published 10,000-request monthly
+free usage cap. Failed upstream attempts are conservatively counted.
 
-## Workspace Auth Headers
+For a deployment where the counter cannot be bypassed:
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+1. Restrict `GOOGLE_MAPS_BROWSER_API_KEY` to the deployed website, Maps
+   JavaScript API, and Places API (New).
+2. Use a different private `GOOGLE_MAPS_SERVER_API_KEY`, restricted to the
+   Isochrones API. Never expose it in browser code or use it in another app.
+3. In Google Maps Platform → Quotas, lower the Isochrones requests-per-minute
+   quota to 10. This rate cap complements the monthly D1 ceiling.
+4. Do not deploy using the single-key fallback; it exists only to make local
+   development convenient.
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+Google currently lists Isochrones as free during pre-GA Preview and publishes a
+10,000-request monthly free cap for GA pricing. Re-check the pricing page before
+changing this guard.
 
-Treat the full name as optional and fall back to email when it is absent:
+## Validation
 
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npm test
 ```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Isochrone cost guard
-
-All Google Isochrones requests must go through `POST /api/isochrones`. The
-server keeps the API key private and atomically reserves each upstream request
-in D1. Requests fail closed when usage cannot be checked and stop at 9,000
-requests per UTC month, leaving a 1,000-request safety margin below Google's
-10,000-request monthly free usage cap.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)

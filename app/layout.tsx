@@ -13,6 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
   const baseUrl = new URL(`${protocol}://${host}`);
+  const socialImage = new URL("/og.png", baseUrl).toString();
   return {
     metadataBase: baseUrl,
     title: "Alpine Search — Bay Area Reachability Map",
@@ -21,13 +22,13 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Alpine Search",
       description: "See how far the road can take you.",
       type: "website",
-      images: [{ url: "/og.png", width: 1200, height: 630 }],
+      images: [{ url: socialImage, width: 1200, height: 630 }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Alpine Search",
       description: "See how far the road can take you.",
-      images: ["/og.png"],
+      images: [socialImage],
     },
   };
 }
