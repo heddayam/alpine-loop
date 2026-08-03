@@ -50,3 +50,58 @@ changing this guard.
 ```bash
 npm test
 ```
+
+## Hiking trail data spike
+
+Render the cached audit comparing representative USGS, USFS, NPS, California
+State Parks, East Bay Regional Park District, and OpenStreetMap data:
+
+```bash
+npm run trails:audit
+```
+
+This command does not contact the remote services, so it stays fast during
+normal development. Refresh everything only when the underlying data needs to
+be sampled again:
+
+```bash
+npm run trails:audit:refresh
+```
+
+To refresh one flaky or recently changed source without waiting for the others,
+use its source ID, for example `npm run trails:audit -- --refresh=usfs` or
+`npm run trails:audit -- --refresh=osm`.
+
+The audit writes a machine-readable report to `data/trails/coverage-spike.json`
+and a review document to `docs/trails/coverage-spike.md`. It does not modify the
+application database or UI.
+
+## Hiking trail regional artifacts
+
+Build the Yosemite–Stanislaus static trail corpus from cached input only:
+
+```bash
+npm run trails:build
+```
+
+The default input is
+`.cache/trails/yosemite-stanislaus/build-input.json`; raw agency snapshots, the
+OSM extract, and the local 3DEP window stay outside version control. The input
+object accepts `agencySnapshots` keyed by provider, `osmSnapshotPath`,
+`accessPointCandidates`, `publicRoadNodeIds`, and an optional
+`elevationGridPath`. It also accepts already normalized `segmentCandidates` and
+`sourceNodes`. Snapshot and grid paths are relative to the input file. Use
+explicit paths for another cached build or output directory:
+
+```bash
+node scripts/trails/build-region.mjs \
+  --region=yosemite-stanislaus \
+  --input=.cache/trails/yosemite-stanislaus/build-input.json \
+  --output=data/trails/generated/yosemite-stanislaus
+```
+
+The build writes `manifest.json`, `named-trails.json`,
+`access-points.geojson`, `segments.ndjson`, `nodes.ndjson`, and `qa.json`.
+Artifact ordering, timestamps, and SHA-256 hashes are derived from cached source
+data, so repeated builds from the same input are byte-for-byte identical. Review
+`qa.json` before using a newly generated corpus in the application.

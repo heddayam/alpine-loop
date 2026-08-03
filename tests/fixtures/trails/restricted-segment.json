@@ -1,0 +1,26 @@
+{
+  "scenario": "restricted",
+  "segment": {
+    "id": "segment_restricted",
+    "fromNodeId": "node_restricted_a",
+    "toNodeId": "node_restricted_b",
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [[-120.013, 37.901], [-120.011, 37.902]]
+    },
+    "name": "Service Access",
+    "manager": "Stanislaus National Forest",
+    "hiking": "blocked",
+    "access": "private",
+    "status": "closed",
+    "lengthMeters": 214.2,
+    "sourceRefs": [
+      {
+        "provider": "usfs",
+        "sourceId": "stanislaus:trail:closed-4",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+      }
+    ]
+  }
+}

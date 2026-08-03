@@ -1,0 +1,21 @@
+{
+  "scenario": "disconnected",
+  "accessPoint": {
+    "id": "access_disconnected",
+    "longitude": -119.5936,
+    "latitude": 37.7459,
+    "name": "Unmatched Parking Area",
+    "type": "parking",
+    "confidence": "mapped",
+    "connectedNodeIds": [],
+    "sourceRefs": [
+      {
+        "provider": "osm",
+        "sourceId": "node/123456789",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://www.openstreetmap.org/node/123456789"
+      }
+    ]
+  },
+  "expectedSearchEligible": false
+}

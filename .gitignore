@@ -42,3 +42,6 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Large, refreshable hiking-data source snapshots
+/.cache/trails/

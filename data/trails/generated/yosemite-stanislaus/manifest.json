@@ -1,0 +1,51 @@
+{
+  "artifacts": {
+    "access-points.geojson": {
+      "bytes": 835,
+      "path": "access-points.geojson",
+      "sha256": "f39b2db6ec5d7e407d9684a0b56a7a517feb3ef82f767c11fb6851ac5906f843"
+    },
+    "named-trails.json": {
+      "bytes": 892,
+      "path": "named-trails.json",
+      "sha256": "11f9d5692f9c2f944fc72ad302f1c1a11109191235dfc6ee7e711756525aa2ad"
+    },
+    "nodes.ndjson": {
+      "bytes": 602,
+      "path": "nodes.ndjson",
+      "sha256": "065a5a9f3b73b251a4629c467b5c0c0f228e76dbc65941dfa8a36809ff4232c4"
+    },
+    "qa.json": {
+      "bytes": 2099,
+      "path": "qa.json",
+      "sha256": "a7eb8978272c57dda47e5559e2e7083d7d62e855aafc0c86eb29bbc3a93fb245"
+    },
+    "segments.ndjson": {
+      "bytes": 1138,
+      "path": "segments.ndjson",
+      "sha256": "61ca2628b678eb2e4bdd21b95242266b4b6c260c05e222a215f1456f0cdc5a70"
+    }
+  },
+  "counts": {
+    "accessPoints": 1,
+    "namedTrails": 1,
+    "nodes": 4,
+    "segments": 2
+  },
+  "elevation": {
+    "available": false,
+    "missingCoverage": "omit-segment-elevation-metrics"
+  },
+  "generatedAt": "2026-08-03T00:00:00.000Z",
+  "region": {
+    "bounds": [
+      -120.1,
+      37.55,
+      -119.35,
+      38.15
+    ],
+    "id": "yosemite-stanislaus",
+    "label": "Yosemite–Stanislaus"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,87 @@
+{
+  "scenario": "named",
+  "sourceRef": {
+    "provider": "usfs",
+    "sourceId": "stanislaus:trail:17E32",
+    "sourceUpdatedAt": "2026-07-15T00:00:00.000Z",
+    "retrievedAt": "2026-08-03T00:00:00.000Z",
+    "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+  },
+  "nodes": [
+    {
+      "id": "node_named_west",
+      "longitude": -119.9104,
+      "latitude": 37.8812,
+      "sourceNodeIds": ["usfs:17E32:start"],
+      "incidentSegmentIds": ["segment_named"]
+    },
+    {
+      "id": "node_named_east",
+      "longitude": -119.9021,
+      "latitude": 37.8867,
+      "sourceNodeIds": ["usfs:17E32:end"],
+      "incidentSegmentIds": ["segment_named"]
+    }
+  ],
+  "segment": {
+    "id": "segment_named",
+    "fromNodeId": "node_named_west",
+    "toNodeId": "node_named_east",
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [[-119.9104, 37.8812], [-119.9062, 37.8839], [-119.9021, 37.8867]]
+    },
+    "name": "Example Meadow Trail",
+    "manager": "Stanislaus National Forest",
+    "hiking": "allowed",
+    "access": "public",
+    "status": "open",
+    "surface": "natural",
+    "lengthMeters": 968.4,
+    "sourceRefs": [
+      {
+        "provider": "usfs",
+        "sourceId": "stanislaus:trail:17E32",
+        "sourceUpdatedAt": "2026-07-15T00:00:00.000Z",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+      }
+    ]
+  },
+  "accessPoint": {
+    "id": "access_named",
+    "longitude": -119.9104,
+    "latitude": 37.8812,
+    "name": "Example Meadow Trailhead",
+    "type": "trailhead",
+    "confidence": "official",
+    "connectedNodeIds": ["node_named_west"],
+    "sourceRefs": [
+      {
+        "provider": "usfs",
+        "sourceId": "stanislaus:trailhead:17E32",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Trailheads/MapServer/0"
+      }
+    ]
+  },
+  "namedTrail": {
+    "id": "trail_example_meadow",
+    "name": "Example Meadow Trail",
+    "segmentIds": ["segment_named"],
+    "accessPointIds": ["access_named"],
+    "manager": "Stanislaus National Forest",
+    "bounds": [-119.9104, 37.8812, -119.9021, 37.8867],
+    "lengthMeters": 968.4,
+    "sourceRefs": [
+      {
+        "provider": "usfs",
+        "sourceId": "stanislaus:trail:17E32",
+        "sourceUpdatedAt": "2026-07-15T00:00:00.000Z",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+      }
+    ],
+    "dataConfidence": "high"
+  }
+}

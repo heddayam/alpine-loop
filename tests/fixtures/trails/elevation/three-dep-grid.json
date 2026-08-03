@@ -1,0 +1,22 @@
+{
+  "type": "ElevationGrid",
+  "crs": "EPSG:4326",
+  "width": 5,
+  "height": 4,
+  "origin": [-119.721, 37.805],
+  "pixelSize": [0.0001, -0.0001],
+  "noDataValue": -9999,
+  "values": [
+    [1000, 1010, 1020, 1030, 1040],
+    [995, 1005, 1015, 1025, 1035],
+    [990, 1000, 1010, 1020, 1030],
+    [985, 995, 1005, 1015, -9999]
+  ],
+  "source": {
+    "provider": "USGS",
+    "product": "3DEP 1/3 arc-second DEM",
+    "version": "fixture-2026-08-03",
+    "verticalDatum": "NAVD88",
+    "sourceUrl": "https://www.usgs.gov/3d-elevation-program"
+  }
+}

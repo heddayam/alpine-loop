@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "usfs",
+    "url": "https://apps.fs.usda.gov/ArcX/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+  },
+  "retrievedAt": "2026-08-03T12:00:00.000Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "TRAIL_CN": "USFS-55",
+        "TRAIL_NAME": "Emigrant Trail",
+        "HIKER_PEDESTRIAN_ACCPT": "Accepted",
+        "TERRA_BASE_SYM_DESC": "Natural",
+        "GIS_MILES": "5.25",
+        "FOREST_NAME": "Stanislaus National Forest"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-119.91, 38.02], [-119.9, 38.03]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "TRAIL_CN": "USFS-56",
+        "TRAIL_NAME": "Closed Stock Route",
+        "HIKER_PEDESTRIAN_ACCPT_DISC": "Not Accepted",
+        "TRAIL_STATUS": "Closed"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-119.92, 38.01], [-119.91, 38.02]]
+      }
+    }
+  ]
+}

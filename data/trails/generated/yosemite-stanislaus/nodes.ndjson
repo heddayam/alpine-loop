@@ -1,0 +1,4 @@
+{"id":"node_named_east","incidentSegmentIds":["segment_66df896268aee4285e8f5a9b"],"latitude":37.8867,"longitude":-119.9021,"sourceNodeIds":["usfs:17E32:end"]}
+{"id":"node_named_west","incidentSegmentIds":["segment_66df896268aee4285e8f5a9b"],"latitude":37.8812,"longitude":-119.9104,"sourceNodeIds":["usfs:17E32:start"]}
+{"id":"node_unnamed_a","incidentSegmentIds":["segment_d50f38d477167122de63c6a9"],"latitude":37.742,"longitude":-119.652,"sourceNodeIds":[]}
+{"id":"node_unnamed_b","incidentSegmentIds":["segment_d50f38d477167122de63c6a9"],"latitude":37.7431,"longitude":-119.6505,"sourceNodeIds":[]}

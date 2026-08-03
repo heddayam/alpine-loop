@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "ebrpd",
+    "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/ArcGIS/rest/services/DistrictTrails_ByTrailName/FeatureServer/0"
+  },
+  "retrievedAt": "2026-08-03T12:00:00.000Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "OBJECTID": 77,
+        "TRAILNAME": "Bayview Trail",
+        "NAME_1": "Coyote Hills Regional Park",
+        "MILES": 2.1
+      },
+      "geometry": {
+        "paths": [[[-122.04, 37.55], [-122.03, 37.56]]]
+      }
+    }
+  ]
+}

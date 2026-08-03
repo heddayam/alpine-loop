@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "state-parks",
+    "url": "https://services2.arcgis.com/AhxrK3F6WM8ECvDi/arcgis/rest/services/RecreationalRoutes/FeatureServer/0"
+  },
+  "retrievedAt": "2026-08-03T12:00:00.000Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "FID": 9,
+        "ROUTENAME": "Skyline Trail",
+        "UNITNAME": "Castle Rock State Park",
+        "SEGLNGTH": 1.75
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-122.13, 37.22], [-122.12, 37.23]]
+      }
+    }
+  ]
+}

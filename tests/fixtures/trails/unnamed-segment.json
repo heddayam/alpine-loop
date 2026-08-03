@@ -1,0 +1,24 @@
+{
+  "scenario": "unnamed",
+  "segment": {
+    "id": "segment_unnamed",
+    "fromNodeId": "node_unnamed_a",
+    "toNodeId": "node_unnamed_b",
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [[-119.652, 37.742], [-119.6505, 37.7431]]
+    },
+    "hiking": "unknown",
+    "access": "unknown",
+    "status": "unknown",
+    "lengthMeters": 182.7,
+    "sourceRefs": [
+      {
+        "provider": "usgs",
+        "sourceId": "national-digital-trails:objectid:9102",
+        "retrievedAt": "2026-08-03T00:00:00.000Z",
+        "sourceUrl": "https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/37"
+      }
+    ]
+  }
+}

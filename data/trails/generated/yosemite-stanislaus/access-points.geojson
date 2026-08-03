@@ -1,0 +1,33 @@
+{
+  "features": [
+    {
+      "geometry": {
+        "coordinates": [
+          -119.9104,
+          37.8812
+        ],
+        "type": "Point"
+      },
+      "id": "access-point_af12bdad276b2d3f2a37e329",
+      "properties": {
+        "confidence": "official",
+        "connectedNodeIds": [
+          "node_named_west"
+        ],
+        "id": "access-point_af12bdad276b2d3f2a37e329",
+        "name": "Example Meadow Trailhead",
+        "sourceRefs": [
+          {
+            "provider": "usfs",
+            "retrievedAt": "2026-08-03T00:00:00.000Z",
+            "sourceId": "stanislaus:trailhead:17E32",
+            "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Trailheads/MapServer/0"
+          }
+        ],
+        "type": "trailhead"
+      },
+      "type": "Feature"
+    }
+  ],
+  "type": "FeatureCollection"
+}

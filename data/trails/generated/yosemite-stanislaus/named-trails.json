@@ -1,0 +1,34 @@
+{
+  "regionId": "yosemite-stanislaus",
+  "schemaVersion": 1,
+  "trails": [
+    {
+      "accessPointIds": [
+        "access-point_af12bdad276b2d3f2a37e329"
+      ],
+      "bounds": [
+        -119.9104,
+        37.8812,
+        -119.9021,
+        37.8867
+      ],
+      "dataConfidence": "high",
+      "id": "named-trail_db1a545c150bdc79c94a0f3d",
+      "lengthMeters": 951.8,
+      "manager": "Stanislaus National Forest",
+      "name": "Example Meadow Trail",
+      "segmentIds": [
+        "segment_66df896268aee4285e8f5a9b"
+      ],
+      "sourceRefs": [
+        {
+          "provider": "usfs",
+          "retrievedAt": "2026-08-03T00:00:00.000Z",
+          "sourceId": "stanislaus:trail:17E32",
+          "sourceUpdatedAt": "2026-07-15T00:00:00.000Z",
+          "sourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+        }
+      ]
+    }
+  ]
+}

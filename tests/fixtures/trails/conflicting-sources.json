@@ -1,0 +1,56 @@
+{
+  "scenario": "conflicting-sources",
+  "candidates": [
+    {
+      "id": "segment_conflict_usgs",
+      "fromNodeId": "node_conflict_a",
+      "toNodeId": "node_conflict_b",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-119.721, 37.803], [-119.718, 37.805]]
+      },
+      "name": "Example Ridge Trail",
+      "hiking": "allowed",
+      "access": "unknown",
+      "status": "unknown",
+      "lengthMeters": 354.8,
+      "sourceRefs": [
+        {
+          "provider": "usgs",
+          "sourceId": "national-digital-trails:objectid:222",
+          "retrievedAt": "2026-08-03T00:00:00.000Z",
+          "sourceUrl": "https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/37"
+        }
+      ]
+    },
+    {
+      "id": "segment_conflict_nps",
+      "fromNodeId": "node_conflict_a",
+      "toNodeId": "node_conflict_b",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-119.721, 37.803], [-119.718, 37.805]]
+      },
+      "name": "Ridge Connector",
+      "manager": "Yosemite National Park",
+      "hiking": "blocked",
+      "access": "unknown",
+      "status": "seasonal",
+      "lengthMeters": 354.8,
+      "sourceRefs": [
+        {
+          "provider": "nps",
+          "sourceId": "yose:trail:987",
+          "sourceUpdatedAt": "2026-07-28T00:00:00.000Z",
+          "retrievedAt": "2026-08-03T00:00:00.000Z",
+          "sourceUrl": "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets/NPS_Public_Trails/FeatureServer/0"
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "hiking": "blocked",
+    "status": "seasonal",
+    "preservedProviders": ["usgs", "nps"]
+  }
+}

@@ -11,11 +11,15 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "trails:audit": "node scripts/trails/coverage-spike.mjs",
+    "trails:audit:refresh": "node scripts/trails/coverage-spike.mjs --refresh=all",
+    "trails:build": "node scripts/trails/build-region.mjs --region=yosemite-stanislaus"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
     "next": "^16.2.12",
+    "osm-pbf-parser-node": "^1.1.4",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
