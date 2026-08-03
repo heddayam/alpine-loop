@@ -16,8 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const socialImage = new URL("/og.png", baseUrl).toString();
   return {
     metadataBase: baseUrl,
-    title: "Alpine Search — Bay Area Reachability Map",
-    description: "Explore the Bay Area you can reach within a 5 to 60 minute drive.",
+    title: "Alpine Search — Five-Hour Drive Map",
+    description: "Explore Northern California within a five-hour drive.",
     openGraph: {
       title: "Alpine Search",
       description: "See how far the road can take you.",

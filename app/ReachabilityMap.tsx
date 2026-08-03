@@ -1,20 +1,45 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { normalizeGeoJson } from "./geojson";
+import { parseCoordinates } from "./location-search";
+import {
+  REACHABILITY_DURATIONS,
+  formatDuration,
+  providerForDuration,
+  type ReachabilityProvider,
+} from "./reachability";
 
 type Origin = { lat: number; lng: number; label: string };
 type MapType = "terrain" | "roadmap" | "satellite";
 type MapsConfigResponse = { apiKey?: string; error?: { message?: string } };
-type IsochroneResponse = {
-  isochrone?: { geoJson?: object };
+type ReachabilityResponse = {
+  status?: "pending" | "complete";
+  provider?: ReachabilityProvider;
+  requestId?: string;
+  pollAfterMs?: number;
+  durationMinutes?: number;
+  geoJson?: unknown;
   error?: string;
 };
-type PlaceSelectEvent = Event & {
-  placePrediction?: { toPlace(): google.maps.places.Place };
-};
+
+type CacheEntry =
+  | {
+      status: "pending";
+      provider: "arcgis";
+      requestId: string;
+      pollAfterMs: number;
+    }
+  | {
+      status: "complete";
+      provider: ReachabilityProvider;
+      geoJson: object;
+    };
 
 const BAY_AREA_CENTER = { lat: 37.7749, lng: -122.4194 };
-const REQUEST_DEBOUNCE_MS = 350;
+const REQUEST_SETTLE_MS = 600;
+const SEARCH_DEBOUNCE_MS = 250;
+const MAX_POLL_TIME_MS = 120_000;
 let mapsLoader: Promise<void> | null = null;
 
 function loadGoogleMaps(apiKey: string): Promise<void> {
@@ -78,7 +103,7 @@ function extendBounds(coordinates: unknown, bounds: google.maps.LatLngBounds) {
   coordinates.forEach((entry) => extendBounds(entry, bounds));
 }
 
-function fitGeoJson(map: google.maps.Map, geoJson: object) {
+function geoJsonBounds(geoJson: object) {
   const bounds = new google.maps.LatLngBounds();
   const candidate = geoJson as {
     type?: string;
@@ -95,29 +120,73 @@ function fitGeoJson(map: google.maps.Map, geoJson: object) {
   } else {
     extendBounds(candidate.coordinates, bounds);
   }
+  return bounds;
+}
+
+function shouldFitGeoJson(map: google.maps.Map, geoJson: object) {
+  const areaBounds = geoJsonBounds(geoJson);
+  if (areaBounds.isEmpty()) return false;
+  const viewport = map.getBounds();
+  return (
+    !viewport ||
+    !viewport.contains(areaBounds.getNorthEast()) ||
+    !viewport.contains(areaBounds.getSouthWest())
+  );
+}
+
+function fitGeoJson(map: google.maps.Map, geoJson: object) {
+  const bounds = geoJsonBounds(geoJson);
   if (!bounds.isEmpty()) map.fitBounds(bounds, 48);
+}
+
+function waitForPoll(milliseconds: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(resolve, milliseconds);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timeout);
+        reject(new DOMException("The request was aborted.", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 }
 
 export function ReachabilityMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const autocompleteContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
+  const autocompleteSessionRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const requestIdRef = useRef(0);
+  const searchRequestIdRef = useRef(0);
   const fitNextContourRef = useRef(false);
+  const shownDurationRef = useRef<number | null>(null);
+  const reachabilityCacheRef = useRef(new Map<string, CacheEntry>());
 
   const [mapReady, setMapReady] = useState(false);
   const [origin, setOrigin] = useState<Origin | null>(null);
-  const [duration, setDuration] = useState(30);
+  const [durationIndex, setDurationIndex] = useState(
+    REACHABILITY_DURATIONS.indexOf(30),
+  );
+  const [appliedDuration, setAppliedDuration] = useState(30);
   const [shownDuration, setShownDuration] = useState<number | null>(null);
+  const [shownProvider, setShownProvider] = useState<ReachabilityProvider | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const [usageRemaining, setUsageRemaining] = useState<number | null>(null);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
+  const [usageProvider, setUsageProvider] = useState<ReachabilityProvider | null>(null);
   const [mapType, setMapType] = useState<MapType>("terrain");
   const [showReachability, setShowReachability] = useState(true);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<google.maps.places.PlacePrediction[]>([]);
+  const duration = REACHABILITY_DURATIONS[durationIndex];
 
   const applyOverlayStyle = useCallback((map: google.maps.Map | null, visible: boolean) => {
     map?.data.setStyle({
@@ -185,10 +254,17 @@ export function ReachabilityMap() {
     applyOverlayStyle(mapRef.current, showReachability);
   }, [applyOverlayStyle, showReachability]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedDuration(duration), REQUEST_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [duration]);
+
   const selectOrigin = useCallback((nextOrigin: Origin) => {
     setOrigin(nextOrigin);
     setError(null);
     setShownDuration(null);
+    shownDurationRef.current = null;
+    setShownProvider(null);
     fitNextContourRef.current = true;
     clearDataLayer(mapRef.current);
     if (mapRef.current) {
@@ -204,48 +280,88 @@ export function ReachabilityMap() {
     clearDataLayer(mapRef.current);
     setOrigin(null);
     setShownDuration(null);
+    shownDurationRef.current = null;
+    setShownProvider(null);
+    setSearchValue("");
+    setSuggestions([]);
     setError(null);
     mapRef.current?.setCenter(BAY_AREA_CENTER);
     mapRef.current?.setZoom(9);
   }, []);
 
   useEffect(() => {
-    if (!mapReady || !autocompleteContainerRef.current) return;
-    const element = new google.maps.places.PlaceAutocompleteElement({
-      componentRestrictions: { country: "us" },
-      locationBias: { center: BAY_AREA_CENTER, radius: 160000 },
-    });
-    element.setAttribute("placeholder", "Enter coordinates or a location name");
-    element.setAttribute("aria-label", "Search for a starting location");
+    if (!mapReady) return;
+    const input = searchValue.trim();
+    if (!input || parseCoordinates(input) || input === origin?.label) {
+      return;
+    }
 
-    const handleSelect = async (event: Event) => {
-      const prediction = (event as PlaceSelectEvent).placePrediction;
-      if (!prediction) return;
+    const requestId = ++searchRequestIdRef.current;
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
       try {
-        const place = prediction.toPlace();
-        await place.fetchFields({
-          fields: ["displayName", "formattedAddress", "location"],
+        const { AutocompleteSessionToken, AutocompleteSuggestion } =
+          (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
+        autocompleteSessionRef.current ??= new AutocompleteSessionToken();
+        const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input,
+          includedRegionCodes: ["us"],
+          locationBias: { center: BAY_AREA_CENTER, radius: 50000 },
+          sessionToken: autocompleteSessionRef.current,
         });
-        if (!place.location) throw new Error("That place does not have a map location.");
-        selectOrigin({
-          lat: place.location.lat(),
-          lng: place.location.lng(),
-          label: place.formattedAddress ?? place.displayName ?? "Selected location",
-        });
-      } catch (caught) {
-        setError(
-          caught instanceof Error ? caught.message : "That location could not be selected.",
+        if (requestId !== searchRequestIdRef.current) return;
+        setSuggestions(
+          response.suggestions
+            .map((suggestion) => suggestion.placePrediction)
+            .filter((prediction): prediction is google.maps.places.PlacePrediction =>
+              Boolean(prediction),
+            )
+            .slice(0, 6),
         );
+      } catch {
+        if (requestId === searchRequestIdRef.current) {
+          setSuggestions([]);
+          setError("Location suggestions could not be loaded. Try coordinates instead.");
+        }
+      } finally {
+        if (requestId === searchRequestIdRef.current) setSearchLoading(false);
       }
-    };
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [mapReady, origin?.label, searchValue]);
 
-    element.addEventListener("gmp-select", handleSelect);
-    autocompleteContainerRef.current.replaceChildren(element);
-    return () => {
-      element.removeEventListener("gmp-select", handleSelect);
-      element.remove();
-    };
-  }, [mapReady, selectOrigin]);
+  const selectPrediction = async (prediction: google.maps.places.PlacePrediction) => {
+    setSearchLoading(true);
+    setSuggestions([]);
+    try {
+      const place = prediction.toPlace();
+      await place.fetchFields({
+        fields: ["displayName", "formattedAddress", "location"],
+      });
+      if (!place.location) throw new Error("That place does not have a map location.");
+      const label = place.formattedAddress ?? place.displayName ?? prediction.text.toString();
+      setSearchValue(label);
+      setSearchFocused(false);
+      searchInputRef.current?.blur();
+      selectOrigin({ lat: place.location.lat(), lng: place.location.lng(), label });
+      autocompleteSessionRef.current = null;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "That location could not be selected.");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const selectTypedCoordinates = () => {
+    const coordinates = parseCoordinates(searchValue);
+    if (!coordinates) return;
+    const label = `${coordinates.lat.toFixed(5)}, ${coordinates.lng.toFixed(5)}`;
+    setSearchValue(label);
+    setSuggestions([]);
+    setSearchFocused(false);
+    searchInputRef.current?.blur();
+    selectOrigin({ ...coordinates, label });
+  };
 
   useEffect(() => {
     markerRef.current?.setMap(null);
@@ -263,45 +379,127 @@ export function ReachabilityMap() {
     if (!origin || !mapReady) return;
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
-    const timer = window.setTimeout(async () => {
+    const cacheKey = `${origin.lat.toFixed(5)}:${origin.lng.toFixed(5)}:${appliedDuration}`;
+
+    const updateUsage = (response: Response) => {
+      const remainingHeader = response.headers.get("X-RateLimit-Remaining");
+      const limitHeader = response.headers.get("X-RateLimit-Limit");
+      const provider = response.headers.get("X-Reachability-Provider");
+      const remaining = remainingHeader === null ? Number.NaN : Number(remainingHeader);
+      const limit = limitHeader === null ? Number.NaN : Number(limitHeader);
+      if (Number.isFinite(remaining) && Number.isFinite(limit)) {
+        setUsageRemaining(remaining);
+        setUsageLimit(limit);
+        if (provider === "google" || provider === "arcgis") setUsageProvider(provider);
+      }
+    };
+
+    const showResult = (entry: Extract<CacheEntry, { status: "complete" }>) => {
+      if (requestId !== requestIdRef.current || !mapRef.current) return;
+      const previousDuration = shownDurationRef.current;
+      clearDataLayer(mapRef.current);
+      mapRef.current.data.addGeoJson(entry.geoJson);
+      applyOverlayStyle(mapRef.current, showReachability);
+      if (
+        fitNextContourRef.current ||
+        (previousDuration !== null &&
+          appliedDuration > previousDuration &&
+          shouldFitGeoJson(mapRef.current, entry.geoJson))
+      ) {
+        fitGeoJson(mapRef.current, entry.geoJson);
+        fitNextContourRef.current = false;
+      }
+      shownDurationRef.current = appliedDuration;
+      setShownDuration(appliedDuration);
+      setShownProvider(entry.provider);
+    };
+
+    const poll = async (entry: Extract<CacheEntry, { status: "pending" }>) => {
+      const startedAt = Date.now();
+      let pollAfterMs = entry.pollAfterMs;
+      while (Date.now() - startedAt < MAX_POLL_TIME_MS) {
+        await waitForPoll(pollAfterMs, controller.signal);
+        const response = await fetch(
+          `/api/reachability/${encodeURIComponent(entry.requestId)}`,
+          { headers: { Accept: "application/json" }, signal: controller.signal, cache: "no-store" },
+        );
+        updateUsage(response);
+        const payload = (await response.json()) as ReachabilityResponse;
+        if (response.status === 202 && payload.status === "pending") {
+          pollAfterMs = Math.min(5_000, Math.max(2_000, payload.pollAfterMs ?? pollAfterMs + 1_000));
+          reachabilityCacheRef.current.set(cacheKey, {
+            ...entry,
+            pollAfterMs,
+          });
+          continue;
+        }
+        const geoJson = normalizeGeoJson(payload.geoJson);
+        if (!response.ok || payload.status !== "complete" || !geoJson) {
+          throw new Error(payload.error ?? "That long-range area could not be calculated.");
+        }
+        const complete: CacheEntry = {
+          status: "complete",
+          provider: payload.provider ?? "arcgis",
+          geoJson,
+        };
+        reachabilityCacheRef.current.set(cacheKey, complete);
+        showResult(complete);
+        return;
+      }
+      throw new Error("This long-range area is still building. Retry to keep waiting without starting over.");
+    };
+
+    const run = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/isochrones", {
+        const cached = reachabilityCacheRef.current.get(cacheKey);
+        if (cached?.status === "complete") {
+          showResult(cached);
+          return;
+        }
+        if (cached?.status === "pending") {
+          await poll(cached);
+          return;
+        }
+
+        const response = await fetch("/api/reachability", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
             latitude: origin.lat,
             longitude: origin.lng,
-            durationMinutes: duration,
+            durationMinutes: appliedDuration,
           }),
           signal: controller.signal,
           cache: "no-store",
         });
-        const payload = (await response.json()) as IsochroneResponse;
-        const geoJson = payload.isochrone?.geoJson;
-        if (!response.ok || !geoJson) {
+        updateUsage(response);
+        const payload = (await response.json()) as ReachabilityResponse;
+        if (response.status === 202 && payload.status === "pending" && payload.requestId) {
+          const pending: CacheEntry = {
+            status: "pending",
+            provider: "arcgis",
+            requestId: payload.requestId,
+            pollAfterMs: payload.pollAfterMs ?? 2_000,
+          };
+          reachabilityCacheRef.current.set(cacheKey, pending);
+          await poll(pending);
+          return;
+        }
+        const geoJson = normalizeGeoJson(payload.geoJson);
+        if (!response.ok || payload.status !== "complete" || !geoJson) {
           throw new Error(payload.error ?? "That reachability area could not be calculated.");
         }
-        if (requestId !== requestIdRef.current || !mapRef.current) return;
-        clearDataLayer(mapRef.current);
-        mapRef.current.data.addGeoJson(geoJson);
-        applyOverlayStyle(mapRef.current, showReachability);
-        if (fitNextContourRef.current) {
-          fitGeoJson(mapRef.current, geoJson);
-          fitNextContourRef.current = false;
-        }
-        setShownDuration(duration);
-        const remaining = Number(response.headers.get("X-RateLimit-Remaining"));
-        const limit = Number(response.headers.get("X-RateLimit-Limit"));
-        if (Number.isFinite(remaining) && Number.isFinite(limit)) {
-          setUsageRemaining(remaining);
-          setUsageLimit(limit);
-        }
+        const complete: CacheEntry = {
+          status: "complete",
+          provider: payload.provider ?? providerForDuration(appliedDuration),
+          geoJson,
+        };
+        reachabilityCacheRef.current.set(cacheKey, complete);
+        showResult(complete);
       } catch (caught) {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-        clearDataLayer(mapRef.current);
-        setShownDuration(null);
         setError(
           caught instanceof Error
             ? caught.message
@@ -310,12 +508,12 @@ export function ReachabilityMap() {
       } finally {
         if (requestId === requestIdRef.current) setIsLoading(false);
       }
-    }, REQUEST_DEBOUNCE_MS);
+    };
+    void run();
     return () => {
-      window.clearTimeout(timer);
       controller.abort();
     };
-  }, [applyOverlayStyle, duration, mapReady, origin, retryToken, showReachability]);
+  }, [applyOverlayStyle, appliedDuration, mapReady, origin, retryToken, showReachability]);
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -344,9 +542,11 @@ export function ReachabilityMap() {
   const statusMessage = error
     ? error
     : isLoading
-      ? `Calculating the ${duration}-minute drive area…`
+      ? appliedDuration > 60
+        ? `Building ${formatDuration(appliedDuration)} long-range drive area… This can take a couple of minutes.`
+        : `Calculating the ${formatDuration(appliedDuration)} drive area…`
       : shownDuration
-        ? `${shownDuration}-minute outbound drive area is active.`
+        ? `${formatDuration(shownDuration)} outbound drive area is active.`
         : origin
           ? "Adjust the travel time to recalculate the area."
           : "Search or use your location to create a drive-time area.";
@@ -358,8 +558,72 @@ export function ReachabilityMap() {
           <span className="compass-mark" aria-hidden="true"><i /></span>
           <strong>ALPINE</strong><span>SEARCH</span>
         </div>
-        <div className="workspace-search" ref={autocompleteContainerRef} aria-live="polite">
-          {!mapReady && <div className="search-placeholder">Enter coordinates or a location name</div>}
+        <div
+          className="workspace-search"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false);
+          }}
+        >
+          <span className="search-icon" aria-hidden="true">⌕</span>
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={searchValue}
+            placeholder="Enter coordinates or a location name"
+            aria-label="Search for a starting location"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="location-suggestions"
+            aria-expanded={searchFocused && (Boolean(parseCoordinates(searchValue)) || suggestions.length > 0)}
+            autoComplete="off"
+            disabled={!mapReady}
+            onChange={(event) => {
+              searchRequestIdRef.current += 1;
+              setSearchValue(event.target.value);
+              setSuggestions([]);
+              setSearchLoading(false);
+              setError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && parseCoordinates(searchValue)) {
+                event.preventDefault();
+                selectTypedCoordinates();
+              } else if (event.key === "Escape") {
+                setSuggestions([]);
+              }
+            }}
+          />
+          {searchLoading && <span className="search-spinner" aria-label="Loading suggestions" />}
+          {searchFocused && (parseCoordinates(searchValue) || suggestions.length > 0) && (
+            <div className="search-suggestions" id="location-suggestions" role="listbox">
+              {parseCoordinates(searchValue) && (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={selectTypedCoordinates}
+                >
+                  <strong>Use these coordinates</strong>
+                  <small>{searchValue.trim()}</small>
+                </button>
+              )}
+              {suggestions.map((prediction) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  key={prediction.placeId}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void selectPrediction(prediction)}
+                >
+                  <strong>{prediction.mainText?.text ?? prediction.text.toString()}</strong>
+                  {prediction.secondaryText?.text && <small>{prediction.secondaryText.text}</small>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <nav className="workspace-tools" aria-label="Map utilities">
           <button type="button" onClick={useCurrentLocation} disabled={isLocating || !mapReady}>
@@ -393,20 +657,22 @@ export function ReachabilityMap() {
           <div className="object-field">
             <div className="slider-heading">
               <label htmlFor="travel-time">Travel time</label>
-              <output htmlFor="travel-time">{duration} min</output>
+              <output htmlFor="travel-time">{formatDuration(duration)}</output>
             </div>
             <input
               id="travel-time"
               type="range"
-              min="5"
-              max="60"
-              step="5"
-              value={duration}
-              onChange={(event) => setDuration(Number(event.target.value))}
+              min="0"
+              max={REACHABILITY_DURATIONS.length - 1}
+              step="1"
+              value={durationIndex}
+              onChange={(event) => setDurationIndex(Number(event.target.value))}
               disabled={!origin}
-              aria-valuetext={`${duration} minutes`}
+              aria-valuetext={formatDuration(duration)}
             />
-            <div className="slider-scale" aria-hidden="true"><span>5</span><span>30</span><span>60</span></div>
+            <div className="slider-scale" aria-hidden="true">
+              <span>5m</span><span>1h</span><span>3h</span><span>5h</span>
+            </div>
           </div>
 
           <div className={`object-status${error ? " object-status--error" : ""}`} role="status" aria-live="polite">
@@ -414,6 +680,11 @@ export function ReachabilityMap() {
             <p>{statusMessage}</p>
             {error && origin && <button type="button" onClick={() => setRetryToken((value) => value + 1)}>Retry</button>}
           </div>
+          {duration > 60 && (
+            <p className="range-caveat">
+              Long-range overview—mountain-road edges can be imprecise. Verify a destination before traveling.
+            </p>
+          )}
         </section>
 
         <section className="compact-layers" aria-label="Map layers">
@@ -432,7 +703,7 @@ export function ReachabilityMap() {
           <label className="layer-row layer-row--active">
             <input type="checkbox" checked={showReachability} onChange={(event) => setShowReachability(event.target.checked)} />
             <span className="layer-symbol layer-symbol--area" aria-hidden="true" />
-            <span><strong>Drive-time area</strong><small>{duration} minute contour</small></span>
+            <span><strong>Drive-time area</strong><small>{formatDuration(duration)} contour</small></span>
           </label>
           <div className="layer-row">
             <span className="fake-check" aria-hidden="true">✓</span><span className="layer-symbol layer-symbol--terrain" aria-hidden="true" />
@@ -444,7 +715,7 @@ export function ReachabilityMap() {
 
         <footer className="objects-footer">
           <strong>Usage</strong>
-          <span>{usageRemaining !== null && usageLimit !== null ? `${usageRemaining.toLocaleString()} / ${usageLimit.toLocaleString()} calls left` : "Protected monthly limit"}</span>
+          <span>{usageRemaining !== null && usageLimit !== null ? `${usageProvider === "arcgis" ? "Long" : "Short"}: ${usageRemaining.toLocaleString()} / ${usageLimit.toLocaleString()} left` : "Protected monthly limit"}</span>
         </footer>
       </aside>
 
@@ -457,7 +728,10 @@ export function ReachabilityMap() {
           <strong>{origin ? `${origin.lat.toFixed(5)}, ${origin.lng.toFixed(5)}` : "37.77490, -122.41940"}</strong>
           <span>{origin ? "Selected origin" : "Bay Area · WGS84"}</span>
         </div>
-        <div className="map-legend" aria-hidden="true"><span /> {shownDuration ?? duration} min drive area</div>
+        <div className="map-legend" aria-hidden="true">
+          <span /> {formatDuration(shownDuration ?? duration)} drive area
+          {shownProvider === "arcgis" && <small>Long-range</small>}
+        </div>
       </section>
 
     </main>

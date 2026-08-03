@@ -34,9 +34,17 @@ button { color: inherit; }
 .compass-mark::after { inset: 10px 5px; }
 .compass-mark i { position: absolute; left: 9px; top: -4px; width: 6px; height: 13px; background: #fbfbfa; border: 1.5px solid #b6542f; clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%); }
 
-.workspace-search { width: min(420px, calc(100% - 24px)); height: 30px; margin-left: 14px; border: 1px solid #8d9699; border-radius: 2px; background: white; overflow: visible; }
-.workspace-search gmp-place-autocomplete { width: 100%; height: 28px; color-scheme: light; }
-.search-placeholder { height: 28px; display: flex; align-items: center; padding: 0 10px; color: #7c8588; background: white; }
+.workspace-search { position: relative; display: flex; align-items: center; width: min(420px, calc(100% - 24px)); height: 30px; margin-left: 14px; border: 1px solid #8d9699; border-radius: 2px; background: white; overflow: visible; }
+.workspace-search:focus-within { border-color: #a64f2a; box-shadow: 0 0 0 1px #a64f2a; }
+.workspace-search input { width: 100%; height: 28px; padding: 0 34px 0 32px; border: 0; outline: 0; color: #263439; background: transparent; font: inherit; }
+.workspace-search input::-webkit-search-cancel-button { cursor: pointer; }
+.search-icon { position: absolute; left: 10px; z-index: 1; color: #536166; font-size: 18px; transform: rotate(-20deg); pointer-events: none; }
+.search-spinner { position: absolute; right: 10px; width: 12px; height: 12px; border: 2px solid #c8cecf; border-top-color: #a64f2a; border-radius: 50%; animation: spin .7s linear infinite; }
+.search-suggestions { position: absolute; z-index: 20; top: calc(100% + 3px); left: -1px; width: calc(100% + 2px); padding: 4px; border: 1px solid #929b9e; background: white; box-shadow: 0 5px 14px rgb(37 49 53 / 22%); }
+.search-suggestions button { display: flex; flex-direction: column; width: 100%; padding: 8px 10px; border: 0; background: white; color: #263439; text-align: left; cursor: pointer; }
+.search-suggestions button:hover, .search-suggestions button:focus-visible { background: #eef1ee; outline: none; }
+.search-suggestions strong { overflow: hidden; width: 100%; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.search-suggestions small { overflow: hidden; width: 100%; margin-top: 2px; color: #687477; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-tools { height: 100%; display: flex; align-items: center; gap: 0; padding-right: 10px; }
 .workspace-tools button { height: 100%; padding: 0 12px; border: 0; border-left: 1px solid var(--line-soft); background: transparent; cursor: pointer; }
 .workspace-tools button:hover:not(:disabled) { background: #ecefed; }
@@ -69,6 +77,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .object-status p { margin: 0; }
 .object-status button { border: 0; padding: 0; color: #9c3e20; background: transparent; text-decoration: underline; cursor: pointer; }
 .object-status--error { border-color: #d2a294; background: #fbf1ee; }
+.range-caveat { margin: 0 8px 9px; padding: 7px 8px; border-left: 3px solid #b98731; color: #5d5139; background: #faf5e8; font-size: 10px; line-height: 1.35; }
 .status-dot, .status-pulse { width: 7px; height: 7px; margin-top: 3px; border-radius: 50%; background: #4f7969; box-shadow: 0 0 0 2px rgb(79 121 105 / 18%); }
 .status-pulse { animation: pulse 1s infinite alternate; }
 @keyframes pulse { to { opacity: .3; } }
@@ -86,6 +95,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .coordinate-readout span { margin-top: 2px; color: #697377; font-size: 9px; }
 .map-legend { position: absolute; z-index: 5; right: 10px; bottom: 24px; display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: rgb(255 255 255 / 90%); border: 1px solid #9da6a9; color: #4d575b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .map-legend span { width: 20px; height: 11px; border: 2px solid var(--accent); background: rgb(227 109 54 / 28%); }
+.map-legend small { padding-left: 7px; border-left: 1px solid #aeb5b7; color: #7b633c; font-size: 8px; }
 
 .compact-layers { padding: 9px 8px 6px; border-top: 1px solid #aeb6b8; border-bottom: 1px solid var(--line-soft); background: #f3f4f2; }
 .subsection-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #536067; font-size: 12px; }

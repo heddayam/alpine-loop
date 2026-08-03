@@ -1,6 +1,8 @@
 export const GOOGLE_ISOCHRONE_MONTHLY_LIMIT = 9_000;
+export const ARCGIS_SERVICE_AREA_MONTHLY_LIMIT = 4_500;
 
-const PROVIDER = "google-isochrones";
+export const GOOGLE_ISOCHRONE_PROVIDER = "google-isochrones";
+export const ARCGIS_SERVICE_AREA_PROVIDER = "arcgis-service-areas";
 
 export function utcMonth(date = new Date()) {
   return date.toISOString().slice(0, 7);
@@ -22,7 +24,9 @@ export type UsageReservation = {
  * Atomically reserves one upstream request. If the counter cannot be checked,
  * this throws so callers fail closed and never contact the paid API.
  */
-export async function reserveGoogleIsochroneRequest(
+export async function reserveProviderRequest(
+  provider: string,
+  limit: number,
   date = new Date(),
 ): Promise<UsageReservation | null> {
   const { env } = await import("cloudflare:workers");
@@ -51,7 +55,7 @@ export async function reserveGoogleIsochroneRequest(
      WHERE api_usage.count < ?
      RETURNING count`,
   )
-    .bind(PROVIDER, period, GOOGLE_ISOCHRONE_MONTHLY_LIMIT)
+    .bind(provider, period, limit)
     .first<{ count: number }>();
 
   if (!row) {
@@ -59,9 +63,34 @@ export async function reserveGoogleIsochroneRequest(
   }
 
   return {
-    limit: GOOGLE_ISOCHRONE_MONTHLY_LIMIT,
+    limit,
     period,
-    remaining: GOOGLE_ISOCHRONE_MONTHLY_LIMIT - row.count,
+    remaining: limit - row.count,
     used: row.count,
   };
+}
+
+export async function getProviderUsage(
+  provider: string,
+  limit: number,
+  date = new Date(),
+): Promise<UsageReservation> {
+  const { env } = await import("cloudflare:workers");
+  if (!env.DB) throw new Error("The API usage database is unavailable.");
+  const period = utcMonth(date);
+  const row = await env.DB.prepare(
+    "SELECT count FROM api_usage WHERE provider = ? AND period = ?",
+  )
+    .bind(provider, period)
+    .first<{ count: number }>();
+  const used = row?.count ?? 0;
+  return { limit, period, remaining: Math.max(0, limit - used), used };
+}
+
+export function reserveGoogleIsochroneRequest(date = new Date()) {
+  return reserveProviderRequest(
+    GOOGLE_ISOCHRONE_PROVIDER,
+    GOOGLE_ISOCHRONE_MONTHLY_LIMIT,
+    date,
+  );
 }

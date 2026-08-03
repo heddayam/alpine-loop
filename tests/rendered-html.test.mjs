@@ -20,7 +20,7 @@ test("server-renders the Alpine Search interface", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>Alpine Search — Bay Area Reachability Map<\/title>/i);
+  assert.match(html, /<title>Alpine Search — Five-Hour Drive Map<\/title>/i);
   assert.match(html, /Alpine Search/);
   assert.match(html, /Use my current location/);
   assert.match(html, /Travel time/);
