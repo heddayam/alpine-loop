@@ -103,3 +103,19 @@ test("reports incomplete extracts instead of inventing topology", () => {
   assert.deepEqual(graph.issues[0].missingNodeIds, ["2"]);
   assert.throws(() => buildOsmTopology(snapshot, { strict: true }), /missing OSM node/);
 });
+
+test("extracts mapped access candidates and shared public-road evidence offline", async () => {
+  const fixture = new URL("./fixtures/trails/gate-c/osm.json", import.meta.url);
+  const snapshot = await readOsmSnapshot(fixture);
+
+  assert.deepEqual(
+    snapshot.accessPointCandidates.map(({ name, type }) => ({ name, type })),
+    [
+      { name: "Mirror Lake Trailhead", type: "trailhead" },
+      { name: "Mirror Lake Parking", type: "parking" },
+    ],
+  );
+  assert.deepEqual(snapshot.publicRoadSourceNodeIds, ["osm:1"]);
+  assert.equal(snapshot.accessPointCandidates.every(({ sourceRefs }) =>
+    sourceRefs[0].provider === "osm"), true);
+});

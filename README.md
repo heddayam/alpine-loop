@@ -78,6 +78,34 @@ application database or UI.
 
 ## Hiking trail regional artifacts
 
+The Gate C pilot is a deliberately small Happy Isles–Mist Trail corridor. Its
+only networked operation is the explicit preparation command below. It queries
+the public NPS trail layer, the bounded OpenStreetMap map API (not Overpass),
+and the USGS 3DEP ImageServer, then writes all raw and prepared inputs beneath
+the ignored `.cache/trails/` tree:
+
+```bash
+npm run trails:pilot:refresh
+```
+
+After preparation, build the pilot offline. Keep its outputs in the cache; the
+small corridor is validation evidence, not the final Yosemite–Stanislaus
+regional artifact:
+
+```bash
+node scripts/trails/build-region.mjs \
+  --region=yosemite-stanislaus \
+  --input=.cache/trails/yosemite-stanislaus/gate-c-pilot/build-input.json \
+  --output=.cache/trails/yosemite-stanislaus/gate-c-pilot/artifacts
+```
+
+Regional ingestion applies one conservative rule: a segment, source node, or
+access candidate is omitted unless all of its coordinates are inside the
+configured region bounds. Every omission is recorded in `qa.json`; crossing
+features are not clipped or accepted silently. Agency lines that are fully
+covered by compatible nearby OSM edges are split and snapped to those OSM
+edges. Partial or ambiguous matches stay unsplit and are reported for review.
+
 Build the Yosemite–Stanislaus static trail corpus from cached input only:
 
 ```bash
@@ -101,7 +129,10 @@ node scripts/trails/build-region.mjs \
 ```
 
 The build writes `manifest.json`, `named-trails.json`,
-`access-points.geojson`, `segments.ndjson`, `nodes.ndjson`, and `qa.json`.
+`access-points.geojson`, `segments.ndjson`, `nodes.ndjson`,
+`segment-provenance.json`, and `qa.json`. The provenance sidecar records the
+selected and losing observations for each normalized field, including 3DEP
+calculation metadata.
 Artifact ordering, timestamps, and SHA-256 hashes are derived from cached source
 data, so repeated builds from the same input are byte-for-byte identical. Review
 `qa.json` before using a newly generated corpus in the application.

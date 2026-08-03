@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "nps",
+    "url": "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets/NPS_Public_Trails/FeatureServer/0"
+  },
+  "retrievedAt": "2026-08-03T12:00:00.000Z",
+  "features": [
+    {
+      "id": "pilot-agency-line",
+      "type": "Feature",
+      "properties": {
+        "FEATUREID": "pilot-agency-line",
+        "TRLNAME": "Mirror Lake Trail",
+        "UNITNAME": "Yosemite National Park",
+        "TRLUSE": "Hiking",
+        "OPENTOPUBLIC": "Yes",
+        "TRLSURFACE": "Natural"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-119.721, 37.805],
+          [-119.72079, 37.8049],
+          [-119.7206, 37.8048]
+        ]
+      }
+    }
+  ]
+}

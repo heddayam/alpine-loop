@@ -1,0 +1,41 @@
+{
+  "retrievedAt": "2026-08-03T12:00:00.000Z",
+  "elements": [
+    {
+      "type": "node",
+      "id": 1,
+      "lon": -119.721,
+      "lat": 37.805,
+      "tags": { "highway": "trailhead", "name": "Mirror Lake Trailhead" }
+    },
+    { "type": "node", "id": 2, "lon": -119.7208, "lat": 37.8049 },
+    { "type": "node", "id": 3, "lon": -119.7206, "lat": 37.8048 },
+    { "type": "node", "id": 4, "lon": -119.7211, "lat": 37.805 },
+    {
+      "type": "node",
+      "id": 5,
+      "lon": -119.72075,
+      "lat": 37.80485,
+      "tags": { "amenity": "parking", "access": "yes", "name": "Mirror Lake Parking" }
+    },
+    {
+      "type": "way",
+      "id": 101,
+      "nodes": [1, 2, 3],
+      "tags": {
+        "highway": "path",
+        "name": "Mirror Lake Trail",
+        "foot": "designated",
+        "access": "yes",
+        "status": "open",
+        "surface": "Natural"
+      }
+    },
+    {
+      "type": "way",
+      "id": 201,
+      "nodes": [4, 1],
+      "tags": { "highway": "residential", "name": "Mirror Lake Road" }
+    }
+  ]
+}

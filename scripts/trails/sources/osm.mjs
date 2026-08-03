@@ -16,6 +16,11 @@ const PUBLIC_ACCESS_VALUES = new Set(["yes", "designated", "permissive", "public
 const BLOCKED_VALUES = new Set(["no", "private"]);
 const HIKING_ROUTE_VALUES = new Set(["hiking", "foot"]);
 const RESTRICTED_WAY_POLICIES = new Set(["exclude", "mark"]);
+const PUBLIC_ROAD_HIGHWAYS = new Set([
+  "motorway", "trunk", "primary", "secondary", "tertiary", "unclassified",
+  "residential", "living_street",
+]);
+const CONDITIONAL_PUBLIC_ROAD_HIGHWAYS = new Set(["service", "track"]);
 
 function requireRestrictedWayPolicy(value) {
   if (!RESTRICTED_WAY_POLICIES.has(value)) {
@@ -101,6 +106,32 @@ function explicitClosure(tags) {
   return status === "closed" || normalizedToken(tags.closed) === "yes" ||
     normalizedToken(tags.disused) === "yes" ||
     (disusedHighway !== undefined && disusedHighway !== "no");
+}
+
+function explicitlyPublic(tags) {
+  return PUBLIC_ACCESS_VALUES.has(normalizedToken(tags.access));
+}
+
+function isPublicRoadWay(way) {
+  if (!way || way.type !== "way") return false;
+  const tags = normalizeOsmTags(way.tags);
+  const highway = normalizedToken(tags.highway);
+  const access = normalizedToken(tags.access);
+  const motorVehicle = normalizedToken(tags.motor_vehicle ?? tags.motorcar ?? tags.vehicle);
+  if (BLOCKED_VALUES.has(access) || BLOCKED_VALUES.has(motorVehicle) || lifecycleBlocked(tags)) {
+    return false;
+  }
+  return PUBLIC_ROAD_HIGHWAYS.has(highway) ||
+    (CONDITIONAL_PUBLIC_ROAD_HIGHWAYS.has(highway) && explicitlyPublic(tags));
+}
+
+function accessCandidateType(tags) {
+  if (normalizedToken(tags.highway) === "trailhead" ||
+      normalizedToken(tags.information) === "trailhead") return "trailhead";
+  if ((normalizedToken(tags.entrance) === "yes" || normalizedToken(tags.barrier) === "entrance") &&
+      explicitlyPublic(tags)) return "entrance";
+  if (normalizedToken(tags.amenity) === "parking" && explicitlyPublic(tags)) return "parking";
+  return undefined;
 }
 
 export function classifyOsmWay(tagsValue, { hikingRouteMemberships = [] } = {}) {
@@ -275,13 +306,26 @@ function prepareElements(elements, { restrictedWayPolicy }) {
 
   const referencedNodeIds = new Set();
   ways.forEach((way) => way.nodeIds.forEach((nodeId) => referencedNodeIds.add(nodeId)));
-  const nodes = elements
+  const allNodes = elements
     .filter((element) => element?.type === "node")
     .map(normalizeNode)
-    .filter((node) => referencedNodeIds.has(node.id))
     .sort((left, right) => compareOsmIds(left.id, right.id));
+  const nodes = allNodes.filter((node) => referencedNodeIds.has(node.id));
+  const accessNodes = allNodes.filter((node) => accessCandidateType(node.tags));
+  const publicRoadNodeIds = new Set();
+  elements.filter(isPublicRoadWay).forEach((way) => {
+    wayNodeIds(way).forEach((nodeId) => {
+      if (referencedNodeIds.has(nodeId)) publicRoadNodeIds.add(nodeId);
+    });
+  });
 
-  return { nodes, ways, relations };
+  return {
+    nodes,
+    ways,
+    relations,
+    accessNodes,
+    publicRoadNodeIds: [...publicRoadNodeIds].sort(compareOsmIds),
+  };
 }
 
 function elementsFromJson(payload) {
@@ -315,6 +359,7 @@ async function forEachPbfElement(filePath, parserOptions, visit) {
 
 async function readPbfElements(filePath, options) {
   const candidateWays = [];
+  const publicRoadWays = [];
   const relations = [];
   await forEachPbfElement(filePath, {
     withInfo: true,
@@ -328,15 +373,50 @@ async function readPbfElements(filePath, options) {
         normalizedToken(element.tags?.type) === "route" &&
         HIKING_ROUTE_VALUES.has(normalizedToken(element.tags?.route))) relations.push(element);
     else if (element.type === "way" && isHikingRelevantWay(element, options)) candidateWays.push(element);
+    else if (element.type === "way" && isPublicRoadWay(element)) publicRoadWays.push(element);
   });
 
   const referencedNodeIds = new Set();
   candidateWays.forEach((way) => wayNodeIds(way).forEach((nodeId) => referencedNodeIds.add(nodeId)));
+  publicRoadWays.forEach((way) => wayNodeIds(way).forEach((nodeId) => referencedNodeIds.add(nodeId)));
   const nodes = [];
-  await forEachPbfElement(filePath, { withTags: false, withInfo: false }, (element) => {
-    if (element.type === "node" && referencedNodeIds.has(String(element.id))) nodes.push(element);
+  await forEachPbfElement(filePath, {
+    withTags: {
+      node: ["highway", "information", "entrance", "barrier", "amenity", "access", "foot", "name"],
+      way: false,
+      relation: false,
+    },
+    withInfo: false,
+  }, (element) => {
+    if (element.type !== "node") return;
+    if (referencedNodeIds.has(String(element.id)) || accessCandidateType(normalizeOsmTags(element.tags))) {
+      nodes.push(element);
+    }
   });
-  return [...nodes, ...candidateWays, ...relations];
+  return [...nodes, ...candidateWays, ...publicRoadWays, ...relations];
+}
+
+function sourceRefForElement(type, id, retrievedAt) {
+  return {
+    provider: "osm",
+    sourceId: `${type}/${id}`,
+    retrievedAt,
+    sourceUrl: `https://www.openstreetmap.org/${type}/${id}`,
+  };
+}
+
+function accessCandidate(node, retrievedAt) {
+  const type = accessCandidateType(node.tags);
+  return {
+    longitude: node.longitude,
+    latitude: node.latitude,
+    ...(node.tags.name ? { name: node.tags.name } : {}),
+    type,
+    confidence: "mapped",
+    osmNodeId: node.id,
+    tags: { ...node.tags },
+    sourceRefs: [sourceRefForElement("node", node.id, retrievedAt)],
+  };
 }
 
 /**
@@ -359,11 +439,17 @@ export async function readOsmSnapshot(filePath, options = {}) {
   const fileStats = await stat(sourcePath);
   const retrievedAt = options.retrievedAt ?? embeddedRetrievedAt ?? fileStats.mtime.toISOString();
   if (Number.isNaN(Date.parse(retrievedAt))) throw new TypeError("retrievedAt must be a valid timestamp");
+  const prepared = prepareElements(elements, { restrictedWayPolicy });
   return {
     format: "osm",
     retrievedAt: new Date(retrievedAt).toISOString(),
     sourcePath,
-    ...prepareElements(elements, { restrictedWayPolicy }),
+    nodes: prepared.nodes,
+    ways: prepared.ways,
+    relations: prepared.relations,
+    accessPointCandidates: prepared.accessNodes.map((node) =>
+      accessCandidate(node, new Date(retrievedAt).toISOString())),
+    publicRoadSourceNodeIds: prepared.publicRoadNodeIds.map((id) => `osm:${id}`),
   };
 }
 

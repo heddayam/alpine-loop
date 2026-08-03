@@ -20,7 +20,10 @@ import {
 } from "./elevation/profile.mjs";
 import { buildAccessPoints } from "./graph/access-points.mjs";
 import { buildOsmTopology } from "./graph/topology.mjs";
-import { mergeTrailSegments } from "./normalize/merge.mjs";
+import {
+  mergeTrailSegments,
+  reconcileAgencyGeometryWithOsmTopology,
+} from "./normalize/merge.mjs";
 import { deduplicateSourceRefs, normalizeSegmentText } from "./normalize/segments.mjs";
 import { readArcGisSnapshot } from "./sources/arcgis.mjs";
 import ebrpdAdapter from "./sources/ebrpd.mjs";
@@ -38,6 +41,7 @@ export const ARTIFACT_FILENAMES = Object.freeze({
   segments: "segments.ndjson",
   nodes: "nodes.ndjson",
   qa: "qa.json",
+  segmentProvenance: "segment-provenance.json",
   manifest: "manifest.json",
 });
 
@@ -87,6 +91,60 @@ function inputArrays(input) {
   return normalized;
 }
 
+function coordinateInBounds([longitude, latitude], [west, south, east, north]) {
+  return longitude >= west && longitude <= east && latitude >= south && latitude <= north;
+}
+
+function regionalRecordId(record, index) {
+  return record?.id ?? record?.sourceRefs?.map(({ provider, sourceId }) =>
+    `${provider}:${sourceId}`).sort().join("|") ?? `index:${index}`;
+}
+
+function applyRegionBounds(arrays, region) {
+  const omitted = [];
+  const filter = (records, kind, coordinates) => records.filter((record, index) => {
+    const positions = coordinates(record);
+    const inside = positions.length > 0 && positions.every((position) =>
+      coordinateInBounds(position, region.bbox));
+    if (!inside) omitted.push({
+      type: "out-of-region-record",
+      kind,
+      recordId: regionalRecordId(record, index),
+      rule: "omit-unless-fully-contained",
+    });
+    return inside;
+  });
+  const segmentCandidates = filter(
+    arrays.segmentCandidates,
+    "segment",
+    (record) => record.geometry?.coordinates ?? [],
+  );
+  const sourceNodes = filter(
+    arrays.sourceNodes,
+    "node",
+    (record) => [[record.longitude, record.latitude]],
+  );
+  const accessPointCandidates = filter(
+    arrays.accessPointCandidates,
+    "access-candidate",
+    (record) => [record.geometry?.coordinates ?? record.coordinates ?? record.coordinate ??
+      [record.longitude, record.latitude]],
+  );
+  const regionalNodeIds = new Set(sourceNodes.map(({ id }) => String(id)));
+  const publicRoadNodeIds = arrays.publicRoadNodeIds.filter((id) => regionalNodeIds.has(String(id)));
+  omitted.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return {
+    arrays: { segmentCandidates, sourceNodes, accessPointCandidates, publicRoadNodeIds },
+    issues: omitted,
+    stats: {
+      rule: "omit-unless-fully-contained",
+      omittedSegments: omitted.filter(({ kind }) => kind === "segment").length,
+      omittedNodes: omitted.filter(({ kind }) => kind === "node").length,
+      omittedAccessCandidates: omitted.filter(({ kind }) => kind === "access-candidate").length,
+    },
+  };
+}
+
 function endpointNode(nodeId, coordinate, provided) {
   const existing = provided.get(nodeId);
   return {
@@ -131,6 +189,41 @@ async function enrichSegments(segments, elevationSource, elevationOptions) {
     enriched.push(result);
   }
   return enriched.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function shippedProvenance(segments, mergeProvenance, elevationSource, elevationOptions) {
+  const result = structuredClone(mergeProvenance);
+  if (!elevationSource) return result;
+  const metadata = createElevationManifestMetadata(elevationSource, elevationOptions);
+  const source = metadata.source;
+  const sourceId = `${source.product}@${source.version}`;
+  for (const segment of segments) {
+    const fields = result[segment.id] ?? {};
+    for (const field of [
+      "ascentForwardMeters",
+      "descentForwardMeters",
+      "minElevationMeters",
+      "maxElevationMeters",
+      "maxGradePct",
+    ]) {
+      if (segment[field] === undefined) continue;
+      fields[field] = [{
+        provider: source.provider,
+        sourceId,
+        value: segment[field],
+        authority: Number.MAX_SAFE_INTEGER,
+        selected: true,
+        sourceField: {
+          product: source.product,
+          version: source.version,
+          sampling: metadata.sampling,
+          smoothing: metadata.smoothing,
+        },
+      }];
+    }
+    result[segment.id] = fields;
+  }
+  return result;
 }
 
 function paddedBounds(segments) {
@@ -204,6 +297,39 @@ function trailConfidence(segments, accessPoints) {
   return "low";
 }
 
+function accessGraph(segments) {
+  const adjacency = new Map();
+  for (const segment of segments.filter(({ hiking, access, status }) =>
+    hiking !== "blocked" && access !== "private" && status !== "closed")) {
+    for (const [from, to] of [
+      [segment.fromNodeId, segment.toNodeId],
+      [segment.toNodeId, segment.fromNodeId],
+    ]) {
+      const edges = adjacency.get(from) ?? [];
+      edges.push({ to, lengthMeters: segment.lengthMeters });
+      adjacency.set(from, edges);
+    }
+  }
+  return adjacency;
+}
+
+function reachableNodes(point, adjacency, maximumMeters = 2_000) {
+  const distances = new Map(point.connectedNodeIds.map((id) => [id, 0]));
+  const pending = point.connectedNodeIds.map((id) => ({ id, distance: 0 }));
+  while (pending.length > 0) {
+    pending.sort((left, right) => left.distance - right.distance || left.id.localeCompare(right.id));
+    const current = pending.shift();
+    if (current.distance !== distances.get(current.id) || current.distance > maximumMeters) continue;
+    for (const edge of adjacency.get(current.id) ?? []) {
+      const distance = current.distance + edge.lengthMeters;
+      if (distance > maximumMeters || distance >= (distances.get(edge.to) ?? Infinity)) continue;
+      distances.set(edge.to, distance);
+      pending.push({ id: edge.to, distance });
+    }
+  }
+  return new Set(distances.keys());
+}
+
 function buildNamedTrails(segments, accessPoints) {
   const eligible = segments.filter(({ name, hiking, access, status }) =>
     name && hiking !== "blocked" && access !== "private" && status !== "closed");
@@ -214,24 +340,19 @@ function buildNamedTrails(segments, accessPoints) {
     values.push(segment);
     namedGroups.set(key, values);
   }
-  const pointsByNode = new Map();
-  for (const point of accessPoints) {
-    for (const nodeId of point.connectedNodeIds) {
-      const points = pointsByNode.get(nodeId) ?? [];
-      points.push(point);
-      pointsByNode.set(nodeId, points);
-    }
-  }
-
+  const adjacency = accessGraph(segments);
+  const reachableByPoint = new Map(accessPoints.map((point) => [
+    point.id,
+    reachableNodes(point, adjacency),
+  ]));
   const trails = [];
   for (const segmentsWithName of namedGroups.values()) {
     for (const group of componentGroups(segmentsWithName)) {
-      const pointMap = new Map();
-      for (const segment of group) {
-        for (const nodeId of [segment.fromNodeId, segment.toNodeId]) {
-          for (const point of pointsByNode.get(nodeId) ?? []) pointMap.set(point.id, point);
-        }
-      }
+      const groupNodeIds = new Set(group.flatMap(({ fromNodeId, toNodeId }) =>
+        [fromNodeId, toNodeId]));
+      const pointMap = new Map(accessPoints.filter((point) =>
+        [...groupNodeIds].some((nodeId) => reachableByPoint.get(point.id).has(nodeId)))
+        .map((point) => [point.id, point]));
       const points = [...pointMap.values()].sort((left, right) => left.id.localeCompare(right.id));
       if (points.length === 0) continue;
       const sourceRefs = deduplicateSourceRefs(group.flatMap(({ sourceRefs }) => sourceRefs));
@@ -287,9 +408,20 @@ export async function buildRegionArtifacts(input) {
     throw new TypeError("input must be an object");
   }
   const region = requireRegion(input.regionId);
-  const arrays = inputArrays(input);
-  const merged = mergeTrailSegments(arrays.segmentCandidates, input.mergeOptions);
+  const regional = applyRegionBounds(inputArrays(input), region);
+  const arrays = regional.arrays;
+  const reconciliation = reconcileAgencyGeometryWithOsmTopology(
+    arrays.segmentCandidates,
+    input.reconciliationOptions,
+  );
+  const merged = mergeTrailSegments(reconciliation.candidates, input.mergeOptions);
   const segments = await enrichSegments(merged.segments, input.elevationSource, input.elevationOptions);
+  const segmentProvenance = shippedProvenance(
+    segments,
+    merged.provenance,
+    input.elevationSource,
+    input.elevationOptions,
+  );
   const nodes = buildCanonicalNodes(segments, arrays.sourceNodes);
   const access = buildAccessPoints({
     nodes,
@@ -309,6 +441,11 @@ export async function buildRegionArtifacts(input) {
     [ARTIFACT_FILENAMES.accessPoints]: prettyJson(accessPointGeoJson(access.accessPoints)),
     [ARTIFACT_FILENAMES.segments]: ndjson(segments),
     [ARTIFACT_FILENAMES.nodes]: ndjson(nodes),
+    [ARTIFACT_FILENAMES.segmentProvenance]: prettyJson({
+      schemaVersion: 1,
+      regionId: region.id,
+      segments: segmentProvenance,
+    }),
   };
   const dataArtifactHashes = Object.fromEntries(Object.entries(payloads).map(([filename, content]) =>
     [filename, artifactMetadata(content)]));
@@ -321,7 +458,14 @@ export async function buildRegionArtifacts(input) {
     namedTrails,
     mergeConflicts: merged.conflicts,
     accessIssues: access.issues,
-    pipelineIssues: input.pipelineIssues,
+    pipelineIssues: [
+      ...(input.pipelineIssues ?? []),
+      ...regional.issues,
+      ...reconciliation.issues,
+    ],
+    regionalFiltering: regional.stats,
+    reconciliation: reconciliation.stats,
+    segmentProvenance,
     artifactHashes: dataArtifactHashes,
   });
   payloads[ARTIFACT_FILENAMES.qa] = prettyJson(qa);
@@ -353,6 +497,7 @@ export async function buildRegionArtifacts(input) {
     accessPoints: access.accessPoints,
     segments,
     nodes,
+    segmentProvenance,
     payloads,
   };
 }
@@ -379,11 +524,19 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
   const inputDirectory = dirname(absoluteInputPath);
   input.segmentCandidates ??= [];
   input.sourceNodes ??= [];
+  input.accessPointCandidates ??= [];
+  input.publicRoadNodeIds ??= [];
   input.pipelineIssues ??= [];
   if (!Array.isArray(input.segmentCandidates)) {
     throw new TypeError("segmentCandidates must be an array");
   }
   if (!Array.isArray(input.sourceNodes)) throw new TypeError("sourceNodes must be an array");
+  if (!Array.isArray(input.accessPointCandidates)) {
+    throw new TypeError("accessPointCandidates must be an array");
+  }
+  if (!Array.isArray(input.publicRoadNodeIds)) {
+    throw new TypeError("publicRoadNodeIds must be an array");
+  }
   if (!Array.isArray(input.pipelineIssues)) throw new TypeError("pipelineIssues must be an array");
   if (input.agencySnapshots !== undefined) {
     if (!input.agencySnapshots || typeof input.agencySnapshots !== "object" ||
@@ -413,6 +566,10 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
     const topology = buildOsmTopology(snapshot);
     input.segmentCandidates.push(...topology.segments);
     input.sourceNodes.push(...topology.nodes);
+    input.accessPointCandidates.push(...(snapshot.accessPointCandidates ?? []));
+    const roadSourceIds = new Set(snapshot.publicRoadSourceNodeIds ?? []);
+    input.publicRoadNodeIds.push(...topology.nodes.filter((node) =>
+      node.sourceNodeIds.some((sourceId) => roadSourceIds.has(sourceId))).map(({ id }) => id));
     input.pipelineIssues.push(...topology.issues);
   }
   if (input.elevationGridPath) {

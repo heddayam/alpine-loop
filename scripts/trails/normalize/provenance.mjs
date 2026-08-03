@@ -57,7 +57,14 @@ function sourceIdentity(sourceRef) {
 function comparableValue(field, value) {
   if (field === "geometry") return JSON.stringify(normalizeLineString(value));
   if (typeof value === "object") return JSON.stringify(value);
-  if (["name", "manager", "surface"].includes(field)) return normalizeSegmentText(value);
+  if (field === "surface") {
+    const normalized = normalizeSegmentText(value);
+    if (["native", "natural", "ground", "dirt", "earth", "rock"].includes(normalized)) {
+      return "natural";
+    }
+    return normalized;
+  }
+  if (["name", "manager"].includes(field)) return normalizeSegmentText(value);
   return String(value).toLowerCase();
 }
 
@@ -158,6 +165,10 @@ export function provenanceConflicts(segmentId, provenance) {
     const meaningful = entries.filter(({ value }) => value !== undefined && value !== "unknown");
     const values = new Set(meaningful.map(({ value }) => comparableValue(field, value)));
     if (values.size <= 1) continue;
+    const generalizedNaturalSurface = field === "surface" && meaningful.some(({ provider, value }) =>
+      providerClass(provider) === "land-manager" &&
+      ["native", "natural"].includes(normalizeSegmentText(value))) &&
+      meaningful.some(({ provider }) => providerClass(provider) === "osm");
     conflicts.push({
       type: "merge-conflict",
       segmentId,
@@ -169,6 +180,9 @@ export function provenanceConflicts(segmentId, provenance) {
         value,
         selected,
       })),
+      ...(generalizedNaturalSurface ? {
+        resolution: "land-manager generalized natural surface wins; localized OSM material remains in provenance",
+      } : {}),
     });
   }
   return conflicts;

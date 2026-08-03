@@ -82,13 +82,23 @@ function elevationMetrics(segments) {
   ];
   const complete = segments.filter((segment) =>
     metricFields.every((field) => Number.isFinite(segment[field])));
+  const shortSegmentGradeChecksSkipped = segments
+    .filter(({ lengthMeters }) => lengthMeters < 50)
+    .map(({ id }) => id).sort();
   const implausibleMetricOutliers = segments.flatMap((segment) => {
     const reasons = [];
-    if (segment.maxGradePct > 80) reasons.push("max-grade-over-80-pct");
-    if (segment.ascentForwardMeters > segment.lengthMeters * 1.5) {
+    // DEM interpolation is not a credible per-edge grade check on OSM shape
+    // fragments shorter than 50 m; retain their metrics but audit grade only
+    // on longer segments.
+    if (segment.lengthMeters >= 50 && segment.maxGradePct > 80) {
+      reasons.push("max-grade-over-80-pct");
+    }
+    if (segment.lengthMeters >= 50 &&
+        segment.ascentForwardMeters > segment.lengthMeters * 1.5) {
       reasons.push("ascent-over-150-pct-of-length");
     }
-    if (segment.descentForwardMeters > segment.lengthMeters * 1.5) {
+    if (segment.lengthMeters >= 50 &&
+        segment.descentForwardMeters > segment.lengthMeters * 1.5) {
       reasons.push("descent-over-150-pct-of-length");
     }
     if (segment.minElevationMeters < -500) reasons.push("elevation-below-minus-500m");
@@ -99,6 +109,7 @@ function elevationMetrics(segments) {
     completeSegments: complete.length,
     missingSegments: segments.length - complete.length,
     coveragePct: segments.length === 0 ? 0 : Number((complete.length / segments.length * 100).toFixed(1)),
+    shortSegmentGradeChecksSkipped,
     implausibleMetricOutliers,
   };
 }
@@ -114,9 +125,13 @@ export function buildQaReport({
   mergeConflicts = [],
   accessIssues = [],
   pipelineIssues = [],
+  regionalFiltering = {},
+  reconciliation = {},
+  segmentProvenance = {},
   artifactHashes = {},
 }) {
   const ambiguousSnaps = accessIssues.filter(({ type }) => type === "ambiguous-connection");
+  const unresolvedMergeConflicts = mergeConflicts.filter(({ resolution }) => !resolution);
   return {
     schemaVersion: 1,
     region: { id: region.id, label: region.label, bounds: [...region.bbox] },
@@ -145,6 +160,12 @@ export function buildQaReport({
       access: countEnum(segments, "access", ENUM_VALUES.access),
     },
     graph: graphMetrics(nodes, segments),
+    regionalFiltering,
+    reconciliation,
+    provenance: {
+      segments: Object.keys(segmentProvenance).length,
+      missingSegmentIds: segments.filter(({ id }) => !segmentProvenance[id]).map(({ id }) => id),
+    },
     accessPoints: countEnum(
       accessPoints,
       "confidence",
@@ -152,6 +173,8 @@ export function buildQaReport({
     ),
     merge: {
       conflicts: mergeConflicts.length,
+      resolved: mergeConflicts.length - unresolvedMergeConflicts.length,
+      unexplained: unresolvedMergeConflicts.length,
       details: mergeConflicts,
     },
     snapping: {

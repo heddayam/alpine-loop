@@ -177,6 +177,7 @@ test("writes the complete artifact contract without network access", async () =>
         "named-trails.json",
         "nodes.ndjson",
         "qa.json",
+        "segment-provenance.json",
         "segments.ndjson",
       ],
     );
@@ -209,6 +210,73 @@ test("composes cached agency and OSM snapshots from a regional input file", asyn
     assert.equal(result.qa.counts.input.bySource.nps.segments, 2);
     assert.equal(result.qa.counts.input.bySource.osm.segments, 3);
     assert.deepEqual(result.qa.issues, []);
+  } finally {
+    await rm(outputDirectory, { recursive: true, force: true });
+  }
+});
+
+test("omits and reports records outside configured regional bounds", async () => {
+  const result = await buildRegionArtifacts(buildInput([
+    ...segments,
+    segment({
+      id: "outside-region",
+      fromNodeId: "outside-1",
+      toNodeId: "outside-2",
+      coordinates: [[-118.1, 35.1], [-118.09, 35.11]],
+      name: "Wrong Region Trail",
+    }),
+  ]));
+
+  assert.equal(result.segments.some(({ name }) => name === "Wrong Region Trail"), false);
+  assert.equal(result.qa.regionalFiltering.rule, "omit-unless-fully-contained");
+  assert.equal(result.qa.regionalFiltering.omittedSegments, 1);
+  assert.equal(result.qa.issues.some(({ type, recordId }) =>
+    type === "out-of-region-record" && recordId === "outside-region"), true);
+});
+
+test("reconciles agency granularity, ingests OSM access, and ships field provenance", async () => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), "alpine-trails-gate-c-"));
+  const inputPath = join(outputDirectory, "build-input.json");
+  const fixtureRoot = new URL("./fixtures/trails/", import.meta.url).pathname;
+  await writeFile(inputPath, JSON.stringify({
+    regionId: "yosemite-stanislaus",
+    agencySnapshots: { nps: join(fixtureRoot, "gate-c/nps.json") },
+    osmSnapshotPath: join(fixtureRoot, "gate-c/osm.json"),
+    elevationGridPath: join(fixtureRoot, "gate-c/elevation-grid.json"),
+  }));
+  try {
+    const result = await buildRegionFromFile(inputPath, {
+      outputDirectory: join(outputDirectory, "artifacts"),
+    });
+    assert.equal(result.qa.counts.input.bySource.nps.segments, 1);
+    assert.equal(result.qa.counts.input.bySource.osm.segments, 2);
+    assert.deepEqual(result.qa.reconciliation, {
+      reconciledAgencySegments: 1,
+      emittedAgencyEdges: 2,
+    });
+    assert.equal(result.segments.length, 2);
+    assert.equal(result.namedTrails.length, 1);
+    assert.ok(result.namedTrails[0].accessPointIds.length >= 1);
+    assert.ok(result.accessPoints.some(({ name }) => name === "Mirror Lake Trailhead"));
+    assert.equal(result.qa.elevation.completeSegments, 2);
+    assert.deepEqual(result.qa.elevation.implausibleMetricOutliers, []);
+    assert.deepEqual(result.qa.merge.details, []);
+    assert.deepEqual(result.qa.snapping.details, []);
+
+    const nodesById = new Map(result.nodes.map((node) => [node.id, node]));
+    for (const builtSegment of result.segments) {
+      assert.deepEqual(builtSegment.geometry.coordinates[0], [
+        nodesById.get(builtSegment.fromNodeId).longitude,
+        nodesById.get(builtSegment.fromNodeId).latitude,
+      ]);
+      assert.deepEqual(builtSegment.geometry.coordinates.at(-1), [
+        nodesById.get(builtSegment.toNodeId).longitude,
+        nodesById.get(builtSegment.toNodeId).latitude,
+      ]);
+      assert.ok(result.segmentProvenance[builtSegment.id].geometry.some(({ selected }) => selected));
+      assert.equal(result.segmentProvenance[builtSegment.id].maxGradePct[0].provider, "USGS");
+    }
+    assert.equal(result.qa.provenance.missingSegmentIds.length, 0);
   } finally {
     await rm(outputDirectory, { recursive: true, force: true });
   }

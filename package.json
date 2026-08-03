@@ -14,6 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "trails:audit": "node scripts/trails/coverage-spike.mjs",
     "trails:audit:refresh": "node scripts/trails/coverage-spike.mjs --refresh=all",
+    "trails:pilot:refresh": "node scripts/trails/prepare-gate-c-pilot.mjs",
     "trails:build": "node scripts/trails/build-region.mjs --region=yosemite-stanislaus"
   },
   "dependencies": {
