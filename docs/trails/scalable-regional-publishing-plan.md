@@ -105,7 +105,7 @@ Keep in versioned object storage:
 - Regional manifests and immutable build evidence.
 
 D1 remains responsible for reachability jobs and usage accounting. R2 is the
-preferred blob store, subject to the fixture-backed proof in P4. Set the logical
+preferred blob store, subject to the fixture-backed proof in P5. Set the logical
 Sites binding only in the reviewed storage integration task; no credentials or
 physical bucket identifiers belong in source.
 
