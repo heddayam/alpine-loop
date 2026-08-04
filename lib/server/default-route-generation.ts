@@ -6,15 +6,17 @@ import {
   type RouteSolver,
 } from "@/lib/solver";
 import type { GenerateRoutesRequestV1, GenerateRoutesResponseV1 } from "@/lib/contracts";
+import {
+  FIXTURE_PACK_COVERAGE,
+  FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
+  FIXTURE_PACK_METADATA,
+} from "@/lib/packs/fixture-pack";
 import { createGenerateRoutesHandler, type RoutePack } from "./route-generation";
 
 const FIXTURE_PACK: RoutePack = {
-  id: "fixture-pack",
-  schemaVersion: "1",
-  dataVersion: "fixture-v1",
-  builtAt: "2026-08-04T00:00:00Z",
-  coverageBbox: [-122.19, 37.15, -122.13, 37.18],
-  maximumAreaSquareKilometers: 25,
+  ...FIXTURE_PACK_METADATA,
+  coverageBbox: FIXTURE_PACK_COVERAGE,
+  maximumAreaSquareKilometers: FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
   loadRepository: async () =>
     new FixtureGraphRepository(fixtureGraph as unknown as FixtureGraphData),
 };

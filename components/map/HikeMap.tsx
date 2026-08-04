@@ -9,6 +9,8 @@ import { boundsPolygon, normalizeBounds } from "./geometry";
 
 type HikeMapProps = {
   bounds: Bounds | null;
+  packCoverage: Bounds;
+  suggestedBounds: Bounds;
   accessPoints: AccessPointOption[];
   selectedAccessPointId?: string;
   routes: GeneratedRoute[];
@@ -50,6 +52,8 @@ export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string
 
 export function HikeMap({
   bounds,
+  packCoverage,
+  suggestedBounds,
   accessPoints,
   selectedAccessPointId,
   routes,
@@ -113,6 +117,19 @@ export function HikeMap({
       map.addControl(new NavigationControl({ showCompass: false }), "top-right");
       map.on("load", () => {
         const initialBounds = boundsRef.current;
+        map?.addSource("pack-coverage", { type: "geojson", data: boundsPolygon(packCoverage) });
+        map?.addLayer({
+          id: "pack-coverage-fill",
+          type: "fill",
+          source: "pack-coverage",
+          paint: { "fill-color": "#2a705a", "fill-opacity": 0.08 },
+        });
+        map?.addLayer({
+          id: "pack-coverage-line",
+          type: "line",
+          source: "pack-coverage",
+          paint: { "line-color": "#245b4b", "line-width": 2, "line-dasharray": [3, 2] },
+        });
         map?.addSource("hard-boundary", { type: "geojson", data: initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
         map?.addLayer({
           id: "hard-boundary-fill",
@@ -191,7 +208,7 @@ export function HikeMap({
       map?.remove();
       mapRef.current = null;
     };
-  }, [onAccessPointSelect, onRouteSelect]);
+  }, [onAccessPointSelect, onRouteSelect, packCoverage]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;
@@ -253,13 +270,20 @@ export function HikeMap({
         >
           {bounds ? "Redraw boundary" : "Draw boundary"}
         </button>
+        <button type="button" onClick={() => onBoundsChange([...suggestedBounds])}>
+          Use demo area
+        </button>
         <button type="button" disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
       </div>
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
       <p className="map-hint">
-        {drawing ? "Drag across the map to set the hard search boundary." : "Routes may not leave the outlined boundary."}
+        {drawing
+          ? "Drag inside the shaded pack coverage to set the hard search boundary."
+          : bounds
+            ? "Routes may not leave the outlined boundary."
+            : "Draw inside the shaded installed-pack coverage, or use the demo area."}
       </p>
     </section>
   );

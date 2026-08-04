@@ -2,6 +2,7 @@ import {
   generateRoutesRequestV1Schema,
   type GenerateRoutesRequestV1,
 } from "@/lib/contracts";
+import { FIXTURE_PACK_COVERAGE } from "@/lib/packs/fixture-pack";
 import type { Bounds, BuilderValues, RangeField } from "./types";
 
 export type ValidationResult =
@@ -28,6 +29,15 @@ export function isPointInsideBounds(lon: number, lat: number, bounds: Bounds) {
   return lon >= west && lon <= east && lat >= south && lat <= north;
 }
 
+export function isBoundsInsideBounds(inner: Bounds, outer: Bounds) {
+  return (
+    inner[0] >= outer[0] &&
+    inner[1] >= outer[1] &&
+    inner[2] <= outer[2] &&
+    inner[3] <= outer[3]
+  );
+}
+
 export function buildGenerateRoutesRequest(
   values: BuilderValues,
   bounds: Bounds | null,
@@ -35,6 +45,9 @@ export function buildGenerateRoutesRequest(
 ): ValidationResult {
   const errors: string[] = [];
   if (!bounds) errors.push("Draw a search rectangle on the map first.");
+  else if (!isBoundsInsideBounds(bounds, FIXTURE_PACK_COVERAGE)) {
+    errors.push("Keep the search rectangle inside the shaded installed-pack coverage.");
+  }
   if (values.routeTypes.length === 0) errors.push("Choose at least one route shape.");
 
   const distance = parseRange(values.distanceMiles, "Distance");

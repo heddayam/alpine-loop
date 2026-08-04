@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BUILDER_VALUES, type BuilderValues } from "./types";
-import { buildGenerateRoutesRequest, isPointInsideBounds } from "./validation";
+import { buildGenerateRoutesRequest, isBoundsInsideBounds, isPointInsideBounds } from "./validation";
 
 const bounds = [-122.18, 37.15, -122.13, 37.18] as const;
 
@@ -57,5 +57,15 @@ describe("builder request validation", () => {
     expect(isPointInsideBounds(-122.18, 37.15, [...bounds])).toBe(true);
     expect(isPointInsideBounds(-122.13, 37.18, [...bounds])).toBe(true);
     expect(isPointInsideBounds(-122.181, 37.16, [...bounds])).toBe(false);
+  });
+
+  it("rejects a rectangle that leaves installed pack coverage", () => {
+    const outside = [-122.2, 37.15, -122.13, 37.18] as const;
+    expect(isBoundsInsideBounds([...outside], [...bounds])).toBe(false);
+    const result = buildGenerateRoutesRequest(values(), [...outside]);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors).toContain("Keep the search rectangle inside the shaded installed-pack coverage.");
+    }
   });
 });

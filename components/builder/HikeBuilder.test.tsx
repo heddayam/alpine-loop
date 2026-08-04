@@ -152,7 +152,7 @@ describe("HikeBuilder", () => {
       bbox: [-122.18, 37.15, -122.13, 37.18],
       startAccessPointId: "trailhead-a",
       routeTypes: ["loop"],
-      distanceMiles: { min: 3, max: 8 },
+      distanceMiles: { min: 2, max: 8 },
       includeUncertainAccess: false,
       limit: 10,
     });
