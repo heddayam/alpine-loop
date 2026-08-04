@@ -13,10 +13,11 @@ import type {
   TopologySourceAdapter,
 } from "./adapters";
 import { reconcileAccess } from "./access";
-import { calculateEdgeMetrics } from "./metrics";
+import { calculateEdgeMetricsBatch } from "./metrics";
 import { writePackDatabase } from "./sqlite-writer";
 import type {
   CompiledEdge,
+  Coordinate,
   NormalizedAccessPoint,
   NormalizedTopology,
   PackAudit,
@@ -78,15 +79,23 @@ async function compileGraph(
   const nodes = topology.nodes.map((node, index) => ({ ...node, elevationM: nodeElevations[index] }));
   let conflicts = 0;
   const edges: CompiledEdge[] = [];
-
-  for (const way of topology.ways) {
+  const segmentPlans = topology.ways.flatMap((way) => {
     const official = byExternalId.get(way.externalId) ?? [];
     const resolution = reconcileAccess(way.accessState, official.map(({ accessState }) => accessState));
     if (resolution.conflict) conflicts += 1;
     const sourceRefs = [...new Set([...way.sourceRefs, ...official.map(({ sourceId }) => sourceId)])];
-    for (let segment = 0; segment < way.nodeIds.length - 1; segment += 1) {
-      const geometry = [way.coordinates[segment], way.coordinates[segment + 1]];
-      const metrics = await calculateEdgeMetrics(geometry, sampler);
+    return Array.from({ length: way.nodeIds.length - 1 }, (_, segment) => ({
+      way,
+      segment,
+      resolution,
+      sourceRefs,
+      geometry: [way.coordinates[segment], way.coordinates[segment + 1]] as [Coordinate, Coordinate],
+    }));
+  });
+  const segmentMetrics = await calculateEdgeMetricsBatch(segmentPlans.map(({ geometry }) => geometry), sampler);
+
+  segmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }, planIndex) => {
+      const metrics = segmentMetrics[planIndex]!;
       const common = {
         lengthM: metrics.lengthM,
         maxElevationM: metrics.maxElevationM,
@@ -115,8 +124,7 @@ async function compileGraph(
           ...common,
         });
       }
-    }
-  }
+  });
 
   const accessPoints = topology.accessPoints.map((point) => {
     const official = byExternalId.get(point.externalId) ?? [];

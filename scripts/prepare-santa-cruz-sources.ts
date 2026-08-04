@@ -6,10 +6,9 @@ import {
   validateOsmPrerequisites,
 } from "../lib/data/osm";
 import {
-  prepareThreeDepVrt,
   readElevationSourceConfig,
   readPinnedThreeDepCollection,
-  validateGdalPrerequisites,
+  validateUvRasterioPrerequisites,
 } from "../lib/data/elevation";
 
 const HELP = `Usage: npx tsx scripts/prepare-santa-cruz-sources.ts [--cache=<path>] [--build-cache=<path>] [--validate]\n\nPrepares already refreshed, pinned OSM and 3DEP snapshots. This command never accesses the network.\nRun refresh-osm.ts and refresh-3dep.ts explicitly before it.\n--validate  Validate configuration and required local tools without reading cached sources.\n`;
@@ -23,7 +22,7 @@ if (process.argv.includes("--help")) {
   const boundaryPath = path.resolve("data/regions/santa-cruz-mountains/boundary.geojson");
   const osmConfig = await readOsmSourceConfig(path.resolve("data/regions/santa-cruz-mountains/osm-source.json"));
   const elevationConfig = await readElevationSourceConfig(path.resolve("data/regions/santa-cruz-mountains/elevation-source.json"));
-  const tools = { osmium: await validateOsmPrerequisites(), ...(await validateGdalPrerequisites()) };
+  const tools = { osmium: await validateOsmPrerequisites(), ...(await validateUvRasterioPrerequisites()) };
   if (process.argv.includes("--validate")) {
     console.log(JSON.stringify({ valid: true, tools, osmVersion: osmConfig.version, demVersion: elevationConfig.version }, null, 2));
   } else {
@@ -36,7 +35,6 @@ if (process.argv.includes("--help")) {
     const topology = [];
     for await (const graph of topologyAdapter.normalize(osmSnapshot)) topology.push(graph);
     if (topology.length !== 1) throw new Error("OSM adapter did not produce exactly one topology graph");
-    const vrtPath = await prepareThreeDepVrt(dem.collectionPath, path.join(buildCache, "elevation"));
     console.log(JSON.stringify({
       tools,
       osm: {
@@ -49,7 +47,7 @@ if (process.argv.includes("--help")) {
       elevation: {
         snapshot: dem.snapshot.contentHash,
         products: dem.collection.products.length,
-        vrtPath,
+        collectionPath: dem.collectionPath,
       },
     }, null, 2));
   }

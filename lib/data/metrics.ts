@@ -58,6 +58,13 @@ export async function calculateEdgeMetrics(
 ): Promise<EdgeMetrics> {
   const coordinates = densifyGeometry(geometry);
   const samples = await sampler.sample(coordinates);
+  return metricsFromSamples(coordinates, samples);
+}
+
+function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | null>): EdgeMetrics {
+  if (samples.length !== coordinates.length) {
+    throw new Error(`Elevation sampler returned ${samples.length} values for ${coordinates.length} coordinates`);
+  }
   const distances = cumulativeDistances(coordinates);
   const lengthM = distances.at(-1) ?? 0;
   const complete = samples.every((sample): sample is number => sample !== null);
@@ -94,4 +101,28 @@ export async function calculateEdgeMetrics(
     maxSustainedGradePct,
     samples,
   };
+}
+
+export async function calculateEdgeMetricsBatch(
+  geometries: ReadonlyArray<readonly Coordinate[]>,
+  sampler: ElevationSampler,
+  batchSize = 5_000,
+): Promise<EdgeMetrics[]> {
+  if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Metric batch size must be a positive integer");
+  const result: EdgeMetrics[] = [];
+  for (let offset = 0; offset < geometries.length; offset += batchSize) {
+    const dense = geometries.slice(offset, offset + batchSize).map(densifyGeometry);
+    const flat = dense.flat();
+    const samples = await sampler.sample(flat);
+    if (samples.length !== flat.length) {
+      throw new Error(`Elevation sampler returned ${samples.length} values for ${flat.length} batched coordinates`);
+    }
+    let sampleOffset = 0;
+    for (const coordinates of dense) {
+      const nextOffset = sampleOffset + coordinates.length;
+      result.push(metricsFromSamples(coordinates, samples.slice(sampleOffset, nextOffset)));
+      sampleOffset = nextOffset;
+    }
+  }
+  return result;
 }
