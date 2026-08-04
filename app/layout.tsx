@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Alpine Search",
-  description: "Build plausible hiking routes inside a bounded trail graph.",
+  description: "Build hiking routes inside a boundary you choose.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
