@@ -9,6 +9,15 @@ import {
   providerForDuration,
   type ReachabilityProvider,
 } from "./reachability";
+import {
+  buildTrailAccessMarkerModels,
+  formatContractValue,
+  formatElevationRange,
+  formatSourceDate,
+  formatTrailLength,
+  type ReachableTrail,
+  type TrailSearchResponse,
+} from "./trails/ui";
 
 type Origin = { lat: number; lng: number; label: string };
 type MapType = "terrain" | "roadmap" | "satellite";
@@ -22,6 +31,7 @@ type ReachabilityResponse = {
   geoJson?: unknown;
   error?: string;
 };
+type CompletedReachability = { key: string; geoJson: object };
 
 type CacheEntry =
   | {
@@ -153,17 +163,41 @@ function waitForPoll(milliseconds: number, signal: AbortSignal) {
   });
 }
 
+function TrailSourceList({ sourceRefs }: { sourceRefs: ReachableTrail["sourceRefs"] }) {
+  return (
+    <ul className="trail-source-list">
+      {sourceRefs.map((source) => (
+        <li key={`${source.provider}:${source.sourceId}:${source.sourceUrl}`}>
+          <a href={source.sourceUrl} target="_blank" rel="noreferrer">
+            {source.provider}
+          </a>
+          <span>{source.sourceId}</span>
+          <small>
+            {source.sourceUpdatedAt && `Updated ${formatSourceDate(source.sourceUpdatedAt)} · `}
+            Retrieved {formatSourceDate(source.retrievedAt)}
+          </small>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function ReachabilityMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
+  const trailDataLayerRef = useRef<google.maps.Data | null>(null);
+  const trailMarkerRefs = useRef<google.maps.Marker[]>([]);
   const autocompleteSessionRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const requestIdRef = useRef(0);
   const searchRequestIdRef = useRef(0);
+  const trailSearchRequestIdRef = useRef(0);
+  const trailGeometryRequestIdRef = useRef(0);
   const fitNextContourRef = useRef(false);
   const shownDurationRef = useRef<number | null>(null);
   const reachabilityCacheRef = useRef(new Map<string, CacheEntry>());
+  const trailGeometryCacheRef = useRef(new Map<string, object>());
 
   const [mapReady, setMapReady] = useState(false);
   const [origin, setOrigin] = useState<Origin | null>(null);
@@ -182,6 +216,16 @@ export function ReachabilityMap() {
   const [usageProvider, setUsageProvider] = useState<ReachabilityProvider | null>(null);
   const [mapType, setMapType] = useState<MapType>("terrain");
   const [showReachability, setShowReachability] = useState(true);
+  const [showTrails, setShowTrails] = useState(false);
+  const [completedReachability, setCompletedReachability] = useState<CompletedReachability | null>(null);
+  const [trailSearchResult, setTrailSearchResult] = useState<TrailSearchResponse | null>(null);
+  const [trailsLoading, setTrailsLoading] = useState(false);
+  const [trailsError, setTrailsError] = useState<string | null>(null);
+  const [trailSearchRetryToken, setTrailSearchRetryToken] = useState(0);
+  const [selectedTrailId, setSelectedTrailId] = useState<string | null>(null);
+  const [trailGeometryLoading, setTrailGeometryLoading] = useState(false);
+  const [trailGeometryError, setTrailGeometryError] = useState<string | null>(null);
+  const [trailGeometryRetryToken, setTrailGeometryRetryToken] = useState(0);
   const [searchValue, setSearchValue] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -199,6 +243,23 @@ export function ReachabilityMap() {
       visible,
     });
   }, []);
+
+  const clearTrailMarkers = useCallback(() => {
+    trailMarkerRefs.current.forEach((marker) => {
+      google.maps.event.clearInstanceListeners(marker);
+      marker.setMap(null);
+    });
+    trailMarkerRefs.current = [];
+  }, []);
+
+  const clearTrailGeometry = useCallback(() => {
+    trailDataLayerRef.current?.forEach((feature) => trailDataLayerRef.current?.remove(feature));
+  }, []);
+
+  const clearTrailMapLayers = useCallback(() => {
+    clearTrailMarkers();
+    clearTrailGeometry();
+  }, [clearTrailGeometry, clearTrailMarkers]);
 
   useEffect(() => {
     let active = true;
@@ -231,7 +292,17 @@ export function ReachabilityMap() {
           controlSize: 30,
         });
         applyOverlayStyle(map, true);
+        const trailDataLayer = new google.maps.Data({ map });
+        trailDataLayer.setStyle({
+          clickable: false,
+          strokeColor: "#2f6b4f",
+          strokeOpacity: 1,
+          strokeWeight: 5,
+          fillOpacity: 0,
+          zIndex: 4,
+        });
         mapRef.current = map;
+        trailDataLayerRef.current = trailDataLayer;
         setMapReady(true);
       } catch (caught) {
         if (active) {
@@ -242,8 +313,11 @@ export function ReachabilityMap() {
     void initializeMap();
     return () => {
       active = false;
+      clearTrailMapLayers();
+      trailDataLayerRef.current?.setMap(null);
+      trailDataLayerRef.current = null;
     };
-  }, [applyOverlayStyle]);
+  }, [applyOverlayStyle, clearTrailMapLayers]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -260,11 +334,13 @@ export function ReachabilityMap() {
   }, [duration]);
 
   const selectOrigin = useCallback((nextOrigin: Origin) => {
+    requestIdRef.current += 1;
     setOrigin(nextOrigin);
     setError(null);
     setShownDuration(null);
     shownDurationRef.current = null;
     setShownProvider(null);
+    setCompletedReachability(null);
     fitNextContourRef.current = true;
     clearDataLayer(mapRef.current);
     if (mapRef.current) {
@@ -282,6 +358,7 @@ export function ReachabilityMap() {
     setShownDuration(null);
     shownDurationRef.current = null;
     setShownProvider(null);
+    setCompletedReachability(null);
     setSearchValue("");
     setSuggestions([]);
     setError(null);
@@ -412,6 +489,9 @@ export function ReachabilityMap() {
       shownDurationRef.current = appliedDuration;
       setShownDuration(appliedDuration);
       setShownProvider(entry.provider);
+      setCompletedReachability((current) =>
+        current?.key === cacheKey ? current : { key: cacheKey, geoJson: entry.geoJson },
+      );
     };
 
     const poll = async (entry: Extract<CacheEntry, { status: "pending" }>) => {
@@ -515,6 +595,146 @@ export function ReachabilityMap() {
     };
   }, [applyOverlayStyle, appliedDuration, mapReady, origin, retryToken, showReachability]);
 
+  useEffect(() => {
+    const requestId = ++trailSearchRequestIdRef.current;
+    trailGeometryRequestIdRef.current += 1;
+    const controller = new AbortController();
+    const run = async () => {
+      clearTrailMapLayers();
+      setSelectedTrailId(null);
+      setTrailGeometryLoading(false);
+      setTrailGeometryError(null);
+      setTrailSearchResult(null);
+      setTrailsError(null);
+      if (!showTrails || !completedReachability) {
+        setTrailsLoading(false);
+        return;
+      }
+      setTrailsLoading(true);
+      try {
+        const response = await fetch("/api/trails/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            regionId: "yosemite-stanislaus",
+            driveTimePolygon: completedReachability.geoJson,
+          }),
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as Partial<TrailSearchResponse> & { error?: string };
+        if (
+          !response.ok ||
+          payload.schemaVersion !== 1 ||
+          typeof payload.count !== "number" ||
+          !Array.isArray(payload.trails)
+        ) {
+          throw new Error(payload.error ?? "Reachable hiking trails could not be loaded.");
+        }
+        if (controller.signal.aborted || requestId !== trailSearchRequestIdRef.current) return;
+        setTrailSearchResult(payload as TrailSearchResponse);
+      } catch (caught) {
+        if (controller.signal.aborted || requestId !== trailSearchRequestIdRef.current) return;
+        setTrailsError(
+          caught instanceof Error ? caught.message : "Reachable hiking trails could not be loaded.",
+        );
+      } finally {
+        if (requestId === trailSearchRequestIdRef.current) setTrailsLoading(false);
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [clearTrailMapLayers, completedReachability, showTrails, trailSearchRetryToken]);
+
+  useEffect(() => {
+    clearTrailMarkers();
+    if (!showTrails || !mapRef.current || !trailSearchResult) return;
+
+    trailMarkerRefs.current = buildTrailAccessMarkerModels(
+      trailSearchResult.trails,
+      selectedTrailId,
+    ).map((accessPoint) => {
+      const marker = new google.maps.Marker({
+        map: mapRef.current,
+        position: { lat: accessPoint.latitude, lng: accessPoint.longitude },
+        title: `${accessPoint.name ?? accessPoint.trailNames.join(", ")} — ${formatContractValue(accessPoint.confidence)} ${formatContractValue(accessPoint.type)}`,
+        zIndex: accessPoint.selected ? 12 : 8,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: accessPoint.selected ? 8 : 6,
+          fillColor: accessPoint.selected ? "#efaa3c" : "#365e4c",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeOpacity: 1,
+          strokeWeight: accessPoint.selected ? 3 : 2,
+        },
+      });
+      marker.addListener("click", () => {
+        setSelectedTrailId(
+          accessPoint.selected && selectedTrailId
+            ? selectedTrailId
+            : accessPoint.trailIds[0],
+        );
+      });
+      return marker;
+    });
+
+    return clearTrailMarkers;
+  }, [clearTrailMarkers, selectedTrailId, showTrails, trailSearchResult]);
+
+  useEffect(() => {
+    const requestId = ++trailGeometryRequestIdRef.current;
+    const controller = new AbortController();
+    const run = async () => {
+      clearTrailGeometry();
+      setTrailGeometryLoading(false);
+      setTrailGeometryError(null);
+      if (!showTrails || !selectedTrailId || !trailSearchResult) return;
+
+      const selectedTrail = trailSearchResult.trails.find(({ id }) => id === selectedTrailId);
+      if (!selectedTrail) return;
+      const cacheKey = `${trailSearchResult.artifactVersion}:${selectedTrail.geometryUrl}`;
+      const cached = trailGeometryCacheRef.current.get(cacheKey);
+      if (cached) {
+        trailDataLayerRef.current?.addGeoJson(cached);
+        return;
+      }
+
+      setTrailGeometryLoading(true);
+      try {
+        const response = await fetch(selectedTrail.geometryUrl, {
+          headers: { Accept: "application/geo+json, application/json" },
+          signal: controller.signal,
+        });
+        const payload = await response.json() as unknown;
+        const geoJson = normalizeGeoJson(payload);
+        const errorMessage = payload && typeof payload === "object" && "error" in payload &&
+          typeof payload.error === "string" ? payload.error : undefined;
+        if (!response.ok || !geoJson) {
+          throw new Error(errorMessage ?? "The selected trail geometry could not be loaded.");
+        }
+        if (controller.signal.aborted || requestId !== trailGeometryRequestIdRef.current) return;
+        trailGeometryCacheRef.current.set(cacheKey, geoJson);
+        trailDataLayerRef.current?.addGeoJson(geoJson);
+      } catch (caught) {
+        if (controller.signal.aborted || requestId !== trailGeometryRequestIdRef.current) return;
+        setTrailGeometryError(
+          caught instanceof Error ? caught.message : "The selected trail geometry could not be loaded.",
+        );
+      } finally {
+        if (requestId === trailGeometryRequestIdRef.current) setTrailGeometryLoading(false);
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [
+    clearTrailGeometry,
+    selectedTrailId,
+    showTrails,
+    trailGeometryRetryToken,
+    trailSearchResult,
+  ]);
+
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       setError("Location is not available in this browser. Use search instead.");
@@ -550,6 +770,8 @@ export function ReachabilityMap() {
         : origin
           ? "Adjust the travel time to recalculate the area."
           : "Search or use your location to create a drive-time area.";
+  const selectedTrail = trailSearchResult?.trails.find(({ id }) => id === selectedTrailId);
+  const activeLayerCount = 1 + Number(showReachability) + Number(showTrails);
 
   return (
     <main className="map-workspace">
@@ -688,7 +910,7 @@ export function ReachabilityMap() {
         </section>
 
         <section className="compact-layers" aria-label="Map layers">
-          <div className="subsection-heading"><strong>Map Layers</strong><span>{showReachability ? "2 active" : "1 active"}</span></div>
+          <div className="subsection-heading"><strong>Map Layers</strong><span>{activeLayerCount} active</span></div>
           <div className="base-layer-preview">
             <span className={`base-thumb base-thumb--${mapType}`} aria-hidden="true" />
             <div><small>Base layer</small><strong>{mapType === "terrain" ? "Topo Terrain" : mapType === "roadmap" ? "Road Map" : "Satellite"}</strong></div>
@@ -700,16 +922,148 @@ export function ReachabilityMap() {
               </button>
             ))}
           </div>
-          <label className="layer-row layer-row--active">
+          <label className="layer-row layer-row--active reachability-layer-row">
             <input type="checkbox" checked={showReachability} onChange={(event) => setShowReachability(event.target.checked)} />
             <span className="layer-symbol layer-symbol--area" aria-hidden="true" />
             <span><strong>Drive-time area</strong><small>{formatDuration(duration)} contour</small></span>
           </label>
-          <div className="layer-row">
+          <label className={`layer-row trails-layer-row${showTrails ? " layer-row--active" : ""}`}>
+            <input
+              type="checkbox"
+              checked={showTrails}
+              onChange={(event) => setShowTrails(event.target.checked)}
+              aria-describedby="trails-layer-description"
+            />
+            <span className="layer-symbol layer-symbol--trails" aria-hidden="true" />
+            <span>
+              <strong>Hiking trails</strong>
+              <small id="trails-layer-description">Reachable connected access</small>
+            </span>
+          </label>
+          <div className="layer-row terrain-layer-row">
             <span className="fake-check" aria-hidden="true">✓</span><span className="layer-symbol layer-symbol--terrain" aria-hidden="true" />
             <span><strong>Terrain relief</strong><small>Hillshade and elevation</small></span>
           </div>
         </section>
+
+        {showTrails && (
+          <section className="trails-panel" aria-label="Reachable hiking trails">
+            <div className="trails-panel-heading">
+              <div>
+                <strong>Reachable trails</strong>
+                <small>Yosemite–Stanislaus</small>
+              </div>
+              <output
+                aria-live="polite"
+                aria-label={trailSearchResult ? `${trailSearchResult.count} total reachable trails` : "Reachable trail count pending"}
+              >
+                {trailsLoading ? "…" : trailSearchResult ? trailSearchResult.count.toLocaleString() : "—"}
+              </output>
+            </div>
+
+            {!completedReachability && (
+              <p className="trails-state">Create a completed drive-time area to find reachable trail access.</p>
+            )}
+            {trailsLoading && (
+              <p className="trails-state" role="status">
+                <span className="status-pulse" aria-hidden="true" /> Searching connected trail access…
+              </p>
+            )}
+            {trailsError && (
+              <div className="trails-state trails-state--error" role="alert">
+                <p>{trailsError}</p>
+                <button type="button" onClick={() => setTrailSearchRetryToken((value) => value + 1)}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {trailSearchResult && trailSearchResult.count === 0 && (
+              <p className="trails-state">No hiking trails have a connected access point inside this drive-time area.</p>
+            )}
+            {trailSearchResult && trailSearchResult.trails.length > 0 && (
+              <>
+                {trailSearchResult.trails.length < trailSearchResult.count && (
+                  <p className="trails-result-limit">
+                    Showing {trailSearchResult.trails.length.toLocaleString()} of {trailSearchResult.count.toLocaleString()}
+                  </p>
+                )}
+                <ol className="trail-results-list">
+                  {trailSearchResult.trails.map((trail) => {
+                    const isSelected = trail.id === selectedTrailId;
+                    return (
+                      <li key={trail.id} className={isSelected ? "is-selected" : ""}>
+                        <button
+                          type="button"
+                          className="trail-result-select"
+                          onClick={() => setSelectedTrailId(trail.id)}
+                          aria-pressed={isSelected}
+                          aria-label={`Show ${trail.name} on the map`}
+                        >
+                          <span className="trail-result-title">
+                            <strong>{trail.name}</strong>
+                            {trail.manager && <small>{trail.manager}</small>}
+                          </span>
+                          <span className="trail-result-metrics">
+                            <span><small>Length</small>{formatTrailLength(trail.lengthMeters)}</span>
+                            <span><small>Elevation</small>{formatElevationRange(trail.elevation)}</span>
+                          </span>
+                        </button>
+
+                        {isSelected && (
+                          <div className="trail-result-details">
+                            <dl>
+                              <div><dt>Hiking</dt><dd>{formatContractValue(trail.hiking)}</dd></div>
+                              <div><dt>Access</dt><dd>{formatContractValue(trail.access)}</dd></div>
+                              <div><dt>Status</dt><dd>{formatContractValue(trail.status)}</dd></div>
+                              <div><dt>Surface</dt><dd>{trail.surfaces?.join(", ") || "Unavailable"}</dd></div>
+                            </dl>
+
+                            <div className="trail-access-summary">
+                              <strong>Reachable access</strong>
+                              <ul>
+                                {trail.accessPoints.map((accessPoint) => (
+                                  <li key={accessPoint.id}>
+                                    <span>{accessPoint.name ?? formatContractValue(accessPoint.type)}</span>
+                                    <small>{formatContractValue(accessPoint.type)} · {formatContractValue(accessPoint.confidence)} confidence</small>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            {trail.notices.length > 0 && (
+                              <ul className="trail-notices" aria-label="Trail notices">
+                                {trail.notices.map((notice) => <li key={notice}>{notice}</li>)}
+                              </ul>
+                            )}
+
+                            <details className="trail-sources">
+                              <summary>Source and update details</summary>
+                              <TrailSourceList sourceRefs={trail.sourceRefs} />
+                              {trail.accessPoints.map((accessPoint) => (
+                                <div className="trail-access-sources" key={accessPoint.id}>
+                                  <strong>{accessPoint.name ?? formatContractValue(accessPoint.type)} access sources</strong>
+                                  <TrailSourceList sourceRefs={accessPoint.sourceRefs} />
+                                </div>
+                              ))}
+                            </details>
+
+                            {trailGeometryLoading && <p className="trail-geometry-state" role="status">Loading trail geometry…</p>}
+                            {trailGeometryError && (
+                              <div className="trail-geometry-state trail-geometry-state--error" role="alert">
+                                <span>{trailGeometryError}</span>
+                                <button type="button" onClick={() => setTrailGeometryRetryToken((value) => value + 1)}>Retry geometry</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
+            )}
+          </section>
+        )}
 
         <div className="panel-spacer" />
 
@@ -731,6 +1085,7 @@ export function ReachabilityMap() {
         <div className="map-legend" aria-hidden="true">
           <span /> {formatDuration(shownDuration ?? duration)} drive area
           {shownProvider === "arcgis" && <small>Long-range</small>}
+          {selectedTrail && <><i /> {selectedTrail.name}</>}
         </div>
       </section>
 
