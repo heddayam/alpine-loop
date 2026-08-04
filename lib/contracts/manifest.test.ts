@@ -1,0 +1,35 @@
+import { describe, expect, it } from "vitest";
+import { packManifestV1Schema } from "./manifest";
+
+const manifest = {
+  schemaVersion: "1",
+  id: "fixture-pack",
+  name: "Fixture Pack",
+  dataVersion: "fixture-v1",
+  builtAt: "2026-08-04T00:00:00Z",
+  compilerVersion: "1",
+  metricAlgorithmVersion: "1",
+  coverage: {
+    bbox: [-122.2, 37.1, -122.1, 37.2],
+    boundary: { type: "Polygon", coordinates: [[[-122.2, 37.1], [-122.1, 37.1], [-122.1, 37.2], [-122.2, 37.1]]] },
+  },
+  display: { center: [-122.15, 37.15], zoom: 12 },
+  capabilities: { elevation: true, officialAccess: true },
+  fieldConfidence: { elevation: "high" },
+  sources: [{
+    id: "fixture-source", authority: "Alpine Search", dataset: "Synthetic fixture", version: "1",
+    retrievedAt: "2026-08-04T00:00:00Z", url: "https://example.invalid/fixture", license: "CC0-1.0",
+    contentHash: `sha256:${"0".repeat(64)}`,
+  }],
+};
+
+describe("PackManifestV1", () => {
+  it("accepts a complete versioned manifest", () => {
+    expect(packManifestV1Schema.parse(manifest).id).toBe("fixture-pack");
+  });
+
+  it("rejects a missing source license decision", () => {
+    const source = { ...manifest.sources[0], license: "" };
+    expect(packManifestV1Schema.safeParse({ ...manifest, sources: [source] }).success).toBe(false);
+  });
+});

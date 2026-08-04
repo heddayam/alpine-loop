@@ -4,8 +4,8 @@ This is the durable resume point for humans and agents. Check a gate only after
 its acceptance criteria pass and record the verifying commands or artifact in
 the evidence line.
 
-- [ ] Gate 0 — active app scaffold, shared contracts, fixture graph
-  - Evidence: not started
+- [x] Gate 0 — active app scaffold, shared contracts, fixture graph
+  - Evidence: `npm ci` and `npm run verify` pass on Node 24.11.0; 14 boundary/fixture tests cover request, response, manifest, and all four fixture route shapes; Next.js 16.3.0 production build succeeds with `legacy/**` and generated data excluded.
 - [ ] Gate 1 — map shell, pack pipeline skeleton, solver foundation
   - Evidence: not started
 - [ ] Gate 2 — end-to-end route generation on committed fixtures
