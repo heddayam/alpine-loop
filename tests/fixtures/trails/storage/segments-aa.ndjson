@@ -1,0 +1,2 @@
+{"id":"segment_aa01","name":"Fixture Creek","geometry":{"type":"LineString","coordinates":[[-119.6,37.7],[-119.5,37.8]]}}
+{"id":"segment_aa02","name":"Fixture Ridge","geometry":{"type":"LineString","coordinates":[[-119.5,37.8],[-119.4,37.9]]}}

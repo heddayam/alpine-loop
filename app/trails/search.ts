@@ -75,12 +75,14 @@ export type AccessPointFeature = {
 export type RegionalTrailCatalog = {
   manifest: {
     schemaVersion: number;
+    buildId?: string;
     generatedAt: string;
     region: {
       id: string;
       label: string;
       bounds: [number, number, number, number];
     };
+    artifacts?: Record<string, { sha256?: string }>;
   };
   namedTrails: NamedTrailRecord[];
   accessPoints: AccessPointFeature[];
