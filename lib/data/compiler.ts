@@ -32,6 +32,7 @@ export type CompilePackOptions = {
   builtAt: string;
   topology: { adapter: TopologySourceAdapter<NormalizedTopology>; snapshot: SourceSnapshot };
   officialAccess: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
+  additionalOfficialAccess?: Array<{ adapter: OfficialAccessAdapter; snapshot: SourceSnapshot }>;
   elevation: { sampler: ElevationSampler; snapshot: SourceSnapshot };
   beforePublish?: () => void | Promise<void>;
 };
@@ -205,7 +206,8 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
 }
 
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
-  const sources = [options.topology.snapshot, options.officialAccess.snapshot, options.elevation.snapshot];
+  const officialAccess = [options.officialAccess, ...(options.additionalOfficialAccess ?? [])];
+  const sources = [options.topology.snapshot, ...officialAccess.map(({ snapshot }) => snapshot), options.elevation.snapshot];
   const manifest = packManifestV1Schema.parse({
     ...options.seed,
     builtAt: options.builtAt,
@@ -225,8 +227,11 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   await mkdir(stagingDirectory);
   try {
     const topology = await collectTopology(options.topology.adapter, options.topology.snapshot);
-    await options.officialAccess.adapter.validate(options.officialAccess.snapshot);
-    const evidence = await options.officialAccess.adapter.normalize(options.officialAccess.snapshot);
+    const evidence = [] as NormalizedAccessEvidence[];
+    for (const official of officialAccess) {
+      await official.adapter.validate(official.snapshot);
+      evidence.push(...await official.adapter.normalize(official.snapshot));
+    }
     const graph = await compileGraph(topology, evidence, options.elevation.sampler);
     const audit = createAudit(options.seed, topology, graph, sources.length);
     const databasePath = path.join(stagingDirectory, "pack.sqlite");

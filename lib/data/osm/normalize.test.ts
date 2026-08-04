@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { normalizeOsmFeatures, osmAccessState, readOsmGeoJsonSequence } from "./normalize";
+import { normalizeOsmFeatures, osmAccessState, osmWayIsHikingRelevant, readOsmGeoJsonSequence } from "./normalize";
 
 const fixturePath = path.resolve("data/fixtures/source/osm/hiking.geojsonseq");
 
@@ -22,5 +22,12 @@ describe("OSM hiking topology normalization", () => {
     expect(osmAccessState({})).toBe("unknown");
     expect(osmAccessState({ access: "no" })).toBe("prohibited");
     expect(osmAccessState({ foot: "private", access: "yes" })).toBe("private");
+  });
+
+  it("excludes ordinary streets and keeps only explicit pedestrian connectors", () => {
+    expect(osmWayIsHikingRelevant({ highway: "residential", name: "Main Street" })).toBe(false);
+    expect(osmWayIsHikingRelevant({ highway: "service", foot: "designated" })).toBe(true);
+    expect(osmWayIsHikingRelevant({ highway: "unclassified", name: "Ridge Trail connector" })).toBe(true);
+    expect(osmWayIsHikingRelevant({ highway: "path" })).toBe(true);
   });
 });

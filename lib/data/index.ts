@@ -7,5 +7,7 @@ export * from "./fixture-pack";
 export * from "./fixture-topology-adapter";
 export * from "./file-source";
 export * from "./metrics";
+export * from "./prepared-official-access-adapter";
+export * from "./prepared-topology-adapter";
 export * from "./sqlite-writer";
 export * from "./types";
