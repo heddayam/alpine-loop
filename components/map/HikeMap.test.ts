@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedRoute } from "@/lib/contracts";
-import { routeFeatures, routeTrailheadPins } from "./HikeMap";
+import { routeFeatures, routeTrailheadPins, showCoverageHatching } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedRoute {
   return {
@@ -23,6 +23,14 @@ function route(id: string, longitude: number): GeneratedRoute {
 }
 
 describe("generated route map features", () => {
+  it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {
+    const bounds = [-122.18, 37.155, -122.14, 37.178] as const;
+
+    expect(showCoverageHatching(null, false)).toBe(true);
+    expect(showCoverageHatching([...bounds], false)).toBe(false);
+    expect(showCoverageHatching([...bounds], true)).toBe(true);
+  });
+
   it("preserves all contract geometries and marks exactly one selected route for non-color styling", () => {
     const routes = [route("first", -122.18), route("second", -122.16)];
     const features = routeFeatures(routes, "second");

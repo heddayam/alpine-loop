@@ -6,6 +6,7 @@ import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSour
 import type { GeneratedRoute } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
+import { projectedRouteTraces, ROUTE_PREVIEW_EVENT, type ProjectedRouteTrace } from "./routeTraceOverlay";
 
 type HikeMapProps = {
   bounds: Bounds | null;
@@ -21,6 +22,7 @@ type HikeMapProps = {
 };
 
 type ScreenBox = { left: number; top: number; width: number; height: number };
+type RouteOverlay = { width: number; height: number; traces: ProjectedRouteTrace[] };
 
 export type RouteTrailheadPin = {
   key: string;
@@ -32,6 +34,10 @@ export type RouteTrailheadPin = {
   selected: boolean;
   nextRouteId: string;
 };
+
+export function showCoverageHatching(bounds: Bounds | null, drawing: boolean) {
+  return !bounds || drawing;
+}
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
@@ -137,10 +143,12 @@ export function HikeMap({
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
   const [drawing, setDrawing] = useState(false);
+  const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [draftBounds, setDraftBounds] = useState<Bounds | null>(null);
   const [coverageScreenBox, setCoverageScreenBox] = useState<ScreenBox | null>(null);
   const [committedScreenBox, setCommittedScreenBox] = useState<ScreenBox | null>(null);
   const [draftScreenBox, setDraftScreenBox] = useState<ScreenBox | null>(null);
+  const [routeOverlay, setRouteOverlay] = useState<RouteOverlay>({ width: 1, height: 1, traces: [] });
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -206,7 +214,7 @@ export function HikeMap({
           id: "hard-boundary-fill",
           type: "fill",
           source: "hard-boundary",
-          paint: { "fill-color": "#ed7b4f", "fill-opacity": 0.16 },
+          paint: { "fill-color": "#ed7b4f", "fill-opacity": 0 },
         });
         map?.addLayer({
           id: "hard-boundary-line",
@@ -265,6 +273,18 @@ export function HikeMap({
           data: routeFeatures(routesRef.current, selectedRouteIdRef.current),
         });
         map?.addLayer({
+          id: "generated-route-native-casing",
+          type: "line",
+          source: "generated-routes",
+          paint: { "line-color": "#18312a", "line-width": 7, "line-opacity": 0.9 },
+        });
+        map?.addLayer({
+          id: "generated-route-native-line",
+          type: "line",
+          source: "generated-routes",
+          paint: { "line-color": "#fffaf0", "line-width": 3, "line-opacity": 0.98, "line-dasharray": [2, 2.5] },
+        });
+        map?.addLayer({
           id: "generated-route-alternate-casing",
           type: "line",
           source: "generated-routes",
@@ -292,12 +312,29 @@ export function HikeMap({
           filter: ["==", ["get", "selected"], true],
           paint: { "line-color": "#f47b4d", "line-width": 6 },
         });
+        map?.addLayer({
+          id: "generated-route-hit-target",
+          type: "line",
+          source: "generated-routes",
+          paint: { "line-color": "#000000", "line-width": 20, "line-opacity": 0.01 },
+        });
         const selectRoute = (event: MapLayerMouseEvent) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onRouteSelect(id);
         };
         map?.on("click", "generated-route-alternates", selectRoute);
         map?.on("click", "generated-route-selected", selectRoute);
+        map?.on("click", "generated-route-hit-target", selectRoute);
+        map?.on("mouseenter", "generated-route-hit-target", (event) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (typeof id !== "string") return;
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          setHoveredRouteId(id);
+        });
+        map?.on("mouseleave", "generated-route-hit-target", () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          setHoveredRouteId(undefined);
+        });
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelect(id);
@@ -333,6 +370,12 @@ export function HikeMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
+    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(bounds, drawing) ? 0.08 : 0);
+  }, [bounds, drawing, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
     const syncCoverageBox = () => setCoverageScreenBox(screenBoxForBounds(map, packCoverage));
     syncCoverageBox();
     map.on("move", syncCoverageBox);
@@ -352,6 +395,35 @@ export function HikeMap({
     const source = mapRef.current?.getSource("generated-routes") as GeoJSONSource | undefined;
     source?.setData(routes.length > 0 ? routeFeatures(routes, selectedRouteId) : EMPTY_LINES);
   }, [routes, selectedRouteId]);
+
+  useEffect(() => {
+    const handleRoutePreview = (event: Event) => {
+      const routeId = (event as CustomEvent<{ routeId?: string }>).detail?.routeId;
+      setHoveredRouteId(routeId);
+    };
+    window.addEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
+    return () => window.removeEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const syncRouteOverlay = () => {
+      const container = map.getContainer();
+      setRouteOverlay({
+        width: Math.max(1, container.clientWidth),
+        height: Math.max(1, container.clientHeight),
+        traces: projectedRouteTraces(routes, selectedRouteId, hoveredRouteId, (coordinate) => map.project(coordinate)),
+      });
+    };
+    syncRouteOverlay();
+    map.on("move", syncRouteOverlay);
+    map.on("resize", syncRouteOverlay);
+    return () => {
+      map.off("move", syncRouteOverlay);
+      map.off("resize", syncRouteOverlay);
+    };
+  }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -386,6 +458,10 @@ export function HikeMap({
         event.stopPropagation();
         onRouteSelect(pin.nextRouteId);
       });
+      element.addEventListener("mouseenter", () => setHoveredRouteId(pin.nextRouteId));
+      element.addEventListener("mouseleave", () => setHoveredRouteId(undefined));
+      element.addEventListener("focus", () => setHoveredRouteId(pin.nextRouteId));
+      element.addEventListener("blur", () => setHoveredRouteId(undefined));
 
       return new Marker({ element, anchor: "bottom" }).setLngLat(pin.coordinates).addTo(map);
     });
@@ -469,8 +545,28 @@ export function HikeMap({
         </button>
       </div>
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
+      {routeOverlay.traces.length > 0 ? (
+        <svg
+          className="route-trace-overlay"
+          viewBox={`0 0 ${routeOverlay.width} ${routeOverlay.height}`}
+          aria-hidden="true"
+          preserveAspectRatio="none"
+        >
+          {routeOverlay.traces.map((trace) => (
+            <g
+              key={trace.id}
+              className={`route-trace ${trace.selected ? "selected" : "alternate"}${trace.hovered ? " hovered" : ""}`}
+              data-route-id={trace.id}
+              data-route-number={trace.routeNumber}
+            >
+              <path className="route-trace-casing" d={trace.path} />
+              <path className="route-trace-line" d={trace.path} />
+            </g>
+          ))}
+        </svg>
+      ) : null}
       {coverageScreenBox ? (
-        <div className="coverage-screen-box" style={coverageScreenBox} aria-hidden="true">
+        <div className={`coverage-screen-box${showCoverageHatching(bounds, drawing) ? "" : " context-only"}`} style={coverageScreenBox} aria-hidden="true">
           <span>Installed demo coverage</span>
         </div>
       ) : null}

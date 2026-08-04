@@ -7,6 +7,7 @@ import type {
   GenerateRoutesResponseV1,
   RouteType,
 } from "@/lib/contracts";
+import { announceRoutePreview } from "../map/routeTraceOverlay";
 
 export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
 
@@ -107,17 +108,28 @@ function ElevationProfile({ route }: { route: GeneratedRoute }) {
 
 function RouteCard({
   route,
+  routeNumber,
   selected,
   buttonRef,
   onSelect,
 }: {
   route: DisplayRoute;
+  routeNumber: number;
   selected: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
   onSelect: () => void;
 }) {
   return (
-    <article className={selected ? "route-card selected" : "route-card"} aria-labelledby={`route-${route.id}`}>
+    <article
+      className={selected ? "route-card selected" : "route-card"}
+      aria-labelledby={`route-${route.id}`}
+      onMouseEnter={() => announceRoutePreview(route.id)}
+      onMouseLeave={() => announceRoutePreview()}
+      onFocusCapture={() => announceRoutePreview(route.id)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) announceRoutePreview();
+      }}
+    >
       <button
         ref={buttonRef}
         className="route-card-select"
@@ -125,7 +137,7 @@ function RouteCard({
         aria-pressed={selected}
         onClick={onSelect}
       >
-        <span className="route-swatch" aria-hidden="true" />
+        <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
         <span>
           <strong id={`route-${route.id}`}>{SHAPE_LABELS[route.shape]}</strong>
           <small>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</small>
@@ -272,6 +284,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
               <RouteCard
                 key={route.id}
                 route={route}
+                routeNumber={index + 1}
                 selected={route.id === selectedRouteId}
                 buttonRef={(node) => { cardRefs.current[index] = node; }}
                 onSelect={() => onSelectRoute(route.id)}
@@ -287,6 +300,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
                 <RouteCard
                   key={route.id}
                   route={route}
+                  routeNumber={response.exact.length + index + 1}
                   selected={route.id === selectedRouteId}
                   buttonRef={(node) => { cardRefs.current[response.exact.length + index] = node; }}
                   onSelect={() => onSelectRoute(route.id)}
