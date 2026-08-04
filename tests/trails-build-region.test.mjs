@@ -7,6 +7,7 @@ import test from "node:test";
 import { gzipSync } from "node:zlib";
 import {
   ARTIFACT_FILENAMES,
+  buildNamedTrails,
   buildRegionFromFile,
   buildRegionArtifacts,
   compactSegmentProvenance,
@@ -125,6 +126,69 @@ function buildInput(segmentCandidates = segments) {
   };
 }
 
+function legacyReachableNodes(point, graphSegments, maximumMeters = 2_000) {
+  const adjacency = new Map();
+  for (const graphSegment of graphSegments.filter(({ hiking, access, status }) =>
+    hiking !== "blocked" && access !== "private" && status !== "closed")) {
+    for (const [from, to] of [
+      [graphSegment.fromNodeId, graphSegment.toNodeId],
+      [graphSegment.toNodeId, graphSegment.fromNodeId],
+    ]) {
+      const edges = adjacency.get(from) ?? [];
+      edges.push({ to, lengthMeters: graphSegment.lengthMeters });
+      adjacency.set(from, edges);
+    }
+  }
+  const distances = new Map(point.connectedNodeIds.map((id) => [id, 0]));
+  const pending = point.connectedNodeIds.map((id) => ({ id, distance: 0 }));
+  while (pending.length > 0) {
+    pending.sort((left, right) => left.distance - right.distance ||
+      left.id.localeCompare(right.id));
+    const current = pending.shift();
+    if (current.distance !== distances.get(current.id) || current.distance > maximumMeters) {
+      continue;
+    }
+    for (const edge of adjacency.get(current.id) ?? []) {
+      const distance = current.distance + edge.lengthMeters;
+      if (distance > maximumMeters || distance >= (distances.get(edge.to) ?? Infinity)) continue;
+      distances.set(edge.to, distance);
+      pending.push({ id: edge.to, distance });
+    }
+  }
+  return new Set(distances.keys());
+}
+
+function directGraphSegment(index, {
+  from = `scale-node-${index}`,
+  to = `scale-node-${index + 1}`,
+  lengthMeters = 10,
+  name = "Scale Trail",
+  manager = "Test Manager",
+  hiking = "allowed",
+  access = "public",
+  status = "open",
+} = {}) {
+  return {
+    id: `scale-segment-${String(index).padStart(5, "0")}`,
+    fromNodeId: from,
+    toNodeId: to,
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [-120 + index * 0.000001, 37],
+        [-120 + (index + 1) * 0.000001, 37],
+      ],
+    },
+    name,
+    manager,
+    hiking,
+    access,
+    status,
+    lengthMeters,
+    sourceRefs: [sourceRef("test", `scale/${index}`)],
+  };
+}
+
 test("builds deterministic regional artifacts with canonical searchable trails", async () => {
   const first = await buildRegionArtifacts(buildInput());
   const telemetryEvents = [];
@@ -181,8 +245,112 @@ test("builds deterministic regional artifacts with canonical searchable trails",
     "shortest-path-endpoint-elevation-windows",
   );
   assert.equal(first.qa.elevation.implausibleMetricOutliers.length, 0);
+  const provenanceEnd = telemetryEvents.find(({ stage, phase }) =>
+    stage === "provenance-preparation" && phase === "end");
+  assert.equal(provenanceEnd.counts.reusedMergeProvenance, 1);
+  assert.equal(provenanceEnd.counts.sharedElevationSourceFields, 1);
+  const elevationSourceFields = Object.values(first.segmentProvenance).flatMap((fields) =>
+    Object.values(fields).flat().filter(({ provider }) => provider === "USGS")
+      .map(({ sourceField }) => sourceField));
+  assert.ok(elevationSourceFields.length > 1);
+  assert.ok(elevationSourceFields.every((value) => value === elevationSourceFields[0]));
   assert.match(first.qa.artifactHashes[ARTIFACT_FILENAMES.segments].sha256, /^[a-f0-9]{64}$/);
   assert.match(first.manifest.artifacts[ARTIFACT_FILENAMES.qa].sha256, /^[a-f0-9]{64}$/);
+});
+
+test("matches legacy named-trail reachability under deterministic input reorderings", () => {
+  const graphSegments = [
+    directGraphSegment(0, { from: "node-0", to: "node-1", lengthMeters: 600 }),
+    directGraphSegment(1, { from: "node-1", to: "node-2", lengthMeters: 600 }),
+    directGraphSegment(2, {
+      from: "node-2",
+      to: "node-3",
+      lengthMeters: 600,
+      name: null,
+    }),
+    directGraphSegment(3, { from: "node-3", to: "node-4", lengthMeters: 600 }),
+    directGraphSegment(4, { from: "node-4", to: "node-5", lengthMeters: 600 }),
+    directGraphSegment(5, {
+      from: "node-5",
+      to: "node-6",
+      lengthMeters: 1,
+      hiking: "blocked",
+    }),
+  ];
+  const accessPoints = [
+    { id: "access-west", connectedNodeIds: ["node-0"], confidence: "official" },
+    { id: "access-east", connectedNodeIds: ["node-5"], confidence: "mapped" },
+    { id: "access-blocked", connectedNodeIds: ["node-6"], confidence: "derived" },
+  ];
+  const first = buildNamedTrails(graphSegments, accessPoints);
+  const reordered = buildNamedTrails([...graphSegments].reverse(), [...accessPoints].reverse());
+  assert.deepEqual(reordered, first);
+  assert.equal(first.length, 2);
+
+  const byId = new Map(graphSegments.map((graphSegment) => [graphSegment.id, graphSegment]));
+  for (const trail of first) {
+    const trailNodeIds = new Set(trail.segmentIds.flatMap((id) => {
+      const graphSegment = byId.get(id);
+      return [graphSegment.fromNodeId, graphSegment.toNodeId];
+    }));
+    const expected = accessPoints.filter((point) =>
+      [...trailNodeIds].some((nodeId) =>
+        legacyReachableNodes(point, graphSegments).has(nodeId)))
+      .map(({ id }) => id).sort();
+    assert.deepEqual(trail.accessPointIds, expected);
+  }
+});
+
+test("keeps the legacy lexical component seed for normalized-equal display fields", () => {
+  const lexicalFirst = directGraphSegment(10, {
+    from: "display-node-0",
+    to: "display-node-1",
+    name: "Scale Trail",
+    manager: "Test Manager",
+  });
+  const lexicalSecond = directGraphSegment(11, {
+    from: "display-node-1",
+    to: "display-node-2",
+    name: "  SCALE   TRAIL ",
+    manager: "TEST MANAGER",
+  });
+  const accessPoints = [{
+    id: "display-access",
+    connectedNodeIds: ["display-node-0"],
+    confidence: "official",
+  }];
+
+  const forward = buildNamedTrails([lexicalFirst, lexicalSecond], accessPoints);
+  const reversed = buildNamedTrails([lexicalSecond, lexicalFirst], accessPoints);
+  assert.deepEqual(reversed, forward);
+  assert.equal(forward.length, 1);
+  assert.equal(forward[0].name, lexicalFirst.name);
+  assert.equal(forward[0].manager, lexicalFirst.manager);
+});
+
+test("bounds named-trail reachability to one indexed traversal on a scale fixture", () => {
+  const graphSegments = Array.from({ length: 4_000 }, (_, index) =>
+    directGraphSegment(index));
+  const accessPoints = Array.from({ length: 1_000 }, (_, index) => ({
+    id: `scale-access-${String(index).padStart(4, "0")}`,
+    connectedNodeIds: [`scale-node-${index * 4}`],
+    confidence: "mapped",
+  }));
+  const checkpoints = [];
+  const trails = buildNamedTrails(graphSegments, accessPoints, (phase, counts) => {
+    checkpoints.push({ phase, counts: { ...counts } });
+  });
+  const final = checkpoints.at(-1);
+
+  assert.equal(trails.length, 1);
+  assert.equal(trails[0].accessPointIds.length, accessPoints.length);
+  assert.deepEqual(checkpoints.map(({ phase }) => phase), ["component-index", "reachability"]);
+  assert.equal(final.counts.accessPointsProcessed, accessPoints.length);
+  assert.equal(final.counts.retainedReachabilitySets, 0);
+  assert.equal(final.counts.accessPointComponentAssociations, accessPoints.length);
+  assert.ok(final.counts.reachableNodeVisits > 300_000);
+  assert.ok(final.counts.maximumReachableNodesPerPoint <= 401);
+  assert.ok(final.counts.maximumPendingReachabilityNodes <= 2);
 });
 
 test("emits deterministic telemetry structure with injected measurements", () => {

@@ -529,12 +529,31 @@ async function enrichSegments(segments, elevationSource, elevationOptions) {
   };
 }
 
-function shippedProvenance(segments, mergeProvenance, elevationSource, elevationOptions) {
-  const result = structuredClone(mergeProvenance);
+function shippedProvenance(
+  segments,
+  mergeProvenance,
+  elevationSource,
+  elevationOptions,
+  metrics = {},
+) {
+  // buildRegionArtifacts owns mergeProvenance after reconciliation. Reuse that
+  // ownership instead of retaining a full structured clone through every later
+  // build stage.
+  const result = mergeProvenance;
+  metrics.reusedMergeProvenance = 1;
+  metrics.elevationObservations = 0;
+  metrics.sharedElevationSourceFields = 0;
   if (!elevationSource) return result;
   const metadata = createElevationManifestMetadata(elevationSource, elevationOptions);
   const source = metadata.source;
   const sourceId = `${source.product}@${source.version}`;
+  const sourceField = {
+    product: source.product,
+    version: source.version,
+    sampling: metadata.sampling,
+    smoothing: metadata.smoothing,
+  };
+  metrics.sharedElevationSourceFields = 1;
   for (const segment of segments) {
     const fields = result[segment.id] ?? {};
     for (const field of [
@@ -551,13 +570,9 @@ function shippedProvenance(segments, mergeProvenance, elevationSource, elevation
         value: segment[field],
         authority: Number.MAX_SAFE_INTEGER,
         selected: true,
-        sourceField: {
-          product: source.product,
-          version: source.version,
-          sampling: metadata.sampling,
-          smoothing: metadata.smoothing,
-        },
+        sourceField,
       }];
+      metrics.elevationObservations += 1;
     }
     result[segment.id] = fields;
   }
@@ -666,6 +681,7 @@ function paddedBounds(segments) {
 
 function componentGroups(segments) {
   const pending = new Set(segments.map(({ id }) => id));
+  const orderedIds = segments.map(({ id }) => id).sort();
   const byId = new Map(segments.map((segment) => [segment.id, segment]));
   const byNode = new Map();
   for (const segment of segments) {
@@ -676,13 +692,15 @@ function componentGroups(segments) {
     }
   }
   const groups = [];
+  let seedIndex = 0;
   while (pending.size > 0) {
-    const first = [...pending].sort()[0];
+    while (!pending.has(orderedIds[seedIndex])) seedIndex += 1;
+    const first = orderedIds[seedIndex];
     const queue = [first];
     const ids = [];
     pending.delete(first);
-    while (queue.length > 0) {
-      const id = queue.shift();
+    for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+      const id = queue[queueIndex];
       ids.push(id);
       const segment = byId.get(id);
       for (const nodeId of [segment.fromNodeId, segment.toNodeId]) {
@@ -732,24 +750,108 @@ function accessGraph(segments) {
   return adjacency;
 }
 
-function reachableNodes(point, adjacency, maximumMeters = 2_000) {
+function compareReachabilityEntries(left, right) {
+  return left.distance - right.distance || left.id.localeCompare(right.id);
+}
+
+class IndexedMinQueue {
+  #entries = [];
+
+  #indexes = new Map();
+
+  get size() {
+    return this.#entries.length;
+  }
+
+  upsert(id, distance) {
+    const existingIndex = this.#indexes.get(id);
+    if (existingIndex !== undefined) {
+      if (distance >= this.#entries[existingIndex].distance) return;
+      this.#entries[existingIndex].distance = distance;
+      this.#bubbleUp(existingIndex);
+      return;
+    }
+    const index = this.#entries.length;
+    this.#entries.push({ id, distance });
+    this.#indexes.set(id, index);
+    this.#bubbleUp(index);
+  }
+
+  pop() {
+    if (this.#entries.length === 0) return undefined;
+    const first = this.#entries[0];
+    const last = this.#entries.pop();
+    this.#indexes.delete(first.id);
+    if (this.#entries.length > 0) {
+      this.#entries[0] = last;
+      this.#indexes.set(last.id, 0);
+      this.#bubbleDown(0);
+    }
+    return first;
+  }
+
+  #bubbleUp(startIndex) {
+    let index = startIndex;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareReachabilityEntries(this.#entries[parent], this.#entries[index]) <= 0) break;
+      this.#swap(parent, index);
+      index = parent;
+    }
+  }
+
+  #bubbleDown(startIndex) {
+    let index = startIndex;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (left < this.#entries.length &&
+          compareReachabilityEntries(this.#entries[left], this.#entries[smallest]) < 0) {
+        smallest = left;
+      }
+      if (right < this.#entries.length &&
+          compareReachabilityEntries(this.#entries[right], this.#entries[smallest]) < 0) {
+        smallest = right;
+      }
+      if (smallest === index) return;
+      this.#swap(index, smallest);
+      index = smallest;
+    }
+  }
+
+  #swap(left, right) {
+    [this.#entries[left], this.#entries[right]] = [this.#entries[right], this.#entries[left]];
+    this.#indexes.set(this.#entries[left].id, left);
+    this.#indexes.set(this.#entries[right].id, right);
+  }
+}
+
+function visitReachableNodes(point, adjacency, visit, maximumMeters = 2_000) {
   const distances = new Map(point.connectedNodeIds.map((id) => [id, 0]));
-  const pending = point.connectedNodeIds.map((id) => ({ id, distance: 0 }));
-  while (pending.length > 0) {
-    pending.sort((left, right) => left.distance - right.distance || left.id.localeCompare(right.id));
-    const current = pending.shift();
-    if (current.distance !== distances.get(current.id) || current.distance > maximumMeters) continue;
+  const pending = new IndexedMinQueue();
+  for (const id of distances.keys()) {
+    pending.upsert(id, 0);
+    visit(id);
+  }
+  let maximumPendingNodes = pending.size;
+  while (pending.size > 0) {
+    const current = pending.pop();
+    if (current.distance > maximumMeters) continue;
     for (const edge of adjacency.get(current.id) ?? []) {
       const distance = current.distance + edge.lengthMeters;
       if (distance > maximumMeters || distance >= (distances.get(edge.to) ?? Infinity)) continue;
+      const firstVisit = !distances.has(edge.to);
       distances.set(edge.to, distance);
-      pending.push({ id: edge.to, distance });
+      pending.upsert(edge.to, distance);
+      if (firstVisit) visit(edge.to);
+      maximumPendingNodes = Math.max(maximumPendingNodes, pending.size);
     }
   }
-  return new Set(distances.keys());
+  return { maximumPendingNodes, reachableNodes: distances.size };
 }
 
-function buildNamedTrails(segments, accessPoints) {
+export function buildNamedTrails(segments, accessPoints, onProgress) {
   const eligible = segments.filter(({ name, hiking, access, status }) =>
     name && hiking !== "blocked" && access !== "private" && status !== "closed");
   const namedGroups = new Map();
@@ -760,39 +862,81 @@ function buildNamedTrails(segments, accessPoints) {
     namedGroups.set(key, values);
   }
   const adjacency = accessGraph(segments);
-  const reachableByPoint = new Map(accessPoints.map((point) => [
-    point.id,
-    reachableNodes(point, adjacency),
-  ]));
-  const trails = [];
+  const components = [];
+  const componentIdsByNode = new Map();
   for (const segmentsWithName of namedGroups.values()) {
     for (const group of componentGroups(segmentsWithName)) {
+      const componentId = components.length;
+      components.push({ group, accessPointIds: new Set() });
       const groupNodeIds = new Set(group.flatMap(({ fromNodeId, toNodeId }) =>
         [fromNodeId, toNodeId]));
-      const pointMap = new Map(accessPoints.filter((point) =>
-        [...groupNodeIds].some((nodeId) => reachableByPoint.get(point.id).has(nodeId)))
-        .map((point) => [point.id, point]));
-      const points = [...pointMap.values()].sort((left, right) => left.id.localeCompare(right.id));
-      if (points.length === 0) continue;
-      const sourceRefs = deduplicateSourceRefs(group.flatMap(({ sourceRefs }) => sourceRefs));
-      const segmentIds = group.map(({ id }) => id).sort();
-      const trail = {
-        id: createNamedTrailId(sourceRefs, group[0].name, segmentIds),
-        name: group[0].name,
-        segmentIds,
-        accessPointIds: points.map(({ id }) => id),
-        ...(group[0].manager ? { manager: group[0].manager } : {}),
-        bounds: paddedBounds(group),
-        ...(isUnbranched(group) ? {
-          lengthMeters: Number(group.reduce((total, segment) =>
-            total + segment.lengthMeters, 0).toFixed(1)),
-        } : {}),
-        sourceRefs,
-        dataConfidence: trailConfidence(group, points),
-      };
-      validateNamedTrail(trail);
-      trails.push(trail);
+      for (const nodeId of groupNodeIds) {
+        const ids = componentIdsByNode.get(nodeId) ?? [];
+        ids.push(componentId);
+        componentIdsByNode.set(nodeId, ids);
+      }
     }
+  }
+  const metrics = {
+    accessPointComponentAssociations: 0,
+    accessPointsProcessed: 0,
+    componentIndexedNodes: componentIdsByNode.size,
+    maximumPendingReachabilityNodes: 0,
+    maximumReachableNodesPerPoint: 0,
+    namedComponents: components.length,
+    reachableNodeVisits: 0,
+    retainedReachabilitySets: 0,
+  };
+  onProgress?.("component-index", metrics);
+  for (const point of accessPoints) {
+    const traversal = visitReachableNodes(point, adjacency, (nodeId) => {
+      metrics.reachableNodeVisits += 1;
+      for (const componentId of componentIdsByNode.get(nodeId) ?? []) {
+        const ids = components[componentId].accessPointIds;
+        if (!ids.has(point.id)) {
+          ids.add(point.id);
+          metrics.accessPointComponentAssociations += 1;
+        }
+      }
+    });
+    metrics.accessPointsProcessed += 1;
+    metrics.maximumPendingReachabilityNodes = Math.max(
+      metrics.maximumPendingReachabilityNodes,
+      traversal.maximumPendingNodes,
+    );
+    metrics.maximumReachableNodesPerPoint = Math.max(
+      metrics.maximumReachableNodesPerPoint,
+      traversal.reachableNodes,
+    );
+    if (metrics.accessPointsProcessed % 1_000 === 0 ||
+        metrics.accessPointsProcessed === accessPoints.length) {
+      onProgress?.("reachability", metrics);
+    }
+  }
+  const pointsById = new Map(accessPoints.map((point) => [point.id, point]));
+  const trails = [];
+  for (const { group, accessPointIds } of components) {
+    const points = [...accessPointIds].map((id) => pointsById.get(id))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (points.length === 0) continue;
+    const sourceRefs = deduplicateSourceRefs(group.flatMap(({ sourceRefs }) => sourceRefs));
+    const segmentIds = group.map(({ id }) => id).sort();
+    const trail = {
+      id: createNamedTrailId(sourceRefs, group[0].name, segmentIds),
+      name: group[0].name,
+      segmentIds,
+      accessPointIds: points.map(({ id }) => id),
+      ...(group[0].manager ? { manager: group[0].manager } : {}),
+      bounds: paddedBounds(group),
+      ...(isUnbranched(group) ? {
+        lengthMeters: Number(group.reduce((total, segment) =>
+          total + segment.lengthMeters, 0).toFixed(1)),
+      } : {}),
+      sourceRefs,
+      dataConfidence: trailConfidence(group, points),
+    };
+    validateNamedTrail(trail);
+    trails.push(trail);
   }
   return trails.sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -851,6 +995,7 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
   const mergedSegments = merged.segments.filter(({ id }) => !degenerateMergedIds.has(id));
   const mergedProvenance = Object.fromEntries(Object.entries(merged.provenance)
     .filter(([segmentId]) => !degenerateMergedIds.has(segmentId)));
+  merged.provenance = undefined;
   const mergeConflicts = merged.conflicts.filter(({ segmentId }) =>
     !degenerateMergedIds.has(segmentId));
   const degenerateIssues = [...degenerateMergedIds].sort().map((segmentId) => ({
@@ -884,15 +1029,21 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     mergeProvenanceSegments: Object.keys(mergedProvenance).length,
     segments: segments.length,
   }, ["merge-field-provenance", "elevation-field-provenance"]);
+  const provenanceMetrics = {};
   const segmentProvenance = shippedProvenance(
     segments,
     mergedProvenance,
     input.elevationSource,
     input.elevationOptions,
+    provenanceMetrics,
   );
   endStage(telemetry, provenanceStage, {
+    ...provenanceMetrics,
     provenanceSegments: Object.keys(segmentProvenance).length,
-  }, ["shipped-field-provenance"]);
+  }, [
+    "owned-merge-field-provenance",
+    ...(input.elevationSource ? ["shared-elevation-source-field-metadata"] : []),
+  ]);
   const constructionStage = beginStage(telemetry, "node-access-named-trail-construction", {
     segments: segments.length,
     sourceNodes: arrays.sourceNodes.length,
@@ -915,7 +1066,20 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     nodes: nodes.length,
     segments: segments.length,
   }, ["segments", "canonical-nodes", "access-points"]);
-  const namedTrails = buildNamedTrails(segments, access.accessPoints);
+  const namedTrails = buildNamedTrails(segments, access.accessPoints, (phase, counts) => {
+    sampleStage(telemetry, constructionStage, counts, [
+      "segments",
+      "canonical-nodes",
+      "access-points",
+      "access-graph",
+      "named-component-node-index",
+      "named-component-access-sets",
+      ...(phase === "reachability" ? [
+        "one-access-point-distance-map",
+        "indexed-min-priority-queue",
+      ] : []),
+    ]);
+  });
   endStage(telemetry, constructionStage, {
     accessPoints: access.accessPoints.length,
     namedTrails: namedTrails.length,
