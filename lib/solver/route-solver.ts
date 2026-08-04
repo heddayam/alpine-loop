@@ -154,7 +154,6 @@ export class DeterministicRouteSolver implements RouteSolver {
       })),
       diagnostics: {
         ...generation.diagnostics,
-        exhausted: generation.diagnostics.exhausted || exact.length < request.limit,
         truncationReasons: [...reasons].sort(),
       },
     };

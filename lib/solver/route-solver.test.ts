@@ -83,7 +83,7 @@ describe("complete RouteSolver response", () => {
     expect(twenty.requested).toBe(20);
     expect(twenty.exact.length).toBeLessThan(20);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(twenty.diagnostics.exhausted).toBe(true);
+    expect(twenty.diagnostics.exhausted).toBe(false);
     expect(twenty.diagnostics.truncationReasons).toContain("fewer-exact-routes-than-requested");
   });
 });

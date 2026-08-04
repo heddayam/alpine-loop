@@ -266,7 +266,8 @@ export function HikeBuilder() {
                 role="switch"
                 checked={values.includeUncertainAccess}
                 onChange={(event) => {
-                  setValues((current) => ({ ...current, includeUncertainAccess: event.currentTarget.checked }));
+                  const includeUncertainAccess = event.currentTarget.checked;
+                  setValues((current) => ({ ...current, includeUncertainAccess }));
                   if (bounds) {
                     setAccessPoints([]);
                     setSelectedAccessPointId(undefined);
@@ -278,7 +279,18 @@ export function HikeBuilder() {
             </label>
             <div className="count-field">
               <label htmlFor="route-count">Number of routes</label>
-              <input id="route-count" type="number" min="1" max="20" step="1" value={values.limit} onChange={(event) => setValues((current) => ({ ...current, limit: event.currentTarget.value }))} />
+              <input
+                id="route-count"
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                value={values.limit}
+                onChange={(event) => {
+                  const limit = event.currentTarget.value;
+                  setValues((current) => ({ ...current, limit }));
+                }}
+              />
               <small>1 to 20 alternatives</small>
             </div>
           </section>

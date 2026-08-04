@@ -42,7 +42,14 @@ function response(overrides: Partial<GenerateRoutesResponseV1> = {}): GenerateRo
     exact: [route()],
     nearMisses: [{
       ...route({ id: "near-out-back", shape: "out-and-back", distanceMeters: 3218.688, trailNames: ["Skyline Trail"], warnings: [] }),
-      violations: [{ constraint: "distance", value: 2, min: 3, max: 8, delta: 1, normalizedDelta: 0.2 }],
+      violations: [{
+        constraint: "distance",
+        value: 3218.688,
+        min: 4828.032,
+        max: 12874.752,
+        delta: 1609.344,
+        normalizedDelta: 0.2,
+      }],
     }],
     diagnostics: { elapsedMs: 42.4, expandedStates: 1200, candidateCount: 18, exhausted: false, truncationReasons: [] },
     ...overrides,
