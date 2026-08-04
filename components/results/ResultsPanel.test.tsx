@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GeneratedRoute, GenerateRoutesResponseV1 } from "@/lib/contracts";
+import { ROUTE_PREVIEW_EVENT } from "../map/routeTraceOverlay";
 import { ResultsPanel } from "./ResultsPanel";
 
 function route(overrides: Partial<GeneratedRoute> = {}): GeneratedRoute {
@@ -88,6 +89,24 @@ describe("ResultsPanel", () => {
     fireEvent.keyDown(list, { key: "Home" });
     expect(onSelect).toHaveBeenLastCalledWith("exact-loop");
     expect(screen.getByRole("button", { name: /Loop/ })).toHaveFocus();
+  });
+
+  it("previews a route trace from pointer hover and keyboard focus without changing selection", () => {
+    const previews: Array<string | undefined> = [];
+    const handlePreview = (event: Event) => previews.push((event as CustomEvent<{ routeId?: string }>).detail.routeId);
+    window.addEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
+
+    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    const exactCard = screen.getByRole("article", { name: "Loop" });
+    const exactButton = within(exactCard).getByRole("button");
+    fireEvent.mouseEnter(exactCard);
+    fireEvent.mouseLeave(exactCard);
+    fireEvent.focus(exactButton);
+    fireEvent.blur(exactButton, { relatedTarget: document.body });
+
+    expect(previews).toEqual(["exact-loop", undefined, "exact-loop", undefined]);
+    expect(within(exactCard).getByText("1")).toBeVisible();
+    window.removeEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
   });
 
   it("shows optional elevation profiles only when samples exist", () => {
