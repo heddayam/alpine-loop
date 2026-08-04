@@ -13,6 +13,7 @@ export default defineConfig([
     ".local-data/**",
     "data/generated/**",
     "data/raw/**",
+    "public/vendor/maplibre/**",
     "playwright-report/**",
     "test-results/**",
   ]),

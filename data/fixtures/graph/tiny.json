@@ -1,22 +1,17 @@
 {
   "packId": "fixture-pack",
   "nodes": [
-    { "id": "a", "lon": -122.160, "lat": 37.160, "elevationMeters": 100, "flags": [] },
-    { "id": "b", "lon": -122.150, "lat": 37.160, "elevationMeters": 120, "flags": [] },
-    { "id": "c", "lon": -122.150, "lat": 37.170, "elevationMeters": 140, "flags": [] },
-    { "id": "d", "lon": -122.160, "lat": 37.170, "elevationMeters": 115, "flags": [] },
-    { "id": "e", "lon": -122.170, "lat": 37.160, "elevationMeters": 125, "flags": [] },
-    { "id": "f", "lon": -122.180, "lat": 37.165, "elevationMeters": 150, "flags": [] },
-    { "id": "g", "lon": -122.175, "lat": 37.175, "elevationMeters": 130, "flags": [] },
-    { "id": "h", "lon": -122.140, "lat": 37.160, "elevationMeters": 90, "flags": [] }
+    { "id": "a", "lon": -122.1815304, "lat": 37.1617503, "elevationMeters": 100, "flags": [] },
+    { "id": "b", "lon": -122.1795464, "lat": 37.1613387, "elevationMeters": 120, "flags": [] },
+    { "id": "c", "lon": -122.1712620, "lat": 37.1586600, "elevationMeters": 140, "flags": [] },
+    { "id": "d", "lon": -122.1746231, "lat": 37.1589191, "elevationMeters": 115, "flags": [] }
   ],
   "undirectedTrails": [
-    ["a", "b", "Ridge Trail"], ["b", "c", "Ridge Trail"], ["c", "d", "Creek Trail"], ["d", "a", "Creek Trail"],
-    ["a", "e", "Connector"], ["e", "f", "West Loop"], ["f", "g", "West Loop"], ["g", "e", "West Loop"],
-    ["b", "h", "Shuttle Trail"]
+    ["a", "b", "Bloom Grade Approach", [[-122.1815304, 37.1617503], [-122.1812527, 37.1617754], [-122.1808880, 37.1618182], [-122.1805446, 37.1617754], [-122.1800940, 37.1616044], [-122.1798365, 37.1615189], [-122.1795464, 37.1613387]], "openstreetmap:way/544704016"],
+    ["b", "c", "Bloom Grade", [[-122.1795464, 37.1613387], [-122.1787310, 37.1613348], [-122.1784959, 37.1610465], [-122.1781418, 37.1610089], [-122.1778970, 37.1608130], [-122.1777388, 37.1606021], [-122.1777766, 37.1604095], [-122.1776993, 37.1602291], [-122.1771060, 37.1598709], [-122.1766286, 37.1597041], [-122.1764318, 37.1598111], [-122.1760171, 37.1599393], [-122.1757703, 37.1599820], [-122.1751963, 37.1597512], [-122.1746231, 37.1589191], [-122.1744748, 37.1586739], [-122.1741077, 37.1583316], [-122.1741492, 37.1580446], [-122.1739420, 37.1581011], [-122.1738648, 37.1583168], [-122.1733808, 37.1580446], [-122.1727058, 37.1577548], [-122.1728648, 37.1584852], [-122.1726910, 37.1586031], [-122.1716976, 37.1585855], [-122.1711907, 37.1585610], [-122.1712620, 37.1586600]], "openstreetmap:way/10548386"],
+    ["c", "d", "Bloom Grade Connector", [[-122.1712620, 37.1586600], [-122.1715378, 37.1587508], [-122.1719133, 37.1588021], [-122.1722030, 37.1590073], [-122.1725141, 37.1592638], [-122.1727823, 37.1594348], [-122.1730505, 37.1594690], [-122.1732866, 37.1594775], [-122.1735012, 37.1595716], [-122.1736299, 37.1595887], [-122.1738123, 37.1595032], [-122.1738767, 37.1593749], [-122.1739303, 37.1592723], [-122.1741556, 37.1591270], [-122.1743058, 37.1589987], [-122.1744453, 37.1588961], [-122.1746231, 37.1589191]], "openstreetmap:way/544704014"]
   ],
   "accessPoints": [
-    { "id": "trailhead-a", "nodeId": "a", "name": "Fixture Trailhead", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["fixture-source"] },
-    { "id": "trailhead-h", "nodeId": "h", "name": "Fixture East Trailhead", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["fixture-source"] }
+    { "id": "trailhead-a", "nodeId": "a", "name": "Bloom Grade demo start", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["openstreetmap-fixture"] }
   ]
 }

@@ -8,7 +8,11 @@ import {
   type GenerateRoutesRequestV1,
   type RouteType,
 } from "@/lib/contracts";
-import { FIXTURE_PACK_COVERAGE, FIXTURE_PACK_DEMO_BOUNDS } from "@/lib/packs/fixture-pack";
+import {
+  FIXTURE_PACK_COVERAGE,
+  FIXTURE_PACK_DEMO_BOUNDS,
+  FIXTURE_PACK_TRAIL_NETWORK,
+} from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
@@ -325,6 +329,7 @@ export function HikeBuilder() {
           bounds={bounds}
           packCoverage={FIXTURE_PACK_COVERAGE}
           suggestedBounds={FIXTURE_PACK_DEMO_BOUNDS}
+          trailNetwork={FIXTURE_PACK_TRAIL_NETWORK}
           accessPoints={accessPoints}
           selectedAccessPointId={selectedAccessPointId}
           routes={generatedRoutes}

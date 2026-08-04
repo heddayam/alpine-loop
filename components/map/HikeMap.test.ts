@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedRoute } from "@/lib/contracts";
-import { routeFeatures, routeTrailheadPins, showCoverageHatching } from "./HikeMap";
+import { routeFeaturePartitions, routeFeatures, routeTrailheadPins, showCoverageHatching } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedRoute {
   return {
@@ -42,6 +42,18 @@ describe("generated route map features", () => {
     expect(features.features[1]?.properties).toMatchObject({ id: "second", selected: true, routeNumber: 2 });
   });
 
+  it("partitions native MapLibre sources without changing geographic coordinates", () => {
+    const routes = [route("first", -122.18), route("second", -122.16)];
+    const partitions = routeFeaturePartitions(routes, "first", "second");
+
+    expect(partitions.all.features.map(({ properties }) => properties?.id)).toEqual(["first", "second"]);
+    expect(partitions.selected.features.map(({ properties }) => properties?.id)).toEqual(["first"]);
+    expect(partitions.alternates.features.map(({ properties }) => properties?.id)).toEqual(["second"]);
+    expect(partitions.hovered.features.map(({ properties }) => properties?.id)).toEqual(["second"]);
+    expect(partitions.selected.features[0]?.geometry).toEqual(routes[0]?.geometry);
+    expect(partitions.hovered.features[0]?.geometry).toEqual(routes[1]?.geometry);
+  });
+
   it("creates numbered trailhead pins and emphasizes the selected route pin", () => {
     const routes = [route("first", -122.18), route("second", -122.16)];
     const pins = routeTrailheadPins(routes, "second");
@@ -63,6 +75,13 @@ describe("generated route map features", () => {
       selected: true,
       nextRouteId: "second",
     });
+  });
+
+  it("anchors each pin to the exact first segment coordinate, not separate metadata", () => {
+    const mismatched = route("first", -122.18);
+    mismatched.startAccessPoint = { ...mismatched.startAccessPoint, lon: -120, lat: 35 };
+
+    expect(routeTrailheadPins([mismatched])[0]?.coordinates).toEqual(mismatched.geometry.coordinates[0]);
   });
 
   it("groups matches at one physical trailhead and cycles through their result numbers", () => {
