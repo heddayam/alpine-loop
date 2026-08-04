@@ -1,6 +1,6 @@
 # P6 versioned trail publishing and runtime delivery
 
-Status: local implementation evidence for integrator review
+Status: integrated local implementation; deployed private-binding smoke pending
 
 ## Publication contract
 
@@ -117,10 +117,34 @@ while selected detail returns the full access evidence. Existing
 Yosemite–Stanislaus schema v1 continues to resolve synchronously from packaged
 `ASSETS` and does not consult the private pointer or R2 binding.
 
+## Retention and cache policy
+
+Object retention is pointer-safe rather than age-only:
+
+- Never delete the build referenced by `current.json.active` or
+  `current.json.previous`.
+- Retain older accepted builds for at least 30 days after they stop being the
+  previous build. This leaves an additional recovery window without weakening
+  the two-build rollback guarantee.
+- An incomplete, never-activated upload may be collected after seven days from
+  its last publication attempt, but only after an offline maintenance job
+  proves that no region pointer references its build ID.
+- Garbage collection is a separate reviewed maintenance operation. Publisher
+  retries, API requests, and ordinary runtime loading never list or delete
+  bucket contents.
+
+The runtime cache holds at most one hydrated regional catalog per isolate for
+15 seconds. It never retains selected geometry, QA, provenance, or artifact
+response bodies. Historical cached metadata for the four pipeline regions is
+about 12 MiB at the largest serialized region before the derived search index
+and JavaScript object overhead; each P8 report must record the actual v2
+metadata bytes. The deployed smoke must confirm acceptable heap and latency.
+If measured catalog retention is unsafe, lower the TTL or compact metadata;
+do not expand the one-entry cache or the Worker memory budget.
+
 ## Sites handoff
 
-This task does not change hosting configuration or external Sites state. The
-integrator-owned logical binding change remains:
+The integration branch declares the logical binding:
 
 ```diff
 -  "r2": null
@@ -128,6 +152,5 @@ integrator-owned logical binding change remains:
 ```
 
 Sites owns the physical private resource and deployment wiring. A deployed
-private-binding smoke test, runtime/cache limits review, and retention policy
-remain Gate F integration work; this task did not deploy, provision, upload,
-activate a live region, or use credentials.
+private-binding smoke test and runtime/cache measurement remain Gate F work.
+No regional corpus has been uploaded or activated.
