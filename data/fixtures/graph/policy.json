@@ -1,0 +1,30 @@
+{
+  "packId": "policy-fixture",
+  "nodes": [
+    { "id": "s", "lon": 0.00, "lat": 0.00, "elevationMeters": 10, "flags": [] },
+    { "id": "a", "lon": 0.01, "lat": 0.00, "elevationMeters": 20, "flags": [] },
+    { "id": "b", "lon": 0.02, "lat": 0.00, "elevationMeters": 30, "flags": [] },
+    { "id": "c", "lon": 0.01, "lat": 0.01, "elevationMeters": 25, "flags": [] },
+    { "id": "d", "lon": -0.01, "lat": 0.00, "elevationMeters": 15, "flags": [] }
+  ],
+  "directedEdges": [
+    { "id": "one-way", "fromNodeId": "s", "toNodeId": "a", "accessState": "public", "trailName": "One Way" },
+    { "id": "unknown", "fromNodeId": "a", "toNodeId": "b", "accessState": "unknown", "trailName": "Unknown" },
+    { "id": "private", "fromNodeId": "b", "toNodeId": "c", "accessState": "private", "trailName": "Private" },
+    { "id": "closed", "fromNodeId": "c", "toNodeId": "s", "accessState": "closed", "trailName": "Closed" },
+    { "id": "not-foot", "fromNodeId": "s", "toNodeId": "c", "accessState": "public", "trailName": "No Foot", "flags": ["foot:no"] },
+    {
+      "id": "leaves-bbox",
+      "fromNodeId": "s",
+      "toNodeId": "d",
+      "accessState": "public",
+      "trailName": "Outside",
+      "coordinates": [[0.00, 0.00], [-0.20, 0.00], [-0.01, 0.00]]
+    }
+  ],
+  "accessPoints": [
+    { "id": "public-start", "nodeId": "s", "name": "Public", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["fixture-source"] },
+    { "id": "unknown-start", "nodeId": "a", "name": "Unknown", "kind": "trailhead", "accessState": "unknown", "confidence": "medium", "parkingEvidence": null, "sourceIds": ["fixture-source"] },
+    { "id": "private-start", "nodeId": "b", "name": "Private", "kind": "trailhead", "accessState": "private", "confidence": "low", "parkingEvidence": null, "sourceIds": ["fixture-source"] }
+  ]
+}
