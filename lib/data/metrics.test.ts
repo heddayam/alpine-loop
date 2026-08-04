@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ElevationSampler } from "./adapters";
-import { calculateEdgeMetrics, densifyGeometry, distanceMeters } from "./metrics";
+import { calculateEdgeMetrics, calculateEdgeMetricsBatch, densifyGeometry, distanceMeters } from "./metrics";
 
 describe("edge elevation metrics", () => {
   it("densifies geometry and calculates noise-filtered directional metrics", async () => {
@@ -36,5 +36,19 @@ describe("edge elevation metrics", () => {
       maxElevationM: null,
       maxSustainedGradePct: null,
     });
+  });
+
+  it("batches multiple edge geometries into bounded sampler calls", async () => {
+    const sample = vi.fn(async (coordinates: ReadonlyArray<readonly [number, number]>) =>
+      coordinates.map((_, index) => 100 + index));
+    const geometries = [
+      [[-122.16, 37.16], [-122.1598, 37.16]],
+      [[-122.1598, 37.16], [-122.1596, 37.16]],
+      [[-122.1596, 37.16], [-122.1594, 37.16]],
+    ] as const;
+    const metrics = await calculateEdgeMetricsBatch(geometries, { algorithmVersion: "test", sample }, 2);
+    expect(metrics).toHaveLength(3);
+    expect(sample).toHaveBeenCalledTimes(2);
+    expect(metrics.every(({ lengthM }) => lengthM > 0)).toBe(true);
   });
 });

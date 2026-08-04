@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandRunner } from "../osm/command";
 import { GdalThreeDepElevationSampler } from "./gdal-sampler";
 import { queryThreeDepProducts, threeDepQueryUrl } from "./products";
+import { UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
 
 const query = {
   endpoint: "https://tnmaccess.nationalmap.gov/api/v1/products",
@@ -32,6 +33,12 @@ describe("USGS 3DEP product ingestion", () => {
     await expect(queryThreeDepProducts({ ...query, expectedProductIds: ["missing-product"] }, async () =>
       new Response(body, { status: 200 }))).rejects.toThrow("missing pinned products");
   });
+
+  it("treats catalog size as advisory because the USGS object response is authoritative", async () => {
+    const body = await readFile(path.resolve("data/fixtures/source/elevation/products.json"), "utf8");
+    const products = await queryThreeDepProducts(query, async () => new Response(body, { status: 200 }));
+    expect(products.every(({ byteLength }) => byteLength === undefined || byteLength > 0)).toBe(true);
+  });
 });
 
 describe("GDAL elevation sampling", () => {
@@ -43,5 +50,31 @@ describe("GDAL elevation sampling", () => {
     const sampler = new GdalThreeDepElevationSampler("/fixture/elevation.vrt", runner);
     await expect(sampler.sample([[-122.2, 37.2], [-122.1, 37.1]])).resolves.toEqual([314.25, null]);
     expect(runner).toHaveBeenCalledWith("gdallocationinfo", expect.arrayContaining(["-wgs84", "bilinear"]), expect.anything());
+  });
+});
+
+describe("uv-managed Rasterio elevation sampling", () => {
+  it("runs the locked environment offline and preserves missing samples", async () => {
+    const runner: CommandRunner = vi.fn(async (_command, arguments_, options) => {
+      expect(arguments_).toEqual(expect.arrayContaining(["--offline", "--frozen", "--collection"]));
+      expect(options?.stdin).toBe("-122.2 37.2\n-122.1 37.1\n");
+      return { stdout: "314.25\nnan\n", stderr: "" };
+    });
+    const sampler = new UvRasterioThreeDepElevationSampler("/fixture/collection.json", {
+      projectPath: "/fixture/tools/dem",
+      scriptPath: "/fixture/tools/dem/sample_dem.py",
+      runner,
+    });
+    await expect(sampler.sample([[-122.2, 37.2], [-122.1, 37.1]])).resolves.toEqual([314.25, null]);
+  });
+
+  it("validates uv and Rasterio versions without network", async () => {
+    const runner: CommandRunner = vi.fn(async (_command, arguments_) => arguments_[0] === "--version"
+      ? { stdout: "uv 0.9.0\n", stderr: "" }
+      : { stdout: "rasterio 1.4.3; GDAL 3.9.3\n", stderr: "" });
+    await expect(validateUvRasterioPrerequisites({ runner })).resolves.toEqual({
+      uv: "uv 0.9.0",
+      rasterio: "rasterio 1.4.3; GDAL 3.9.3",
+    });
   });
 });
