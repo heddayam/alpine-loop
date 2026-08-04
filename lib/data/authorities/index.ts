@@ -6,4 +6,5 @@ export * from "./reconcile";
 export * from "./san-mateo-county";
 export * from "./santa-clara-county";
 export * from "./source";
+export * from "./spatial-match";
 export * from "./types";
