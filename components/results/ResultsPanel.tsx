@@ -67,9 +67,9 @@ function humanizeReason(reason: string) {
 }
 
 function violationValue(violation: ConstraintViolation, value: number) {
-  if (violation.constraint === "distance") return `${value.toFixed(1)} mi`;
+  if (violation.constraint === "distance") return `${(value / METERS_PER_MILE).toFixed(1)} mi`;
   if (violation.constraint === "steepest-sustained-grade") return `${value.toFixed(1)}%`;
-  return `${Math.round(value).toLocaleString("en-US")} ft`;
+  return `${Math.round(value * FEET_PER_METER).toLocaleString("en-US")} ft`;
 }
 
 function ElevationProfile({ route }: { route: GeneratedRoute }) {
