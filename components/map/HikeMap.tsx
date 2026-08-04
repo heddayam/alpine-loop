@@ -144,6 +144,7 @@ export function HikeMap({
   const draftBoundsRef = useRef<Bounds | null>(null);
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
+  const trailNetworkRef = useRef(trailNetwork);
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
@@ -160,6 +161,12 @@ export function HikeMap({
     accessPointsRef.current = accessPoints;
     selectedAccessPointIdRef.current = selectedAccessPointId;
   }, [accessPoints, selectedAccessPointId]);
+
+  useEffect(() => {
+    trailNetworkRef.current = trailNetwork;
+    const source = mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined;
+    source?.setData(trailNetwork);
+  }, [trailNetwork]);
 
   useEffect(() => {
     routesRef.current = routes;
@@ -267,7 +274,7 @@ export function HikeMap({
             "circle-stroke-width": 3,
           },
         });
-        map?.addSource("trail-network", { type: "geojson", data: trailNetwork });
+        map?.addSource("trail-network", { type: "geojson", data: trailNetworkRef.current });
         map?.addLayer({
           id: "trail-network-casing",
           type: "line",
@@ -385,7 +392,7 @@ export function HikeMap({
       mapRef.current = null;
       routeMarkerConstructorRef.current = null;
     };
-  }, [onAccessPointSelect, onRouteSelect, packCoverage, trailNetwork]);
+  }, [onAccessPointSelect, onRouteSelect, packCoverage]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;

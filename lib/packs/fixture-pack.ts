@@ -19,6 +19,17 @@ export const FIXTURE_PACK_DEMO_BOUNDS: Bounds = [-122.183, 37.155, -122.14, 37.1
 
 export const FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS = 25;
 
+export type BuilderPackConfig = {
+  id: string;
+  name: string;
+  subtitle: string;
+  dataVersion: string;
+  builtAt: string;
+  coverage: Bounds;
+  suggestedBounds: Bounds;
+  trailNetwork: FeatureCollection<LineString>;
+};
+
 const fixtureNodes = new Map(fixtureGraph.nodes.map((node) => [node.id, node]));
 type FixtureTrailTuple = [string, string, string, Array<[number, number]>?, string?];
 const fixtureTrails = fixtureGraph.undirectedTrails as unknown as FixtureTrailTuple[];
@@ -41,4 +52,15 @@ export const FIXTURE_PACK_TRAIL_NETWORK: FeatureCollection<LineString> = {
       },
     };
   }),
+};
+
+export const FIXTURE_BUILDER_PACK: BuilderPackConfig = {
+  id: FIXTURE_PACK_METADATA.id,
+  name: "Fixture pack",
+  subtitle: "Santa Cruz Mountains preview",
+  dataVersion: FIXTURE_PACK_METADATA.dataVersion,
+  builtAt: FIXTURE_PACK_METADATA.builtAt,
+  coverage: FIXTURE_PACK_COVERAGE,
+  suggestedBounds: FIXTURE_PACK_DEMO_BOUNDS,
+  trailNetwork: FIXTURE_PACK_TRAIL_NETWORK,
 };

@@ -1,25 +1,11 @@
-import fixtureGraph from "@/data/fixtures/graph/tiny.json";
-import { FixtureGraphRepository, type FixtureGraphData } from "@/lib/graph";
 import {
   DEFAULT_SOLVER_BUDGET,
   type RouteGenerationContext,
   type RouteSolver,
 } from "@/lib/solver";
 import type { GenerateRoutesRequestV1, GenerateRoutesResponseV1 } from "@/lib/contracts";
-import {
-  FIXTURE_PACK_COVERAGE,
-  FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
-  FIXTURE_PACK_METADATA,
-} from "@/lib/packs/fixture-pack";
 import { createGenerateRoutesHandler, type RoutePack } from "./route-generation";
-
-const FIXTURE_PACK: RoutePack = {
-  ...FIXTURE_PACK_METADATA,
-  coverageBbox: FIXTURE_PACK_COVERAGE,
-  maximumAreaSquareKilometers: FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
-  loadRepository: async () =>
-    new FixtureGraphRepository(fixtureGraph as unknown as FixtureGraphData),
-};
+import { loadRoutePacks } from "./pack-registry";
 
 type SolverModule = {
   createRouteSolver?: (options: {
@@ -27,33 +13,45 @@ type SolverModule = {
   }) => RouteSolver;
 };
 
-class LazyFixtureRouteSolver implements RouteSolver {
-  #solver?: RouteSolver;
+class LazyPackRouteSolver implements RouteSolver {
+  readonly #packs: ReadonlyMap<string, RoutePack>;
+  readonly #solvers = new Map<string, RouteSolver>();
+
+  constructor(packs: ReadonlyMap<string, RoutePack>) {
+    this.#packs = packs;
+  }
 
   async generate(
     request: GenerateRoutesRequestV1,
     context: RouteGenerationContext,
   ): Promise<GenerateRoutesResponseV1> {
-    if (!this.#solver) {
+    let solver = this.#solvers.get(request.packId);
+    if (!solver) {
+      const pack = this.#packs.get(request.packId);
+      if (!pack) throw new Error(`Pack ${request.packId} is not registered`);
       const solverModule = (await import("@/lib/solver")) as SolverModule;
       if (!solverModule.createRouteSolver) {
         throw new Error("The deterministic route solver is not installed");
       }
-      this.#solver = solverModule.createRouteSolver({
+      solver = solverModule.createRouteSolver({
         pack: {
-          id: FIXTURE_PACK.id,
-          schemaVersion: FIXTURE_PACK.schemaVersion,
-          dataVersion: FIXTURE_PACK.dataVersion,
-          builtAt: FIXTURE_PACK.builtAt,
+          id: pack.id,
+          schemaVersion: pack.schemaVersion,
+          dataVersion: pack.dataVersion,
+          builtAt: pack.builtAt,
         },
       });
+      this.#solvers.set(request.packId, solver);
     }
-    return this.#solver.generate(request, context);
+    return solver.generate(request, context);
   }
 }
 
-export const POST = createGenerateRoutesHandler({
-  packs: new Map([[FIXTURE_PACK.id, FIXTURE_PACK]]),
-  solver: new LazyFixtureRouteSolver(),
-  budget: { ...DEFAULT_SOLVER_BUDGET },
-});
+export async function POST(request: Request): Promise<Response> {
+  const packs = await loadRoutePacks();
+  return createGenerateRoutesHandler({
+    packs,
+    solver: new LazyPackRouteSolver(packs),
+    budget: { ...DEFAULT_SOLVER_BUDGET },
+  })(request);
+}

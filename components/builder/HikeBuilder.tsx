@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FeatureCollection, LineString } from "geojson";
 import {
   bboxSchema,
   generateRoutesResponseV1Schema,
@@ -8,11 +9,7 @@ import {
   type GenerateRoutesRequestV1,
   type RouteType,
 } from "@/lib/contracts";
-import {
-  FIXTURE_PACK_COVERAGE,
-  FIXTURE_PACK_DEMO_BOUNDS,
-  FIXTURE_PACK_TRAIL_NETWORK,
-} from "@/lib/packs/fixture-pack";
+import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
@@ -44,10 +41,17 @@ function patchRange(
   setValues((current) => ({ ...current, [key]: next }));
 }
 
-export function HikeBuilder() {
+function isTrailNetwork(value: unknown): value is FeatureCollection<LineString> {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { type?: unknown; features?: unknown };
+  return candidate.type === "FeatureCollection" && Array.isArray(candidate.features);
+}
+
+export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPackConfig }) {
   const [bounds, setBounds] = useState<Bounds | null>(null);
   const [values, setValues] = useState<BuilderValues>(DEFAULT_BUILDER_VALUES);
   const [accessPoints, setAccessPoints] = useState<AccessPointOption[]>([]);
+  const [trailNetwork, setTrailNetwork] = useState<FeatureCollection<LineString>>(pack.trailNetwork);
   const [selectedAccessPointId, setSelectedAccessPointId] = useState<string>();
   const [accessState, setAccessState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [accessError, setAccessError] = useState("");
@@ -65,6 +69,7 @@ export function HikeBuilder() {
     activeGeneration?.abort();
     setBounds(next);
     setAccessPoints([]);
+    if (!next) setTrailNetwork(pack.trailNetwork);
     setSelectedAccessPointId(undefined);
     setAccessState(next && bboxSchema.safeParse(next).success ? "loading" : "idle");
     setAccessError("");
@@ -72,7 +77,7 @@ export function HikeBuilder() {
     setGenerationMessage("");
     setGenerationResponse(null);
     setSelectedRouteId(undefined);
-  }, []);
+  }, [pack.trailNetwork]);
   const onAccessPointSelect = useCallback((id: string) => setSelectedAccessPointId(id), []);
 
   useEffect(() => {
@@ -84,15 +89,16 @@ export function HikeBuilder() {
       bbox: bounds.join(","),
       includeUncertainAccess: String(values.includeUncertainAccess),
     });
-    void fetch(`/api/packs/fixture-pack/access-points?${query}`, { signal: controller.signal })
+    void fetch(`/api/packs/${pack.id}/access-points?${query}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Access points could not be loaded.");
-        return response.json() as Promise<{ accessPoints?: AccessPointOption[] }>;
+        return response.json() as Promise<{ accessPoints?: AccessPointOption[]; trailNetwork?: unknown }>;
       })
       .then((payload) => {
         if (!Array.isArray(payload.accessPoints)) throw new Error("Access-point data was invalid.");
         const inside = payload.accessPoints.filter((point) => isPointInsideBounds(point.lon, point.lat, bounds));
         setAccessPoints(inside);
+        if (isTrailNetwork(payload.trailNetwork)) setTrailNetwork(payload.trailNetwork);
         setSelectedAccessPointId((selected) => selected && inside.some((point) => point.id === selected) ? selected : undefined);
         setAccessState("ready");
       })
@@ -103,7 +109,7 @@ export function HikeBuilder() {
         setAccessError(error instanceof Error ? error.message : "Access points could not be loaded.");
       });
     return () => controller.abort();
-  }, [bounds, values.includeUncertainAccess]);
+  }, [bounds, pack.id, values.includeUncertainAccess]);
 
   useEffect(() => () => {
     const activeGeneration = generationControllerRef.current;
@@ -126,7 +132,10 @@ export function HikeBuilder() {
   };
 
   const generate = async () => {
-    const validated = buildGenerateRoutesRequest(values, bounds, selectedAccessPointId);
+    const validated = buildGenerateRoutesRequest(values, bounds, selectedAccessPointId, {
+      id: pack.id,
+      coverage: pack.coverage,
+    });
     if (!validated.success) {
       setValidationErrors(validated.errors);
       setGenerationState("idle");
@@ -206,7 +215,7 @@ export function HikeBuilder() {
         </div>
         <div className="pack-status" aria-label="Installed region pack">
           <span className="status-dot" aria-hidden="true" />
-          <span><strong>Fixture pack</strong><small>Santa Cruz Mountains preview</small></span>
+          <span><strong>{pack.name}</strong><small>{pack.subtitle}</small></span>
         </div>
       </header>
 
@@ -327,9 +336,9 @@ export function HikeBuilder() {
 
         <HikeMap
           bounds={bounds}
-          packCoverage={FIXTURE_PACK_COVERAGE}
-          suggestedBounds={FIXTURE_PACK_DEMO_BOUNDS}
-          trailNetwork={FIXTURE_PACK_TRAIL_NETWORK}
+          packCoverage={pack.coverage}
+          suggestedBounds={pack.suggestedBounds}
+          trailNetwork={trailNetwork}
           accessPoints={accessPoints}
           selectedAccessPointId={selectedAccessPointId}
           routes={generatedRoutes}
