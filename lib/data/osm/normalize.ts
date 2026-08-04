@@ -16,8 +16,16 @@ const featureSchema = z.object({
 
 const PEDESTRIAN_HIGHWAYS = new Set([
   "path", "footway", "track", "pedestrian", "steps", "bridleway",
-  "service", "unclassified", "residential", "living_street",
 ]);
+const ROAD_CONNECTORS = new Set(["service", "unclassified", "residential", "living_street"]);
+
+export function osmWayIsHikingRelevant(values: Record<string, string>): boolean {
+  const highway = values.highway ?? "";
+  if (PEDESTRIAN_HIGHWAYS.has(highway)) return true;
+  if (!ROAD_CONNECTORS.has(highway)) return false;
+  return ["yes", "designated", "permissive", "public"].includes(values.foot ?? "")
+    || /(?:^|\s)(trail|path|walk)(?:\s|$)/i.test(values.name ?? "");
+}
 
 function tags(properties: Record<string, unknown>): Record<string, string> {
   const result: Record<string, string> = {};
@@ -88,7 +96,7 @@ export function normalizeOsmFeatures(
     const values = tags(feature.properties);
     const featureExternalId = externalId(feature, `feature-${featureIndex}`);
     if (feature.geometry.type === "LineString") {
-      if (!PEDESTRIAN_HIGHWAYS.has(values.highway ?? "")) {
+      if (!osmWayIsHikingRelevant(values)) {
         rejectedWayCount += 1;
         return;
       }

@@ -24,7 +24,7 @@ export type OsmPipelineOptions = {
   runner?: CommandRunner;
 };
 
-const ADAPTER_VERSION = "osmium-complete-ways-hiking-v1";
+const ADAPTER_VERSION = "osmium-complete-ways-hiking-v2";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street";
 
 async function nonempty(filePath: string, label: string): Promise<void> {

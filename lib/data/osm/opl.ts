@@ -1,16 +1,47 @@
 import { readFile } from "node:fs/promises";
 import type { NormalizedAccessPoint, NormalizedNode, NormalizedTopology, NormalizedWay } from "../types";
-import { osmAccessState, osmFootDirection } from "./normalize";
+import { osmAccessState, osmFootDirection, osmWayIsHikingRelevant } from "./normalize";
 
 type OplNode = { id: string; lon: number; lat: number; tags: Record<string, string> };
 type OplWay = { id: string; nodeIds: string[]; tags: Record<string, string> };
 
 function decode(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch (error) {
-    throw new Error(`Invalid percent encoding in OPL value: ${value}`, { cause: error });
+  let result = "";
+  for (let index = 0; index < value.length;) {
+    const hex = value.slice(index + 1, index + 3);
+    if (value[index] !== "%" || !/^[a-fA-F0-9]{2}$/.test(hex)) {
+      result += value[index];
+      index += 1;
+      continue;
+    }
+    const first = Number.parseInt(hex, 16);
+    const byteCount = first < 0x80 ? 1 : first >= 0xc2 && first <= 0xdf ? 2 : first >= 0xe0 && first <= 0xef ? 3 : first >= 0xf0 && first <= 0xf4 ? 4 : 0;
+    const bytes: number[] = [];
+    let valid = byteCount > 0;
+    for (let byteIndex = 0; byteIndex < byteCount; byteIndex += 1) {
+      const offset = index + byteIndex * 3;
+      const pair = value.slice(offset + 1, offset + 3);
+      if (value[offset] !== "%" || !/^[a-fA-F0-9]{2}$/.test(pair)) {
+        valid = false;
+        break;
+      }
+      const byte = Number.parseInt(pair, 16);
+      if (byteIndex > 0 && (byte < 0x80 || byte > 0xbf)) valid = false;
+      bytes.push(byte);
+    }
+    if (valid) {
+      try {
+        result += new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bytes));
+        index += byteCount * 3;
+        continue;
+      } catch {
+        // A literal percent followed by hex-looking text is valid OSM tag content.
+      }
+    }
+    result += "%";
+    index += 1;
   }
+  return result;
 }
 
 function field(tokens: readonly string[], prefix: string): string | undefined {
@@ -50,10 +81,6 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
     }
   }
 
-  const acceptedHighways = new Set([
-    "path", "footway", "track", "pedestrian", "steps", "bridleway",
-    "service", "unclassified", "residential", "living_street",
-  ]);
   const retainedNodes = new Map<string, NormalizedNode>();
   const retainNode = (id: string): NormalizedNode => {
     const existing = retainedNodes.get(id);
@@ -75,7 +102,7 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
   const ways: NormalizedWay[] = [];
   let rejectedWayCount = 0;
   for (const way of inputWays) {
-    if (!acceptedHighways.has(way.tags.highway ?? "")) {
+    if (!osmWayIsHikingRelevant(way.tags)) {
       rejectedWayCount += 1;
       continue;
     }

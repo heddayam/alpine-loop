@@ -47,17 +47,22 @@ def sample(collection_path: Path) -> None:
         for file in collection_files(collection_path):
             source = stack.enter_context(rasterio.open(file))
             datasets.append(stack.enter_context(WarpedVRT(source, crs="EPSG:4326", resampling=Resampling.bilinear)))
-        for lon, lat in points:
-            value: float | None = None
-            for dataset in datasets:
-                bounds = dataset.bounds
-                if bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top:
-                    sampled = next(dataset.sample([(lon, lat)], masked=True))[0]
-                    if not bool(getattr(sampled, "mask", False)):
-                        candidate = float(sampled)
-                        if math.isfinite(candidate):
-                            value = candidate
-                            break
+        values: list[float | None] = [None] * len(points)
+        for dataset in datasets:
+            bounds = dataset.bounds
+            indexes = [
+                index for index, (lon, lat) in enumerate(points)
+                if values[index] is None and bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top
+            ]
+            if not indexes:
+                continue
+            for index, sampled in zip(indexes, dataset.sample([points[index] for index in indexes], masked=True), strict=True):
+                first = sampled[0]
+                if not bool(getattr(first, "mask", False)):
+                    candidate = float(first)
+                    if math.isfinite(candidate):
+                        values[index] = candidate
+        for value in values:
             print("nan" if value is None else f"{value:.6f}")
 
 

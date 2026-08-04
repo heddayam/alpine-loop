@@ -11,7 +11,6 @@ export const midpenDefinition: ArcGisAuthorityDefinition = {
   stableIdField: "AssetID",
   nameField: "NAME",
   expectedFields: {
-    OBJECTID: "esriFieldTypeOID",
     AssetID: "esriFieldTypeString",
     NAME: "esriFieldTypeString",
     TRLACCESS: "esriFieldTypeString",
