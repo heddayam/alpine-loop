@@ -1,0 +1,21 @@
+{
+  "objectIdFieldName": "OBJECTID",
+  "globalIdFieldName": "GlobalID",
+  "geometryType": "esriGeometryPolyline",
+  "spatialReference": { "wkid": 4326 },
+  "fields": [
+    { "name": "OBJECTID", "type": "esriFieldTypeOID" },
+    { "name": "trail_name", "type": "esriFieldTypeString" },
+    { "name": "public_use", "type": "esriFieldTypeString" },
+    { "name": "status", "type": "esriFieldTypeString" },
+    { "name": "hiking_use", "type": "esriFieldTypeString" },
+    { "name": "distribution", "type": "esriFieldTypeString" },
+    { "name": "GlobalID", "type": "esriFieldTypeGlobalID" }
+  ],
+  "features": [
+    { "attributes": { "OBJECTID": 1, "trail_name": "Open Trail", "public_use": "hiking/bicycling", "status": "open", "hiking_use": "yes", "distribution": "Public", "GlobalID": "{scc-1}" }, "geometry": { "paths": [[[-121.9, 37.2], [-121.89, 37.21]]] } },
+    { "attributes": { "OBJECTID": 2, "trail_name": "Closed Trail", "public_use": "hiking", "status": "temporarily closed", "hiking_use": "yes", "distribution": "Public", "GlobalID": "{scc-2}" }, "geometry": { "paths": [[[-121.91, 37.2], [-121.90, 37.21]]] } },
+    { "attributes": { "OBJECTID": 3, "trail_name": "Motorcycle Trail", "public_use": "motorcycle only", "status": "open", "hiking_use": "no", "distribution": "Public", "GlobalID": "{scc-3}" }, "geometry": { "paths": [[[-121.92, 37.2], [-121.91, 37.21]]] } },
+    { "attributes": { "OBJECTID": 4, "trail_name": "Restricted Trail", "public_use": "restricted", "status": "open", "hiking_use": "yes", "distribution": "Public", "GlobalID": "{scc-4}" }, "geometry": { "paths": [[[-121.93, 37.2], [-121.92, 37.21]]] } }
+  ]
+}
