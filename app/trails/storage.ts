@@ -251,12 +251,25 @@ export type RuntimeTrailArtifactBindings = {
   ASSETS?: { fetch(request: Request): Promise<Response> };
 };
 
+export type RuntimeTrailArtifactBackend = "packaged-assets" | "private-r2";
+
 export function createRuntimeTrailArtifactStore(
   bindings: RuntimeTrailArtifactBindings,
   requestUrl: string,
+  backend: RuntimeTrailArtifactBackend,
   localFetch: typeof fetch = fetch,
 ) {
-  if (bindings.TRAIL_ARTIFACTS) return new R2TrailArtifactStore(bindings.TRAIL_ARTIFACTS);
+  if (backend === "private-r2") {
+    if (bindings.TRAIL_ARTIFACTS) {
+      return new R2TrailArtifactStore(bindings.TRAIL_ARTIFACTS);
+    }
+    if (process.env.NODE_ENV !== "development") {
+      throw new TrailArtifactTransientError("runtime-binding");
+    }
+  }
+  if (backend !== "private-r2" && backend !== "packaged-assets") {
+    throw new TypeError(`Unsupported trail artifact backend: ${backend}`);
+  }
   if (bindings.ASSETS) {
     return new FetchTrailArtifactStore(requestUrl, async (request) => {
       try {

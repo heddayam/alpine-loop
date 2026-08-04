@@ -28,7 +28,7 @@ small checked-in NDJSON fixture:
 
 | Concern | Fixture evidence |
 | --- | --- |
-| Private application boundary | Runtime selection prefers the optional logical `TRAIL_ARTIFACTS` binding and exposes no bucket URL. |
+| Private application boundary | V2 artifacts explicitly select the logical `TRAIL_ARTIFACTS` binding and expose no bucket URL. V1 artifacts explicitly select packaged `ASSETS`, so enabling R2 cannot shadow Yosemite's historical keys. |
 | Local development | When the binding is absent, the existing Sites `ASSETS` fetcher (or development fetch) supplies the same object interface without R2 credentials. |
 | Accepted v2 layout | The locator resolves a two-character fixture shard from the accepted manifest's region ID, build ID, and declared artifact path; its expected SHA-256 comes from the manifest artifact record. |
 | Object and stream reads | A chunked `ReadableStream` feeds the same selected-segment NDJSON parser used by lazy geometry. |
@@ -36,7 +36,7 @@ small checked-in NDJSON fixture:
 | HTTP metadata | Content type, cache control, content encoding, content length, range support, and quoted ETag are retained or assigned safe defaults. |
 | Integrity | A manifest-supplied SHA-256 must match private object `customMetadata.sha256` (or the local fixture's `x-content-sha256`); missing or mismatched metadata fails closed. |
 | Failure behavior | Missing objects and transient storage failures have distinct typed errors. The geometry API continues to fail a known trail with unavailable/corrupt backing data as `503`, rather than returning partial geometry. |
-| Existing region | Yosemite–Stanislaus schema v1 keeps its historical `trails/<region>/<artifact path>` packaged Sites asset key. Because those packaged assets do not carry R2 custom metadata, the v1 fallback remains readable without applying the v2 metadata requirement. |
+| Existing region | Yosemite–Stanislaus schema v1 keeps its historical `trails/<region>/<artifact path>` packaged Sites asset key. A both-bindings regression proves v1 reads `ASSETS` while v2 reads R2. Because packaged v1 assets do not carry R2 custom metadata, the v1 fallback remains readable without applying the v2 metadata requirement. |
 | Partition width | The P4 catalog retains the manifest/index-declared prefix length used to select a shard; storage receives the resulting manifest path and does not assume one- or two-character partitions. |
 
 Cloudflare documents that Workers R2 bindings return object bodies as streams,

@@ -86,6 +86,7 @@ test("private R2 adapter streams a complete object with metadata and manifest ha
 test("v2 immutable object keys and integrity expectations come from the accepted manifest", () => {
   assert.deepEqual(fixtureArtifact, {
     key: "trails/fixture-region/build_0123456789abcdef0123456789abcdef/segments/aa.ndjson",
+    backend: "private-r2",
     expectedSha256: fixtureHash,
   });
   assert.throws(
@@ -147,6 +148,8 @@ test("private R2 adapter distinguishes object 404 from transient binding failure
 });
 
 test("local asset fallback needs no R2 credentials and preserves range semantics", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "development";
   const requests = [];
   const assets = {
     async fetch(request) {
@@ -167,28 +170,91 @@ test("local asset fallback needs no R2 credentials and preserves range semantics
       });
     },
   };
-  const store = createRuntimeTrailArtifactStore({ ASSETS: assets }, "http://local.test/request");
-  assert.ok(store instanceof FetchTrailArtifactStore);
+  try {
+    const store = createRuntimeTrailArtifactStore(
+      { ASSETS: assets },
+      "http://local.test/request",
+      fixtureArtifact.backend,
+    );
+    assert.ok(store instanceof FetchTrailArtifactStore);
 
-  const object = await store.get(objectKey, {
-    range: { offset: 4, length: 11 },
-    expectedSha256: fixtureHash,
-  });
-  assert.equal(requests[0].url, `http://local.test/${objectKey}`);
-  assert.equal(requests[0].headers.get("range"), "bytes=4-14");
-  assert.equal(object.size, fixtureBytes.length);
-  assert.deepEqual(
-    Buffer.from(await new Response(object.body).arrayBuffer()),
-    fixtureBytes.subarray(4, 15),
-  );
+    const object = await store.get(objectKey, {
+      range: { offset: 4, length: 11 },
+      expectedSha256: fixtureHash,
+    });
+    assert.equal(requests[0].url, `http://local.test/${objectKey}`);
+    assert.equal(requests[0].headers.get("range"), "bytes=4-14");
+    assert.equal(object.size, fixtureBytes.length);
+    assert.deepEqual(
+      Buffer.from(await new Response(object.body).arrayBuffer()),
+      fixtureBytes.subarray(4, 15),
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
-test("runtime selection prefers the logical private R2 binding over local assets", () => {
-  const store = createRuntimeTrailArtifactStore(
-    { TRAIL_ARTIFACTS: fixtureR2().binding, ASSETS: { fetch: async () => new Response() } },
+test("coexisting bindings read v1 from ASSETS and v2 from private R2", async () => {
+  const r2 = fixtureR2();
+  const assetRequests = [];
+  const bindings = {
+    TRAIL_ARTIFACTS: r2.binding,
+    ASSETS: {
+      async fetch(request) {
+        assetRequests.push(request);
+        return new Response(fixtureBytes, {
+          headers: { "Content-Type": "application/x-ndjson" },
+        });
+      },
+    },
+  };
+  const v1Artifact = locateTrailArtifact({
+    schemaVersion: 1,
+    region: { id: "yosemite-stanislaus" },
+  }, "segments/a.ndjson");
+
+  const v1Store = createRuntimeTrailArtifactStore(
+    bindings,
     "http://local.test/request",
+    v1Artifact.backend,
   );
-  assert.ok(store instanceof R2TrailArtifactStore);
+  assert.ok(v1Store instanceof FetchTrailArtifactStore);
+  const v1Object = await v1Store.get(v1Artifact.key);
+  assert.equal(await new Response(v1Object.body).text(), fixtureBytes.toString());
+  assert.equal(assetRequests.length, 1);
+  assert.equal(r2.calls.length, 0);
+
+  const v2Store = createRuntimeTrailArtifactStore(
+    bindings,
+    "http://local.test/request",
+    fixtureArtifact.backend,
+  );
+  assert.ok(v2Store instanceof R2TrailArtifactStore);
+  const v2Object = await v2Store.get(fixtureArtifact.key, {
+    expectedSha256: fixtureArtifact.expectedSha256,
+  });
+  assert.equal(await new Response(v2Object.body).text(), fixtureBytes.toString());
+  assert.equal(assetRequests.length, 1);
+  assert.equal(r2.calls.length, 1);
+});
+
+test("v2 does not silently use packaged ASSETS when private R2 is missing in production", () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  let assetCalls = 0;
+  try {
+    assert.throws(
+      () => createRuntimeTrailArtifactStore({
+        ASSETS: { fetch: async () => { assetCalls += 1; return new Response(fixtureBytes); } },
+      }, "http://local.test/request", fixtureArtifact.backend),
+      TrailArtifactTransientError,
+    );
+    assert.equal(assetCalls, 0);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
 test("the legacy Yosemite manifest keeps its packaged ASSETS key without hash metadata", () => {
@@ -198,6 +264,7 @@ test("the legacy Yosemite manifest keeps its packaged ASSETS key without hash me
     artifacts: { "segments/a.ndjson": { sha256: "f".repeat(64) } },
   }, "segments/a.ndjson"), {
     key: "trails/yosemite-stanislaus/segments/a.ndjson",
+    backend: "packaged-assets",
   });
 });
 
@@ -216,13 +283,40 @@ test("the credential-free packaged Yosemite v1 fallback remains readable", async
         });
       },
     },
-  }, "http://local.test/api/trails");
+  }, "http://local.test/api/trails", artifact.backend);
 
   const object = await store.get(artifact.key, {
     ...(artifact.expectedSha256 ? { expectedSha256: artifact.expectedSha256 } : {}),
   });
   assert.equal(requests[0].url, "http://local.test/trails/yosemite-stanislaus/segments/a.ndjson");
   assert.equal(await new Response(object.body).text(), fixtureBytes.toString());
+});
+
+test("v2 development fallback still works without either production binding", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "development";
+  const requests = [];
+  try {
+    const store = createRuntimeTrailArtifactStore(
+      {},
+      "http://local.test/api/trails",
+      fixtureArtifact.backend,
+      async (request) => {
+        requests.push(request);
+        return new Response(fixtureBytes, {
+          headers: { "x-content-sha256": fixtureHash },
+        });
+      },
+    );
+    const object = await store.get(fixtureArtifact.key, {
+      expectedSha256: fixtureArtifact.expectedSha256,
+    });
+    assert.equal(await new Response(object.body).text(), fixtureBytes.toString());
+    assert.equal(requests[0].url, `http://local.test/${fixtureArtifact.key}`);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
 test("local fallback maps HTTP absence and service errors without exposing a bucket", async () => {

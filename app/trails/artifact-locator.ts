@@ -7,6 +7,7 @@ export type TrailArtifactManifest = {
 
 export type LocatedTrailArtifact = {
   key: string;
+  backend: "packaged-assets" | "private-r2";
   expectedSha256?: string;
 };
 
@@ -35,7 +36,10 @@ export function locateTrailArtifact(
   if (!validPathPart(manifest.region.id)) throw new TypeError("Invalid trail manifest region id.");
 
   if (manifest.schemaVersion === 1) {
-    return { key: `trails/${manifest.region.id}/${artifactPath}` };
+    return {
+      key: `trails/${manifest.region.id}/${artifactPath}`,
+      backend: "packaged-assets",
+    };
   }
   if (manifest.schemaVersion !== 2) {
     throw new TypeError(`Unsupported trail artifact schema version: ${manifest.schemaVersion}`);
@@ -49,6 +53,7 @@ export function locateTrailArtifact(
   }
   return {
     key: `trails/${manifest.region.id}/${manifest.buildId}/${artifactPath}`,
+    backend: "private-r2",
     expectedSha256,
   };
 }

@@ -50,8 +50,8 @@ export async function loadRegionalSegmentShard(
   const artifactPath = catalog?.shardPaths[shard];
   if (!artifactPath) throw new Error(`Unknown geometry shard ${shard}`);
   const { env } = await import("cloudflare:workers");
-  const store = createRuntimeTrailArtifactStore(env, requestUrl);
   const artifact = locateTrailArtifact(catalog.manifest, artifactPath);
+  const store = createRuntimeTrailArtifactStore(env, requestUrl, artifact.backend);
   const object = await store.get(artifact.key, {
     ...(artifact.expectedSha256 ? { expectedSha256: artifact.expectedSha256 } : {}),
   });
