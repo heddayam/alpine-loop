@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "n-a", "lon": -122.1600, "lat": 37.1600, "tags": { "highway": "trailhead", "name": "Redwood Gate", "access": "yes" } },
+    { "id": "n-b", "lon": -122.1590, "lat": 37.1600, "tags": {} },
+    { "id": "n-c", "lon": -122.1580, "lat": 37.1600, "tags": {} },
+    { "id": "n-d", "lon": -122.1580, "lat": 37.1610, "tags": {} },
+    { "id": "n-e", "lon": -122.1590, "lat": 37.1610, "tags": {} },
+    { "id": "n-f", "lon": -122.1570, "lat": 37.1600, "tags": {} },
+    { "id": "n-g", "lon": -122.1560, "lat": 37.1600, "tags": { "amenity": "parking", "name": "East Parking", "access": "yes" } }
+  ],
+  "ways": [
+    { "id": "w-loop", "nodeIds": ["n-a", "n-b", "n-c", "n-d", "n-e", "n-a"], "tags": { "highway": "path", "foot": "yes", "name": "Redwood Loop" } },
+    { "id": "w-ridge", "nodeIds": ["n-c", "n-f", "n-g"], "tags": { "highway": "track", "access": "private", "name": "Ridge Connector" } },
+    { "id": "w-unknown", "nodeIds": ["n-b", "n-e"], "tags": { "highway": "footway", "name": "Unverified Cutoff" } },
+    { "id": "w-oneway", "nodeIds": ["n-d", "n-f"], "tags": { "highway": "path", "foot": "yes", "oneway": "yes", "name": "Directional Traverse" } },
+    { "id": "w-rejected", "nodeIds": ["n-a", "n-g"], "tags": { "highway": "motorway", "name": "Not a Trail" } }
+  ]
+}

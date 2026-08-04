@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "records": [
+    { "id": "official-ridge", "externalId": "w-ridge", "lon": -122.1570, "lat": 37.1600, "name": "Ridge Connector", "accessState": "public", "confidence": "high" },
+    { "id": "official-gate", "externalId": "n-a", "lon": -122.1600, "lat": 37.1600, "name": "Redwood Gate", "accessState": "public", "confidence": "high" }
+  ]
+}

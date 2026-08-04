@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "samples": [
+    { "lon": -122.1600, "lat": 37.1600, "elevationM": 100 },
+    { "lon": -122.1590, "lat": 37.1600, "elevationM": 106 },
+    { "lon": -122.1580, "lat": 37.1600, "elevationM": 114 },
+    { "lon": -122.1580, "lat": 37.1610, "elevationM": 122 },
+    { "lon": -122.1590, "lat": 37.1610, "elevationM": 111 },
+    { "lon": -122.1570, "lat": 37.1600, "elevationM": 125 },
+    { "lon": -122.1560, "lat": 37.1600, "elevationM": 118 }
+  ]
+}
