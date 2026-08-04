@@ -1,0 +1,21 @@
+{
+  "total": 2,
+  "items": [
+    {
+      "sourceId": "USGS_13_n38w123",
+      "title": "USGS 1/3 arc-second n38w123",
+      "downloadURL": "https://fixtures.invalid/USGS_13_n38w123.tif",
+      "publicationDate": "2025-01-01",
+      "sizeInBytes": 12,
+      "format": "GeoTIFF"
+    },
+    {
+      "sourceId": "USGS_13_n38w122",
+      "title": "USGS 1/3 arc-second n38w122",
+      "downloadURL": "https://fixtures.invalid/USGS_13_n38w122.tif",
+      "publicationDate": "2025-01-01",
+      "sizeInBytes": "12",
+      "format": "GeoTIFF"
+    }
+  ]
+}
