@@ -4,6 +4,9 @@ export const STATE_PARKS_SOURCE = Object.freeze({
   provider: "state-parks",
   label: "California State Parks Recreational Routes",
   url: "https://services2.arcgis.com/AhxrK3F6WM8ECvDi/arcgis/rest/services/RecreationalRoutes/FeatureServer/0",
+  // Complex statewide route geometry can make larger object-ID responses fail
+  // at the hosted service edge even when the request URL itself is short.
+  refreshPageSize: 50,
   idFields: ["globalid", "gisid", "fid", "objectid"],
   updatedAtFields: ["last_edited_date", "edit_date", "updatedate"],
   nameFields: ["routename", "unitname"],

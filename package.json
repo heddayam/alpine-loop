@@ -16,7 +16,7 @@
     "trails:audit:refresh": "node scripts/trails/coverage-spike.mjs --refresh=all",
     "trails:pilot:refresh": "node scripts/trails/prepare-gate-c-pilot.mjs",
     "trails:region:refresh": "node scripts/trails/prepare-gate-c-region.mjs",
-    "trails:build": "node scripts/trails/build-region.mjs --region=yosemite-stanislaus"
+    "trails:build": "node scripts/trails/build-region.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

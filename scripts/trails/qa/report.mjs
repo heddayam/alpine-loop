@@ -44,7 +44,8 @@ function graphMetrics(nodes, segments) {
   }
 
   const visited = new Set();
-  const components = [];
+  let connectedComponents = 0;
+  const isolatedSegmentIds = [];
   for (const nodeId of [...adjacency.keys()].sort()) {
     if (visited.has(nodeId) || (segmentIdsByNode.get(nodeId)?.length ?? 0) === 0) continue;
     const pending = [nodeId];
@@ -62,11 +63,14 @@ function graphMetrics(nodes, segments) {
         }
       }
     }
-    components.push([...componentSegmentIds].sort());
+    connectedComponents += 1;
+    if (componentSegmentIds.size === 1) {
+      isolatedSegmentIds.push(componentSegmentIds.values().next().value);
+    }
   }
-  const isolatedSegmentIds = components.filter((ids) => ids.length === 1).flat().sort();
+  isolatedSegmentIds.sort();
   return {
-    connectedComponents: components.length,
+    connectedComponents,
     isolatedSegments: isolatedSegmentIds.length,
     isolatedSegmentIds,
     explanation: "isolated source-backed geometry is retained for review but is searchable only when credible access connects it",
@@ -112,35 +116,35 @@ function aggregateElevationWindows(segments, nodeElevations, {
       adjacency.set(from, edges);
     }
   }
-  const windowsByStart = new Map();
   const startNodeIds = [...new Set(shortSegments.flatMap(({ fromNodeId, toNodeId }) =>
     [fromNodeId, toNodeId]))].sort();
+  const coveredStartNodeIds = new Set();
+  const outlierMap = new Map();
+  let checkedWindows = 0;
   for (const nodeId of startNodeIds) {
     if (!Number.isFinite(nodeElevations[nodeId])) continue;
-    windowsByStart.set(nodeId, shortestWindows(
+    const windows = shortestWindows(
       nodeId,
       adjacency,
       nodeElevations,
       minimumMeters,
       maximumMeters,
-    ));
-  }
-  const covered = shortSegments.filter((segment) =>
-    (windowsByStart.get(segment.fromNodeId)?.length ?? 0) > 0 ||
-    (windowsByStart.get(segment.toNodeId)?.length ?? 0) > 0);
-  const outlierMap = new Map();
-  for (const [startNodeId, windows] of windowsByStart) {
+    );
+    checkedWindows += windows.length;
+    if (windows.length > 0) coveredStartNodeIds.add(nodeId);
     for (const window of windows) {
-      const key = [startNodeId, window.nodeId].sort().join("\u0000");
-      const gradePct = Math.abs(nodeElevations[startNodeId] - nodeElevations[window.nodeId]) /
+      const key = nodeId < window.nodeId
+        ? `${nodeId}\u0000${window.nodeId}`
+        : `${window.nodeId}\u0000${nodeId}`;
+      const gradePct = Math.abs(nodeElevations[nodeId] - nodeElevations[window.nodeId]) /
         window.distance * 100;
       if (gradePct <= maximumGradePct || outlierMap.has(key)) continue;
       outlierMap.set(key, {
-        fromNodeId: startNodeId,
+        fromNodeId: nodeId,
         toNodeId: window.nodeId,
         distanceMeters: Number(window.distance.toFixed(1)),
         elevationChangeMeters: Number(Math.abs(
-          nodeElevations[startNodeId] - nodeElevations[window.nodeId],
+          nodeElevations[nodeId] - nodeElevations[window.nodeId],
         ).toFixed(1)),
         gradePct: Number(gradePct.toFixed(1)),
         reason: `aggregate-${minimumMeters}-${maximumMeters}m-grade-over-${maximumGradePct}-pct`,
@@ -153,10 +157,13 @@ function aggregateElevationWindows(segments, nodeElevations, {
     maximumWindowMeters: maximumMeters,
     maximumGradePct,
     shortSegments: shortSegments.length,
-    coveredShortSegments: covered.length,
+    coveredShortSegments: shortSegments.filter((segment) =>
+      coveredStartNodeIds.has(segment.fromNodeId) ||
+      coveredStartNodeIds.has(segment.toNodeId)).length,
     uncompensatedShortSegmentIds: shortSegments
-      .filter((segment) => !covered.includes(segment)).map(({ id }) => id).sort(),
-    checkedWindows: [...windowsByStart.values()].reduce((total, windows) => total + windows.length, 0),
+      .filter((segment) => !coveredStartNodeIds.has(segment.fromNodeId) &&
+        !coveredStartNodeIds.has(segment.toNodeId)).map(({ id }) => id).sort(),
+    checkedWindows,
     outliers: [...outlierMap.values()].sort((left, right) =>
       left.fromNodeId.localeCompare(right.fromNodeId) || left.toNodeId.localeCompare(right.toNodeId)),
   };
