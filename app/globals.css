@@ -1,0 +1,10 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  background: #f4f1e8;
+  color: #17251e;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 56rem; margin: 0 auto; padding: 4rem 1.5rem; }

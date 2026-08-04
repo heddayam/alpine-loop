@@ -6,6 +6,7 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+*.tsbuildinfo.*
 
 # Local configuration and secrets
 .env
@@ -17,6 +18,7 @@ test-results/
 .local-data/
 data/raw/
 data/generated/
+data/packs/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
