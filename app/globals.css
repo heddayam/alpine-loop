@@ -128,6 +128,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .boundary-draft-readout strong { color: #ffd7c7; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
 .boundary-draft-readout span { font: 700 .95rem/1.2 Georgia, serif; }
 .boundary-draft-readout small { color: #dbe6df; font-size: .58rem; }
+.route-trailhead-pin { position: relative; width: 2.65rem; height: 3rem; padding: 0; cursor: pointer; background: transparent; border: 0; filter: drop-shadow(0 3px 3px rgb(24 49 42 / 38%)); }
+.route-trailhead-pin-shape { position: absolute; top: .14rem; left: 50%; display: grid; width: 2rem; height: 2rem; place-items: center; transform: translateX(-50%) rotate(45deg); color: #fffaf0; background: #173f35; border: 3px solid #fffaf0; border-radius: 50% 50% 50% 0; box-shadow: 0 0 0 2px #173f35; transition: width .14s ease, height .14s ease, background .14s ease, box-shadow .14s ease; }
+.route-trailhead-pin-number { display: block; max-width: 1.65rem; overflow: hidden; transform: rotate(-45deg); font-size: .67rem; font-weight: 900; line-height: 1; letter-spacing: -.04em; text-overflow: clip; white-space: nowrap; }
+.route-trailhead-pin:hover .route-trailhead-pin-shape, .route-trailhead-pin:focus-visible .route-trailhead-pin-shape { background: #245b4b; box-shadow: 0 0 0 3px #f47b4d, 0 0 0 5px rgb(255 250 240 / 90%); }
+.route-trailhead-pin:focus-visible { outline: 0; }
+.route-trailhead-pin.selected { z-index: 2; filter: drop-shadow(0 4px 5px rgb(24 49 42 / 48%)); }
+.route-trailhead-pin.selected .route-trailhead-pin-shape { top: 0; width: 2.25rem; height: 2.25rem; color: #173f35; background: #f47b4d; box-shadow: 0 0 0 3px #173f35, 0 0 0 6px rgb(255 250 240 / 78%); }
+.route-trailhead-pin.dense .route-trailhead-pin-number { font-size: .56rem; letter-spacing: -.07em; }
 .map-hint { position: absolute; z-index: 3; bottom: 1rem; left: 50%; width: max-content; max-width: calc(100% - 2rem); margin: 0; padding: .6rem .8rem; transform: translateX(-50%); color: #fff; background: rgb(23 63 53 / 90%); border-radius: .3rem; box-shadow: 0 3px 12px rgb(0 0 0 / 20%); font-size: .7rem; }
 
 .results-panel { z-index: 2; min-width: 0; overflow-y: auto; background: #f6f4ed; border-left: 1px solid #bfc8c1; box-shadow: -5px 0 18px rgb(31 55 47 / 10%); }

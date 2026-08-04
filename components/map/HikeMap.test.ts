@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedRoute } from "@/lib/contracts";
-import { routeFeatures } from "./HikeMap";
+import { routeFeatures, routeTrailheadPins } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedRoute {
   return {
@@ -32,5 +32,47 @@ describe("generated route map features", () => {
     expect(features.features[0]?.properties).toMatchObject({ id: "first", selected: false, routeNumber: 1 });
     expect(features.features[1]?.geometry).toEqual(routes[1]?.geometry);
     expect(features.features[1]?.properties).toMatchObject({ id: "second", selected: true, routeNumber: 2 });
+  });
+
+  it("creates numbered trailhead pins and emphasizes the selected route pin", () => {
+    const routes = [route("first", -122.18), route("second", -122.16)];
+    const pins = routeTrailheadPins(routes, "second");
+
+    expect(pins).toHaveLength(2);
+    expect(pins[0]).toMatchObject({
+      coordinates: [-122.18, 37.15],
+      routeIds: ["first"],
+      routeNumbers: [1],
+      numberLabel: "1",
+      selected: false,
+      nextRouteId: "first",
+    });
+    expect(pins[1]).toMatchObject({
+      coordinates: [-122.16, 37.15],
+      routeIds: ["second"],
+      routeNumbers: [2],
+      numberLabel: "2",
+      selected: true,
+      nextRouteId: "second",
+    });
+  });
+
+  it("groups matches at one physical trailhead and cycles through their result numbers", () => {
+    const routes = [route("first", -122.18), route("second", -122.18), route("third", -122.18)];
+    const [pin] = routeTrailheadPins(routes, "second");
+
+    expect(pin).toMatchObject({
+      routeIds: ["first", "second", "third"],
+      routeNumbers: [1, 2, 3],
+      numberLabel: "1·2·3",
+      selected: true,
+      nextRouteId: "third",
+    });
+  });
+
+  it("compresses a long consecutive run of route numbers on a shared pin", () => {
+    const routes = Array.from({ length: 6 }, (_, index) => route(`route-${index + 1}`, -122.18));
+
+    expect(routeTrailheadPins(routes)[0]?.numberLabel).toBe("1–6");
   });
 });
