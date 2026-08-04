@@ -12,6 +12,7 @@ import type { RouteGenerationContext, RouteSolver } from "./types";
 
 type PackResponseMetadata = GenerateRoutesResponseV1["pack"];
 type Confidence = GeneratedRoute["source"]["confidence"];
+const STALE_SOURCE_MILLISECONDS = 30 * 24 * 60 * 60 * 1_000;
 
 export type RouteSolverOptions = {
   pack: PackResponseMetadata;
@@ -64,10 +65,12 @@ function generatedRoute(
   candidate: ScoredCandidate,
   options: Required<Pick<RouteSolverOptions, "sourceFreshness" | "sourceConfidence" | "fallbackSourceIds">>,
   truncated: boolean,
+  sourceIsStale: boolean,
 ): GeneratedRoute {
   const warnings = [
     ...candidate.warnings,
     "Planning aid only; verify current trail and access conditions",
+    ...(sourceIsStale ? ["Source data is more than 30 days old; verify official access and current conditions"] : []),
     ...(truncated ? ["Search was truncated; additional alternatives may exist"] : []),
   ];
   return {
@@ -142,14 +145,16 @@ export class DeterministicRouteSolver implements RouteSolver {
       fallbackSourceIds: this.#options.fallbackSourceIds ?? [`${this.#options.pack.id}:manifest`],
     } satisfies Required<Pick<RouteSolverOptions, "sourceFreshness" | "sourceConfidence" | "fallbackSourceIds">>;
     const budgetTruncated = generation.diagnostics.exhausted;
+    const sourceAgeMilliseconds = (context.now?.() ?? Date.now()) - Date.parse(sourceOptions.sourceFreshness);
+    const sourceIsStale = sourceAgeMilliseconds > STALE_SOURCE_MILLISECONDS;
     return {
       version: 1,
       requestId: (this.#options.requestIdFactory ?? defaultRequestId)(request),
       pack: this.#options.pack,
       requested: request.limit,
-      exact: exact.map((candidate) => generatedRoute(candidate, sourceOptions, budgetTruncated)),
+      exact: exact.map((candidate) => generatedRoute(candidate, sourceOptions, budgetTruncated, sourceIsStale)),
       nearMisses: nearMisses.map((candidate) => ({
-        ...generatedRoute(candidate, sourceOptions, budgetTruncated),
+        ...generatedRoute(candidate, sourceOptions, budgetTruncated, sourceIsStale),
         violations: candidate.violations,
       })),
       diagnostics: {

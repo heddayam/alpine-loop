@@ -8,11 +8,19 @@ import {
 import { loadSantaCruzPack } from "@/lib/packs/installed-pack";
 import type { RoutePack } from "./route-generation";
 
-export type RegisteredRoutePack = RoutePack & { kind: "fixture" | "installed" };
+export type RegisteredRoutePack = RoutePack & {
+  kind: "fixture" | "installed";
+  sourceFreshness: string;
+  sourceConfidence: "high" | "medium" | "low";
+  fallbackSourceIds: string[];
+};
 
 const FIXTURE_PACK: RegisteredRoutePack = {
   ...FIXTURE_PACK_METADATA,
   kind: "fixture",
+  sourceFreshness: FIXTURE_PACK_METADATA.builtAt,
+  sourceConfidence: "high",
+  fallbackSourceIds: ["fixture-source"],
   coverageBbox: FIXTURE_PACK_COVERAGE,
   maximumAreaSquareKilometers: FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
   loadRepository: async () =>
@@ -30,6 +38,9 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
       dataVersion: manifest.dataVersion,
       builtAt: manifest.builtAt,
       kind: "installed",
+      sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
+      sourceConfidence: manifest.fieldConfidence.access ?? "low",
+      fallbackSourceIds: manifest.sources.map(({ id }) => id),
       coverageBbox: manifest.coverage.bbox,
       maximumAreaSquareKilometers: 25,
       loadRepository: async (signal) => {

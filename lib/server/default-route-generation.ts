@@ -4,20 +4,23 @@ import {
   type RouteSolver,
 } from "@/lib/solver";
 import type { GenerateRoutesRequestV1, GenerateRoutesResponseV1 } from "@/lib/contracts";
-import { createGenerateRoutesHandler, type RoutePack } from "./route-generation";
-import { loadRoutePacks } from "./pack-registry";
+import { createGenerateRoutesHandler } from "./route-generation";
+import { loadRoutePacks, type RegisteredRoutePack } from "./pack-registry";
 
 type SolverModule = {
   createRouteSolver?: (options: {
-    pack: Pick<RoutePack, "id" | "schemaVersion" | "dataVersion" | "builtAt">;
+    pack: Pick<RegisteredRoutePack, "id" | "schemaVersion" | "dataVersion" | "builtAt">;
+    sourceFreshness: string;
+    sourceConfidence: "high" | "medium" | "low";
+    fallbackSourceIds: string[];
   }) => RouteSolver;
 };
 
 class LazyPackRouteSolver implements RouteSolver {
-  readonly #packs: ReadonlyMap<string, RoutePack>;
+  readonly #packs: ReadonlyMap<string, RegisteredRoutePack>;
   readonly #solvers = new Map<string, RouteSolver>();
 
-  constructor(packs: ReadonlyMap<string, RoutePack>) {
+  constructor(packs: ReadonlyMap<string, RegisteredRoutePack>) {
     this.#packs = packs;
   }
 
@@ -40,6 +43,9 @@ class LazyPackRouteSolver implements RouteSolver {
           dataVersion: pack.dataVersion,
           builtAt: pack.builtAt,
         },
+        sourceFreshness: pack.sourceFreshness,
+        sourceConfidence: pack.sourceConfidence,
+        fallbackSourceIds: pack.fallbackSourceIds,
       });
       this.#solvers.set(request.packId, solver);
     }
