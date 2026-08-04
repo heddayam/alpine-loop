@@ -1,38 +1,19 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { analyzeRecords, buildNameOverlap, renderCoverageReport } from "./coverage-lib.mjs";
+import { requireRegion } from "./regions.mjs";
 
-const REGIONS = [
-  {
-    id: "bay-midpen",
-    label: "Bay Area — Midpen sample",
-    bbox: [-122.25, 37.15, -121.95, 37.45],
-    elevationProbe: { latitude: 37.1608, longitude: -121.9041 },
-  },
-  {
-    id: "bay-east",
-    label: "Bay Area — East Bay sample",
-    bbox: [-122.1, 37.45, -121.75, 37.85],
-    elevationProbe: { latitude: 37.5124, longitude: -121.8807 },
-  },
-  {
-    id: "sierra-national-forest",
-    label: "Sierra National Forest sample",
-    bbox: [-119.35, 36.95, -118.85, 37.45],
-    elevationProbe: { latitude: 37.2946, longitude: -119.1038 },
-  },
-  {
-    id: "yosemite-stanislaus",
-    label: "Yosemite–Stanislaus sample",
-    bbox: [-120.1, 37.55, -119.35, 38.15],
-    elevationProbe: { latitude: 37.7459, longitude: -119.5936 },
-  },
-  {
-    id: "tahoe-eldorado",
-    label: "Tahoe–Eldorado sample",
-    bbox: [-120.4, 38.6, -119.85, 39.15],
-    elevationProbe: { latitude: 38.9341, longitude: -120.0418 },
-  },
-];
+const AUDIT_REGIONS = [
+  "bay-midpen",
+  "bay-east",
+  "sierra-national-forest",
+  "yosemite-stanislaus",
+  "tahoe-eldorado",
+].map(requireRegion).map((region) => ({
+  id: region.id,
+  label: `${region.label} sample`,
+  bbox: region.bbox,
+  elevationProbe: region.elevationProbe,
+}));
 
 const COMMON_FIELDS = {
   surfaceFields: ["surface", "trail_surface", "trlsurface", "routesur", "surf_type"],
@@ -298,7 +279,7 @@ async function main() {
     (cachedReport?.regions ?? []).map((region) => [region.id, region]),
   );
   const regionReports = [];
-  for (const region of REGIONS) {
+  for (const region of AUDIT_REGIONS) {
     const cachedRegion = cachedRegions.get(region.id);
     process.stdout.write(`${REFRESH_TARGETS.size ? "Auditing" : "Rendering cached"} ${region.label}...\n`);
     const sourceResults = [];

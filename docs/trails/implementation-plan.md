@@ -1,13 +1,17 @@
 # Alpine Search hiking-data implementation plan
 
-Status: T7.3 review complete; Gate C passed with documented exceptions
+Status: T8 pipeline implementation complete with regional publication blocked;
+T9, T10, and Yosemite product integration complete; Gate D verification passed
 Primary integration branch: `codex/trails-data`
 First production slice: Yosemite–Stanislaus
 Current evidence: [coverage-spike.md](./coverage-spike.md)
 
-Immediate next tasks: T8 regional expansion and T9 search-layer implementation
-may begin from the accepted T7.2 corpus. They must honor the product constraints
-recorded in [gate-c-review.md](./gate-c-review.md).
+Immediate next task after T8–T10 integration: profile and bound the regional
+build's late-stage memory use, complete byte-identical repeat-build evidence and
+manual QA, and decide on an external versioned artifact delivery mechanism.
+Additional regions remain unavailable in the product until that work is
+accepted. All product work must continue to honor the constraints recorded in
+[gate-c-review.md](./gate-c-review.md).
 
 ## Objective
 
@@ -660,14 +664,46 @@ response contract and Gate D remains open.
 
 Branch: `codex/trails-region-expansion`
 Dependencies: accepted T7.2 and Gate C
+Status: pipeline implementation complete at `7e69acb`; regional publication
+blocked
 
 Add Bay Area, Sierra National Forest, and Tahoe–Eldorado through region config
 and source snapshots only. Do not fork the normalization logic by region.
+
+Completion note (2026-08-03): the generalized regional workflow is implemented
+for Bay Area — Midpen, Bay Area — East Bay, Sierra National Forest, and
+Tahoe–Eldorado. It preserves config-driven agency selection, shared California
+PBF reuse, bounded OSM preparation, State Parks pagination at the service's
+working page size, large-array-safe composition, and lower-memory QA. First
+cached builds produced 590,040 segments with complete elevation coverage. The
+ignored artifacts remain outside the repository and product; see
+[t8-regional-expansion.md](./t8-regional-expansion.md).
+
+Publication is blocked because the heaviest repeat build still exceeds Node's
+default heap during a later sort, byte-identical repeat-build evidence is
+incomplete, manual regional QA and storage/delivery acceptance are incomplete,
+and Tahoe elevation flags require review. The four regional payloads total
+about 993 MB raw and 201 MB gzip. Do not commit their indexes or artifacts,
+package their geometry as public Sites assets, or expose them through the API
+or UI until those gates pass.
+
+#### T8.1 follow-up: bounded-memory builds and external artifact delivery
+
+Dependencies: integrated T8 pipeline and a separate storage/delivery decision
+Status: not started; explicitly outside T8–T10 integration
+
+Profile the late build/serializer sort and make peak memory bounded without
+raising the default Node heap merely to complete a run. Then repeat each build
+from identical cached inputs, record byte-identical evidence, complete manual
+regional QA (including Tahoe elevation flags), and choose a reviewed versioned
+external delivery mechanism before proposing product publication. R2 or another
+storage system requires its own reviewed change.
 
 #### T9: App search/query layer
 
 Branch: `codex/trails-search-api`
 Dependencies: accepted T7.2 artifact contract and Gate C
+Status: complete at `a0a30b8`
 
 Responsibilities:
 
@@ -677,10 +713,16 @@ Responsibilities:
 - Return metadata first and geometry lazily.
 - Keep external source calls out of request handling.
 
+Completion note (2026-08-03): Yosemite–Stanislaus is the only registered
+catalog. Search uses access points inside the active polygon, preserves Gate C
+policy exclusions and warnings, returns metadata before geometry, and loads
+only the selected geometry shards. No additional regional search index exists.
+
 #### T10: Map and result UI
 
 Branch: `codex/trails-ui`
 Dependencies: stable T9 response contract
+Status: complete at `b6bd7be`; integration verification passed
 
 Responsibilities:
 
@@ -692,6 +734,11 @@ Responsibilities:
 - Clear unknown and closure messaging.
 
 Do not let the UI agent invent data fields or read raw source artifacts.
+
+Completion note (2026-08-03): the UI includes the trail toggle, reachable
+results, trailhead markers, selected lazy geometry, request guards, and separate
+reachability/trail map layers. It searches Yosemite–Stanislaus only and retains
+the existing reachability flow.
 
 ## Agent coordination rules
 
@@ -806,11 +853,24 @@ Do not let the UI agent invent data fields or read raw source artifacts.
 
 ### Gate D — product
 
-- T9–T10 merged.
+Status: passed for Yosemite–Stanislaus on 2026-08-03. Additional regional
+publication remains outside this gate and blocked under T8.1.
+
+- T8 workflow and T9–T10 product work merged without publishing additional
+  regions.
 - Existing reachability tests still pass.
 - Reachable trails are selected by access point, not line intersection.
 - Full `npm test` passes.
 - Browser QA is performed only when explicitly requested.
+- Sites packages only committed Yosemite–Stanislaus geometry; QA, provenance,
+  nodes, and ignored T8 caches are not eager client assets.
+
+Integration verification: T8-focused tests passed (7), T9/T10 search and UI
+tests passed (9), all affected trail tests passed (74), lint passed, and the
+final production build plus full test suite passed (92). The build emitted the
+existing reachability routes, trail search route, and lazy trail geometry
+route. Its public trail tree contains only the 16 Yosemite geometry shards and
+their index.
 
 ## Definition of done for the data phase
 

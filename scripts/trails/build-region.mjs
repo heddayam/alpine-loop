@@ -763,7 +763,7 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
         resolve(inputDirectory, relativePath),
         adapter.config,
       );
-      input.segmentCandidates.push(...adapter.normalizeSnapshot(snapshot));
+      input.segmentCandidates = input.segmentCandidates.concat(adapter.normalizeSnapshot(snapshot));
     }
   }
   if (input.osmSnapshotPath) {
@@ -772,13 +772,15 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
       input.osmSnapshotOptions,
     );
     const topology = buildOsmTopology(snapshot);
-    input.segmentCandidates.push(...topology.segments);
-    input.sourceNodes.push(...topology.nodes);
-    input.accessPointCandidates.push(...(snapshot.accessPointCandidates ?? []));
+    input.segmentCandidates = input.segmentCandidates.concat(topology.segments);
+    input.sourceNodes = input.sourceNodes.concat(topology.nodes);
+    input.accessPointCandidates = input.accessPointCandidates.concat(
+      snapshot.accessPointCandidates ?? [],
+    );
     const roadSourceIds = new Set(snapshot.publicRoadSourceNodeIds ?? []);
-    input.publicRoadNodeIds.push(...topology.nodes.filter((node) =>
+    input.publicRoadNodeIds = input.publicRoadNodeIds.concat(topology.nodes.filter((node) =>
       node.sourceNodeIds.some((sourceId) => roadSourceIds.has(sourceId))).map(({ id }) => id));
-    input.pipelineIssues.push(...topology.issues);
+    input.pipelineIssues = input.pipelineIssues.concat(topology.issues);
   }
   if (input.elevationGridPath) {
     const gridPath = resolve(inputDirectory, input.elevationGridPath);

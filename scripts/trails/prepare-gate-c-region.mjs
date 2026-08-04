@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -11,6 +11,7 @@ import { createOSMStream } from "osm-pbf-parser-node";
 import { fromArrayBuffer } from "geotiff";
 import { requireRegion } from "./regions.mjs";
 import { refreshArcGisSnapshot } from "./sources/arcgis.mjs";
+import { EBRPD_SOURCE } from "./sources/ebrpd.mjs";
 import { NPS_SOURCE } from "./sources/nps.mjs";
 import {
   isHikingRelevantWay,
@@ -18,17 +19,43 @@ import {
   normalizeOsmTags,
   osmAccessCandidateType,
 } from "./sources/osm.mjs";
+import { STATE_PARKS_SOURCE } from "./sources/state-parks.mjs";
 import { USFS_SOURCE } from "./sources/usfs.mjs";
 import { USGS_SOURCE } from "./sources/usgs.mjs";
 
-export const GATE_C_REGION = Object.freeze({
-  regionId: "yosemite-stanislaus",
+export const REGION_REFRESH_CONFIG = Object.freeze({
   osmPbfUrl: "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
   elevationUrl:
     "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
   elevationCellDegrees: 1 / 3_600,
   elevationTileSize: 512,
 });
+
+// Retained for callers that still identify the accepted T7.2 workflow by name.
+export const GATE_C_REGION = Object.freeze({
+  regionId: "yosemite-stanislaus",
+  ...REGION_REFRESH_CONFIG,
+});
+
+const AGENCY_SOURCES = Object.freeze({
+  usgs: USGS_SOURCE,
+  usfs: USFS_SOURCE,
+  nps: NPS_SOURCE,
+  "state-parks": STATE_PARKS_SOURCE,
+  ebrpd: EBRPD_SOURCE,
+});
+
+export function regionalAgencySources(regionOrId) {
+  const region = typeof regionOrId === "string" ? requireRegion(regionOrId) : regionOrId;
+  if (!region?.id || !Array.isArray(region.agencyProviders)) {
+    throw new TypeError("region must be a configured trail region");
+  }
+  return region.agencyProviders.map((provider) => {
+    const source = AGENCY_SOURCES[provider];
+    if (!source) throw new RangeError(`No agency source is registered for ${provider}`);
+    return [provider, source];
+  });
+}
 
 const OSM_NODE_TAGS = Object.freeze([
   "highway", "information", "entrance", "barrier", "amenity", "access", "foot", "name",
@@ -147,7 +174,7 @@ async function fetchResponse(url, options = {}) {
     try {
       const response = await fetch(url, {
         ...fetchOptions,
-        headers: { "User-Agent": "AlpineSearch-GateCRegion/1", ...options.headers },
+        headers: { "User-Agent": "AlpineSearch-TrailRegionRefresh/1", ...options.headers },
         signal: AbortSignal.timeout(timeoutMilliseconds),
       });
       if (response.ok) return response;
@@ -353,15 +380,15 @@ async function prepareElevationTiles(cacheRoot, bbox, retrievedAt, { reuseComple
   const rawRoot = resolve(root, "raw");
   const preparedRoot = resolve(root, "tiles");
   await Promise.all([mkdir(rawRoot, { recursive: true }), mkdir(preparedRoot, { recursive: true })]);
-  const metadataUrl = new URL(GATE_C_REGION.elevationUrl);
+  const metadataUrl = new URL(REGION_REFRESH_CONFIG.elevationUrl);
   metadataUrl.searchParams.set("f", "json");
   const serviceMetadata = await fetchJson(metadataUrl);
   const servicePath = resolve(root, "service.json");
   await writeFile(servicePath, pretty(serviceMetadata));
   const layout = tileLayout(
     bbox,
-    GATE_C_REGION.elevationCellDegrees,
-    GATE_C_REGION.elevationTileSize,
+    REGION_REFRESH_CONFIG.elevationCellDegrees,
+    REGION_REFRESH_CONFIG.elevationTileSize,
   );
   const tiles = [];
   let noDataCells = 0;
@@ -377,7 +404,7 @@ async function prepareElevationTiles(cacheRoot, bbox, retrievedAt, { reuseComple
         if (prepared.readFloatLE(offset) === NO_DATA_VALUE) tileNoDataCells += 1;
       }
     } else {
-      const response = await fetchResponse(exportImageUrl(GATE_C_REGION.elevationUrl, tile));
+      const response = await fetchResponse(exportImageUrl(REGION_REFRESH_CONFIG.elevationUrl, tile));
       const bytes = Buffer.from(await response.arrayBuffer());
       await writeFile(rawPath, bytes);
       const decoded = await decodeTiff(bytes, tile.width, tile.height);
@@ -390,7 +417,7 @@ async function prepareElevationTiles(cacheRoot, bbox, retrievedAt, { reuseComple
       path: relative(root, preparedPath),
       raw: await fileMetadata(rawPath, cacheRoot),
       prepared: await fileMetadata(preparedPath, cacheRoot),
-      sourceUrl: exportImageUrl(GATE_C_REGION.elevationUrl, tile).toString(),
+      sourceUrl: exportImageUrl(REGION_REFRESH_CONFIG.elevationUrl, tile).toString(),
       noDataCells: tileNoDataCells,
     });
   }
@@ -400,17 +427,20 @@ async function prepareElevationTiles(cacheRoot, bbox, retrievedAt, { reuseComple
     crs: "EPSG:4326",
     width: layout.width,
     height: layout.height,
-    tileSize: GATE_C_REGION.elevationTileSize,
+    tileSize: REGION_REFRESH_CONFIG.elevationTileSize,
     origin: [
-      layout.rasterWest + GATE_C_REGION.elevationCellDegrees / 2,
-      layout.rasterNorth - GATE_C_REGION.elevationCellDegrees / 2,
+      layout.rasterWest + REGION_REFRESH_CONFIG.elevationCellDegrees / 2,
+      layout.rasterNorth - REGION_REFRESH_CONFIG.elevationCellDegrees / 2,
     ],
-    pixelSize: [GATE_C_REGION.elevationCellDegrees, -GATE_C_REGION.elevationCellDegrees],
+    pixelSize: [
+      REGION_REFRESH_CONFIG.elevationCellDegrees,
+      -REGION_REFRESH_CONFIG.elevationCellDegrees,
+    ],
     noDataValue: NO_DATA_VALUE,
     coverageBounds: [
       layout.rasterWest,
-      layout.rasterNorth - layout.height * GATE_C_REGION.elevationCellDegrees,
-      layout.rasterWest + layout.width * GATE_C_REGION.elevationCellDegrees,
+      layout.rasterNorth - layout.height * REGION_REFRESH_CONFIG.elevationCellDegrees,
+      layout.rasterWest + layout.width * REGION_REFRESH_CONFIG.elevationCellDegrees,
       layout.rasterNorth,
     ],
     source: {
@@ -418,7 +448,7 @@ async function prepareElevationTiles(cacheRoot, bbox, retrievedAt, { reuseComple
       product: "3DEP 1 arc-second dynamic elevation",
       version: retrievedAt.slice(0, 10),
       verticalDatum: "NAVD88",
-      sourceUrl: GATE_C_REGION.elevationUrl,
+      sourceUrl: REGION_REFRESH_CONFIG.elevationUrl,
     },
     tiles: tiles.map(({ raw, prepared, sourceUrl, noDataCells: tileNoData, ...tile }) => ({
       ...tile,
@@ -455,7 +485,7 @@ async function prepareAgency(cacheRoot, provider, source, bbox, retrievedAt) {
     cachePath: path,
     // Some regional layers advertise record pages large enough to overflow a
     // GET query when expressed as comma-separated object IDs.
-    pageSize: 200,
+    pageSize: source.refreshPageSize ?? 200,
     retrievedAt,
   });
   return {
@@ -467,13 +497,14 @@ async function prepareAgency(cacheRoot, provider, source, bbox, retrievedAt) {
   };
 }
 
-/** The only T7.2 workflow that contacts public source services. */
-export async function refreshGateCRegion({
+/** The only regional workflow that contacts public source services. */
+export async function refreshTrailRegion({
+  regionId = GATE_C_REGION.regionId,
   cacheDirectory,
   osmPbfPath,
   retrievedAt = new Date().toISOString(),
 } = {}) {
-  const region = requireRegion(GATE_C_REGION.regionId);
+  const region = requireRegion(regionId);
   const cacheRoot = resolve(cacheDirectory ?? `.cache/trails/${region.id}`);
   await mkdir(cacheRoot, { recursive: true });
   const inProgressPath = resolve(cacheRoot, ".refresh-in-progress.json");
@@ -481,28 +512,42 @@ export async function refreshGateCRegion({
   const resume = await existingFile(inProgressPath);
   if (resume) {
     const inProgress = JSON.parse(await readFile(inProgressPath, "utf8"));
+    if (inProgress.regionId !== region.id) {
+      throw new Error(
+        `Refresh cache belongs to ${inProgress.regionId}, not requested region ${region.id}`,
+      );
+    }
     retrievedAt = inProgress.retrievedAt;
   } else {
     await writeFile(inProgressPath, pretty({ regionId: region.id, retrievedAt }));
   }
   const agencies = {};
-  for (const [provider, source] of [
-    ["usgs", USGS_SOURCE],
-    ["usfs", USFS_SOURCE],
-    ["nps", NPS_SOURCE],
-  ]) agencies[provider] = await prepareAgency(cacheRoot, provider, source, region.bbox, retrievedAt);
+  for (const [provider, source] of regionalAgencySources(region)) {
+    agencies[provider] = await prepareAgency(
+      cacheRoot,
+      provider,
+      source,
+      region.bbox,
+      retrievedAt,
+    );
+  }
 
-  const rawPbfPath = resolve(cacheRoot, "osm", "california-latest.osm.pbf");
+  const rawPbfPath = osmPbfPath
+    ? resolve(osmPbfPath)
+    : resolve(cacheRoot, "osm", "california-latest.osm.pbf");
   if (osmPbfPath) {
-    await mkdir(dirname(rawPbfPath), { recursive: true });
-    await copyFile(resolve(osmPbfPath), rawPbfPath);
+    if (!await existingFile(rawPbfPath)) {
+      throw new Error(`OSM PBF does not exist or is empty: ${rawPbfPath}`);
+    }
+    process.stdout.write(`Using supplied OSM PBF ${rawPbfPath}\n`);
   } else if (!resume || !await existingFile(rawPbfPath)) {
-    process.stdout.write(`Downloading ${GATE_C_REGION.osmPbfUrl}\n`);
-    await downloadFile(GATE_C_REGION.osmPbfUrl, rawPbfPath);
+    process.stdout.write(`Downloading ${REGION_REFRESH_CONFIG.osmPbfUrl}\n`);
+    await downloadFile(REGION_REFRESH_CONFIG.osmPbfUrl, rawPbfPath);
   } else {
     process.stdout.write(`Reusing completed OSM download ${rawPbfPath}\n`);
   }
-  const osmPath = resolve(cacheRoot, "osm", "yosemite-stanislaus.json");
+  const osmPath = resolve(cacheRoot, "osm", `${region.id}.json`);
+  await mkdir(dirname(osmPath), { recursive: true });
   let osm;
   if (resume && await existingFile(osmPath)) {
     process.stdout.write(`Reusing completed bounded OSM snapshot ${osmPath}\n`);
@@ -546,7 +591,7 @@ export async function refreshGateCRegion({
       ...agencies,
       osm: {
         provider: "OpenStreetMap",
-        sourceUrl: GATE_C_REGION.osmPbfUrl,
+        sourceUrl: REGION_REFRESH_CONFIG.osmPbfUrl,
         bounds: [...region.bbox],
         counts: osm.counts,
         memoryStrategy: osm.memoryStrategy,
@@ -555,14 +600,14 @@ export async function refreshGateCRegion({
       },
       accessPoints: {
         provider: "OpenStreetMap",
-        sourceUrl: GATE_C_REGION.osmPbfUrl,
+        sourceUrl: REGION_REFRESH_CONFIG.osmPbfUrl,
         records: osm.counts.accessPointCandidates,
         evidence: ["trailhead", "public-entrance", "public-parking", "public-road-intersection"],
         snapshot: relative(cacheRoot, osmPath),
       },
       threeDep: {
         provider: "USGS",
-        sourceUrl: GATE_C_REGION.elevationUrl,
+        sourceUrl: REGION_REFRESH_CONFIG.elevationUrl,
         bounds: [...region.bbox],
         representation: "tiled-float32-with-cached-source-geotiffs",
         resolutionArcSeconds: 1,
@@ -577,7 +622,9 @@ export async function refreshGateCRegion({
     regionId: region.id,
     buildTimestamp: retrievedAt,
     sourceManifestPath: basename(sourceManifestPath),
-    agencySnapshots: { usgs: "usgs.json", usfs: "usfs.json", nps: "nps.json" },
+    agencySnapshots: Object.fromEntries(
+      region.agencyProviders.map((provider) => [provider, `${provider}.json`]),
+    ),
     osmSnapshotPath: relative(cacheRoot, osmPath),
     elevationTilesPath: relative(cacheRoot, elevation.indexPath),
     reconciliationOptions: {
@@ -592,22 +639,29 @@ export async function refreshGateCRegion({
   return { cacheRoot, buildInputPath, sourceManifest, sourceManifestPath };
 }
 
+export function refreshGateCRegion(options = {}) {
+  return refreshTrailRegion({ ...options, regionId: GATE_C_REGION.regionId });
+}
+
 function commandLineOptions(argv) {
   const options = {};
   for (const argument of argv) {
-    const match = /^--(cache|osm-pbf)=(.+)$/.exec(argument);
+    const match = /^--(region|cache|osm-pbf)=(.+)$/.exec(argument);
     if (!match) throw new Error(`Unknown argument ${argument}`);
     options[match[1]] = match[2];
   }
   return {
+    regionId: options.region,
     cacheDirectory: options.cache,
     osmPbfPath: options["osm-pbf"],
   };
 }
 
 async function main() {
-  const result = await refreshGateCRegion(commandLineOptions(process.argv.slice(2)));
-  process.stdout.write(`Prepared full regional inputs in ${result.cacheRoot}\n`);
+  const result = await refreshTrailRegion(commandLineOptions(process.argv.slice(2)));
+  process.stdout.write(
+    `Prepared ${result.sourceManifest.region.label} inputs in ${result.cacheRoot}\n`,
+  );
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

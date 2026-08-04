@@ -99,21 +99,44 @@ node scripts/trails/build-region.mjs \
   --output=.cache/trails/yosemite-stanislaus/gate-c-pilot/artifacts
 ```
 
-Prepare the full Yosemite–Stanislaus Gate C inputs with one explicit networked
-workflow:
+Prepare a full region's inputs with one explicit networked workflow. Omitting
+`--region` retains the accepted Yosemite–Stanislaus default:
 
 ```bash
 npm run trails:region:refresh
+npm run trails:region:refresh -- --region=bay-midpen
+npm run trails:region:refresh -- --region=bay-east
+npm run trails:region:refresh -- --region=sierra-national-forest
+npm run trails:region:refresh -- --region=tahoe-eldorado
 ```
 
-This command writes bounded USGS, USFS, NPS, OSM/access-point, and tiled USGS
-3DEP inputs plus `source-manifest.json` beneath the ignored
-`.cache/trails/yosemite-stanislaus/` tree. OSM preparation downloads the public
-California PBF once, then uses three streaming passes whose retained working
-sets are bounded to the region. Completed downloads, the bounded OSM snapshot,
-and completed 3DEP tiles are safely reused if a transient source failure
-requires rerunning the command. Normal builds never invoke this workflow or
-contact its source URLs.
+The region configuration selects only the source snapshots established by the
+coverage audit:
+
+| Region | Agency snapshots |
+| --- | --- |
+| Yosemite–Stanislaus | USGS, USFS, NPS |
+| Bay Area — Midpen | USGS, California State Parks |
+| Bay Area — East Bay | USGS, NPS, California State Parks, EBRPD |
+| Sierra National Forest | USGS, USFS |
+| Tahoe–Eldorado | USGS, USFS, California State Parks |
+
+Every refresh also prepares a bounded OSM/access-point snapshot and tiled USGS
+3DEP coverage, then writes `source-manifest.json` and `build-input.json` beneath
+`.cache/trails/<region>/`. OSM preparation downloads the public California PBF
+and uses three streaming passes whose retained working sets are bounded to the
+selected region. To avoid downloading or copying that large file for later
+regions, pass the first cached PBF explicitly, for example:
+
+```bash
+npm run trails:region:refresh -- \
+  --region=bay-midpen \
+  --osm-pbf=.cache/trails/yosemite-stanislaus/osm/california-latest.osm.pbf
+```
+
+Completed downloads, bounded OSM snapshots, and completed 3DEP tiles are safely
+reused if a transient source failure requires rerunning a refresh. Normal builds
+never invoke this workflow or contact source URLs.
 
 Regional ingestion applies one conservative rule: a segment, source node, or
 access candidate is omitted unless all of its coordinates are inside the
@@ -122,7 +145,8 @@ features are not clipped or accepted silently. Agency lines that are fully
 covered by compatible nearby OSM edges are split and snapped to those OSM
 edges. Partial or ambiguous matches stay unsplit and are reported for review.
 
-Build the Yosemite–Stanislaus static trail corpus from cached input only:
+Build the accepted Yosemite–Stanislaus static trail corpus from cached input
+only:
 
 ```bash
 npm run trails:build
@@ -130,7 +154,7 @@ npm run trails:build
 
 The default input is
 `.cache/trails/yosemite-stanislaus/build-input.json`; raw agency snapshots, the
-OSM extract, and the local 3DEP window stay outside version control. The input
+OSM extract, and the local 3DEP tiles stay outside version control. The input
 object accepts `agencySnapshots` keyed by provider, `osmSnapshotPath`,
 `accessPointCandidates`, `publicRoadNodeIds`, and an optional
 `elevationGridPath`. It also accepts already normalized `segmentCandidates` and
@@ -144,6 +168,29 @@ node scripts/trails/build-region.mjs \
   --output=data/trails/generated/yosemite-stanislaus
 ```
 
+The other configured regions remain pipeline-only. Build them explicitly into
+the ignored cache for later QA and publication work; do not write these outputs
+under `data/trails/generated/`:
+
+```bash
+node scripts/trails/build-region.mjs --region=bay-midpen \
+  --input=.cache/trails/bay-midpen/build-input.json \
+  --output=.cache/trails/bay-midpen/artifacts-a
+node scripts/trails/build-region.mjs --region=bay-east \
+  --input=.cache/trails/bay-east/build-input.json \
+  --output=.cache/trails/bay-east/artifacts-a
+node scripts/trails/build-region.mjs --region=sierra-national-forest \
+  --input=.cache/trails/sierra-national-forest/build-input.json \
+  --output=.cache/trails/sierra-national-forest/artifacts-a
+node scripts/trails/build-region.mjs --region=tahoe-eldorado \
+  --input=.cache/trails/tahoe-eldorado/build-input.json \
+  --output=.cache/trails/tahoe-eldorado/artifacts-a
+```
+
+Only the committed Yosemite–Stanislaus geometry shards are packaged as public
+Sites assets. Regional cache artifacts, QA, provenance, nodes, and source
+snapshots are not public client assets.
+
 The build writes eager `named-trails.json` and `access-points.geojson` metadata,
 `nodes.ndjson`, `qa.json`, and `manifest.json`. Detailed geometry is partitioned
 under `segments/`, and dictionary-compacted field provenance is independently
@@ -156,3 +203,7 @@ gzip bytes, and SHA-256 for every index and shard.
 Artifact ordering, timestamps, and SHA-256 hashes are derived from cached source
 data, so repeated builds from the same input are byte-for-byte identical. Review
 `qa.json` before using a newly generated corpus in the application.
+
+The T8 first-build measurements and the remaining default-heap/static-delivery
+blockers are recorded in
+[`docs/trails/t8-regional-expansion.md`](docs/trails/t8-regional-expansion.md).

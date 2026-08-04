@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectBoundedOsmElements } from "../scripts/trails/prepare-gate-c-region.mjs";
+import {
+  GATE_C_REGION,
+  REGION_REFRESH_CONFIG,
+  regionalAgencySources,
+  selectBoundedOsmElements,
+} from "../scripts/trails/prepare-gate-c-region.mjs";
+
+test("selects source snapshots entirely from immutable region configuration", () => {
+  const providers = (regionId) => regionalAgencySources(regionId).map(([provider]) => provider);
+  assert.deepEqual(providers("yosemite-stanislaus"), ["usgs", "usfs", "nps"]);
+  assert.deepEqual(providers("bay-midpen"), ["usgs", "state-parks"]);
+  assert.deepEqual(providers("bay-east"), ["usgs", "nps", "state-parks", "ebrpd"]);
+  assert.deepEqual(providers("sierra-national-forest"), ["usgs", "usfs"]);
+  assert.deepEqual(providers("tahoe-eldorado"), ["usgs", "usfs", "state-parks"]);
+  assert.equal(GATE_C_REGION.osmPbfUrl, REGION_REFRESH_CONFIG.osmPbfUrl);
+  assert.equal(GATE_C_REGION.regionId, "yosemite-stanislaus");
+  assert.throws(() => regionalAgencySources("unknown"), /Unknown trail region/);
+});
 
 test("prepares a bounded OSM extract with only intersecting public-road evidence", () => {
   const node = (id, lon, lat, tags = {}) => ({ type: "node", id, lon, lat, tags });

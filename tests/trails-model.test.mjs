@@ -134,7 +134,18 @@ test("provides validation dispatch and all five immutable region definitions", (
     ],
   );
   assert.equal(getRegion("bay-east")?.bbox[0], -122.1);
+  assert.deepEqual(
+    Object.fromEntries(REGIONS.map(({ id, agencyProviders }) => [id, agencyProviders])),
+    {
+      "yosemite-stanislaus": ["usgs", "usfs", "nps"],
+      "bay-midpen": ["usgs", "state-parks"],
+      "bay-east": ["usgs", "nps", "state-parks", "ebrpd"],
+      "sierra-national-forest": ["usgs", "usfs"],
+      "tahoe-eldorado": ["usgs", "usfs", "state-parks"],
+    },
+  );
   assert.equal(requireRegion("yosemite-stanislaus"), REGIONS[0]);
   assert.equal(Object.isFrozen(REGIONS[0].bbox), true);
+  assert.equal(Object.isFrozen(REGIONS[0].agencyProviders), true);
   assert.throws(() => requireRegion("missing"), /Unknown trail region/);
 });

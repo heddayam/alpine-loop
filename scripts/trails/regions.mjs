@@ -4,30 +4,35 @@ const regionDefinitions = [
     label: "Yosemite–Stanislaus",
     bbox: [-120.1, 37.55, -119.35, 38.15],
     elevationProbe: { latitude: 37.7459, longitude: -119.5936 },
+    agencyProviders: ["usgs", "usfs", "nps"],
   },
   {
     id: "bay-midpen",
     label: "Bay Area — Midpen",
     bbox: [-122.25, 37.15, -121.95, 37.45],
     elevationProbe: { latitude: 37.1608, longitude: -121.9041 },
+    agencyProviders: ["usgs", "state-parks"],
   },
   {
     id: "bay-east",
     label: "Bay Area — East Bay",
     bbox: [-122.1, 37.45, -121.75, 37.85],
     elevationProbe: { latitude: 37.5124, longitude: -121.8807 },
+    agencyProviders: ["usgs", "nps", "state-parks", "ebrpd"],
   },
   {
     id: "sierra-national-forest",
     label: "Sierra National Forest",
     bbox: [-119.35, 36.95, -118.85, 37.45],
     elevationProbe: { latitude: 37.2946, longitude: -119.1038 },
+    agencyProviders: ["usgs", "usfs"],
   },
   {
     id: "tahoe-eldorado",
     label: "Tahoe–Eldorado",
     bbox: [-120.4, 38.6, -119.85, 39.15],
     elevationProbe: { latitude: 38.9341, longitude: -120.0418 },
+    agencyProviders: ["usgs", "usfs", "state-parks"],
   },
 ];
 
@@ -36,6 +41,7 @@ function freezeRegion(region) {
     ...region,
     bbox: Object.freeze([...region.bbox]),
     elevationProbe: Object.freeze({ ...region.elevationProbe }),
+    agencyProviders: Object.freeze([...region.agencyProviders]),
   });
 }
 

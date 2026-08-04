@@ -1,6 +1,8 @@
-import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Plugin } from "vite";
+
+const PRODUCTION_TRAIL_REGIONS = Object.freeze(["yosemite-stanislaus"]);
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -30,7 +32,7 @@ export function sites(): Plugin {
         const match = /^\/trails\/([a-z0-9]+(?:-[a-z0-9]+)*)\/segments\/(index\.json|[0-9a-f]\.ndjson)$/.exec(
           new URL(request.url ?? "/", "http://localhost").pathname,
         );
-        if (!match) return next();
+        if (!match || !PRODUCTION_TRAIL_REGIONS.includes(match[1])) return next();
         const path = resolve(root, "data", "trails", "generated", match[1], "segments", match[2]);
         try {
           const content = await readFile(path);
@@ -67,11 +69,10 @@ export function sites(): Plugin {
       }
       await rm(publicTrails, { recursive: true, force: true });
       if (await exists(trailArtifacts)) {
-        const regions = await readdir(trailArtifacts, { withFileTypes: true });
-        await Promise.all(regions.filter((entry) => entry.isDirectory()).map(async (entry) => {
-          const segmentSource = resolve(trailArtifacts, entry.name, "segments");
+        await Promise.all(PRODUCTION_TRAIL_REGIONS.map(async (regionId) => {
+          const segmentSource = resolve(trailArtifacts, regionId, "segments");
           if (!await exists(segmentSource)) return;
-          await cp(segmentSource, resolve(publicTrails, entry.name, "segments"), {
+          await cp(segmentSource, resolve(publicTrails, regionId, "segments"), {
             recursive: true,
           });
         }));
