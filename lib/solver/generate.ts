@@ -218,12 +218,13 @@ function generateLollipops(
       for (const traversal of adjacency.get(nodeId) ?? []) {
         const key = undirectedEdgeKey(traversal.edge);
         if (stemKeys.has(key) || usedEdges.has(key)) continue;
-        const routeLength = routeDistance(stem) * 2 + routeDistance(cycle) + traversal.edge.lengthMeters;
+        const repeatedStemDistance = routeDistance(stem) + routeDistance(reverseStem);
+        const routeLength = repeatedStemDistance + routeDistance(cycle) + traversal.edge.lengthMeters;
         if (routeLength > distanceCap) continue;
         if (traversal.to.id === junctionId) {
           if (cycle.length >= 2) {
             const path = [...stem, ...cycle, traversal, ...reverseStem];
-            const repeatedStemShare = (routeDistance(stem) * 2) / routeDistance(path);
+            const repeatedStemShare = repeatedStemDistance / routeDistance(path);
             if (repeatedStemShare <= 0.35) {
               recordCandidate("lollipop", path, start, start, controller, candidates);
             }
