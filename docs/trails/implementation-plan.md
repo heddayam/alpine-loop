@@ -1,12 +1,13 @@
 # Alpine Search hiking-data implementation plan
 
-Status: T7.1 real-data pilot accepted; T7.2 full-region Gate C build open
+Status: T7.3 review complete; Gate C passed with documented exceptions
 Primary integration branch: `codex/trails-data`
 First production slice: Yosemite–Stanislaus
 Current evidence: [coverage-spike.md](./coverage-spike.md)
 
-Immediate next task: T7.2 full Yosemite–Stanislaus production build and Gate C
-review. Do not begin T8 or T9 until T7.2 is accepted.
+Immediate next tasks: T8 regional expansion and T9 search-layer implementation
+may begin from the accepted T7.2 corpus. They must honor the product constraints
+recorded in [gate-c-review.md](./gate-c-review.md).
 
 ## Objective
 
@@ -551,6 +552,8 @@ pilot and full test/lint gates passed.
 Owner: full-region data agent
 Branch: `codex/trails-gate-c-region`
 Dependencies: accepted T7.1
+Status: implementation completed at `7fc761d` on 2026-08-03; manual acceptance
+completed by T7.3
 
 Goal: prepare complete cached Yosemite–Stanislaus inputs, run the hardened
 pipeline at regional scale, and deliver production artifacts plus a reviewable
@@ -632,6 +635,26 @@ Scope limits:
   before requesting credentials.
 - Do not weaken conservative access/restriction rules merely to increase trail
   counts or elevation coverage.
+
+#### T7.3: Gate C manual review and closure
+
+Owner: integration closure agent
+Branch: `codex/trails-gate-c-closure`
+Dependencies: T7.2 implementation at `7fc761d`
+Status: completed on 2026-08-03; **PASS WITH DOCUMENTED EXCEPTIONS**
+
+The committed T7.2 production artifacts and both cached deterministic builds
+were reviewed without rerunning the regional build. The review classified the
+elevation flags, resolved the disposition of all six searchable names with
+isolated geometry, accepted the static delivery split, and added safe cleanup
+for obsolete pipeline-managed artifacts. The evidence and product constraints
+are recorded in [gate-c-review.md](./gate-c-review.md).
+
+T8 and T9 are unblocked. T9 must not expose raw flagged edge grades as precise
+difficulty data, must exclude or separately classify climbing approaches and
+scrambles, and must suppress the identified 26-meter Old Yosemite Coulterville
+Road component pending source repair. T10 remains dependent on a stable T9
+response contract and Gate D remains open.
 
 #### T8: Regional expansion
 

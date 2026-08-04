@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -204,6 +204,34 @@ test("writes the complete artifact contract without network access", async () =>
     }
   } finally {
     globalThis.fetch = previousFetch;
+    await rm(outputDirectory, { recursive: true, force: true });
+  }
+});
+
+test("removes stale managed artifacts without touching unrelated output files", async () => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), "alpine-trails-cleanup-"));
+  try {
+    await mkdir(join(outputDirectory, "segments"), { recursive: true });
+    await writeFile(join(outputDirectory, "segments.ndjson"), "legacy segments\n");
+    await writeFile(join(outputDirectory, "segments", "f.ndjson"), "stale shard\n");
+    await writeFile(join(outputDirectory, "segments", "notes.ndjson"), "keep shard notes\n");
+    await writeFile(join(outputDirectory, "review-notes.txt"), "keep review notes\n");
+
+    await writeRegionArtifacts({ payloads: { "manifest.json": "{}\n" } }, outputDirectory);
+
+    await assert.rejects(readFile(join(outputDirectory, "segments.ndjson")), { code: "ENOENT" });
+    await assert.rejects(readFile(join(outputDirectory, "segments", "f.ndjson")), {
+      code: "ENOENT",
+    });
+    assert.equal(
+      await readFile(join(outputDirectory, "segments", "notes.ndjson"), "utf8"),
+      "keep shard notes\n",
+    );
+    assert.equal(
+      await readFile(join(outputDirectory, "review-notes.txt"), "utf8"),
+      "keep review notes\n",
+    );
+  } finally {
     await rm(outputDirectory, { recursive: true, force: true });
   }
 });

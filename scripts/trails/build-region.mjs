@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -46,6 +46,15 @@ export const ARTIFACT_FILENAMES = Object.freeze({
   qa: "qa.json",
   segmentProvenance: "segment-provenance/index.json",
   manifest: "manifest.json",
+});
+
+const OBSOLETE_MANAGED_ARTIFACTS = Object.freeze([
+  "segments.ndjson",
+]);
+
+const MANAGED_SHARD_PATTERNS = Object.freeze({
+  segments: /^[0-9a-f]\.ndjson$/,
+  "segment-provenance": /^[0-9a-f]\.json$/,
 });
 
 const AGENCY_ADAPTERS = Object.freeze({
@@ -681,6 +690,23 @@ export async function writeRegionArtifacts(result, outputDirectory) {
     throw new TypeError("result and outputDirectory are required");
   }
   await mkdir(outputDirectory, { recursive: true });
+  await Promise.all(OBSOLETE_MANAGED_ARTIFACTS.map((filename) =>
+    rm(resolve(outputDirectory, filename), { force: true })));
+  await Promise.all(Object.entries(MANAGED_SHARD_PATTERNS).map(async ([directory, pattern]) => {
+    const absoluteDirectory = resolve(outputDirectory, directory);
+    let entries;
+    try {
+      entries = await readdir(absoluteDirectory, { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      throw error;
+    }
+    await Promise.all(entries
+      .filter((entry) => entry.isFile() && pattern.test(entry.name))
+      .map((entry) => `${directory}/${entry.name}`)
+      .filter((filename) => !Object.hasOwn(result.payloads, filename))
+      .map((filename) => rm(resolve(outputDirectory, filename), { force: true })));
+  }));
   await Promise.all(Object.keys(result.payloads).map((filename) =>
     mkdir(dirname(resolve(outputDirectory, filename)), { recursive: true })));
   await Promise.all(Object.entries(result.payloads).map(([filename, content]) =>
