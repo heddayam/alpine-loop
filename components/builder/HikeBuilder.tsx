@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   bboxSchema,
   generateRoutesResponseV1Schema,
+  type GenerateRoutesResponseV1,
   type GenerateRoutesRequestV1,
   type RouteType,
 } from "@/lib/contracts";
 import { HikeMap } from "../map/HikeMap";
+import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
 import { RangeInput } from "./RangeInput";
 import {
@@ -45,15 +47,26 @@ export function HikeBuilder() {
   const [accessState, setAccessState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [accessError, setAccessError] = useState("");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [generationState, setGenerationState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [generationState, setGenerationState] = useState<"idle" | ResultsStatus>("idle");
   const [generationMessage, setGenerationMessage] = useState("");
+  const [generationResponse, setGenerationResponse] = useState<GenerateRoutesResponseV1 | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string>();
+  const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
+  const generationControllerRef = useRef<AbortController | null>(null);
 
   const onBoundsChange = useCallback((next: Bounds | null) => {
+    const activeGeneration = generationControllerRef.current;
+    generationControllerRef.current = null;
+    activeGeneration?.abort();
     setBounds(next);
     setAccessPoints([]);
     setSelectedAccessPointId(undefined);
     setAccessState(next && bboxSchema.safeParse(next).success ? "loading" : "idle");
     setAccessError("");
+    setGenerationState("idle");
+    setGenerationMessage("");
+    setGenerationResponse(null);
+    setSelectedRouteId(undefined);
   }, []);
   const onAccessPointSelect = useCallback((id: string) => setSelectedAccessPointId(id), []);
 
@@ -87,6 +100,12 @@ export function HikeBuilder() {
     return () => controller.abort();
   }, [bounds, values.includeUncertainAccess]);
 
+  useEffect(() => () => {
+    const activeGeneration = generationControllerRef.current;
+    generationControllerRef.current = null;
+    activeGeneration?.abort();
+  }, []);
+
   const boundarySummary = useMemo(() => {
     if (!bounds) return "No boundary drawn";
     return `${bounds[0].toFixed(4)}, ${bounds[1].toFixed(4)} to ${bounds[2].toFixed(4)}, ${bounds[3].toFixed(4)}`;
@@ -108,31 +127,62 @@ export function HikeBuilder() {
       setGenerationState("idle");
       return;
     }
+    generationControllerRef.current?.abort();
+    const controller = new AbortController();
+    generationControllerRef.current = controller;
     setValidationErrors([]);
     setGenerationState("loading");
     setGenerationMessage("Generating routes inside your boundary…");
+    setGenerationResponse(null);
+    setSelectedRouteId(undefined);
     try {
       const response = await fetch("/api/routes/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(validated.request satisfies GenerateRoutesRequestV1),
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Routes could not be generated. Try a different boundary or constraints.");
       const parsed = generateRoutesResponseV1Schema.safeParse(await response.json());
       if (!parsed.success) throw new Error("The route response was invalid.");
       const exactCount = parsed.data.exact.length;
       const nearCount = parsed.data.nearMisses.length;
+      const firstRoute = parsed.data.exact[0] ?? parsed.data.nearMisses[0];
+      setGenerationResponse(parsed.data);
+      setSelectedRouteId(firstRoute?.id);
       setGenerationMessage(
         exactCount === 0
           ? `No exact matches. ${nearCount} near ${nearCount === 1 ? "match is" : "matches are"} available.`
           : `${exactCount} exact ${exactCount === 1 ? "route" : "routes"} ready.`,
       );
       setGenerationState("done");
-    } catch (error) {
+      setMobilePanel("results");
+    } catch (error: unknown) {
+      if (controller.signal.aborted) {
+        if (generationControllerRef.current !== controller) return;
+        setGenerationMessage("Route generation was cancelled.");
+        setGenerationState("cancelled");
+        return;
+      }
       setGenerationMessage(error instanceof Error ? error.message : "Routes could not be generated.");
       setGenerationState("error");
+      setMobilePanel("results");
+    } finally {
+      if (generationControllerRef.current === controller) generationControllerRef.current = null;
     }
   };
+
+  const cancelGeneration = () => {
+    generationControllerRef.current?.abort();
+    setGenerationMessage("Route generation was cancelled.");
+    setGenerationState("cancelled");
+    setMobilePanel("results");
+  };
+
+  const generatedRoutes = useMemo(
+    () => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [],
+    [generationResponse],
+  );
 
   return (
     <main className="app-frame">
@@ -147,8 +197,12 @@ export function HikeBuilder() {
         </div>
       </header>
 
-      <div className="workspace">
-        <aside className="builder-panel" aria-labelledby="builder-title">
+      <div className={generationState === "idle" ? "workspace" : "workspace with-results"}>
+        <nav className="mobile-panel-nav" aria-label="Workspace panels">
+          <button type="button" aria-pressed={mobilePanel === "builder"} onClick={() => setMobilePanel("builder")}>Plan</button>
+          <button type="button" aria-pressed={mobilePanel === "results"} disabled={generationState === "idle"} onClick={() => setMobilePanel("results")}>Results{generationResponse ? ` (${generatedRoutes.length})` : ""}</button>
+        </nav>
+        <aside className={mobilePanel === "builder" ? "builder-panel" : "builder-panel mobile-panel-hidden"} aria-labelledby="builder-title">
           <div className="panel-heading">
             <span className="step-number">01</span>
             <div><p>Plan a hike</p><h2 id="builder-title">Build your route</h2></div>
@@ -238,6 +292,7 @@ export function HikeBuilder() {
           <button className="generate-button" type="button" disabled={generationState === "loading"} onClick={() => void generate()}>
             {generationState === "loading" ? "Generating…" : "Generate routes"}
           </button>
+          {generationState === "loading" ? <button className="cancel-button" type="button" onClick={cancelGeneration}>Cancel generation</button> : null}
           {generationMessage ? (
             <p className={generationState === "error" ? "generation-status error-state" : "generation-status"} role={generationState === "error" ? "alert" : "status"} aria-live="polite">
               {generationMessage}
@@ -245,7 +300,26 @@ export function HikeBuilder() {
           ) : null}
         </aside>
 
-        <HikeMap bounds={bounds} accessPoints={accessPoints} selectedAccessPointId={selectedAccessPointId} onBoundsChange={onBoundsChange} onAccessPointSelect={onAccessPointSelect} />
+        <HikeMap
+          bounds={bounds}
+          accessPoints={accessPoints}
+          selectedAccessPointId={selectedAccessPointId}
+          routes={generatedRoutes}
+          selectedRouteId={selectedRouteId}
+          onBoundsChange={onBoundsChange}
+          onAccessPointSelect={onAccessPointSelect}
+          onRouteSelect={setSelectedRouteId}
+        />
+        {generationState !== "idle" ? (
+          <ResultsPanel
+            status={generationState}
+            response={generationResponse}
+            message={generationMessage}
+            selectedRouteId={selectedRouteId}
+            onSelectRoute={setSelectedRouteId}
+            mobileVisible={mobilePanel === "results"}
+          />
+        ) : null}
       </div>
     </main>
   );

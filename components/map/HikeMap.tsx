@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { FeatureCollection, Point } from "geojson";
-import type { Map as MapLibreMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
+import type { FeatureCollection, LineString, Point } from "geojson";
+import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
+import type { GeneratedRoute } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsPolygon, normalizeBounds } from "./geometry";
 
@@ -10,11 +11,15 @@ type HikeMapProps = {
   bounds: Bounds | null;
   accessPoints: AccessPointOption[];
   selectedAccessPointId?: string;
+  routes: GeneratedRoute[];
+  selectedRouteId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
   onAccessPointSelect: (id: string) => void;
+  onRouteSelect: (id: string) => void;
 };
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
+const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
 
 function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
   return {
@@ -27,12 +32,31 @@ function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPo
   };
 }
 
+export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string): FeatureCollection<LineString> {
+  return {
+    type: "FeatureCollection",
+    features: routes.map((route, index) => ({
+      type: "Feature",
+      properties: {
+        id: route.id,
+        selected: route.id === selectedRouteId,
+        routeNumber: index + 1,
+        shape: route.shape,
+      },
+      geometry: route.geometry,
+    })),
+  };
+}
+
 export function HikeMap({
   bounds,
   accessPoints,
   selectedAccessPointId,
+  routes,
+  selectedRouteId,
   onBoundsChange,
   onAccessPointSelect,
+  onRouteSelect,
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -40,6 +64,8 @@ export function HikeMap({
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
+  const routesRef = useRef(routes);
+  const selectedRouteIdRef = useRef(selectedRouteId);
   const [drawing, setDrawing] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
@@ -51,6 +77,11 @@ export function HikeMap({
     accessPointsRef.current = accessPoints;
     selectedAccessPointIdRef.current = selectedAccessPointId;
   }, [accessPoints, selectedAccessPointId]);
+
+  useEffect(() => {
+    routesRef.current = routes;
+    selectedRouteIdRef.current = selectedRouteId;
+  }, [routes, selectedRouteId]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -110,6 +141,44 @@ export function HikeMap({
             "circle-stroke-width": 2,
           },
         });
+        map?.addSource("generated-routes", {
+          type: "geojson",
+          data: routeFeatures(routesRef.current, selectedRouteIdRef.current),
+        });
+        map?.addLayer({
+          id: "generated-route-alternate-casing",
+          type: "line",
+          source: "generated-routes",
+          filter: ["!=", ["get", "selected"], true],
+          paint: { "line-color": "#18312a", "line-width": 7, "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
+        });
+        map?.addLayer({
+          id: "generated-route-alternates",
+          type: "line",
+          source: "generated-routes",
+          filter: ["!=", ["get", "selected"], true],
+          paint: { "line-color": "#fffaf0", "line-width": 3, "line-opacity": 0.95, "line-dasharray": [2, 3.5] },
+        });
+        map?.addLayer({
+          id: "generated-route-selected-casing",
+          type: "line",
+          source: "generated-routes",
+          filter: ["==", ["get", "selected"], true],
+          paint: { "line-color": "#173f35", "line-width": 10, "line-opacity": 0.95 },
+        });
+        map?.addLayer({
+          id: "generated-route-selected",
+          type: "line",
+          source: "generated-routes",
+          filter: ["==", ["get", "selected"], true],
+          paint: { "line-color": "#f47b4d", "line-width": 6 },
+        });
+        const selectRoute = (event: MapLayerMouseEvent) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (typeof id === "string") onRouteSelect(id);
+        };
+        map?.on("click", "generated-route-alternates", selectRoute);
+        map?.on("click", "generated-route-selected", selectRoute);
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelect(id);
@@ -122,7 +191,7 @@ export function HikeMap({
       map?.remove();
       mapRef.current = null;
     };
-  }, [onAccessPointSelect]);
+  }, [onAccessPointSelect, onRouteSelect]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;
@@ -133,6 +202,11 @@ export function HikeMap({
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
     source?.setData(accessPointFeatures(accessPoints, selectedAccessPointId));
   }, [accessPoints, selectedAccessPointId]);
+
+  useEffect(() => {
+    const source = mapRef.current?.getSource("generated-routes") as GeoJSONSource | undefined;
+    source?.setData(routes.length > 0 ? routeFeatures(routes, selectedRouteId) : EMPTY_LINES);
+  }, [routes, selectedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
