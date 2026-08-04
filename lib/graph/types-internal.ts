@@ -1,6 +1,12 @@
 export type AccessState = "public" | "unknown" | "private" | "closed" | "prohibited";
 
-export type GraphNode = { id: string; lon: number; lat: number; elevationMeters: number | null; flags: string[] };
+export type GraphNode = {
+  id: string;
+  lon: number;
+  lat: number;
+  elevationMeters: number | null;
+  flags: string[];
+};
 
 export type GraphEdge = {
   id: string;
