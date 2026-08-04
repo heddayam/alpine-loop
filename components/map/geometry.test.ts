@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
+import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
 
 describe("hard-boundary geometry", () => {
   it("normalizes a rectangle dragged in any direction", () => {
@@ -32,5 +32,11 @@ describe("hard-boundary geometry", () => {
     expect(dimensions.width).toBeCloseTo(2.76, 1);
     expect(dimensions.height).toBeCloseTo(2.07, 1);
     expect(dimensions.area).toBeCloseTo(5.7, 1);
+  });
+
+  it("detects when a search rectangle extends beyond installed coverage", () => {
+    const coverage = [-122.19, 37.15, -122.13, 37.18] as const;
+    expect(boundsContainBounds([...coverage], [-122.18, 37.155, -122.14, 37.178])).toBe(true);
+    expect(boundsContainBounds([...coverage], [-122.20, 37.155, -122.14, 37.178])).toBe(false);
   });
 });

@@ -108,8 +108,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .map-shell { position: relative; min-width: 0; min-height: 28rem; overflow: hidden; background: #dce1da; }
 .map-canvas { position: absolute; inset: 0; }
 .map-shell.is-drawing .map-canvas { box-shadow: inset 0 0 0 3px rgb(244 123 77 / 62%); }
+.coverage-screen-box { position: absolute; z-index: 2; min-width: 2px; min-height: 2px; pointer-events: none; background: repeating-linear-gradient(135deg, rgb(42 112 90 / 14%) 0, rgb(42 112 90 / 14%) 8px, rgb(255 250 240 / 6%) 8px, rgb(255 250 240 / 6%) 16px); border: 4px dashed #17604b; outline: 2px solid rgb(255 250 240 / 92%); outline-offset: 1px; box-shadow: inset 0 0 0 2px rgb(42 112 90 / 32%); }
+.coverage-screen-box > span { position: absolute; top: .55rem; right: .55rem; padding: .3rem .48rem; color: #fffaf0; background: rgb(23 96 75 / 94%); border: 1px solid rgb(255 250 240 / 82%); border-radius: .2rem; box-shadow: 0 2px 6px rgb(0 0 0 / 24%); font-size: .6rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .boundary-screen-box { position: absolute; z-index: 3; min-width: 2px; min-height: 2px; pointer-events: none; background: rgb(244 123 77 / 20%); border: 3px solid #a93617; outline: 2px solid #fffaf0; outline-offset: 1px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 3px 12px rgb(38 31 25 / 28%); }
 .boundary-screen-box.draft { background: rgb(255 136 82 / 31%); border-style: dashed; border-width: 4px; box-shadow: inset 0 0 0 2px rgb(255 250 240 / 58%), 0 4px 18px rgb(38 31 25 / 34%); }
+.boundary-screen-box.outside-coverage { background: rgb(185 52 37 / 30%); border-color: #8e1d12; outline-color: #fff2b5; }
+.boundary-screen-box.outside-coverage > span { background: #8e1d12; }
 .boundary-screen-box > span { position: absolute; top: .5rem; left: .55rem; padding: .28rem .42rem; color: #fffaf0; background: #8d2f17; border: 1px solid rgb(255 250 240 / 80%); border-radius: .2rem; box-shadow: 0 2px 6px rgb(0 0 0 / 25%); font-size: .6rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .boundary-screen-box .corner { position: absolute; width: .72rem; height: .72rem; background: var(--accent); border: 3px solid #fffaf0; border-radius: 50%; box-shadow: 0 1px 5px rgb(0 0 0 / 45%); }
 .boundary-screen-box .northwest { top: 0; left: 0; transform: translate(-50%, -50%); }
