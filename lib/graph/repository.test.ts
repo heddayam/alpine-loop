@@ -4,21 +4,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import policyFixture from "@/data/fixtures/graph/policy.json";
-import tinyFixture from "@/data/fixtures/graph/tiny.json";
+import tinyFixture from "@/data/fixtures/graph/solver-shapes.json";
+import mappedFixture from "@/data/fixtures/graph/tiny.json";
 import { FixtureGraphRepository, type FixtureGraphData } from "./fixture-repository";
 import { SQLiteGraphRepository } from "./sqlite-repository";
 
 const policy = policyFixture as unknown as FixtureGraphData;
 const tiny = tinyFixture as unknown as FixtureGraphData;
+const mapped = mappedFixture as unknown as FixtureGraphData;
 const WORLD_FIXTURE_BBOX = [-122.19, 37.15, -122.13, 37.18] as const;
 
 describe("FixtureGraphRepository", () => {
   it("materializes reversible fixture trails with direction-aware gain and loss", async () => {
-    const repository = new FixtureGraphRepository(tiny);
+    const repository = new FixtureGraphRepository(mapped);
     const graph = await repository.getInducedGraph({ bbox: WORLD_FIXTURE_BBOX, includeUncertainAccess: false });
-    expect(graph.edges).toHaveLength(tiny.undirectedTrails!.length * 2);
+    expect(graph.edges).toHaveLength(mapped.undirectedTrails!.length * 2);
     const forward = graph.edges.find((edge) => edge.fromNodeId === "a" && edge.toNodeId === "b")!;
     const reverse = graph.edges.find((edge) => edge.fromNodeId === "b" && edge.toNodeId === "a")!;
+    expect(forward.coordinates.length).toBeGreaterThan(2);
+    expect(reverse.coordinates).toEqual([...forward.coordinates].reverse());
     expect(forward.gainMeters).toBe(20);
     expect(reverse.lossMeters).toBe(20);
   });

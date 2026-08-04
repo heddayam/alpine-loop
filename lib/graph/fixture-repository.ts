@@ -10,7 +10,13 @@ import type {
   InducedGraph,
 } from "./types";
 
-type FixtureTrail = readonly [fromNodeId: string, toNodeId: string, trailName?: string];
+type FixtureTrail = readonly [
+  fromNodeId: string,
+  toNodeId: string,
+  trailName?: string,
+  coordinates?: Array<readonly [number, number]>,
+  sourceId?: string,
+];
 
 type FixtureDirectedEdge = {
   id: string;
@@ -64,6 +70,15 @@ function materializeDirectedEdge(edge: FixtureDirectedEdge, nodes: Map<string, G
   const to = nodes.get(edge.toNodeId);
   if (!from || !to) throw new Error(`Fixture edge ${edge.id} references an unknown node`);
   const coordinates = edge.coordinates ?? [[from.lon, from.lat], [to.lon, to.lat]];
+  const first = coordinates[0];
+  const last = coordinates.at(-1);
+  if (
+    coordinates.length < 2 ||
+    first?.[0] !== from.lon || first[1] !== from.lat ||
+    last?.[0] !== to.lon || last[1] !== to.lat
+  ) {
+    throw new Error(`Fixture edge ${edge.id} geometry must start and end at its referenced nodes`);
+  }
   const elevation = deriveElevationMetrics(from, to);
   return {
     id: edge.id,
@@ -84,9 +99,16 @@ function materializeDirectedEdge(edge: FixtureDirectedEdge, nodes: Map<string, G
 
 function materializeEdges(data: FixtureGraphData, nodes: Map<string, GraphNode>): GraphEdge[] {
   const directed = (data.directedEdges ?? []).map((edge) => materializeDirectedEdge(edge, nodes));
-  for (const [index, [fromNodeId, toNodeId, trailName]] of (data.undirectedTrails ?? []).entries()) {
+  for (const [index, [fromNodeId, toNodeId, trailName, coordinates, sourceId]] of (data.undirectedTrails ?? []).entries()) {
     const forward = materializeDirectedEdge(
-      { id: `fixture-trail-${index}:forward`, fromNodeId, toNodeId, trailName: trailName ?? null },
+      {
+        id: `fixture-trail-${index}:forward`,
+        fromNodeId,
+        toNodeId,
+        trailName: trailName ?? null,
+        coordinates,
+        sourceIds: [sourceId ?? "fixture-source"],
+      },
       nodes,
     );
     directed.push(forward, {

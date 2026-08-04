@@ -151,8 +151,8 @@ describe("HikeBuilder", () => {
       packId: "fixture-pack",
       bbox: [-122.18, 37.15, -122.13, 37.18],
       startAccessPointId: "trailhead-a",
-      routeTypes: ["loop"],
-      distanceMiles: { min: 2, max: 8 },
+      routeTypes: ["out-and-back"],
+      distanceMiles: { min: 1, max: 4 },
       includeUncertainAccess: false,
       limit: 10,
     });

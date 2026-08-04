@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import fixture from "@/data/fixtures/graph/tiny.json";
+import fixture from "@/data/fixtures/graph/solver-shapes.json";
 
 const connections = new Set(
   fixture.undirectedTrails.flatMap(([from, to]) => [`${from}:${to}`, `${to}:${from}`]),
@@ -8,7 +8,7 @@ const connections = new Set(
 const hasPath = (nodes: string[]) =>
   nodes.slice(1).every((node, index) => connections.has(`${nodes[index]}:${node}`));
 
-describe("tiny fixture graph", () => {
+describe("solver shape fixture graph", () => {
   it("contains a simple loop", () => {
     expect(hasPath(["a", "b", "c", "d", "a"])).toBe(true);
   });

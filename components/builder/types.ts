@@ -29,8 +29,8 @@ export type BuilderValues = {
 };
 
 export const DEFAULT_BUILDER_VALUES: BuilderValues = {
-  routeTypes: ["loop"],
-  distanceMiles: { enabled: true, min: "2", max: "8" },
+  routeTypes: ["out-and-back"],
+  distanceMiles: { enabled: true, min: "1", max: "4" },
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
   steepestSustainedGradePct: { enabled: false, min: "0", max: "20" },

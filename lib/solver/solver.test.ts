@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import tinyFixture from "@/data/fixtures/graph/tiny.json";
+import tinyFixture from "@/data/fixtures/graph/solver-shapes.json";
 import type { GenerateRoutesRequestV1, RouteType } from "@/lib/contracts";
 import { FixtureGraphRepository, type FixtureGraphData, type InducedGraph } from "@/lib/graph";
 import { DEFAULT_SOLVER_BUDGET } from "./budget";

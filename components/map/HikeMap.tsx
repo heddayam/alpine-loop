@@ -6,12 +6,13 @@ import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSour
 import type { GeneratedRoute } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
-import { projectedRouteTraces, ROUTE_PREVIEW_EVENT, type ProjectedRouteTrace } from "./routeTraceOverlay";
+import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
   bounds: Bounds | null;
   packCoverage: Bounds;
   suggestedBounds: Bounds;
+  trailNetwork: FeatureCollection<LineString>;
   accessPoints: AccessPointOption[];
   selectedAccessPointId?: string;
   routes: GeneratedRoute[];
@@ -20,9 +21,6 @@ type HikeMapProps = {
   onAccessPointSelect: (id: string) => void;
   onRouteSelect: (id: string) => void;
 };
-
-type ScreenBox = { left: number; top: number; width: number; height: number };
-type RouteOverlay = { width: number; height: number; traces: ProjectedRouteTrace[] };
 
 export type RouteTrailheadPin = {
   key: string;
@@ -69,6 +67,19 @@ export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string
   };
 }
 
+export function routeFeaturePartitions(
+  routes: GeneratedRoute[],
+  selectedRouteId?: string,
+  hoveredRouteId?: string,
+) {
+  return {
+    all: routeFeatures(routes, selectedRouteId),
+    alternates: routeFeatures(routes.filter((route) => route.id !== selectedRouteId), selectedRouteId),
+    selected: routeFeatures(routes.filter((route) => route.id === selectedRouteId), selectedRouteId),
+    hovered: routeFeatures(routes.filter((route) => route.id === hoveredRouteId), selectedRouteId),
+  };
+}
+
 function numberLabel(numbers: number[]): string {
   if (numbers.length <= 4) return numbers.join("·");
   const consecutive = numbers.every((number, index) => index === 0 || number === numbers[index - 1]! + 1);
@@ -79,7 +90,11 @@ export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: s
   const groups = new Map<string, Omit<RouteTrailheadPin, "numberLabel" | "selected" | "nextRouteId">>();
   routes.forEach((route, index) => {
     const point = route.startAccessPoint;
-    const key = `${point.id}:${point.lon}:${point.lat}`;
+    const firstCoordinate = route.geometry.coordinates[0];
+    const coordinates: [number, number] = firstCoordinate
+      ? [firstCoordinate[0], firstCoordinate[1]]
+      : [point.lon, point.lat];
+    const key = `${point.id}:${coordinates[0]}:${coordinates[1]}`;
     const existing = groups.get(key);
     if (existing) {
       existing.routeIds.push(route.id);
@@ -88,7 +103,7 @@ export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: s
     }
     groups.set(key, {
       key,
-      coordinates: [point.lon, point.lat],
+      coordinates,
       name: point.name,
       routeIds: [route.id],
       routeNumbers: [index + 1],
@@ -108,22 +123,11 @@ export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: s
   });
 }
 
-function screenBoxForBounds(map: MapLibreMap, bounds: Bounds): ScreenBox {
-  const [west, south, east, north] = bounds;
-  const northwest = map.project([west, north]);
-  const southeast = map.project([east, south]);
-  return {
-    left: Math.min(northwest.x, southeast.x),
-    top: Math.min(northwest.y, southeast.y),
-    width: Math.abs(southeast.x - northwest.x),
-    height: Math.abs(southeast.y - northwest.y),
-  };
-}
-
 export function HikeMap({
   bounds,
   packCoverage,
   suggestedBounds,
+  trailNetwork,
   accessPoints,
   selectedAccessPointId,
   routes,
@@ -137,6 +141,7 @@ export function HikeMap({
   const routeMarkerConstructorRef = useRef<typeof import("maplibre-gl").Marker | null>(null);
   const routeMarkersRef = useRef<MapLibreMarker[]>([]);
   const startRef = useRef<[number, number] | null>(null);
+  const draftBoundsRef = useRef<Bounds | null>(null);
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
@@ -145,10 +150,6 @@ export function HikeMap({
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [draftBounds, setDraftBounds] = useState<Bounds | null>(null);
-  const [coverageScreenBox, setCoverageScreenBox] = useState<ScreenBox | null>(null);
-  const [committedScreenBox, setCommittedScreenBox] = useState<ScreenBox | null>(null);
-  const [draftScreenBox, setDraftScreenBox] = useState<ScreenBox | null>(null);
-  const [routeOverlay, setRouteOverlay] = useState<RouteOverlay>({ width: 1, height: 1, traces: [] });
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -169,8 +170,9 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
-    void import("maplibre-gl").then(({ Map, Marker, NavigationControl }) => {
+    void import("maplibre-gl").then(({ Map, Marker, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
+      setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
       routeMarkerConstructorRef.current = Marker;
       map = new Map({
         container: containerRef.current,
@@ -201,33 +203,45 @@ export function HikeMap({
           id: "pack-coverage-fill",
           type: "fill",
           source: "pack-coverage",
-          paint: { "fill-color": "#2a705a", "fill-opacity": 0.08 },
+          paint: { "fill-color": "#2a705a", "fill-opacity": 0.14 },
+        });
+        map?.addLayer({
+          id: "pack-coverage-casing",
+          type: "line",
+          source: "pack-coverage",
+          paint: { "line-color": "#fffaf0", "line-width": 7, "line-opacity": 0.9 },
         });
         map?.addLayer({
           id: "pack-coverage-line",
           type: "line",
           source: "pack-coverage",
-          paint: { "line-color": "#245b4b", "line-width": 2, "line-dasharray": [3, 2] },
+          paint: { "line-color": "#17604b", "line-width": 4, "line-dasharray": [3, 2] },
         });
         map?.addSource("hard-boundary", { type: "geojson", data: initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
         map?.addLayer({
           id: "hard-boundary-fill",
           type: "fill",
           source: "hard-boundary",
-          paint: { "fill-color": "#ed7b4f", "fill-opacity": 0 },
+          paint: { "fill-color": "#2f6f9f", "fill-opacity": 0 },
+        });
+        map?.addLayer({
+          id: "hard-boundary-casing",
+          type: "line",
+          source: "hard-boundary",
+          paint: { "line-color": "#fffaf0", "line-width": 8, "line-opacity": 0.95 },
         });
         map?.addLayer({
           id: "hard-boundary-line",
           type: "line",
           source: "hard-boundary",
-          paint: { "line-color": "#a53d1f", "line-width": 3, "line-dasharray": [2, 1] },
+          paint: { "line-color": "#24587f", "line-width": 4, "line-dasharray": [3, 2] },
         });
         map?.addSource("boundary-preview", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
           id: "boundary-preview-fill",
           type: "fill",
           source: "boundary-preview",
-          paint: { "fill-color": "#f47b4d", "fill-opacity": 0.27 },
+          paint: { "fill-color": "#4f91c2", "fill-opacity": 0.25 },
         });
         map?.addLayer({
           id: "boundary-preview-casing",
@@ -239,7 +253,7 @@ export function HikeMap({
           id: "boundary-preview-line",
           type: "line",
           source: "boundary-preview",
-          paint: { "line-color": "#a53d1f", "line-width": 4, "line-dasharray": [2, 1] },
+          paint: { "line-color": "#24587f", "line-width": 4, "line-dasharray": [2, 1] },
         });
         map?.addSource("boundary-preview-corners", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
@@ -248,10 +262,23 @@ export function HikeMap({
           source: "boundary-preview-corners",
           paint: {
             "circle-radius": 6,
-            "circle-color": "#f47b4d",
+            "circle-color": "#4f91c2",
             "circle-stroke-color": "#fffaf0",
             "circle-stroke-width": 3,
           },
+        });
+        map?.addSource("trail-network", { type: "geojson", data: trailNetwork });
+        map?.addLayer({
+          id: "trail-network-casing",
+          type: "line",
+          source: "trail-network",
+          paint: { "line-color": "#fffaf0", "line-width": 8, "line-opacity": 0.92 },
+        });
+        map?.addLayer({
+          id: "trail-network-lines",
+          type: "line",
+          source: "trail-network",
+          paint: { "line-color": "#314e43", "line-width": 3.5, "line-opacity": 1, "line-dasharray": [1.5, 1] },
         });
         map?.addSource("access-points", {
           type: "geojson",
@@ -268,54 +295,62 @@ export function HikeMap({
             "circle-stroke-width": 2,
           },
         });
-        map?.addSource("generated-routes", {
+        map?.addSource("generated-routes-hit", {
           type: "geojson",
-          data: routeFeatures(routesRef.current, selectedRouteIdRef.current),
+          data: routeFeaturePartitions(routesRef.current, selectedRouteIdRef.current).all,
         });
-        map?.addLayer({
-          id: "generated-route-native-casing",
-          type: "line",
-          source: "generated-routes",
-          paint: { "line-color": "#18312a", "line-width": 7, "line-opacity": 0.9 },
+        map?.addSource("generated-route-alternates", {
+          type: "geojson",
+          data: routeFeaturePartitions(routesRef.current, selectedRouteIdRef.current).alternates,
         });
-        map?.addLayer({
-          id: "generated-route-native-line",
-          type: "line",
-          source: "generated-routes",
-          paint: { "line-color": "#fffaf0", "line-width": 3, "line-opacity": 0.98, "line-dasharray": [2, 2.5] },
+        map?.addSource("generated-route-selected", {
+          type: "geojson",
+          data: routeFeaturePartitions(routesRef.current, selectedRouteIdRef.current).selected,
+        });
+        map?.addSource("generated-route-hover", {
+          type: "geojson",
+          data: EMPTY_LINES,
         });
         map?.addLayer({
           id: "generated-route-alternate-casing",
           type: "line",
-          source: "generated-routes",
-          filter: ["!=", ["get", "selected"], true],
+          source: "generated-route-alternates",
           paint: { "line-color": "#18312a", "line-width": 7, "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
         });
         map?.addLayer({
           id: "generated-route-alternates",
           type: "line",
-          source: "generated-routes",
-          filter: ["!=", ["get", "selected"], true],
+          source: "generated-route-alternates",
           paint: { "line-color": "#fffaf0", "line-width": 3, "line-opacity": 0.95, "line-dasharray": [2, 3.5] },
         });
         map?.addLayer({
           id: "generated-route-selected-casing",
           type: "line",
-          source: "generated-routes",
-          filter: ["==", ["get", "selected"], true],
-          paint: { "line-color": "#173f35", "line-width": 10, "line-opacity": 0.95 },
+          source: "generated-route-selected",
+          paint: { "line-color": "#173f35", "line-width": 12, "line-opacity": 0.98 },
         });
         map?.addLayer({
           id: "generated-route-selected",
           type: "line",
-          source: "generated-routes",
-          filter: ["==", ["get", "selected"], true],
-          paint: { "line-color": "#f47b4d", "line-width": 6 },
+          source: "generated-route-selected",
+          paint: { "line-color": "#f47b4d", "line-width": 8 },
+        });
+        map?.addLayer({
+          id: "generated-route-hover-casing",
+          type: "line",
+          source: "generated-route-hover",
+          paint: { "line-color": "#173f35", "line-width": 12, "line-opacity": 0.98 },
+        });
+        map?.addLayer({
+          id: "generated-route-hover",
+          type: "line",
+          source: "generated-route-hover",
+          paint: { "line-color": "#fff0a8", "line-width": 7, "line-dasharray": [3, 1] },
         });
         map?.addLayer({
           id: "generated-route-hit-target",
           type: "line",
-          source: "generated-routes",
+          source: "generated-routes-hit",
           paint: { "line-color": "#000000", "line-width": 20, "line-opacity": 0.01 },
         });
         const selectRoute = (event: MapLayerMouseEvent) => {
@@ -350,41 +385,18 @@ export function HikeMap({
       mapRef.current = null;
       routeMarkerConstructorRef.current = null;
     };
-  }, [onAccessPointSelect, onRouteSelect, packCoverage]);
+  }, [onAccessPointSelect, onRouteSelect, packCoverage, trailNetwork]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;
     source?.setData(bounds ? boundsPolygon(bounds) : EMPTY_POINTS);
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    const syncScreenBox = () => setCommittedScreenBox(bounds ? screenBoxForBounds(map, bounds) : null);
-    syncScreenBox();
-    map.on("move", syncScreenBox);
-    map.on("resize", syncScreenBox);
-    return () => {
-      map.off("move", syncScreenBox);
-      map.off("resize", syncScreenBox);
-    };
-  }, [bounds, mapReady]);
+  }, [bounds]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(bounds, drawing) ? 0.08 : 0);
+    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(bounds, drawing) ? 0.14 : 0.025);
   }, [bounds, drawing, mapReady]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    const syncCoverageBox = () => setCoverageScreenBox(screenBoxForBounds(map, packCoverage));
-    syncCoverageBox();
-    map.on("move", syncCoverageBox);
-    map.on("resize", syncCoverageBox);
-    return () => {
-      map.off("move", syncCoverageBox);
-      map.off("resize", syncCoverageBox);
-    };
-  }, [mapReady, packCoverage]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
@@ -392,9 +404,14 @@ export function HikeMap({
   }, [accessPoints, selectedAccessPointId]);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource("generated-routes") as GeoJSONSource | undefined;
-    source?.setData(routes.length > 0 ? routeFeatures(routes, selectedRouteId) : EMPTY_LINES);
-  }, [routes, selectedRouteId]);
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const partitions = routeFeaturePartitions(routes, selectedRouteId, hoveredRouteId);
+    (map.getSource("generated-routes-hit") as GeoJSONSource | undefined)?.setData(partitions.all);
+    (map.getSource("generated-route-alternates") as GeoJSONSource | undefined)?.setData(partitions.alternates);
+    (map.getSource("generated-route-selected") as GeoJSONSource | undefined)?.setData(partitions.selected);
+    (map.getSource("generated-route-hover") as GeoJSONSource | undefined)?.setData(partitions.hovered);
+  }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
 
   useEffect(() => {
     const handleRoutePreview = (event: Event) => {
@@ -404,26 +421,6 @@ export function HikeMap({
     window.addEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
     return () => window.removeEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
   }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    const syncRouteOverlay = () => {
-      const container = map.getContainer();
-      setRouteOverlay({
-        width: Math.max(1, container.clientWidth),
-        height: Math.max(1, container.clientHeight),
-        traces: projectedRouteTraces(routes, selectedRouteId, hoveredRouteId, (coordinate) => map.project(coordinate)),
-      });
-    };
-    syncRouteOverlay();
-    map.on("move", syncRouteOverlay);
-    map.on("resize", syncRouteOverlay);
-    return () => {
-      map.off("move", syncRouteOverlay);
-      map.off("resize", syncRouteOverlay);
-    };
-  }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -453,6 +450,14 @@ export function HikeMap({
       label.textContent = pin.numberLabel;
       shape.append(label);
       element.append(shape);
+      const stem = document.createElement("span");
+      stem.className = "route-trailhead-pin-stem";
+      const anchor = document.createElement("span");
+      anchor.className = "route-trailhead-pin-anchor";
+      const caption = document.createElement("span");
+      caption.className = "route-trailhead-pin-caption";
+      caption.textContent = "Start";
+      element.append(stem, anchor, caption);
       element.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -480,8 +485,8 @@ export function HikeMap({
     const clearPreview = () => {
       previewSource?.setData(EMPTY_POINTS);
       cornerSource?.setData(EMPTY_POINTS);
+      draftBoundsRef.current = null;
       setDraftBounds(null);
-      setDraftScreenBox(null);
     };
     const handleDown = (event: MapMouseEvent) => {
       event.preventDefault();
@@ -494,26 +499,41 @@ export function HikeMap({
       if (!next) return;
       previewSource?.setData(boundsPolygon(next));
       cornerSource?.setData(boundsCorners(next));
+      draftBoundsRef.current = next;
       setDraftBounds(next);
-      setDraftScreenBox(screenBoxForBounds(map, next));
     };
-    const handleUp = (event: MapMouseEvent) => {
+    const finishDrawing = (next: Bounds | null) => {
       if (!startRef.current) return;
-      const next = normalizeBounds(startRef.current, [event.lngLat.lng, event.lngLat.lat]);
       startRef.current = null;
       map.dragPan.enable();
       setDrawing(false);
       clearPreview();
       if (next) onBoundsChange(next);
     };
+    const handleUp = (event: MapMouseEvent) => {
+      if (!startRef.current) return;
+      finishDrawing(normalizeBounds(startRef.current, [event.lngLat.lng, event.lngLat.lat]));
+    };
+    const handleWindowUp = () => finishDrawing(draftBoundsRef.current);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      startRef.current = null;
+      map.dragPan.enable();
+      clearPreview();
+      setDrawing(false);
+    };
     map.getCanvas().style.cursor = "crosshair";
     map.on("mousedown", handleDown);
     map.on("mousemove", handleMove);
     map.on("mouseup", handleUp);
+    window.addEventListener("mouseup", handleWindowUp);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
       map.off("mousedown", handleDown);
       map.off("mousemove", handleMove);
       map.off("mouseup", handleUp);
+      window.removeEventListener("mouseup", handleWindowUp);
+      window.removeEventListener("keydown", handleKeyDown);
       map.getCanvas().style.cursor = "";
       map.dragPan.enable();
       startRef.current = null;
@@ -522,7 +542,6 @@ export function HikeMap({
   }, [drawing, mapReady, onBoundsChange]);
 
   const draftDimensions = draftBounds ? boundsDimensionsMiles(draftBounds) : null;
-  const visibleScreenBox = draftScreenBox ?? committedScreenBox;
   const visibleBounds = draftBounds ?? bounds;
   const boundaryInsideCoverage = visibleBounds ? boundsContainBounds(packCoverage, visibleBounds) : true;
 
@@ -545,44 +564,6 @@ export function HikeMap({
         </button>
       </div>
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
-      {routeOverlay.traces.length > 0 ? (
-        <svg
-          className="route-trace-overlay"
-          viewBox={`0 0 ${routeOverlay.width} ${routeOverlay.height}`}
-          aria-hidden="true"
-          preserveAspectRatio="none"
-        >
-          {routeOverlay.traces.map((trace) => (
-            <g
-              key={trace.id}
-              className={`route-trace ${trace.selected ? "selected" : "alternate"}${trace.hovered ? " hovered" : ""}`}
-              data-route-id={trace.id}
-              data-route-number={trace.routeNumber}
-            >
-              <path className="route-trace-casing" d={trace.path} />
-              <path className="route-trace-line" d={trace.path} />
-            </g>
-          ))}
-        </svg>
-      ) : null}
-      {coverageScreenBox ? (
-        <div className={`coverage-screen-box${showCoverageHatching(bounds, drawing) ? "" : " context-only"}`} style={coverageScreenBox} aria-hidden="true">
-          <span>Installed demo coverage</span>
-        </div>
-      ) : null}
-      {visibleScreenBox ? (
-        <div
-          className={`${draftScreenBox ? "boundary-screen-box draft" : "boundary-screen-box committed"}${boundaryInsideCoverage ? "" : " outside-coverage"}`}
-          style={visibleScreenBox}
-          aria-hidden="true"
-        >
-          <span>{boundaryInsideCoverage ? (draftScreenBox ? "Drawing search area" : "Search boundary") : "Outside installed coverage"}</span>
-          <i className="corner northwest" />
-          <i className="corner northeast" />
-          <i className="corner southeast" />
-          <i className="corner southwest" />
-        </div>
-      ) : null}
       {draftDimensions ? (
         <output className="boundary-draft-readout" aria-label="Boundary dimensions">
           <strong>Search area</strong>
@@ -590,9 +571,16 @@ export function HikeMap({
           <small>{draftDimensions.area.toFixed(1)} sq mi · {boundaryInsideCoverage ? "inside coverage" : "outside coverage"}</small>
         </output>
       ) : null}
+      <div className="map-key" aria-label="Map symbol key">
+        <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
+        <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
+        {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
+        {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+      </div>
       <p className="map-hint">
         {drawing
-          ? "Keep the orange search box entirely inside the green installed demo coverage."
+          ? "Keep the blue search box entirely inside the green installed demo coverage."
           : bounds
             ? boundaryInsideCoverage
               ? "Routes may not leave the outlined boundary."

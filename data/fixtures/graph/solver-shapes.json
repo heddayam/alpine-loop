@@ -1,0 +1,28 @@
+{
+  "packId": "fixture-pack",
+  "nodes": [
+    { "id": "a", "lon": -122.160, "lat": 37.160, "elevationMeters": 100, "flags": [] },
+    { "id": "b", "lon": -122.150, "lat": 37.160, "elevationMeters": 120, "flags": [] },
+    { "id": "c", "lon": -122.150, "lat": 37.170, "elevationMeters": 140, "flags": [] },
+    { "id": "d", "lon": -122.160, "lat": 37.170, "elevationMeters": 115, "flags": [] },
+    { "id": "e", "lon": -122.170, "lat": 37.160, "elevationMeters": 125, "flags": [] },
+    { "id": "f", "lon": -122.180, "lat": 37.165, "elevationMeters": 150, "flags": [] },
+    { "id": "g", "lon": -122.175, "lat": 37.175, "elevationMeters": 130, "flags": [] },
+    { "id": "h", "lon": -122.140, "lat": 37.160, "elevationMeters": 90, "flags": [] }
+  ],
+  "undirectedTrails": [
+    ["a", "b", "Ridge Trail"],
+    ["b", "c", "Ridge Trail"],
+    ["c", "d", "Creek Trail"],
+    ["d", "a", "Creek Trail"],
+    ["a", "e", "Connector"],
+    ["e", "f", "West Loop"],
+    ["f", "g", "West Loop"],
+    ["g", "e", "West Loop"],
+    ["b", "h", "Shuttle Trail"]
+  ],
+  "accessPoints": [
+    { "id": "trailhead-a", "nodeId": "a", "name": "Solver Start", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["fixture-source"] },
+    { "id": "trailhead-h", "nodeId": "h", "name": "Solver Finish", "kind": "trailhead", "accessState": "public", "confidence": "high", "parkingEvidence": "fixture", "sourceIds": ["fixture-source"] }
+  ]
+}
