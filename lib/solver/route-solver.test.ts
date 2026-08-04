@@ -86,6 +86,22 @@ describe("complete RouteSolver response", () => {
     expect(twenty.diagnostics.exhausted).toBe(false);
     expect(twenty.diagnostics.truncationReasons).toContain("fewer-exact-routes-than-requested");
   });
+
+  it("adds an explicit warning when source freshness is more than 30 days old", async () => {
+    const staleSolver = createRouteSolver({
+      pack: PACK,
+      sourceFreshness: "2026-06-01T00:00:00Z",
+      fallbackSourceIds: ["official-access"],
+    });
+    const response = await staleSolver.generate(request({ routeTypes: ["out-and-back"], limit: 1 }), {
+      repository: fixtureRepository(),
+      budget: DEFAULT_SOLVER_BUDGET,
+      now: () => Date.parse("2026-08-04T00:00:00Z"),
+    });
+    expect(response.exact[0]?.warnings).toContain(
+      "Source data is more than 30 days old; verify official access and current conditions",
+    );
+  });
 });
 
 function asymmetricFixture(): FixtureGraphData {
