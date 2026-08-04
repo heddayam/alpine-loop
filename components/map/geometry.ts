@@ -1,4 +1,4 @@
-import type { Feature, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
 import type { Bounds } from "../builder/types";
 
 const PRECISION = 6;
@@ -22,4 +22,29 @@ export function boundsPolygon(bounds: Bounds): Feature<Polygon> {
       coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
     },
   };
+}
+
+export function boundsCorners(bounds: Bounds): FeatureCollection<Point> {
+  const [west, south, east, north] = bounds;
+  return {
+    type: "FeatureCollection",
+    features: [
+      [west, south],
+      [east, south],
+      [east, north],
+      [west, north],
+    ].map((coordinates, index) => ({
+      type: "Feature",
+      properties: { index, role: "boundary-corner" },
+      geometry: { type: "Point", coordinates },
+    })),
+  };
+}
+
+export function boundsDimensionsMiles(bounds: Bounds): { width: number; height: number; area: number } {
+  const [west, south, east, north] = bounds;
+  const middleLatitudeRadians = ((south + north) / 2) * (Math.PI / 180);
+  const height = (north - south) * 69;
+  const width = (east - west) * 69.172 * Math.cos(middleLatitudeRadians);
+  return { width, height, area: width * height };
 }
