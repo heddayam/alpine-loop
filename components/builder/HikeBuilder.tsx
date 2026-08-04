@@ -8,6 +8,7 @@ import {
   type GenerateRoutesRequestV1,
   type RouteType,
 } from "@/lib/contracts";
+import { FIXTURE_PACK_COVERAGE, FIXTURE_PACK_DEMO_BOUNDS } from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
@@ -142,7 +143,15 @@ export function HikeBuilder() {
         body: JSON.stringify(validated.request satisfies GenerateRoutesRequestV1),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error("Routes could not be generated. Try a different boundary or constraints.");
+      if (!response.ok) {
+        const payload: unknown = await response.json().catch(() => null);
+        const message = payload && typeof payload === "object" && "error" in payload &&
+          payload.error && typeof payload.error === "object" && "message" in payload.error &&
+          typeof payload.error.message === "string"
+          ? payload.error.message
+          : "Routes could not be generated. Try a different boundary or constraints.";
+        throw new Error(message);
+      }
       const parsed = generateRoutesResponseV1Schema.safeParse(await response.json());
       if (!parsed.success) throw new Error("The route response was invalid.");
       const exactCount = parsed.data.exact.length;
@@ -314,6 +323,8 @@ export function HikeBuilder() {
 
         <HikeMap
           bounds={bounds}
+          packCoverage={FIXTURE_PACK_COVERAGE}
+          suggestedBounds={FIXTURE_PACK_DEMO_BOUNDS}
           accessPoints={accessPoints}
           selectedAccessPointId={selectedAccessPointId}
           routes={generatedRoutes}
