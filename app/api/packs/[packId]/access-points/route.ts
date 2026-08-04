@@ -1,35 +1,91 @@
 import { NextResponse } from "next/server";
-import fixtureGraph from "@/data/fixtures/graph/tiny.json";
+import type { FeatureCollection, LineString } from "geojson";
 import { bboxSchema } from "@/lib/contracts";
+import { FIXTURE_PACK_TRAIL_NETWORK } from "@/lib/packs/fixture-pack";
+import { loadRoutePacks } from "@/lib/server/pack-registry";
+
+const MAXIMUM_TRAIL_FEATURES = 10_000;
+
+function canonicalGeometry(coordinates: ReadonlyArray<readonly [number, number]>): string {
+  const forward = JSON.stringify(coordinates);
+  const reverse = JSON.stringify([...coordinates].reverse());
+  return forward < reverse ? forward : reverse;
+}
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ packId: string }> },
 ) {
   const { packId } = await context.params;
-  if (packId !== fixtureGraph.packId) {
-    return NextResponse.json({ error: "Pack not found" }, { status: 404 });
-  }
+  const pack = (await loadRoutePacks()).get(packId);
+  if (!pack) return NextResponse.json({ error: "Pack not found" }, { status: 404 });
 
-  const values = new URL(request.url).searchParams.get("bbox")?.split(",").map(Number);
+  const url = new URL(request.url);
+  const values = url.searchParams.get("bbox")?.split(",").map(Number);
   const parsedBounds = bboxSchema.safeParse(values);
   if (!parsedBounds.success) {
     return NextResponse.json({ error: "A valid bbox query is required" }, { status: 400 });
   }
-  const [west, south, east, north] = parsedBounds.data;
-  const nodesById = new Map(fixtureGraph.nodes.map((node) => [node.id, node]));
-  const accessPoints = fixtureGraph.accessPoints.flatMap((accessPoint) => {
-    const node = nodesById.get(accessPoint.nodeId);
-    if (!node || node.lon < west || node.lon > east || node.lat < south || node.lat > north) return [];
-    return [{
-      id: accessPoint.id,
-      name: accessPoint.name,
-      lon: node.lon,
-      lat: node.lat,
-      kind: accessPoint.kind,
-      accessState: accessPoint.accessState,
-      confidence: accessPoint.confidence,
-    }];
-  });
-  return NextResponse.json({ accessPoints });
+  const includeUncertainAccess = url.searchParams.get("includeUncertainAccess") === "true";
+  const controller = new AbortController();
+  const repository = await pack.loadRepository(controller.signal);
+  try {
+    const [accessPoints, graph] = await Promise.all([
+      repository.getAccessPoints(parsedBounds.data, includeUncertainAccess),
+      repository.getInducedGraph({
+        bbox: parsedBounds.data,
+        includeUncertainAccess: true,
+        signal: controller.signal,
+      }),
+    ]);
+    const nodes = graph.nodes;
+    const seen = new Set<string>();
+    const features: FeatureCollection<LineString>["features"] = [];
+    if (pack.kind === "installed") {
+      for (const edge of graph.edges) {
+        const key = canonicalGeometry(edge.coordinates);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        features.push({
+          type: "Feature",
+          properties: {
+            id: edge.id,
+            name: edge.trailName,
+            role: "available-trail",
+            accessState: edge.accessState,
+            sourceIds: edge.sourceIds,
+          },
+          geometry: { type: "LineString", coordinates: edge.coordinates.map((coordinate) => [...coordinate]) },
+        });
+        if (features.length > MAXIMUM_TRAIL_FEATURES) {
+          return NextResponse.json(
+            { error: "Boundary contains too many mapped trail segments; draw a smaller rectangle" },
+            { status: 422 },
+          );
+        }
+      }
+    }
+    return NextResponse.json({
+      accessPoints: accessPoints.flatMap((point) => {
+        const node = nodes.get(point.nodeId);
+        if (!node) {
+          return [];
+        }
+        return [{
+          id: point.id,
+          name: point.name,
+          lon: node.lon,
+          lat: node.lat,
+          kind: point.kind,
+          accessState: point.accessState,
+          confidence: point.confidence,
+        }];
+      }),
+      trailNetwork: pack.kind === "fixture"
+        ? FIXTURE_PACK_TRAIL_NETWORK
+        : { type: "FeatureCollection", features },
+    });
+  } finally {
+    await repository.close();
+  }
 }

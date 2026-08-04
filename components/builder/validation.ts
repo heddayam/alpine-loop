@@ -2,7 +2,7 @@ import {
   generateRoutesRequestV1Schema,
   type GenerateRoutesRequestV1,
 } from "@/lib/contracts";
-import { FIXTURE_PACK_COVERAGE } from "@/lib/packs/fixture-pack";
+import { FIXTURE_PACK_COVERAGE, FIXTURE_PACK_METADATA } from "@/lib/packs/fixture-pack";
 import type { Bounds, BuilderValues, RangeField } from "./types";
 
 export type ValidationResult =
@@ -42,10 +42,14 @@ export function buildGenerateRoutesRequest(
   values: BuilderValues,
   bounds: Bounds | null,
   startAccessPointId?: string,
+  pack: { id: string; coverage: Bounds } = {
+    id: FIXTURE_PACK_METADATA.id,
+    coverage: FIXTURE_PACK_COVERAGE,
+  },
 ): ValidationResult {
   const errors: string[] = [];
   if (!bounds) errors.push("Draw a search rectangle on the map first.");
-  else if (!isBoundsInsideBounds(bounds, FIXTURE_PACK_COVERAGE)) {
+  else if (!isBoundsInsideBounds(bounds, pack.coverage)) {
     errors.push("Keep the search rectangle inside the shaded installed-pack coverage.");
   }
   if (values.routeTypes.length === 0) errors.push("Choose at least one route shape.");
@@ -65,7 +69,7 @@ export function buildGenerateRoutesRequest(
 
   const candidate: GenerateRoutesRequestV1 = {
     version: 1,
-    packId: "fixture-pack",
+    packId: pack.id,
     bbox: bounds,
     ...(startAccessPointId ? { startAccessPointId } : {}),
     routeTypes: values.routeTypes,
