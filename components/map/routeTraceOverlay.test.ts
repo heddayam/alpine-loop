@@ -52,4 +52,15 @@ describe("projected route traces", () => {
     expect(traces[0]).toMatchObject({ id: "selected", selected: true, hovered: false });
     expect(traces[1]).toMatchObject({ id: "hovered", selected: false, hovered: true });
   });
+
+  it("renders selected and hovered traces after alternates so emphasis cannot be covered", () => {
+    const traces = projectedRouteTraces(
+      [route("selected", [[0, 0], [1, 1]]), route("hovered", [[0, 0], [1, 1]]), route("alternate", [[0, 0], [1, 1]])],
+      "selected",
+      "hovered",
+      ([x, y]) => ({ x, y }),
+    );
+
+    expect(traces.map(({ id }) => id)).toEqual(["alternate", "selected", "hovered"]);
+  });
 });

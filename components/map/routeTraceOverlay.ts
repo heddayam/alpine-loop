@@ -19,7 +19,7 @@ export function projectedRouteTraces(
   hoveredRouteId: string | undefined,
   project: ProjectCoordinate,
 ): ProjectedRouteTrace[] {
-  return routes.flatMap((route, index) => {
+  const traces = routes.flatMap((route, index) => {
     if (route.geometry.coordinates.length < 2) return [];
     const path = route.geometry.coordinates.map((coordinate, coordinateIndex) => {
       const point = project([coordinate[0], coordinate[1]]);
@@ -32,6 +32,10 @@ export function projectedRouteTraces(
       selected: route.id === selectedRouteId,
       hovered: route.id === hoveredRouteId,
     }];
+  });
+  return traces.sort((left, right) => {
+    const weight = (trace: ProjectedRouteTrace) => trace.hovered ? 2 : trace.selected ? 1 : 0;
+    return weight(left) - weight(right);
   });
 }
 
