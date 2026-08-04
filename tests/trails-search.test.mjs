@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MAX_TRAIL_SEARCH_REQUEST_BYTES,
+  MAX_TRAIL_SEARCH_VERTICES,
   loadTrailSegments,
   normalizeDriveTimeGeometry,
   parseTrailSearchRequest,
@@ -137,8 +138,8 @@ test("validates bounded trail search requests", () => {
 });
 
 test("allows production-scale long-range contours within the vertex safety cap", () => {
-  const coordinates = Array.from({ length: 31_299 }, (_, index) => {
-    const angle = (index / 31_298) * Math.PI * 2;
+  const coordinates = Array.from({ length: 87_159 }, (_, index) => {
+    const angle = (index / 87_158) * Math.PI * 2;
     return [-119.5 + Math.cos(angle), 37.5 + Math.sin(angle)];
   });
   coordinates[coordinates.length - 1] = coordinates[0];
@@ -148,8 +149,17 @@ test("allows production-scale long-range contours within the vertex safety cap",
   };
 
   assert.ok(Buffer.byteLength(JSON.stringify(payload)) > 512 * 1024);
-  assert.equal(MAX_TRAIL_SEARCH_REQUEST_BYTES, 4 * 1024 * 1024);
+  assert.equal(MAX_TRAIL_SEARCH_REQUEST_BYTES, 8 * 1024 * 1024);
+  assert.equal(MAX_TRAIL_SEARCH_VERTICES, 200_000);
   assert.equal(parseTrailSearchRequest(payload).ok, true);
+});
+
+test("rejects drive-time geometry beyond the bounded vertex ceiling", () => {
+  const coordinates = Array.from({ length: MAX_TRAIL_SEARCH_VERTICES + 1 }, () => [0, 0]);
+  assert.equal(normalizeDriveTimeGeometry({
+    type: "Polygon",
+    coordinates: [coordinates],
+  }), null);
 });
 
 test("requires a reachable access point and applies conservative default hiking policy", () => {

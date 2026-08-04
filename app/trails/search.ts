@@ -1,8 +1,8 @@
-// ArcGIS long-range service areas can legitimately contain tens of thousands
-// of vertices. Keep the transport ceiling aligned with the stricter 50,000
-// vertex geometry cap below so valid contours are not rejected based only on
-// JSON encoding overhead.
-export const MAX_TRAIL_SEARCH_REQUEST_BYTES = 4 * 1024 * 1024;
+// ArcGIS four- and five-hour service areas can legitimately contain more than
+// 50,000 vertices. These limits remain bounded, while accommodating the real
+// provider contours used by the product.
+export const MAX_TRAIL_SEARCH_REQUEST_BYTES = 8 * 1024 * 1024;
+export const MAX_TRAIL_SEARCH_VERTICES = 200_000;
 export const MAX_TRAIL_SEARCH_RESULTS = 500;
 
 export type SourceRef = {
@@ -155,7 +155,7 @@ function vertexCount(polygons: PolygonGeometry[]) {
 
 export function normalizeDriveTimeGeometry(value: unknown): DriveTimeGeometry | null {
   const polygons = polygonGeometries(value);
-  if (!polygons || vertexCount(polygons) > 50_000) return null;
+  if (!polygons || vertexCount(polygons) > MAX_TRAIL_SEARCH_VERTICES) return null;
   if (polygons.length === 1) return polygons[0];
   return { type: "MultiPolygon", coordinates: polygons.map(({ coordinates }) => coordinates) };
 }
@@ -263,6 +263,10 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
   }
   const accessPoints = new Map(catalog.accessPoints.map((feature) =>
     [feature.properties.id, feature]));
+  const reachableAccessPointIds = new Set(catalog.accessPoints.flatMap((feature) =>
+    pointInDriveTimeGeometry(feature.geometry.coordinates, request.driveTimePolygon)
+      ? [feature.properties.id]
+      : []));
   const query = request.query ? searchableText(request.query) : undefined;
   const results = [];
 
@@ -272,7 +276,7 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
     if (query && !searchableText(`${trail.name} ${trail.manager ?? ""}`).includes(query)) continue;
     const reachableAccessPoints = trail.accessPointIds.flatMap((id) => {
       const feature = accessPoints.get(id);
-      if (!feature || !pointInDriveTimeGeometry(feature.geometry.coordinates, request.driveTimePolygon)) {
+      if (!feature || !reachableAccessPointIds.has(id)) {
         return [];
       }
       return [{
