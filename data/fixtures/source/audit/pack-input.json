@@ -1,0 +1,23 @@
+{
+  "packId": "santa-cruz-mountains",
+  "dataVersion": "fixture-1",
+  "nodes": [
+    { "id": "a", "elevationM": 100, "sourceRefs": ["osm"] },
+    { "id": "b", "elevationM": 110, "sourceRefs": ["osm"] },
+    { "id": "c", "elevationM": null, "sourceRefs": ["osm"] }
+  ],
+  "edges": [
+    { "id": "ab", "fromNode": "a", "toNode": "b", "lengthM": 100, "gainM": 10, "lossM": 0, "maxElevationM": 110, "maxSustainedGradePct": 10, "accessState": "public", "sourceRefs": ["osm", "official"] },
+    { "id": "ba", "fromNode": "b", "toNode": "a", "lengthM": 100, "gainM": 0, "lossM": 10, "maxElevationM": 110, "maxSustainedGradePct": 10, "accessState": "public", "sourceRefs": ["osm", "official"] },
+    { "id": "bc", "fromNode": "b", "toNode": "c", "lengthM": 80, "gainM": null, "lossM": null, "maxElevationM": null, "maxSustainedGradePct": null, "accessState": "unknown", "sourceRefs": ["osm"] }
+  ],
+  "accessPoints": [
+    { "id": "start", "accessState": "public", "sourceRefs": ["osm", "official"] }
+  ],
+  "sources": [
+    { "id": "osm", "authority": "OpenStreetMap contributors", "dataset": "Northern California", "version": "fixture", "retrievedAt": "2026-08-04T00:00:00Z", "url": "https://download.geofabrik.de/", "license": "ODbL-1.0", "termsDecision": "Attribution and share-alike required", "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { "id": "official", "authority": "Fixture Parks", "dataset": "Trails", "version": "fixture", "retrievedAt": "2026-08-04T00:00:00Z", "url": "https://example.invalid/trails", "license": "Public Domain", "termsDecision": "Reuse allowed", "contentHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+  ],
+  "rejectedEdgeCount": 2,
+  "conflictRecordIds": []
+}

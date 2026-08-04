@@ -1,0 +1,17 @@
+{
+  "id": "california-state-parks-recreational-routes",
+  "authority": "California State Parks",
+  "dataset": "Recreational Routes",
+  "version": "item-modified-2026-02-18T18:18:12.000Z-data-current-2026-02",
+  "retrievedAt": "2026-08-04T19:00:00.000Z",
+  "itemUrl": "https://www.arcgis.com/home/item.html?id=45fa4fba9dde4a8dbb23cdd56da40703",
+  "downloadUrl": "https://services2.arcgis.com/AhxrK3F6WM8ECvDi/arcgis/rest/services/RecreationalRoutes/FeatureServer/0/query?where=1%3D1&outFields=FID%2CROUTENAME%2CGISID%2CROUTECLASS%2CUNITNAME%2CROUTECAT%2CROUTETYPE%2CGlobalID&returnGeometry=true&outSR=4326&f=json",
+  "nativeCrs": { "wkid": 102100, "latestWkid": 3857 },
+  "downloadCrs": 4326,
+  "stableIdField": "GISID",
+  "accessFields": [],
+  "license": "Copyright 2022 California State Parks; custom Terms of Use",
+  "termsDecision": "Attribution is required; sale and alteration are prohibited; commercial use requires advance approval. Do not ingest into a normalized derivative pack without written permission. May be used only as an unmodified local cross-check.",
+  "redistribution": "blocked",
+  "metadataContentHash": "sha256:ff0e81808b83499eca2b4ec9a660ca91cb634871de9639fa6fab6e1c7e0407ce"
+}
