@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { partitionPrefixLength, segmentPartitionKey } from "./artifact-contract.mjs";
 
 const DEFAULT_ARTIFACT_ROOT = resolve("data/trails/generated");
 const DEFAULT_OUTPUT_ROOT = resolve("app/trails/indexes");
@@ -85,15 +86,19 @@ async function readJson(path) {
 
 async function readSegments(directory, index) {
   const segments = new Map();
-  for (const shard of Object.values(index.shards)) {
+  const prefixLength = partitionPrefixLength(index);
+  for (const [prefix, shard] of Object.entries(index.shards)) {
     const content = await readFile(resolve(directory, shard.path), "utf8");
     for (const line of content.split("\n")) {
       if (!line) continue;
       const segment = JSON.parse(line);
+      if (segmentPartitionKey(segment.id, prefixLength) !== prefix) {
+        throw new Error(`Segment ${segment.id} is stored in the wrong shard ${prefix}`);
+      }
       segments.set(segment.id, segment);
     }
   }
-  return segments;
+  return { segments, prefixLength };
 }
 
 export async function buildTrailSearchIndex(regionId, options = {}) {
@@ -110,7 +115,7 @@ export async function buildTrailSearchIndex(regionId, options = {}) {
     throw new Error(`Artifact region mismatch for ${regionId}`);
   }
 
-  const segments = await readSegments(directory, segmentIndex);
+  const { segments, prefixLength } = await readSegments(directory, segmentIndex);
   const trails = {};
   for (const trail of namedPayload.trails) {
     const trailSegments = trail.segmentIds.map((segmentId) => {
@@ -134,6 +139,7 @@ export async function buildTrailSearchIndex(regionId, options = {}) {
       manifestSha256: sha256(manifestText),
       namedTrailsSha256: manifest.artifacts?.["named-trails.json"]?.sha256,
       segmentsIndexSha256: manifest.artifacts?.["segments/index.json"]?.sha256,
+      ...(manifest.schemaVersion >= 2 ? { segmentPartitionPrefixLength: prefixLength } : {}),
     },
     trails,
   };

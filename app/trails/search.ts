@@ -86,6 +86,7 @@ export type RegionalTrailCatalog = {
   accessPoints: AccessPointFeature[];
   summaries: Record<string, TrailSearchSummary>;
   shardPaths: Record<string, string>;
+  partitionPrefixLength: number;
 };
 
 type Position = [number, number];
@@ -319,10 +320,15 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
   };
 }
 
-export function segmentShardKey(segmentId: string) {
-  const match = /^segment_([0-9a-f])[0-9a-f]+$/.exec(segmentId);
-  if (!match) throw new TypeError(`Invalid segment id: ${segmentId}`);
-  return match[1];
+export function segmentShardKey(segmentId: string, prefixLength = 1) {
+  if (!Number.isInteger(prefixLength) || prefixLength < 1 || prefixLength > 8) {
+    throw new TypeError(`Invalid segment partition prefix length: ${prefixLength}`);
+  }
+  const match = /^segment_([0-9a-f]+)$/.exec(segmentId);
+  if (!match || match[1].length < prefixLength) {
+    throw new TypeError(`Invalid segment id: ${segmentId}`);
+  }
+  return match[1].slice(0, prefixLength);
 }
 
 export async function loadTrailSegments(
@@ -334,7 +340,7 @@ export async function loadTrailSegments(
   if (!trail) return null;
   const idsByShard = new Map<string, Set<string>>();
   for (const segmentId of trail.segmentIds) {
-    const shard = segmentShardKey(segmentId);
+    const shard = segmentShardKey(segmentId, catalog.partitionPrefixLength);
     const selected = idsByShard.get(shard) ?? new Set<string>();
     selected.add(segmentId);
     idsByShard.set(shard, selected);

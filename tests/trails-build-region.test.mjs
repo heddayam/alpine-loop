@@ -21,6 +21,8 @@ import {
   validateTrailNode,
   validateTrailSegment,
 } from "../scripts/trails/model.mjs";
+import { validateArtifactDirectory } from "../scripts/trails/validate-artifacts.mjs";
+import { enforceRuntimeShardSizeTargets } from "../scripts/trails/artifact-contract.mjs";
 
 const retrievedAt = "2026-08-03T12:00:00.000Z";
 const sourceRef = (provider, sourceId) => ({
@@ -256,6 +258,17 @@ test("builds deterministic regional artifacts with canonical searchable trails",
   assert.ok(elevationSourceFields.every((value) => value === elevationSourceFields[0]));
   assert.match(first.qa.artifactHashes[ARTIFACT_FILENAMES.segments].sha256, /^[a-f0-9]{64}$/);
   assert.match(first.manifest.artifacts[ARTIFACT_FILENAMES.qa].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(first.manifest.schemaVersion, 2);
+  assert.match(first.manifest.buildId, /^build_[a-f0-9]{32}$/);
+  assert.equal(first.manifest.delivery.partitioning.prefixLength, 2);
+  assert.ok(Object.keys(JSON.parse(first.payloads[ARTIFACT_FILENAMES.segments]).shards)
+    .every((prefix) => prefix.length === 2));
+  assert.deepEqual(first.manifest.decisions, {
+    qa: { decision: "pending", decidedAt: null, notes: [] },
+    review: { decision: "pending", reviewer: null, decidedAt: null, notes: [] },
+  });
+  assert.equal(first.manifest.artifacts[ARTIFACT_FILENAMES.segments].role, "runtime");
+  assert.equal(first.manifest.artifacts[ARTIFACT_FILENAMES.qa].role, "diagnostic");
 });
 
 test("matches legacy named-trail reachability under deterministic input reorderings", () => {
@@ -405,6 +418,36 @@ test("emits deterministic telemetry structure with injected measurements", () =>
   ]);
 });
 
+test("requires explicit notes for runtime shards above either size target", () => {
+  const artifacts = {
+    "segments/ab.ndjson": { bytes: 101, gzipBytes: 40 },
+    "segments/cd.ndjson": { bytes: 90, gzipBytes: 51 },
+  };
+  const paths = Object.keys(artifacts);
+  const targets = { rawBytes: 100, compressedBytes: 50 };
+  assert.throws(
+    () => enforceRuntimeShardSizeTargets(artifacts, paths, {}, targets),
+    /add an explicit shardSizeExceptions note/,
+  );
+  assert.deepEqual(enforceRuntimeShardSizeTargets(artifacts, paths, {
+    "segments/ab.ndjson": "Worker review measured safe memory behavior.",
+    "segments/cd.ndjson": "API review accepted the compressed transfer size.",
+  }, targets), [
+    {
+      path: "segments/ab.ndjson",
+      rawBytes: 101,
+      compressedBytes: 40,
+      note: "Worker review measured safe memory behavior.",
+    },
+    {
+      path: "segments/cd.ndjson",
+      rawBytes: 90,
+      compressedBytes: 51,
+      note: "API review accepted the compressed transfer size.",
+    },
+  ]);
+});
+
 test("round-trips dictionary-compacted field provenance", async () => {
   const result = await buildRegionArtifacts(buildInput());
   const compact = compactSegmentProvenance(result.segmentProvenance);
@@ -445,6 +488,8 @@ test("writes the complete artifact contract without network access", async () =>
   try {
     const result = await buildRegionArtifacts(buildInput());
     await writeRegionArtifacts(result, outputDirectory);
+    const validation = await validateArtifactDirectory(outputDirectory);
+    assert.equal(validation.buildId, result.manifest.buildId);
     assert.deepEqual(
       Object.values(ARTIFACT_FILENAMES).sort(),
       [
@@ -460,6 +505,15 @@ test("writes the complete artifact contract without network access", async () =>
     for (const filename of Object.values(ARTIFACT_FILENAMES)) {
       assert.equal(await readFile(join(outputDirectory, filename), "utf8"), result.payloads[filename]);
     }
+    const segmentShard = Object.keys(result.payloads).find((path) =>
+      /^segments\/[0-9a-f]{2}\.ndjson$/.test(path));
+    await writeFile(join(outputDirectory, segmentShard), "corrupt\n");
+    await assert.rejects(validateArtifactDirectory(outputDirectory), /hash or size mismatch/);
+    await writeFile(join(outputDirectory, segmentShard), result.payloads[segmentShard]);
+    const invalidManifest = structuredClone(result.manifest);
+    invalidManifest.artifacts[segmentShard].application = "optional";
+    await writeFile(join(outputDirectory, "manifest.json"), JSON.stringify(invalidManifest));
+    await assert.rejects(validateArtifactDirectory(outputDirectory), /invalid v2 metadata/);
   } finally {
     globalThis.fetch = previousFetch;
     await rm(outputDirectory, { recursive: true, force: true });
@@ -549,6 +603,7 @@ test("reconciles agency granularity, ingests OSM access, and ships field provena
   const fixtureRoot = new URL("./fixtures/trails/", import.meta.url).pathname;
   await writeFile(inputPath, JSON.stringify({
     regionId: "yosemite-stanislaus",
+    artifactSchemaVersion: 1,
     agencySnapshots: { nps: join(fixtureRoot, "gate-c/nps.json") },
     osmSnapshotPath: join(fixtureRoot, "gate-c/osm.json"),
     elevationGridPath: join(fixtureRoot, "gate-c/elevation-grid.json"),
@@ -596,6 +651,11 @@ test("reconciles agency granularity, ingests OSM access, and ships field provena
       "b66ea987c456141292bb2a08357b7e3f83e308decb2c6a615b1107b0faf0e43c",
       "Yosemite Gate C v1 manifest bytes must match the accepted pre-P2 builder",
     );
+    assert.deepEqual(await validateArtifactDirectory(join(outputDirectory, "artifacts")), {
+      schemaVersion: 1,
+      regionId: "yosemite-stanislaus",
+      files: Object.keys(result.manifest.artifacts).length,
+    });
     for (const [filename, metadata] of Object.entries(result.manifest.artifacts)) {
       assert.equal(files[filename].byteLength, metadata.bytes, `${filename} raw bytes`);
       assert.equal(gzipSync(files[filename], { level: 9 }).byteLength, metadata.gzipBytes,

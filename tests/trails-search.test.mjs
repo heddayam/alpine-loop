@@ -92,6 +92,7 @@ function fixtureCatalog() {
       "named-trail_f": summary({ suppressed: true }),
     },
     shardPaths: { a: "segments/a.ndjson", b: "segments/b.ndjson" },
+    partitionPrefixLength: 1,
   };
 }
 
@@ -216,4 +217,21 @@ test("loads only selected geometry shards and preserves trail segment order", as
   assert.equal(geoJson.type, "FeatureCollection");
   assert.equal(geoJson.features.length, 3);
   assert.equal("maxGradePct" in geoJson.features[0].properties, false);
+});
+
+test("loads v2 geometry using the catalog-declared two-character partition width", async () => {
+  const catalog = fixtureCatalog();
+  catalog.partitionPrefixLength = 2;
+  catalog.shardPaths = { a0: "segments/a0.ndjson", a1: "segments/a1.ndjson" };
+  catalog.namedTrails[0].segmentIds = ["segment_a001", "segment_a101"];
+  const calls = [];
+  const segments = await loadTrailSegments(catalog, "named-trail_a", async (shard, ids) => {
+    calls.push([shard, [...ids]]);
+    return [...ids].map((id) => ({ id }));
+  });
+  assert.deepEqual(calls, [
+    ["a0", ["segment_a001"]],
+    ["a1", ["segment_a101"]],
+  ]);
+  assert.deepEqual(segments.map(({ id }) => id), ["segment_a001", "segment_a101"]);
 });

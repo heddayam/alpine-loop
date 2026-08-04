@@ -41,6 +41,20 @@ import usgsAdapter from "./sources/usgs.mjs";
 import { lineStringBounds } from "./spatial/geometry.mjs";
 import { buildQaReport } from "./qa/report.mjs";
 import { geodesicLineLengthMeters } from "./spatial/length.mjs";
+import {
+  ARTIFACT_SCHEMA_VERSION,
+  DEFAULT_PARTITION_PREFIX_LENGTH,
+  MAX_RUNTIME_SHARD_GZIP_BYTES,
+  MAX_RUNTIME_SHARD_RAW_BYTES,
+  contentTypeForArtifact,
+  createBuildId,
+  defaultArtifactPolicy,
+  enforceRuntimeShardSizeTargets,
+  partitionPrefixes,
+  segmentPartitionKey,
+  sourceSnapshotRecords,
+  stableJson,
+} from "./artifact-contract.mjs";
 
 export const ARTIFACT_FILENAMES = Object.freeze({
   namedTrails: "named-trails.json",
@@ -52,22 +66,13 @@ export const ARTIFACT_FILENAMES = Object.freeze({
   manifest: "manifest.json",
 });
 
-function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) =>
-      `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 const OBSOLETE_MANAGED_ARTIFACTS = Object.freeze([
   "segments.ndjson",
 ]);
 
 const MANAGED_SHARD_PATTERNS = Object.freeze({
-  segments: /^[0-9a-f]\.ndjson$/,
-  "segment-provenance": /^[0-9a-f]\.json$/,
+  segments: /^[0-9a-f]{1,8}\.ndjson$/,
+  "segment-provenance": /^[0-9a-f]{1,8}\.json$/,
 });
 
 const AGENCY_ADAPTERS = Object.freeze({
@@ -648,16 +653,16 @@ export function expandSegmentProvenance(compact) {
   ]));
 }
 
-function artifactPartition(id) {
-  const match = /_([a-f0-9])/.exec(id);
-  if (!match) throw new TypeError(`artifact record id ${JSON.stringify(id)} has no hex partition`);
-  return match[1];
-}
-
-function partitionRecords(records, id = (record) => record.id) {
-  const partitions = Object.fromEntries("0123456789abcdef".split("").map((prefix) => [prefix, []]));
-  for (const record of records) partitions[artifactPartition(id(record))].push(record);
-  return partitions;
+function partitionRecords(records, prefixLength, id = (record) => record.id, includeEmpty = false) {
+  const partitions = includeEmpty
+    ? Object.fromEntries(partitionPrefixes(prefixLength).map((prefix) => [prefix, []]))
+    : {};
+  for (const record of records) {
+    const prefix = segmentPartitionKey(id(record), prefixLength);
+    (partitions[prefix] ??= []).push(record);
+  }
+  return Object.fromEntries(Object.entries(partitions).sort(([left], [right]) =>
+    left.localeCompare(right)));
 }
 
 function paddedBounds(segments) {
@@ -971,6 +976,23 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     throw new TypeError("input must be an object");
   }
   const region = requireRegion(input.regionId);
+  const artifactSchemaVersion = input.artifactSchemaVersion ?? ARTIFACT_SCHEMA_VERSION;
+  if (![1, ARTIFACT_SCHEMA_VERSION].includes(artifactSchemaVersion)) {
+    throw new TypeError("artifactSchemaVersion must be 1 or 2");
+  }
+  const partitionPrefixLength = artifactSchemaVersion === 1
+    ? 1
+    : (input.partitionPrefixLength ?? DEFAULT_PARTITION_PREFIX_LENGTH);
+  partitionPrefixes(partitionPrefixLength);
+  if (artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION &&
+      partitionPrefixLength !== DEFAULT_PARTITION_PREFIX_LENGTH &&
+      (typeof input.partitionPrefixException !== "string" ||
+       !input.partitionPrefixException.trim())) {
+    throw new Error(
+      `v2 partitions use ${DEFAULT_PARTITION_PREFIX_LENGTH} hexadecimal characters unless ` +
+      "partitionPrefixException records the measured justification",
+    );
+  }
   const reconciliationStage = beginStage(telemetry, "agency-osm-reconciliation-merge", {
     inputSegmentCandidates: (input.segmentCandidates ?? input.segments ?? []).length,
   }, ["normalized-segment-candidates", "merge-candidate-index", "field-provenance"]);
@@ -1090,10 +1112,18 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     provenanceSegments: Object.keys(segmentProvenance).length,
     segments: segments.length,
   }, ["segments", "shipped-field-provenance", "partition-arrays"]);
-  const segmentPartitions = partitionRecords(segments);
+  const includeEmptyPartitions = artifactSchemaVersion === 1;
+  const segmentPartitions = partitionRecords(
+    segments,
+    partitionPrefixLength,
+    (record) => record.id,
+    includeEmptyPartitions,
+  );
   const provenancePartitions = partitionRecords(
     Object.entries(segmentProvenance),
+    partitionPrefixLength,
     ([segmentId]) => segmentId,
+    includeEmptyPartitions,
   );
   const segmentShardPaths = Object.fromEntries(Object.keys(segmentPartitions).map(
     (prefix) => [prefix, `segments/${prefix}.ndjson`],
@@ -1126,12 +1156,14 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     ...(writer.retainsPayloads ? ["fixture-payload-strings"] : []),
   ]);
   const measuredArtifactFiles = {};
+  const artifactRecordCounts = {};
   let artifactsWritten = 0;
   let serializedBytes = 0;
   let peakChunkBytes = 0;
-  const writeArtifact = async (filename, chunks) => {
+  const writeArtifact = async (filename, chunks, records) => {
     const result = await writer.write(filename, chunks);
     measuredArtifactFiles[filename] = result.metadata;
+    artifactRecordCounts[filename] = records;
     artifactsWritten += 1;
     serializedBytes += result.metadata.bytes;
     peakChunkBytes = Math.max(peakChunkBytes, result.peakChunkBytes);
@@ -1154,32 +1186,55 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
       schemaVersion: 1,
       regionId: region.id,
       trails: namedTrails,
-    })],
-    [ARTIFACT_FILENAMES.accessPoints, prettyJsonChunks(accessPointGeoJson(access.accessPoints))],
+    }), namedTrails.length],
+    [ARTIFACT_FILENAMES.accessPoints, prettyJsonChunks(accessPointGeoJson(access.accessPoints)),
+      access.accessPoints.length],
     [ARTIFACT_FILENAMES.segments, prettyJsonChunks({
-      schemaVersion: 1,
+      schemaVersion: artifactSchemaVersion,
       regionId: region.id,
-      partitionRule: "first hexadecimal character after segment_",
+      ...(artifactSchemaVersion === 1 ? {
+        partitionRule: "first hexadecimal character after segment_",
+      } : {
+        partitioning: {
+          algorithm: "segment-id-hex-prefix",
+          prefixLength: partitionPrefixLength,
+          ...(partitionPrefixLength === DEFAULT_PARTITION_PREFIX_LENGTH ? {} : {
+            exceptionNote: input.partitionPrefixException.trim(),
+          }),
+        },
+      }),
       shards: Object.fromEntries(Object.entries(segmentShardPaths).map(([prefix, path]) => [
         prefix,
         { path, records: segmentPartitions[prefix].length },
       ])),
-    })],
-    [ARTIFACT_FILENAMES.nodes, ndjsonChunks(nodes)],
+    }), Object.keys(segmentShardPaths).length],
+    [ARTIFACT_FILENAMES.nodes, ndjsonChunks(nodes), nodes.length],
     [ARTIFACT_FILENAMES.segmentProvenance, prettyJsonChunks({
       schemaVersion: 2,
       regionId: region.id,
       encoding: "field-observation-dictionaries-v1",
-      partitionRule: "first hexadecimal character after segment_",
+      ...(artifactSchemaVersion === 1 ? {
+        partitionRule: "first hexadecimal character after segment_",
+      } : {
+        partitioning: {
+          algorithm: "segment-id-hex-prefix",
+          prefixLength: partitionPrefixLength,
+          ...(partitionPrefixLength === DEFAULT_PARTITION_PREFIX_LENGTH ? {} : {
+            exceptionNote: input.partitionPrefixException.trim(),
+          }),
+        },
+      }),
       shards: Object.fromEntries(Object.entries(provenanceShardPaths).map(([prefix, path]) => [
         prefix,
         { path, records: provenancePartitions[prefix].length },
       ])),
-    })],
+    }), Object.keys(provenanceShardPaths).length],
   ];
-  for (const [filename, chunks] of fixedArtifacts) await writeArtifact(filename, chunks);
+  for (const [filename, chunks, records] of fixedArtifacts) {
+    await writeArtifact(filename, chunks, records);
+  }
   for (const [prefix, path] of Object.entries(segmentShardPaths)) {
-    await writeArtifact(path, ndjsonChunks(segmentPartitions[prefix]));
+    await writeArtifact(path, ndjsonChunks(segmentPartitions[prefix]), segmentPartitions[prefix].length);
   }
   for (const [index, [prefix, path]] of Object.entries(provenanceShardPaths).entries()) {
     const compact = {
@@ -1187,7 +1242,11 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
       regionId: region.id,
       partition: prefix,
     };
-    const metadata = await writeArtifact(path, compactJsonLineChunks(compact));
+    const metadata = await writeArtifact(
+      path,
+      compactJsonLineChunks(compact),
+      provenancePartitions[prefix].length,
+    );
     sampleStage(telemetry, provenanceCompactionStage, {
       partitionRecords: provenancePartitions[prefix].length,
       partitionsCompacted: index + 1,
@@ -1230,14 +1289,82 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
     issues: qa.issues.length,
     segments: segments.length,
   }, ["canonical-records", "field-provenance", "data-artifact-metadata", "qa-report"]);
-  await writeArtifact(ARTIFACT_FILENAMES.qa, prettyJsonChunks(qa));
+  await writeArtifact(ARTIFACT_FILENAMES.qa, prettyJsonChunks(qa), 1);
+
+  const shardSizeExceptions = input.shardSizeExceptions ?? {};
+  if (!shardSizeExceptions || typeof shardSizeExceptions !== "object" ||
+      Array.isArray(shardSizeExceptions)) {
+    throw new TypeError("shardSizeExceptions must be an object keyed by artifact path");
+  }
+  const sizeExceptions = artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION
+    ? enforceRuntimeShardSizeTargets(
+        measuredArtifactFiles,
+        Object.values(segmentShardPaths),
+        shardSizeExceptions,
+      )
+    : [];
+
   const artifactFiles = Object.fromEntries(Object.entries(measuredArtifactFiles).map(
-    ([filename, metadata]) => [filename, { path: filename, ...metadata }],
+    ([filename, metadata]) => [filename, artifactSchemaVersion === 1
+      ? { path: filename, ...metadata }
+      : {
+          path: filename,
+          records: artifactRecordCounts[filename],
+          rawBytes: metadata.bytes,
+          compressedBytes: metadata.gzipBytes,
+          contentEncoding: "identity",
+          contentType: contentTypeForArtifact(filename),
+          sha256: metadata.sha256,
+          ...defaultArtifactPolicy(filename),
+        }],
   ));
+  const generatedAt = buildTimestamp(input, segments);
+  const sourceSnapshots = artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION
+    ? sourceSnapshotRecords(input, {
+        regionId: region.id,
+        sourceRefs: segments.flatMap(({ sourceRefs }) => sourceRefs).sort((left, right) =>
+          stableJson(left).localeCompare(stableJson(right))),
+      }, generatedAt)
+    : undefined;
+  const buildId = artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION
+    ? createBuildId({ regionId: region.id, sourceSnapshots, artifacts: artifactFiles })
+    : undefined;
+  const qaDecision = {
+    decision: input.qaDecision?.decision ?? "pending",
+    decidedAt: input.qaDecision?.decidedAt ?? null,
+    notes: input.qaDecision?.notes ?? [],
+  };
+  const reviewDecision = {
+    decision: input.reviewDecision?.decision ?? "pending",
+    reviewer: input.reviewDecision?.reviewer ?? null,
+    decidedAt: input.reviewDecision?.decidedAt ?? null,
+    notes: input.reviewDecision?.notes ?? [],
+  };
+  if (artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION) {
+    if (!["pending", "pass", "pass-with-exceptions", "fail"].includes(qaDecision.decision) ||
+        !Array.isArray(qaDecision.notes) ||
+        (qaDecision.decidedAt !== null && Number.isNaN(Date.parse(qaDecision.decidedAt))) ||
+        (qaDecision.decision !== "pending" && qaDecision.decidedAt === null)) {
+      throw new TypeError("qaDecision must explicitly declare a valid decision, date, and notes");
+    }
+    if (!["pending", "accepted", "rejected"].includes(reviewDecision.decision) ||
+        !Array.isArray(reviewDecision.notes) ||
+        (reviewDecision.decidedAt !== null && Number.isNaN(Date.parse(reviewDecision.decidedAt))) ||
+        (reviewDecision.decision !== "pending" && reviewDecision.decidedAt === null) ||
+        (reviewDecision.decision === "accepted" &&
+         (typeof reviewDecision.reviewer !== "string" || !reviewDecision.reviewer.trim()))) {
+      throw new TypeError(
+        "reviewDecision must explicitly declare a valid decision, reviewer, date, and notes",
+      );
+    }
+  }
+  qaDecision.notes = [...qaDecision.notes];
+  reviewDecision.notes = [...reviewDecision.notes];
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: artifactSchemaVersion,
+    ...(buildId ? { buildId } : {}),
     region: { id: region.id, label: region.label, bounds: [...region.bbox] },
-    generatedAt: buildTimestamp(input, segments),
+    generatedAt,
     counts: {
       namedTrails: namedTrails.length,
       accessPoints: access.accessPoints.length,
@@ -1248,15 +1375,37 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
       ? createElevationManifestMetadata(input.elevationSource, input.elevationOptions)
       : { available: false, missingCoverage: "omit-segment-elevation-metrics" },
     ...(input.sourceManifest ? { sources: input.sourceManifest } : {}),
-    delivery: {
-      eagerMetadata: [ARTIFACT_FILENAMES.namedTrails, ARTIFACT_FILENAMES.accessPoints],
-      lazyGeometryIndex: ARTIFACT_FILENAMES.segments,
-      lazyProvenanceIndex: ARTIFACT_FILENAMES.segmentProvenance,
-      partitionRule: "segment id first hexadecimal character",
-    },
+    ...(artifactSchemaVersion === 1 ? {
+      delivery: {
+        eagerMetadata: [ARTIFACT_FILENAMES.namedTrails, ARTIFACT_FILENAMES.accessPoints],
+        lazyGeometryIndex: ARTIFACT_FILENAMES.segments,
+        lazyProvenanceIndex: ARTIFACT_FILENAMES.segmentProvenance,
+        partitionRule: "segment id first hexadecimal character",
+      },
+    } : {
+      sourceSnapshots,
+      decisions: { qa: qaDecision, review: reviewDecision },
+      delivery: {
+        eagerMetadata: [ARTIFACT_FILENAMES.namedTrails, ARTIFACT_FILENAMES.accessPoints],
+        lazyGeometryIndex: ARTIFACT_FILENAMES.segments,
+        lazyProvenanceIndex: ARTIFACT_FILENAMES.segmentProvenance,
+        partitioning: {
+          algorithm: "segment-id-hex-prefix",
+          prefixLength: partitionPrefixLength,
+          ...(partitionPrefixLength === DEFAULT_PARTITION_PREFIX_LENGTH ? {} : {
+            exceptionNote: input.partitionPrefixException.trim(),
+          }),
+        },
+        shardSizeTargets: {
+          rawBytes: MAX_RUNTIME_SHARD_RAW_BYTES,
+          compressedBytes: MAX_RUNTIME_SHARD_GZIP_BYTES,
+          exceptions: sizeExceptions,
+        },
+      },
+    }),
     artifacts: artifactFiles,
   };
-  await writeArtifact(ARTIFACT_FILENAMES.manifest, prettyJsonChunks(manifest));
+  await writeArtifact(ARTIFACT_FILENAMES.manifest, prettyJsonChunks(manifest), 1);
   const finalCounts = {
     artifactsWritten,
     peakChunkBytes,

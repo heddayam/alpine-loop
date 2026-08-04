@@ -14,6 +14,12 @@ import type {
 const accessPoints = JSON.parse(accessPointsText) as { features: AccessPointFeature[] };
 const shardPaths = Object.fromEntries(Object.entries(segmentIndex.shards).map(([shard, value]) =>
   [shard, value.path]));
+const partitionPrefixLength = "partitioning" in segmentIndex
+  ? segmentIndex.partitioning.prefixLength
+  : Object.keys(segmentIndex.shards)[0]?.length;
+if (!Number.isInteger(partitionPrefixLength) || partitionPrefixLength < 1) {
+  throw new TypeError("Trail segment index has no valid partition prefix length");
+}
 
 const yosemiteStanislaus: RegionalTrailCatalog = {
   manifest: manifest as unknown as RegionalTrailCatalog["manifest"],
@@ -21,6 +27,7 @@ const yosemiteStanislaus: RegionalTrailCatalog = {
   accessPoints: accessPoints.features as AccessPointFeature[],
   summaries: searchIndex.trails as Record<string, TrailSearchSummary>,
   shardPaths,
+  partitionPrefixLength,
 };
 
 const CATALOGS: Record<string, RegionalTrailCatalog> = {
