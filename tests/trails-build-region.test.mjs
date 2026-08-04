@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { gzipSync } from "node:zlib";
 import {
   ARTIFACT_FILENAMES,
   buildRegionFromFile,
@@ -26,6 +28,18 @@ const sourceRef = (provider, sourceId) => ({
   retrievedAt,
   sourceUrl: `https://example.test/${provider}/${sourceId}`,
 });
+
+const digest = (content) => createHash("sha256").update(content).digest("hex");
+
+async function artifactFiles(directory, relative = "") {
+  const files = {};
+  for (const entry of await readdir(join(directory, relative), { withFileTypes: true })) {
+    const filename = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) Object.assign(files, await artifactFiles(directory, filename));
+    else files[filename] = await readFile(join(directory, filename));
+  }
+  return files;
+}
 
 function segment({ id, fromNodeId, toNodeId, coordinates, name, manager, source = "osm" }) {
   return {
@@ -372,9 +386,12 @@ test("reconciles agency granularity, ingests OSM access, and ships field provena
     elevationGridPath: join(fixtureRoot, "gate-c/elevation-grid.json"),
   }));
   try {
+    const telemetryEvents = [];
     const result = await buildRegionFromFile(inputPath, {
       outputDirectory: join(outputDirectory, "artifacts"),
+      telemetry: createBuildStageTelemetry({ emit: (event) => telemetryEvents.push(event) }),
     });
+    assert.equal(result.payloads, undefined);
     assert.equal(result.qa.counts.input.bySource.nps.segments, 1);
     assert.equal(result.qa.counts.input.bySource.osm.segments, 2);
     assert.deepEqual(result.qa.reconciliation, {
@@ -404,7 +421,98 @@ test("reconciles agency granularity, ingests OSM access, and ships field provena
       assert.equal(result.segmentProvenance[builtSegment.id].maxGradePct[0].provider, "USGS");
     }
     assert.equal(result.qa.provenance.missingSegmentIds.length, 0);
+
+    const files = await artifactFiles(join(outputDirectory, "artifacts"));
+    assert.equal(
+      digest(files[ARTIFACT_FILENAMES.manifest]),
+      "b66ea987c456141292bb2a08357b7e3f83e308decb2c6a615b1107b0faf0e43c",
+      "Yosemite Gate C v1 manifest bytes must match the accepted pre-P2 builder",
+    );
+    for (const [filename, metadata] of Object.entries(result.manifest.artifacts)) {
+      assert.equal(files[filename].byteLength, metadata.bytes, `${filename} raw bytes`);
+      assert.equal(gzipSync(files[filename], { level: 9 }).byteLength, metadata.gzipBytes,
+        `${filename} gzip bytes`);
+      assert.equal(digest(files[filename]), metadata.sha256, `${filename} sha256`);
+    }
+    const serializationEvents = telemetryEvents.filter(({ stage }) =>
+      stage === "json-serialization");
+    assert.ok(serializationEvents.length > 2);
+    assert.ok(serializationEvents.every(({ counts }) =>
+      counts.retainedSerializedBytes === undefined || counts.retainedSerializedBytes === 0));
+    const serializationEnd = serializationEvents.find(({ phase }) => phase === "end");
+    assert.ok(serializationEnd.counts.serializedBytes > serializationEnd.counts.peakChunkBytes);
+    assert.ok(serializationEvents.every(({ structures }) =>
+      !structures.includes("serialized-artifact-strings") &&
+      !structures.includes("synchronous-gzip-buffer")));
   } finally {
     await rm(outputDirectory, { recursive: true, force: true });
+  }
+});
+
+test("streams deterministic output and keeps the prior complete tree on injected failure", async () => {
+  const root = await mkdtemp(join(tmpdir(), "alpine-trails-atomic-"));
+  const fixtureRoot = new URL("./fixtures/trails/", import.meta.url).pathname;
+  const inputPath = join(root, "build-input.json");
+  const firstOutput = join(root, "first");
+  const secondOutput = join(root, "second");
+  const protectedOutput = join(root, "protected");
+  await writeFile(inputPath, JSON.stringify({
+    regionId: "yosemite-stanislaus",
+    agencySnapshots: { nps: join(fixtureRoot, "gate-c/nps.json") },
+    osmSnapshotPath: join(fixtureRoot, "gate-c/osm.json"),
+    elevationGridPath: join(fixtureRoot, "gate-c/elevation-grid.json"),
+  }));
+  try {
+    await buildRegionFromFile(inputPath, { outputDirectory: firstOutput });
+    await buildRegionFromFile(inputPath, { outputDirectory: secondOutput });
+    assert.deepEqual(await artifactFiles(firstOutput), await artifactFiles(secondOutput));
+
+    await mkdir(join(protectedOutput, "segments"), { recursive: true });
+    await writeFile(join(protectedOutput, "manifest.json"), "{\"complete\":\"old\"}\n");
+    await writeFile(join(protectedOutput, "segments.ndjson"), "obsolete monolith\n");
+    await writeFile(join(protectedOutput, "segments", "f.ndjson"), "old managed shard\n");
+    await writeFile(join(protectedOutput, "segments", "notes.ndjson"), "unrelated notes\n");
+    await writeFile(join(protectedOutput, "review-notes.txt"), "human review\n");
+    const before = await artifactFiles(protectedOutput);
+
+    await assert.rejects(buildRegionFromFile(inputPath, {
+      outputDirectory: protectedOutput,
+      async beforeArtifact({ filename, artifactCount, stagingDirectory }) {
+        if (artifactCount === 1) {
+          await assert.rejects(readFile(join(stagingDirectory, "segments.ndjson")), {
+            code: "ENOENT",
+          });
+          await assert.rejects(readFile(join(stagingDirectory, "segments", "f.ndjson")), {
+            code: "ENOENT",
+          });
+          assert.equal(
+            await readFile(join(stagingDirectory, "segments", "notes.ndjson"), "utf8"),
+            "unrelated notes\n",
+          );
+        }
+        if (filename === ARTIFACT_FILENAMES.manifest) throw new Error("injected manifest failure");
+      },
+    }), /injected manifest failure/);
+
+    assert.deepEqual(await artifactFiles(protectedOutput), before);
+    assert.deepEqual(
+      (await readdir(root)).filter((name) => name.startsWith(".protected.tmp-")),
+      [],
+    );
+
+    await assert.rejects(buildRegionFromFile(inputPath, {
+      outputDirectory: protectedOutput,
+      beforeActivation() {
+        throw new Error("injected staging activation failure");
+      },
+    }), /injected staging activation failure/);
+    assert.deepEqual(await artifactFiles(protectedOutput), before);
+    assert.deepEqual(
+      (await readdir(root)).filter((name) =>
+        name.startsWith(".protected.tmp-") || name.startsWith(".protected.old-")),
+      [],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

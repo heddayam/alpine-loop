@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { appendFileSync, writeFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { appendFileSync, createWriteStream, writeFileSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm } from "node:fs/promises";
+import { once } from "node:events";
+import { basename, dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { finished } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
-import { gzipSync } from "node:zlib";
+import { createGzip } from "node:zlib";
 import {
   createNamedTrailId,
   validateAccessPoint,
@@ -50,6 +52,15 @@ export const ARTIFACT_FILENAMES = Object.freeze({
   manifest: "manifest.json",
 });
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 const OBSOLETE_MANAGED_ARTIFACTS = Object.freeze([
   "segments.ndjson",
 ]);
@@ -67,25 +78,149 @@ const AGENCY_ADAPTERS = Object.freeze({
   ebrpd: ebrpdAdapter,
 });
 
-function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) =>
-      `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+function jsonPrimitive(value, arrayValue = false) {
+  const serialized = JSON.stringify(value);
+  return serialized === undefined && arrayValue ? "null" : serialized;
+}
+
+/** Yield canonical JSON without first materializing stable and pretty copies. */
+function* canonicalJsonChunks(
+  value,
+  { pretty = false } = {},
+  depth = 0,
+  stack = new Set(),
+) {
+  if (value?.toJSON instanceof Function) value = value.toJSON();
+  if (!value || typeof value !== "object") {
+    const serialized = jsonPrimitive(value);
+    if (serialized !== undefined) yield serialized;
+    return;
   }
-  return JSON.stringify(value);
+  if (stack.has(value)) throw new TypeError("Converting circular structure to JSON");
+  stack.add(value);
+  const newline = pretty ? "\n" : "";
+  const separator = pretty ? ": " : ":";
+  const indent = (level) => pretty ? "  ".repeat(level) : "";
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      yield "[]";
+    } else {
+      yield `[${newline}`;
+      for (let index = 0; index < value.length; index += 1) {
+        if (index > 0) yield `,${newline}`;
+        yield indent(depth + 1);
+        const item = value[index]?.toJSON instanceof Function ? value[index].toJSON() : value[index];
+        if (item && typeof item === "object") {
+          yield* canonicalJsonChunks(item, { pretty }, depth + 1, stack);
+        } else {
+          yield jsonPrimitive(item, true);
+        }
+      }
+      yield `${newline}${indent(depth)}]`;
+    }
+  } else {
+    const entries = Object.keys(value).sort().flatMap((key) => {
+      const item = value[key]?.toJSON instanceof Function ? value[key].toJSON() : value[key];
+      return ["undefined", "function", "symbol"].includes(typeof item) ? [] : [[key, item]];
+    });
+    if (entries.length === 0) {
+      yield "{}";
+    } else {
+      yield `{${newline}`;
+      for (let index = 0; index < entries.length; index += 1) {
+        if (index > 0) yield `,${newline}`;
+        const [key, item] = entries[index];
+        yield `${indent(depth + 1)}${JSON.stringify(key)}${separator}`;
+        yield* canonicalJsonChunks(item, { pretty }, depth + 1, stack);
+      }
+      yield `${newline}${indent(depth)}}`;
+    }
+  }
+  stack.delete(value);
 }
 
-function prettyJson(value) {
-  return `${JSON.stringify(JSON.parse(stableJson(value)), null, 2)}\n`;
+function* prettyJsonChunks(value) {
+  yield* canonicalJsonChunks(value, { pretty: true });
+  yield "\n";
 }
 
-function ndjson(records) {
-  return records.map(stableJson).join("\n") + (records.length > 0 ? "\n" : "");
+function* ndjsonChunks(records) {
+  for (const record of records) {
+    yield* canonicalJsonChunks(record);
+    yield "\n";
+  }
 }
 
-function sha256(content) {
-  return createHash("sha256").update(content).digest("hex");
+function* compactJsonLineChunks(value) {
+  yield* canonicalJsonChunks(value);
+  yield "\n";
+}
+
+function* coalesceChunks(chunks, targetBytes = 64 * 1024) {
+  let values = [];
+  let bytes = 0;
+  for (const value of chunks) {
+    const valueBytes = Buffer.byteLength(value);
+    if (bytes > 0 && bytes + valueBytes > targetBytes) {
+      yield values.join("");
+      values = [];
+      bytes = 0;
+    }
+    values.push(value);
+    bytes += valueBytes;
+    if (bytes >= targetBytes) {
+      yield values.join("");
+      values = [];
+      bytes = 0;
+    }
+  }
+  if (values.length > 0) yield values.join("");
+}
+
+function writeWithBackpressure(stream, chunk) {
+  return stream.write(chunk) ? undefined : once(stream, "drain");
+}
+
+async function serializeArtifact(chunks, { destination, retain = false } = {}) {
+  const hash = createHash("sha256");
+  const gzip = createGzip({ level: 9 });
+  let gzipBytes = 0;
+  let bytes = 0;
+  let peakChunkBytes = 0;
+  const retained = retain ? [] : undefined;
+  gzip.on("data", (chunk) => {
+    gzipBytes += chunk.byteLength;
+  });
+  const gzipFinished = finished(gzip);
+  const file = destination ? createWriteStream(destination, { flags: "wx" }) : undefined;
+  const fileFinished = file ? finished(file) : undefined;
+  try {
+    for (const value of coalesceChunks(chunks)) {
+      const chunk = Buffer.from(value);
+      bytes += chunk.byteLength;
+      peakChunkBytes = Math.max(peakChunkBytes, chunk.byteLength);
+      hash.update(chunk);
+      if (retained) retained.push(value);
+      const fileDrain = file ? writeWithBackpressure(file, chunk) : undefined;
+      const gzipDrain = writeWithBackpressure(gzip, chunk);
+      if (fileDrain || gzipDrain) {
+        await Promise.all([...(fileDrain ? [fileDrain] : []), ...(gzipDrain ? [gzipDrain] : [])]);
+      }
+    }
+    if (file) file.end();
+    gzip.end();
+    await Promise.all([gzipFinished, ...(fileFinished ? [fileFinished] : [])]);
+  } catch (error) {
+    file?.destroy();
+    gzip.destroy();
+    await Promise.allSettled([gzipFinished, ...(fileFinished ? [fileFinished] : [])]);
+    throw error;
+  }
+  return {
+    metadata: { bytes, gzipBytes, sha256: hash.digest("hex") },
+    peakChunkBytes,
+    ...(retained ? { content: retained.join("") } : {}),
+  };
 }
 
 function sortedRecord(record = {}) {
@@ -155,49 +290,110 @@ function osmSnapshotRecordCount(snapshot) {
     (snapshot?.relations?.length ?? 0) + (snapshot?.accessNodes?.length ?? 0);
 }
 
-function measureArtifactMetadata(payloads, telemetry, scope) {
-  const entries = Object.entries(payloads);
-  const hashes = {};
-  const hashStage = beginStage(telemetry, "hashing", {
-    artifacts: entries.length,
-  }, [`${scope}-serialized-strings`, `${scope}-hash-metadata`]);
-  for (const [filename, content] of entries) {
-    hashes[filename] = sha256(content);
-    sampleStage(telemetry, hashStage, {
-      artifactsHashed: Object.keys(hashes).length,
-      contentBytes: Buffer.byteLength(content),
-    }, [`${scope}-serialized-strings`, `${scope}-hash-metadata`]);
-  }
-  endStage(telemetry, hashStage, { artifactsHashed: entries.length }, [
-    `${scope}-serialized-strings`,
-    `${scope}-hash-metadata`,
-  ]);
-
-  const gzipBytes = {};
-  const compressionStage = beginStage(telemetry, "compression-measurement", {
-    artifacts: entries.length,
-  }, [`${scope}-serialized-strings`, "synchronous-gzip-buffer"]);
-  for (const [filename, content] of entries) {
-    gzipBytes[filename] = gzipSync(content, { level: 9 }).byteLength;
-    sampleStage(telemetry, compressionStage, {
-      artifactsCompressed: Object.keys(gzipBytes).length,
-      contentBytes: Buffer.byteLength(content),
-      gzipBytes: gzipBytes[filename],
-    }, [`${scope}-serialized-strings`, "synchronous-gzip-buffer"]);
-  }
-  endStage(telemetry, compressionStage, { artifactsCompressed: entries.length }, [
-    `${scope}-serialized-strings`,
-    "synchronous-gzip-buffer",
-  ]);
-
-  return Object.fromEntries(entries.map(([filename, content]) => [
-    filename,
-    {
-      bytes: Buffer.byteLength(content),
-      gzipBytes: gzipBytes[filename],
-      sha256: hashes[filename],
+function createMemoryArtifactWriter() {
+  const payloads = {};
+  return {
+    payloads,
+    retainsPayloads: true,
+    async write(filename, chunks) {
+      const result = await serializeArtifact(chunks, { retain: true });
+      payloads[filename] = result.content;
+      return result;
     },
-  ]));
+  };
+}
+
+function isManagedArtifact(filename) {
+  if (Object.values(ARTIFACT_FILENAMES).includes(filename) ||
+      OBSOLETE_MANAGED_ARTIFACTS.includes(filename)) return true;
+  const [directory, leaf, ...rest] = filename.split("/");
+  return rest.length === 0 && MANAGED_SHARD_PATTERNS[directory]?.test(leaf);
+}
+
+async function copyUnmanagedTree(source, destination, relative = "") {
+  let entries;
+  try {
+    entries = await readdir(source, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  await mkdir(destination, { recursive: true });
+  for (const entry of entries) {
+    const childRelative = relative ? `${relative}/${entry.name}` : entry.name;
+    if (isManagedArtifact(childRelative)) continue;
+    if (!relative && Object.hasOwn(MANAGED_SHARD_PATTERNS, entry.name) &&
+        !entry.isDirectory()) continue;
+    const sourcePath = join(source, entry.name);
+    const destinationPath = join(destination, entry.name);
+    if (entry.isDirectory()) {
+      await copyUnmanagedTree(sourcePath, destinationPath, childRelative);
+    } else {
+      await cp(sourcePath, destinationPath, { force: false, verbatimSymlinks: true });
+    }
+  }
+}
+
+/** Create a sibling staging tree whose managed files become visible only at commit. */
+export async function createStreamingArtifactWriter(
+  outputDirectory,
+  { beforeArtifact, beforeActivation } = {},
+) {
+  if (typeof outputDirectory !== "string" || !outputDirectory) {
+    throw new TypeError("outputDirectory is required");
+  }
+  const destination = resolve(outputDirectory);
+  const parent = dirname(destination);
+  await mkdir(parent, { recursive: true });
+  const stagingDirectory = await mkdtemp(join(parent, `.${basename(destination)}.tmp-`));
+  await copyUnmanagedTree(destination, stagingDirectory);
+  let artifactCount = 0;
+  let committed = false;
+  return {
+    retainsPayloads: false,
+    stagingDirectory,
+    async write(filename, chunks) {
+      if (committed) throw new Error("artifact writer is already committed");
+      if (isManagedArtifact(filename) === false || filename.includes("..")) {
+        throw new TypeError(`refusing unmanaged artifact path ${JSON.stringify(filename)}`);
+      }
+      artifactCount += 1;
+      await beforeArtifact?.({ filename, artifactCount, stagingDirectory });
+      const artifactPath = resolve(stagingDirectory, filename);
+      await mkdir(dirname(artifactPath), { recursive: true });
+      return serializeArtifact(chunks, { destination: artifactPath });
+    },
+    async commit() {
+      if (committed) throw new Error("artifact writer is already committed");
+      let existing = true;
+      try {
+        await readdir(destination);
+      } catch (error) {
+        if (error?.code === "ENOENT") existing = false;
+        else throw error;
+      }
+      if (!existing) {
+        await rename(stagingDirectory, destination);
+      } else {
+        const backupDirectory = await mkdtemp(join(parent, `.${basename(destination)}.old-`));
+        await rm(backupDirectory, { recursive: true });
+        await rename(destination, backupDirectory);
+        try {
+          await beforeActivation?.({ destination, stagingDirectory, backupDirectory });
+          await rename(stagingDirectory, destination);
+        } catch (error) {
+          await rename(backupDirectory, destination);
+          throw error;
+        }
+        await rm(backupDirectory, { recursive: true });
+      }
+      committed = true;
+      return destination;
+    },
+    async abort() {
+      if (!committed) await rm(stagingDirectory, { recursive: true, force: true });
+    },
+  };
 }
 
 function inputArrays(input) {
@@ -625,8 +821,8 @@ function buildTimestamp(input, segments) {
   return new Date(timestamps.length > 0 ? Math.max(...timestamps) : 0).toISOString();
 }
 
-/** Build all T7 artifacts in memory without touching the network or filesystem. */
-export async function buildRegionArtifacts(input, { telemetry } = {}) {
+/** Build canonical records, retaining payload strings only for the fixture API by default. */
+export async function buildRegionArtifacts(input, { telemetry, artifactWriter } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("input must be an object");
   }
@@ -745,39 +941,58 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
     provenancePartitions: Object.keys(provenancePartitions).length,
     segmentPartitions: Object.keys(segmentPartitions).length,
   }, ["segments", "shipped-field-provenance", "partition-arrays"]);
+  const writer = artifactWriter ?? createMemoryArtifactWriter();
   const provenanceCompactionStage = beginStage(telemetry, "provenance-compaction", {
     provenancePartitions: Object.keys(provenancePartitions).length,
-  }, ["partitioned-field-provenance", "compaction-dictionaries", "serialized-provenance-strings"]);
-  const provenancePayloads = Object.fromEntries(Object.entries(provenanceShardPaths).map(
-    ([prefix, path], index) => {
-      const content = `${stableJson({
-        ...compactSegmentProvenance(Object.fromEntries(provenancePartitions[prefix])),
-        regionId: region.id,
-        partition: prefix,
-      })}\n`;
-      sampleStage(telemetry, provenanceCompactionStage, {
-        partitionRecords: provenancePartitions[prefix].length,
-        partitionsCompacted: index + 1,
-        serializedBytes: Buffer.byteLength(content),
-      }, ["partitioned-field-provenance", "compaction-dictionaries", "serialized-provenance-strings"]);
-      return [path, content];
-    },
-  ));
-  endStage(telemetry, provenanceCompactionStage, {
-    partitionsCompacted: Object.keys(provenancePayloads).length,
-  }, ["partitioned-field-provenance", "serialized-provenance-strings"]);
+  }, ["partitioned-field-provenance", "one-partition-compaction-dictionaries"]);
   const serializationStage = beginStage(telemetry, "json-serialization", {
     provenancePartitions: Object.keys(provenancePartitions).length,
     segmentPartitions: Object.keys(segmentPartitions).length,
-  }, ["canonical-records", "partition-arrays", "serialized-artifact-strings"]);
-  const payloads = {
-    [ARTIFACT_FILENAMES.namedTrails]: prettyJson({
+  }, [
+    "canonical-records",
+    "partition-arrays",
+    ...(writer.retainsPayloads ? ["fixture-payload-strings"] : ["current-artifact-chunks"]),
+  ]);
+  const hashingStage = beginStage(telemetry, "hashing", {}, [
+    "incremental-sha256-state",
+    ...(writer.retainsPayloads ? ["fixture-payload-strings"] : []),
+  ]);
+  const compressionStage = beginStage(telemetry, "compression-measurement", {}, [
+    "streaming-gzip-state",
+    ...(writer.retainsPayloads ? ["fixture-payload-strings"] : []),
+  ]);
+  const measuredArtifactFiles = {};
+  let artifactsWritten = 0;
+  let serializedBytes = 0;
+  let peakChunkBytes = 0;
+  const writeArtifact = async (filename, chunks) => {
+    const result = await writer.write(filename, chunks);
+    measuredArtifactFiles[filename] = result.metadata;
+    artifactsWritten += 1;
+    serializedBytes += result.metadata.bytes;
+    peakChunkBytes = Math.max(peakChunkBytes, result.peakChunkBytes);
+    const counts = {
+      artifactsWritten,
+      artifactBytes: result.metadata.bytes,
+      gzipBytes: result.metadata.gzipBytes,
+      peakChunkBytes,
+      retainedSerializedBytes: writer.retainsPayloads ? serializedBytes : 0,
+      serializedBytes,
+    };
+    sampleStage(telemetry, serializationStage, counts);
+    sampleStage(telemetry, hashingStage, counts);
+    sampleStage(telemetry, compressionStage, counts);
+    return result.metadata;
+  };
+
+  const fixedArtifacts = [
+    [ARTIFACT_FILENAMES.namedTrails, prettyJsonChunks({
       schemaVersion: 1,
       regionId: region.id,
       trails: namedTrails,
-    }),
-    [ARTIFACT_FILENAMES.accessPoints]: prettyJson(accessPointGeoJson(access.accessPoints)),
-    [ARTIFACT_FILENAMES.segments]: prettyJson({
+    })],
+    [ARTIFACT_FILENAMES.accessPoints, prettyJsonChunks(accessPointGeoJson(access.accessPoints))],
+    [ARTIFACT_FILENAMES.segments, prettyJsonChunks({
       schemaVersion: 1,
       regionId: region.id,
       partitionRule: "first hexadecimal character after segment_",
@@ -785,9 +1000,9 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
         prefix,
         { path, records: segmentPartitions[prefix].length },
       ])),
-    }),
-    [ARTIFACT_FILENAMES.nodes]: ndjson(nodes),
-    [ARTIFACT_FILENAMES.segmentProvenance]: prettyJson({
+    })],
+    [ARTIFACT_FILENAMES.nodes, ndjsonChunks(nodes)],
+    [ARTIFACT_FILENAMES.segmentProvenance, prettyJsonChunks({
       schemaVersion: 2,
       regionId: region.id,
       encoding: "field-observation-dictionaries-v1",
@@ -796,19 +1011,29 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
         prefix,
         { path, records: provenancePartitions[prefix].length },
       ])),
-    }),
-    ...Object.fromEntries(Object.entries(segmentShardPaths).map(([prefix, path]) => [
-      path,
-      ndjson(segmentPartitions[prefix]),
-    ])),
-    ...provenancePayloads,
-  };
-  endStage(telemetry, serializationStage, {
-    artifacts: Object.keys(payloads).length,
-    serializedBytes: Object.values(payloads).reduce((total, content) =>
-      total + Buffer.byteLength(content), 0),
-  }, ["canonical-records", "partition-arrays", "serialized-artifact-strings"]);
-  const dataArtifactHashes = measureArtifactMetadata(payloads, telemetry, "data-artifact");
+    })],
+  ];
+  for (const [filename, chunks] of fixedArtifacts) await writeArtifact(filename, chunks);
+  for (const [prefix, path] of Object.entries(segmentShardPaths)) {
+    await writeArtifact(path, ndjsonChunks(segmentPartitions[prefix]));
+  }
+  for (const [index, [prefix, path]] of Object.entries(provenanceShardPaths).entries()) {
+    const compact = {
+      ...compactSegmentProvenance(Object.fromEntries(provenancePartitions[prefix])),
+      regionId: region.id,
+      partition: prefix,
+    };
+    const metadata = await writeArtifact(path, compactJsonLineChunks(compact));
+    sampleStage(telemetry, provenanceCompactionStage, {
+      partitionRecords: provenancePartitions[prefix].length,
+      partitionsCompacted: index + 1,
+      serializedBytes: metadata.bytes,
+    });
+  }
+  endStage(telemetry, provenanceCompactionStage, {
+    partitionsCompacted: Object.keys(provenanceShardPaths).length,
+  });
+  const dataArtifactHashes = structuredClone(measuredArtifactFiles);
   const qaStage = beginStage(telemetry, "qa", {
     accessPoints: access.accessPoints.length,
     namedTrails: namedTrails.length,
@@ -841,15 +1066,7 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
     issues: qa.issues.length,
     segments: segments.length,
   }, ["canonical-records", "field-provenance", "data-artifact-metadata", "qa-report"]);
-  const qaSerializationStage = beginStage(telemetry, "json-serialization", {
-    artifactsAlreadyRetained: Object.keys(payloads).length,
-  }, ["serialized-artifact-strings", "qa-report"]);
-  payloads[ARTIFACT_FILENAMES.qa] = prettyJson(qa);
-  endStage(telemetry, qaSerializationStage, {
-    artifacts: Object.keys(payloads).length,
-    qaBytes: Buffer.byteLength(payloads[ARTIFACT_FILENAMES.qa]),
-  }, ["serialized-artifact-strings", "qa-report"]);
-  const measuredArtifactFiles = measureArtifactMetadata(payloads, telemetry, "manifest-artifact");
+  await writeArtifact(ARTIFACT_FILENAMES.qa, prettyJsonChunks(qa));
   const artifactFiles = Object.fromEntries(Object.entries(measuredArtifactFiles).map(
     ([filename, metadata]) => [filename, { path: filename, ...metadata }],
   ));
@@ -875,14 +1092,16 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
     },
     artifacts: artifactFiles,
   };
-  const manifestSerializationStage = beginStage(telemetry, "json-serialization", {
-    artifactsAlreadyRetained: Object.keys(payloads).length,
-  }, ["serialized-artifact-strings", "manifest-object"]);
-  payloads[ARTIFACT_FILENAMES.manifest] = prettyJson(manifest);
-  endStage(telemetry, manifestSerializationStage, {
-    artifacts: Object.keys(payloads).length,
-    manifestBytes: Buffer.byteLength(payloads[ARTIFACT_FILENAMES.manifest]),
-  }, ["serialized-artifact-strings", "manifest-object"]);
+  await writeArtifact(ARTIFACT_FILENAMES.manifest, prettyJsonChunks(manifest));
+  const finalCounts = {
+    artifactsWritten,
+    peakChunkBytes,
+    retainedSerializedBytes: writer.retainsPayloads ? serializedBytes : 0,
+    serializedBytes,
+  };
+  endStage(telemetry, serializationStage, finalCounts);
+  endStage(telemetry, hashingStage, finalCounts);
+  endStage(telemetry, compressionStage, finalCounts);
   return {
     region,
     manifest,
@@ -892,7 +1111,7 @@ export async function buildRegionArtifacts(input, { telemetry } = {}) {
     segments,
     nodes,
     segmentProvenance,
-    payloads,
+    ...(writer.payloads ? { payloads: writer.payloads } : {}),
   };
 }
 
@@ -900,32 +1119,26 @@ export async function writeRegionArtifacts(result, outputDirectory) {
   if (!result?.payloads || typeof outputDirectory !== "string" || !outputDirectory) {
     throw new TypeError("result and outputDirectory are required");
   }
-  await mkdir(outputDirectory, { recursive: true });
-  await Promise.all(OBSOLETE_MANAGED_ARTIFACTS.map((filename) =>
-    rm(resolve(outputDirectory, filename), { force: true })));
-  await Promise.all(Object.entries(MANAGED_SHARD_PATTERNS).map(async ([directory, pattern]) => {
-    const absoluteDirectory = resolve(outputDirectory, directory);
-    let entries;
-    try {
-      entries = await readdir(absoluteDirectory, { withFileTypes: true });
-    } catch (error) {
-      if (error?.code === "ENOENT") return;
-      throw error;
-    }
-    await Promise.all(entries
-      .filter((entry) => entry.isFile() && pattern.test(entry.name))
-      .map((entry) => `${directory}/${entry.name}`)
-      .filter((filename) => !Object.hasOwn(result.payloads, filename))
-      .map((filename) => rm(resolve(outputDirectory, filename), { force: true })));
-  }));
-  await Promise.all(Object.keys(result.payloads).map((filename) =>
-    mkdir(dirname(resolve(outputDirectory, filename)), { recursive: true })));
-  await Promise.all(Object.entries(result.payloads).map(([filename, content]) =>
-    writeFile(resolve(outputDirectory, filename), content)));
-  return outputDirectory;
+  const writer = await createStreamingArtifactWriter(outputDirectory);
+  try {
+    const entries = Object.entries(result.payloads).sort(([left], [right]) =>
+      Number(left === ARTIFACT_FILENAMES.manifest) -
+      Number(right === ARTIFACT_FILENAMES.manifest));
+    for (const [filename, content] of entries) await writer.write(filename, [content]);
+    return await writer.commit();
+  } catch (error) {
+    await writer.abort();
+    throw error;
+  }
 }
 
-export async function buildRegionFromFile(inputPath, { outputDirectory, regionId, telemetry } = {}) {
+export async function buildRegionFromFile(inputPath, {
+  outputDirectory,
+  regionId,
+  telemetry,
+  beforeArtifact,
+  beforeActivation,
+} = {}) {
   const snapshotStage = beginStage(telemetry, "snapshot-loading-normalization", {
     inputFiles: 1,
   }, ["input-json-string", "parsed-build-input", "normalized-agency-candidates"]);
@@ -1032,13 +1245,22 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
     "normalized-osm-topology",
     ...(input.elevationSource ? ["cached-elevation-source"] : []),
   ]);
-  const result = await buildRegionArtifacts(input, { telemetry });
   const destination = outputDirectory ?? resolve(
     "data/trails/generated",
-    result.region.id,
+    input.regionId,
   );
-  await writeRegionArtifacts(result, destination);
-  return { ...result, outputDirectory: destination };
+  const writer = await createStreamingArtifactWriter(destination, {
+    beforeArtifact,
+    beforeActivation,
+  });
+  try {
+    const result = await buildRegionArtifacts(input, { telemetry, artifactWriter: writer });
+    await writer.commit();
+    return { ...result, outputDirectory: destination };
+  } catch (error) {
+    await writer.abort();
+    throw error;
+  }
 }
 
 function commandLineOptions(argv) {
