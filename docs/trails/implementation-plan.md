@@ -1,17 +1,18 @@
-# Alpine Search hiking-data implementation plan
+# Alpine Search hiking-data implementation plan — Phase 1 archive
 
-Status: T8 pipeline implementation complete with regional publication blocked;
-T9, T10, and Yosemite product integration complete; Gate D verification passed
+Status: completed and archived at integration commit `586eb9b`; T8 pipeline
+implementation is complete with regional publication blocked; T9, T10, and
+Yosemite product integration are complete; Gate D verification passed
 Primary integration branch: `codex/trails-data`
 First production slice: Yosemite–Stanislaus
 Current evidence: [coverage-spike.md](./coverage-spike.md)
+Successor plan: [scalable-regional-publishing-plan.md](./scalable-regional-publishing-plan.md)
 
-Immediate next task after T8–T10 integration: profile and bound the regional
-build's late-stage memory use, complete byte-identical repeat-build evidence and
-manual QA, and decide on an external versioned artifact delivery mechanism.
-Additional regions remain unavailable in the product until that work is
-accepted. All product work must continue to honor the constraints recorded in
-[gate-c-review.md](./gate-c-review.md).
+Do not launch new implementation tasks from this archived plan. Phase 2 owns
+bounded-memory builds, versioned object storage, regional QA, and publication.
+Additional regions remain unavailable in the product until the successor
+plan's gates pass. All product work must continue to honor the constraints
+recorded in [gate-c-review.md](./gate-c-review.md).
 
 ## Objective
 
