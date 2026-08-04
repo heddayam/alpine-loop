@@ -13,6 +13,7 @@ type ArcGisQuerySnapshot = {
   spatialReference: { wkid?: number; latestWkid?: number };
   fields: ArcGisField[];
   features: ArcGisFeature[];
+  exceededTransferLimit?: boolean;
 };
 
 export type ArcGisAuthorityDefinition = {
@@ -40,6 +41,7 @@ function parseSnapshot(value: unknown): ArcGisQuerySnapshot {
   }
   if (!Array.isArray(value.fields)) throw new Error("ArcGIS snapshot is missing field metadata");
   if (!Array.isArray(value.features) || value.features.length === 0) throw new Error("ArcGIS snapshot is empty");
+  if (value.exceededTransferLimit === true) throw new Error("ArcGIS snapshot exceeded the service transfer limit");
   return value as ArcGisQuerySnapshot;
 }
 
