@@ -1,0 +1,72 @@
+{
+  "encoding": "field-observation-dictionaries-v1",
+  "partitionRule": "first hexadecimal character after segment_",
+  "regionId": "yosemite-stanislaus",
+  "schemaVersion": 2,
+  "shards": {
+    "0": {
+      "path": "segment-provenance/0.json",
+      "records": 6770
+    },
+    "1": {
+      "path": "segment-provenance/1.json",
+      "records": 6720
+    },
+    "2": {
+      "path": "segment-provenance/2.json",
+      "records": 6676
+    },
+    "3": {
+      "path": "segment-provenance/3.json",
+      "records": 6679
+    },
+    "4": {
+      "path": "segment-provenance/4.json",
+      "records": 6644
+    },
+    "5": {
+      "path": "segment-provenance/5.json",
+      "records": 6745
+    },
+    "6": {
+      "path": "segment-provenance/6.json",
+      "records": 6701
+    },
+    "7": {
+      "path": "segment-provenance/7.json",
+      "records": 6692
+    },
+    "8": {
+      "path": "segment-provenance/8.json",
+      "records": 6722
+    },
+    "9": {
+      "path": "segment-provenance/9.json",
+      "records": 6595
+    },
+    "a": {
+      "path": "segment-provenance/a.json",
+      "records": 6724
+    },
+    "b": {
+      "path": "segment-provenance/b.json",
+      "records": 6815
+    },
+    "c": {
+      "path": "segment-provenance/c.json",
+      "records": 6672
+    },
+    "d": {
+      "path": "segment-provenance/d.json",
+      "records": 6720
+    },
+    "e": {
+      "path": "segment-provenance/e.json",
+      "records": 6745
+    },
+    "f": {
+      "path": "segment-provenance/f.json",
+      "records": 6677
+    }
+  }
+}

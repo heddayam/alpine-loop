@@ -99,6 +99,22 @@ node scripts/trails/build-region.mjs \
   --output=.cache/trails/yosemite-stanislaus/gate-c-pilot/artifacts
 ```
 
+Prepare the full Yosemite–Stanislaus Gate C inputs with one explicit networked
+workflow:
+
+```bash
+npm run trails:region:refresh
+```
+
+This command writes bounded USGS, USFS, NPS, OSM/access-point, and tiled USGS
+3DEP inputs plus `source-manifest.json` beneath the ignored
+`.cache/trails/yosemite-stanislaus/` tree. OSM preparation downloads the public
+California PBF once, then uses three streaming passes whose retained working
+sets are bounded to the region. Completed downloads, the bounded OSM snapshot,
+and completed 3DEP tiles are safely reused if a transient source failure
+requires rerunning the command. Normal builds never invoke this workflow or
+contact its source URLs.
+
 Regional ingestion applies one conservative rule: a segment, source node, or
 access candidate is omitted unless all of its coordinates are inside the
 configured region bounds. Every omission is recorded in `qa.json`; crossing
@@ -128,11 +144,15 @@ node scripts/trails/build-region.mjs \
   --output=data/trails/generated/yosemite-stanislaus
 ```
 
-The build writes `manifest.json`, `named-trails.json`,
-`access-points.geojson`, `segments.ndjson`, `nodes.ndjson`,
-`segment-provenance.json`, and `qa.json`. The provenance sidecar records the
-selected and losing observations for each normalized field, including 3DEP
-calculation metadata.
+The build writes eager `named-trails.json` and `access-points.geojson` metadata,
+`nodes.ndjson`, `qa.json`, and `manifest.json`. Detailed geometry is partitioned
+under `segments/`, and dictionary-compacted field provenance is independently
+partitioned under `segment-provenance/`; each index uses the first hexadecimal
+character of the segment ID. This keeps the metadata/index request small and
+allows later product work to load detailed geometry and provenance lazily. The
+provenance shards retain selected and losing observations for every normalized
+field, including 3DEP calculation metadata. `manifest.json` records raw bytes,
+gzip bytes, and SHA-256 for every index and shard.
 Artifact ordering, timestamps, and SHA-256 hashes are derived from cached source
 data, so repeated builds from the same input are byte-for-byte identical. Review
 `qa.json` before using a newly generated corpus in the application.

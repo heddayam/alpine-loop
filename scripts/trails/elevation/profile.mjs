@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { geodesicDistanceMeters } from "../spatial/length.mjs";
 import { validateLineString } from "../spatial/geometry.mjs";
 
@@ -253,9 +254,150 @@ export function createCachedElevationGridSource(grid) {
   });
 }
 
+function validateTileIndex(index) {
+  if (!index || index.type !== "ElevationTileIndex" || index.crs !== "EPSG:4326") {
+    throw new TypeError("cached elevation tile index must be an EPSG:4326 ElevationTileIndex");
+  }
+  for (const field of ["width", "height", "tileSize"]) {
+    if (!Number.isInteger(index[field]) || index[field] < 1) {
+      throw new TypeError(`cached elevation tile index ${field} must be a positive integer`);
+    }
+  }
+  if (!Array.isArray(index.origin) || index.origin.length !== 2 ||
+      !index.origin.every(Number.isFinite)) {
+    throw new TypeError("cached elevation tile index origin must be the first cell center");
+  }
+  if (!Array.isArray(index.pixelSize) || index.pixelSize.length !== 2 ||
+      !index.pixelSize.every((value) => Number.isFinite(value) && value !== 0)) {
+    throw new TypeError("cached elevation tile index pixelSize must contain two non-zero numbers");
+  }
+  if (!Array.isArray(index.tiles) || index.tiles.length === 0) {
+    throw new TypeError("cached elevation tile index tiles must be a non-empty array");
+  }
+  const occupied = new Set();
+  for (const [tileIndex, tile] of index.tiles.entries()) {
+    for (const field of ["row", "column", "rowStart", "columnStart", "width", "height"]) {
+      if (!Number.isInteger(tile[field]) || tile[field] < 0 ||
+          (["width", "height"].includes(field) && tile[field] < 1)) {
+        throw new TypeError(`cached elevation tile ${tileIndex}.${field} is invalid`);
+      }
+    }
+    if (typeof tile.path !== "string" || !tile.path || tile.path.includes("\0")) {
+      throw new TypeError(`cached elevation tile ${tileIndex}.path must be a non-empty string`);
+    }
+    const key = `${tile.row}:${tile.column}`;
+    if (occupied.has(key)) throw new TypeError(`duplicate cached elevation tile ${key}`);
+    occupied.add(key);
+    if (tile.rowStart + tile.height > index.height ||
+        tile.columnStart + tile.width > index.width) {
+      throw new TypeError(`cached elevation tile ${key} exceeds the raster dimensions`);
+    }
+  }
+  validateSourceMetadata(index.source);
+  return index;
+}
+
+function float32Value(buffer, index, noDataValue) {
+  const value = buffer.readFloatLE(index * 4);
+  return isNoData(value, noDataValue) ? undefined : value;
+}
+
+/**
+ * Create a lazy bilinear sampler over prepared Float32 tiles. Only tiles touched
+ * by trail geometry are loaded, and concurrent samples share the same read.
+ */
+export function createCachedElevationTileSource(index, indexPath) {
+  validateTileIndex(index);
+  if (typeof indexPath !== "string" || !indexPath) {
+    throw new TypeError("indexPath is required for cached elevation tiles");
+  }
+  const root = dirname(resolve(indexPath));
+  const tilesByCell = new Map(index.tiles.map((tile) => [`${tile.row}:${tile.column}`, tile]));
+  const cache = new Map();
+  const loadTile = (tile) => {
+    const key = `${tile.row}:${tile.column}`;
+    if (!cache.has(key)) {
+      cache.set(key, readFile(resolve(root, tile.path)).then((buffer) => {
+        if (buffer.byteLength !== tile.width * tile.height * 4) {
+          throw new Error(`elevation tile ${tile.path} has an unexpected byte length`);
+        }
+        return buffer;
+      }));
+    }
+    return cache.get(key);
+  };
+  const cell = async (row, column) => {
+    if (row < 0 || column < 0 || row >= index.height || column >= index.width) return undefined;
+    const tileRow = Math.floor(row / index.tileSize);
+    const tileColumn = Math.floor(column / index.tileSize);
+    const tile = tilesByCell.get(`${tileRow}:${tileColumn}`);
+    if (!tile) return undefined;
+    const buffer = await loadTile(tile);
+    const localRow = row - tile.rowStart;
+    const localColumn = column - tile.columnStart;
+    if (localRow < 0 || localColumn < 0 || localRow >= tile.height || localColumn >= tile.width) {
+      return undefined;
+    }
+    return float32Value(buffer, localRow * tile.width + localColumn, index.noDataValue);
+  };
+  const [originLongitude, originLatitude] = index.origin;
+  const [pixelLongitude, pixelLatitude] = index.pixelSize;
+
+  return Object.freeze({
+    metadata: Object.freeze(validateSourceMetadata(index.source)),
+    interpolation: "bilinear-tiled-float32",
+    tileIndex: Object.freeze({
+      width: index.width,
+      height: index.height,
+      tileSize: index.tileSize,
+      tileCount: index.tiles.length,
+    }),
+    async sampleElevation(longitude, latitude) {
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+        throw new TypeError("sample coordinates must be finite numbers");
+      }
+      const column = (longitude - originLongitude) / pixelLongitude;
+      const row = (latitude - originLatitude) / pixelLatitude;
+      const epsilon = 1e-9;
+      if (column < -epsilon || row < -epsilon ||
+          column > index.width - 1 + epsilon || row > index.height - 1 + epsilon) {
+        return undefined;
+      }
+      const boundedColumn = Math.max(0, Math.min(index.width - 1, column));
+      const boundedRow = Math.max(0, Math.min(index.height - 1, row));
+      const left = Math.floor(boundedColumn);
+      const right = Math.ceil(boundedColumn);
+      const top = Math.floor(boundedRow);
+      const bottom = Math.ceil(boundedRow);
+      const columnFraction = boundedColumn - left;
+      const rowFraction = boundedRow - top;
+      const weightedCells = [
+        [top, left, (1 - rowFraction) * (1 - columnFraction)],
+        [top, right, (1 - rowFraction) * columnFraction],
+        [bottom, left, rowFraction * (1 - columnFraction)],
+        [bottom, right, rowFraction * columnFraction],
+      ];
+      let elevation = 0;
+      for (const [cellRow, cellColumn, weight] of weightedCells) {
+        if (weight <= Number.EPSILON) continue;
+        const value = await cell(cellRow, cellColumn);
+        if (value === undefined) return undefined;
+        elevation += value * weight;
+      }
+      return elevation;
+    },
+  });
+}
+
 export async function loadCachedElevationGrid(pathOrUrl) {
   const grid = JSON.parse(await readFile(pathOrUrl, "utf8"));
   return createCachedElevationGridSource(grid);
+}
+
+export async function loadCachedElevationTiles(indexPath) {
+  const absolutePath = resolve(indexPath);
+  const index = JSON.parse(await readFile(absolutePath, "utf8"));
+  return createCachedElevationTileSource(index, absolutePath);
 }
 
 export function elevationManifestMetadata(elevationSource, options = {}) {

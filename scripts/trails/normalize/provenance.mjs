@@ -180,9 +180,9 @@ export function provenanceConflicts(segmentId, provenance) {
         value,
         selected,
       })),
-      ...(generalizedNaturalSurface ? {
-        resolution: "land-manager generalized natural surface wins; localized OSM material remains in provenance",
-      } : {}),
+      resolution: generalizedNaturalSurface
+        ? "land-manager generalized natural surface wins; localized OSM material remains in provenance"
+        : "documented field-level source precedence selected the canonical value; losing observations remain in provenance",
     });
   }
   return conflicts;

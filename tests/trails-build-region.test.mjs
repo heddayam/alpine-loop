@@ -7,6 +7,8 @@ import {
   ARTIFACT_FILENAMES,
   buildRegionFromFile,
   buildRegionArtifacts,
+  compactSegmentProvenance,
+  expandSegmentProvenance,
   writeRegionArtifacts,
 } from "../scripts/trails/build-region.mjs";
 import {
@@ -135,9 +137,25 @@ test("builds deterministic regional artifacts with canonical searchable trails",
   assert.equal(first.qa.graph.isolatedSegments, 1);
   assert.deepEqual(first.qa.accessPoints, { official: 1, mapped: 0, derived: 0 });
   assert.equal(first.qa.elevation.completeSegments, 3);
+  assert.deepEqual(first.qa.elevation.shortSegmentGradeChecksSkipped, []);
+  assert.equal(
+    first.qa.elevation.aggregateWindows.method,
+    "shortest-path-endpoint-elevation-windows",
+  );
   assert.equal(first.qa.elevation.implausibleMetricOutliers.length, 0);
   assert.match(first.qa.artifactHashes[ARTIFACT_FILENAMES.segments].sha256, /^[a-f0-9]{64}$/);
   assert.match(first.manifest.artifacts[ARTIFACT_FILENAMES.qa].sha256, /^[a-f0-9]{64}$/);
+});
+
+test("round-trips dictionary-compacted field provenance", async () => {
+  const result = await buildRegionArtifacts(buildInput());
+  const compact = compactSegmentProvenance(result.segmentProvenance);
+  assert.deepEqual(expandSegmentProvenance(compact), result.segmentProvenance);
+  assert.equal(compact.schemaVersion, 2);
+  assert.ok(JSON.stringify(compact).length < JSON.stringify({
+    schemaVersion: 1,
+    segments: result.segmentProvenance,
+  }).length);
 });
 
 test("omits unconnected names and unavailable elevation metrics", async () => {
@@ -177,8 +195,8 @@ test("writes the complete artifact contract without network access", async () =>
         "named-trails.json",
         "nodes.ndjson",
         "qa.json",
-        "segment-provenance.json",
-        "segments.ndjson",
+        "segment-provenance/index.json",
+        "segments/index.json",
       ],
     );
     for (const filename of Object.values(ARTIFACT_FILENAMES)) {

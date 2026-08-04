@@ -69,10 +69,100 @@ function graphMetrics(nodes, segments) {
     connectedComponents: components.length,
     isolatedSegments: isolatedSegmentIds.length,
     isolatedSegmentIds,
+    explanation: "isolated source-backed geometry is retained for review but is searchable only when credible access connects it",
   };
 }
 
-function elevationMetrics(segments) {
+function shortestWindows(startNodeId, adjacency, nodeElevations, minimumMeters, maximumMeters) {
+  const distances = new Map([[startNodeId, 0]]);
+  const pending = [{ nodeId: startNodeId, distance: 0 }];
+  const windows = [];
+  while (pending.length > 0) {
+    pending.sort((left, right) => left.distance - right.distance ||
+      left.nodeId.localeCompare(right.nodeId));
+    const current = pending.shift();
+    if (current.distance !== distances.get(current.nodeId) || current.distance > maximumMeters) continue;
+    if (current.distance >= minimumMeters && Number.isFinite(nodeElevations[current.nodeId])) {
+      windows.push(current);
+    }
+    for (const edge of adjacency.get(current.nodeId) ?? []) {
+      const distance = current.distance + edge.lengthMeters;
+      if (distance > maximumMeters || distance >= (distances.get(edge.to) ?? Infinity)) continue;
+      distances.set(edge.to, distance);
+      pending.push({ nodeId: edge.to, distance });
+    }
+  }
+  return windows;
+}
+
+function aggregateElevationWindows(segments, nodeElevations, {
+  minimumMeters = 50,
+  maximumMeters = 200,
+  maximumGradePct = 80,
+} = {}) {
+  const shortSegments = segments.filter(({ lengthMeters }) => lengthMeters < minimumMeters);
+  const adjacency = new Map();
+  for (const segment of segments) {
+    for (const [from, to] of [
+      [segment.fromNodeId, segment.toNodeId],
+      [segment.toNodeId, segment.fromNodeId],
+    ]) {
+      const edges = adjacency.get(from) ?? [];
+      edges.push({ to, lengthMeters: segment.lengthMeters });
+      adjacency.set(from, edges);
+    }
+  }
+  const windowsByStart = new Map();
+  const startNodeIds = [...new Set(shortSegments.flatMap(({ fromNodeId, toNodeId }) =>
+    [fromNodeId, toNodeId]))].sort();
+  for (const nodeId of startNodeIds) {
+    if (!Number.isFinite(nodeElevations[nodeId])) continue;
+    windowsByStart.set(nodeId, shortestWindows(
+      nodeId,
+      adjacency,
+      nodeElevations,
+      minimumMeters,
+      maximumMeters,
+    ));
+  }
+  const covered = shortSegments.filter((segment) =>
+    (windowsByStart.get(segment.fromNodeId)?.length ?? 0) > 0 ||
+    (windowsByStart.get(segment.toNodeId)?.length ?? 0) > 0);
+  const outlierMap = new Map();
+  for (const [startNodeId, windows] of windowsByStart) {
+    for (const window of windows) {
+      const key = [startNodeId, window.nodeId].sort().join("\u0000");
+      const gradePct = Math.abs(nodeElevations[startNodeId] - nodeElevations[window.nodeId]) /
+        window.distance * 100;
+      if (gradePct <= maximumGradePct || outlierMap.has(key)) continue;
+      outlierMap.set(key, {
+        fromNodeId: startNodeId,
+        toNodeId: window.nodeId,
+        distanceMeters: Number(window.distance.toFixed(1)),
+        elevationChangeMeters: Number(Math.abs(
+          nodeElevations[startNodeId] - nodeElevations[window.nodeId],
+        ).toFixed(1)),
+        gradePct: Number(gradePct.toFixed(1)),
+        reason: `aggregate-${minimumMeters}-${maximumMeters}m-grade-over-${maximumGradePct}-pct`,
+      });
+    }
+  }
+  return {
+    method: "shortest-path-endpoint-elevation-windows",
+    minimumWindowMeters: minimumMeters,
+    maximumWindowMeters: maximumMeters,
+    maximumGradePct,
+    shortSegments: shortSegments.length,
+    coveredShortSegments: covered.length,
+    uncompensatedShortSegmentIds: shortSegments
+      .filter((segment) => !covered.includes(segment)).map(({ id }) => id).sort(),
+    checkedWindows: [...windowsByStart.values()].reduce((total, windows) => total + windows.length, 0),
+    outliers: [...outlierMap.values()].sort((left, right) =>
+      left.fromNodeId.localeCompare(right.fromNodeId) || left.toNodeId.localeCompare(right.toNodeId)),
+  };
+}
+
+function elevationMetrics(segments, namedTrails, elevationQa = {}) {
   const metricFields = [
     "ascentForwardMeters",
     "descentForwardMeters",
@@ -82,35 +172,51 @@ function elevationMetrics(segments) {
   ];
   const complete = segments.filter((segment) =>
     metricFields.every((field) => Number.isFinite(segment[field])));
-  const shortSegmentGradeChecksSkipped = segments
-    .filter(({ lengthMeters }) => lengthMeters < 50)
-    .map(({ id }) => id).sort();
   const implausibleMetricOutliers = segments.flatMap((segment) => {
     const reasons = [];
-    // DEM interpolation is not a credible per-edge grade check on OSM shape
-    // fragments shorter than 50 m; retain their metrics but audit grade only
-    // on longer segments.
-    if (segment.lengthMeters >= 50 && segment.maxGradePct > 80) {
-      reasons.push("max-grade-over-80-pct");
+    if (segment.maxGradePct > 80) {
+      reasons.push(segment.lengthMeters < 50
+        ? "short-edge-max-grade-over-80-pct"
+        : "max-grade-over-80-pct");
     }
-    if (segment.lengthMeters >= 50 &&
-        segment.ascentForwardMeters > segment.lengthMeters * 1.5) {
+    if (segment.ascentForwardMeters > segment.lengthMeters * 1.5) {
       reasons.push("ascent-over-150-pct-of-length");
     }
-    if (segment.lengthMeters >= 50 &&
-        segment.descentForwardMeters > segment.lengthMeters * 1.5) {
+    if (segment.descentForwardMeters > segment.lengthMeters * 1.5) {
       reasons.push("descent-over-150-pct-of-length");
     }
     if (segment.minElevationMeters < -500) reasons.push("elevation-below-minus-500m");
     if (segment.maxElevationMeters > 9_000) reasons.push("elevation-over-9000m");
     return reasons.length > 0 ? [{ segmentId: segment.id, reasons }] : [];
   });
+  const routable = segments.filter(({ hiking, access, status }) =>
+    hiking !== "blocked" && access !== "private" && status !== "closed");
+  const completeIds = new Set(complete.map(({ id }) => id));
+  const namedTrailSegmentIds = new Set(namedTrails.flatMap(({ segmentIds }) => segmentIds));
+  const aggregateWindows = aggregateElevationWindows(
+    complete,
+    elevationQa.nodeElevations ?? {},
+  );
   return {
     completeSegments: complete.length,
     missingSegments: segments.length - complete.length,
     coveragePct: segments.length === 0 ? 0 : Number((complete.length / segments.length * 100).toFixed(1)),
-    shortSegmentGradeChecksSkipped,
+    routableCoveragePct: routable.length === 0 ? 0 : Number((
+      routable.filter(({ id }) => completeIds.has(id)).length / routable.length * 100
+    ).toFixed(1)),
+    searchableNamedTrailSegments: namedTrailSegmentIds.size,
+    searchableNamedTrailMissingSegmentIds: [...namedTrailSegmentIds]
+      .filter((id) => !completeIds.has(id)).sort(),
+    shortSegmentGradeChecksSkipped: [],
+    perEdgeShortSegmentsChecked: segments.filter(({ lengthMeters }) => lengthMeters < 50).length,
+    aggregateWindows,
     implausibleMetricOutliers,
+    review: {
+      status: implausibleMetricOutliers.length > 0 || aggregateWindows.outliers.length > 0
+        ? "manual-review-required"
+        : "passed",
+      explanation: "1 arc-second terrain cells can cross cliffs beside switchbacks; aggregate windows identify persistent spikes instead of hiding them in short edges",
+    },
   };
 }
 
@@ -128,6 +234,8 @@ export function buildQaReport({
   regionalFiltering = {},
   reconciliation = {},
   segmentProvenance = {},
+  elevationQa = {},
+  sourceManifest,
   artifactHashes = {},
 }) {
   const ambiguousSnaps = accessIssues.filter(({ type }) => type === "ambiguous-connection");
@@ -181,7 +289,8 @@ export function buildQaReport({
       ambiguous: ambiguousSnaps.length,
       details: ambiguousSnaps,
     },
-    elevation: elevationMetrics(segments),
+    elevation: elevationMetrics(segments, namedTrails, elevationQa),
+    ...(sourceManifest ? { sources: sourceManifest } : {}),
     issues: [...pipelineIssues, ...accessIssues],
     artifactHashes,
   };

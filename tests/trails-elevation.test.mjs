@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   createElevationManifestMetadata,
   elevationSampleLocations,
   loadCachedElevationGrid,
+  loadCachedElevationTiles,
   sampleElevationProfile,
 } from "../scripts/trails/elevation/profile.mjs";
 import {
@@ -145,5 +149,46 @@ test("sampling never falls back to the USGS point API", async () => {
     assert.equal(sampled.coverage, "complete");
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test("lazily samples a tiled Float32 3DEP cache across cell boundaries", async () => {
+  const root = await mkdtemp(join(tmpdir(), "alpine-elevation-tiles-"));
+  try {
+    const tile = Buffer.alloc(16);
+    [100, 110, 120, 130].forEach((value, index) => tile.writeFloatLE(value, index * 4));
+    await writeFile(join(root, "tile.f32"), tile);
+    const indexPath = join(root, "index.json");
+    await writeFile(indexPath, JSON.stringify({
+      type: "ElevationTileIndex",
+      crs: "EPSG:4326",
+      width: 2,
+      height: 2,
+      tileSize: 2,
+      origin: [-120, 38],
+      pixelSize: [0.1, -0.1],
+      noDataValue: -9999,
+      source: {
+        provider: "USGS",
+        product: "3DEP tiled fixture",
+        version: "fixture-1",
+      },
+      tiles: [{
+        row: 0,
+        column: 0,
+        rowStart: 0,
+        columnStart: 0,
+        width: 2,
+        height: 2,
+        path: "tile.f32",
+      }],
+    }));
+    const source = await loadCachedElevationTiles(indexPath);
+    assert.equal(await source.sampleElevation(-120, 38), 100);
+    assert.ok(Math.abs(await source.sampleElevation(-119.95, 37.95) - 115) < 1e-9);
+    assert.equal(await source.sampleElevation(-119.8, 38), undefined);
+    assert.equal(source.tileIndex.tileCount, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

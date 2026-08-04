@@ -1,42 +1,270 @@
 {
   "artifacts": {
     "access-points.geojson": {
-      "bytes": 835,
+      "bytes": 232592,
+      "gzipBytes": 18547,
       "path": "access-points.geojson",
-      "sha256": "f39b2db6ec5d7e407d9684a0b56a7a517feb3ef82f767c11fb6851ac5906f843"
+      "sha256": "d8b301f711e9482151263bbb504cb7573c8991de36a8f27e7ea24b203bd4037a"
     },
     "named-trails.json": {
-      "bytes": 892,
+      "bytes": 1260238,
+      "gzipBytes": 312392,
       "path": "named-trails.json",
-      "sha256": "11f9d5692f9c2f944fc72ad302f1c1a11109191235dfc6ee7e711756525aa2ad"
+      "sha256": "cefeffa5d856fbcbf6e6b82f06158aae3869edf15a54bc0e89835491ea8be958"
     },
     "nodes.ndjson": {
-      "bytes": 602,
+      "bytes": 19416951,
+      "gzipBytes": 5799027,
       "path": "nodes.ndjson",
-      "sha256": "065a5a9f3b73b251a4629c467b5c0c0f228e76dbc65941dfa8a36809ff4232c4"
+      "sha256": "639716c403cc0f6df873afe744aaf7c60277bd5163630426f6ef99734750c0c8"
     },
     "qa.json": {
-      "bytes": 2099,
+      "bytes": 15903790,
+      "gzipBytes": 508078,
       "path": "qa.json",
-      "sha256": "a7eb8978272c57dda47e5559e2e7083d7d62e855aafc0c86eb29bbc3a93fb245"
+      "sha256": "afb3924689d0b65b5f329b0d6546d3085f7fe78e81fffb31babd8e88d5927af1"
     },
-    "segments.ndjson": {
-      "bytes": 1138,
-      "path": "segments.ndjson",
-      "sha256": "61ca2628b678eb2e4bdd21b95242266b4b6c260c05e222a215f1456f0cdc5a70"
+    "segment-provenance/0.json": {
+      "bytes": 6842900,
+      "gzipBytes": 1553461,
+      "path": "segment-provenance/0.json",
+      "sha256": "a6a03212d08b2dfc5f2a77f2d431a29d4c47da7e799ccdea13fa1d02b847e07b"
+    },
+    "segment-provenance/1.json": {
+      "bytes": 6767533,
+      "gzipBytes": 1529951,
+      "path": "segment-provenance/1.json",
+      "sha256": "b7054475fd4f1f585ee72dc5b20890fee3cfa0f38414c1a68420d7ba292c9e8f"
+    },
+    "segment-provenance/2.json": {
+      "bytes": 6557218,
+      "gzipBytes": 1460006,
+      "path": "segment-provenance/2.json",
+      "sha256": "9d2476f348efaf6a7edf8b7cfdf4683671719dd0c0ff67c9f5e33c52921232b9"
+    },
+    "segment-provenance/3.json": {
+      "bytes": 6646232,
+      "gzipBytes": 1492453,
+      "path": "segment-provenance/3.json",
+      "sha256": "cfe5b1110a64d9c4e6a807c2d80c885f664df0888868fb73cf890279b99cd487"
+    },
+    "segment-provenance/4.json": {
+      "bytes": 6582048,
+      "gzipBytes": 1483823,
+      "path": "segment-provenance/4.json",
+      "sha256": "0fa1a2b0dfe11c80574dfafdcc16b64b51216c67a3aa8293bc1678c51643b2cc"
+    },
+    "segment-provenance/5.json": {
+      "bytes": 6529850,
+      "gzipBytes": 1440725,
+      "path": "segment-provenance/5.json",
+      "sha256": "c618e0d2940c4f50a1cbd813cb4abbe3cc689397095379266dd2cb6dc86b142c"
+    },
+    "segment-provenance/6.json": {
+      "bytes": 6587834,
+      "gzipBytes": 1467405,
+      "path": "segment-provenance/6.json",
+      "sha256": "d543a02a82728544a7e52d9c751b08cfc13ed1e17ea7b46eab5480332470cae2"
+    },
+    "segment-provenance/7.json": {
+      "bytes": 6864158,
+      "gzipBytes": 1574701,
+      "path": "segment-provenance/7.json",
+      "sha256": "db9892f5c734a47839b63a0554557856a1520fef813309452c6fb50c760e3cfb"
+    },
+    "segment-provenance/8.json": {
+      "bytes": 6800026,
+      "gzipBytes": 1551527,
+      "path": "segment-provenance/8.json",
+      "sha256": "8fc5fafff5038f64e545d77a2269d42e5200bae314ed334f7ccae464ae5cd225"
+    },
+    "segment-provenance/9.json": {
+      "bytes": 6648354,
+      "gzipBytes": 1502158,
+      "path": "segment-provenance/9.json",
+      "sha256": "c2fd0e26ba70700b7657270101b0c7af889dbeda11b0057f97cc1145aace9e73"
+    },
+    "segment-provenance/a.json": {
+      "bytes": 6678064,
+      "gzipBytes": 1494542,
+      "path": "segment-provenance/a.json",
+      "sha256": "3ebddf2fca95af45b0f68a25d8a5f80e2c164906fb631888abe1422a92230259"
+    },
+    "segment-provenance/b.json": {
+      "bytes": 6774375,
+      "gzipBytes": 1524024,
+      "path": "segment-provenance/b.json",
+      "sha256": "5d9708ecddd9a2fdb9539d7b88e8a71571e851012b4cd8eca3d027e8407beaa3"
+    },
+    "segment-provenance/c.json": {
+      "bytes": 6645545,
+      "gzipBytes": 1491013,
+      "path": "segment-provenance/c.json",
+      "sha256": "19dfdac6ebd239d0b28b8e5fe488c9bd0bd59193df69a7aa8feab99967601e72"
+    },
+    "segment-provenance/d.json": {
+      "bytes": 6863634,
+      "gzipBytes": 1567740,
+      "path": "segment-provenance/d.json",
+      "sha256": "b94b3ec4517bcc7413940e0b188c0527d454ec909eea0ce3cfcc302a338c9979"
+    },
+    "segment-provenance/e.json": {
+      "bytes": 6792832,
+      "gzipBytes": 1537961,
+      "path": "segment-provenance/e.json",
+      "sha256": "37c7072dc44b2e9df46c102a6481c6776d574b52e6983d18128da6b07fa8a9bb"
+    },
+    "segment-provenance/f.json": {
+      "bytes": 6733340,
+      "gzipBytes": 1522853,
+      "path": "segment-provenance/f.json",
+      "sha256": "71c2598b04a0c66b9b3af7f4fc9ae8f730c4f4b87ecb16407c6448adfcfd1e1c"
+    },
+    "segment-provenance/index.json": {
+      "bytes": 1524,
+      "gzipBytes": 337,
+      "path": "segment-provenance/index.json",
+      "sha256": "a99f62ac9ef22e25088c83bf04f322aad9c0e8cdd22ae97e7b52cc21bc89ee3d"
+    },
+    "segments/0.ndjson": {
+      "bytes": 6355931,
+      "gzipBytes": 1130740,
+      "path": "segments/0.ndjson",
+      "sha256": "f06140d7b6a56386b2890ee4fe1304cb1c7efd42b47ea36dc84b7576c2321423"
+    },
+    "segments/1.ndjson": {
+      "bytes": 6230307,
+      "gzipBytes": 1092463,
+      "path": "segments/1.ndjson",
+      "sha256": "8e4ff9b200ebb8e7703480a198b4a584f0fc30a011b708d7ac730c70fa1d2919"
+    },
+    "segments/2.ndjson": {
+      "bytes": 6114058,
+      "gzipBytes": 1054667,
+      "path": "segments/2.ndjson",
+      "sha256": "980566beb588c867a234db09ee173213d77d950515f793367e3cd13837a0ce23"
+    },
+    "segments/3.ndjson": {
+      "bytes": 6112301,
+      "gzipBytes": 1054290,
+      "path": "segments/3.ndjson",
+      "sha256": "7ba9d43c87906baa16b637efc1373b1e4486824f89cd80ac7514c82d252f4271"
+    },
+    "segments/4.ndjson": {
+      "bytes": 6121160,
+      "gzipBytes": 1076620,
+      "path": "segments/4.ndjson",
+      "sha256": "805acdc700da5de941c9a11cbd35bb9e2210db12be04616c18df491a0311e08b"
+    },
+    "segments/5.ndjson": {
+      "bytes": 6037798,
+      "gzipBytes": 1011965,
+      "path": "segments/5.ndjson",
+      "sha256": "8f4255b1b7f3a7e22997c2be76f270a9977b560ec8a24cea1d047977da89edb4"
+    },
+    "segments/6.ndjson": {
+      "bytes": 6092831,
+      "gzipBytes": 1040453,
+      "path": "segments/6.ndjson",
+      "sha256": "0e4e822103018acd1c2c02a245490a6e114d9c577467fdf0e92e5b3bf508972a"
+    },
+    "segments/7.ndjson": {
+      "bytes": 6357284,
+      "gzipBytes": 1154643,
+      "path": "segments/7.ndjson",
+      "sha256": "886196e7d71df66bd629ea1ed0f0b8fb6e20cd89068f00856e5e9ea1b4d49858"
+    },
+    "segments/8.ndjson": {
+      "bytes": 6266471,
+      "gzipBytes": 1117795,
+      "path": "segments/8.ndjson",
+      "sha256": "50649b97f592ada165507e0020ef647317b10eed3c8b00dca7408f1493d9c6fe"
+    },
+    "segments/9.ndjson": {
+      "bytes": 6177180,
+      "gzipBytes": 1089051,
+      "path": "segments/9.ndjson",
+      "sha256": "70b7592c1b492f37476fe9b736f0cbfaa99af88d4e613306e4e00b679791fb3b"
+    },
+    "segments/a.ndjson": {
+      "bytes": 6188591,
+      "gzipBytes": 1075151,
+      "path": "segments/a.ndjson",
+      "sha256": "3ee1b44b8ccb53868a82f51d1c45dc891a2c648bdb9f83374ec73a111b828d69"
+    },
+    "segments/b.ndjson": {
+      "bytes": 6255221,
+      "gzipBytes": 1083758,
+      "path": "segments/b.ndjson",
+      "sha256": "d2ec3a2fd8bda1883c2bcec9d6b9aa4e5dba0e8ae581dee6362afd3a5cfddc3b"
+    },
+    "segments/c.ndjson": {
+      "bytes": 6094413,
+      "gzipBytes": 1053079,
+      "path": "segments/c.ndjson",
+      "sha256": "45d339c98f84655b6195710ad2956d91e0709ecedec87f691530d4466fb49f1a"
+    },
+    "segments/d.ndjson": {
+      "bytes": 6336780,
+      "gzipBytes": 1135202,
+      "path": "segments/d.ndjson",
+      "sha256": "60af34e8764732a4f2301b2c23239a031e4cba806d308d3219243b357571ed8a"
+    },
+    "segments/e.ndjson": {
+      "bytes": 6228466,
+      "gzipBytes": 1091042,
+      "path": "segments/e.ndjson",
+      "sha256": "5e9f95b57d6571eba5fc035c8b7ea1158bce975146c3256c19f7c17b04d2d907"
+    },
+    "segments/f.ndjson": {
+      "bytes": 6277368,
+      "gzipBytes": 1116112,
+      "path": "segments/f.ndjson",
+      "sha256": "09ea80e333a2e39d15a600a44aa73a904c36fca91c6d46b57fdec60aa13965ab"
+    },
+    "segments/index.json": {
+      "bytes": 1345,
+      "gzipBytes": 298,
+      "path": "segments/index.json",
+      "sha256": "cf4b018260b25ba40c470b31633d2af032e8f4fc5e1deb76ac37e415010b2c93"
     }
   },
   "counts": {
-    "accessPoints": 1,
-    "namedTrails": 1,
-    "nodes": 4,
-    "segments": 2
+    "accessPoints": 230,
+    "namedTrails": 282,
+    "nodes": 82869,
+    "segments": 107297
+  },
+  "delivery": {
+    "eagerMetadata": [
+      "named-trails.json",
+      "access-points.geojson"
+    ],
+    "lazyGeometryIndex": "segments/index.json",
+    "lazyProvenanceIndex": "segment-provenance/index.json",
+    "partitionRule": "segment id first hexadecimal character"
   },
   "elevation": {
-    "available": false,
-    "missingCoverage": "omit-segment-elevation-metrics"
+    "missingCoverage": "omit-segment-elevation-metrics",
+    "sampling": {
+      "interpolation": "bilinear-tiled-float32",
+      "maximumSpacingMeters": 10,
+      "method": "equal-distance-geodesic"
+    },
+    "smoothing": {
+      "method": "centered-moving-mean-with-vertical-noise-floor",
+      "noiseThresholdMeters": 1,
+      "windowMeters": 30
+    },
+    "source": {
+      "product": "3DEP 1 arc-second dynamic elevation",
+      "provider": "USGS",
+      "sourceUrl": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+      "version": "2026-08-04",
+      "verticalDatum": "NAVD88"
+    }
   },
-  "generatedAt": "2026-08-03T00:00:00.000Z",
+  "generatedAt": "2026-08-04T00:25:17.467Z",
   "region": {
     "bounds": [
       -120.1,
@@ -47,5 +275,142 @@
     "id": "yosemite-stanislaus",
     "label": "Yosemite–Stanislaus"
   },
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "sources": {
+    "region": {
+      "bounds": [
+        -120.1,
+        37.55,
+        -119.35,
+        38.15
+      ],
+      "id": "yosemite-stanislaus",
+      "label": "Yosemite–Stanislaus"
+    },
+    "retrievedAt": "2026-08-04T00:25:17.467Z",
+    "schemaVersion": 1,
+    "sources": {
+      "accessPoints": {
+        "evidence": [
+          "trailhead",
+          "public-entrance",
+          "public-parking",
+          "public-road-intersection"
+        ],
+        "provider": "OpenStreetMap",
+        "records": 57,
+        "snapshot": "osm/yosemite-stanislaus.json",
+        "sourceUrl": "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"
+      },
+      "nps": {
+        "bounds": [
+          -120.1,
+          37.55,
+          -119.35,
+          38.15
+        ],
+        "provider": "nps",
+        "records": 1049,
+        "snapshot": {
+          "bytes": 16276452,
+          "path": "nps.json",
+          "sha256": "d450a3d8777731abc9118a65e109677bdfbb080c6f3103799aa0c3f014a5deb3"
+        },
+        "sourceUrl": "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets/NPS_Public_Trails/FeatureServer/0"
+      },
+      "osm": {
+        "bounds": [
+          -120.1,
+          37.55,
+          -119.35,
+          38.15
+        ],
+        "counts": {
+          "accessPointCandidates": 57,
+          "hikingNodes": 80341,
+          "hikingRouteRelations": 35,
+          "hikingWays": 1422,
+          "materializedNodes": 80353,
+          "preparedElements": 81927,
+          "publicRoadWaysTouchingTrails": 117
+        },
+        "memoryStrategy": {
+          "passes": 3,
+          "rule": "retain-bounded-node-ids-then-bounded-hiking-ways-and-intersecting-road-evidence",
+          "statewidePublicRoadWaysRetained": 0
+        },
+        "provider": "OpenStreetMap",
+        "rawPbf": {
+          "bytes": 1322536987,
+          "path": "osm/california-latest.osm.pbf",
+          "sha256": "7fbcd9433a0aeddf769a836fd68bda599a8ceffcd33b977e5e98909242334558"
+        },
+        "snapshot": {
+          "bytes": 12984637,
+          "path": "osm/yosemite-stanislaus.json",
+          "sha256": "395ffe83526e309939580d7c1c8d79a720f6ef7df3b74d586582dfb2a110e5aa"
+        },
+        "sourceUrl": "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"
+      },
+      "threeDep": {
+        "bounds": [
+          -120.1,
+          37.55,
+          -119.35,
+          38.15
+        ],
+        "counts": {
+          "cells": 5844426,
+          "noDataCells": 994,
+          "tiles": 30
+        },
+        "index": {
+          "bytes": 26109,
+          "path": "3dep/index.json",
+          "sha256": "171c2a2ec081e2832c6687db1d7156ee2493d7746df81cf38d71a1cca3137b8b"
+        },
+        "provider": "USGS",
+        "representation": "tiled-float32-with-cached-source-geotiffs",
+        "resolutionArcSeconds": 1,
+        "serviceMetadata": {
+          "bytes": 14076,
+          "path": "3dep/service.json",
+          "sha256": "bf2dcb99e18190c3509f16ed0aa81d7f4d7e99075a4b79e177cc8f28382014c2"
+        },
+        "sourceUrl": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer"
+      },
+      "usfs": {
+        "bounds": [
+          -120.1,
+          37.55,
+          -119.35,
+          38.15
+        ],
+        "provider": "usfs",
+        "records": 292,
+        "snapshot": {
+          "bytes": 5186460,
+          "path": "usfs.json",
+          "sha256": "18877e9a361366f7502eb303dc28d736232c84869f7b938a7838c92a7594dd6e"
+        },
+        "sourceUrl": "https://apps.fs.usda.gov/ArcX/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0"
+      },
+      "usgs": {
+        "bounds": [
+          -120.1,
+          37.55,
+          -119.35,
+          38.15
+        ],
+        "provider": "usgs",
+        "records": 1492,
+        "snapshot": {
+          "bytes": 20829366,
+          "path": "usgs.json",
+          "sha256": "5ecedbed023016bf86243434b2b4c46c77539c6bc17799d817f1b16ea3a4ce77"
+        },
+        "sourceUrl": "https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/37"
+      }
+    }
+  }
 }

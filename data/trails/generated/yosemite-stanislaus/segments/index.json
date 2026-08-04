@@ -1,0 +1,71 @@
+{
+  "partitionRule": "first hexadecimal character after segment_",
+  "regionId": "yosemite-stanislaus",
+  "schemaVersion": 1,
+  "shards": {
+    "0": {
+      "path": "segments/0.ndjson",
+      "records": 6770
+    },
+    "1": {
+      "path": "segments/1.ndjson",
+      "records": 6720
+    },
+    "2": {
+      "path": "segments/2.ndjson",
+      "records": 6676
+    },
+    "3": {
+      "path": "segments/3.ndjson",
+      "records": 6679
+    },
+    "4": {
+      "path": "segments/4.ndjson",
+      "records": 6644
+    },
+    "5": {
+      "path": "segments/5.ndjson",
+      "records": 6745
+    },
+    "6": {
+      "path": "segments/6.ndjson",
+      "records": 6701
+    },
+    "7": {
+      "path": "segments/7.ndjson",
+      "records": 6692
+    },
+    "8": {
+      "path": "segments/8.ndjson",
+      "records": 6722
+    },
+    "9": {
+      "path": "segments/9.ndjson",
+      "records": 6595
+    },
+    "a": {
+      "path": "segments/a.ndjson",
+      "records": 6724
+    },
+    "b": {
+      "path": "segments/b.ndjson",
+      "records": 6815
+    },
+    "c": {
+      "path": "segments/c.ndjson",
+      "records": 6672
+    },
+    "d": {
+      "path": "segments/d.ndjson",
+      "records": 6720
+    },
+    "e": {
+      "path": "segments/e.ndjson",
+      "records": 6745
+    },
+    "f": {
+      "path": "segments/f.ndjson",
+      "records": 6677
+    }
+  }
+}

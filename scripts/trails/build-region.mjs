@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 import {
   createNamedTrailId,
   validateAccessPoint,
@@ -16,6 +17,7 @@ import { applyElevationMetrics } from "./elevation/metrics.mjs";
 import {
   createCachedElevationGridSource,
   createElevationManifestMetadata,
+  loadCachedElevationTiles,
   sampleElevationProfile,
 } from "./elevation/profile.mjs";
 import { buildAccessPoints } from "./graph/access-points.mjs";
@@ -34,14 +36,15 @@ import usfsAdapter from "./sources/usfs.mjs";
 import usgsAdapter from "./sources/usgs.mjs";
 import { lineStringBounds } from "./spatial/geometry.mjs";
 import { buildQaReport } from "./qa/report.mjs";
+import { geodesicLineLengthMeters } from "./spatial/length.mjs";
 
 export const ARTIFACT_FILENAMES = Object.freeze({
   namedTrails: "named-trails.json",
   accessPoints: "access-points.geojson",
-  segments: "segments.ndjson",
+  segments: "segments/index.json",
   nodes: "nodes.ndjson",
   qa: "qa.json",
-  segmentProvenance: "segment-provenance.json",
+  segmentProvenance: "segment-provenance/index.json",
   manifest: "manifest.json",
 });
 
@@ -75,7 +78,11 @@ function sha256(content) {
 }
 
 function artifactMetadata(content) {
-  return { bytes: Buffer.byteLength(content), sha256: sha256(content) };
+  return {
+    bytes: Buffer.byteLength(content),
+    gzipBytes: gzipSync(content, { level: 9 }).byteLength,
+    sha256: sha256(content),
+  };
 }
 
 function inputArrays(input) {
@@ -111,14 +118,25 @@ function applyRegionBounds(arrays, region) {
       kind,
       recordId: regionalRecordId(record, index),
       rule: "omit-unless-fully-contained",
+      resolution: "omitted-by-documented-full-containment-rule",
     });
     return inside;
   });
-  const segmentCandidates = filter(
+  const boundedSegmentCandidates = filter(
     arrays.segmentCandidates,
     "segment",
     (record) => record.geometry?.coordinates ?? [],
   );
+  const segmentCandidates = boundedSegmentCandidates.filter((record, index) => {
+    if (geodesicLineLengthMeters(record.geometry) > 0) return true;
+    omitted.push({
+      type: "degenerate-segment",
+      kind: "segment",
+      recordId: regionalRecordId(record, index),
+      resolution: "omitted-zero-length-geometry",
+    });
+    return false;
+  });
   const sourceNodes = filter(
     arrays.sourceNodes,
     "node",
@@ -141,6 +159,7 @@ function applyRegionBounds(arrays, region) {
       omittedSegments: omitted.filter(({ kind }) => kind === "segment").length,
       omittedNodes: omitted.filter(({ kind }) => kind === "node").length,
       omittedAccessCandidates: omitted.filter(({ kind }) => kind === "access-candidate").length,
+      omittedDegenerateSegments: omitted.filter(({ type }) => type === "degenerate-segment").length,
     },
   };
 }
@@ -180,6 +199,7 @@ export function buildCanonicalNodes(segments, sourceNodes = []) {
 
 async function enrichSegments(segments, elevationSource, elevationOptions) {
   const enriched = [];
+  const nodeElevations = {};
   for (const segment of segments) {
     const profile = elevationSource
       ? await sampleElevationProfile(segment.geometry, elevationSource, elevationOptions)
@@ -187,8 +207,15 @@ async function enrichSegments(segments, elevationSource, elevationOptions) {
     const result = applyElevationMetrics(segment, profile, elevationOptions);
     validateTrailSegment(result);
     enriched.push(result);
+    if (profile?.coverage === "complete" && profile.samples.length >= 2) {
+      nodeElevations[segment.fromNodeId] = profile.samples[0].elevationMeters;
+      nodeElevations[segment.toNodeId] = profile.samples.at(-1).elevationMeters;
+    }
   }
-  return enriched.sort((left, right) => left.id.localeCompare(right.id));
+  return {
+    segments: enriched.sort((left, right) => left.id.localeCompare(right.id)),
+    nodeElevations: Object.fromEntries(Object.entries(nodeElevations).sort()),
+  };
 }
 
 function shippedProvenance(segments, mergeProvenance, elevationSource, elevationOptions) {
@@ -224,6 +251,87 @@ function shippedProvenance(segments, mergeProvenance, elevationSource, elevation
     result[segment.id] = fields;
   }
   return result;
+}
+
+function dictionaryIndex(values, indexes, value) {
+  const key = stableJson(value);
+  if (!indexes.has(key)) {
+    indexes.set(key, values.length);
+    values.push(value);
+  }
+  return indexes.get(key);
+}
+
+/** Compact repeated field observations while preserving every selected and losing value. */
+export function compactSegmentProvenance(provenance) {
+  const fields = [];
+  const providers = [];
+  const sourceIds = [];
+  const values = [];
+  const sourceFields = [];
+  const indexes = {
+    fields: new Map(),
+    providers: new Map(),
+    sourceIds: new Map(),
+    values: new Map(),
+    sourceFields: new Map(),
+  };
+  const segments = Object.keys(provenance).sort().map((segmentId) => [
+    segmentId,
+    Object.keys(provenance[segmentId]).sort().map((field) => [
+      dictionaryIndex(fields, indexes.fields, field),
+      provenance[segmentId][field].map((entry) => [
+        dictionaryIndex(providers, indexes.providers, entry.provider),
+        dictionaryIndex(sourceIds, indexes.sourceIds, entry.sourceId),
+        dictionaryIndex(values, indexes.values, entry.value),
+        entry.authority,
+        entry.selected ? 1 : 0,
+        entry.sourceField === undefined
+          ? -1
+          : dictionaryIndex(sourceFields, indexes.sourceFields, entry.sourceField),
+      ]),
+    ]),
+  ]);
+  return {
+    schemaVersion: 2,
+    regionEncoding: "field-observation-dictionaries-v1",
+    dictionaries: { fields, providers, sourceIds, values, sourceFields },
+    segments,
+  };
+}
+
+export function expandSegmentProvenance(compact) {
+  if (compact?.schemaVersion !== 2 ||
+      compact.regionEncoding !== "field-observation-dictionaries-v1") {
+    throw new TypeError("unsupported compact segment provenance encoding");
+  }
+  const { fields, providers, sourceIds, values, sourceFields } = compact.dictionaries;
+  return Object.fromEntries(compact.segments.map(([segmentId, observations]) => [
+    segmentId,
+    Object.fromEntries(observations.map(([fieldIndex, entries]) => [
+      fields[fieldIndex],
+      entries.map(([providerIndex, sourceIdIndex, valueIndex, authority, selected, sourceField]) => ({
+        provider: providers[providerIndex],
+        sourceId: sourceIds[sourceIdIndex],
+        value: structuredClone(values[valueIndex]),
+        authority,
+        selected: selected === 1,
+        ...(sourceField < 0 ? {} : { sourceField: structuredClone(sourceFields[sourceField]) }),
+      })),
+    ])),
+  ]));
+}
+
+function artifactPartition(id) {
+  const match = /_([a-f0-9])/.exec(id);
+  if (!match) throw new TypeError(`artifact record id ${JSON.stringify(id)} has no hex partition`);
+  return match[1];
+}
+
+function partitionRecords(records, id = (record) => record.id) {
+  const partitions = Object.fromEntries("0123456789abcdef".split("").map((prefix) => [prefix, []]));
+  for (const record of records) partitions[artifactPartition(id(record))].push(record);
+  return partitions;
 }
 
 function paddedBounds(segments) {
@@ -415,10 +523,31 @@ export async function buildRegionArtifacts(input) {
     input.reconciliationOptions,
   );
   const merged = mergeTrailSegments(reconciliation.candidates, input.mergeOptions);
-  const segments = await enrichSegments(merged.segments, input.elevationSource, input.elevationOptions);
+  const degenerateMergedIds = new Set(merged.segments
+    .filter(({ lengthMeters }) => lengthMeters === 0)
+    .map(({ id }) => id));
+  const mergedSegments = merged.segments.filter(({ id }) => !degenerateMergedIds.has(id));
+  const mergedProvenance = Object.fromEntries(Object.entries(merged.provenance)
+    .filter(([segmentId]) => !degenerateMergedIds.has(segmentId)));
+  const mergeConflicts = merged.conflicts.filter(({ segmentId }) =>
+    !degenerateMergedIds.has(segmentId));
+  const degenerateIssues = [...degenerateMergedIds].sort().map((segmentId) => ({
+    type: "degenerate-segment",
+    kind: "segment",
+    recordId: segmentId,
+    stage: "post-merge-topology-alignment",
+    resolution: "omitted-zero-length-geometry",
+  }));
+  regional.stats.omittedDegenerateSegments += degenerateIssues.length;
+  const enrichment = await enrichSegments(
+    mergedSegments,
+    input.elevationSource,
+    input.elevationOptions,
+  );
+  const segments = enrichment.segments;
   const segmentProvenance = shippedProvenance(
     segments,
-    merged.provenance,
+    mergedProvenance,
     input.elevationSource,
     input.elevationOptions,
   );
@@ -431,7 +560,17 @@ export async function buildRegionArtifacts(input) {
   }, input.accessPointOptions);
   access.accessPoints.forEach(validateAccessPoint);
   const namedTrails = buildNamedTrails(segments, access.accessPoints);
-
+  const segmentPartitions = partitionRecords(segments);
+  const provenancePartitions = partitionRecords(
+    Object.entries(segmentProvenance),
+    ([segmentId]) => segmentId,
+  );
+  const segmentShardPaths = Object.fromEntries(Object.keys(segmentPartitions).map(
+    (prefix) => [prefix, `segments/${prefix}.ndjson`],
+  ));
+  const provenanceShardPaths = Object.fromEntries(Object.entries(provenancePartitions).map(
+    ([prefix]) => [prefix, `segment-provenance/${prefix}.json`],
+  ));
   const payloads = {
     [ARTIFACT_FILENAMES.namedTrails]: prettyJson({
       schemaVersion: 1,
@@ -439,13 +578,38 @@ export async function buildRegionArtifacts(input) {
       trails: namedTrails,
     }),
     [ARTIFACT_FILENAMES.accessPoints]: prettyJson(accessPointGeoJson(access.accessPoints)),
-    [ARTIFACT_FILENAMES.segments]: ndjson(segments),
-    [ARTIFACT_FILENAMES.nodes]: ndjson(nodes),
-    [ARTIFACT_FILENAMES.segmentProvenance]: prettyJson({
+    [ARTIFACT_FILENAMES.segments]: prettyJson({
       schemaVersion: 1,
       regionId: region.id,
-      segments: segmentProvenance,
+      partitionRule: "first hexadecimal character after segment_",
+      shards: Object.fromEntries(Object.entries(segmentShardPaths).map(([prefix, path]) => [
+        prefix,
+        { path, records: segmentPartitions[prefix].length },
+      ])),
     }),
+    [ARTIFACT_FILENAMES.nodes]: ndjson(nodes),
+    [ARTIFACT_FILENAMES.segmentProvenance]: prettyJson({
+      schemaVersion: 2,
+      regionId: region.id,
+      encoding: "field-observation-dictionaries-v1",
+      partitionRule: "first hexadecimal character after segment_",
+      shards: Object.fromEntries(Object.entries(provenanceShardPaths).map(([prefix, path]) => [
+        prefix,
+        { path, records: provenancePartitions[prefix].length },
+      ])),
+    }),
+    ...Object.fromEntries(Object.entries(segmentShardPaths).map(([prefix, path]) => [
+      path,
+      ndjson(segmentPartitions[prefix]),
+    ])),
+    ...Object.fromEntries(Object.entries(provenanceShardPaths).map(([prefix, path]) => [
+      path,
+      `${stableJson({
+        ...compactSegmentProvenance(Object.fromEntries(provenancePartitions[prefix])),
+        regionId: region.id,
+        partition: prefix,
+      })}\n`,
+    ])),
   };
   const dataArtifactHashes = Object.fromEntries(Object.entries(payloads).map(([filename, content]) =>
     [filename, artifactMetadata(content)]));
@@ -456,16 +620,19 @@ export async function buildRegionArtifacts(input) {
     nodes,
     accessPoints: access.accessPoints,
     namedTrails,
-    mergeConflicts: merged.conflicts,
+    mergeConflicts,
     accessIssues: access.issues,
     pipelineIssues: [
       ...(input.pipelineIssues ?? []),
       ...regional.issues,
       ...reconciliation.issues,
+      ...degenerateIssues,
     ],
     regionalFiltering: regional.stats,
     reconciliation: reconciliation.stats,
     segmentProvenance,
+    elevationQa: { nodeElevations: enrichment.nodeElevations },
+    sourceManifest: input.sourceManifest,
     artifactHashes: dataArtifactHashes,
   });
   payloads[ARTIFACT_FILENAMES.qa] = prettyJson(qa);
@@ -486,6 +653,13 @@ export async function buildRegionArtifacts(input) {
     elevation: input.elevationSource
       ? createElevationManifestMetadata(input.elevationSource, input.elevationOptions)
       : { available: false, missingCoverage: "omit-segment-elevation-metrics" },
+    ...(input.sourceManifest ? { sources: input.sourceManifest } : {}),
+    delivery: {
+      eagerMetadata: [ARTIFACT_FILENAMES.namedTrails, ARTIFACT_FILENAMES.accessPoints],
+      lazyGeometryIndex: ARTIFACT_FILENAMES.segments,
+      lazyProvenanceIndex: ARTIFACT_FILENAMES.segmentProvenance,
+      partitionRule: "segment id first hexadecimal character",
+    },
     artifacts: artifactFiles,
   };
   payloads[ARTIFACT_FILENAMES.manifest] = prettyJson(manifest);
@@ -507,6 +681,8 @@ export async function writeRegionArtifacts(result, outputDirectory) {
     throw new TypeError("result and outputDirectory are required");
   }
   await mkdir(outputDirectory, { recursive: true });
+  await Promise.all(Object.keys(result.payloads).map((filename) =>
+    mkdir(dirname(resolve(outputDirectory, filename)), { recursive: true })));
   await Promise.all(Object.entries(result.payloads).map(([filename, content]) =>
     writeFile(resolve(outputDirectory, filename), content)));
   return outputDirectory;
@@ -538,6 +714,12 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
     throw new TypeError("publicRoadNodeIds must be an array");
   }
   if (!Array.isArray(input.pipelineIssues)) throw new TypeError("pipelineIssues must be an array");
+  if (input.sourceManifestPath) {
+    input.sourceManifest = JSON.parse(await readFile(
+      resolve(inputDirectory, input.sourceManifestPath),
+      "utf8",
+    ));
+  }
   if (input.agencySnapshots !== undefined) {
     if (!input.agencySnapshots || typeof input.agencySnapshots !== "object" ||
         Array.isArray(input.agencySnapshots)) {
@@ -576,6 +758,11 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
     const gridPath = resolve(inputDirectory, input.elevationGridPath);
     input.elevationSource = createCachedElevationGridSource(
       JSON.parse(await readFile(gridPath, "utf8")),
+    );
+  }
+  if (input.elevationTilesPath) {
+    input.elevationSource = await loadCachedElevationTiles(
+      resolve(inputDirectory, input.elevationTilesPath),
     );
   }
   const result = await buildRegionArtifacts(input);

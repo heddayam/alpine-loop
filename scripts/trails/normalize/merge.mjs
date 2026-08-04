@@ -20,6 +20,62 @@ export const DEFAULT_RECONCILIATION_OPTIONS = Object.freeze({
   maximumGapMeters: 30,
 });
 
+const SPATIAL_INDEX_CELL_DEGREES = 0.01;
+
+function geometryBounds(geometry) {
+  return geometry.coordinates.reduce((bounds, [longitude, latitude]) => [
+    Math.min(bounds[0], longitude),
+    Math.min(bounds[1], latitude),
+    Math.max(bounds[2], longitude),
+    Math.max(bounds[3], latitude),
+  ], [Infinity, Infinity, -Infinity, -Infinity]);
+}
+
+function expandedGeometryBounds(geometry, meters = 0) {
+  const bounds = geometryBounds(geometry);
+  const latitude = (bounds[1] + bounds[3]) / 2;
+  const latitudePadding = meters / 111_195.080_233_532_9;
+  const longitudePadding = latitudePadding / Math.max(0.1, Math.cos(radians(latitude)));
+  return [
+    bounds[0] - longitudePadding,
+    bounds[1] - latitudePadding,
+    bounds[2] + longitudePadding,
+    bounds[3] + latitudePadding,
+  ];
+}
+
+function spatialCellKeys(bounds) {
+  const west = Math.floor(bounds[0] / SPATIAL_INDEX_CELL_DEGREES);
+  const south = Math.floor(bounds[1] / SPATIAL_INDEX_CELL_DEGREES);
+  const east = Math.floor(bounds[2] / SPATIAL_INDEX_CELL_DEGREES);
+  const north = Math.floor(bounds[3] / SPATIAL_INDEX_CELL_DEGREES);
+  const keys = [];
+  for (let x = west; x <= east; x += 1) {
+    for (let y = south; y <= north; y += 1) keys.push(`${x}:${y}`);
+  }
+  return keys;
+}
+
+function createSpatialCandidateIndex() {
+  const cells = new Map();
+  return {
+    add(id, geometry) {
+      for (const key of spatialCellKeys(expandedGeometryBounds(geometry))) {
+        const ids = cells.get(key) ?? new Set();
+        ids.add(id);
+        cells.set(key, ids);
+      }
+    },
+    query(geometry, paddingMeters = 0) {
+      const ids = new Set();
+      for (const key of spatialCellKeys(expandedGeometryBounds(geometry, paddingMeters))) {
+        for (const id of cells.get(key) ?? []) ids.add(id);
+      }
+      return [...ids].sort((left, right) => left - right);
+    },
+  };
+}
+
 function radians(value) {
   return value * Math.PI / 180;
 }
@@ -265,13 +321,17 @@ export function reconcileAgencyGeometryWithOsmTopology(inputCandidates, options 
   const settings = reconciliationSettings(options);
   const candidates = normalizeSegmentCandidates(inputCandidates);
   const osm = candidates.filter(osmCandidate);
+  const osmIndex = createSpatialCandidateIndex();
+  osm.forEach((candidate, index) => osmIndex.add(index, candidate.geometry));
   const output = [...osm];
   const issues = [];
   let reconciledAgencySegments = 0;
   let emittedAgencyEdges = 0;
 
   for (const agency of candidates.filter((candidate) => !osmCandidate(candidate))) {
-    const matches = osm.flatMap((candidate) => {
+    const matches = osmIndex.query(agency.geometry, settings.snapToleranceMeters)
+      .flatMap((index) => {
+      const candidate = osm[index];
       const match = matchOsmEdge(agency, candidate, settings);
       return match ? [match] : [];
     });
@@ -280,6 +340,8 @@ export function reconcileAgencyGeometryWithOsmTopology(inputCandidates, options 
       issues.push({
         type: "ambiguous-topology-reconciliation",
         sourceIds: agency.sourceRefs.map(({ sourceId }) => sourceId).sort(),
+        resolution: "retained-unsplit-official-geometry",
+        explanation: "duplicate nearby OSM intervals made a deterministic split unsafe",
       });
       output.push(agency);
       continue;
@@ -388,12 +450,21 @@ function candidateSortKey(candidate) {
 
 function clusterCandidates(candidates, options) {
   const groups = [];
+  const index = createSpatialCandidateIndex();
+  const toleranceMeters = options.toleranceMeters ?? DEFAULT_MERGE_TOLERANCE_METERS;
   for (const candidate of [...candidates].sort((left, right) =>
     candidateSortKey(left).localeCompare(candidateSortKey(right)))) {
-    const group = groups.find((members) =>
-      members.every((member) => segmentsCanMerge(member, candidate, options)));
-    if (group) group.push(candidate);
-    else groups.push([candidate]);
+    const matchingIndex = index.query(candidate.geometry, toleranceMeters).find((groupIndex) =>
+      groups[groupIndex].every((member) => segmentsCanMerge(member, candidate, options)));
+    const group = matchingIndex === undefined ? undefined : groups[matchingIndex];
+    if (group) {
+      group.push(candidate);
+      index.add(matchingIndex, candidate.geometry);
+    } else {
+      const groupIndex = groups.length;
+      groups.push([candidate]);
+      index.add(groupIndex, candidate.geometry);
+    }
   }
   return groups;
 }

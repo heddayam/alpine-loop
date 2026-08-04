@@ -15,6 +15,7 @@
     "trails:audit": "node scripts/trails/coverage-spike.mjs",
     "trails:audit:refresh": "node scripts/trails/coverage-spike.mjs --refresh=all",
     "trails:pilot:refresh": "node scripts/trails/prepare-gate-c-pilot.mjs",
+    "trails:region:refresh": "node scripts/trails/prepare-gate-c-region.mjs",
     "trails:build": "node scripts/trails/build-region.mjs --region=yosemite-stanislaus"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "^16.2.12",
+    "geotiff": "3.0.5",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",

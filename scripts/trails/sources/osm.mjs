@@ -134,6 +134,16 @@ function accessCandidateType(tags) {
   return undefined;
 }
 
+/** Shared by the explicit regional preparation workflow without widening build-time I/O. */
+export function osmAccessCandidateType(tags) {
+  return accessCandidateType(normalizeOsmTags(tags));
+}
+
+/** Identify explicit public-road evidence while preparing a bounded OSM extract. */
+export function isOsmPublicRoadWay(way) {
+  return isPublicRoadWay(way);
+}
+
 export function classifyOsmWay(tagsValue, { hikingRouteMemberships = [] } = {}) {
   const tags = normalizeOsmTags(tagsValue);
   const accessTag = normalizedToken(tags.access);

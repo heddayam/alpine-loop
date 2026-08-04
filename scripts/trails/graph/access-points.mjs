@@ -360,11 +360,19 @@ export function buildAccessPoints(
   const issues = [];
   allCandidates.map(normalizeCandidate).sort(compareCandidate).forEach((candidate) => {
     if (candidate.private) {
-      issues.push({ type: "private-candidate", candidateId: candidate.key });
+      issues.push({
+        type: "private-candidate",
+        candidateId: candidate.key,
+        resolution: "omitted-conservative-access-rule",
+      });
       return;
     }
     if (!candidate.classification) {
-      issues.push({ type: "ineligible-candidate", candidateId: candidate.key });
+      issues.push({
+        type: "ineligible-candidate",
+        candidateId: candidate.key,
+        resolution: "omitted-without-credible-access-classification",
+      });
       return;
     }
     const connection = connectCandidate(candidate, nodes, indexes, settings);
@@ -375,6 +383,9 @@ export function buildAccessPoints(
         ...(connection.candidates ? {
           nodeIds: connection.candidates.map(({ id }) => id),
         } : {}),
+        resolution: connection.status === "ambiguous"
+          ? "omitted-without-arbitrary-node-choice"
+          : "omitted-without-connected-graph-node",
       });
       return;
     }
