@@ -5,7 +5,7 @@ import type { FeatureCollection, LineString, Point } from "geojson";
 import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { GeneratedRoute } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
-import { boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
+import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
 
 type HikeMapProps = {
   bounds: Bounds | null;
@@ -86,6 +86,7 @@ export function HikeMap({
   const selectedRouteIdRef = useRef(selectedRouteId);
   const [drawing, setDrawing] = useState(false);
   const [draftBounds, setDraftBounds] = useState<Bounds | null>(null);
+  const [coverageScreenBox, setCoverageScreenBox] = useState<ScreenBox | null>(null);
   const [committedScreenBox, setCommittedScreenBox] = useState<ScreenBox | null>(null);
   const [draftScreenBox, setDraftScreenBox] = useState<ScreenBox | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -274,6 +275,19 @@ export function HikeMap({
   }, [bounds, mapReady]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const syncCoverageBox = () => setCoverageScreenBox(screenBoxForBounds(map, packCoverage));
+    syncCoverageBox();
+    map.on("move", syncCoverageBox);
+    map.on("resize", syncCoverageBox);
+    return () => {
+      map.off("move", syncCoverageBox);
+      map.off("resize", syncCoverageBox);
+    };
+  }, [mapReady, packCoverage]);
+
+  useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
     source?.setData(accessPointFeatures(accessPoints, selectedAccessPointId));
   }, [accessPoints, selectedAccessPointId]);
@@ -334,6 +348,8 @@ export function HikeMap({
 
   const draftDimensions = draftBounds ? boundsDimensionsMiles(draftBounds) : null;
   const visibleScreenBox = draftScreenBox ?? committedScreenBox;
+  const visibleBounds = draftBounds ?? bounds;
+  const boundaryInsideCoverage = visibleBounds ? boundsContainBounds(packCoverage, visibleBounds) : true;
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
@@ -354,13 +370,18 @@ export function HikeMap({
         </button>
       </div>
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
+      {coverageScreenBox ? (
+        <div className="coverage-screen-box" style={coverageScreenBox} aria-hidden="true">
+          <span>Installed demo coverage</span>
+        </div>
+      ) : null}
       {visibleScreenBox ? (
         <div
-          className={draftScreenBox ? "boundary-screen-box draft" : "boundary-screen-box committed"}
+          className={`${draftScreenBox ? "boundary-screen-box draft" : "boundary-screen-box committed"}${boundaryInsideCoverage ? "" : " outside-coverage"}`}
           style={visibleScreenBox}
           aria-hidden="true"
         >
-          <span>{draftScreenBox ? "Drawing search area" : "Search boundary"}</span>
+          <span>{boundaryInsideCoverage ? (draftScreenBox ? "Drawing search area" : "Search boundary") : "Outside installed coverage"}</span>
           <i className="corner northwest" />
           <i className="corner northeast" />
           <i className="corner southeast" />
@@ -371,15 +392,17 @@ export function HikeMap({
         <output className="boundary-draft-readout" aria-label="Boundary dimensions">
           <strong>Search area</strong>
           <span>{draftDimensions.width.toFixed(1)} × {draftDimensions.height.toFixed(1)} mi</span>
-          <small>{draftDimensions.area.toFixed(1)} sq mi · hard boundary</small>
+          <small>{draftDimensions.area.toFixed(1)} sq mi · {boundaryInsideCoverage ? "inside coverage" : "outside coverage"}</small>
         </output>
       ) : null}
       <p className="map-hint">
         {drawing
-          ? "Drag inside the shaded pack coverage to set the hard search boundary."
+          ? "Keep the orange search box entirely inside the green installed demo coverage."
           : bounds
-            ? "Routes may not leave the outlined boundary."
-            : "Draw inside the shaded installed-pack coverage, or use the demo area."}
+            ? boundaryInsideCoverage
+              ? "Routes may not leave the outlined boundary."
+              : "Move or redraw this box entirely inside the green installed demo coverage."
+            : "Draw inside the green installed demo coverage, or use the demo area."}
       </p>
     </section>
   );

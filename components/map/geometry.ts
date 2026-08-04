@@ -48,3 +48,7 @@ export function boundsDimensionsMiles(bounds: Bounds): { width: number; height: 
   const width = (east - west) * 69.172 * Math.cos(middleLatitudeRadians);
   return { width, height, area: width * height };
 }
+
+export function boundsContainBounds(outer: Bounds, inner: Bounds): boolean {
+  return inner[0] >= outer[0] && inner[1] >= outer[1] && inner[2] <= outer[2] && inner[3] <= outer[3];
+}
