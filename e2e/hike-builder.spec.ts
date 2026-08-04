@@ -10,7 +10,12 @@ async function drawFixtureBoundary(page: Page) {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.65, { steps: 8 });
   await page.mouse.up();
-  await expect(page.getByText("Edit boundary coordinates", { exact: true })).toBeVisible();
+  await page.getByText("Edit boundary coordinates", { exact: true }).click();
+  await page.getByLabel("West longitude").fill("-122.183");
+  await page.getByLabel("South latitude").fill("37.155");
+  await page.getByLabel("East longitude").fill("-122.14");
+  await page.getByLabel("North latitude").fill("37.178");
+  await expect(page.getByRole("status").filter({ hasText: "-122.1830" })).toBeVisible();
 }
 
 async function configureBroadDistance(page: Page, min: string, max: string) {
@@ -40,7 +45,7 @@ test("draws, configures, generates, and inspects an exact fixture route", async 
   await expect(page.getByRole("heading", { name: "Explore results" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const exactSection = page.getByRole("region", { name: "Exact matches" });
-  await expect(exactSection.getByRole("article")).toHaveCount(1);
+  await expect(exactSection.getByRole("article")).toHaveCount(2);
   await expect(exactSection.getByText("Selected", { exact: true })).toBeVisible();
   await expect(page.getByText("Planning aid only. Verify current trail conditions and access before hiking.")).toBeVisible();
 });
