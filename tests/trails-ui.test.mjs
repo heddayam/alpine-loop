@@ -6,6 +6,8 @@ import {
   formatElevationRange,
   formatSourceDate,
   formatTrailLength,
+  MAX_LOW_ZOOM_ACCESS_MARKERS,
+  visibleTrailAccessMarkerModels,
 } from "../app/trails/ui.ts";
 
 const sourceRef = {
@@ -26,6 +28,7 @@ function trail(id, name, accessPoints) {
     access: "public",
     status: "open",
     notices: [],
+    accessPointCount: accessPoints.length,
     accessPoints,
     sourceRefs: [sourceRef],
     geometryUrl: `/api/trails/fixture/${id}/geometry`,
@@ -70,6 +73,31 @@ test("deduplicates shared access markers and highlights selected trail access", 
       },
     ],
   );
+});
+
+test("caps low-zoom markers deterministically while retaining selected and stronger evidence", () => {
+  const trails = Array.from({ length: MAX_LOW_ZOOM_ACCESS_MARKERS + 25 }, (_, index) => {
+    const confidence = index === 220 ? "official" : index === 215 ? "mapped" : "derived";
+    return trail(`trail-${index.toString().padStart(3, "0")}`, `Trail ${index}`, [{
+      id: `access-${index.toString().padStart(3, "0")}`,
+      type: confidence === "derived" ? "derived" : "trailhead",
+      confidence,
+      longitude: -122 + index / 10_000,
+      latitude: 37,
+      sourceRefs: [sourceRef],
+    }]);
+  });
+
+  const lowZoom = visibleTrailAccessMarkerModels(trails, "trail-224", 9);
+  assert.equal(lowZoom.length, MAX_LOW_ZOOM_ACCESS_MARKERS);
+  assert.equal(lowZoom[0].id, "access-224");
+  assert.equal(lowZoom[1].confidence, "official");
+  assert.equal(lowZoom[2].confidence, "mapped");
+  assert.deepEqual(
+    visibleTrailAccessMarkerModels([...trails].reverse(), "trail-224", 9),
+    lowZoom,
+  );
+  assert.equal(visibleTrailAccessMarkerModels(trails, "trail-224", 11).length, trails.length);
 });
 
 test("formats only API-backed distance, elevation, enum, and source date values", () => {

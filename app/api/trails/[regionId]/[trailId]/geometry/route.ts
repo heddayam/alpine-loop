@@ -5,6 +5,7 @@ import {
 import {
   findUserFacingTrail,
   loadTrailSegments,
+  trailAccessPointDetails,
   trailGeometryFeatureCollection,
 } from "@/app/trails/search";
 
@@ -44,7 +45,12 @@ export async function GET(request: Request, context: RouteContext) {
       (shard, selectedIds) => loadRegionalSegmentShard(regionId, shard, selectedIds, request.url),
     );
     if (!segments) return errorResponse("Trail geometry was not found.", 404);
-    return Response.json(trailGeometryFeatureCollection(regionId, trail, segments), {
+    return Response.json(trailGeometryFeatureCollection(
+      regionId,
+      trail,
+      segments,
+      trailAccessPointDetails(catalog, trail),
+    ), {
       headers: {
         ETag: etag,
         "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",

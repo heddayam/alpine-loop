@@ -3,7 +3,10 @@
 // provider contours used by the product.
 export const MAX_TRAIL_SEARCH_REQUEST_BYTES = 8 * 1024 * 1024;
 export const MAX_TRAIL_SEARCH_VERTICES = 200_000;
+export const MAX_TRAIL_SEARCH_RESPONSE_BYTES = 448 * 1024;
 export const MAX_TRAIL_SEARCH_RESULTS = 500;
+export const MAX_REPRESENTATIVE_ACCESS_POINTS = 2;
+export const ACCESS_POINT_EQUIVALENCE_METERS = 25;
 
 export type SourceRef = {
   provider: string;
@@ -89,6 +92,20 @@ export type RegionalTrailCatalog = {
   summaries: Record<string, TrailSearchSummary>;
   shardPaths: Record<string, string>;
   partitionPrefixLength: number;
+};
+
+export type TrailAccessPointMetadata = {
+  id: string;
+  name?: string;
+  type: AccessPointFeature["properties"]["type"];
+  confidence: AccessPointFeature["properties"]["confidence"];
+  longitude: number;
+  latitude: number;
+  sourceRefs: SourceRef[];
+};
+
+export type TrailAccessPointDetail = TrailAccessPointMetadata & {
+  connectedNodeIds: string[];
 };
 
 type Position = [number, number];
@@ -254,6 +271,106 @@ function statusNotices(summary: TrailSearchSummary) {
   return [...new Set(notices)];
 }
 
+const EARTH_RADIUS_METERS = 6_371_008.8;
+const ACCESS_EVIDENCE_RANK = Object.freeze({ official: 0, mapped: 1, derived: 2 });
+
+function accessPointMetadata(feature: AccessPointFeature): TrailAccessPointMetadata {
+  return {
+    id: feature.properties.id,
+    ...(feature.properties.name ? { name: feature.properties.name } : {}),
+    type: feature.properties.type,
+    confidence: feature.properties.confidence,
+    sourceRefs: feature.properties.sourceRefs,
+    longitude: feature.geometry.coordinates[0],
+    latitude: feature.geometry.coordinates[1],
+  };
+}
+
+function compareAccessPoints(left: TrailAccessPointMetadata, right: TrailAccessPointMetadata) {
+  return ACCESS_EVIDENCE_RANK[left.confidence] - ACCESS_EVIDENCE_RANK[right.confidence] ||
+    left.id.localeCompare(right.id) ||
+    left.longitude - right.longitude || left.latitude - right.latitude;
+}
+
+function earthCenteredPoint({ longitude, latitude }: TrailAccessPointMetadata) {
+  const longitudeRadians = longitude * Math.PI / 180;
+  const latitudeRadians = latitude * Math.PI / 180;
+  const latitudeRadius = EARTH_RADIUS_METERS * Math.cos(latitudeRadians);
+  return [
+    latitudeRadius * Math.cos(longitudeRadians),
+    latitudeRadius * Math.sin(longitudeRadians),
+    EARTH_RADIUS_METERS * Math.sin(latitudeRadians),
+  ] as const;
+}
+
+function spatialCell(coordinates: readonly number[]) {
+  return coordinates.map((coordinate) =>
+    Math.floor(coordinate / ACCESS_POINT_EQUIVALENCE_METERS));
+}
+
+function cellKey(cell: readonly number[]) {
+  return cell.join(":");
+}
+
+/**
+ * Product-only geographic summarization. Canonical access features and their
+ * connected graph nodes are never mutated or removed.
+ */
+export function geographicallyDistinctAccessPoints(
+  candidates: TrailAccessPointMetadata[],
+) {
+  const representatives: Array<{
+    point: TrailAccessPointMetadata;
+    centered: readonly [number, number, number];
+  }> = [];
+  const byCell = new Map<string, number[]>();
+  const maximumChordSquared = ACCESS_POINT_EQUIVALENCE_METERS ** 2;
+
+  for (const point of [...candidates].sort(compareAccessPoints)) {
+    const centered = earthCenteredPoint(point);
+    const cell = spatialCell(centered);
+    let equivalent = false;
+    for (let x = -1; x <= 1 && !equivalent; x += 1) {
+      for (let y = -1; y <= 1 && !equivalent; y += 1) {
+        for (let z = -1; z <= 1 && !equivalent; z += 1) {
+          const indexes = byCell.get(cellKey([cell[0] + x, cell[1] + y, cell[2] + z])) ?? [];
+          equivalent = indexes.some((index) => {
+            const candidate = representatives[index].centered;
+            return (centered[0] - candidate[0]) ** 2 +
+              (centered[1] - candidate[1]) ** 2 +
+              (centered[2] - candidate[2]) ** 2 <= maximumChordSquared;
+          });
+        }
+      }
+    }
+    if (equivalent) continue;
+
+    const index = representatives.length;
+    representatives.push({ point, centered });
+    const key = cellKey(cell);
+    const indexes = byCell.get(key) ?? [];
+    indexes.push(index);
+    byCell.set(key, indexes);
+  }
+  return representatives.map(({ point }) => point);
+}
+
+export function trailAccessPointDetails(
+  catalog: RegionalTrailCatalog,
+  trail: NamedTrailRecord,
+) {
+  const accessPoints = new Map(catalog.accessPoints.map((feature) =>
+    [feature.properties.id, feature]));
+  return trail.accessPointIds.flatMap((id): TrailAccessPointDetail[] => {
+    const feature = accessPoints.get(id);
+    if (!feature) return [];
+    return [{
+      ...accessPointMetadata(feature),
+      connectedNodeIds: [...feature.properties.connectedNodeIds],
+    }];
+  }).sort(compareAccessPoints);
+}
+
 export function findUserFacingTrail(catalog: RegionalTrailCatalog, trailId: string) {
   const trail = catalog.namedTrails.find(({ id }) => id === trailId);
   if (!trail || !userFacing(catalog.summaries[trail.id])) return null;
@@ -282,17 +399,10 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
       if (!feature || !reachableAccessPointIds.has(id)) {
         return [];
       }
-      return [{
-        id: feature.properties.id,
-        ...(feature.properties.name ? { name: feature.properties.name } : {}),
-        type: feature.properties.type,
-        confidence: feature.properties.confidence,
-        sourceRefs: feature.properties.sourceRefs,
-        longitude: feature.geometry.coordinates[0],
-        latitude: feature.geometry.coordinates[1],
-      }];
+      return [accessPointMetadata(feature)];
     });
     if (reachableAccessPoints.length === 0) continue;
+    const distinctAccessPoints = geographicallyDistinctAccessPoints(reachableAccessPoints);
     results.push({
       id: trail.id,
       name: trail.name,
@@ -306,7 +416,8 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
       ...(summary.surfaces ? { surfaces: summary.surfaces } : {}),
       ...(summary.elevation ? { elevation: summary.elevation } : {}),
       notices: statusNotices(summary),
-      accessPoints: reachableAccessPoints,
+      accessPointCount: distinctAccessPoints.length,
+      accessPoints: distinctAccessPoints.slice(0, MAX_REPRESENTATIVE_ACCESS_POINTS),
       sourceRefs: trail.sourceRefs,
       geometryUrl: `/api/trails/${catalog.manifest.region.id}/${trail.id}/geometry`,
     });
@@ -361,10 +472,18 @@ export function trailGeometryFeatureCollection(
   regionId: string,
   trail: NamedTrailRecord,
   segments: TrailSegment[],
+  accessPoints: TrailAccessPointDetail[] = [],
 ) {
+  const accessPointCount = geographicallyDistinctAccessPoints(accessPoints).length;
   return {
     type: "FeatureCollection" as const,
-    properties: { schemaVersion: 1, regionId, trailId: trail.id },
+    properties: {
+      schemaVersion: 1,
+      regionId,
+      trailId: trail.id,
+      accessPointCount,
+      accessPoints,
+    },
     features: segments.map(({ geometry, displayGeometry, ...properties }) => {
       const safeProperties = { ...properties };
       delete safeProperties.maxGradePct;

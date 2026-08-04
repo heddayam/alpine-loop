@@ -10,11 +10,11 @@ import {
   type ReachabilityProvider,
 } from "./reachability";
 import {
-  buildTrailAccessMarkerModels,
   formatContractValue,
   formatElevationRange,
   formatSourceDate,
   formatTrailLength,
+  visibleTrailAccessMarkerModels,
   type ReachableTrail,
   type TrailSearchResponse,
 } from "./trails/ui";
@@ -226,6 +226,7 @@ export function ReachabilityMap() {
   const [trailGeometryLoading, setTrailGeometryLoading] = useState(false);
   const [trailGeometryError, setTrailGeometryError] = useState<string | null>(null);
   const [trailGeometryRetryToken, setTrailGeometryRetryToken] = useState(0);
+  const [trailMarkerZoom, setTrailMarkerZoom] = useState(9);
   const [searchValue, setSearchValue] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -323,6 +324,15 @@ export function ReachabilityMap() {
     if (!mapRef.current) return;
     mapRef.current.setMapTypeId(mapType);
   }, [mapType]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    const updateZoom = () => setTrailMarkerZoom(map.getZoom() ?? 9);
+    updateZoom();
+    const listener = map.addListener("zoom_changed", updateZoom);
+    return () => listener.remove();
+  }, [mapReady]);
 
   useEffect(() => {
     applyOverlayStyle(mapRef.current, showReachability);
@@ -650,9 +660,10 @@ export function ReachabilityMap() {
     clearTrailMarkers();
     if (!showTrails || !mapRef.current || !trailSearchResult) return;
 
-    trailMarkerRefs.current = buildTrailAccessMarkerModels(
+    trailMarkerRefs.current = visibleTrailAccessMarkerModels(
       trailSearchResult.trails,
       selectedTrailId,
+      trailMarkerZoom,
     ).map((accessPoint) => {
       const marker = new google.maps.Marker({
         map: mapRef.current,
@@ -680,7 +691,7 @@ export function ReachabilityMap() {
     });
 
     return clearTrailMarkers;
-  }, [clearTrailMarkers, selectedTrailId, showTrails, trailSearchResult]);
+  }, [clearTrailMarkers, selectedTrailId, showTrails, trailMarkerZoom, trailSearchResult]);
 
   useEffect(() => {
     const requestId = ++trailGeometryRequestIdRef.current;
@@ -1019,7 +1030,12 @@ export function ReachabilityMap() {
                             </dl>
 
                             <div className="trail-access-summary">
-                              <strong>Reachable access</strong>
+                              <strong>
+                                Reachable access ({trail.accessPointCount.toLocaleString()})
+                              </strong>
+                              {trail.accessPoints.length < trail.accessPointCount && (
+                                <small>Showing the strongest representative access points.</small>
+                              )}
                               <ul>
                                 {trail.accessPoints.map((accessPoint) => (
                                   <li key={accessPoint.id}>

@@ -23,6 +23,7 @@ export type ReachableTrail = {
   surfaces?: string[];
   elevation?: { minMeters: number; maxMeters: number };
   notices: string[];
+  accessPointCount: number;
   accessPoints: TrailAccessPoint[];
   sourceRefs: SourceRef[];
   geometryUrl: string;
@@ -45,6 +46,11 @@ export type TrailAccessMarkerModel = TrailAccessPoint & {
   trailNames: string[];
   selected: boolean;
 };
+
+export const LOW_ZOOM_ACCESS_MARKER_THRESHOLD = 10;
+export const MAX_LOW_ZOOM_ACCESS_MARKERS = 200;
+
+const ACCESS_EVIDENCE_RANK = Object.freeze({ official: 0, mapped: 1, derived: 2 });
 
 export function buildTrailAccessMarkerModels(
   trails: ReachableTrail[],
@@ -71,6 +77,21 @@ export function buildTrailAccessMarkerModels(
     }
   }
   return [...markers.values()];
+}
+
+export function visibleTrailAccessMarkerModels(
+  trails: ReachableTrail[],
+  selectedTrailId: string | null,
+  zoom: number,
+) {
+  const markers = buildTrailAccessMarkerModels(trails, selectedTrailId);
+  if (zoom > LOW_ZOOM_ACCESS_MARKER_THRESHOLD ||
+      markers.length <= MAX_LOW_ZOOM_ACCESS_MARKERS) return markers;
+  return markers.sort((left, right) =>
+    Number(right.selected) - Number(left.selected) ||
+    ACCESS_EVIDENCE_RANK[left.confidence] - ACCESS_EVIDENCE_RANK[right.confidence] ||
+    left.id.localeCompare(right.id)
+  ).slice(0, MAX_LOW_ZOOM_ACCESS_MARKERS);
 }
 
 export function formatTrailLength(lengthMeters?: number) {

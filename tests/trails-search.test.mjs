@@ -3,11 +3,13 @@ import test from "node:test";
 import {
   MAX_TRAIL_SEARCH_REQUEST_BYTES,
   MAX_TRAIL_SEARCH_VERTICES,
+  geographicallyDistinctAccessPoints,
   loadTrailSegments,
   normalizeDriveTimeGeometry,
   parseTrailSearchRequest,
   pointInDriveTimeGeometry,
   searchTrails,
+  trailAccessPointDetails,
   trailGeometryFeatureCollection,
 } from "../app/trails/search.ts";
 
@@ -176,6 +178,44 @@ test("requires a reachable access point and applies conservative default hiking 
   assert.equal(response.trails[1].hiking, "unknown");
   assert.match(response.trails[1].notices.join(" "), /permission is unknown/i);
   assert.equal(response.trails[1].accessPoints[0].confidence, "derived");
+  assert.equal(response.trails[1].accessPointCount, 1);
+});
+
+test("deduplicates geographic equivalents by conservative evidence rank without promotion", () => {
+  const points = [
+    { id: "derived", type: "derived", confidence: "derived", longitude: -119, latitude: 37, sourceRefs: [{ ...sourceRef, sourceId: "derived" }] },
+    { id: "mapped", type: "trailhead", confidence: "mapped", longitude: -119, latitude: 37.0001, sourceRefs: [{ ...sourceRef, sourceId: "mapped" }] },
+    { id: "official", type: "entrance", confidence: "official", longitude: -119, latitude: 37.00005, sourceRefs: [{ ...sourceRef, sourceId: "official" }] },
+    { id: "separate", type: "trailhead", confidence: "mapped", longitude: -119, latitude: 37.0005, sourceRefs: [{ ...sourceRef, sourceId: "separate" }] },
+  ];
+  const expected = geographicallyDistinctAccessPoints(points);
+  assert.deepEqual(expected.map(({ id }) => id), ["official", "separate"]);
+  assert.equal(expected[0].confidence, "official");
+  assert.deepEqual(expected[0].sourceRefs.map(({ sourceId }) => sourceId), ["official"]);
+  assert.deepEqual(geographicallyDistinctAccessPoints([...points].reverse()), expected);
+});
+
+test("keeps all canonical access evidence and connected graph entries in lazy trail detail", () => {
+  const catalog = fixtureCatalog();
+  catalog.accessPoints[0].properties.connectedNodeIds.push("node-shared");
+  const details = trailAccessPointDetails(catalog, catalog.namedTrails[0]);
+  assert.deepEqual(details, [{
+    id: "inside",
+    type: "trailhead",
+    confidence: "mapped",
+    longitude: 1,
+    latitude: 1,
+    sourceRefs: [sourceRef],
+    connectedNodeIds: ["node-inside", "node-shared"],
+  }]);
+  const geoJson = trailGeometryFeatureCollection(
+    "fixture-region",
+    catalog.namedTrails[0],
+    [],
+    details,
+  );
+  assert.equal(geoJson.properties.accessPointCount, 1);
+  assert.deepEqual(geoJson.properties.accessPoints, details);
 });
 
 test("supports metadata name search without changing the reachable count contract", () => {

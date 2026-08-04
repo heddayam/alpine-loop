@@ -46,6 +46,7 @@ The response has this shape:
     surfaces?: string[];
     elevation?: { minMeters: number; maxMeters: number };
     notices: string[];
+    accessPointCount: number;
     accessPoints: Array<{
       id: string;
       name?: string;
@@ -61,9 +62,13 @@ The response has this shape:
 }
 ```
 
-`count` is the total after access, policy, and optional text filtering but before `limit`. Returned
-access points are only those inside the active drive-time polygon. A trail line crossing the polygon
-without a connected access point inside it is never returned.
+`count` is the total after access, policy, and optional text filtering but before `limit`.
+`accessPointCount` is the number of geographically distinct reachable access points before
+representative limiting. `accessPoints` retains its v1-compatible shape but contains at most two
+representatives, selected deterministically by conservative evidence rank (`official`, then
+`mapped`, then `derived`). Returned access metadata is only for points inside the active drive-time
+polygon. A trail line crossing the polygon without a connected access point inside it is never
+returned.
 
 Unknown hiking permission remains searchable with an explicit notice. Blocked, private, closed,
 advanced climbing/scramble, and Gate C-suppressed catalog entries are omitted. Derived access points
@@ -76,4 +81,8 @@ retain `confidence: "derived"` and are never promoted to mapped or official.
 The endpoint returns a GeoJSON FeatureCollection for a user-facing search result and reads only the
 segment shards needed by that trail. Each feature contains display geometry and canonical segment
 metadata. Raw per-edge `maxGradePct` is deliberately omitted under the Gate C elevation exception.
-The response has an ETag and a one-hour public cache lifetime.
+The collection-level `properties.accessPoints` contains the selected trail's complete access detail,
+including original confidence, source references, and connected canonical graph-node IDs;
+`properties.accessPointCount` reports the geographically distinct product count. This detail is lazy
+and is not included in ordinary list/search responses. The response has an ETag and a one-hour
+public cache lifetime.
