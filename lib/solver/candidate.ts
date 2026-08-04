@@ -23,6 +23,7 @@ export type RouteCandidate = {
   trailNames: string[];
   sourceIds: string[];
   warnings: string[];
+  elevationSamples?: Array<{ distanceMeters: number; elevationMeters: number }>;
 };
 
 export type ScoredCandidate = RouteCandidate & {
@@ -72,6 +73,24 @@ function routeMetrics(traversals: readonly EdgeTraversal[]): CandidateMetrics {
   };
 }
 
+function elevationSamples(
+  traversals: readonly EdgeTraversal[],
+): Array<{ distanceMeters: number; elevationMeters: number }> | undefined {
+  if (
+    traversals.length === 0 ||
+    traversals.some(({ from, to }) => from.elevationMeters === null || to.elevationMeters === null)
+  ) {
+    return undefined;
+  }
+  const samples = [{ distanceMeters: 0, elevationMeters: traversals[0].from.elevationMeters! }];
+  let distanceMeters = 0;
+  for (const traversal of traversals) {
+    distanceMeters += traversal.edge.lengthMeters;
+    samples.push({ distanceMeters, elevationMeters: traversal.to.elevationMeters! });
+  }
+  return samples;
+}
+
 export function createCandidate(
   shape: RouteType,
   traversals: EdgeTraversal[],
@@ -84,6 +103,18 @@ export function createCandidate(
   if (startAccessPoint.accessState === "unknown" || endAccessPoint.accessState === "unknown") {
     warnings.push("Access is uncertain");
   }
+  if (edges.some((edge) => edge.accessState === "unknown")) warnings.push("Route uses trail access marked uncertain");
+  if (
+    traversals.some(
+      ({ edge, from, to }) =>
+        from.elevationMeters === null ||
+        to.elevationMeters === null ||
+        edge.maximumElevationMeters === null ||
+        edge.maximumSustainedGradePct === null,
+    )
+  ) {
+    warnings.push("Elevation data is incomplete");
+  }
   return {
     id: canonicalRouteId(shape, edges),
     shape,
@@ -93,8 +124,15 @@ export function createCandidate(
     coordinates: routeCoordinates(traversals),
     metrics: routeMetrics(traversals),
     trailNames: [...new Set(edges.map((edge) => edge.trailName).filter((name): name is string => Boolean(name)))],
-    sourceIds: [...new Set(edges.flatMap((edge) => edge.sourceIds))].sort(),
+    sourceIds: [
+      ...new Set([
+        ...edges.flatMap((edge) => edge.sourceIds),
+        ...startAccessPoint.sourceIds,
+        ...endAccessPoint.sourceIds,
+      ]),
+    ].sort(),
     warnings,
+    elevationSamples: elevationSamples(traversals),
   };
 }
 
