@@ -1,0 +1,39 @@
+# Dependencies and framework output
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Raw sources, generated packs, and local databases
+.cache/
+.local-data/
+data/raw/
+data/generated/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.pbf
+*.osm
+*.osm.gz
+
+# Retired hosting/build systems must not reappear at the root. Their archived
+# copies under legacy/ remain intentionally trackable.
+/.openai/
+/.vinext/
+/.wrangler/
+/dist/
+
+# Editor and OS files
+.DS_Store
+*.swp
+.idea/
+.vscode/
