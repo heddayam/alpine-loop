@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MAX_TRAIL_SEARCH_REQUEST_BYTES,
   loadTrailSegments,
   normalizeDriveTimeGeometry,
   parseTrailSearchRequest,
@@ -133,6 +134,22 @@ test("validates bounded trail search requests", () => {
   assert.equal(parseTrailSearchRequest({ regionId: "../bad", geoJson: driveTimePolygon }).ok, false);
   assert.equal(parseTrailSearchRequest({ regionId: "fixture-region", geoJson: driveTimePolygon, limit: 501 }).ok, false);
   assert.equal(parseTrailSearchRequest({ regionId: "fixture-region", geoJson: { type: "Polygon", coordinates: [] } }).ok, false);
+});
+
+test("allows production-scale long-range contours within the vertex safety cap", () => {
+  const coordinates = Array.from({ length: 31_299 }, (_, index) => {
+    const angle = (index / 31_298) * Math.PI * 2;
+    return [-119.5 + Math.cos(angle), 37.5 + Math.sin(angle)];
+  });
+  coordinates[coordinates.length - 1] = coordinates[0];
+  const payload = {
+    regionId: "fixture-region",
+    driveTimePolygon: { type: "Polygon", coordinates: [coordinates] },
+  };
+
+  assert.ok(Buffer.byteLength(JSON.stringify(payload)) > 512 * 1024);
+  assert.equal(MAX_TRAIL_SEARCH_REQUEST_BYTES, 4 * 1024 * 1024);
+  assert.equal(parseTrailSearchRequest(payload).ok, true);
 });
 
 test("requires a reachable access point and applies conservative default hiking policy", () => {

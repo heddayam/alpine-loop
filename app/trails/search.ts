@@ -1,4 +1,8 @@
-export const MAX_TRAIL_SEARCH_REQUEST_BYTES = 512 * 1024;
+// ArcGIS long-range service areas can legitimately contain tens of thousands
+// of vertices. Keep the transport ceiling aligned with the stricter 50,000
+// vertex geometry cap below so valid contours are not rejected based only on
+// JSON encoding overhead.
+export const MAX_TRAIL_SEARCH_REQUEST_BYTES = 4 * 1024 * 1024;
 export const MAX_TRAIL_SEARCH_RESULTS = 500;
 
 export type SourceRef = {

@@ -17,7 +17,7 @@ function errorResponse(error: string, status: number) {
 export async function POST(request: Request) {
   const declaredBytes = Number(request.headers.get("content-length"));
   if (Number.isFinite(declaredBytes) && declaredBytes > MAX_TRAIL_SEARCH_REQUEST_BYTES) {
-    return errorResponse("The trail search area is too large.", 413);
+    return errorResponse("The trail search geometry is too detailed.", 413);
   }
 
   let text: string;
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return errorResponse("The request body could not be read.", 400);
   }
   if (new TextEncoder().encode(text).byteLength > MAX_TRAIL_SEARCH_REQUEST_BYTES) {
-    return errorResponse("The trail search area is too large.", 413);
+    return errorResponse("The trail search geometry is too detailed.", 413);
   }
 
   let payload: unknown;

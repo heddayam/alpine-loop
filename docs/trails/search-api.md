@@ -21,7 +21,9 @@ request. Search responses contain metadata only; selected display geometry is lo
 
 `driveTimePolygon` accepts a GeoJSON Polygon, MultiPolygon, Feature, or FeatureCollection. The
 existing reachability payload may also be passed as `geoJson`. `query` and `limit` are optional;
-the maximum limit is 500.
+the maximum limit is 500. Requests are capped at 4 MiB and normalized drive-time geometry is
+capped at 50,000 vertices, which accommodates detailed long-range provider contours while keeping
+request cost bounded.
 
 The response has this shape:
 
