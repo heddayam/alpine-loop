@@ -8,6 +8,7 @@ import {
   buildRegionFromFile,
   buildRegionArtifacts,
   compactSegmentProvenance,
+  createBuildStageTelemetry,
   expandSegmentProvenance,
   writeRegionArtifacts,
 } from "../scripts/trails/build-region.mjs";
@@ -112,9 +113,32 @@ function buildInput(segmentCandidates = segments) {
 
 test("builds deterministic regional artifacts with canonical searchable trails", async () => {
   const first = await buildRegionArtifacts(buildInput());
-  const reversed = await buildRegionArtifacts(buildInput([...segments].reverse()));
+  const telemetryEvents = [];
+  const reversed = await buildRegionArtifacts(buildInput([...segments].reverse()), {
+    telemetry: createBuildStageTelemetry({ emit: (event) => telemetryEvents.push(event) }),
+  });
 
   assert.deepEqual(first.payloads, reversed.payloads);
+  assert.deepEqual(
+    [...new Set(telemetryEvents.map(({ stage }) => stage))],
+    [
+      "agency-osm-reconciliation-merge",
+      "elevation-enrichment",
+      "provenance-preparation",
+      "node-access-named-trail-construction",
+      "partitioning",
+      "provenance-compaction",
+      "json-serialization",
+      "hashing",
+      "compression-measurement",
+      "qa",
+    ],
+  );
+  assert.deepEqual(telemetryEvents.map(({ sequence }) => sequence),
+    telemetryEvents.map((_, index) => index + 1));
+  assert.ok(telemetryEvents.every(({ memory }) =>
+    ["heapUsed", "heapTotal", "external", "rss"].every((field) =>
+      Number.isFinite(memory[field]))));
   assert.equal(first.segments.length, 3);
   assert.equal(first.nodes.length, 5);
   assert.equal(first.accessPoints.length, 1);
@@ -145,6 +169,58 @@ test("builds deterministic regional artifacts with canonical searchable trails",
   assert.equal(first.qa.elevation.implausibleMetricOutliers.length, 0);
   assert.match(first.qa.artifactHashes[ARTIFACT_FILENAMES.segments].sha256, /^[a-f0-9]{64}$/);
   assert.match(first.manifest.artifacts[ARTIFACT_FILENAMES.qa].sha256, /^[a-f0-9]{64}$/);
+});
+
+test("emits deterministic telemetry structure with injected measurements", () => {
+  const events = [];
+  const times = [100, 105, 112];
+  const telemetry = createBuildStageTelemetry({
+    emit: (event) => events.push(event),
+    now: () => times.shift(),
+    memoryUsage: () => ({
+      heapUsed: 10,
+      heapTotal: 20,
+      external: 30,
+      rss: 40,
+      arrayBuffers: 5,
+    }),
+  });
+  const stage = telemetry.start("fixture-stage", { z: 2, a: 1 }, ["z-copy", "a-copy"]);
+  telemetry.sample(stage, { records: 3 });
+  telemetry.end(stage, { records: 4 });
+
+  assert.deepEqual(events, [
+    {
+      schemaVersion: 1,
+      sequence: 1,
+      stage: "fixture-stage",
+      phase: "begin",
+      elapsedMs: 0,
+      counts: { a: 1, z: 2 },
+      memory: { heapUsed: 10, heapTotal: 20, external: 30, rss: 40, arrayBuffers: 5 },
+      structures: ["a-copy", "z-copy"],
+    },
+    {
+      schemaVersion: 1,
+      sequence: 2,
+      stage: "fixture-stage",
+      phase: "sample",
+      elapsedMs: 5,
+      counts: { records: 3 },
+      memory: { heapUsed: 10, heapTotal: 20, external: 30, rss: 40, arrayBuffers: 5 },
+      structures: ["a-copy", "z-copy"],
+    },
+    {
+      schemaVersion: 1,
+      sequence: 3,
+      stage: "fixture-stage",
+      phase: "end",
+      elapsedMs: 12,
+      counts: { records: 4 },
+      memory: { heapUsed: 10, heapTotal: 20, external: 30, rss: 40, arrayBuffers: 5 },
+      structures: ["a-copy", "z-copy"],
+    },
+  ]);
 });
 
 test("round-trips dictionary-compacted field provenance", async () => {
@@ -249,13 +325,18 @@ test("composes cached agency and OSM snapshots from a regional input file", asyn
     accessPointCandidates: [],
   }));
   try {
+    const telemetryEvents = [];
     const result = await buildRegionFromFile(inputPath, {
       outputDirectory: join(outputDirectory, "artifacts"),
+      telemetry: createBuildStageTelemetry({ emit: (event) => telemetryEvents.push(event) }),
     });
     assert.equal(result.segments.length, 5);
     assert.equal(result.qa.counts.input.bySource.nps.segments, 2);
     assert.equal(result.qa.counts.input.bySource.osm.segments, 3);
     assert.deepEqual(result.qa.issues, []);
+    const stages = new Set(telemetryEvents.map(({ stage }) => stage));
+    assert.equal(stages.has("snapshot-loading-normalization"), true);
+    assert.equal(stages.has("osm-topology-construction"), true);
   } finally {
     await rm(outputDirectory, { recursive: true, force: true });
   }

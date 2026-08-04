@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import {
@@ -86,12 +88,116 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function artifactMetadata(content) {
-  return {
-    bytes: Buffer.byteLength(content),
-    gzipBytes: gzipSync(content, { level: 9 }).byteLength,
-    sha256: sha256(content),
+function sortedRecord(record = {}) {
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) =>
+    left.localeCompare(right)));
+}
+
+/**
+ * Produce deterministically ordered, opt-in build-stage events. Timing and
+ * process memory values are observations only and never enter an artifact.
+ */
+export function createBuildStageTelemetry({
+  emit,
+  now = () => performance.now(),
+  memoryUsage = () => process.memoryUsage(),
+} = {}) {
+  if (typeof emit !== "function") throw new TypeError("telemetry emit must be a function");
+  let sequence = 0;
+  const sample = (stage, phase, startedAt, counts, structures, elapsedOverride) => {
+    const memory = memoryUsage();
+    emit({
+      schemaVersion: 1,
+      sequence: ++sequence,
+      stage,
+      phase,
+      elapsedMs: elapsedOverride ?? Number(Math.max(0, now() - startedAt).toFixed(3)),
+      counts: sortedRecord(counts),
+      memory: {
+        heapUsed: memory.heapUsed,
+        heapTotal: memory.heapTotal,
+        external: memory.external,
+        rss: memory.rss,
+        ...(memory.arrayBuffers === undefined ? {} : { arrayBuffers: memory.arrayBuffers }),
+      },
+      structures: [...new Set(structures ?? [])].sort(),
+    });
   };
+  return {
+    start(stage, counts = {}, structures = []) {
+      const startedAt = now();
+      sample(stage, "begin", startedAt, counts, structures, 0);
+      return { stage, startedAt, structures };
+    },
+    sample(token, counts = {}, structures = token.structures) {
+      sample(token.stage, "sample", token.startedAt, counts, structures);
+    },
+    end(token, counts = {}, structures = token.structures) {
+      sample(token.stage, "end", token.startedAt, counts, structures);
+    },
+  };
+}
+
+function beginStage(telemetry, stage, counts, structures) {
+  return telemetry?.start(stage, counts, structures);
+}
+
+function sampleStage(telemetry, token, counts, structures) {
+  if (token) telemetry.sample(token, counts, structures);
+}
+
+function endStage(telemetry, token, counts, structures) {
+  if (token) telemetry.end(token, counts, structures);
+}
+
+function osmSnapshotRecordCount(snapshot) {
+  return (snapshot?.nodes?.length ?? 0) + (snapshot?.ways?.length ?? 0) +
+    (snapshot?.relations?.length ?? 0) + (snapshot?.accessNodes?.length ?? 0);
+}
+
+function measureArtifactMetadata(payloads, telemetry, scope) {
+  const entries = Object.entries(payloads);
+  const hashes = {};
+  const hashStage = beginStage(telemetry, "hashing", {
+    artifacts: entries.length,
+  }, [`${scope}-serialized-strings`, `${scope}-hash-metadata`]);
+  for (const [filename, content] of entries) {
+    hashes[filename] = sha256(content);
+    sampleStage(telemetry, hashStage, {
+      artifactsHashed: Object.keys(hashes).length,
+      contentBytes: Buffer.byteLength(content),
+    }, [`${scope}-serialized-strings`, `${scope}-hash-metadata`]);
+  }
+  endStage(telemetry, hashStage, { artifactsHashed: entries.length }, [
+    `${scope}-serialized-strings`,
+    `${scope}-hash-metadata`,
+  ]);
+
+  const gzipBytes = {};
+  const compressionStage = beginStage(telemetry, "compression-measurement", {
+    artifacts: entries.length,
+  }, [`${scope}-serialized-strings`, "synchronous-gzip-buffer"]);
+  for (const [filename, content] of entries) {
+    gzipBytes[filename] = gzipSync(content, { level: 9 }).byteLength;
+    sampleStage(telemetry, compressionStage, {
+      artifactsCompressed: Object.keys(gzipBytes).length,
+      contentBytes: Buffer.byteLength(content),
+      gzipBytes: gzipBytes[filename],
+    }, [`${scope}-serialized-strings`, "synchronous-gzip-buffer"]);
+  }
+  endStage(telemetry, compressionStage, { artifactsCompressed: entries.length }, [
+    `${scope}-serialized-strings`,
+    "synchronous-gzip-buffer",
+  ]);
+
+  return Object.fromEntries(entries.map(([filename, content]) => [
+    filename,
+    {
+      bytes: Buffer.byteLength(content),
+      gzipBytes: gzipBytes[filename],
+      sha256: hashes[filename],
+    },
+  ]));
 }
 
 function inputArrays(input) {
@@ -520,18 +626,29 @@ function buildTimestamp(input, segments) {
 }
 
 /** Build all T7 artifacts in memory without touching the network or filesystem. */
-export async function buildRegionArtifacts(input) {
+export async function buildRegionArtifacts(input, { telemetry } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("input must be an object");
   }
   const region = requireRegion(input.regionId);
+  const reconciliationStage = beginStage(telemetry, "agency-osm-reconciliation-merge", {
+    inputSegmentCandidates: (input.segmentCandidates ?? input.segments ?? []).length,
+  }, ["normalized-segment-candidates", "merge-candidate-index", "field-provenance"]);
   const regional = applyRegionBounds(inputArrays(input), region);
   const arrays = regional.arrays;
   const reconciliation = reconcileAgencyGeometryWithOsmTopology(
     arrays.segmentCandidates,
     input.reconciliationOptions,
   );
+  sampleStage(telemetry, reconciliationStage, {
+    reconciledCandidates: reconciliation.candidates.length,
+    reconciliationIssues: reconciliation.issues.length,
+  }, ["regional-segment-candidates", "reconciled-segment-candidates"]);
   const merged = mergeTrailSegments(reconciliation.candidates, input.mergeOptions);
+  sampleStage(telemetry, reconciliationStage, {
+    mergeConflicts: merged.conflicts.length,
+    mergedSegments: merged.segments.length,
+  }, ["reconciled-segment-candidates", "merged-segments", "field-provenance"]);
   const degenerateMergedIds = new Set(merged.segments
     .filter(({ lengthMeters }) => lengthMeters === 0)
     .map(({ id }) => id));
@@ -548,19 +665,47 @@ export async function buildRegionArtifacts(input) {
     resolution: "omitted-zero-length-geometry",
   }));
   regional.stats.omittedDegenerateSegments += degenerateIssues.length;
+  endStage(telemetry, reconciliationStage, {
+    mergeConflicts: mergeConflicts.length,
+    mergedSegments: mergedSegments.length,
+    reconciledCandidates: reconciliation.candidates.length,
+    regionalCandidates: arrays.segmentCandidates.length,
+  }, ["regional-segment-candidates", "merged-segments", "field-provenance"]);
+  const elevationStage = beginStage(telemetry, "elevation-enrichment", {
+    segments: mergedSegments.length,
+  }, ["merged-segments", "elevation-samples", "enriched-segments", "node-elevations"]);
   const enrichment = await enrichSegments(
     mergedSegments,
     input.elevationSource,
     input.elevationOptions,
   );
   const segments = enrichment.segments;
+  endStage(telemetry, elevationStage, {
+    enrichedSegments: segments.length,
+    nodeElevations: Object.keys(enrichment.nodeElevations).length,
+  }, ["merged-segments", "enriched-segments", "node-elevations"]);
+  const provenanceStage = beginStage(telemetry, "provenance-preparation", {
+    mergeProvenanceSegments: Object.keys(mergedProvenance).length,
+    segments: segments.length,
+  }, ["merge-field-provenance", "elevation-field-provenance"]);
   const segmentProvenance = shippedProvenance(
     segments,
     mergedProvenance,
     input.elevationSource,
     input.elevationOptions,
   );
+  endStage(telemetry, provenanceStage, {
+    provenanceSegments: Object.keys(segmentProvenance).length,
+  }, ["shipped-field-provenance"]);
+  const constructionStage = beginStage(telemetry, "node-access-named-trail-construction", {
+    segments: segments.length,
+    sourceNodes: arrays.sourceNodes.length,
+  }, ["segments", "canonical-nodes", "access-graph", "named-trail-groups"]);
   const nodes = buildCanonicalNodes(segments, arrays.sourceNodes);
+  sampleStage(telemetry, constructionStage, {
+    nodes: nodes.length,
+    segments: segments.length,
+  }, ["segments", "canonical-nodes"]);
   const access = buildAccessPoints({
     nodes,
     segments,
@@ -568,7 +713,23 @@ export async function buildRegionArtifacts(input) {
     publicRoadNodeIds: arrays.publicRoadNodeIds,
   }, input.accessPointOptions);
   access.accessPoints.forEach(validateAccessPoint);
+  sampleStage(telemetry, constructionStage, {
+    accessIssues: access.issues.length,
+    accessPoints: access.accessPoints.length,
+    nodes: nodes.length,
+    segments: segments.length,
+  }, ["segments", "canonical-nodes", "access-points"]);
   const namedTrails = buildNamedTrails(segments, access.accessPoints);
+  endStage(telemetry, constructionStage, {
+    accessPoints: access.accessPoints.length,
+    namedTrails: namedTrails.length,
+    nodes: nodes.length,
+    segments: segments.length,
+  }, ["segments", "canonical-nodes", "access-points", "named-trails"]);
+  const partitionStage = beginStage(telemetry, "partitioning", {
+    provenanceSegments: Object.keys(segmentProvenance).length,
+    segments: segments.length,
+  }, ["segments", "shipped-field-provenance", "partition-arrays"]);
   const segmentPartitions = partitionRecords(segments);
   const provenancePartitions = partitionRecords(
     Object.entries(segmentProvenance),
@@ -580,6 +741,35 @@ export async function buildRegionArtifacts(input) {
   const provenanceShardPaths = Object.fromEntries(Object.entries(provenancePartitions).map(
     ([prefix]) => [prefix, `segment-provenance/${prefix}.json`],
   ));
+  endStage(telemetry, partitionStage, {
+    provenancePartitions: Object.keys(provenancePartitions).length,
+    segmentPartitions: Object.keys(segmentPartitions).length,
+  }, ["segments", "shipped-field-provenance", "partition-arrays"]);
+  const provenanceCompactionStage = beginStage(telemetry, "provenance-compaction", {
+    provenancePartitions: Object.keys(provenancePartitions).length,
+  }, ["partitioned-field-provenance", "compaction-dictionaries", "serialized-provenance-strings"]);
+  const provenancePayloads = Object.fromEntries(Object.entries(provenanceShardPaths).map(
+    ([prefix, path], index) => {
+      const content = `${stableJson({
+        ...compactSegmentProvenance(Object.fromEntries(provenancePartitions[prefix])),
+        regionId: region.id,
+        partition: prefix,
+      })}\n`;
+      sampleStage(telemetry, provenanceCompactionStage, {
+        partitionRecords: provenancePartitions[prefix].length,
+        partitionsCompacted: index + 1,
+        serializedBytes: Buffer.byteLength(content),
+      }, ["partitioned-field-provenance", "compaction-dictionaries", "serialized-provenance-strings"]);
+      return [path, content];
+    },
+  ));
+  endStage(telemetry, provenanceCompactionStage, {
+    partitionsCompacted: Object.keys(provenancePayloads).length,
+  }, ["partitioned-field-provenance", "serialized-provenance-strings"]);
+  const serializationStage = beginStage(telemetry, "json-serialization", {
+    provenancePartitions: Object.keys(provenancePartitions).length,
+    segmentPartitions: Object.keys(segmentPartitions).length,
+  }, ["canonical-records", "partition-arrays", "serialized-artifact-strings"]);
   const payloads = {
     [ARTIFACT_FILENAMES.namedTrails]: prettyJson({
       schemaVersion: 1,
@@ -611,17 +801,20 @@ export async function buildRegionArtifacts(input) {
       path,
       ndjson(segmentPartitions[prefix]),
     ])),
-    ...Object.fromEntries(Object.entries(provenanceShardPaths).map(([prefix, path]) => [
-      path,
-      `${stableJson({
-        ...compactSegmentProvenance(Object.fromEntries(provenancePartitions[prefix])),
-        regionId: region.id,
-        partition: prefix,
-      })}\n`,
-    ])),
+    ...provenancePayloads,
   };
-  const dataArtifactHashes = Object.fromEntries(Object.entries(payloads).map(([filename, content]) =>
-    [filename, artifactMetadata(content)]));
+  endStage(telemetry, serializationStage, {
+    artifacts: Object.keys(payloads).length,
+    serializedBytes: Object.values(payloads).reduce((total, content) =>
+      total + Buffer.byteLength(content), 0),
+  }, ["canonical-records", "partition-arrays", "serialized-artifact-strings"]);
+  const dataArtifactHashes = measureArtifactMetadata(payloads, telemetry, "data-artifact");
+  const qaStage = beginStage(telemetry, "qa", {
+    accessPoints: access.accessPoints.length,
+    namedTrails: namedTrails.length,
+    nodes: nodes.length,
+    segments: segments.length,
+  }, ["canonical-records", "field-provenance", "data-artifact-metadata", "qa-indexes"]);
   const qa = buildQaReport({
     region,
     input: arrays,
@@ -644,11 +837,22 @@ export async function buildRegionArtifacts(input) {
     sourceManifest: input.sourceManifest,
     artifactHashes: dataArtifactHashes,
   });
+  endStage(telemetry, qaStage, {
+    issues: qa.issues.length,
+    segments: segments.length,
+  }, ["canonical-records", "field-provenance", "data-artifact-metadata", "qa-report"]);
+  const qaSerializationStage = beginStage(telemetry, "json-serialization", {
+    artifactsAlreadyRetained: Object.keys(payloads).length,
+  }, ["serialized-artifact-strings", "qa-report"]);
   payloads[ARTIFACT_FILENAMES.qa] = prettyJson(qa);
-  const artifactFiles = Object.fromEntries(Object.entries(payloads).map(([filename, content]) => [
-    filename,
-    { path: filename, ...artifactMetadata(content) },
-  ]));
+  endStage(telemetry, qaSerializationStage, {
+    artifacts: Object.keys(payloads).length,
+    qaBytes: Buffer.byteLength(payloads[ARTIFACT_FILENAMES.qa]),
+  }, ["serialized-artifact-strings", "qa-report"]);
+  const measuredArtifactFiles = measureArtifactMetadata(payloads, telemetry, "manifest-artifact");
+  const artifactFiles = Object.fromEntries(Object.entries(measuredArtifactFiles).map(
+    ([filename, metadata]) => [filename, { path: filename, ...metadata }],
+  ));
   const manifest = {
     schemaVersion: 1,
     region: { id: region.id, label: region.label, bounds: [...region.bbox] },
@@ -671,7 +875,14 @@ export async function buildRegionArtifacts(input) {
     },
     artifacts: artifactFiles,
   };
+  const manifestSerializationStage = beginStage(telemetry, "json-serialization", {
+    artifactsAlreadyRetained: Object.keys(payloads).length,
+  }, ["serialized-artifact-strings", "manifest-object"]);
   payloads[ARTIFACT_FILENAMES.manifest] = prettyJson(manifest);
+  endStage(telemetry, manifestSerializationStage, {
+    artifacts: Object.keys(payloads).length,
+    manifestBytes: Buffer.byteLength(payloads[ARTIFACT_FILENAMES.manifest]),
+  }, ["serialized-artifact-strings", "manifest-object"]);
   return {
     region,
     manifest,
@@ -714,7 +925,10 @@ export async function writeRegionArtifacts(result, outputDirectory) {
   return outputDirectory;
 }
 
-export async function buildRegionFromFile(inputPath, { outputDirectory, regionId } = {}) {
+export async function buildRegionFromFile(inputPath, { outputDirectory, regionId, telemetry } = {}) {
+  const snapshotStage = beginStage(telemetry, "snapshot-loading-normalization", {
+    inputFiles: 1,
+  }, ["input-json-string", "parsed-build-input", "normalized-agency-candidates"]);
   const absoluteInputPath = resolve(inputPath);
   const input = JSON.parse(await readFile(absoluteInputPath, "utf8"));
   if (regionId !== undefined && input.regionId !== regionId) {
@@ -766,21 +980,35 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
       input.segmentCandidates = input.segmentCandidates.concat(adapter.normalizeSnapshot(snapshot));
     }
   }
+  let osmSnapshot;
   if (input.osmSnapshotPath) {
-    const snapshot = await readOsmSnapshot(
+    osmSnapshot = await readOsmSnapshot(
       resolve(inputDirectory, input.osmSnapshotPath),
       input.osmSnapshotOptions,
     );
-    const topology = buildOsmTopology(snapshot);
+  }
+  const osmRecords = osmSnapshotRecordCount(osmSnapshot);
+  if (osmSnapshot) {
+    const topologyStage = beginStage(telemetry, "osm-topology-construction", {
+      osmRecords,
+    }, ["parsed-osm-snapshot", "osm-node-way-indexes", "topology-segments"]);
+    const topology = buildOsmTopology(osmSnapshot);
     input.segmentCandidates = input.segmentCandidates.concat(topology.segments);
     input.sourceNodes = input.sourceNodes.concat(topology.nodes);
     input.accessPointCandidates = input.accessPointCandidates.concat(
-      snapshot.accessPointCandidates ?? [],
+      osmSnapshot.accessPointCandidates ?? [],
     );
-    const roadSourceIds = new Set(snapshot.publicRoadSourceNodeIds ?? []);
+    const roadSourceIds = new Set(osmSnapshot.publicRoadSourceNodeIds ?? []);
     input.publicRoadNodeIds = input.publicRoadNodeIds.concat(topology.nodes.filter((node) =>
       node.sourceNodeIds.some((sourceId) => roadSourceIds.has(sourceId))).map(({ id }) => id));
     input.pipelineIssues = input.pipelineIssues.concat(topology.issues);
+    endStage(telemetry, topologyStage, {
+      issues: topology.issues.length,
+      nodes: topology.nodes.length,
+      publicRoadNodes: input.publicRoadNodeIds.length,
+      segments: topology.segments.length,
+    }, ["parsed-osm-snapshot", "topology-nodes", "topology-segments"]);
+    osmSnapshot = undefined;
   }
   if (input.elevationGridPath) {
     const gridPath = resolve(inputDirectory, input.elevationGridPath);
@@ -793,7 +1021,18 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
       resolve(inputDirectory, input.elevationTilesPath),
     );
   }
-  const result = await buildRegionArtifacts(input);
+  endStage(telemetry, snapshotStage, {
+    accessPointCandidates: input.accessPointCandidates.length,
+    normalizedSegmentCandidates: input.segmentCandidates.length,
+    osmRecords,
+    sourceNodes: input.sourceNodes.length,
+  }, [
+    "parsed-build-input",
+    "normalized-agency-candidates",
+    "normalized-osm-topology",
+    ...(input.elevationSource ? ["cached-elevation-source"] : []),
+  ]);
+  const result = await buildRegionArtifacts(input, { telemetry });
   const destination = outputDirectory ?? resolve(
     "data/trails/generated",
     result.region.id,
@@ -805,7 +1044,7 @@ export async function buildRegionFromFile(inputPath, { outputDirectory, regionId
 function commandLineOptions(argv) {
   const options = {};
   for (const argument of argv) {
-    const match = /^--(region|input|output)=(.+)$/.exec(argument);
+    const match = /^--(region|input|output|telemetry)=(.+)$/.exec(argument);
     if (!match) throw new Error(`Unknown argument ${argument}`);
     options[match[1]] = match[2];
   }
@@ -817,9 +1056,20 @@ function commandLineOptions(argv) {
 
 async function main() {
   const options = commandLineOptions(process.argv.slice(2));
+  let telemetry;
+  if (options.telemetry) {
+    const telemetryPath = resolve(options.telemetry);
+    writeFileSync(telemetryPath, "");
+    telemetry = createBuildStageTelemetry({
+      emit(event) {
+        appendFileSync(telemetryPath, `${JSON.stringify(event)}\n`);
+      },
+    });
+  }
   const result = await buildRegionFromFile(options.input, {
     outputDirectory: resolve(options.output),
     regionId: options.region,
+    telemetry,
   });
   process.stdout.write(
     `Built ${result.manifest.counts.segments} segments and ` +
