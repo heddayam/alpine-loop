@@ -31,6 +31,34 @@ The synthetic fixture constructs the measured 24,029-point shape in memory. It d
 commit cached regional corpora. Tests reverse both trail and access arrays to prove deterministic
 response order, preserve selected markers, and assert response-byte and marker budgets.
 
+## Prepared contour evaluation
+
+Search prepares the submitted Polygon or MultiPolygon once, before evaluating regional access
+points. Each ring retains its existing boundary-inclusive even/odd semantics while adding expanded
+bounds and adaptive latitude bins. An edge is placed in every bin whose latitude range can affect;
+very long-span edges are retained once in a separate list to bound index memory. Horizontal edges,
+vertices exactly on bin boundaries, repeated vertices, hole boundaries, overlapping multipolygons,
+and planar antimeridian-adjacent coordinates are covered by differential tests against the original
+full-ring algorithm. A pathological long-span zigzag is also covered: its separate spanning-edge
+list bounds index memory, but it does not guarantee a worst-case CPU reduction when most edges cross
+most latitude bins. That case remains linear in the ring size and makes no candidate-reduction claim.
+
+The deterministic representative performance fixture uses all 24,029 regional-shape access points
+and a dense radial contour matching the local edge shape of typical provider polygons. For this
+fixture only, the operation-count threshold is at least a 200x reduction from the naive point-count
+times vertex-count candidate bound. Wall time is illustrative and is not a pass/fail assertion. One
+full-suite run on the local Node test runtime reported:
+
+| Contour | Naive edge bound | Prepared candidates | Reduction | Prepare | Classify | End-to-end search |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 50,001 vertices | 1,201,474,029 | 1,276,990 | 941x | 79.1 ms | 21.4 ms | 193.9 ms |
+| 200,000 vertices | 4,805,800,000 | 1,281,423 | 3,750x | 11.2 ms | 12.8 ms | 156.7 ms |
+
+The single-run timings are hardware-, JIT-, GC-, and test-order-dependent; they are not a latency
+guarantee or a Gate F threshold. The deterministic candidate counts provide the gating evidence for
+the representative contour shape. The tests preserve the 8 MiB request and 200,000-vertex safety
+ceilings; provider contours are not simplified.
+
 ## Deferred P6 integration
 
 P6's runtime adapter must hydrate the same `RegionalTrailCatalog` fields (`namedTrails`,

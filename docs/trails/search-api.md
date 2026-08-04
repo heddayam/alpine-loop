@@ -23,7 +23,10 @@ request. Search responses contain metadata only; selected display geometry is lo
 existing reachability payload may also be passed as `geoJson`. `query` and `limit` are optional;
 the maximum limit is 500. Requests are capped at 8 MiB and normalized drive-time geometry is
 capped at 200,000 vertices. Reachability is computed once for each regional access point, keeping
-request cost bounded while accommodating detailed four- and five-hour provider contours.
+request cost bounded while accommodating detailed four- and five-hour provider contours. The
+validated contour is prepared once with bounds and an exact latitude edge index; this preserves
+boundary-inclusive Polygon, MultiPolygon, and hole behavior without rescanning every contour edge
+for every access point.
 
 The response has this shape:
 

@@ -122,6 +122,40 @@ type PolygonGeometry = { type: "Polygon"; coordinates: Position[][] };
 type MultiPolygonGeometry = { type: "MultiPolygon"; coordinates: Position[][][] };
 export type DriveTimeGeometry = PolygonGeometry | MultiPolygonGeometry;
 
+type PreparedRingEdge = {
+  start: Position;
+  end: Position;
+  minimumLongitude: number;
+  minimumLatitude: number;
+  maximumLongitude: number;
+  maximumLatitude: number;
+};
+
+type PreparedRing = {
+  edges: PreparedRingEdge[];
+  latitudeBins: number[][];
+  spanningEdgeIndexes: number[];
+  minimumLongitude: number;
+  minimumLatitude: number;
+  maximumLongitude: number;
+  maximumLatitude: number;
+};
+
+type PreparedPolygon = {
+  outer: PreparedRing;
+  holes: PreparedRing[];
+};
+
+export type PreparedDriveTimeGeometry = {
+  polygons: PreparedPolygon[];
+};
+
+export type PreparedGeometryStats = {
+  candidateEdges: number;
+  edgeChecks: number;
+  boundsRejected: number;
+};
+
 export type TrailSearchRequest = {
   regionId: string;
   driveTimePolygon: DriveTimeGeometry;
@@ -219,14 +253,19 @@ export function parseTrailSearchRequest(value: unknown): ParseResult {
   };
 }
 
+const POINT_ON_SEGMENT_EPSILON = 1e-12;
+const TARGET_EDGES_PER_LATITUDE_BIN = 64;
+const MAX_LATITUDE_BINS = 4_096;
+const MAX_EDGE_BIN_COPIES = 64;
+
 function pointOnSegment(point: Position, start: Position, end: Position) {
   const cross = (point[1] - start[1]) * (end[0] - start[0]) -
     (point[0] - start[0]) * (end[1] - start[1]);
-  if (Math.abs(cross) > 1e-12) return false;
-  return point[0] >= Math.min(start[0], end[0]) - 1e-12 &&
-    point[0] <= Math.max(start[0], end[0]) + 1e-12 &&
-    point[1] >= Math.min(start[1], end[1]) - 1e-12 &&
-    point[1] <= Math.max(start[1], end[1]) + 1e-12;
+  if (Math.abs(cross) > POINT_ON_SEGMENT_EPSILON) return false;
+  return point[0] >= Math.min(start[0], end[0]) - POINT_ON_SEGMENT_EPSILON &&
+    point[0] <= Math.max(start[0], end[0]) + POINT_ON_SEGMENT_EPSILON &&
+    point[1] >= Math.min(start[1], end[1]) - POINT_ON_SEGMENT_EPSILON &&
+    point[1] <= Math.max(start[1], end[1]) + POINT_ON_SEGMENT_EPSILON;
 }
 
 function ringLocation(point: Position, ring: Position[]): "inside" | "outside" | "boundary" {
@@ -258,6 +297,142 @@ function pointInPolygon(point: Position, coordinates: Position[][]) {
 export function pointInDriveTimeGeometry(point: Position, geometry: DriveTimeGeometry) {
   const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
   return polygons.some((polygon) => pointInPolygon(point, polygon));
+}
+
+function prepareRing(ring: Position[]): PreparedRing {
+  let minimumLongitude = Infinity;
+  let minimumLatitude = Infinity;
+  let maximumLongitude = -Infinity;
+  let maximumLatitude = -Infinity;
+  for (const [longitude, latitude] of ring) {
+    minimumLongitude = Math.min(minimumLongitude, longitude);
+    minimumLatitude = Math.min(minimumLatitude, latitude);
+    maximumLongitude = Math.max(maximumLongitude, longitude);
+    maximumLatitude = Math.max(maximumLatitude, latitude);
+  }
+
+  const edges: PreparedRingEdge[] = [];
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const start = ring[previous];
+    const end = ring[index];
+    edges.push({
+      start,
+      end,
+      minimumLongitude: Math.min(start[0], end[0]),
+      minimumLatitude: Math.min(start[1], end[1]),
+      maximumLongitude: Math.max(start[0], end[0]),
+      maximumLatitude: Math.max(start[1], end[1]),
+    });
+  }
+
+  const binCount = Math.min(
+    MAX_LATITUDE_BINS,
+    Math.max(1, Math.ceil(edges.length / TARGET_EDGES_PER_LATITUDE_BIN)),
+  );
+  const latitudeBins = Array.from({ length: binCount }, (): number[] => []);
+  const expandedMinimumLatitude = minimumLatitude - POINT_ON_SEGMENT_EPSILON;
+  const expandedMaximumLatitude = maximumLatitude + POINT_ON_SEGMENT_EPSILON;
+  const latitudeSpan = expandedMaximumLatitude - expandedMinimumLatitude;
+  const latitudeBinIndex = (latitude: number) => Math.max(0, Math.min(
+    binCount - 1,
+    Math.floor(((latitude - expandedMinimumLatitude) / latitudeSpan) * binCount),
+  ));
+  const spanningEdgeIndexes: number[] = [];
+
+  edges.forEach((edge, edgeIndex) => {
+    const firstBin = latitudeBinIndex(edge.minimumLatitude - POINT_ON_SEGMENT_EPSILON);
+    const lastBin = latitudeBinIndex(edge.maximumLatitude + POINT_ON_SEGMENT_EPSILON);
+    if (lastBin - firstBin + 1 > MAX_EDGE_BIN_COPIES) {
+      spanningEdgeIndexes.push(edgeIndex);
+      return;
+    }
+    for (let binIndex = firstBin; binIndex <= lastBin; binIndex += 1) {
+      latitudeBins[binIndex].push(edgeIndex);
+    }
+  });
+
+  return {
+    edges,
+    latitudeBins,
+    spanningEdgeIndexes,
+    minimumLongitude: minimumLongitude - POINT_ON_SEGMENT_EPSILON,
+    minimumLatitude: expandedMinimumLatitude,
+    maximumLongitude: maximumLongitude + POINT_ON_SEGMENT_EPSILON,
+    maximumLatitude: expandedMaximumLatitude,
+  };
+}
+
+export function prepareDriveTimeGeometry(
+  geometry: DriveTimeGeometry,
+): PreparedDriveTimeGeometry {
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  return {
+    polygons: polygons.map(([outer, ...holes]) => ({
+      outer: prepareRing(outer),
+      holes: holes.map(prepareRing),
+    })),
+  };
+}
+
+function preparedLatitudeBinIndex(ring: PreparedRing, latitude: number) {
+  const span = ring.maximumLatitude - ring.minimumLatitude;
+  return Math.max(0, Math.min(
+    ring.latitudeBins.length - 1,
+    Math.floor(((latitude - ring.minimumLatitude) / span) * ring.latitudeBins.length),
+  ));
+}
+
+function preparedRingLocation(
+  point: Position,
+  ring: PreparedRing,
+  stats?: PreparedGeometryStats,
+): "inside" | "outside" | "boundary" {
+  if (point[0] < ring.minimumLongitude || point[0] > ring.maximumLongitude ||
+      point[1] < ring.minimumLatitude || point[1] > ring.maximumLatitude) {
+    if (stats) stats.boundsRejected += 1;
+    return "outside";
+  }
+
+  let inside = false;
+  const bin = ring.latitudeBins[preparedLatitudeBinIndex(ring, point[1])];
+  const candidateIndexes = ring.spanningEdgeIndexes.length === 0
+    ? bin
+    : [...ring.spanningEdgeIndexes, ...bin];
+  if (stats) stats.candidateEdges += candidateIndexes.length;
+
+  for (const edgeIndex of candidateIndexes) {
+    const edge = ring.edges[edgeIndex];
+    if (point[1] < edge.minimumLatitude - POINT_ON_SEGMENT_EPSILON ||
+        point[1] > edge.maximumLatitude + POINT_ON_SEGMENT_EPSILON ||
+        point[0] > edge.maximumLongitude + POINT_ON_SEGMENT_EPSILON) {
+      continue;
+    }
+    if (stats) stats.edgeChecks += 1;
+    if (pointOnSegment(point, edge.start, edge.end)) return "boundary";
+    const crosses = (edge.end[1] > point[1]) !== (edge.start[1] > point[1]) &&
+      point[0] < ((edge.start[0] - edge.end[0]) * (point[1] - edge.end[1])) /
+        (edge.start[1] - edge.end[1]) + edge.end[0];
+    if (crosses) inside = !inside;
+  }
+  return inside ? "inside" : "outside";
+}
+
+export function pointInPreparedDriveTimeGeometry(
+  point: Position,
+  geometry: PreparedDriveTimeGeometry,
+  stats?: PreparedGeometryStats,
+) {
+  return geometry.polygons.some((polygon) => {
+    const outer = preparedRingLocation(point, polygon.outer, stats);
+    if (outer === "outside") return false;
+    if (outer === "boundary") return true;
+    for (const hole of polygon.holes) {
+      const location = preparedRingLocation(point, hole, stats);
+      if (location === "boundary") return true;
+      if (location === "inside") return false;
+    }
+    return true;
+  });
 }
 
 function searchableText(value: string) {
@@ -392,8 +567,9 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
   }
   const accessPoints = new Map(catalog.accessPoints.map((feature) =>
     [feature.properties.id, feature]));
+  const preparedDriveTimeGeometry = prepareDriveTimeGeometry(request.driveTimePolygon);
   const reachableAccessPointIds = new Set(catalog.accessPoints.flatMap((feature) =>
-    pointInDriveTimeGeometry(feature.geometry.coordinates, request.driveTimePolygon)
+    pointInPreparedDriveTimeGeometry(feature.geometry.coordinates, preparedDriveTimeGeometry)
       ? [feature.properties.id]
       : []));
   const query = request.query ? searchableText(request.query) : undefined;
