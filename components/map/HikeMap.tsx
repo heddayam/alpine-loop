@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FeatureCollection, LineString, Point } from "geojson";
-import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
+import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker as MapLibreMarker } from "maplibre-gl";
 import type { GeneratedRoute } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
@@ -21,6 +21,17 @@ type HikeMapProps = {
 };
 
 type ScreenBox = { left: number; top: number; width: number; height: number };
+
+export type RouteTrailheadPin = {
+  key: string;
+  coordinates: [number, number];
+  name: string;
+  routeIds: string[];
+  routeNumbers: number[];
+  numberLabel: string;
+  selected: boolean;
+  nextRouteId: string;
+};
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
@@ -52,6 +63,45 @@ export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string
   };
 }
 
+function numberLabel(numbers: number[]): string {
+  if (numbers.length <= 4) return numbers.join("·");
+  const consecutive = numbers.every((number, index) => index === 0 || number === numbers[index - 1]! + 1);
+  return consecutive ? `${numbers[0]}–${numbers.at(-1)}` : `${numbers.slice(0, 3).join("·")}+${numbers.length - 3}`;
+}
+
+export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: string): RouteTrailheadPin[] {
+  const groups = new Map<string, Omit<RouteTrailheadPin, "numberLabel" | "selected" | "nextRouteId">>();
+  routes.forEach((route, index) => {
+    const point = route.startAccessPoint;
+    const key = `${point.id}:${point.lon}:${point.lat}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.routeIds.push(route.id);
+      existing.routeNumbers.push(index + 1);
+      return;
+    }
+    groups.set(key, {
+      key,
+      coordinates: [point.lon, point.lat],
+      name: point.name,
+      routeIds: [route.id],
+      routeNumbers: [index + 1],
+    });
+  });
+
+  return [...groups.values()].map((group) => {
+    const selectedIndex = selectedRouteId ? group.routeIds.indexOf(selectedRouteId) : -1;
+    return {
+      ...group,
+      numberLabel: numberLabel(group.routeNumbers),
+      selected: selectedIndex >= 0,
+      nextRouteId: selectedIndex >= 0
+        ? group.routeIds[(selectedIndex + 1) % group.routeIds.length]!
+        : group.routeIds[0]!,
+    };
+  });
+}
+
 function screenBoxForBounds(map: MapLibreMap, bounds: Bounds): ScreenBox {
   const [west, south, east, north] = bounds;
   const northwest = map.project([west, north]);
@@ -78,6 +128,8 @@ export function HikeMap({
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const routeMarkerConstructorRef = useRef<typeof import("maplibre-gl").Marker | null>(null);
+  const routeMarkersRef = useRef<MapLibreMarker[]>([]);
   const startRef = useRef<[number, number] | null>(null);
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
@@ -109,8 +161,9 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
-    void import("maplibre-gl").then(({ Map, NavigationControl }) => {
+    void import("maplibre-gl").then(({ Map, Marker, NavigationControl }) => {
       if (!alive || !containerRef.current) return;
+      routeMarkerConstructorRef.current = Marker;
       map = new Map({
         container: containerRef.current,
         center: [-122.16, 37.165],
@@ -254,8 +307,11 @@ export function HikeMap({
     });
     return () => {
       alive = false;
+      routeMarkersRef.current.forEach((marker) => marker.remove());
+      routeMarkersRef.current = [];
       map?.remove();
       mapRef.current = null;
+      routeMarkerConstructorRef.current = null;
     };
   }, [onAccessPointSelect, onRouteSelect, packCoverage]);
 
@@ -296,6 +352,49 @@ export function HikeMap({
     const source = mapRef.current?.getSource("generated-routes") as GeoJSONSource | undefined;
     source?.setData(routes.length > 0 ? routeFeatures(routes, selectedRouteId) : EMPTY_LINES);
   }, [routes, selectedRouteId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const Marker = routeMarkerConstructorRef.current;
+    if (!map || !Marker || !mapReady) return;
+
+    routeMarkersRef.current.forEach((marker) => marker.remove());
+    routeMarkersRef.current = routeTrailheadPins(routes, selectedRouteId).map((pin) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = [
+        "route-trailhead-pin",
+        pin.selected ? "selected" : "",
+        pin.numberLabel.length > 4 ? "dense" : "",
+      ].filter(Boolean).join(" ");
+      element.dataset.routeCount = String(pin.routeIds.length);
+      const routeDescription = pin.routeNumbers.length === 1
+        ? `route ${pin.routeNumbers[0]}`
+        : `routes ${pin.routeNumbers.join(", ")}`;
+      element.setAttribute("aria-label", `${pin.name}, ${routeDescription}${pin.selected ? ", selected" : ""}`);
+      element.title = `${pin.name} · ${routeDescription}${pin.routeIds.length > 1 ? " · click to cycle matches" : ""}`;
+
+      const shape = document.createElement("span");
+      shape.className = "route-trailhead-pin-shape";
+      const label = document.createElement("span");
+      label.className = "route-trailhead-pin-number";
+      label.textContent = pin.numberLabel;
+      shape.append(label);
+      element.append(shape);
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onRouteSelect(pin.nextRouteId);
+      });
+
+      return new Marker({ element, anchor: "bottom" }).setLngLat(pin.coordinates).addTo(map);
+    });
+
+    return () => {
+      routeMarkersRef.current.forEach((marker) => marker.remove());
+      routeMarkersRef.current = [];
+    };
+  }, [mapReady, onRouteSelect, routes, selectedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
