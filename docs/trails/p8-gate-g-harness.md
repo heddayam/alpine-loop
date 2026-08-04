@@ -4,8 +4,9 @@ Status: **offline harness ready; no P8 build, Gate G acceptance, publication, or
 
 The harness at `scripts/trails/verify-gate-g.mjs` prepares deterministic evidence for one P8 region
 at a time. It validates both artifact-contract-v2 directories, compares the complete declared
-artifact sets, extracts machine QA and access evidence, measures selected-trail geometry fanout, and
-writes a compact review skeleton that always ends with `Gate G accepted: NO`.
+artifact sets, extracts machine QA and access evidence, verifies the per-trail immutable geometry
+contract and search-index linkage, and writes a compact review skeleton that always ends with
+`Gate G accepted: NO`.
 
 It does not alter either artifact directory, accept QA, publish objects, change an active pointer, or
 activate a region.
@@ -44,13 +45,13 @@ remove any inherited heap-related `NODE_OPTIONS`:
 env -u NODE_OPTIONS node scripts/trails/build-region.mjs \
   --region=<region-id> \
   --input=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/build-input.json \
-  --output=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/artifacts-p8-a \
+  --output=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-a/<region-id> \
   --telemetry=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/p8-a-telemetry.ndjson
 
 env -u NODE_OPTIONS node scripts/trails/build-region.mjs \
   --region=<region-id> \
   --input=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/build-input.json \
-  --output=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/artifacts-p8-b \
+  --output=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-b/<region-id> \
   --telemetry=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/p8-b-telemetry.ndjson
 ```
 
@@ -87,13 +88,22 @@ accepted as substitutes for the measured structures.
 
 ## Gate G evidence command
 
-After both builds and the regional access evidence exist, run:
+Generate the runtime search index from build A with the production builder. The search index is
+separate from the artifact directory and must link its manifest, named-trail, canonical segment
+index, and per-trail geometry index hashes:
+
+```bash
+node --input-type=module --eval='import { writeTrailSearchIndex } from "./scripts/trails/build-search-index.mjs"; await writeTrailSearchIndex("<region-id>", { artifactRoot: "/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-a", outputRoot: "/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-search-indexes" });'
+```
+
+After both builds, that search index, and the regional access evidence exist, run:
 
 ```bash
 node scripts/trails/verify-gate-g.mjs \
   --region=<region-id> \
-  --build-a=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/artifacts-p8-a \
-  --build-b=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/artifacts-p8-b \
+  --build-a=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-a/<region-id> \
+  --build-b=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-b/<region-id> \
+  --search-index=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/p8-search-indexes/<region-id>.json \
   --access-evidence=/Users/mouradheddaya/Documents/alpine-search/.cache/trails/<region-id>/access-evidence.json \
   --max-total-object-reads=50 \
   --max-concurrent-reads=6 \
@@ -104,23 +114,31 @@ The values 50 total object reads and 6 concurrent reads are current deployment-p
 not artifact-schema or permanent platform constants. Reverify and explicitly supply the applicable
 limits before each Gate G review.
 
-The current P6 adapter is modeled as six fixed object reads before geometry (`current.json`, the
-manifest, and four runtime metadata objects), with up to four metadata reads concurrent. Its current
-geometry loader fans all distinct segment shards out concurrently. For every named trail the harness
-therefore reports:
+The frozen P6 adapter is modeled as seven sequential reads before geometry: `current.json`, the
+manifest, named trails, access points, canonical segment index, per-trail geometry index, and runtime
+search index. Selected geometry then performs one exact-key GET for the named trail's immutable
+object. For every named trail the harness therefore reports:
 
-- distinct geometry shard/object reads;
-- estimated raw and compressed geometry bytes read;
-- estimated full-request reads (`6 + geometry objects`);
-- estimated maximum concurrency (`max(4, geometry objects)`);
-- whether the selected display geometry resolves to exactly one immutable geometry object;
+- the exact `trail-geometry/<first-two-trail-id-hex>/<trail-id>.ndjson` path;
+- exact raw and compressed selected-object bytes;
+- estimated full-request reads (`7 + 1 selected object`);
+- sequential maximum concurrency of one read;
+- exact named-trail, geometry-index, and manifest coverage;
+- the linked `trailGeometryIndexSha256` in the runtime search index;
 - whether the supplied total-read and concurrent-read ceilings pass.
 
-The accepted delivery contract is one immutable selected-display-geometry object per trail. An
-ordinary object must remain at or below 8 MiB raw and 2 MiB compressed; only a manifest-declared,
-reviewed exception may exceed those sizes. The current segment-prefix layout can spread a trail over
-many objects, so this check is expected to expose a Gate F blocker until the delivery design is
-corrected. The P8 harness does not change the artifact or runtime contracts itself.
+The canonical segment-prefix shards remain required runtime artifacts for later routing, but they
+are not selected display geometry. The report records their per-trail fanout only to prove that the
+selected endpoint remains one object. A pre-extension v2 build without
+`manifest.delivery.lazyTrailGeometryIndex === "trail-geometry/index.json"` is blocked explicitly;
+the harness reports its legacy segment-shard fanout and does not treat those shards as an acceptable
+selected-geometry fallback.
+
+An ordinary per-trail geometry object must remain at or below 8 MiB raw and 2 MiB compressed. An
+exception must exactly match manifest path, raw bytes, compressed bytes, and a non-empty reviewed
+note. Even a reviewed exception may not exceed the runtime hard cap of 16 MiB raw. The harness also
+reports total raw/compressed bytes across the immutable per-trail geometry corpus and includes every
+object in the two-build byte-identity evidence.
 
 ## Manual review that remains mandatory
 

@@ -25,16 +25,19 @@ export const P8_REGION_IDS = Object.freeze([
 export const GATE_G_RESPONSE_BUDGET_BYTES = 448 * 1024;
 export const GATE_G_LOW_ZOOM_MARKER_BUDGET = 200;
 
-// The current P6 adapter reads current.json, the manifest, and four runtime
-// metadata objects before selected geometry. These are implementation
-// measurements, not platform limits or artifact-schema constants.
-export const P6_FIXED_RUNTIME_OBJECT_READS = 6;
-export const P6_METADATA_CONCURRENT_READS = 4;
+// The P6 adapter reads current.json, the manifest, and five runtime metadata
+// objects sequentially before one exact selected-geometry object. These are
+// implementation measurements, not platform or artifact-schema limits.
+export const P6_FIXED_RUNTIME_OBJECT_READS = 7;
+export const P6_SELECTED_GEOMETRY_OBJECT_READS = 1;
+export const P6_RUNTIME_CONCURRENT_READS = 1;
+export const P6_RUNTIME_GEOMETRY_HARD_RAW_BYTES = 16 * 1024 * 1024;
 
 const REQUIRED_RUNTIME_ARTIFACTS = Object.freeze([
   "access-points.geojson",
   "named-trails.json",
   "segments/index.json",
+  "trail-geometry/index.json",
 ]);
 
 function fail(message) {
@@ -98,24 +101,72 @@ function runtimeRequirements(manifest) {
     .filter(([path, artifact]) => /^segments\/[0-9a-f]+\.ndjson$/.test(path) &&
       artifact.role === "runtime")
     .sort(([left], [right]) => left.localeCompare(right));
+  const trailGeometryObjects = Object.entries(manifest.artifacts ?? {})
+    .filter(([path, artifact]) =>
+      /^trail-geometry\/[0-9a-f]{2}\/named-trail_[0-9a-f]+\.ndjson$/.test(path) &&
+      artifact.role === "runtime")
+    .sort(([left], [right]) => left.localeCompare(right));
   const targets = manifest.delivery?.shardSizeTargets;
-  const oversized = segmentShards.filter(([, artifact]) =>
+  const oversized = [...segmentShards, ...trailGeometryObjects].filter(([, artifact]) =>
     artifact.rawBytes > targets.rawBytes || artifact.compressedBytes > targets.compressedBytes)
     .map(([path]) => path);
   return {
-    requiredRuntimeArtifactsPresent: missingRequiredRuntimeArtifacts.length === 0,
+    deliveryContractPresent:
+      manifest.delivery?.lazyTrailGeometryIndex === "trail-geometry/index.json",
+    requiredRuntimeArtifactsPresent: missingRequiredRuntimeArtifacts.length === 0 &&
+      manifest.delivery?.lazyTrailGeometryIndex === "trail-geometry/index.json",
     missingRequiredRuntimeArtifacts,
-    geometryShards: segmentShards.length,
+    canonicalSegmentShards: segmentShards.length,
+    trailGeometryObjects: trailGeometryObjects.length,
+    declaredArtifactFiles: Object.keys(manifest.artifacts ?? {}).length,
     rawByteTarget: targets.rawBytes,
     compressedByteTarget: targets.compressedBytes,
-    oversizedGeometryShards: oversized,
-    documentedExceptions: (targets.exceptions ?? []).map(({ path, note }) => ({ path, note })),
+    oversizedRuntimeGeometryObjects: oversized,
+    documentedExceptions: (targets.exceptions ?? []).map(
+      ({ path, rawBytes, compressedBytes, note }) => ({ path, rawBytes, compressedBytes, note }),
+    ),
   };
 }
 
 function requirePositiveInteger(value, label) {
   if (!Number.isSafeInteger(value) || value < 1) fail(`${label} must be a positive integer`);
   return value;
+}
+
+export function assessTrailGeometrySize(path, metadata, targets, exceptions) {
+  const exceedsOrdinaryTarget = metadata.rawBytes > targets.rawBytes ||
+    metadata.compressedBytes > targets.compressedBytes;
+  const exception = exceptions.find((candidate) => candidate.path === path);
+  const exactReviewedException = exceedsOrdinaryTarget && Boolean(exception) &&
+    exception.rawBytes === metadata.rawBytes &&
+    exception.compressedBytes === metadata.compressedBytes &&
+    typeof exception.note === "string" && Boolean(exception.note.trim());
+  const hardRawCapPass = metadata.rawBytes <= P6_RUNTIME_GEOMETRY_HARD_RAW_BYTES;
+  return {
+    exceedsOrdinaryTarget,
+    exactReviewedException,
+    hardRawCapPass,
+    pass: hardRawCapPass && (!exceedsOrdinaryTarget || exactReviewedException),
+  };
+}
+
+async function legacySegmentShardFanout(directory, manifest) {
+  const [namedValue, segmentIndex] = await Promise.all([
+    loadJson(resolve(directory, "named-trails.json"), "named-trails.json"),
+    loadJson(resolve(directory, "segments/index.json"), "segments/index.json"),
+  ]);
+  const prefixLength = partitionPrefixLength(segmentIndex);
+  const trails = (namedValue.trails ?? []).map((trail) => ({
+    id: trail.id,
+    shardObjects: new Set(trail.segmentIds.map((segmentId) =>
+      segmentPartitionKey(segmentId, prefixLength))).size,
+  })).sort((left, right) =>
+    right.shardObjects - left.shardObjects || left.id.localeCompare(right.id));
+  return {
+    buildId: manifest.buildId,
+    maximumShardObjects: trails[0]?.shardObjects ?? 0,
+    maximumTrailId: trails[0]?.id ?? null,
+  };
 }
 
 async function runtimeDelivery(directory, manifest, limits) {
@@ -127,59 +178,87 @@ async function runtimeDelivery(directory, manifest, limits) {
     limits?.concurrentReads,
     "max concurrent reads",
   );
-  const [namedValue, segmentIndex] = await Promise.all([
+  const [namedValue, segmentIndex, trailGeometryIndex] = await Promise.all([
     loadJson(resolve(directory, "named-trails.json"), "named-trails.json"),
     loadJson(resolve(directory, "segments/index.json"), "segments/index.json"),
+    loadJson(resolve(directory, "trail-geometry/index.json"), "trail-geometry/index.json"),
   ]);
   const prefixLength = partitionPrefixLength(segmentIndex);
+  const namedTrailIds = (namedValue.trails ?? []).map(({ id }) => id).sort();
+  const indexedTrailIds = Object.keys(trailGeometryIndex.objects ?? {}).sort();
+  const declaredPaths = Object.keys(manifest.artifacts ?? {})
+    .filter((path) => /^trail-geometry\/[0-9a-f]{2}\/named-trail_[0-9a-f]+\.ndjson$/.test(path))
+    .sort();
+  const indexedPaths = Object.values(trailGeometryIndex.objects ?? {})
+    .map(({ path }) => path).sort();
+  const exactCoverage = JSON.stringify(namedTrailIds) === JSON.stringify(indexedTrailIds) &&
+    JSON.stringify(declaredPaths) === JSON.stringify(indexedPaths);
+  const targets = manifest.delivery.shardSizeTargets;
   const trails = (namedValue.trails ?? []).map((trail) => {
-    const prefixes = [...new Set(trail.segmentIds.map((segmentId) =>
-      segmentPartitionKey(segmentId, prefixLength)))].sort();
-    const paths = prefixes.map((prefix) => segmentIndex.shards[prefix]?.path);
-    const missingPrefixes = prefixes.filter((prefix, index) => !paths[index]);
-    const geometryRawBytes = paths.reduce((total, path) =>
-      total + (manifest.artifacts[path]?.rawBytes ?? 0), 0);
-    const geometryCompressedBytes = paths.reduce((total, path) =>
-      total + (manifest.artifacts[path]?.compressedBytes ?? 0), 0);
-    const geometryObjectReads = paths.length;
+    const canonicalSegmentShards = new Set(trail.segmentIds.map((segmentId) =>
+      segmentPartitionKey(segmentId, prefixLength))).size;
+    const entry = trailGeometryIndex.objects?.[trail.id];
+    const expectedPrefix = /^named-trail_([0-9a-f]{2})[0-9a-f]+$/.exec(trail.id)?.[1];
+    const expectedPath = expectedPrefix
+      ? `trail-geometry/${expectedPrefix}/${trail.id}.ndjson`
+      : null;
+    const metadata = entry?.path ? manifest.artifacts?.[entry.path] : undefined;
+    const exactObject = Boolean(entry && entry.path === expectedPath &&
+      entry.records === trail.segmentIds.length && metadata?.path === entry.path &&
+      metadata.records === entry.records && metadata.role === "runtime" &&
+      metadata.application === "required");
+    const size = metadata
+      ? assessTrailGeometrySize(entry.path, metadata, targets, targets.exceptions)
+      : {
+          exceedsOrdinaryTarget: false,
+          exactReviewedException: false,
+          hardRawCapPass: false,
+          pass: false,
+        };
+    const geometryObjectReads = exactObject ? P6_SELECTED_GEOMETRY_OBJECT_READS : 0;
     const totalObjectReads = P6_FIXED_RUNTIME_OBJECT_READS + geometryObjectReads;
-    const estimatedConcurrentReads = Math.max(
-      P6_METADATA_CONCURRENT_READS,
-      geometryObjectReads,
-    );
+    const estimatedConcurrentReads = P6_RUNTIME_CONCURRENT_READS;
     return {
       id: trail.id,
       segments: trail.segmentIds.length,
+      path: entry?.path ?? null,
+      canonicalSegmentShards,
       geometryObjectReads,
-      geometryRawBytes,
-      geometryCompressedBytes,
+      geometryRawBytes: metadata?.rawBytes ?? 0,
+      geometryCompressedBytes: metadata?.compressedBytes ?? 0,
       totalObjectReads,
       estimatedConcurrentReads,
-      missingPrefixes,
-      oneImmutableGeometryObject: geometryObjectReads === 1 && missingPrefixes.length === 0,
+      exactObject,
+      size,
+      oneImmutableGeometryObject: exactObject && geometryObjectReads === 1,
       totalObjectReadsWithinCeiling: totalObjectReads <= totalObjectReadCeiling,
       concurrentReadsWithinCeiling: estimatedConcurrentReads <= concurrentReadCeiling,
     };
   }).sort((left, right) =>
-    right.geometryObjectReads - left.geometryObjectReads ||
     right.geometryRawBytes - left.geometryRawBytes ||
+    right.canonicalSegmentShards - left.canonicalSegmentShards ||
     left.id.localeCompare(right.id));
   const maximum = trails[0] ?? {
     geometryObjectReads: 0,
     geometryRawBytes: 0,
     geometryCompressedBytes: 0,
     totalObjectReads: P6_FIXED_RUNTIME_OBJECT_READS,
-    estimatedConcurrentReads: P6_METADATA_CONCURRENT_READS,
+    estimatedConcurrentReads: P6_RUNTIME_CONCURRENT_READS,
+    canonicalSegmentShards: 0,
   };
-  const requirements = runtimeRequirements(manifest);
+  const maximumCanonicalFanout = [...trails].sort((left, right) =>
+    right.canonicalSegmentShards - left.canonicalSegmentShards ||
+    left.id.localeCompare(right.id))[0];
   return {
     selectedTrailContract: "exactly one immutable geometry object",
     currentAdapterFixedObjectReads: P6_FIXED_RUNTIME_OBJECT_READS,
-    currentAdapterMetadataConcurrentReads: P6_METADATA_CONCURRENT_READS,
+    selectedGeometryObjectReads: P6_SELECTED_GEOMETRY_OBJECT_READS,
+    currentAdapterConcurrentReads: P6_RUNTIME_CONCURRENT_READS,
     totalObjectReadCeiling,
     concurrentReadCeiling,
     ordinaryObjectRawByteCeiling: MAX_RUNTIME_SHARD_RAW_BYTES,
     ordinaryObjectCompressedByteCeiling: MAX_RUNTIME_SHARD_GZIP_BYTES,
+    hardObjectRawByteCeiling: P6_RUNTIME_GEOMETRY_HARD_RAW_BYTES,
     trailsMeasured: trails.length,
     trailsUsingOneGeometryObject: trails.filter(({ oneImmutableGeometryObject }) =>
       oneImmutableGeometryObject).length,
@@ -187,10 +266,23 @@ async function runtimeDelivery(directory, manifest, limits) {
       !totalObjectReadsWithinCeiling).length,
     trailsExceedingConcurrentReadCeiling: trails.filter(({ concurrentReadsWithinCeiling }) =>
       !concurrentReadsWithinCeiling).length,
-    trailsWithMissingPrefixes: trails.filter(({ missingPrefixes }) => missingPrefixes.length > 0).length,
+    exactNamedTrailIndexManifestCoverage: exactCoverage && trails.every(({ exactObject }) => exactObject),
+    totalTrailGeometryRawBytes: trails.reduce((total, trail) =>
+      total + trail.geometryRawBytes, 0),
+    totalTrailGeometryCompressedBytes: trails.reduce((total, trail) =>
+      total + trail.geometryCompressedBytes, 0),
+    reviewedExceptionObjects: trails.filter(({ size }) => size.exactReviewedException)
+      .map(({ path }) => path).sort(),
+    maximumCanonicalSegmentShardFanout: {
+      trailId: maximumCanonicalFanout?.id ?? null,
+      shards: maximumCanonicalFanout?.canonicalSegmentShards ?? 0,
+      selectedGeometryObjectReads: maximumCanonicalFanout?.geometryObjectReads ?? 0,
+    },
     maximum: {
       trailId: maximum.id ?? null,
       segments: maximum.segments ?? 0,
+      path: maximum.path ?? null,
+      canonicalSegmentShards: maximum.canonicalSegmentShards,
       geometryObjectReads: maximum.geometryObjectReads,
       geometryRawBytes: maximum.geometryRawBytes,
       geometryCompressedBytes: maximum.geometryCompressedBytes,
@@ -200,6 +292,8 @@ async function runtimeDelivery(directory, manifest, limits) {
     largestFanouts: trails.slice(0, 10).map((trail) => ({
       trailId: trail.id,
       segments: trail.segments,
+      path: trail.path,
+      canonicalSegmentShards: trail.canonicalSegmentShards,
       geometryObjectReads: trail.geometryObjectReads,
       geometryRawBytes: trail.geometryRawBytes,
       geometryCompressedBytes: trail.geometryCompressedBytes,
@@ -207,13 +301,11 @@ async function runtimeDelivery(directory, manifest, limits) {
       estimatedConcurrentReads: trail.estimatedConcurrentReads,
     })),
     oneImmutableGeometryObjectPerTrail: trails.every(({ oneImmutableGeometryObject }) =>
-      oneImmutableGeometryObject),
+      oneImmutableGeometryObject) && exactCoverage,
     requestReadCeilingsPass: trails.every(({ totalObjectReadsWithinCeiling,
       concurrentReadsWithinCeiling }) =>
       totalObjectReadsWithinCeiling && concurrentReadsWithinCeiling),
-    ordinaryObjectSizeContractPass: requirements.oversizedGeometryShards.length === 0 ||
-      requirements.oversizedGeometryShards.every((path) =>
-        requirements.documentedExceptions.some((exception) => exception.path === path)),
+    ordinaryObjectSizeContractPass: trails.every(({ size }) => size.pass),
   };
 }
 
@@ -280,6 +372,39 @@ async function accessBudgetEvidence(path) {
   };
 }
 
+async function searchIndexEvidence(path, directory, regionId, manifest, manifestSha256) {
+  if (!path) return { supplied: false, linked: false };
+  const [searchIndex, namedValue, segmentIndex] = await Promise.all([
+    loadJson(resolve(path), "search index"),
+    loadJson(resolve(directory, "named-trails.json"), "named-trails.json"),
+    loadJson(resolve(directory, "segments/index.json"), "segments/index.json"),
+  ]);
+  const expectedTrailIds = (namedValue.trails ?? []).map(({ id }) => id).sort();
+  const indexedTrailIds = Object.keys(searchIndex.trails ?? {}).sort();
+  const source = searchIndex.source ?? {};
+  const checks = {
+    schemaAndRegion: searchIndex.schemaVersion === 1 && searchIndex.regionId === regionId,
+    manifestSha256: source.manifestSha256 === manifestSha256,
+    namedTrailsSha256:
+      source.namedTrailsSha256 === manifest.artifacts["named-trails.json"]?.sha256,
+    segmentsIndexSha256:
+      source.segmentsIndexSha256 === manifest.artifacts["segments/index.json"]?.sha256,
+    trailGeometryIndexSha256:
+      source.trailGeometryIndexSha256 ===
+        manifest.artifacts["trail-geometry/index.json"]?.sha256,
+    segmentPartitionPrefixLength:
+      source.segmentPartitionPrefixLength === partitionPrefixLength(segmentIndex),
+    exactTrailCoverage: JSON.stringify(indexedTrailIds) === JSON.stringify(expectedTrailIds),
+  };
+  return {
+    supplied: true,
+    linked: Object.values(checks).every(Boolean),
+    checks,
+    trails: indexedTrailIds.length,
+    trailGeometryIndexSha256: source.trailGeometryIndexSha256 ?? null,
+  };
+}
+
 function qaEvidence(qa) {
   const edgeFlags = qa.elevation?.implausibleMetricOutliers?.length ?? 0;
   const aggregateFlags = qa.elevation?.aggregateWindows?.outliers?.length ?? 0;
@@ -307,6 +432,7 @@ export async function verifyGateGEvidence({
   buildA,
   buildB,
   accessEvidence,
+  searchIndex,
   runtimeLimits,
 }) {
   if (!P8_REGION_IDS.includes(regionId)) {
@@ -318,6 +444,26 @@ export async function verifyGateGEvidence({
   const region = requireRegion(regionId);
   const directoryA = resolve(buildA);
   const directoryB = resolve(buildB);
+  const [manifestBufferA, manifestBufferB] = await Promise.all([
+    readFile(resolve(directoryA, "manifest.json")),
+    readFile(resolve(directoryB, "manifest.json")),
+  ]);
+  const manifestA = JSON.parse(manifestBufferA);
+  const manifestB = JSON.parse(manifestBufferB);
+  for (const [directory, manifest] of [
+    [directoryA, manifestA],
+    [directoryB, manifestB],
+  ]) {
+    if (manifest.schemaVersion === 2 &&
+        manifest.delivery?.lazyTrailGeometryIndex !== "trail-geometry/index.json") {
+      const legacy = await legacySegmentShardFanout(directory, manifest);
+      fail(
+        `pre-extension v2 build ${legacy.buildId} is blocked: it has no ` +
+        `trail-geometry/index.json contract; legacy selected geometry reaches ` +
+        `${legacy.maximumShardObjects} segment-shard objects for ${legacy.maximumTrailId}`,
+      );
+    }
+  }
   // Keep full regional validation sequential so the harness does not double
   // its validator live set merely to compare two builds.
   const validationA = await validateArtifactDirectory(directoryA);
@@ -328,14 +474,10 @@ export async function verifyGateGEvidence({
   if (validationA.regionId !== regionId || validationB.regionId !== regionId) {
     fail(`both builds must declare region ${regionId}`);
   }
-  const [manifestBufferA, manifestBufferB, qa, access] = await Promise.all([
-    readFile(resolve(directoryA, "manifest.json")),
-    readFile(resolve(directoryB, "manifest.json")),
+  const [qa, access] = await Promise.all([
     loadJson(resolve(directoryA, "qa.json"), "qa.json"),
     accessCredibility(directoryA),
   ]);
-  const manifestA = JSON.parse(manifestBufferA);
-  const manifestB = JSON.parse(manifestBufferB);
   const comparison = artifactComparison(
     manifestA,
     manifestB,
@@ -344,6 +486,14 @@ export async function verifyGateGEvidence({
   const budget = await accessBudgetEvidence(accessEvidence);
   const qaSummary = qaEvidence(qa);
   const delivery = await runtimeDelivery(directoryA, manifestA, runtimeLimits);
+  const manifestSha256A = createHash("sha256").update(manifestBufferA).digest("hex");
+  const search = await searchIndexEvidence(
+    searchIndex,
+    directoryA,
+    regionId,
+    manifestA,
+    manifestSha256A,
+  );
   const machineChecks = {
     artifactValidation: true,
     byteIdentical: comparison.byteIdentical,
@@ -358,6 +508,7 @@ export async function verifyGateGEvidence({
     oneImmutableGeometryObjectPerTrail: delivery.oneImmutableGeometryObjectPerTrail,
     runtimeRequestReadCeilings: delivery.requestReadCeilingsPass,
     runtimeObjectSizeContract: delivery.ordinaryObjectSizeContractPass,
+    searchIndexLinkage: search.linked,
   };
   return {
     reportVersion: 1,
@@ -367,7 +518,7 @@ export async function verifyGateGEvidence({
       labels: [basename(directoryA), basename(directoryB)],
       buildIdA: manifestA.buildId,
       buildIdB: manifestB.buildId,
-      manifestSha256A: await sha256File(resolve(directoryA, "manifest.json")),
+      manifestSha256A,
       manifestSha256B: await sha256File(resolve(directoryB, "manifest.json")),
       comparison,
     },
@@ -380,6 +531,7 @@ export async function verifyGateGEvidence({
     qa: qaSummary,
     access,
     accessBudget: budget,
+    searchIndex: search,
     runtimeDelivery: delivery,
     tahoeFlagReview: regionId === "tahoe-eldorado" ? {
       required: true,
@@ -424,6 +576,8 @@ export function renderGateGReport(evidence) {
       `${result(evidence.machineChecks.oneImmutableGeometryObjectPerTrail)}`,
     `- Full-request object-read ceilings: ${result(evidence.machineChecks.runtimeRequestReadCeilings)}`,
     `- Runtime object-size contract: ${result(evidence.machineChecks.runtimeObjectSizeContract)}`,
+    `- Search-index artifact linkage and exact trail coverage: ` +
+      `${result(evidence.machineChecks.searchIndexLinkage)}`,
     "",
     "## QA review inputs",
     "",
@@ -456,10 +610,14 @@ export function renderGateGReport(evidence) {
     `- Trails resolving to exactly one immutable geometry object: ` +
       `${evidence.runtimeDelivery.trailsUsingOneGeometryObject} / ` +
       `${evidence.runtimeDelivery.trailsMeasured}`,
-    `- Maximum geometry fanout: ${evidence.runtimeDelivery.maximum.geometryObjectReads} objects / ` +
-      `${evidence.runtimeDelivery.maximum.geometryRawBytes} estimated raw bytes / ` +
-      `${evidence.runtimeDelivery.maximum.geometryCompressedBytes} estimated compressed bytes ` +
+    `- Named-trail ↔ geometry-index ↔ manifest coverage: ` +
+      `${result(evidence.runtimeDelivery.exactNamedTrailIndexManifestCoverage)}`,
+    `- Largest selected object: ${evidence.runtimeDelivery.maximum.geometryRawBytes} raw / ` +
+      `${evidence.runtimeDelivery.maximum.geometryCompressedBytes} compressed bytes ` +
       `(trail \`${evidence.runtimeDelivery.maximum.trailId}\`)`,
+    `- Complete selected-geometry corpus: ` +
+      `${evidence.runtimeDelivery.totalTrailGeometryRawBytes} raw / ` +
+      `${evidence.runtimeDelivery.totalTrailGeometryCompressedBytes} compressed bytes`,
     `- Maximum full-request estimate: ${evidence.runtimeDelivery.maximum.totalObjectReads} object reads / ` +
       `${evidence.runtimeDelivery.maximum.estimatedConcurrentReads} concurrent reads`,
     `- Reviewed deployment-plan ceilings: ${evidence.runtimeDelivery.totalObjectReadCeiling} total / ` +
@@ -467,14 +625,22 @@ export function renderGateGReport(evidence) {
     `- Ordinary geometry object ceiling: ${evidence.runtimeDelivery.ordinaryObjectRawByteCeiling} raw / ` +
       `${evidence.runtimeDelivery.ordinaryObjectCompressedByteCeiling} compressed bytes; ` +
       "manifest-declared reviewed exceptions only",
+    `- Absolute reviewed-exception raw cap: ` +
+      `${evidence.runtimeDelivery.hardObjectRawByteCeiling} bytes`,
+    `- Largest canonical routing-shard fanout: ` +
+      `${evidence.runtimeDelivery.maximumCanonicalSegmentShardFanout.shards} shards, while selected ` +
+      `geometry remains ${evidence.runtimeDelivery.maximumCanonicalSegmentShardFanout
+        .selectedGeometryObjectReads} exact object GET`,
+    `- Search index supplied and linked: ${result(evidence.searchIndex.linked)}`,
     "",
-    "Largest measured fanouts:",
+    "Largest selected geometry objects:",
     "",
-    "| Trail | Segments | Geometry objects | Raw bytes | Full-request reads | Concurrent reads |",
+    "| Trail | Segments | Canonical shards | Selected GETs | Raw bytes | Compressed bytes |",
     "| --- | ---: | ---: | ---: | ---: | ---: |",
     ...evidence.runtimeDelivery.largestFanouts.slice(0, 5).map((trail) =>
-      `| \`${trail.trailId}\` | ${trail.segments} | ${trail.geometryObjectReads} | ` +
-      `${trail.geometryRawBytes} | ${trail.totalObjectReads} | ${trail.estimatedConcurrentReads} |`),
+      `| \`${trail.trailId}\` | ${trail.segments} | ${trail.canonicalSegmentShards} | ` +
+      `${trail.geometryObjectReads} | ${trail.geometryRawBytes} | ` +
+      `${trail.geometryCompressedBytes} |`),
     "",
     "## Required human review",
     "",
@@ -504,11 +670,11 @@ export function renderGateGReport(evidence) {
 function commandLineOptions(argv) {
   const options = {};
   for (const argument of argv) {
-    const match = /^--(region|build-a|build-b|access-evidence|report|max-total-object-reads|max-concurrent-reads)=(.+)$/.exec(argument);
+    const match = /^--(region|build-a|build-b|access-evidence|search-index|report|max-total-object-reads|max-concurrent-reads)=(.+)$/.exec(argument);
     if (!match) {
       fail("usage: verify-gate-g.mjs --region=<id> --build-a=<dir> --build-b=<dir> " +
         "--max-total-object-reads=<count> --max-concurrent-reads=<count> " +
-        "[--access-evidence=<json>] [--report=<markdown>]");
+        "--search-index=<json> [--access-evidence=<json>] [--report=<markdown>]");
     }
     options[match[1]] = match[2];
   }
@@ -522,6 +688,7 @@ async function main() {
     buildA: options["build-a"],
     buildB: options["build-b"],
     accessEvidence: options["access-evidence"],
+    searchIndex: options["search-index"],
     runtimeLimits: {
       totalObjectReads: Number(options["max-total-object-reads"]),
       concurrentReads: Number(options["max-concurrent-reads"]),
