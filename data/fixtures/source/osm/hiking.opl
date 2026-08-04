@@ -1,0 +1,9 @@
+n1 v1 dV c1 t i0 u Tname=Fixture%20Trailhead,highway=trailhead,access=yes x-122.20 y37.20
+n2 v1 dV c1 t i0 u T x-122.19 y37.205
+n3 v1 dV c1 t i0 u T x-122.18 y37.20
+n4 v1 dV c1 t i0 u Tamenity=parking,name=Uncertain%20Parking x-122.17 y37.19
+n5 v1 dV c1 t i0 u T x-122.20 y37.19
+n6 v1 dV c1 t i0 u T x-122.19 y37.19
+w101 v1 dV c1 t i0 u Thighway=path,name=Public%20Ridge%20Trail,foot=designated,surface=dirt Nn1,n2,n3
+w102 v1 dV c1 t i0 u Thighway=track,name=Reverse%20Track,oneway%3Afoot=-1,access=private Nn3,n4
+w103 v1 dV c1 t i0 u Thighway=motorway,name=Rejected%20road Nn5,n6

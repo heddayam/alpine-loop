@@ -1,0 +1,5 @@
+{"type":"Feature","id":"way/101","properties":{"@id":"way/101","highway":"path","name":"Public Ridge Trail","foot":"designated","surface":"dirt"},"geometry":{"type":"LineString","coordinates":[[-122.20,37.20],[-122.19,37.205],[-122.18,37.20]]}}
+{"type":"Feature","id":"way/102","properties":{"@id":"way/102","highway":"track","name":"Reverse Track","oneway:foot":"-1","access":"private"},"geometry":{"type":"LineString","coordinates":[[-122.18,37.20],[-122.17,37.19]]}}
+{"type":"Feature","id":"way/103","properties":{"@id":"way/103","highway":"motorway","name":"Rejected road"},"geometry":{"type":"LineString","coordinates":[[-122.20,37.19],[-122.19,37.19]]}}
+{"type":"Feature","id":"node/201","properties":{"@id":"node/201","highway":"trailhead","name":"Fixture Trailhead","access":"yes"},"geometry":{"type":"Point","coordinates":[-122.20,37.20]}}
+{"type":"Feature","id":"node/202","properties":{"@id":"node/202","amenity":"parking","name":"Uncertain Parking"},"geometry":{"type":"Point","coordinates":[-122.17,37.19]}}
