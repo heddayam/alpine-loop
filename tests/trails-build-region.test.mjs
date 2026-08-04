@@ -22,7 +22,11 @@ import {
   validateTrailSegment,
 } from "../scripts/trails/model.mjs";
 import { validateArtifactDirectory } from "../scripts/trails/validate-artifacts.mjs";
-import { enforceRuntimeShardSizeTargets } from "../scripts/trails/artifact-contract.mjs";
+import {
+  createBuildId,
+  enforceRuntimeShardSizeTargets,
+  stableJson,
+} from "../scripts/trails/artifact-contract.mjs";
 
 const retrievedAt = "2026-08-03T12:00:00.000Z";
 const sourceRef = (provider, sourceId) => ({
@@ -500,6 +504,7 @@ test("writes the complete artifact contract without network access", async () =>
         "qa.json",
         "segment-provenance/index.json",
         "segments/index.json",
+        "trail-geometry/index.json",
       ],
     );
     for (const filename of Object.values(ARTIFACT_FILENAMES)) {
@@ -542,6 +547,82 @@ test("writes the complete artifact contract without network access", async () =>
     globalThis.fetch = previousFetch;
     await rm(outputDirectory, { recursive: true, force: true });
   }
+});
+
+test("rejects trail-local geometry that differs from its canonical segment", async (t) => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), "alpine-trails-identity-"));
+  t.after(() => rm(outputDirectory, { recursive: true, force: true }));
+  const result = await buildRegionArtifacts(buildInput());
+  await writeRegionArtifacts(result, outputDirectory);
+  const manifest = structuredClone(result.manifest);
+  const geometryIndex = JSON.parse(result.payloads[ARTIFACT_FILENAMES.trailGeometry]);
+  const path = Object.values(geometryIndex.objects)[0].path;
+  const records = result.payloads[path].trimEnd().split("\n").map(JSON.parse);
+  records[0].geometry.coordinates[0][0] += 0.0001;
+  const altered = `${records.map(stableJson).join("\n")}\n`;
+  await writeFile(join(outputDirectory, path), altered);
+  const bytes = Buffer.from(altered);
+  manifest.artifacts[path] = {
+    ...manifest.artifacts[path],
+    rawBytes: bytes.byteLength,
+    compressedBytes: gzipSync(bytes, { level: 9 }).byteLength,
+    sha256: digest(bytes),
+  };
+  manifest.buildId = createBuildId({
+    regionId: manifest.region.id,
+    sourceSnapshots: manifest.sourceSnapshots,
+    artifacts: manifest.artifacts,
+  });
+  await writeFile(join(outputDirectory, "manifest.json"), `${stableJson(manifest)}\n`);
+  await assert.rejects(
+    validateArtifactDirectory(outputDirectory),
+    /differs from canonical segment/,
+  );
+});
+
+test("allows two named trails to reference the same canonical segment", async (t) => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), "alpine-trails-shared-"));
+  t.after(() => rm(outputDirectory, { recursive: true, force: true }));
+  const result = await buildRegionArtifacts(buildInput());
+  await writeRegionArtifacts(result, outputDirectory);
+  const manifest = structuredClone(result.manifest);
+  const namedPayload = JSON.parse(result.payloads[ARTIFACT_FILENAMES.namedTrails]);
+  const geometryIndex = JSON.parse(result.payloads[ARTIFACT_FILENAMES.trailGeometry]);
+  const original = namedPayload.trails[0];
+  const aliasId = "named-trail_ff00112233445566";
+  namedPayload.trails.push({ ...original, id: aliasId, name: `${original.name} Alias` });
+  namedPayload.trails.sort((left, right) => left.id.localeCompare(right.id));
+  const originalPath = geometryIndex.objects[original.id].path;
+  const aliasPath = `trail-geometry/ff/${aliasId}.ndjson`;
+  const geometryBytes = Buffer.from(result.payloads[originalPath]);
+  geometryIndex.objects[aliasId] = { path: aliasPath, records: original.segmentIds.length };
+  const namedBytes = Buffer.from(`${stableJson(namedPayload)}\n`);
+  const indexBytes = Buffer.from(`${stableJson(geometryIndex)}\n`);
+  await mkdir(join(outputDirectory, "trail-geometry", "ff"), { recursive: true });
+  await writeFile(join(outputDirectory, aliasPath), geometryBytes);
+  await writeFile(join(outputDirectory, ARTIFACT_FILENAMES.namedTrails), namedBytes);
+  await writeFile(join(outputDirectory, ARTIFACT_FILENAMES.trailGeometry), indexBytes);
+  const updateMetadata = (path, bytes, records) => {
+    manifest.artifacts[path] = {
+      ...(manifest.artifacts[path] ?? manifest.artifacts[originalPath]),
+      path,
+      records,
+      rawBytes: bytes.byteLength,
+      compressedBytes: gzipSync(bytes, { level: 9 }).byteLength,
+      sha256: digest(bytes),
+    };
+  };
+  updateMetadata(ARTIFACT_FILENAMES.namedTrails, namedBytes, namedPayload.trails.length);
+  updateMetadata(ARTIFACT_FILENAMES.trailGeometry, indexBytes, namedPayload.trails.length);
+  updateMetadata(aliasPath, geometryBytes, original.segmentIds.length);
+  manifest.counts.namedTrails = namedPayload.trails.length;
+  manifest.buildId = createBuildId({
+    regionId: manifest.region.id,
+    sourceSnapshots: manifest.sourceSnapshots,
+    artifacts: manifest.artifacts,
+  });
+  await writeFile(join(outputDirectory, "manifest.json"), `${stableJson(manifest)}\n`);
+  assert.equal((await validateArtifactDirectory(outputDirectory)).buildId, manifest.buildId);
 });
 
 test("removes stale managed artifacts without touching unrelated output files", async () => {

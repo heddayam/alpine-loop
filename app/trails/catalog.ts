@@ -9,9 +9,17 @@ import type {
   RegionalTrailCatalog,
   TrailSearchSummary,
 } from "./search";
+import { loadTrailSegments } from "./search";
+import {
+  loadCachedActiveRegionalTrailCatalog,
+  loadVerifiedTrailGeometry,
+} from "./active-catalog";
 import { locateTrailArtifact } from "./artifact-locator";
 import { parseSelectedSegmentNdjson } from "./segment-reader";
-import { createRuntimeTrailArtifactStore } from "./storage";
+import {
+  createRuntimeTrailArtifactStore,
+  TrailArtifactNotFoundError,
+} from "./storage";
 
 const accessPoints = JSON.parse(accessPointsText) as { features: AccessPointFeature[] };
 const shardPaths = Object.fromEntries(Object.entries(segmentIndex.shards).map(([shard, value]) =>
@@ -36,18 +44,28 @@ const CATALOGS: Record<string, RegionalTrailCatalog> = {
   "yosemite-stanislaus": yosemiteStanislaus,
 };
 
-export function getRegionalTrailCatalog(regionId: string) {
-  return CATALOGS[regionId] ?? null;
+export async function getRegionalTrailCatalog(regionId: string, requestUrl?: string) {
+  const packaged = CATALOGS[regionId];
+  if (packaged) return packaged;
+  if (!requestUrl) return null;
+  const { env } = await import("cloudflare:workers");
+  const store = createRuntimeTrailArtifactStore(env, requestUrl, "private-r2");
+  try {
+    return (await loadCachedActiveRegionalTrailCatalog(store, regionId)).catalog;
+  } catch (error) {
+    if (error instanceof TrailArtifactNotFoundError &&
+        error.key === `trails/${regionId}/current.json`) return null;
+    throw error;
+  }
 }
 
 export async function loadRegionalSegmentShard(
-  regionId: string,
+  catalog: RegionalTrailCatalog,
   shard: string,
   selectedIds: ReadonlySet<string>,
   requestUrl: string,
 ) {
-  const catalog = getRegionalTrailCatalog(regionId);
-  const artifactPath = catalog?.shardPaths[shard];
+  const artifactPath = catalog.shardPaths[shard];
   if (!artifactPath) throw new Error(`Unknown geometry shard ${shard}`);
   const { env } = await import("cloudflare:workers");
   const artifact = locateTrailArtifact(catalog.manifest, artifactPath);
@@ -56,4 +74,21 @@ export async function loadRegionalSegmentShard(
     ...(artifact.expectedSha256 ? { expectedSha256: artifact.expectedSha256 } : {}),
   });
   return parseSelectedSegmentNdjson(object.body, selectedIds);
+}
+
+export async function loadRegionalTrailGeometry(
+  catalog: RegionalTrailCatalog,
+  trail: NamedTrailRecord,
+  requestUrl: string,
+) {
+  if (catalog.manifest.schemaVersion === 1) {
+    return loadTrailSegments(
+      catalog,
+      trail.id,
+      (shard, selectedIds) => loadRegionalSegmentShard(catalog, shard, selectedIds, requestUrl),
+    );
+  }
+  const { env } = await import("cloudflare:workers");
+  const store = createRuntimeTrailArtifactStore(env, requestUrl, "private-r2");
+  return loadVerifiedTrailGeometry(store, catalog, trail);
 }

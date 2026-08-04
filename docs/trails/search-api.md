@@ -78,9 +78,10 @@ retain `confidence: "derived"` and are never promoted to mapped or official.
 
 `GET /api/trails/:regionId/:trailId/geometry`
 
-The endpoint returns a GeoJSON FeatureCollection for a user-facing search result and reads only the
-segment shards needed by that trail. Each feature contains display geometry and canonical segment
-metadata. Raw per-edge `maxGradePct` is deliberately omitted under the Gate C elevation exception.
+The endpoint returns a GeoJSON FeatureCollection for a user-facing search result. Schema-v2 regions
+read exactly one manifest-declared trail-local geometry object; schema-v1 Yosemite retains its
+historical packaged segment-shard lookup. Each feature contains display geometry and canonical
+segment metadata. Raw per-edge `maxGradePct` is deliberately omitted under the Gate C elevation exception.
 The collection-level `properties.accessPoints` contains the selected trail's complete access detail,
 including original confidence, source references, and connected canonical graph-node IDs;
 `properties.accessPointCount` reports the geographically distinct product count. This detail is lazy

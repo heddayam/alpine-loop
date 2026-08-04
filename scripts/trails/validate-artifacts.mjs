@@ -17,6 +17,7 @@ import {
   defaultArtifactPolicy,
   partitionPrefixLength,
   segmentPartitionKey,
+  stableJson,
 } from "./artifact-contract.mjs";
 
 function fail(message) {
@@ -37,7 +38,9 @@ const EXACT_MANAGED_PATHS = new Set([
 function isManagedPath(path) {
   return EXACT_MANAGED_PATHS.has(path) ||
     /^segments\/[0-9a-f]{1,8}\.ndjson$/.test(path) ||
-    /^segment-provenance\/[0-9a-f]{1,8}\.json$/.test(path);
+    /^segment-provenance\/[0-9a-f]{1,8}\.json$/.test(path) ||
+    path === "trail-geometry/index.json" ||
+    /^trail-geometry\/[0-9a-f]{2}\/named-trail_[0-9a-f]+\.ndjson$/.test(path);
 }
 
 function validateDeclaredPaths(paths) {
@@ -127,6 +130,7 @@ async function artifactRecordCount(path, filename, prefixLength) {
   const value = JSON.parse(await readFile(path, "utf8"));
   if (filename === "named-trails.json") return value.trails?.length;
   if (filename === "access-points.geojson") return value.features?.length;
+  if (filename === "trail-geometry/index.json") return Object.keys(value.objects ?? {}).length;
   if (filename.endsWith("/index.json")) return Object.keys(value.shards ?? {}).length;
   const provenancePrefix = /^segment-provenance\/([0-9a-f]+)\.json$/.exec(filename)?.[1];
   if (provenancePrefix) {
@@ -221,6 +225,79 @@ function validateIndex(index, manifest, kind) {
   return prefixLength;
 }
 
+async function validateTrailGeometry(directory, manifest, namedPayload, segmentIndex, index) {
+  if (index?.schemaVersion !== 2 || index.regionId !== manifest.region.id ||
+      !index.objects || typeof index.objects !== "object" || Array.isArray(index.objects)) {
+    fail("trail geometry index has an invalid contract");
+  }
+  const trails = Array.isArray(namedPayload?.trails) ? namedPayload.trails : [];
+  const expectedIds = trails.map(({ id }) => id).sort();
+  const indexedIds = Object.keys(index.objects).sort();
+  if (JSON.stringify(indexedIds) !== JSON.stringify(expectedIds)) {
+    fail("trail geometry index must exactly cover named trails");
+  }
+  const indexedPaths = Object.values(index.objects).map(({ path }) => path).sort();
+  const declaredPaths = Object.keys(manifest.artifacts)
+    .filter((path) => /^trail-geometry\/[0-9a-f]{2}\/named-trail_[0-9a-f]+\.ndjson$/.test(path))
+    .sort();
+  if (JSON.stringify(indexedPaths) !== JSON.stringify(declaredPaths)) {
+    fail("trail geometry index must exactly cover declared geometry objects");
+  }
+  const ownedSegmentIds = new Set();
+  for (const trail of trails) {
+    if (!Array.isArray(trail.segmentIds) || trail.segmentIds.length === 0) {
+      fail(`named trail ${trail.id} has no segment IDs`);
+    }
+    if (new Set(trail.segmentIds).size !== trail.segmentIds.length) {
+      fail(`named trail ${trail.id} repeats a segment ID`);
+    }
+    for (const segmentId of trail.segmentIds) ownedSegmentIds.add(segmentId);
+  }
+  const canonicalSegmentHashes = new Map();
+  for (const shard of Object.values(segmentIndex.shards ?? {})) {
+    await ndjsonRecordCount(resolve(directory, shard.path), (record) => {
+      if (!ownedSegmentIds.has(record?.id)) return;
+      if (canonicalSegmentHashes.has(record.id)) {
+        fail(`canonical segment ${record.id} appears more than once`);
+      }
+      canonicalSegmentHashes.set(
+        record.id,
+        createHash("sha256").update(stableJson(record)).digest("hex"),
+      );
+    });
+  }
+  if (canonicalSegmentHashes.size !== ownedSegmentIds.size) {
+    fail("canonical segment shards do not cover every named-trail segment");
+  }
+  for (const trail of trails) {
+    const entry = index.objects[trail.id];
+    const prefix = /^named-trail_([0-9a-f]{2})[0-9a-f]+$/.exec(trail.id)?.[1];
+    const expectedPath = prefix ? `trail-geometry/${prefix}/${trail.id}.ndjson` : null;
+    if (!entry || entry.path !== expectedPath || entry.records !== trail.segmentIds.length) {
+      fail(`trail geometry index entry ${trail.id} is invalid`);
+    }
+    const metadata = manifest.artifacts[entry.path];
+    if (!metadata || metadata.path !== entry.path || metadata.records !== entry.records ||
+        metadata.role !== "runtime" || metadata.application !== "required") {
+      fail(`trail geometry object ${entry.path} is not a required runtime artifact`);
+    }
+    let recordIndex = 0;
+    await ndjsonRecordCount(resolve(directory, entry.path), (record) => {
+      if (record?.id !== trail.segmentIds[recordIndex]) {
+        fail(`trail geometry ${entry.path} does not match canonical segment order`);
+      }
+      const recordHash = createHash("sha256").update(stableJson(record)).digest("hex");
+      if (recordHash !== canonicalSegmentHashes.get(record.id)) {
+        fail(`trail geometry ${entry.path} differs from canonical segment ${record.id}`);
+      }
+      recordIndex += 1;
+    });
+    if (recordIndex !== trail.segmentIds.length) {
+      fail(`trail geometry ${entry.path} has incomplete segment coverage`);
+    }
+  }
+}
+
 export async function validateArtifactDirectory(directory) {
   const root = resolve(directory);
   const manifestPath = resolve(root, "manifest.json");
@@ -255,7 +332,12 @@ export async function validateArtifactDirectory(directory) {
 
   const declaredFiles = Object.keys(manifest.artifacts ?? {}).sort();
   await validateArtifactTree(root, declaredFiles);
-  for (const requiredPath of ["named-trails.json", "access-points.geojson", "segments/index.json"]) {
+  for (const requiredPath of [
+    "named-trails.json",
+    "access-points.geojson",
+    "segments/index.json",
+    "trail-geometry/index.json",
+  ]) {
     const metadata = manifest.artifacts[requiredPath];
     if (metadata?.role !== "runtime" || metadata.application !== "required") {
       fail(`${requiredPath} must be a required runtime artifact`);
@@ -263,6 +345,11 @@ export async function validateArtifactDirectory(directory) {
   }
 
   const segmentIndex = JSON.parse(await readFile(resolve(root, "segments/index.json"), "utf8"));
+  const namedPayload = JSON.parse(await readFile(resolve(root, "named-trails.json"), "utf8"));
+  const trailGeometryIndex = JSON.parse(await readFile(
+    resolve(root, "trail-geometry/index.json"),
+    "utf8",
+  ));
   const provenanceIndex = JSON.parse(await readFile(
     resolve(root, "segment-provenance/index.json"),
     "utf8",
@@ -281,13 +368,18 @@ export async function validateArtifactDirectory(directory) {
     const records = await artifactRecordCount(resolve(root, path), path, prefixLength);
     if (records !== metadata.records) fail(`record count mismatch for ${path}`);
   }
+  await validateTrailGeometry(root, manifest, namedPayload, segmentIndex, trailGeometryIndex);
 
   const targets = manifest.delivery.shardSizeTargets;
   if (targets?.rawBytes !== MAX_RUNTIME_SHARD_RAW_BYTES ||
       targets?.compressedBytes !== MAX_RUNTIME_SHARD_GZIP_BYTES ||
       !Array.isArray(targets.exceptions)) fail("invalid runtime shard size targets");
   const exceptions = new Map(targets.exceptions.map((exception) => [exception.path, exception]));
-  for (const shard of Object.values(segmentIndex.shards)) {
+  const runtimeGeometryObjects = [
+    ...Object.values(segmentIndex.shards),
+    ...Object.values(trailGeometryIndex.objects),
+  ];
+  for (const shard of runtimeGeometryObjects) {
     const metadata = manifest.artifacts[shard.path];
     const oversized = metadata.rawBytes > targets.rawBytes ||
       metadata.compressedBytes > targets.compressedBytes;
@@ -300,7 +392,7 @@ export async function validateArtifactDirectory(directory) {
     if (!oversized && exception) fail(`runtime shard ${shard.path} has an unnecessary exception`);
     exceptions.delete(shard.path);
   }
-  if (exceptions.size > 0) fail("shard exceptions reference unknown geometry shards");
+  if (exceptions.size > 0) fail("shard exceptions reference unknown geometry objects");
 
   const expectedBuildId = createBuildId({
     regionId: manifest.region.id,

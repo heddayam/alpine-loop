@@ -1,10 +1,9 @@
 import {
   getRegionalTrailCatalog,
-  loadRegionalSegmentShard,
+  loadRegionalTrailGeometry,
 } from "@/app/trails/catalog";
 import {
   findUserFacingTrail,
-  loadTrailSegments,
   trailAccessPointDetails,
   trailGeometryFeatureCollection,
 } from "@/app/trails/search";
@@ -26,11 +25,18 @@ export async function GET(request: Request, context: RouteContext) {
       !/^named-trail_[0-9a-f]+$/.test(trailId)) {
     return errorResponse("Trail geometry was not found.", 404);
   }
-  const catalog = getRegionalTrailCatalog(regionId);
+  let catalog;
+  try {
+    catalog = await getRegionalTrailCatalog(regionId, request.url);
+  } catch (error) {
+    console.error("Trail catalog loading failed", error);
+    return errorResponse("Trail geometry is temporarily unavailable.", 503);
+  }
   const trail = catalog ? findUserFacingTrail(catalog, trailId) : null;
   if (!catalog || !trail) return errorResponse("Trail geometry was not found.", 404);
 
-  const etag = `"${catalog.manifest.generatedAt}:${trail.id}"`;
+  const artifactVersion = catalog.manifest.buildId ?? catalog.manifest.generatedAt;
+  const etag = `"${artifactVersion}:${trail.id}"`;
   if (request.headers.get("if-none-match") === etag) {
     return new Response(null, {
       status: 304,
@@ -39,11 +45,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    const segments = await loadTrailSegments(
-      catalog,
-      trail.id,
-      (shard, selectedIds) => loadRegionalSegmentShard(regionId, shard, selectedIds, request.url),
-    );
+    const segments = await loadRegionalTrailGeometry(catalog, trail, request.url);
     if (!segments) return errorResponse("Trail geometry was not found.", 404);
     return Response.json(trailGeometryFeatureCollection(
       regionId,

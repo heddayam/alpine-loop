@@ -32,6 +32,7 @@ test("builds v2 search metadata from its declared two-character segment partitio
   const regionId = "v2-fixture";
   const directory = join(artifactRoot, regionId);
   await mkdir(join(directory, "segments"), { recursive: true });
+  await mkdir(join(directory, "trail-geometry"), { recursive: true });
   const segment = {
     id: "segment_ab001",
     fromNodeId: "node-a",
@@ -52,6 +53,7 @@ test("builds v2 search metadata from its declared two-character segment partitio
       artifacts: {
         "named-trails.json": { sha256: "1".repeat(64) },
         "segments/index.json": { sha256: "2".repeat(64) },
+        "trail-geometry/index.json": { sha256: "3".repeat(64) },
       },
     }));
     await writeFile(join(directory, "named-trails.json"), JSON.stringify({
@@ -66,8 +68,16 @@ test("builds v2 search metadata from its declared two-character segment partitio
       shards: { ab: { path: "segments/ab.ndjson", records: 1 } },
     }));
     await writeFile(join(directory, "segments/ab.ndjson"), `${JSON.stringify(segment)}\n`);
+    await writeFile(join(directory, "trail-geometry/index.json"), JSON.stringify({
+      schemaVersion: 2,
+      regionId,
+      objects: {
+        "named-trail_ab": { path: "trail-geometry/ab/named-trail_ab.ndjson", records: 1 },
+      },
+    }));
     const index = await buildTrailSearchIndex(regionId, { artifactRoot });
     assert.equal(index.source.segmentPartitionPrefixLength, 2);
+    assert.equal(index.source.trailGeometryIndexSha256, "3".repeat(64));
     assert.equal(index.trails["named-trail_ab"].hiking, "allowed");
   } finally {
     await rm(artifactRoot, { recursive: true, force: true });

@@ -60,6 +60,7 @@ export const ARTIFACT_FILENAMES = Object.freeze({
   namedTrails: "named-trails.json",
   accessPoints: "access-points.geojson",
   segments: "segments/index.json",
+  trailGeometry: "trail-geometry/index.json",
   nodes: "nodes.ndjson",
   qa: "qa.json",
   segmentProvenance: "segment-provenance/index.json",
@@ -74,6 +75,10 @@ const MANAGED_SHARD_PATTERNS = Object.freeze({
   segments: /^[0-9a-f]{1,8}\.ndjson$/,
   "segment-provenance": /^[0-9a-f]{1,8}\.json$/,
 });
+
+const MANAGED_ARTIFACT_PATTERNS = Object.freeze([
+  /^trail-geometry\/[0-9a-f]{2}\/named-trail_[0-9a-f]+\.ndjson$/,
+]);
 
 const AGENCY_ADAPTERS = Object.freeze({
   usgs: usgsAdapter,
@@ -311,6 +316,7 @@ function createMemoryArtifactWriter() {
 function isManagedArtifact(filename) {
   if (Object.values(ARTIFACT_FILENAMES).includes(filename) ||
       OBSOLETE_MANAGED_ARTIFACTS.includes(filename)) return true;
+  if (MANAGED_ARTIFACT_PATTERNS.some((pattern) => pattern.test(filename))) return true;
   const [directory, leaf, ...rest] = filename.split("/");
   return rest.length === 0 && MANAGED_SHARD_PATTERNS[directory]?.test(leaf);
 }
@@ -1128,6 +1134,13 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
   const segmentShardPaths = Object.fromEntries(Object.keys(segmentPartitions).map(
     (prefix) => [prefix, `segments/${prefix}.ndjson`],
   ));
+  const trailGeometryPaths = artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION
+    ? Object.fromEntries(namedTrails.map(({ id }) => {
+        const prefix = /^named-trail_([0-9a-f]{2})/.exec(id)?.[1];
+        if (!prefix) throw new TypeError(`Invalid named trail ID for geometry delivery: ${id}`);
+        return [id, `trail-geometry/${prefix}/${id}.ndjson`];
+      }))
+    : {};
   const provenanceShardPaths = Object.fromEntries(Object.entries(provenancePartitions).map(
     ([prefix]) => [prefix, `segment-provenance/${prefix}.json`],
   ));
@@ -1187,7 +1200,13 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
       regionId: region.id,
       trails: namedTrails,
     }), namedTrails.length],
-    [ARTIFACT_FILENAMES.accessPoints, prettyJsonChunks(accessPointGeoJson(access.accessPoints)),
+    [ARTIFACT_FILENAMES.accessPoints, prettyJsonChunks({
+      ...accessPointGeoJson(access.accessPoints),
+      ...(artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION ? {
+        schemaVersion: 2,
+        regionId: region.id,
+      } : {}),
+    }),
       access.accessPoints.length],
     [ARTIFACT_FILENAMES.segments, prettyJsonChunks({
       schemaVersion: artifactSchemaVersion,
@@ -1208,6 +1227,18 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
         { path, records: segmentPartitions[prefix].length },
       ])),
     }), Object.keys(segmentShardPaths).length],
+    ...(artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION ? [[
+      ARTIFACT_FILENAMES.trailGeometry,
+      prettyJsonChunks({
+        schemaVersion: 2,
+        regionId: region.id,
+        objects: Object.fromEntries(namedTrails.map((trail) => [trail.id, {
+          path: trailGeometryPaths[trail.id],
+          records: trail.segmentIds.length,
+        }])),
+      }),
+      namedTrails.length,
+    ]] : []),
     [ARTIFACT_FILENAMES.nodes, ndjsonChunks(nodes), nodes.length],
     [ARTIFACT_FILENAMES.segmentProvenance, prettyJsonChunks({
       schemaVersion: 2,
@@ -1235,6 +1266,21 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
   }
   for (const [prefix, path] of Object.entries(segmentShardPaths)) {
     await writeArtifact(path, ndjsonChunks(segmentPartitions[prefix]), segmentPartitions[prefix].length);
+  }
+  if (artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION) {
+    const segmentsById = new Map(segments.map((segment) => [segment.id, segment]));
+    for (const trail of namedTrails) {
+      const trailSegments = trail.segmentIds.map((segmentId) => {
+        const segment = segmentsById.get(segmentId);
+        if (!segment) throw new Error(`Named trail ${trail.id} references missing ${segmentId}`);
+        return segment;
+      });
+      await writeArtifact(
+        trailGeometryPaths[trail.id],
+        ndjsonChunks(trailSegments),
+        trailSegments.length,
+      );
+    }
   }
   for (const [index, [prefix, path]] of Object.entries(provenanceShardPaths).entries()) {
     const compact = {
@@ -1299,7 +1345,7 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
   const sizeExceptions = artifactSchemaVersion === ARTIFACT_SCHEMA_VERSION
     ? enforceRuntimeShardSizeTargets(
         measuredArtifactFiles,
-        Object.values(segmentShardPaths),
+        [...Object.values(segmentShardPaths), ...Object.values(trailGeometryPaths)],
         shardSizeExceptions,
       )
     : [];
@@ -1388,6 +1434,7 @@ export async function buildRegionArtifacts(input, { telemetry, artifactWriter } 
       delivery: {
         eagerMetadata: [ARTIFACT_FILENAMES.namedTrails, ARTIFACT_FILENAMES.accessPoints],
         lazyGeometryIndex: ARTIFACT_FILENAMES.segments,
+        lazyTrailGeometryIndex: ARTIFACT_FILENAMES.trailGeometry,
         lazyProvenanceIndex: ARTIFACT_FILENAMES.segmentProvenance,
         partitioning: {
           algorithm: "segment-id-hex-prefix",

@@ -39,7 +39,18 @@ export async function POST(request: Request) {
   const parsed = parseTrailSearchRequest(payload);
   if (!parsed.ok) return errorResponse(parsed.error, 400);
 
-  const catalog = getRegionalTrailCatalog(parsed.request.regionId);
+  let catalog;
+  try {
+    catalog = await getRegionalTrailCatalog(parsed.request.regionId, request.url);
+  } catch (error) {
+    console.error("Trail catalog loading failed", error);
+    return errorResponse("Trail search is temporarily unavailable.", 503);
+  }
   if (!catalog) return errorResponse("That trail region is not available.", 404);
-  return Response.json(searchTrails(catalog, parsed.request), { headers: RESPONSE_HEADERS });
+  try {
+    return Response.json(searchTrails(catalog, parsed.request), { headers: RESPONSE_HEADERS });
+  } catch (error) {
+    console.error("Trail search execution failed", error);
+    return errorResponse("Trail search is temporarily unavailable.", 503);
+  }
 }

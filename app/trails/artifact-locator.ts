@@ -2,7 +2,7 @@ export type TrailArtifactManifest = {
   schemaVersion: number;
   buildId?: string;
   region: { id: string };
-  artifacts?: Record<string, { sha256?: string }>;
+  artifacts?: Record<string, { rawBytes?: number; sha256?: string }>;
 };
 
 export type LocatedTrailArtifact = {

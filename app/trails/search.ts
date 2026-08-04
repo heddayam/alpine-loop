@@ -85,13 +85,22 @@ export type RegionalTrailCatalog = {
       label: string;
       bounds: [number, number, number, number];
     };
-    artifacts?: Record<string, { sha256?: string }>;
+    artifacts?: Record<string, {
+      path?: string;
+      records?: number;
+      rawBytes?: number;
+      compressedBytes?: number;
+      sha256?: string;
+      role?: "runtime" | "diagnostic";
+      application?: "required" | "optional";
+    }>;
   };
   namedTrails: NamedTrailRecord[];
   accessPoints: AccessPointFeature[];
   summaries: Record<string, TrailSearchSummary>;
   shardPaths: Record<string, string>;
   partitionPrefixLength: number;
+  trailGeometryPaths?: Record<string, string>;
 };
 
 export type TrailAccessPointMetadata = {
@@ -426,7 +435,7 @@ export function searchTrails(catalog: RegionalTrailCatalog, request: TrailSearch
   results.sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return {
     schemaVersion: 1,
-    artifactVersion: catalog.manifest.generatedAt,
+    artifactVersion: catalog.manifest.buildId ?? catalog.manifest.generatedAt,
     region: catalog.manifest.region,
     count: results.length,
     trails: results.slice(0, request.limit),

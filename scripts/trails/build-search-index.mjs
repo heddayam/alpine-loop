@@ -114,6 +114,12 @@ export async function buildTrailSearchIndex(regionId, options = {}) {
       segmentIndex.regionId !== regionId) {
     throw new Error(`Artifact region mismatch for ${regionId}`);
   }
+  const trailGeometryIndexSha256 = manifest.artifacts?.["trail-geometry/index.json"]?.sha256;
+  if (manifest.schemaVersion >= 2 &&
+      (typeof trailGeometryIndexSha256 !== "string" ||
+       !/^[0-9a-f]{64}$/.test(trailGeometryIndexSha256))) {
+    throw new Error(`Artifact v2 trail geometry index is missing for ${regionId}`);
+  }
 
   const { segments, prefixLength } = await readSegments(directory, segmentIndex);
   const trails = {};
@@ -139,7 +145,10 @@ export async function buildTrailSearchIndex(regionId, options = {}) {
       manifestSha256: sha256(manifestText),
       namedTrailsSha256: manifest.artifacts?.["named-trails.json"]?.sha256,
       segmentsIndexSha256: manifest.artifacts?.["segments/index.json"]?.sha256,
-      ...(manifest.schemaVersion >= 2 ? { segmentPartitionPrefixLength: prefixLength } : {}),
+      ...(manifest.schemaVersion >= 2 ? {
+        segmentPartitionPrefixLength: prefixLength,
+        trailGeometryIndexSha256,
+      } : {}),
     },
     trails,
   };
