@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -505,8 +505,32 @@ test("writes the complete artifact contract without network access", async () =>
     for (const filename of Object.values(ARTIFACT_FILENAMES)) {
       assert.equal(await readFile(join(outputDirectory, filename), "utf8"), result.payloads[filename]);
     }
+    await writeFile(join(outputDirectory, "review-notes.txt"), "human review\n");
+    await writeFile(join(outputDirectory, "segments", "notes.ndjson"), "not an artifact\n");
+    await symlink("segments", join(outputDirectory, "review-assets"));
+    assert.equal((await validateArtifactDirectory(outputDirectory)).buildId, result.manifest.buildId);
+
     const segmentShard = Object.keys(result.payloads).find((path) =>
       /^segments\/[0-9a-f]{2}\.ndjson$/.test(path));
+    const extraShard = Array.from({ length: 256 }, (_, value) =>
+      `segments/${value.toString(16).padStart(2, "0")}.ndjson`).find((path) =>
+      !Object.hasOwn(result.payloads, path));
+    await writeFile(join(outputDirectory, extraShard), "stale managed shard\n");
+    await assert.rejects(
+      validateArtifactDirectory(outputDirectory),
+      new RegExp(`undeclared managed artifact ${extraShard.replace("/", "\\/")}`),
+    );
+    await rm(join(outputDirectory, extraShard));
+    await symlink("../review-notes.txt", join(outputDirectory, extraShard));
+    await assert.rejects(validateArtifactDirectory(outputDirectory), /may not be a symlink/);
+    await rm(join(outputDirectory, extraShard));
+
+    await rm(join(outputDirectory, segmentShard));
+    await symlink("../review-notes.txt", join(outputDirectory, segmentShard));
+    await assert.rejects(validateArtifactDirectory(outputDirectory), /may not be a symlink/);
+    await rm(join(outputDirectory, segmentShard));
+    await writeFile(join(outputDirectory, segmentShard), result.payloads[segmentShard]);
+
     await writeFile(join(outputDirectory, segmentShard), "corrupt\n");
     await assert.rejects(validateArtifactDirectory(outputDirectory), /hash or size mismatch/);
     await writeFile(join(outputDirectory, segmentShard), result.payloads[segmentShard]);
@@ -651,11 +675,22 @@ test("reconciles agency granularity, ingests OSM access, and ships field provena
       "b66ea987c456141292bb2a08357b7e3f83e308decb2c6a615b1107b0faf0e43c",
       "Yosemite Gate C v1 manifest bytes must match the accepted pre-P2 builder",
     );
-    assert.deepEqual(await validateArtifactDirectory(join(outputDirectory, "artifacts")), {
+    const artifactDirectory = join(outputDirectory, "artifacts");
+    await writeFile(join(artifactDirectory, "review-notes.txt"), "human review\n");
+    await writeFile(join(artifactDirectory, "segments", "notes.ndjson"), "not an artifact\n");
+    await symlink("segments", join(artifactDirectory, "review-assets"));
+    assert.deepEqual(await validateArtifactDirectory(artifactDirectory), {
       schemaVersion: 1,
       regionId: "yosemite-stanislaus",
       files: Object.keys(result.manifest.artifacts).length,
     });
+    await writeFile(join(artifactDirectory, "segments.ndjson"), "obsolete managed artifact\n");
+    await assert.rejects(
+      validateArtifactDirectory(artifactDirectory),
+      /undeclared managed artifact segments\.ndjson/,
+    );
+    await rm(join(artifactDirectory, "segments.ndjson"));
+    assert.equal((await validateArtifactDirectory(artifactDirectory)).schemaVersion, 1);
     for (const [filename, metadata] of Object.entries(result.manifest.artifacts)) {
       assert.equal(files[filename].byteLength, metadata.bytes, `${filename} raw bytes`);
       assert.equal(gzipSync(files[filename], { level: 9 }).byteLength, metadata.gzipBytes,

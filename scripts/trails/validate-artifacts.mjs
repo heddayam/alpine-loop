@@ -2,9 +2,9 @@
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import { relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { finished } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
 import { createGzip } from "node:zlib";
@@ -23,15 +23,67 @@ function fail(message) {
   throw new Error(`Invalid trail artifact directory: ${message}`);
 }
 
-async function filesBeneath(directory, current = directory) {
-  const files = [];
-  for (const entry of await readdir(current, { withFileTypes: true })) {
-    const path = resolve(current, entry.name);
-    if (entry.isDirectory()) files.push(...await filesBeneath(directory, path));
-    else if (entry.isFile()) files.push(relative(directory, path).split(sep).join("/"));
-    else fail(`unsupported directory entry ${relative(directory, path)}`);
+const EXACT_MANAGED_PATHS = new Set([
+  "manifest.json",
+  "named-trails.json",
+  "access-points.geojson",
+  "segments/index.json",
+  "nodes.ndjson",
+  "qa.json",
+  "segment-provenance/index.json",
+  "segments.ndjson",
+]);
+
+function isManagedPath(path) {
+  return EXACT_MANAGED_PATHS.has(path) ||
+    /^segments\/[0-9a-f]{1,8}\.ndjson$/.test(path) ||
+    /^segment-provenance\/[0-9a-f]{1,8}\.json$/.test(path);
+}
+
+function validateDeclaredPaths(paths) {
+  for (const path of paths) {
+    if (typeof path !== "string" || !path || path.startsWith("/") || path.includes("\\") ||
+        path.split("/").some((part) => !part || part === "." || part === "..")) {
+      fail(`invalid declared artifact path ${JSON.stringify(path)}`);
+    }
   }
-  return files.sort();
+}
+
+async function inspectArtifactTree(declaredPaths, current, prefix = "") {
+  const regularFiles = new Set();
+  for (const entry of await readdir(current, { withFileTypes: true })) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const absolutePath = resolve(current, entry.name);
+    const declared = declaredPaths.has(path);
+    const managed = isManagedPath(path);
+    if (declared || managed) {
+      if (!entry.isFile()) {
+        fail(`${path} must be a regular file and may not be a symlink or directory`);
+      }
+      if (!declared) fail(`undeclared managed artifact ${path}`);
+      regularFiles.add(path);
+      continue;
+    }
+    if (entry.isDirectory()) {
+      for (const child of await inspectArtifactTree(
+        declaredPaths,
+        absolutePath,
+        path,
+      )) regularFiles.add(child);
+    }
+    // Unrelated regular files and symlinks are deliberately ignored. Symlinks
+    // are never traversed.
+  }
+  return regularFiles;
+}
+
+async function validateArtifactTree(directory, artifactPaths) {
+  validateDeclaredPaths(artifactPaths);
+  const declaredPaths = new Set(["manifest.json", ...artifactPaths]);
+  const regularFiles = await inspectArtifactTree(declaredPaths, directory);
+  for (const path of declaredPaths) {
+    if (!regularFiles.has(path)) fail(`declared artifact ${path} is not a regular file`);
+  }
 }
 
 async function measureFile(path) {
@@ -172,14 +224,16 @@ function validateIndex(index, manifest, kind) {
 export async function validateArtifactDirectory(directory) {
   const root = resolve(directory);
   const manifestPath = resolve(root, "manifest.json");
+  const manifestStats = await lstat(manifestPath);
+  if (!manifestStats.isFile()) fail("manifest.json must be a regular file and may not be a symlink");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (manifest.schemaVersion === 1) {
-    const actualFiles = (await filesBeneath(root)).filter((path) => path !== "manifest.json");
     const declaredFiles = Object.keys(manifest.artifacts ?? {}).sort();
-    if (JSON.stringify(actualFiles) !== JSON.stringify(declaredFiles)) fail("v1 file set does not match manifest");
+    await validateArtifactTree(root, declaredFiles);
     for (const path of declaredFiles) {
       const measured = await measureFile(resolve(root, path));
       const metadata = manifest.artifacts[path];
+      if (metadata?.path !== path) fail(`v1 metadata path mismatch for ${path}`);
       if (measured.rawBytes !== metadata.bytes || measured.compressedBytes !== metadata.gzipBytes ||
           measured.sha256 !== metadata.sha256) fail(`v1 metadata mismatch for ${path}`);
     }
@@ -199,9 +253,8 @@ export async function validateArtifactDirectory(directory) {
     fail("a non-default partition prefix length requires a measured exception note");
   }
 
-  const actualFiles = (await filesBeneath(root)).filter((path) => path !== "manifest.json");
   const declaredFiles = Object.keys(manifest.artifacts ?? {}).sort();
-  if (JSON.stringify(actualFiles) !== JSON.stringify(declaredFiles)) fail("file set does not match manifest");
+  await validateArtifactTree(root, declaredFiles);
   for (const requiredPath of ["named-trails.json", "access-points.geojson", "segments/index.json"]) {
     const metadata = manifest.artifacts[requiredPath];
     if (metadata?.role !== "runtime" || metadata.application !== "required") {
