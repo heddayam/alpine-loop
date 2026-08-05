@@ -1,4 +1,5 @@
 import type { AccessState } from "@/lib/graph/types";
+import type { NamedArea } from "@/lib/contracts";
 
 export type Coordinate = readonly [lon: number, lat: number];
 
@@ -41,6 +42,14 @@ export type NormalizedAccessPoint = {
   confidence: "high" | "medium" | "low";
   parkingEvidence: string | null;
   sourceRefs: string[];
+  knownConnectivity?: number;
+  inclusiveConnectivity?: number;
+  knownOutDegree?: number;
+  inclusiveOutDegree?: number;
+};
+
+export type NormalizedNamedArea = NamedArea & {
+  aliases: string[];
 };
 
 export type CompiledEdge = {
@@ -59,7 +68,7 @@ export type CompiledEdge = {
 };
 
 export type PackAudit = {
-  schemaVersion: "1";
+  schemaVersion: "1" | "2";
   packId: string;
   dataVersion: string;
   nodeCount: number;
@@ -71,6 +80,8 @@ export type PackAudit = {
   missingElevationNodeCount: number;
   missingElevationEdgeCount: number;
   accessStateCounts: Record<AccessState, number>;
+  namedAreaCount?: number;
+  rejectedCoverageEdgeCount?: number;
 };
 
 export type PackBuildResult = {

@@ -24,6 +24,7 @@ export type AuditEdge = {
   accessState: AccessState;
   sourceRefs: string[];
   flags?: string[];
+  geometry?: Array<readonly [number, number]>;
 };
 export type AuditAccessPoint = { id: string; accessState: AccessState; sourceRefs: string[] };
 
@@ -49,6 +50,7 @@ export type RegionalPackAudit = {
     sources: number;
     rejectedEdges: number;
     conflicts: number;
+    namedAreas?: number;
   };
   accessStateCounts: Record<AccessState, number>;
   topology: {
@@ -61,6 +63,7 @@ export type RegionalPackAudit = {
   implausibleMetricRecordIds: string[];
   unattributedRecordIds: string[];
   unknownSourceReferenceRecordIds: string[];
+  outsideCoverageEdgeIds?: string[];
   errors: string[];
   warnings: string[];
 };

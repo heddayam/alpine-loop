@@ -24,7 +24,7 @@ export type OsmPipelineOptions = {
   runner?: CommandRunner;
 };
 
-const ADAPTER_VERSION = "osmium-complete-ways-hiking-v6";
+const ADAPTER_VERSION = "osmium-complete-ways-hiking-v7";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
@@ -47,6 +47,22 @@ export async function validateOsmPrerequisites(runner: CommandRunner = runComman
   return requireCommand("osmium", runner);
 }
 
+async function preparationDestination(snapshot: SourceSnapshot, options: OsmPipelineOptions): Promise<string> {
+  const boundaryHash = await sha256File(options.boundaryPath);
+  const key = `${snapshot.contentHash.slice(7, 23)}-${boundaryHash.slice(7, 23)}-${ADAPTER_VERSION}`;
+  return path.join(options.preparationRoot, key);
+}
+
+export async function preparedOsmRegionPath(
+  snapshot: SourceSnapshot,
+  options: OsmPipelineOptions,
+): Promise<string> {
+  await prepareOsmTopology(snapshot, options);
+  const regionPath = path.join(await preparationDestination(snapshot, options), "region.osm.pbf");
+  await nonempty(regionPath, "Prepared OSM regional extract");
+  return regionPath;
+}
+
 export async function prepareOsmTopology(
   snapshot: SourceSnapshot,
   options: OsmPipelineOptions,
@@ -56,9 +72,7 @@ export async function prepareOsmTopology(
   if (actualHash !== snapshot.contentHash) throw new Error(`Content hash mismatch for source ${snapshot.id}`);
   boundarySchema.parse(JSON.parse(await readFile(options.boundaryPath, "utf8")));
   await validateOsmPrerequisites(options.runner);
-  const boundaryHash = await sha256File(options.boundaryPath);
-  const key = `${actualHash.slice(7, 23)}-${boundaryHash.slice(7, 23)}-${ADAPTER_VERSION}`;
-  const destination = path.join(options.preparationRoot, key);
+  const destination = await preparationDestination(snapshot, options);
   const normalizedPath = path.join(destination, "topology.json");
   const prepared = await readPrepared(normalizedPath);
   if (prepared) return prepared;

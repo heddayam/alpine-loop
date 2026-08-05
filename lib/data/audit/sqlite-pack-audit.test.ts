@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { compilePack } from "../compiler";
-import { fixtureCompileOptions } from "../fixture-pack";
+import { fixtureCompileOptions, fixtureCompileOptionsV2 } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -13,6 +13,12 @@ async function buildFixture() {
   const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-"));
   temporaryDirectories.push(outputRoot);
   return compilePack(await fixtureCompileOptions(outputRoot));
+}
+
+async function buildFixtureV2() {
+  const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v2-"));
+  temporaryDirectories.push(outputRoot);
+  return compilePack(await fixtureCompileOptionsV2(outputRoot));
 }
 
 function mutateDatabase(databasePath: string, sql: string): void {
@@ -105,5 +111,32 @@ describe("SQLite regional pack audit extraction", () => {
     `);
     await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
       .rejects.toThrow(/Manifest\/database source mismatch for fixture-topology.license/);
+  });
+
+  it("audits schema 2 named-area attribution and exact persisted coverage", async () => {
+    const pack = await buildFixtureV2();
+    const valid = await auditSqlitePack({
+      databasePath: pack.databasePath,
+      manifestPath: pack.manifestPath,
+      auditPath: pack.auditPath,
+    });
+    expect(valid.counts.namedAreas).toBe(3);
+    expect(valid.outsideCoverageEdgeIds).toEqual([]);
+    expect(valid.errors).toEqual([]);
+
+    mutateDatabase(pack.databasePath, `
+      UPDATE edges SET geometry = '[[0,0],[1,1]]' WHERE id = 'w-loop:0:forward';
+      UPDATE named_areas SET source_refs = '["missing-source"]' WHERE id = 'osm:relation/1001';
+    `);
+    const corrupt = await auditSqlitePack({
+      databasePath: pack.databasePath,
+      manifestPath: pack.manifestPath,
+      auditPath: pack.auditPath,
+    });
+    expect(corrupt.outsideCoverageEdgeIds).toEqual(["w-loop:0:forward"]);
+    expect(corrupt.errors).toEqual(expect.arrayContaining([
+      "Named area osm:relation/1001 references an unknown source",
+      "1 persisted edges leave exact pack coverage",
+    ]));
   });
 });

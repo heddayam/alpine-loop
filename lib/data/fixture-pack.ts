@@ -2,6 +2,7 @@ import path from "node:path";
 import type { SourceSnapshot } from "./adapters";
 import type { CompilePackOptions, PackSeed } from "./compiler";
 import { FixtureElevationSampler } from "./fixture-elevation-sampler";
+import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";
 import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
 import { sha256File } from "./file-source";
@@ -36,6 +37,13 @@ export const fixturePackSeed: PackSeed = {
   display: { center: [-122.158, 37.1605], zoom: 14 },
   capabilities: { elevation: true, officialAccess: true },
   fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
+};
+
+export const fixturePackSeedV2: PackSeed = {
+  ...fixturePackSeed,
+  schemaVersion: "2",
+  dataVersion: "fixture-v2",
+  capabilities: { ...fixturePackSeed.capabilities, namedAreas: true },
 };
 
 export async function fixtureCompileOptions(
@@ -75,5 +83,29 @@ export async function fixtureCompileOptions(
     officialAccess: { adapter: new FixtureOfficialAccessAdapter(), snapshot: officialAccess },
     elevation: { sampler: await FixtureElevationSampler.create(elevation), snapshot: elevation },
     beforePublish: overrides.beforePublish,
+  };
+}
+
+export async function fixtureCompileOptionsV2(
+  outputRoot: string,
+  fixtureRoot = path.resolve("data/fixtures/source"),
+  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
+  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish">> = {},
+): Promise<CompilePackOptions> {
+  const base = await fixtureCompileOptions(outputRoot, fixtureRoot, {
+    ...overrides,
+    seed: overrides.seed ?? fixturePackSeedV2,
+  });
+  const namedAreas = await fixtureSnapshot(namedAreaFixtureRoot, "areas.json", {
+    id: "fixture-named-areas",
+    authority: "Alpine Search",
+    dataset: "Synthetic OSM named areas",
+    version: "1",
+    url: "https://example.invalid/alpine-search/fixture-named-areas",
+    license: "CC0-1.0",
+  });
+  return {
+    ...base,
+    namedAreas: { adapter: new FixtureNamedAreaAdapter(), snapshot: namedAreas },
   };
 }

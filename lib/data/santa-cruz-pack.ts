@@ -14,6 +14,7 @@ import { assertPackAuditPassed, auditOfficialAccessJoins, auditSqlitePack } from
 import type { OfficialAccessAdapter, SourceSnapshot } from "./adapters";
 import { snapAccessPointsToTopology } from "./access-point-snap";
 import { applyOfficialWayEvidenceToAccessPoints } from "./access-point-evidence";
+import { areaGeometryBounds, type AreaGeometry } from "./area-geometry";
 import { compilePack, type PackSeed } from "./compiler";
 import {
   readElevationSourceConfig,
@@ -24,6 +25,7 @@ import {
 } from "./elevation";
 import {
   OsmPbfTopologyAdapter,
+  OsmPbfNamedAreaAdapter,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -34,14 +36,14 @@ import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v6";
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v7";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
 const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
 
 type BoundaryFeature = {
   type: "Feature";
-  geometry: PackSeed["coverage"]["boundary"];
+  geometry: AreaGeometry;
 };
 
 type AuthorityInput = {
@@ -131,16 +133,6 @@ function requiredSnapshot(snapshots: SourceSnapshot[], id: string): SourceSnapsh
   return snapshot;
 }
 
-function coverageBbox(boundary: PackSeed["coverage"]["boundary"]): [number, number, number, number] {
-  const coordinates = boundary.coordinates.flat();
-  return [
-    Math.min(...coordinates.map(([lon]) => lon)),
-    Math.min(...coordinates.map(([, lat]) => lat)),
-    Math.max(...coordinates.map(([lon]) => lon)),
-    Math.max(...coordinates.map(([, lat]) => lat)),
-  ];
-}
-
 function newestRetrieval(snapshots: SourceSnapshot[]): string {
   return snapshots.map(({ retrievedAt }) => retrievedAt).sort().at(-1)!;
 }
@@ -208,6 +200,11 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     boundaryPath,
     preparationRoot: path.join(options.preparationRoot, "osm"),
   });
+  const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+    namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
+  });
   const preparedTopology = snapAccessPointsToTopology(
     await (async () => {
       const normalized: NormalizedTopology[] = [];
@@ -244,19 +241,19 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
   const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot];
   const seed: PackSeed = {
-    schemaVersion: "1",
+    schemaVersion: "2",
     id: PACK_ID,
     name: "Santa Cruz Mountains",
     dataVersion: dataVersion(
       boundaryContents,
       snapshots,
-      sourceTopologyAdapter.adapterVersion,
+      `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}`,
       elevationSampler.algorithmVersion,
     ),
     compilerVersion: COMPILER_VERSION,
-    coverage: { bbox: coverageBbox(boundary.geometry), boundary: boundary.geometry },
+    coverage: { bbox: areaGeometryBounds(boundary.geometry), boundary: boundary.geometry },
     display: { center: [-122.18, 37.319], zoom: 13.5 },
-    capabilities: { elevation: true, officialAccess: true },
+    capabilities: { elevation: true, officialAccess: true, namedAreas: true },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   };
   const [firstAuthority, ...additionalAuthorities] = authorities;
@@ -277,6 +274,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       snapshot: authority.snapshot,
     })),
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
+    namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
   });
 
   const regionalAudit = await auditSqlitePack({

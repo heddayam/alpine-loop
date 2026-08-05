@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { packManifestV1Schema, type PackManifestV1 } from "@/lib/contracts";
+import { namedAreaSchema, packManifestSchema, type PackManifest } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
+import { edgeInsideCoverage } from "../area-geometry";
 import { auditRegionalPack } from "./audit";
 import type {
   AuditAccessPoint,
@@ -70,6 +71,21 @@ function jsonStringArray(value: unknown, field: string): string[] {
   }
 }
 
+function jsonCoordinates(value: unknown, field: string): Array<[number, number]> {
+  const encoded = requiredString(value, field);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(encoded);
+  } catch (error) {
+    throw new Error(`Invalid ${field}: malformed JSON`, { cause: error });
+  }
+  if (!Array.isArray(parsed) || parsed.length < 2 || parsed.some((coordinate) =>
+    !Array.isArray(coordinate) || coordinate.length !== 2 || coordinate.some((number) => typeof number !== "number" || !Number.isFinite(number)))) {
+    throw new Error(`Invalid ${field}: expected at least two finite coordinate pairs`);
+  }
+  return parsed as Array<[number, number]>;
+}
+
 function databaseMetadata(database: DatabaseSync): Metadata {
   const rows = database.prepare("SELECT key, value FROM metadata").all() as Array<Record<string, unknown>>;
   return Object.fromEntries(rows.map((row) => [
@@ -78,7 +94,7 @@ function databaseMetadata(database: DatabaseSync): Metadata {
   ]));
 }
 
-function assertManifestMetadata(manifest: PackManifestV1, metadata: Metadata): void {
+function assertManifestMetadata(manifest: PackManifest, metadata: Metadata): void {
   const expected: Metadata = {
     schemaVersion: manifest.schemaVersion,
     packId: manifest.id,
@@ -94,7 +110,7 @@ function assertManifestMetadata(manifest: PackManifestV1, metadata: Metadata): v
   }
 }
 
-function sourcesFromDatabase(database: DatabaseSync, manifest: PackManifestV1): AuditSource[] {
+function sourcesFromDatabase(database: DatabaseSync, manifest: PackManifest): AuditSource[] {
   const rows = database.prepare(`
     SELECT id, authority, dataset, version, retrieved_at, url, license, content_hash
     FROM sources ORDER BY id
@@ -135,7 +151,7 @@ function sourcesFromDatabase(database: DatabaseSync, manifest: PackManifestV1): 
 
 function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
   const rows = database.prepare(`
-    SELECT id, from_node, to_node, length_m, gain_m, loss_m, max_elevation_m,
+    SELECT id, from_node, to_node, geometry, length_m, gain_m, loss_m, max_elevation_m,
       max_sustained_grade_pct, access_state, source_refs, flags
     FROM edges ORDER BY id
   `).all() as Array<Record<string, unknown>>;
@@ -153,8 +169,51 @@ function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
       accessState: accessState(row.access_state, `edge ${id}.access_state`),
       sourceRefs: jsonStringArray(row.source_refs, `edge ${id}.source_refs`),
       flags: jsonStringArray(row.flags, `edge ${id}.flags`),
+      geometry: jsonCoordinates(row.geometry, `edge ${id}.geometry`),
     };
   });
+}
+
+function auditNamedAreas(
+  database: DatabaseSync,
+  manifest: PackManifest,
+  sourceIds: ReadonlySet<string>,
+): { count: number; errors: string[] } {
+  if (manifest.schemaVersion === "1") return { count: 0, errors: [] };
+  const errors: string[] = [];
+  const rows = database.prepare(`
+    SELECT id, name, kind, context, min_lon, min_lat, max_lon, max_lat, geometry, source_refs
+    FROM named_areas ORDER BY id
+  `).all() as Array<Record<string, unknown>>;
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const id = requiredString(row.id, "named_areas.id");
+    ids.add(id);
+    try {
+      const area = namedAreaSchema.parse({
+        id,
+        name: row.name,
+        kind: row.kind,
+        ...(row.context === null ? {} : { context: row.context }),
+        bbox: [row.min_lon, row.min_lat, row.max_lon, row.max_lat],
+        geometry: JSON.parse(requiredString(row.geometry, `named area ${id}.geometry`)),
+        sourceIds: jsonStringArray(row.source_refs, `named area ${id}.source_refs`),
+      });
+      if (area.sourceIds.some((sourceId) => !sourceIds.has(sourceId))) errors.push(`Named area ${id} references an unknown source`);
+    } catch (error) {
+      errors.push(`Named area ${id} is invalid: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (!ids.has(`pack:${manifest.id}`)) errors.push(`Named-area catalog is missing pack:${manifest.id}`);
+  const aliasAreas = database.prepare("SELECT DISTINCT area_id FROM named_area_aliases ORDER BY area_id")
+    .all().map((row) => requiredString((row as Record<string, unknown>).area_id, "named_area_aliases.area_id"));
+  for (const id of ids) if (!aliasAreas.includes(id)) errors.push(`Named area ${id} has no searchable alias`);
+  const spatialCount = requiredNumber(
+    (database.prepare("SELECT count(*) AS count FROM named_area_spatial").get() as Record<string, unknown>).count,
+    "named_area_spatial count",
+  );
+  if (spatialCount !== rows.length) errors.push(`Named-area spatial row count ${spatialCount} does not match catalog count ${rows.length}`);
+  return { count: rows.length, errors };
 }
 
 function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNode[] {
@@ -228,7 +287,11 @@ async function buildMetrics(metadata: Metadata, auditPath: string | null): Promi
   const metadataRejected = metadata.rejectedEdgeCount === undefined
     ? null
     : optionalCount(Number(metadata.rejectedEdgeCount), "metadata.rejectedEdgeCount", errors);
-  const auditRejected = optionalCount(audit.rejectedEdgeCount, "build audit rejectedEdgeCount", errors);
+  const auditRejected = optionalCount(
+    audit.rejectedCoverageEdgeCount ?? audit.rejectedEdgeCount,
+    "build audit rejectedCoverageEdgeCount",
+    errors,
+  );
   const rejectedWays = optionalCount(audit.rejectedWayCount, "build audit rejectedWayCount", errors);
   let rejectedEdgeCount = metadataRejected ?? auditRejected ?? rejectedWays ?? 0;
   if (metadataRejected === null && auditRejected === null && rejectedWays !== null) {
@@ -269,13 +332,14 @@ async function buildMetrics(metadata: Metadata, auditPath: string | null): Promi
 }
 
 export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<RegionalPackAudit> {
-  const manifest = packManifestV1Schema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
+  const manifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
   const database = new DatabaseSync(options.databasePath, { readOnly: true });
   let metadata: Metadata;
   let sources: AuditSource[];
   let edges: AuditEdge[];
   let nodes: AuditNode[];
   let accessPoints: AuditAccessPoint[];
+  let namedAreas: ReturnType<typeof auditNamedAreas>;
   try {
     metadata = databaseMetadata(database);
     assertManifestMetadata(manifest, metadata);
@@ -283,6 +347,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     edges = edgesFromDatabase(database);
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
+    namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
   } finally {
     database.close();
   }
@@ -304,5 +369,15 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   audit.warnings.push(...metrics.warnings);
   audit.errors.push(...metrics.errors);
   audit.counts.conflicts = metrics.conflictCount;
+  if (manifest.schemaVersion === "2") {
+    audit.counts.namedAreas = namedAreas.count;
+    audit.errors.push(...namedAreas.errors);
+    audit.outsideCoverageEdgeIds = edges
+      .filter((edge) => !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary))
+      .map(({ id }) => id);
+    if (audit.outsideCoverageEdgeIds.length) {
+      audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
+    }
+  }
   return audit;
 }
