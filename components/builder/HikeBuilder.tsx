@@ -61,6 +61,8 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [generationResponse, setGenerationResponse] = useState<GenerateRoutesResponseV1 | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string>();
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
+  const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
+  const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
   const generationControllerRef = useRef<AbortController | null>(null);
 
   const onBoundsChange = useCallback((next: Bounds | null) => {
@@ -205,6 +207,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     () => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [],
     [generationResponse],
   );
+  const hasResultsPanel = generationState !== "idle";
+  const workspaceClassName = [
+    "workspace",
+    hasResultsPanel ? "with-results" : "",
+    desktopBuilderVisible ? "" : "without-builder",
+    hasResultsPanel && !desktopResultsVisible ? "without-results" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <main className="app-frame">
@@ -217,14 +226,37 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <span className="status-dot" aria-hidden="true" />
           <span><strong>{pack.name}</strong><small>{pack.subtitle}</small></span>
         </div>
+        <nav className="desktop-panel-controls" aria-label="Desktop panels">
+          <button
+            type="button"
+            aria-label="Toggle plan panel"
+            aria-pressed={desktopBuilderVisible}
+            onClick={() => setDesktopBuilderVisible((visible) => !visible)}
+          >
+            Plan
+          </button>
+          <button
+            type="button"
+            aria-label="Toggle results panel"
+            aria-pressed={desktopResultsVisible && hasResultsPanel}
+            disabled={!hasResultsPanel}
+            onClick={() => setDesktopResultsVisible((visible) => !visible)}
+          >
+            Results
+          </button>
+        </nav>
       </header>
 
-      <div className={generationState === "idle" ? "workspace" : "workspace with-results"}>
+      <div className={workspaceClassName}>
         <nav className="mobile-panel-nav" aria-label="Workspace panels">
           <button type="button" aria-pressed={mobilePanel === "builder"} onClick={() => setMobilePanel("builder")}>Plan</button>
           <button type="button" aria-pressed={mobilePanel === "results"} disabled={generationState === "idle"} onClick={() => setMobilePanel("results")}>Results{generationResponse ? ` (${generatedRoutes.length})` : ""}</button>
         </nav>
-        <aside className={mobilePanel === "builder" ? "builder-panel" : "builder-panel mobile-panel-hidden"} aria-labelledby="builder-title">
+        <aside className={[
+          "builder-panel",
+          mobilePanel === "builder" ? "" : "mobile-panel-hidden",
+          desktopBuilderVisible ? "" : "desktop-panel-hidden",
+        ].filter(Boolean).join(" ")} aria-labelledby="builder-title">
           <div className="panel-heading builder-console-heading">
             <div className="builder-console-title">
               <p>Plan</p>
@@ -368,6 +400,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
             selectedRouteId={selectedRouteId}
             onSelectRoute={setSelectedRouteId}
             mobileVisible={mobilePanel === "results"}
+            desktopVisible={desktopResultsVisible}
           />
         ) : null}
       </div>

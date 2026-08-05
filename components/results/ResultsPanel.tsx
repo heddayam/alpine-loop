@@ -18,6 +18,7 @@ type ResultsPanelProps = {
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
   mobileVisible?: boolean;
+  desktopVisible?: boolean;
 };
 
 type DisplayRoute = GeneratedRoute & { violations?: ConstraintViolation[] };
@@ -211,8 +212,21 @@ function RouteCard({
   );
 }
 
-export function ResultsPanel({ status, response, message, selectedRouteId, onSelectRoute, mobileVisible = true }: ResultsPanelProps) {
+export function ResultsPanel({
+  status,
+  response,
+  message,
+  selectedRouteId,
+  onSelectRoute,
+  mobileVisible = true,
+  desktopVisible = true,
+}: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const panelClassName = [
+    "results-panel",
+    mobileVisible ? "" : "mobile-panel-hidden",
+    desktopVisible ? "" : "desktop-panel-hidden",
+  ].filter(Boolean).join(" ");
   const routes = useMemo(
     () => response ? [...response.exact, ...response.nearMisses] : [],
     [response],
@@ -235,7 +249,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
 
   if (status === "loading") {
     return (
-      <aside className={mobileVisible ? "results-panel" : "results-panel mobile-panel-hidden"} aria-labelledby="results-title">
+      <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Searching the graph</h2></div>
         <p className="results-state loading-state" role="status" aria-live="polite">Generating routes inside your hard boundary…</p>
       </aside>
@@ -244,7 +258,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
 
   if (status === "error") {
     return (
-      <aside className={mobileVisible ? "results-panel" : "results-panel mobile-panel-hidden"} aria-labelledby="results-title">
+      <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Generation failed</h2></div>
         <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different boundary or constraints."}</span></div>
       </aside>
@@ -253,7 +267,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
 
   if (status === "cancelled") {
     return (
-      <aside className={mobileVisible ? "results-panel" : "results-panel mobile-panel-hidden"} aria-labelledby="results-title">
+      <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Search cancelled</h2></div>
         <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings or generate again when you’re ready.</span></div>
       </aside>
@@ -267,7 +281,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
   const reasons = response.diagnostics.truncationReasons.map(humanizeReason);
 
   return (
-    <aside className={mobileVisible ? "results-panel" : "results-panel mobile-panel-hidden"} aria-labelledby="results-title">
+    <aside className={panelClassName} aria-labelledby="results-title">
       <div className="results-heading">
         <p>Route alternatives</p>
         <h2 id="results-title">Explore results</h2>

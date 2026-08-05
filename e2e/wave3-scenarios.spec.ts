@@ -14,7 +14,7 @@ async function installOfflineTile(page: Page) {
 }
 
 async function drawFixtureBoundary(page: Page) {
-  await page.getByRole("button", { name: "Draw boundary" }).click();
+  await page.getByRole("button", { name: "Draw search boundary" }).click();
   await expect(page.getByText("Keep the blue search box entirely inside the green installed demo coverage.")).toBeVisible();
   const canvas = page.locator(".maplibregl-canvas");
   const box = await canvas.boundingBox();
@@ -25,7 +25,7 @@ async function drawFixtureBoundary(page: Page) {
   await page.mouse.up();
   // Retain the real draw gesture above, then normalize coordinates so map camera
   // or viewport changes cannot make this supplemental scenario nondeterministic.
-  await page.getByRole("button", { name: "Use demo area" }).click();
+  await page.getByRole("button", { name: "Use demo search area" }).click();
   await page.getByText("Edit boundary coordinates", { exact: true }).click();
   await page.getByLabel("West longitude").fill("-122.183");
   await page.getByLabel("South latitude").fill("37.155");
