@@ -9,10 +9,11 @@ solver logic.
 
 The primary interaction is:
 
-1. Draw or resize a rectangle on the map. The rectangle is a hard boundary for
-   every returned route geometry.
-2. Optionally select a known access point inside it. If none is selected, the
-   solver may choose a suitable known access point.
+1. Choose one trailhead-filter mode: draw an area, select an installed named
+   region, or calculate a typical drive-time area from an origin. Drive time may
+   be refined by one installed named region.
+2. Optionally select an eligible access point. If none is selected, the solver
+   searches up to eight deterministically ranked eligible access points.
 3. Choose one or more route shapes, physical constraint ranges, the unknown
    access policy, and a requested result count from 1 to 20 (default 10).
 4. Generate alternatives. Show exact matches first. Show up to three near misses
@@ -27,7 +28,8 @@ points and major trail names, but the graph and constraints define the route.
 
 ### First release
 
-- Rectangle draw/edit/clear and optional trailhead selection.
+- Drawn-area, named-region, and 5–300 minute drive-time access-point filters,
+  plus optional trailhead selection.
 - Loop, lollipop, out-and-back, and point-to-point generation.
 - Min/max ranges for distance, total elevation gain, maximum altitude, and
   steepest sustained grade.
@@ -40,8 +42,8 @@ points and major trail names, but the graph and constraints define the route.
 
 ### Explicitly deferred
 
-- Travel-time isochrones and drive-time filtering. Preserve the code under
-  `legacy/isochrones/source`, but do not import or expose it.
+- Live-traffic and departure-time modeling. Drive-time filtering uses ArcGIS
+  typical/static travel time and retains no persistent origin history.
 - Accounts, saved hikes, collaboration, turn-by-turn navigation, mobile-native
   clients, hosted deployment, and real-time closure guarantees.
 - Additional regions until the first pack proves the pack contract.
@@ -53,16 +55,17 @@ points and major trail names, but the graph and constraints define the route.
 Use a Caltopo-inspired information density without copying its visual design.
 
 - Top bar: product name, installed pack/freshness, unit preference, help.
-- Left builder panel: region status, rectangle instructions, start access point,
+- Left builder panel: region status, trailhead-filter mode, start access point,
   route types, constraint ranges, unknown-access toggle, result count, Generate.
-- Center: MapLibre map with USGS topo base, rectangle, access points, trail
+- Center: MapLibre map with USGS topo base, active trailhead filter, access points, trail
   context, highlighted and alternate generated routes.
 - Right results panel: exact matches, near misses, cards, sort, comparison, and
   route details. It is collapsed until results exist.
 - Small screens: map remains primary; builder and results become mutually
   navigable drawers/bottom sheets.
 
-Required states are empty, drawing, invalid rectangle, generating, partial
+Required states are empty, drawing, resolving region/origin, calculating drive
+area, invalid filter, generating, partial
 results, no exact results, data unavailable, request budget exhausted, and
 cancelled. Keyboard operation, visible focus, non-color route distinctions, and
 screen-reader status announcements are acceptance requirements.
@@ -101,16 +104,21 @@ R2, or deployment scripts.
 
 ## 5. Public route-generation contract
 
-Implement `POST /api/routes/generate` with this versioned request shape:
+Implement `POST /api/routes/generate` with this versioned request shape. Version
+1 is rejected after the coordinated local-app cutover:
 
 ```ts
-type GenerateRoutesRequestV1 = {
-  version: 1;
+type GenerateRoutesRequestV2 = {
+  version: 2;
   packId: string;
-  bbox: [west: number, south: number, east: number, north: number];
+  accessFilter:
+    | { mode: "drawn-area"; bbox: [west: number, south: number, east: number, north: number] }
+    | { mode: "named-region"; regionId: string }
+    | { mode: "drive-time"; reachabilityId: string; regionId?: string };
   startAccessPointId?: string;
   routeTypes: Array<"loop" | "lollipop" | "out-and-back" | "point-to-point">;
-  distanceMiles: { min: number; max: number };
+  pointToPoint: { finishMustMatchAccessFilter: boolean };
+  distanceMiles: { min: number; max: number }; // maximum 30 miles
   elevationGainFeet?: { min: number; max: number };
   maximumElevationFeet?: { min: number; max: number };
   steepestSustainedGradePct?: { min: number; max: number };
@@ -119,27 +127,33 @@ type GenerateRoutesRequestV1 = {
 };
 ```
 
-Validate finite coordinates, ordered ranges, supported pack, rectangle inside
-pack coverage, maximum rectangle area, at least one route type, and explicit
-request limits. Store and calculate internally in SI units; translate only at
-the API/UI boundary.
+Validate finite coordinates, ordered ranges, supported pack, effective filter
+overlap with pack coverage, the 30-mile route cap, at least one route type, and
+explicit request limits. Store and calculate internally in SI units; translate
+only at the API/UI boundary.
 
 The response must contain:
 
 ```ts
-type GenerateRoutesResponseV1 = {
-  version: 1;
+type GenerateRoutesResponseV2 = {
+  version: 2;
   requestId: string;
   pack: { id: string; schemaVersion: string; dataVersion: string; builtAt: string };
   requested: number;
+  resolvedAccessFilter: { mode: string; label: string };
   exact: GeneratedRoute[];
   nearMisses: Array<GeneratedRoute & { violations: ConstraintViolation[] }>;
   diagnostics: {
     elapsedMs: number;
     expandedStates: number;
     candidateCount: number;
+    eligibleAccessPointCount: number;
+    searchedAccessPointCount: number;
+    graphQueryCount: number;
+    maximumLoadedDirectedEdges: number;
     exhausted: boolean;
     truncationReasons: string[];
+    shortfallReasons: string[];
   };
 };
 ```
@@ -177,19 +191,21 @@ enables it.
 Keep a `GraphRepository` interface between the solver and SQLite so fixture
 graphs and future pack formats do not change solver code.
 
-1. Query spatial indexes for nodes, edges, and access points intersecting the
-   rectangle; clip by geometry and reject any candidate that leaves the hard
-   boundary.
-2. Resolve the requested access point or rank eligible starts by known public
-   access confidence, parking/trailhead evidence, and graph connectivity.
+1. Resolve the active filter and shortlist access points through spatial
+   indexes. Drawn, named, and drive polygons filter access points only; exact
+   pack coverage is the sole hard route-geometry boundary.
+2. Resolve the requested access point or rank up to eight eligible starts by
+   connectivity, outgoing degree, name quality, access confidence, parking
+   evidence, and stable ID.
 3. Build candidates with shape-specific algorithms:
    - out-and-back: bounded path labels from the start near half the target range;
    - loop: bounded cycle search around the start;
    - lollipop: bounded stem labels plus compatible cycles;
    - point-to-point: bounded labels to distinct eligible access points.
-4. Use multi-criteria beam search / nondominated labels bucketed by distance and
-   gain. Apply feasibility bounds early and score complete candidates later.
-5. Deduplicate canonical edge sequences, then greedily select diverse results.
+4. Query a bounded reachable graph around each selected start and schedule
+   `(start, route type)` lanes round-robin under the shared budgets.
+5. Deduplicate canonical edge sequences, apply the 80% overlap rule, take at
+   most two routes per start on the first pass, then backfill globally.
 
 Hard defaults, configurable in one server-side budget object:
 
@@ -223,6 +239,8 @@ branches for “Midpen” or “Santa Cruz.” A pack includes:
 - source snapshot identifiers, URLs, retrieval times, hashes, and licenses;
 - capabilities and field-level confidence/freshness;
 - compiler version and metric algorithm version.
+- a searchable named-area catalog with Polygon/MultiPolygon geometry, aliases,
+  kinds, source references, and spatial indexes when `namedAreas` is supported.
 
 Minimum runtime tables:
 
@@ -231,7 +249,8 @@ Minimum runtime tables:
   max_elevation_m, max_sustained_grade_pct, access_state, source_refs, flags)`
   plus spatial index;
 - `access_points(id, node_id, name, kind, access_state, confidence,
-  parking_evidence, source_refs)`;
+  parking_evidence, source_refs, connectivity and out-degree ranking fields)`;
+- `named_areas(...)`, `named_area_aliases(...)`, and `named_area_spatial`;
 - `sources(id, authority, dataset, version, retrieved_at, url, license,
   content_hash)`;
 - metadata and schema migration records.
@@ -254,15 +273,15 @@ Failed builds must not replace the last valid local pack.
 
 ## 9. Error and safety behavior
 
-- Reject overlarge/degenerate/out-of-coverage rectangles with an actionable
-  message before searching.
+- Reject degenerate filters, empty pack overlap, expired reachability IDs, and
+  explicit starts outside the effective filter with actionable messages.
 - A route is a planning aid, not an assurance that a trail is open or safe.
   Display data dates and a “verify current conditions” warning.
 - Show explicit warnings for uncertain access, point-to-point logistics,
   incomplete elevation, stale official data, and search truncation.
 - No runtime call to the public OSM API or Overpass.
-- Never log secrets or raw user location history. The first release needs no
-  persistent user-location store.
+- Never log secrets or raw user location history. Origins, labels, contours,
+  and reachability jobs remain memory-only and expire after 30 minutes.
 
 ## 10. Acceptance gates
 
@@ -296,8 +315,12 @@ Failed builds must not replace the last valid local pack.
 - A curated set of rectangle/request scenarios produces useful routes within the
   budgets on a typical development laptop.
 
-### Gate 4 — hardening
+### Gate 4 — trailhead filters and hardening
 
+- Drawn areas, installed named regions, and ArcGIS drive-time contours filter
+  eligible access points without clipping routes.
+- Pack schema 2 supplies named areas and exact pack-boundary enforcement.
+- Multi-start generation is deterministic, budgeted, and softly diversified.
 - Responsive and keyboard UX passes accessibility checks.
 - Empty/error/partial/stale/cancelled states are clear.
 - Fresh clone instructions work with only documented prerequisites.

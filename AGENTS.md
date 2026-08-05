@@ -28,7 +28,9 @@ application.
 ## Product invariants
 
 - This is a hike-route generator, not a catalog of known hikes.
-- The search rectangle is a hard geometry boundary.
+- Drawn areas, named regions, and drive-time contours filter eligible access
+  points; they do not clip hiking routes. Exact installed-pack coverage is the
+  hard geometry boundary.
 - Unknown access is included by default and can be explicitly disabled.
 - Return exact matches separately from clearly labeled near misses; never relax
   constraints silently.
