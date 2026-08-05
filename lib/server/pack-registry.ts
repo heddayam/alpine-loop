@@ -1,23 +1,30 @@
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
 import { getNamedArea, searchNamedAreas } from "@/lib/data/named-area-catalog";
-import { FixtureGraphRepository, SQLiteGraphRepository, type FixtureGraphData } from "@/lib/graph";
+import {
+  FixtureGraphRepository,
+  SQLiteClosedRouteFeasibilityRepository,
+  SQLiteGraphRepository,
+  type FixtureGraphData,
+} from "@/lib/graph";
 import {
   FIXTURE_PACK_COVERAGE,
   FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
   FIXTURE_PACK_METADATA,
 } from "@/lib/packs/fixture-pack";
 import { loadSantaCruzPack } from "@/lib/packs/installed-pack";
-import type { RoutePack } from "./route-generation";
+import type { ClosedRoutePack } from "./closed-route-generation";
 
 export const INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS = 100;
 
-export type RegisteredRoutePack = RoutePack & {
+export type RegisteredRoutePack = ClosedRoutePack & {
   kind: "fixture" | "installed";
   sourceFreshness: string;
   sourceConfidence: "high" | "medium" | "low";
   fallbackSourceIds: string[];
 };
 
+// The legacy fixture intentionally has no schema-3 feasibility repository.
+// The V3 endpoint reports CLOSED_ROUTES_UNAVAILABLE until a compact fixture is compiled.
 const FIXTURE_PACK: RegisteredRoutePack = {
   ...FIXTURE_PACK_METADATA,
   kind: "fixture",
@@ -57,9 +64,21 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
       coverageBbox: manifest.coverage.bbox,
       coverage: manifest.coverage.boundary,
       databasePath: installed.databasePath,
-      ...(manifest.schemaVersion === "2" && manifest.capabilities.namedAreas ? {
+      ...(manifest.capabilities.namedAreas ? {
         searchNamedAreas: (text: string, limit?: number) => searchNamedAreas(installed.databasePath, text, limit),
         getNamedArea: (id: string) => getNamedArea(installed.databasePath, id),
+      } : {}),
+      ...(manifest.schemaVersion === "3" ? {
+        closedRouteRuntimeMode: manifest.closedRouteTopology.runtimeMode,
+        ...(manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback" ? {
+          loadClosedRouteFeasibilityRepository: async (signal: AbortSignal) => {
+            if (signal.aborted) throw signal.reason ?? new DOMException("Pack opening was cancelled", "AbortError");
+            return new SQLiteClosedRouteFeasibilityRepository({
+              databasePath: installed.databasePath,
+              manifest,
+            });
+          },
+        } : {}),
       } : {}),
       maximumAreaSquareKilometers: INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
       loadRepository: async (signal) => {
