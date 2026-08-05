@@ -101,6 +101,25 @@ describe("reachability orchestration", () => {
     });
     await expect(context.service.poll(ID)).resolves.toMatchObject({ status: "complete" });
     expect(arcgis.pollServiceArea).toHaveBeenCalledOnce();
+    expect(context.service.resolveCompleted(ID, REQUEST.packId)).toEqual({
+      geometry: GEOMETRY,
+      durationMinutes: 30,
+      resolvedAt: "2026-08-04T12:00:00.000Z",
+      originLabel: "Private origin",
+    });
+    expect(arcgis.pollServiceArea).toHaveBeenCalledOnce();
+  });
+
+  it("distinguishes pending and cross-pack resolution without contacting ArcGIS", async () => {
+    const context = setup();
+    await context.service.submit(REQUEST);
+    expect(() => context.service.resolveCompleted(ID, REQUEST.packId)).toThrowError(
+      expect.objectContaining({ code: "REACHABILITY_PENDING" }),
+    );
+    expect(() => context.service.resolveCompleted(ID, "different-pack")).toThrowError(
+      expect.objectContaining({ code: "REACHABILITY_PACK_MISMATCH" }),
+    );
+    expect(context.provider.pollServiceArea).not.toHaveBeenCalled();
   });
 
   it("returns distinct failed, missing, and expired errors", async () => {

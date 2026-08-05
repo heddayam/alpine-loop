@@ -7,6 +7,7 @@ import { ReachabilityError, toReachabilityError } from "./errors";
 import { MemoryReachabilityJobStore } from "./jobs";
 import type {
   ArcGisProvider,
+  AreaGeometry,
   Clock,
   GeocodingSuggestion,
   IdGenerator,
@@ -27,6 +28,13 @@ type ReachabilityServiceOptions = {
   id: IdGenerator;
   geocodingMonthlyLimit?: number;
   serviceAreaMonthlyLimit?: number;
+};
+
+export type CompletedReachability = {
+  geometry: AreaGeometry;
+  durationMinutes: ReachabilityRequest["durationMinutes"];
+  resolvedAt: string;
+  originLabel: string;
 };
 
 export class ReachabilityService {
@@ -148,6 +156,54 @@ export class ReachabilityService {
       await this.provider.cancelServiceArea(job.providerJobId, signal);
     }
     this.jobs.delete(id);
+  }
+
+  /** Resolves only already-completed process-local state; it never contacts ArcGIS. */
+  resolveCompleted(id: string, packId: string): CompletedReachability {
+    const lookup = this.jobs.lookup(id);
+    if (lookup.state === "expired") {
+      throw new ReachabilityError(
+        "REACHABILITY_EXPIRED",
+        "That drive-time request expired. Calculate it again.",
+        410,
+      );
+    }
+    if (lookup.state === "missing") {
+      throw new ReachabilityError(
+        "REACHABILITY_NOT_FOUND",
+        "That drive-time request was not found.",
+        404,
+      );
+    }
+    const { job } = lookup;
+    if (job.packId !== packId) {
+      throw new ReachabilityError(
+        "REACHABILITY_PACK_MISMATCH",
+        "That drive-time area belongs to a different installed pack.",
+        422,
+      );
+    }
+    if (job.state === "failed") {
+      throw new ReachabilityError(
+        "REACHABILITY_FAILED",
+        job.error ?? "The drive-time calculation failed.",
+        502,
+      );
+    }
+    if (job.state !== "complete" || !job.geometry || !job.resolvedAt) {
+      throw new ReachabilityError(
+        "REACHABILITY_PENDING",
+        "That drive-time area is still being calculated.",
+        409,
+        true,
+      );
+    }
+    return {
+      geometry: structuredClone(job.geometry),
+      durationMinutes: job.durationMinutes,
+      resolvedAt: job.resolvedAt.toISOString(),
+      originLabel: job.origin.label,
+    };
   }
 
   private response(id: string): ReachabilityResponse {
