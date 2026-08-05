@@ -47,6 +47,29 @@ describe("FixtureGraphRepository", () => {
       repository.getInducedGraph({ bbox: WORLD_FIXTURE_BBOX, includeUncertainAccess: false, signal: controller.signal }),
     ).rejects.toThrow("stop");
   });
+
+  it("loads a bounded reachable graph independently of the access filter", async () => {
+    const repository = new FixtureGraphRepository(mapped);
+    const candidates = await repository.getAccessPointCandidates({
+      bbox: [-122.182, 37.161, -122.181, 37.162],
+      includeUncertainAccess: true,
+    });
+    expect(candidates.map(({ id }) => id)).toEqual(["trailhead-a"]);
+    const result = await repository.getReachableGraph({
+      startNodeId: "a",
+      maximumDistanceMeters: 10_000,
+      maximumDirectedEdges: 10_000,
+      includeUncertainAccess: true,
+      coverage: {
+        type: "Polygon",
+        coordinates: [[
+          [-122.19, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.19, 37.18], [-122.19, 37.15],
+        ]],
+      },
+    });
+    expect(result.truncated).toBe(false);
+    expect(result.graph.edges.length).toBe(mapped.undirectedTrails!.length * 2);
+  });
 });
 
 describe("SQLiteGraphRepository", () => {
@@ -97,6 +120,21 @@ describe("SQLiteGraphRepository", () => {
     expect(uncertain.edges.map(({ id }) => id)).toEqual(["public", "unknown"]);
     expect(uncertain.edges[1].gainMeters).toBe(0);
     expect(await repository.getAccessPoints([-0.1, -0.1, 0.1, 0.1], true)).toHaveLength(2);
+    const candidates = await repository.getAccessPointCandidates({
+      bbox: [-0.1, -0.1, 0.1, 0.1], includeUncertainAccess: true,
+    });
+    expect(candidates.map(({ id }) => id)).toEqual(["known", "uncertain"]);
+    const reachable = await repository.getReachableGraph({
+      startNodeId: "a",
+      maximumDistanceMeters: 2_000,
+      maximumDirectedEdges: 10,
+      includeUncertainAccess: true,
+      coverage: {
+        type: "Polygon",
+        coordinates: [[[-0.1, -0.1], [0.1, -0.1], [0.1, 0.1], [-0.1, 0.1], [-0.1, -0.1]]],
+      },
+    });
+    expect(reachable.graph.edges.map(({ id }) => id)).toEqual(["public", "unknown"]);
     await repository.close();
     await repository.close();
   });

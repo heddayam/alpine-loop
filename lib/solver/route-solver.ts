@@ -63,9 +63,11 @@ function routeConfidence(candidate: ScoredCandidate, configured: Confidence): Co
   return confidence;
 }
 
-function generatedRoute(
+export type GeneratedRouteOptions = Required<Pick<RouteSolverOptions, "sourceFreshness" | "sourceConfidence" | "fallbackSourceIds">>;
+
+export function generatedRoute(
   candidate: ScoredCandidate,
-  options: Required<Pick<RouteSolverOptions, "sourceFreshness" | "sourceConfidence" | "fallbackSourceIds">>,
+  options: GeneratedRouteOptions,
   truncated: boolean,
   sourceIsStale: boolean,
 ): GeneratedRoute {

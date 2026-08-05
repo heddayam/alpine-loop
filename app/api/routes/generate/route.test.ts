@@ -4,7 +4,10 @@ import type {
   GenerateRoutesRequestV1,
   GenerateRoutesResponseV1,
 } from "@/lib/contracts";
-import type { GraphRepository, InducedGraph } from "@/lib/graph";
+import type {
+  GraphRepository,
+  InducedGraph,
+} from "@/lib/graph";
 import type { RouteSolver, SolverBudget } from "@/lib/solver";
 import {
   createGenerateRoutesHandler,
@@ -106,6 +109,14 @@ class TestRepository implements GraphRepository {
 
   async getAccessPoints(): Promise<[]> {
     return [];
+  }
+
+  async getAccessPointCandidates(): Promise<[]> {
+    return [];
+  }
+
+  async getReachableGraph() {
+    return { graph: await this.getInducedGraph(), truncated: false };
   }
 }
 
