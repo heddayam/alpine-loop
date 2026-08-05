@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "externalId": "relation/1001",
+      "name": "Redwood Preserve",
+      "kind": "preserve",
+      "context": "Santa Cruz County, California",
+      "aliases": ["Redwoods", "Redwood Open Space"],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-122.1608, 37.1592],
+            [-122.1578, 37.1592],
+            [-122.1578, 37.1618],
+            [-122.1608, 37.1618],
+            [-122.1608, 37.1592]
+          ],
+          [
+            [-122.1602, 37.1600],
+            [-122.1597, 37.1600],
+            [-122.1597, 37.1605],
+            [-122.1602, 37.1605],
+            [-122.1602, 37.1600]
+          ]
+        ]
+      }
+    },
+    {
+      "externalId": "relation/1002",
+      "name": "Twin Hills",
+      "kind": "city",
+      "context": "California",
+      "aliases": ["Twin Hills City"],
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [[
+            [-122.1577, 37.1593],
+            [-122.1568, 37.1593],
+            [-122.1568, 37.1600],
+            [-122.1577, 37.1600],
+            [-122.1577, 37.1593]
+          ]],
+          [[
+            [-122.1570, 37.1607],
+            [-122.1560, 37.1607],
+            [-122.1560, 37.1616],
+            [-122.1570, 37.1616],
+            [-122.1570, 37.1607]
+          ]]
+        ]
+      }
+    }
+  ]
+}

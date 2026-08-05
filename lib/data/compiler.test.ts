@@ -3,9 +3,16 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packManifestV1Schema } from "@/lib/contracts";
+import { packManifestV1Schema, packManifestV2Schema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
-import { fixtureCompileOptions, fixturePackSeed } from "./fixture-pack";
+import type { AreaGeometry } from "./area-geometry";
+import { getNamedArea, searchNamedAreas } from "./named-area-catalog";
+import {
+  fixtureCompileOptions,
+  fixtureCompileOptionsV2,
+  fixturePackSeed,
+  fixturePackSeedV2,
+} from "./fixture-pack";
 
 const temporaryDirectories: string[] = [];
 
@@ -96,5 +103,99 @@ describe("fixture pack compiler", () => {
     expect(await readFile(pointerPath, "utf8")).toBe(originalPointer);
     await expect(readFile(path.join(outputRoot, "fixture-pack", "fixture-v2", "manifest.json"), "utf8"))
       .rejects.toThrow();
+  });
+
+  it("writes deterministic schema 2 named areas, aliases, spatial rows, and access ranking fields", async () => {
+    const firstRoot = await temporaryOutput();
+    const secondRoot = await temporaryOutput();
+    const first = await compilePack(await fixtureCompileOptionsV2(firstRoot));
+    const second = await compilePack(await fixtureCompileOptionsV2(secondRoot));
+    const manifest = packManifestV2Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+
+    expect(manifest.capabilities.namedAreas).toBe(true);
+    expect(first.audit).toMatchObject({
+      schemaVersion: "2",
+      namedAreaCount: 3,
+      rejectedCoverageEdgeCount: 0,
+      sourceCount: 4,
+    });
+
+    const database = new DatabaseSync(first.databasePath, { readOnly: true });
+    const secondDatabase = new DatabaseSync(second.databasePath, { readOnly: true });
+    try {
+      const areas = database.prepare(`
+        SELECT id, name, kind, geometry, source_refs FROM named_areas ORDER BY id
+      `).all();
+      expect(areas).toEqual(secondDatabase.prepare(`
+        SELECT id, name, kind, geometry, source_refs FROM named_areas ORDER BY id
+      `).all());
+      expect(areas).toHaveLength(3);
+      expect(database.prepare("SELECT count(*) AS count FROM named_area_spatial").get()).toEqual({ count: 3 });
+      expect(database.prepare(`
+        SELECT alias, normalized_alias FROM named_area_aliases
+        WHERE area_id = 'osm:relation/1001' ORDER BY normalized_alias
+      `).all()).toEqual([
+        { alias: "Redwood Open Space", normalized_alias: "redwood open space" },
+        { alias: "Redwood Preserve", normalized_alias: "redwood preserve" },
+        { alias: "Redwoods", normalized_alias: "redwoods" },
+      ]);
+      const preserve = JSON.parse((areas.find((row) => (row as { id: string }).id === "osm:relation/1001") as { geometry: string }).geometry);
+      const islands = JSON.parse((areas.find((row) => (row as { id: string }).id === "osm:relation/1002") as { geometry: string }).geometry);
+      expect(preserve.coordinates).toHaveLength(2);
+      expect(islands.type).toBe("MultiPolygon");
+      expect(islands.coordinates).toHaveLength(2);
+      expect(database.prepare(`
+        SELECT known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree
+        FROM access_points WHERE id = 'access-n-a'
+      `).get()).toEqual({
+        known_connectivity: 7,
+        inclusive_connectivity: 7,
+        known_out_degree: 2,
+        inclusive_out_degree: 2,
+      });
+      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
+        .toEqual([{ version: 1 }, { version: 2 }]);
+    } finally {
+      database.close();
+      secondDatabase.close();
+    }
+    expect(searchNamedAreas(first.databasePath, "redwood open")).toEqual([
+      expect.objectContaining({ id: "osm:relation/1001", name: "Redwood Preserve" }),
+    ]);
+    expect(searchNamedAreas(first.databasePath, "twin hills city")[0]).toMatchObject({
+      id: "osm:relation/1002",
+      kind: "city",
+    });
+    expect(searchNamedAreas(first.databasePath, "unknown region")).toEqual([]);
+    expect(getNamedArea(first.databasePath, "osm:relation/1001")?.geometry).toMatchObject({ type: "Polygon" });
+    expect(getNamedArea(first.databasePath, "missing")).toBeNull();
+  });
+
+  it("rejects out-of-coverage directed edges and records the exact audit count", async () => {
+    const outputRoot = await temporaryOutput();
+    const boundary: AreaGeometry = {
+      type: "Polygon",
+      coordinates: [[
+        [-122.1605, 37.1595], [-122.1575, 37.1595], [-122.1575, 37.1615],
+        [-122.1605, 37.1615], [-122.1605, 37.1595],
+      ]],
+    };
+    const options = await fixtureCompileOptionsV2(outputRoot, undefined, undefined, {
+      seed: {
+        ...fixturePackSeedV2,
+        dataVersion: "fixture-v2-clipped",
+        coverage: { bbox: [-122.1605, 37.1595, -122.1575, 37.1615], boundary },
+      },
+    });
+    const result = await compilePack(options);
+    expect(result.audit.rejectedCoverageEdgeCount).toBe(5);
+    expect(result.audit.directedEdgeCount).toBe(12);
+    const database = new DatabaseSync(result.databasePath, { readOnly: true });
+    try {
+      expect(database.prepare("SELECT count(*) AS count FROM edges").get()).toEqual({ count: 12 });
+      expect(database.prepare("SELECT count(*) AS count FROM edges WHERE id LIKE 'w-ridge:%'").get()).toEqual({ count: 0 });
+    } finally {
+      database.close();
+    }
   });
 });

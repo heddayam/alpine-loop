@@ -1,4 +1,5 @@
 import type { AccessState } from "@/lib/graph/types";
+import type { NormalizedNamedArea } from "./types";
 
 export type SourceSnapshot = {
   id: string;
@@ -37,4 +38,10 @@ export interface OfficialAccessAdapter {
 export interface ElevationSampler {
   readonly algorithmVersion: string;
   sample(coordinates: ReadonlyArray<readonly [number, number]>): Promise<Array<number | null>>;
+}
+
+export interface NamedAreaSourceAdapter {
+  readonly adapterVersion: string;
+  validate(snapshot: SourceSnapshot): Promise<void>;
+  normalize(snapshot: SourceSnapshot): Promise<NormalizedNamedArea[]>;
 }

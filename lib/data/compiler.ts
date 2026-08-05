@@ -3,10 +3,15 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { packManifestV1Schema, type PackManifestV1 } from "@/lib/contracts";
+import {
+  packManifestSchema,
+  type PackManifestV1,
+  type PackManifestV2,
+} from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import type {
   ElevationSampler,
+  NamedAreaSourceAdapter,
   NormalizedAccessEvidence,
   OfficialAccessAdapter,
   SourceSnapshot,
@@ -14,17 +19,22 @@ import type {
 } from "./adapters";
 import { reconcileAccess } from "./access";
 import { calculateEdgeMetricsBatch } from "./metrics";
+import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
+import { validateAndSortNamedAreas } from "./named-areas";
 import { writePackDatabase } from "./sqlite-writer";
 import type {
   CompiledEdge,
   Coordinate,
   NormalizedAccessPoint,
+  NormalizedNamedArea,
   NormalizedTopology,
   PackAudit,
   PackBuildResult,
 } from "./types";
 
-export type PackSeed = Omit<PackManifestV1, "builtAt" | "metricAlgorithmVersion" | "sources">;
+export type PackSeed =
+  | Omit<PackManifestV1, "builtAt" | "metricAlgorithmVersion" | "sources">
+  | Omit<PackManifestV2, "builtAt" | "metricAlgorithmVersion" | "sources">;
 
 export type CompilePackOptions = {
   outputRoot: string;
@@ -34,6 +44,7 @@ export type CompilePackOptions = {
   officialAccess: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
   additionalOfficialAccess?: Array<{ adapter: OfficialAccessAdapter; snapshot: SourceSnapshot }>;
   elevation: { sampler: ElevationSampler; snapshot: SourceSnapshot };
+  namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
   beforePublish?: () => void | Promise<void>;
 };
 
@@ -66,7 +77,14 @@ async function compileGraph(
   topology: NormalizedTopology,
   evidence: NormalizedAccessEvidence[],
   sampler: ElevationSampler,
-): Promise<{ nodes: NormalizedTopology["nodes"]; edges: CompiledEdge[]; accessPoints: NormalizedAccessPoint[]; conflicts: number }> {
+  coverage?: AreaGeometry,
+): Promise<{
+  nodes: NormalizedTopology["nodes"];
+  edges: CompiledEdge[];
+  accessPoints: NormalizedAccessPoint[];
+  conflicts: number;
+  rejectedCoverageEdgeCount: number;
+}> {
   const byExternalId = evidenceByExternalId(evidence);
   const knownExternalIds = new Set([
     ...topology.ways.map(({ externalId }) => externalId),
@@ -93,9 +111,15 @@ async function compileGraph(
       geometry: [way.coordinates[segment], way.coordinates[segment + 1]] as [Coordinate, Coordinate],
     }));
   });
-  const segmentMetrics = await calculateEdgeMetricsBatch(segmentPlans.map(({ geometry }) => geometry), sampler);
+  let rejectedCoverageEdgeCount = 0;
+  const retainedSegmentPlans = coverage ? segmentPlans.filter(({ geometry, way }) => {
+    const accepted = edgeInsideCoverage({ geometry }, coverage);
+    if (!accepted) rejectedCoverageEdgeCount += way.bidirectional ? 2 : 1;
+    return accepted;
+  }) : segmentPlans;
+  const segmentMetrics = await calculateEdgeMetricsBatch(retainedSegmentPlans.map(({ geometry }) => geometry), sampler);
 
-  segmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }, planIndex) => {
+  retainedSegmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }, planIndex) => {
       const metrics = segmentMetrics[planIndex]!;
       const common = {
         lengthM: metrics.lengthM,
@@ -127,7 +151,7 @@ async function compileGraph(
       }
   });
 
-  const accessPoints = topology.accessPoints.map((point) => {
+  let accessPoints = topology.accessPoints.map((point) => {
     const official = byExternalId.get(point.externalId) ?? [];
     const resolution = reconcileAccess(point.accessState, official.map(({ accessState }) => accessState));
     if (resolution.conflict) conflicts += 1;
@@ -145,19 +169,91 @@ async function compileGraph(
     };
   });
 
-  return { nodes, edges, accessPoints, conflicts };
+  if (coverage) {
+    const incidentNodeIds = new Set(edges.flatMap((edge) => [edge.fromNode, edge.toNode]));
+    const retainedNodes = nodes.filter(({ id }) => incidentNodeIds.has(id));
+    const nodeById = new Map(retainedNodes.map((node) => [node.id, node]));
+    accessPoints = accessPoints.filter((point) => {
+      const node = nodeById.get(point.nodeId);
+      return node !== undefined && pointInArea([node.lon, node.lat], coverage);
+    });
+    return { nodes: retainedNodes, edges, accessPoints, conflicts, rejectedCoverageEdgeCount };
+  }
+  return { nodes, edges, accessPoints, conflicts, rejectedCoverageEdgeCount };
+}
+
+function weakConnectivity(
+  nodes: readonly NormalizedTopology["nodes"][number][],
+  edges: readonly CompiledEdge[],
+  acceptedStates: ReadonlySet<AccessState>,
+): Map<string, number> {
+  const adjacency = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    if (!acceptedStates.has(edge.accessState)) continue;
+    const from = adjacency.get(edge.fromNode) ?? new Set<string>();
+    const to = adjacency.get(edge.toNode) ?? new Set<string>();
+    from.add(edge.toNode);
+    to.add(edge.fromNode);
+    adjacency.set(edge.fromNode, from);
+    adjacency.set(edge.toNode, to);
+  }
+  const result = new Map<string, number>();
+  const visited = new Set<string>();
+  for (const node of nodes) {
+    if (visited.has(node.id) || !adjacency.has(node.id)) continue;
+    const component: string[] = [];
+    const pending = [node.id];
+    visited.add(node.id);
+    while (pending.length) {
+      const id = pending.pop()!;
+      component.push(id);
+      for (const neighbor of adjacency.get(id) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          pending.push(neighbor);
+        }
+      }
+    }
+    for (const id of component) result.set(id, component.length);
+  }
+  return result;
+}
+
+function addAccessRankingFields(
+  nodes: readonly NormalizedTopology["nodes"][number][],
+  edges: readonly CompiledEdge[],
+  accessPoints: readonly NormalizedAccessPoint[],
+): NormalizedAccessPoint[] {
+  const knownStates = new Set<AccessState>(["public"]);
+  const inclusiveStates = new Set<AccessState>(["public", "unknown"]);
+  const knownConnectivity = weakConnectivity(nodes, edges, knownStates);
+  const inclusiveConnectivity = weakConnectivity(nodes, edges, inclusiveStates);
+  const outDegrees = (states: ReadonlySet<AccessState>): Map<string, number> => {
+    const result = new Map<string, number>();
+    for (const edge of edges) if (states.has(edge.accessState)) result.set(edge.fromNode, (result.get(edge.fromNode) ?? 0) + 1);
+    return result;
+  };
+  const knownOutDegree = outDegrees(knownStates);
+  const inclusiveOutDegree = outDegrees(inclusiveStates);
+  return accessPoints.map((point) => ({
+    ...point,
+    knownConnectivity: knownConnectivity.get(point.nodeId) ?? 0,
+    inclusiveConnectivity: inclusiveConnectivity.get(point.nodeId) ?? 0,
+    knownOutDegree: knownOutDegree.get(point.nodeId) ?? 0,
+    inclusiveOutDegree: inclusiveOutDegree.get(point.nodeId) ?? 0,
+  }));
 }
 
 function createAudit(
   seed: PackSeed,
   topology: NormalizedTopology,
-  graph: Awaited<ReturnType<typeof compileGraph>>,
+  graph: Awaited<ReturnType<typeof compileGraph>> & { namedAreas: NormalizedNamedArea[] },
   sourceCount: number,
 ): PackAudit {
   const accessStateCounts = { ...EMPTY_ACCESS_COUNTS };
   for (const edge of graph.edges) accessStateCounts[edge.accessState] += 1;
   return {
-    schemaVersion: "1",
+    schemaVersion: seed.schemaVersion,
     packId: seed.id,
     dataVersion: seed.dataVersion,
     nodeCount: graph.nodes.length,
@@ -169,15 +265,20 @@ function createAudit(
     missingElevationNodeCount: graph.nodes.filter(({ elevationM }) => elevationM === null).length,
     missingElevationEdgeCount: graph.edges.filter(({ maxElevationM }) => maxElevationM === null).length,
     accessStateCounts,
+    ...(seed.schemaVersion === "2" ? {
+      namedAreaCount: graph.namedAreas.length,
+      rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
+    } : {}),
   };
 }
 
-async function existingBuild(finalDirectory: string): Promise<PackBuildResult | null> {
+async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2"): Promise<PackBuildResult | null> {
   try {
     const manifestPath = path.join(finalDirectory, "manifest.json");
     const auditPath = path.join(finalDirectory, "audit.json");
     const databasePath = path.join(finalDirectory, "pack.sqlite");
-    packManifestV1Schema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    if (manifest.schemaVersion !== schemaVersion) return null;
     const audit = JSON.parse(await readFile(auditPath, "utf8")) as PackAudit;
     await access(databasePath, constants.R_OK);
     return { packDirectory: finalDirectory, manifestPath, auditPath, databasePath, audit, reusedExisting: true };
@@ -206,9 +307,17 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
 }
 
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
+  if (options.seed.schemaVersion === "2" && !options.namedAreas) throw new Error("Schema 2 pack requires a named-area adapter");
+  if (options.seed.schemaVersion === "1" && options.namedAreas) throw new Error("Schema 1 pack cannot include named areas");
   const officialAccess = [options.officialAccess, ...(options.additionalOfficialAccess ?? [])];
-  const sources = [options.topology.snapshot, ...officialAccess.map(({ snapshot }) => snapshot), options.elevation.snapshot];
-  const manifest = packManifestV1Schema.parse({
+  const sourceCandidates = [
+    options.topology.snapshot,
+    ...officialAccess.map(({ snapshot }) => snapshot),
+    options.elevation.snapshot,
+    ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
+  ];
+  const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
+  const manifest = packManifestSchema.parse({
     ...options.seed,
     builtAt: options.builtAt,
     metricAlgorithmVersion: options.elevation.sampler.algorithmVersion,
@@ -217,7 +326,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   const packRoot = path.join(options.outputRoot, manifest.id);
   const finalDirectory = path.join(packRoot, manifest.dataVersion);
   await mkdir(packRoot, { recursive: true });
-  const existing = await existingBuild(finalDirectory);
+  const existing = await existingBuild(finalDirectory, manifest.schemaVersion);
   if (existing) {
     await writeCurrentPointer(packRoot, manifest.dataVersion);
     return existing;
@@ -232,13 +341,40 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       await official.adapter.validate(official.snapshot);
       evidence.push(...await official.adapter.normalize(official.snapshot));
     }
-    const graph = await compileGraph(topology, evidence, options.elevation.sampler);
+    const compiledGraph = await compileGraph(
+      topology,
+      evidence,
+      options.elevation.sampler,
+      manifest.schemaVersion === "2" ? manifest.coverage.boundary : undefined,
+    );
+    let namedAreas: NormalizedNamedArea[] = [];
+    if (manifest.schemaVersion === "2") {
+      await options.namedAreas!.adapter.validate(options.namedAreas!.snapshot);
+      const providedAreas = await options.namedAreas!.adapter.normalize(options.namedAreas!.snapshot);
+      namedAreas = validateAndSortNamedAreas([{
+        id: `pack:${manifest.id}`,
+        name: manifest.name,
+        kind: "pack",
+        aliases: [],
+        bbox: areaGeometryBounds(manifest.coverage.boundary),
+        geometry: manifest.coverage.boundary,
+        sourceIds: [options.topology.snapshot.id],
+      }, ...providedAreas], new Set(sources.map(({ id }) => id)));
+    }
+    const graph = {
+      ...compiledGraph,
+      accessPoints: manifest.schemaVersion === "2"
+        ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
+        : compiledGraph.accessPoints,
+      namedAreas,
+    };
     const audit = createAudit(options.seed, topology, graph, sources.length);
     const databasePath = path.join(stagingDirectory, "pack.sqlite");
     writePackDatabase(databasePath, {
       nodes: graph.nodes,
       edges: graph.edges,
       accessPoints: graph.accessPoints,
+      ...(manifest.schemaVersion === "2" ? { namedAreas: graph.namedAreas } : {}),
       sources,
       metadata: {
         schemaVersion: manifest.schemaVersion,
