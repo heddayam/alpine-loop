@@ -67,6 +67,7 @@ export const packManifestV3Schema = packManifestV2Schema.extend({
     closedRouteTopology: z.literal(true),
   }).catchall(z.boolean()),
   closedRouteTopology: z.object({
+    runtimeMode: z.enum(["primitive", "reachable-graph-fallback"]),
     algorithmVersion: z.string().min(1),
     policyVersion: z.string().min(1),
     profiles: z.tuple([z.literal("known"), z.literal("inclusive")]),

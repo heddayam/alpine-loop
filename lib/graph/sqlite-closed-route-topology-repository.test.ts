@@ -29,6 +29,7 @@ const manifest = {
     license: "CC0-1.0", contentHash: `sha256:${"0".repeat(64)}`,
   }],
   closedRouteTopology: {
+    runtimeMode: "primitive",
     algorithmVersion: "closed-topology-v1",
     policyVersion: "closed-primitives-v1",
     profiles: ["known", "inclusive"],

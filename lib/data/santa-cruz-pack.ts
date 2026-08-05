@@ -36,7 +36,7 @@ import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v8";
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v9";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
 const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
@@ -260,8 +260,9 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       closedRouteTopology: true,
     },
     closedRouteTopology: {
-      algorithmVersion: "closed-route-topology-v1",
-      policyVersion: "closed-primitives-v1",
+      runtimeMode: "reachable-graph-fallback",
+      algorithmVersion: "closed-route-safe-pruning-v1",
+      policyVersion: "unified-closed-tours-v1",
       profiles: ["known", "inclusive"],
     },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },

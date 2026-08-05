@@ -158,6 +158,7 @@ export type TopologyProfileBuild = {
 };
 
 export type Schema3TopologyBuild = {
+  runtimeMode: "primitive" | "reachable-graph-fallback";
   algorithmVersion: string;
   policyVersion: string;
   contentHash: string;

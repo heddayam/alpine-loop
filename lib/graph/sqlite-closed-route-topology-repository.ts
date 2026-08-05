@@ -328,6 +328,7 @@ export function computePersistedTopologyHashes(
   database: DatabaseSync,
   algorithmVersion: string,
   policyVersion: string,
+  runtimeMode: PackManifestV3["closedRouteTopology"]["runtimeMode"] = "primitive",
 ): {
   profiles: Array<{ profile: TopologyProfile; contentHash: string }>;
   networks: Array<{ profile: TopologyProfile; networkId: number; contentHash: string }>;
@@ -345,7 +346,7 @@ export function computePersistedTopologyHashes(
   return {
     profiles,
     networks,
-    contentHash: canonicalTopologyHash({ algorithmVersion, policyVersion, profiles }),
+    contentHash: canonicalTopologyHash({ runtimeMode, algorithmVersion, policyVersion, profiles }),
   };
 }
 
@@ -397,6 +398,9 @@ export class SQLiteClosedRouteTopologyRepository implements ClosedRouteTopologyR
 
   constructor(options: SQLiteClosedRouteTopologyRepositoryOptions) {
     this.#manifest = packManifestV3Schema.parse(options.manifest);
+    if (this.#manifest.closedRouteTopology.runtimeMode !== "primitive") {
+      throw new Error("Primitive topology repository requires a primitive runtime pack");
+    }
     this.packId = this.#manifest.id;
     this.dataVersion = this.#manifest.dataVersion;
     this.#maximumCacheBytes = options.maximumCacheBytes ?? DEFAULT_MAXIMUM_CACHE_BYTES;
@@ -687,6 +691,7 @@ export class SQLiteClosedRouteTopologyRepository implements ClosedRouteTopologyR
       this.#database,
       this.#manifest.closedRouteTopology.algorithmVersion,
       this.#manifest.closedRouteTopology.policyVersion,
+      this.#manifest.closedRouteTopology.runtimeMode,
     );
     const profileStatement = this.#database.prepare(
       "SELECT content_hash FROM topology_profiles WHERE profile = ?",

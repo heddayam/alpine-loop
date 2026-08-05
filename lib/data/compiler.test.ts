@@ -206,6 +206,7 @@ describe("fixture pack compiler", () => {
     const first = await compilePack(await fixtureCompileOptionsV3(firstRoot));
     const second = await compilePack(await fixtureCompileOptionsV3(secondRoot));
     const manifest = packManifestV3Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    expect(manifest.closedRouteTopology.runtimeMode).toBe("reachable-graph-fallback");
     expect(manifest.closedRouteTopology.profiles).toEqual(["known", "inclusive"]);
     expect(first.audit.topologyProfiles).toHaveLength(2);
     const database = new DatabaseSync(first.databasePath, { readOnly: true });
@@ -219,14 +220,13 @@ describe("fixture pack compiler", () => {
       expect(database.prepare("SELECT edge_key, id, physical_edge_key FROM edges ORDER BY edge_key").all()).toEqual(
         replay.prepare("SELECT edge_key, id, physical_edge_key FROM edges ORDER BY edge_key").all(),
       );
-      expect(database.prepare("SELECT count(*) AS count FROM topology_decision_edge_members").get()).toEqual({ count: 32 });
-      expect(database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
-        JOIN edges e ON e.edge_key=m.edge_key AND e.physical_edge_key=m.physical_edge_key`).get()).toEqual({ count: 32 });
+      expect(database.prepare("SELECT count(*) AS count FROM topology_decision_edge_members").get()).toEqual({ count: 0 });
+      expect(database.prepare("SELECT count(*) AS count FROM physical_edges").get()).toEqual({ count: 9 });
       expect(database.prepare("SELECT connector_decision_edge_ids FROM access_topology WHERE profile='known' AND access_point_id='access-n-a'").get())
         .toEqual({ connector_decision_edge_ids: "[]" });
       const keys = database.prepare("SELECT decision_edge_key FROM topology_decision_edges ORDER BY decision_edge_key").all()
         .map((row) => (row as { decision_edge_key: number }).decision_edge_key);
-      expect(new Set(keys).size).toBe(keys.length);
+      expect(keys).toEqual([]);
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     } finally { database.close(); replay.close(); }
     expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
