@@ -38,6 +38,42 @@ export function showCoverageHatching(bounds: Bounds | null, drawing: boolean) {
   return !bounds || drawing;
 }
 
+export type MapStatusSummary = {
+  boundary: "Draw mode" | "Drawing boundary" | "Boundary set" | "No boundary";
+  dimensions?: string;
+  coverage?: "Inside coverage" | "Outside coverage";
+  accessPoints: string;
+};
+
+export function mapStatusSummary(
+  bounds: Bounds | null,
+  draftBounds: Bounds | null,
+  drawing: boolean,
+  packCoverage: Bounds,
+  accessPointCount: number,
+): MapStatusSummary {
+  const statusBounds = draftBounds ?? (drawing ? null : bounds);
+  const dimensions = statusBounds ? boundsDimensionsMiles(statusBounds) : null;
+  const coverage = statusBounds
+    ? boundsContainBounds(packCoverage, statusBounds) ? "Inside coverage" as const : "Outside coverage" as const
+    : undefined;
+
+  return {
+    boundary: draftBounds
+      ? "Drawing boundary"
+      : drawing
+        ? "Draw mode"
+        : bounds
+          ? "Boundary set"
+          : "No boundary",
+    ...(dimensions ? {
+      dimensions: `${dimensions.width.toFixed(1)} × ${dimensions.height.toFixed(1)} mi (${dimensions.area.toFixed(1)} sq mi)`,
+      coverage,
+    } : {}),
+    accessPoints: `${accessPointCount} access point${accessPointCount === 1 ? "" : "s"} available`,
+  };
+}
+
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
 
@@ -550,49 +586,52 @@ export function HikeMap({
     };
   }, [drawing, mapReady, onBoundsChange]);
 
-  const draftDimensions = draftBounds ? boundsDimensionsMiles(draftBounds) : null;
   const visibleBounds = draftBounds ?? bounds;
   const boundaryInsideCoverage = visibleBounds ? boundsContainBounds(packCoverage, visibleBounds) : true;
+  const mapStatus = mapStatusSummary(bounds, draftBounds, drawing, packCoverage, accessPoints.length);
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
-      <div className="map-toolbar" aria-label="Boundary tools">
+      <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Search boundary tools">
         <button
           type="button"
-          className={drawing ? "active" : ""}
+          className={`map-tool map-tool-draw${drawing ? " active" : ""}`}
+          aria-label={bounds ? "Redraw search boundary" : "Draw search boundary"}
           aria-pressed={drawing}
           onClick={() => setDrawing(true)}
         >
-          {bounds ? "Redraw boundary" : "Draw boundary"}
+          {bounds ? "Redraw" : "Draw"}
         </button>
-        <button type="button" onClick={() => {
+        <button type="button" className="map-tool map-tool-demo" aria-label="Use demo search area" onClick={() => {
           onBoundsChange([...suggestedBounds]);
           mapRef.current?.fitBounds(
             [[suggestedBounds[0], suggestedBounds[1]], [suggestedBounds[2], suggestedBounds[3]]],
             { padding: 48, duration: 350 },
           );
         }}>
-          Use demo area
+          Demo
         </button>
-        <button type="button" disabled={!bounds} onClick={() => onBoundsChange(null)}>
+        <button type="button" className="map-tool map-tool-clear" aria-label="Clear search boundary" disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
       </div>
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
-      {draftDimensions ? (
-        <output className="boundary-draft-readout" aria-label="Boundary dimensions">
-          <strong>Search area</strong>
-          <span>{draftDimensions.width.toFixed(1)} × {draftDimensions.height.toFixed(1)} mi</span>
-          <small>{draftDimensions.area.toFixed(1)} sq mi · {boundaryInsideCoverage ? "inside coverage" : "outside coverage"}</small>
-        </output>
-      ) : null}
-      <div className="map-key" aria-label="Map symbol key">
-        <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
-        <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
-        {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
-        {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
-        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
-      </div>
+      <output className="map-status" aria-label="Map status">
+        <span className="map-status-boundary">{mapStatus.boundary}</span>
+        {mapStatus.dimensions ? <span className="map-status-dimensions">{mapStatus.dimensions}</span> : null}
+        {mapStatus.coverage ? <span className="map-status-coverage">{mapStatus.coverage}</span> : null}
+        <span className="map-status-access">{mapStatus.accessPoints}</span>
+      </output>
+      <details className="map-key map-key-collapsible">
+        <summary className="map-key-toggle">Map key</summary>
+        <div className="map-key-content" aria-label="Map symbol explanations">
+          <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
+          <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
+          {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
+          {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
+        </div>
+      </details>
       <p className="map-hint">
         {drawing
           ? "Keep the blue search box entirely inside the green installed demo coverage."
