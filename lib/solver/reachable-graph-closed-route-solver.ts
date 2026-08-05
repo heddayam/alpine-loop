@@ -157,6 +157,8 @@ function reconstructTraversals(
       physicalEdgeKey,
       stablePhysicalEdgeId: `physical:${physicalEdgeKey}`,
       minimumElevationMeters,
+      fromElevationMeters: traversal.from.elevationMeters,
+      toElevationMeters: traversal.to.elevationMeters,
     });
   }
   return reconstructed;

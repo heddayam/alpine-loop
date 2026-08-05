@@ -248,6 +248,23 @@ function routeCoordinates(edges: readonly ReconstructedDirectedEdge[]): Array<[n
   return coordinates;
 }
 
+function routeElevationSamples(
+  edges: readonly ReconstructedDirectedEdge[],
+): Array<{ distanceMeters: number; elevationMeters: number }> | undefined {
+  if (edges.length === 0 || edges.some((edge) =>
+    edge.fromElevationMeters === null
+    || edge.fromElevationMeters === undefined
+    || edge.toElevationMeters === null
+    || edge.toElevationMeters === undefined)) return undefined;
+  const samples = [{ distanceMeters: 0, elevationMeters: edges[0]!.fromElevationMeters! }];
+  let distanceMeters = 0;
+  for (const edge of edges) {
+    distanceMeters += edge.lengthMeters;
+    samples.push({ distanceMeters, elevationMeters: edge.toElevationMeters! });
+  }
+  return samples;
+}
+
 export function validateReconstructedClosedRoute(
   edges: readonly ReconstructedDirectedEdge[],
   options: ClosedRouteValidationOptions,
@@ -285,6 +302,7 @@ export function validateReconstructedClosedRoute(
     ...options.fallbackSourceIds,
   ])].sort();
   const trailNames = [...new Set(edges.map(({ trailName }) => trailName).filter((name): name is string => Boolean(name)))].sort();
+  const elevationSamples = routeElevationSamples(edges);
   return {
     valid: true,
     value: {
@@ -310,6 +328,7 @@ export function validateReconstructedClosedRoute(
         steepestSustainedGradePct: Math.max(0, ...edges.map(({ maximumSustainedGradePct }) => maximumSustainedGradePct ?? 0)),
         trailNames,
         warnings,
+        ...(elevationSamples ? { elevationSamples } : {}),
         source: {
           freshness: options.sourceFreshness,
           confidence: options.sourceConfidence,
