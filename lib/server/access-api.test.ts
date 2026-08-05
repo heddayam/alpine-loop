@@ -86,11 +86,11 @@ describe("access-point preview API", () => {
     const payload = await response.json() as {
       resolvedAccessFilter: { mode: string };
       filterGeometry: { type: string };
-      eligibleAccessPoints: Array<{ id: string }>;
+      accessPoints: Array<{ id: string }>;
     };
     expect(payload.resolvedAccessFilter.mode).toBe("named-region");
     expect(payload.filterGeometry.type).toBe("Polygon");
-    expect(payload.eligibleAccessPoints.map(({ id }) => id)).toEqual(["hole-boundary", "inside"]);
+    expect(payload.accessPoints.map(({ id }) => id)).toEqual(["hole-boundary", "inside"]);
     expect(repository.close).toHaveBeenCalledOnce();
   });
 
@@ -107,10 +107,10 @@ describe("access-point preview API", () => {
       },
       includeUncertainAccess: true,
     }), "fixture-pack");
-    const payload = await response.json() as { filterGeometry: unknown; refinementGeometry: unknown; eligibleAccessPoints: unknown[] };
+    const payload = await response.json() as { filterGeometry: unknown; refinementGeometry: unknown; accessPoints: unknown[] };
     expect(payload.filterGeometry).toBeDefined();
     expect(payload.refinementGeometry).toEqual(REGION.geometry);
-    expect(payload.eligibleAccessPoints).toHaveLength(1);
+    expect(payload.accessPoints).toHaveLength(1);
   });
 
   it("returns structured validation and pack errors", async () => {

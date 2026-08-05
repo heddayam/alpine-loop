@@ -69,7 +69,7 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
         resolvedAccessFilter: resolved.summary,
         filterGeometry: resolved.filterGeometry,
         ...(resolved.refinementGeometry ? { refinementGeometry: resolved.refinementGeometry } : {}),
-        eligibleAccessPoints: eligible.map((point) => ({
+        accessPoints: eligible.map((point) => ({
           id: point.id,
           name: point.name,
           kind: point.kind,

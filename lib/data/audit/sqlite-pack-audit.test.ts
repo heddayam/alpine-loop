@@ -120,6 +120,7 @@ describe("SQLite regional pack audit extraction", () => {
       manifestPath: pack.manifestPath,
       auditPath: pack.auditPath,
     });
+    expect(valid.schemaVersion).toBe("2");
     expect(valid.counts.namedAreas).toBe(3);
     expect(valid.outsideCoverageEdgeIds).toEqual([]);
     expect(valid.errors).toEqual([]);

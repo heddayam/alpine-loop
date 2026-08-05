@@ -357,6 +357,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     options.auditPath === undefined ? path.join(path.dirname(options.manifestPath), "audit.json") : options.auditPath,
   );
   const audit = auditRegionalPack({
+    schemaVersion: manifest.schemaVersion,
     packId: manifest.id,
     dataVersion: manifest.dataVersion,
     nodes,

@@ -237,7 +237,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
         .then(async (response) => {
           const payload: unknown = await response.json().catch(() => null);
           if (!response.ok) throw new Error(parseError(payload, "Installed regions could not be searched."));
-          const raw = Array.isArray(payload) ? payload : payload && typeof payload === "object" && "areas" in payload ? payload.areas : [];
+          const raw = Array.isArray(payload)
+            ? payload
+            : payload && typeof payload === "object" && "regions" in payload
+              ? payload.regions
+              : payload && typeof payload === "object" && "areas" in payload
+                ? payload.areas
+                : [];
           return namedAreaSummarySchema.array().parse(raw);
         })
         .then((suggestions) => {
@@ -263,7 +269,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       const response = await fetch(`/api/packs/${pack.id}/named-areas/${encodeURIComponent(summary.id)}`);
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(payload, "That installed region could not be loaded."));
-      const selected = namedAreaSchema.parse(payload && typeof payload === "object" && "area" in payload ? payload.area : payload);
+      const selected = namedAreaSchema.parse(
+        payload && typeof payload === "object" && "region" in payload
+          ? payload.region
+          : payload && typeof payload === "object" && "area" in payload
+            ? payload.area
+            : payload,
+      );
       const ready = (current: NamedRegionDraft): NamedRegionDraft => ({ ...current, query: selected.name, selected, state: "ready", suggestions: [], error: undefined });
       if (target === "named") {
         setNamedDraft(ready);
