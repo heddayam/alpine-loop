@@ -1,0 +1,101 @@
+{
+  "formatVersion": 1,
+  "description": "Shared schema-3 topology cases. Each edge is a physical trail; directions lists its legal directed traversals.",
+  "cases": [
+    {
+      "id": "simple-loop",
+      "nodes": ["a", "b", "c"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 },
+        { "id": "ca", "from": "c", "to": "a", "directions": "both", "lengthMeters": 100 }
+      ],
+      "access": { "id": "access-simple", "node": "a" },
+      "expected": { "kind": "simple-loop", "cycleCount": 1, "cycleBlockCount": 1 }
+    },
+    {
+      "id": "lollipop",
+      "nodes": ["s", "a", "b", "c"],
+      "edges": [
+        { "id": "sa", "from": "s", "to": "a", "directions": "both", "lengthMeters": 80 },
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 },
+        { "id": "ca", "from": "c", "to": "a", "directions": "both", "lengthMeters": 100 }
+      ],
+      "access": { "id": "access-lollipop", "node": "s" },
+      "expected": { "kind": "lollipop", "cycleCount": 1, "cycleBlockCount": 1, "sharedStemDistanceMeters": 80 }
+    },
+    {
+      "id": "figure-eight",
+      "nodes": ["a", "b", "c", "d", "e"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 },
+        { "id": "ca", "from": "c", "to": "a", "directions": "both", "lengthMeters": 100 },
+        { "id": "ad", "from": "a", "to": "d", "directions": "both", "lengthMeters": 110 },
+        { "id": "de", "from": "d", "to": "e", "directions": "both", "lengthMeters": 110 },
+        { "id": "ea", "from": "e", "to": "a", "directions": "both", "lengthMeters": 110 }
+      ],
+      "access": { "id": "access-eight", "node": "a" },
+      "expected": { "kind": "figure-eight", "cycleCount": 2, "cycleBlockCount": 2 }
+    },
+    {
+      "id": "chained-loops",
+      "nodes": ["a", "b", "c", "d", "e", "f"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 },
+        { "id": "ca", "from": "c", "to": "a", "directions": "both", "lengthMeters": 100 },
+        { "id": "cd", "from": "c", "to": "d", "directions": "both", "lengthMeters": 75 },
+        { "id": "de", "from": "d", "to": "e", "directions": "both", "lengthMeters": 120 },
+        { "id": "ef", "from": "e", "to": "f", "directions": "both", "lengthMeters": 120 },
+        { "id": "fd", "from": "f", "to": "d", "directions": "both", "lengthMeters": 120 }
+      ],
+      "access": { "id": "access-chain", "node": "a" },
+      "expected": { "kind": "chained-loops", "cycleCount": 2, "cycleBlockCount": 2, "connectorCount": 1 }
+    },
+    {
+      "id": "bridge-only",
+      "nodes": ["a", "b", "c"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 }
+      ],
+      "access": { "id": "access-bridge", "node": "a" },
+      "expected": { "canReachCycle": false }
+    },
+    {
+      "id": "directed-asymmetry",
+      "nodes": ["a", "b", "c"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "forward", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "forward", "lengthMeters": 100 },
+        { "id": "ac", "from": "a", "to": "c", "directions": "forward", "lengthMeters": 100 }
+      ],
+      "access": { "id": "access-directed", "node": "a" },
+      "expected": { "undirectedCycle": true, "canReachDirectedCycle": false }
+    },
+    {
+      "id": "parallel-edges",
+      "nodes": ["a", "b"],
+      "edges": [
+        { "id": "ab-north", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "ab-south", "from": "a", "to": "b", "directions": "both", "lengthMeters": 110 }
+      ],
+      "access": { "id": "access-parallel", "node": "a" },
+      "expected": { "bridgeCount": 0, "cycleRank": 1 }
+    },
+    {
+      "id": "degree-two-cycle",
+      "nodes": ["a", "b", "c", "d"],
+      "edges": [
+        { "id": "ab", "from": "a", "to": "b", "directions": "both", "lengthMeters": 100 },
+        { "id": "bc", "from": "b", "to": "c", "directions": "both", "lengthMeters": 100 },
+        { "id": "cd", "from": "c", "to": "d", "directions": "both", "lengthMeters": 100 },
+        { "id": "da", "from": "d", "to": "a", "directions": "both", "lengthMeters": 100 }
+      ],
+      "access": { "id": "access-degree-two", "node": "a" },
+      "expected": { "retainedAnchorCount": 1, "cycleRank": 1 }
+    }
+  ]
+}

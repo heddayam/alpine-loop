@@ -1,6 +1,20 @@
 import type { GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "./types-internal";
 import type { AreaGeometry, BoundingBox } from "./geometry";
 
+export type {
+  AccessTopology,
+  ClosedRouteTopologyRepository,
+  CycleNetworkSummary,
+  DecisionNetwork,
+  ReconstructedDirectedEdge,
+  TopologyBlock,
+  TopologyBlockLink,
+  TopologyCacheDiagnostics,
+  TopologyDecisionEdge,
+  TopologyDecisionEdgeMember,
+  TopologyDecisionNode,
+} from "./closed-route-topology";
+
 export type { AccessState, GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "./types-internal";
 
 export type GraphQuery = {

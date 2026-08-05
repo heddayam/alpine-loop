@@ -1,7 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { namedAreaSchema, packManifestSchema, type PackManifest } from "@/lib/contracts";
+import {
+  namedAreaSchema,
+  packManifestSchema,
+  type PackManifestV1,
+  type PackManifestV2,
+} from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import { edgeInsideCoverage } from "../area-geometry";
 import { auditRegionalPack } from "./audit";
@@ -16,6 +21,7 @@ import type {
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
 type Metadata = Record<string, string>;
+type AuditablePackManifest = PackManifestV1 | PackManifestV2;
 type BuildMetrics = {
   rejectedEdgeCount: number;
   conflictRecordIds: string[];
@@ -94,7 +100,7 @@ function databaseMetadata(database: DatabaseSync): Metadata {
   ]));
 }
 
-function assertManifestMetadata(manifest: PackManifest, metadata: Metadata): void {
+function assertManifestMetadata(manifest: AuditablePackManifest, metadata: Metadata): void {
   const expected: Metadata = {
     schemaVersion: manifest.schemaVersion,
     packId: manifest.id,
@@ -110,7 +116,7 @@ function assertManifestMetadata(manifest: PackManifest, metadata: Metadata): voi
   }
 }
 
-function sourcesFromDatabase(database: DatabaseSync, manifest: PackManifest): AuditSource[] {
+function sourcesFromDatabase(database: DatabaseSync, manifest: AuditablePackManifest): AuditSource[] {
   const rows = database.prepare(`
     SELECT id, authority, dataset, version, retrieved_at, url, license, content_hash
     FROM sources ORDER BY id
@@ -176,7 +182,7 @@ function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
 
 function auditNamedAreas(
   database: DatabaseSync,
-  manifest: PackManifest,
+  manifest: AuditablePackManifest,
   sourceIds: ReadonlySet<string>,
 ): { count: number; errors: string[] } {
   if (manifest.schemaVersion === "1") return { count: 0, errors: [] };
@@ -332,7 +338,11 @@ async function buildMetrics(metadata: Metadata, auditPath: string | null): Promi
 }
 
 export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<RegionalPackAudit> {
-  const manifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
+  const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
+  if (parsedManifest.schemaVersion === "3") {
+    throw new Error("Schema 3 pack audit is unavailable until the Gate 5 topology compiler is active");
+  }
+  const manifest = parsedManifest;
   const database = new DatabaseSync(options.databasePath, { readOnly: true });
   let metadata: Metadata;
   let sources: AuditSource[];
