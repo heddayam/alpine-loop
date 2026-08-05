@@ -11,9 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "playwright test",
+    "test:browser": "node scripts/run-browser-tests.mjs",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
-    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts"
+    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
+    "qa:wave3:fixture": "tsx lib/qa/run-scenarios.ts --suite data/fixtures/scenarios/santa-cruz-wave3.json --fixture data/fixtures/scenarios/santa-cruz-wave3-graph.json"
   },
   "engines": {
     "node": ">=22.0.0"

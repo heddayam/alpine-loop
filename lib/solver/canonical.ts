@@ -1,6 +1,8 @@
 import type { RouteType } from "@/lib/contracts";
 import type { GraphEdge } from "@/lib/graph";
 
+const undirectedEdgeKeyCache = new WeakMap<GraphEdge, string>();
+
 function stableHash(value: string): string {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < value.length; index += 1) {
@@ -20,8 +22,12 @@ function normalizedCoordinates(edge: GraphEdge): string {
 }
 
 export function undirectedEdgeKey(edge: GraphEdge): string {
+  const cached = undirectedEdgeKeyCache.get(edge);
+  if (cached) return cached;
   const endpoints = [edge.fromNodeId, edge.toNodeId].sort().join("~");
-  return `${endpoints}|${normalizedCoordinates(edge)}`;
+  const key = `${endpoints}|${normalizedCoordinates(edge)}`;
+  undirectedEdgeKeyCache.set(edge, key);
+  return key;
 }
 
 export function canonicalEdgeSequence(edges: readonly GraphEdge[]): string {

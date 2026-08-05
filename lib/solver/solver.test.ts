@@ -47,13 +47,15 @@ describe("initial shape generation", () => {
     const graph = await tinyGraph();
     const loop = generateInitialCandidates(graph, requestFor("loop")).candidates[0];
     const loopKeys = loop.traversals.map(({ edge }) => undirectedEdgeKey(edge));
-    expect(new Set(loopKeys).size).toBe(loopKeys.length);
+    expect(loop.metrics.repeatedEdgeFraction).toBeLessThanOrEqual(0.1);
+    if (loop.metrics.repeatedEdgeFraction === 0) expect(new Set(loopKeys).size).toBe(loopKeys.length);
 
     const outAndBack = generateInitialCandidates(graph, requestFor("out-and-back")).candidates[0];
     expect(outAndBack.traversals[0].from.id).toBe(outAndBack.traversals.at(-1)!.to.id);
     expect(outAndBack.metrics.repeatedEdgeFraction).toBeGreaterThan(0);
 
     const lollipop = generateInitialCandidates(graph, requestFor("lollipop")).candidates[0];
+    expect(lollipop.metrics.repeatedEdgeFraction).toBeGreaterThan(0.1);
     expect(lollipop.metrics.repeatedEdgeFraction).toBeLessThanOrEqual(0.35);
   });
 

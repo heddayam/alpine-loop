@@ -5,9 +5,48 @@ reasonably sized rectangle on the map, optionally chooses a trailhead, specifies
 route shape and physical constraints, chooses how many alternatives to request,
 and receives generated routes from a versioned local trail-graph pack.
 
-This branch is intentionally a documentation-first foundation. The previous
-application has been removed from the active build so the new architecture does
-not inherit its hosting and data assumptions.
+The active application is standard local Next.js plus MapLibre. The previous
+application remains excluded under `legacy/`; no hosted deployment stack is
+part of the active build.
+
+## Run locally
+
+Use Node.js 22 or newer, then install and verify the ordinary local app:
+
+```sh
+npm ci
+npm run verify
+npm run dev
+```
+
+Without an installed regional pack the app uses its small committed fixture.
+Open <http://localhost:3000> in a browser.
+
+## Build the Santa Cruz Mountains pack
+
+Real-pack builds additionally require `osmium-tool` and
+[uv](https://docs.astral.sh/uv/). Python and rasterio are invoked through uv;
+do not install project Python packages with pip. This explicit command is the
+only workflow that refreshes sources over the network:
+
+```sh
+npm run pack:bootstrap -- --pack=santa-cruz-mountains
+```
+
+To rebuild only from an already populated pinned source cache:
+
+```sh
+npm run pack:bootstrap -- \
+  --pack=santa-cruz-mountains \
+  --offline \
+  --cache=.cache/sources \
+  --build-cache=.cache/build/santa-cruz-mountains/sources \
+  --output=.local-data/packs
+```
+
+Downloads, build caches, SQLite databases, audit output, and generated packs
+remain local and ignored by Git. Normal runtime and automated tests never use
+the network.
 
 ## Start the implementation in a new Codex session
 
@@ -34,6 +73,6 @@ The data policy is [docs/rebuild/data-sources.md](docs/rebuild/data-sources.md).
   branch.
 - `archive/pre-redo-working-2026-08-04` preserves the former working branch.
 
-The local-only target will use ordinary `npm install`, `npm run dev`,
+The local-only target uses ordinary `npm install`, `npm run dev`,
 `npm run build`, and `npm start`. No production hosting configuration belongs in
-this foundation.
+this repository.

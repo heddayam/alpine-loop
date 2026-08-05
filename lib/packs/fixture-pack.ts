@@ -27,6 +27,7 @@ export type BuilderPackConfig = {
   builtAt: string;
   coverage: Bounds;
   suggestedBounds: Bounds;
+  display: { center: [number, number]; zoom: number };
   trailNetwork: FeatureCollection<LineString>;
 };
 
@@ -62,5 +63,6 @@ export const FIXTURE_BUILDER_PACK: BuilderPackConfig = {
   builtAt: FIXTURE_PACK_METADATA.builtAt,
   coverage: FIXTURE_PACK_COVERAGE,
   suggestedBounds: FIXTURE_PACK_DEMO_BOUNDS,
+  display: { center: [-122.16, 37.165], zoom: 12.4 },
   trailNetwork: FIXTURE_PACK_TRAIL_NETWORK,
 };

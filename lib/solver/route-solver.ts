@@ -8,11 +8,13 @@ import { compareScoredCandidates, scoreCandidate, type ScoredCandidate } from ".
 import { RouteSearchCancelledError } from "./control";
 import { selectDiverseCandidates } from "./diversity";
 import { generateInitialCandidates } from "./generate";
+import { graphForRouteRequest } from "./route-graph";
 import type { RouteGenerationContext, RouteSolver } from "./types";
 
 type PackResponseMetadata = GenerateRoutesResponseV1["pack"];
 type Confidence = GeneratedRoute["source"]["confidence"];
 const STALE_SOURCE_MILLISECONDS = 30 * 24 * 60 * 60 * 1_000;
+const RESPONSE_HEADROOM_MILLISECONDS = 750;
 
 export type RouteSolverOptions = {
   pack: PackResponseMetadata;
@@ -125,8 +127,16 @@ export class DeterministicRouteSolver implements RouteSolver {
       }
       throw error;
     }
+    // Candidate scoring, diversity selection, response construction, and the
+    // SQLite query all belong to the documented server deadline too. Keep the
+    // public 3 s budget intact while preventing graph expansion from consuming
+    // the entire end-to-end allowance on dense regional data.
+    const generationBudget = context.budget.deadlineMs > RESPONSE_HEADROOM_MILLISECONDS
+      ? { ...context.budget, deadlineMs: context.budget.deadlineMs - RESPONSE_HEADROOM_MILLISECONDS }
+      : context.budget;
+    graph = graphForRouteRequest(graph, request, context.budget.maximumDirectedEdges);
     const generation = generateInitialCandidates(graph, request, {
-      budget: context.budget,
+      budget: generationBudget,
       signal: context.signal,
       now: context.now,
     });
@@ -144,7 +154,7 @@ export class DeterministicRouteSolver implements RouteSolver {
       sourceConfidence: this.#options.sourceConfidence ?? "high",
       fallbackSourceIds: this.#options.fallbackSourceIds ?? [`${this.#options.pack.id}:manifest`],
     } satisfies Required<Pick<RouteSolverOptions, "sourceFreshness" | "sourceConfidence" | "fallbackSourceIds">>;
-    const budgetTruncated = generation.diagnostics.exhausted;
+    const budgetTruncated = generation.diagnostics.exhausted && exact.length < request.limit;
     const sourceAgeMilliseconds = (context.now?.() ?? Date.now()) - Date.parse(sourceOptions.sourceFreshness);
     const sourceIsStale = sourceAgeMilliseconds > STALE_SOURCE_MILLISECONDS;
     return {

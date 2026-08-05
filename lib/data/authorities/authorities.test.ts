@@ -68,6 +68,22 @@ describe("official authority adapters", () => {
     expect(evidence.map(({ accessState }) => accessState)).toEqual(["public", "closed", "prohibited", "unknown"]);
   });
 
+  it("reports authority records without geometry instead of treating them as joinable", async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), "authority-missing-geometry-"));
+    const input = JSON.parse(await readFile(fixture("santa-clara-query.json"), "utf8")) as {
+      features: Array<{ attributes: Record<string, unknown>; geometry?: unknown }>;
+    };
+    input.features[0].geometry = null;
+    const localPath = path.join(temporary, "santa-clara.json");
+    await writeFile(localPath, JSON.stringify(input));
+    const source = await snapshot(localPath, {
+      authority: "Santa Clara County Parks and Recreation", dataset: "Santa Clara County Parks Trails", url: SANTA_CLARA_COUNTY_QUERY_URL,
+    });
+    const result = await new SantaClaraCountyParksAccessAdapter().normalizeForJoinWithReport(source);
+    expect(result.features).toHaveLength(3);
+    expect(result.rejectedGeometryFeatureIds).toEqual(["{scc-1}"]);
+  });
+
   it("keeps State Parks routes unknown because the documented layer has no hiking or closure field", async () => {
     const adapter = new CaliforniaStateParksAccessAdapter();
     const source = await snapshot(fixture("state-parks-query.json"), {

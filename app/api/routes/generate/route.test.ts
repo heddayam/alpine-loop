@@ -10,6 +10,7 @@ import {
   createGenerateRoutesHandler,
   type RoutePack,
 } from "@/lib/server/route-generation";
+import { INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS } from "@/lib/server/pack-registry";
 
 const PACK_METADATA = {
   id: "fixture-pack",
@@ -217,6 +218,26 @@ describe("POST /api/routes/generate request validation", () => {
     expect(body.error.code).toBe("BOUNDARY_TOO_LARGE");
     expect(body.error.details.areaSquareKilometers).toBeGreaterThan(1);
     expect(body.error.details.maximumAreaSquareKilometers).toBe(1);
+  });
+
+  it("accepts a representative mountain-scale rectangle under the installed-pack limit", async () => {
+    const bbox = [-122.374051, 37.356924, -122.276508, 37.420529] as const;
+    const partialResponse: GenerateRoutesResponseV1 = {
+      ...COMPLETE_RESPONSE,
+      exact: [],
+      requested: VALID_REQUEST.limit,
+      diagnostics: {
+        ...COMPLETE_RESPONSE.diagnostics,
+        exhausted: true,
+        truncationReasons: ["fewer-exact-routes-than-requested"],
+      },
+    };
+    const response = await handlerFor(
+      staticSolver(partialResponse),
+      testPack({ maximumAreaSquareKilometers: INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS }),
+    )(jsonRequest({ ...VALID_REQUEST, bbox }));
+
+    expect(response.status).toBe(200);
   });
 
   it("returns an actionable 503 when the local pack cannot be loaded", async () => {

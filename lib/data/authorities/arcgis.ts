@@ -27,6 +27,11 @@ export type ArcGisAuthorityDefinition = {
   resolve(attributes: Record<string, unknown>): AccessState;
 };
 
+export type ArcGisJoinNormalizationResult = {
+  features: OfficialAccessJoinFeature[];
+  rejectedGeometryFeatureIds: string[];
+};
+
 function assertRecord(value: unknown, context: string): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${context} must be an object`);
 }
@@ -100,9 +105,15 @@ export class ArcGisOfficialAccessAdapter implements OfficialAccessAdapter {
   }
 
   async normalizeForJoin(snapshot: SourceSnapshot): Promise<OfficialAccessJoinFeature[]> {
+    return (await this.normalizeForJoinWithReport(snapshot)).features;
+  }
+
+  async normalizeForJoinWithReport(snapshot: SourceSnapshot): Promise<ArcGisJoinNormalizationResult> {
     const input = await this.read(snapshot);
     const ids = new Set<string>();
-    return input.features.map((feature, index) => {
+    const features: OfficialAccessJoinFeature[] = [];
+    const rejectedGeometryFeatureIds: string[] = [];
+    input.features.forEach((feature, index) => {
       assertRecord(feature.attributes, `ArcGIS feature ${index} attributes`);
       for (const name of Object.keys(this.definition.expectedFields)) {
         if (!(name in feature.attributes)) throw new Error(`ArcGIS feature ${index} is missing documented field ${name}`);
@@ -111,8 +122,12 @@ export class ArcGisOfficialAccessAdapter implements OfficialAccessAdapter {
       if (!id) throw new Error(`ArcGIS feature ${index} has no stable ID`);
       if (ids.has(id)) throw new Error(`ArcGIS snapshot contains duplicate stable ID ${id}`);
       ids.add(id);
+      if (!feature.geometry || !Array.isArray(feature.geometry.paths) || feature.geometry.paths.length === 0) {
+        rejectedGeometryFeatureIds.push(id);
+        return;
+      }
       const [lon, lat] = representativeCoordinate(feature.geometry);
-      return {
+      features.push({
         sourceId: snapshot.id,
         authorityFeatureId: id,
         geometry: geoJsonGeometry(feature.geometry),
@@ -125,8 +140,9 @@ export class ArcGisOfficialAccessAdapter implements OfficialAccessAdapter {
           accessState: this.definition.resolve(feature.attributes),
           confidence: "high" as const,
         },
-      };
+      });
     });
+    return { features, rejectedGeometryFeatureIds };
   }
 }
 

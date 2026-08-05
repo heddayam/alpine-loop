@@ -5,13 +5,41 @@ import { osmAccessState, osmFootDirection, osmWayIsHikingRelevant } from "./norm
 type OplNode = { id: string; lon: number; lat: number; tags: Record<string, string> };
 type OplWay = { id: string; nodeIds: string[]; tags: Record<string, string> };
 
+function accessPointKind(tags: Record<string, string>): NormalizedAccessPoint["kind"] | null {
+  if (tags.amenity === "parking") return "parking";
+  if (tags.highway === "trailhead" || tags.information === "trailhead") return "trailhead";
+  if (tags.barrier !== "gate") return null;
+  const explicitlyRestricted = [tags.foot, tags.access].some((value) =>
+    ["no", "private", "customers", "agricultural", "forestry"].includes(value ?? ""),
+  );
+  const namedEntrance = /(?:trail\s*head|trail\s+access|access\s+(?:point|gate)|entrance|entry)/i.test(tags.name ?? "");
+  return namedEntrance && !explicitlyRestricted ? "trailhead" : null;
+}
+
+function accessPointName(tags: Record<string, string>, kind: NormalizedAccessPoint["kind"]): string {
+  return tags.name ?? (kind === "parking" ? "OSM parking" : tags.barrier === "gate" ? "OSM trail gate" : "OSM trailhead");
+}
+
 function decode(value: string): string {
   let result = "";
   for (let index = 0; index < value.length;) {
-    const hex = value.slice(index + 1, index + 3);
-    if (value[index] !== "%" || !/^[a-fA-F0-9]{2}$/.test(hex)) {
+    if (value[index] !== "%") {
       result += value[index];
       index += 1;
+      continue;
+    }
+    const hex = value.slice(index + 1, index + 3);
+    if (!/^[a-fA-F0-9]{2}$/.test(hex)) {
+      if (value[index + 1] === "%") {
+        // Osmium inserts a percent separator between adjacent escaped bytes,
+        // for example `%2c%%20%Kennedy` for `, Kennedy`.
+        index += 1;
+        continue;
+      }
+      // OPL also prefixes a single syntax-sensitive character with `%`.
+      // For example, `Black%20%Oak` represents `Black Oak`.
+      result += value[index + 1] ?? "%";
+      index += value[index + 1] === undefined ? 1 : 2;
       continue;
     }
     const first = Number.parseInt(hex, 16);
@@ -34,12 +62,10 @@ function decode(value: string): string {
         result += new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bytes));
         index += byteCount * 3;
         continue;
-      } catch {
-        // A literal percent followed by hex-looking text is valid OSM tag content.
-      }
+      } catch { /* Preserve a malformed encoded byte below. */ }
     }
-    result += "%";
-    index += 1;
+    result += value[index + 1] ?? "%";
+    index += value[index + 1] === undefined ? 1 : 2;
   }
   return result;
 }
@@ -131,18 +157,46 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
 
   const accessPoints: NormalizedAccessPoint[] = [];
   for (const node of nodes.values()) {
-    const kind = node.tags.highway === "trailhead" ? "trailhead" : node.tags.amenity === "parking" ? "parking" : null;
+    const kind = accessPointKind(node.tags);
     if (!kind) continue;
     const normalizedNode = retainNode(node.id);
     accessPoints.push({
       id: `osm-access-node-${node.id}`,
       externalId: `node/${node.id}`,
       nodeId: normalizedNode.id,
-      name: node.tags.name ?? `OSM ${kind}`,
+      name: accessPointName(node.tags, kind),
       kind,
       accessState: osmAccessState(node.tags),
       confidence: node.tags.foot || node.tags.access ? "medium" : "low",
       parkingEvidence: kind === "parking" ? "osm:amenity=parking" : null,
+      sourceRefs: [sourceId],
+    });
+  }
+  for (const way of inputWays) {
+    const kind = accessPointKind(way.tags);
+    if (!kind) continue;
+    const distinctNodeIds = [...new Set(way.nodeIds)];
+    const wayNodes = distinctNodeIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node));
+    if (wayNodes.length === 0) continue;
+    const normalizedNode: NormalizedNode = {
+      id: `osm-node-way-${way.id}-access`,
+      externalId: `way/${way.id}#access`,
+      lon: wayNodes.reduce((sum, node) => sum + node.lon, 0) / wayNodes.length,
+      lat: wayNodes.reduce((sum, node) => sum + node.lat, 0) / wayNodes.length,
+      elevationM: null,
+      flags: ["synthetic-access-centroid"],
+      sourceRefs: [sourceId],
+    };
+    retainedNodes.set(`way-access-${way.id}`, normalizedNode);
+    accessPoints.push({
+      id: `osm-access-way-${way.id}`,
+      externalId: `way/${way.id}`,
+      nodeId: normalizedNode.id,
+      name: accessPointName(way.tags, kind),
+      kind,
+      accessState: osmAccessState(way.tags),
+      confidence: way.tags.foot || way.tags.access ? "medium" : "low",
+      parkingEvidence: kind === "parking" ? "osm:amenity=parking-area" : null,
       sourceRefs: [sourceId],
     });
   }

@@ -30,3 +30,10 @@ npx tsx lib/qa/run-scenarios.ts \
 
 The command performs no network calls and does not write reports, databases,
 caches, or generated packs.
+
+Gate 3 uses `santa-cruz-gate3-real.json` against the installed pack. Its
+representative small rectangle is in the Monte Bello/Russian Ridge mountain
+trail network rather than the UCSC campus. It covers each shape separately,
+small and large hard rectangles, explicit unknown-access opt-in, strict
+impossible constraints, budget exhaustion, and every requested count from 1
+through 20.

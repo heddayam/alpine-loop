@@ -12,6 +12,7 @@ type HikeMapProps = {
   bounds: Bounds | null;
   packCoverage: Bounds;
   suggestedBounds: Bounds;
+  display: { center: [number, number]; zoom: number };
   trailNetwork: FeatureCollection<LineString>;
   accessPoints: AccessPointOption[];
   selectedAccessPointId?: string;
@@ -127,6 +128,7 @@ export function HikeMap({
   bounds,
   packCoverage,
   suggestedBounds,
+  display,
   trailNetwork,
   accessPoints,
   selectedAccessPointId,
@@ -183,8 +185,8 @@ export function HikeMap({
       routeMarkerConstructorRef.current = Marker;
       map = new Map({
         container: containerRef.current,
-        center: [-122.16, 37.165],
-        zoom: 12.4,
+        center: display.center,
+        zoom: display.zoom,
         attributionControl: { compact: true },
         style: {
           version: 8,
@@ -392,7 +394,7 @@ export function HikeMap({
       mapRef.current = null;
       routeMarkerConstructorRef.current = null;
     };
-  }, [onAccessPointSelect, onRouteSelect, packCoverage]);
+  }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;
@@ -401,7 +403,7 @@ export function HikeMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady) return;
+    if (!map || !mapReady || !map.getLayer("pack-coverage-fill")) return;
     map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(bounds, drawing) ? 0.14 : 0.025);
   }, [bounds, drawing, mapReady]);
 
@@ -563,7 +565,13 @@ export function HikeMap({
         >
           {bounds ? "Redraw boundary" : "Draw boundary"}
         </button>
-        <button type="button" onClick={() => onBoundsChange([...suggestedBounds])}>
+        <button type="button" onClick={() => {
+          onBoundsChange([...suggestedBounds]);
+          mapRef.current?.fitBounds(
+            [[suggestedBounds[0], suggestedBounds[1]], [suggestedBounds[2], suggestedBounds[3]]],
+            { padding: 48, duration: 350 },
+          );
+        }}>
           Use demo area
         </button>
         <button type="button" disabled={!bounds} onClick={() => onBoundsChange(null)}>

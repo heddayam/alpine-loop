@@ -4,10 +4,16 @@ import { loadSantaCruzPack } from "./installed-pack";
 
 function insetBounds(
   [west, south, east, north]: BuilderPackConfig["coverage"],
+  [centerLon, centerLat]: BuilderPackConfig["display"]["center"],
 ): BuilderPackConfig["suggestedBounds"] {
-  const longitudeInset = (east - west) * 0.28;
-  const latitudeInset = (north - south) * 0.28;
-  return [west + longitudeInset, south + latitudeInset, east - longitudeInset, north - latitudeInset];
+  const longitudeRadius = Math.min(0.015, (east - west) / 2);
+  const latitudeRadius = Math.min(0.014, (north - south) / 2);
+  return [
+    Math.max(west, centerLon - longitudeRadius),
+    Math.max(south, centerLat - latitudeRadius),
+    Math.min(east, centerLon + longitudeRadius),
+    Math.min(north, centerLat + latitudeRadius),
+  ];
 }
 
 export async function loadBuilderPack(): Promise<BuilderPackConfig> {
@@ -21,7 +27,8 @@ export async function loadBuilderPack(): Promise<BuilderPackConfig> {
     dataVersion: manifest.dataVersion,
     builtAt: manifest.builtAt,
     coverage: manifest.coverage.bbox,
-    suggestedBounds: insetBounds(manifest.coverage.bbox),
+    suggestedBounds: insetBounds(manifest.coverage.bbox, manifest.display.center),
+    display: manifest.display,
     trailNetwork: { type: "FeatureCollection", features: [] },
   };
 }
