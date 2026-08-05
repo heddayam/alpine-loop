@@ -219,7 +219,16 @@ function profileHashInput(profile: Omit<TopologyProfileBuild, "contentHash">): u
     decisionEdges: profile.decisionEdges,
     blocks: profile.blocks,
     blockLinks: profile.blockLinks,
-    networks: profile.networks.map(({ contentHash: _hash, ...network }) => network),
+    networks: profile.networks.map((network) => ({
+      networkId: network.networkId,
+      decisionNodeCount: network.decisionNodeCount,
+      decisionEdgeCount: network.decisionEdgeCount,
+      cycleBlockCount: network.cycleBlockCount,
+      minimumCycleLengthM: network.minimumCycleLengthM,
+      maximumCycleLengthM: network.maximumCycleLengthM,
+      minimumElevationM: network.minimumElevationM,
+      maximumElevationM: network.maximumElevationM,
+    })),
     accessTopology: profile.accessTopology,
   };
 }
@@ -591,7 +600,15 @@ export function buildClosedRouteTopology(
   });
   return {
     algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion, contentHash,
-    nodeKeys, edgeKeys, physicalEdges: physicalEdges.map(({ lengthM: _length, stableEdgeIds: _ids, ...edge }) => edge),
+    nodeKeys,
+    edgeKeys,
+    physicalEdges: physicalEdges.map((edge) => ({
+      physicalEdgeKey: edge.physicalEdgeKey,
+      stablePhysicalId: edge.stablePhysicalId,
+      fromNodeKey: edge.fromNodeKey,
+      toNodeKey: edge.toNodeKey,
+      geometryHash: edge.geometryHash,
+    })),
     physicalEdgeKeysByStableId, profiles,
   };
 }
