@@ -1,6 +1,7 @@
 export * from "./budget";
 export * from "./candidate";
 export * from "./canonical";
+export * from "./closed-tours";
 export * from "./control";
 export * from "./compressed-graph";
 export * from "./diversity";
