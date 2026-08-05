@@ -18,20 +18,19 @@ vi.mock("../map/HikeMap", () => ({
 const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high" };
 const preview = { resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" }, filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.18, 37.18], [-122.18, 37.15]]] }, accessPoints: [accessPoint] };
 const generatedRoute = {
-  id: "exact-route", shape: "out-and-back", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
+  id: "exact-route", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
   startAccessPoint: { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, accessState: "public", confidence: "high" },
-  endAccessPoint: { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, accessState: "public", confidence: "high" },
   distanceMeters: 6400, elevationGainMeters: 300, elevationLossMeters: 300, minimumElevationMeters: 300, maximumElevationMeters: 600,
-  steepestSustainedGradePct: 9, repeatedEdgeFraction: 0, trailNames: ["Fixture Ridge"], warnings: [],
-  source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] }, filterMatch: { start: true, end: true },
+  steepestSustainedGradePct: 9, topology: { kind: "simple-loop", cycleCount: 1, cycleBlockCount: 1, repeatedTrailDistanceMeters: 0, repeatedTrailFraction: 0, sharedStemDistanceMeters: 0, connectorCount: 0 }, trailNames: ["Fixture Ridge"], warnings: [],
+  source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] },
 };
 const routeResponse = {
-  version: 2, requestId: "request-1", pack: { id: "fixture-pack", schemaVersion: "2", dataVersion: "fixture-2", builtAt: "2026-08-04T00:00:00Z" },
+  version: 3, requestId: "request-1", pack: { id: "fixture-pack", schemaVersion: "3", dataVersion: "fixture-3", builtAt: "2026-08-04T00:00:00Z" },
   requested: 10, resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" }, exact: [generatedRoute], nearMisses: [],
-  diagnostics: { elapsedMs: 1, expandedStates: 1, candidateCount: 1, eligibleAccessPointCount: 1, searchedAccessPointCount: 1, graphQueryCount: 1, maximumLoadedDirectedEdges: 4, exhausted: false, truncationReasons: [], shortfallReasons: [] },
+  diagnostics: { elapsedMs: 1, expandedStates: 1, candidateCount: 1, eligibleAccessPointCount: 1, searchedAccessPointCount: 1, graphQueryCount: 1, maximumLoadedDirectedEdges: 4, exhausted: true, truncationReasons: [], shortfallReasons: [], noCycleAccessPointCount: 0, feasibleAccessPointCount: 1, attachmentGroupCount: 1, probedAttachmentGroupCount: 1, deeplySearchedAttachmentGroupCount: 1, loadedTopologyNetworkCount: 1, cycleBlockCount: 1, cyclePrimitiveCount: 1, composedCandidateCount: 1, repairedCandidateCount: 0, directedValidationRejectionCount: 0, expandedAssemblyStates: 1, timeToFirstExactMs: 1, hardTruncationReasons: [], nonBudgetShortfallReasons: ["fewer-exact-routes-than-requested"] },
 };
 
-describe("HikeBuilder V2 trailhead filters", () => {
+describe("HikeBuilder V3 closed routes", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(cleanup);
 
@@ -43,7 +42,7 @@ describe("HikeBuilder V2 trailhead filters", () => {
     expect(screen.getByRole("button", { name: "Results" })).toBeDisabled();
   });
 
-  it("previews eligible access and submits the strict V2 drawn-area request", async () => {
+  it("previews eligible access and submits the strict V3 closed-route request", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(routeResponse), { status: 200 }));
@@ -53,7 +52,9 @@ describe("HikeBuilder V2 trailhead filters", () => {
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
     expect(await screen.findByText("1 exact route ready.")).toBeVisible();
     const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>;
-    expect(request).toMatchObject({ version: 2, accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, startAccessPointId: "trailhead-a", pointToPoint: { finishMustMatchAccessFilter: true }, distanceMiles: { min: 1, max: 4 }, limit: 10 });
+    expect(request).toMatchObject({ version: 3, accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, startAccessPointId: "trailhead-a", routeFamily: "closed", closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, searchEffort: "thorough", distanceMiles: { min: 1, max: 4 }, limit: 10 });
+    expect(request).not.toHaveProperty("routeTypes");
+    expect(request).not.toHaveProperty("pointToPoint");
     expect(screen.getByLabelText("Map route state")).toHaveTextContent("exact-route|selected:exact-route");
   });
 
@@ -106,10 +107,17 @@ describe("HikeBuilder V2 trailhead filters", () => {
     expect(screen.getByText(/live traffic is not used/i)).toBeVisible();
   });
 
-  it("shows the point-to-point finish control on by default and enforces 30 miles", async () => {
+  it("shows closed-route controls, switches effort, and enforces 30 miles", async () => {
     render(<HikeBuilder />);
-    await userEvent.click(screen.getByRole("checkbox", { name: /Point to point/ }));
-    expect(screen.getByRole("switch", { name: /Keep finish inside trailhead filter/ })).toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: /Point to point/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Out & back/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Maximum repeated trail" })).toHaveValue("35");
+    expect(screen.getByRole("switch", { name: /Allow figure-eights and chained loops/ })).toBeChecked();
+    expect(screen.getByLabelText("Search effort")).toHaveValue("thorough");
+    await userEvent.selectOptions(screen.getByLabelText("Search effort"), "quick");
+    expect(screen.getByLabelText("Search effort")).toHaveValue("quick");
+    await userEvent.click(screen.getByRole("switch", { name: /Limit the shared access stem/ }));
+    expect(screen.getByLabelText("Maximum shared stem")).toHaveValue(2);
     const maximum = screen.getByRole("spinbutton", { name: "Distance maximum" });
     await userEvent.clear(maximum);
     await userEvent.type(maximum, "31");

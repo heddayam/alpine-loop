@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { GeneratedRoute } from "@/lib/contracts";
+import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
   mapStatusSummary,
@@ -11,20 +11,26 @@ import {
   showCoverageHatching,
 } from "./HikeMap";
 
-function route(id: string, longitude: number): GeneratedRoute {
+function route(id: string, longitude: number): GeneratedClosedRouteV3 {
   return {
     id,
-    shape: "loop",
     geometry: { type: "LineString", coordinates: [[longitude, 37.15], [longitude + 0.01, 37.16], [longitude, 37.15]] },
     startAccessPoint: { id: "start", name: "Start", lon: longitude, lat: 37.15, accessState: "public", confidence: "high" },
-    endAccessPoint: { id: "start", name: "Start", lon: longitude, lat: 37.15, accessState: "public", confidence: "high" },
     distanceMeters: 1000,
     elevationGainMeters: 100,
     elevationLossMeters: 100,
     minimumElevationMeters: 200,
     maximumElevationMeters: 300,
     steepestSustainedGradePct: 5,
-    repeatedEdgeFraction: 0,
+    topology: {
+      kind: "simple-loop",
+      cycleCount: 1,
+      cycleBlockCount: 1,
+      repeatedTrailDistanceMeters: 0,
+      repeatedTrailFraction: 0,
+      sharedStemDistanceMeters: 0,
+      connectorCount: 0,
+    },
     trailNames: ["Fixture Trail"],
     warnings: [],
     source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] },

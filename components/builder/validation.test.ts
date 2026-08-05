@@ -9,14 +9,16 @@ function values(overrides: Partial<BuilderValues> = {}): BuilderValues {
   return { ...DEFAULT_BUILDER_VALUES, ...overrides };
 }
 
-describe("builder V2 request validation", () => {
-  it("builds the default drawn-area request with point-to-point policy", () => {
+describe("builder V3 request validation", () => {
+  it("builds the default closed-route request", () => {
     const result = buildGenerateRoutesRequest(values(), filter);
     expect(result.success).toBe(true);
     if (result.success) expect(result.request).toMatchObject({
-      version: 2,
+      version: 3,
       accessFilter: filter,
-      pointToPoint: { finishMustMatchAccessFilter: true },
+      routeFamily: "closed",
+      closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+      searchEffort: "thorough",
       limit: 10,
       includeUncertainAccess: true,
     });
@@ -32,10 +34,23 @@ describe("builder V2 request validation", () => {
     if (!result.success) expect(result.errors).toContain("Route count must be a whole number from 1 through 20.");
   });
 
-  it("requires a complete filter and one route shape", () => {
-    expect(buildGenerateRoutesRequest(values({ routeTypes: [] }), null)).toEqual({
+  it("requires a complete filter", () => {
+    expect(buildGenerateRoutesRequest(values(), null)).toEqual({
       success: false,
-      errors: ["Choose and complete a trailhead filter first.", "Choose at least one route shape."],
+      errors: ["Choose and complete a trailhead filter first."],
+    });
+  });
+
+  it("validates repetition and optional shared-stem limits", () => {
+    const repetition = buildGenerateRoutesRequest(values({ maximumRepeatedTrailPct: "101" }), filter);
+    expect(repetition.success).toBe(false);
+    if (!repetition.success) expect(repetition.errors).toContain("Maximum repeated trail must be a whole percentage from 0 through 100.");
+
+    const stem = buildGenerateRoutesRequest(values({ maximumSharedStemEnabled: true, maximumSharedStemMiles: "2.5", searchEffort: "quick" }), filter);
+    expect(stem.success).toBe(true);
+    if (stem.success) expect(stem.request).toMatchObject({
+      closedRoute: { maximumSharedStemMiles: 2.5 },
+      searchEffort: "quick",
     });
   });
 
