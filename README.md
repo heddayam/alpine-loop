@@ -70,6 +70,25 @@ Downloads, build caches, SQLite databases, audit output, and generated packs
 remain local and ignored by Git. Normal runtime and automated tests never use
 the network.
 
+### Verify the installed schema-2 pack
+
+The Gate 4 scenario runner checks V2 contracts, exact pack coverage, filter
+semantics, solver budgets, named-region generation, long closed tours, and the
+route-count sweep against the installed Santa Cruz pack:
+
+```sh
+node --import tsx lib/qa/run-v2-scenarios.ts \
+  --suite data/fixtures/scenarios/santa-cruz-gate4-real.json \
+  --database .local-data/packs/santa-cruz-mountains/scm-a339bce45af76f29/pack.sqlite \
+  --manifest .local-data/packs/santa-cruz-mountains/scm-a339bce45af76f29/manifest.json
+```
+
+Closed-route search runs on a metric-preserving compressed decision graph and
+targets the requested distance and elevation ranges. A user-facing loop may be
+a simple loop, figure-eight, or chained set of cycles. Repeated connector or
+stem distance determines whether the result is classified as a loop or
+lollipop.
+
 ## Start the implementation in a new Codex session
 
 Use this prompt verbatim:

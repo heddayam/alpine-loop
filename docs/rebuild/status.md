@@ -12,8 +12,8 @@ the evidence line.
   - Evidence: `npm run verify` passes with 95 deterministic offline tests across 15 files and a successful production build; `npm run test:browser` passes 2 Chromium flows (draw/configure/generate/inspect and impossible constraints with labeled near misses) using an in-memory tile fixture; direct local API smoke returned 3 exact routes in 31 ms with validated geometry, metrics, warnings, provenance, and diagnostics.
 - [x] Gate 3 — Santa Cruz Mountains pack and full local UX
   - Evidence: an explicit refresh populated an initially empty `.cache/gate3-empty/sources` using `npm run pack:bootstrap -- --pack=santa-cruz-mountains --cache=.cache/gate3-empty/sources --build-cache=.cache/gate3-empty/build/santa-cruz-mountains/sources --output=.local-data/packs`; an offline replay with the same paths and `--offline` reproduced data version `scm-561dc87c0f4a6bed`. The ignored pack contains 430,766 nodes, 875,166 directed edges, 3,215 access points, and four pinned sources. Its persisted regional audit reports 3,266 components (177,573 nodes / 41.22% in the largest), 55,253 rejected source ways, zero conflicts, zero missing elevation values, zero implausible metrics, and no unattributed or unknown-source records. Access audit evidence records 366 public access points, 249 outside UCSC, and four public points in the representative Monte Bello mountain box; OSM is ODbL and 3DEP is public domain. The installed-pack scenario command `node --import tsx lib/qa/run-scenarios.ts --suite data/fixtures/scenarios/santa-cruz-gate3-real.json --database .local-data/packs/santa-cruz-mountains/scm-561dc87c0f4a6bed/pack.sqlite --manifest .local-data/packs/santa-cruz-mountains/scm-561dc87c0f4a6bed/manifest.json` passes 29/29 runs, including small/large hard rectangles, all route shapes, known/unknown access, strict impossible constraints, partial-budget behavior, and every requested count from 1 through 20; all count-sweep requests were filled and the slowest typical search was 619.136 ms against the 3,000 ms budget. `npm run verify` passes 178 offline tests across 33 files plus the Next.js production build, and `npm run test:browser` passes all five Chromium regression flows. Final live in-app-browser checks on `localhost:3000` generated 10 exact default out-and-backs and seven exact loops in Monte Bello, kept short-stem routes classified as loops, preserved geographically anchored MapLibre coverage/trails/routes/hover/trailheads through zoom and pan, and confirmed the mobile map stays fixed while the results panel scrolls internally.
-- [ ] Gate 4 — trailhead-filter redesign, hardening, accessibility, deterministic tests, documentation
-  - Evidence: in progress. The previous hard-rectangle UI baseline passed 183 offline tests, the production build, and all five Chromium flows before the V2 cutover. Gate 4 now additionally requires Draw, Named region, and Drive time access-point filters; routes may leave filter geometry but never pack coverage; the Santa Cruz pack must be rebuilt at schema 2 with named areas; and multi-start generation must remain deterministic and budgeted. Fresh-clone prerequisites and the final release-readiness audit remain outstanding.
+- [x] Gate 4 — trailhead-filter redesign, hardening, accessibility, deterministic tests, documentation
+  - Evidence: the active API strictly validates `GenerateRoutesRequestV2`; Draw area, installed Named region, and ArcGIS typical Drive time filters resolve eligible trailheads without clipping hiking geometry, while exact pack coverage remains a runtime-validated route boundary. The rebuilt schema-2 Santa Cruz pack (`scm-a339bce45af76f29`) contains 425,302 nodes, 863,917 directed edges, 3,207 access points, and 476 locally searchable named areas; its persisted audit reports zero outside-coverage persisted edges, zero missing elevation values, zero unattributed records, and 11,249 rejected source edges crossing concave coverage. The offline V2 installed-pack matrix passes 25/25 runs with a 2,641.350 ms slowest typical search; its targeted regression returns an exact 8.00-mile, 1,842-foot lollipop for the previously empty 6–10 mile / 1,500–2,500 foot request. Metric-preserving graph compression, target-directed alternative-return search, adaptive edge allocation, and topology classification cover simple loops, figure-eights, chained cycles, repeated connectors, lollipops, and out-and-backs. `npm run verify` passes 269 offline tests across 51 files plus the production build; two consecutive `npm run test:browser` runs each pass all seven Chromium flows. A temporary clean clone passed `npm ci` with zero vulnerabilities and the complete `npm run verify`; all subagent worktrees and branches were removed.
 
 ## Current product decisions
 
@@ -33,17 +33,18 @@ the evidence line.
 - Exact matches are distinct from labeled near misses.
 - Local Next.js + MapLibre only; no hosted deployment stack.
 
-## Resume point after Wave 3
+## Completed Gate 4 baseline
 
-- Start the next session from clean `main`; the Gate 3 implementation baseline
-  is commit `855d992` (`feat: complete Wave 3 regional pack`). Do not repeat
-  Waves 0–3 or begin from one of the archived pre-rebuild tags.
-- Gate 4 is the next and only incomplete gate. Follow its checklist in
-  `docs/rebuild/agent-runbook.md`; keep the product contracts above unchanged.
+- Gate 4 is complete on the trailhead-filter integration branch. Do not repeat
+  Waves 0–4 or begin from one of the archived pre-rebuild tags.
+- The next product investigation is a more flexible Drive-time focus control:
+  a single named-region intersection is insufficient for subjective mountain
+  areas or multiple disjoint parks. Treat that as a new scoped decision, not a
+  silent change to the completed V2 filter contract.
 - The generated regional pack, source cache, build cache, and audits are local
   ignored artifacts. The verified pack pointer is
   `.local-data/packs/santa-cruz-mountains/current.json`, currently resolving to
-  data version `scm-561dc87c0f4a6bed`. Rebuild it only through the explicit
+  schema-2 data version `scm-a339bce45af76f29`. Rebuild it only through the explicit
   commands documented in `README.md`; use uv for Python dependencies.
 - Begin with `git status --short --branch`, `npm ci`, `npm run verify`, and
   `npm run test:browser`. Browser tests use an isolated local server and restore
