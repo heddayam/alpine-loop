@@ -29,7 +29,7 @@ application.
 
 - This is a hike-route generator, not a catalog of known hikes.
 - The search rectangle is a hard geometry boundary.
-- Unknown access is excluded by default and can be explicitly enabled.
+- Unknown access is included by default and can be explicitly disabled.
 - Return exact matches separately from clearly labeled near misses; never relax
   constraints silently.
 - Route count is chosen by the user from 1 through 20 and defaults to 10.

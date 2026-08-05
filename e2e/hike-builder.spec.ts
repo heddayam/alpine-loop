@@ -72,6 +72,31 @@ test("draws, configures, generates, and inspects an exact fixture route", async 
   expect(layout.builderWidth).toBe(268);
   expect(layout.resultsWidth).toBe(308);
 
+  const collisionState = await page.evaluate(() => {
+    const intersects = (left: DOMRect, right: DOMRect) => (
+      left.left < right.right && left.right > right.left && left.top < right.bottom && left.bottom > right.top
+    );
+    const resultRowsOverlap = [...document.querySelectorAll(".route-card")].some((card) => {
+      const routeInfo = card.querySelector(".route-summary-main")?.getBoundingClientRect();
+      const routeMetrics = card.querySelector(".route-summary-metrics")?.getBoundingClientRect();
+      return routeInfo && routeMetrics ? intersects(routeInfo, routeMetrics) : false;
+    });
+    const toolbar = document.querySelector(".map-toolbar")?.getBoundingClientRect();
+    const status = document.querySelector(".map-status")?.getBoundingClientRect();
+    const zoom = document.querySelector(".maplibregl-ctrl-top-right")?.getBoundingClientRect();
+    const mapKey = document.querySelector(".map-key")?.getBoundingClientRect();
+    return {
+      resultRowsOverlap,
+      toolbarStatusGap: toolbar && status ? status.left - toolbar.right : -1,
+      statusZoomGap: status && zoom ? zoom.left - status.right : -1,
+      zoomMapKeyGap: zoom && mapKey ? mapKey.top - zoom.bottom : -1,
+    };
+  });
+  expect(collisionState.resultRowsOverlap).toBe(false);
+  expect(collisionState.toolbarStatusGap).toBeGreaterThanOrEqual(8);
+  expect(collisionState.statusZoomGap).toBeGreaterThanOrEqual(12);
+  expect(collisionState.zoomMapKeyGap).toBeGreaterThanOrEqual(12);
+
   await page.getByRole("button", { name: "Toggle plan panel" }).click();
   await expect(page.locator(".builder-panel")).toBeHidden();
   await expect.poll(async () => page.locator(".map-shell").evaluate((element) => element.getBoundingClientRect().width)).toBe(972);

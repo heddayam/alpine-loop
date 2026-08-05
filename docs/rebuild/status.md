@@ -21,7 +21,7 @@ the evidence line.
 - User selects 1–20 routes; default 10.
 - Route shapes: loop, lollipop, out-and-back, point-to-point.
 - Hard rectangle boundary; optional explicit starting access point.
-- Unknown access excluded by default.
+- Unknown access included by default; users can explicitly restrict results to known access.
 - Exact matches are distinct from labeled near misses.
 - Local Next.js + MapLibre only; no hosted deployment stack.
 
@@ -50,7 +50,7 @@ the evidence line.
 
 - The pack has 3,266 graph components and its largest component contains 41.22%
   of nodes. OSM parking relations are not yet ingested, and many access points
-  correctly remain unknown and excluded by default.
+  correctly remain marked unknown and are visibly disclosed when included.
 - Compact rectangles may contain few or no longer-stem lollipops. Preserve the
   current honest exact/near-miss behavior; do not relabel a short-stem loop or
   silently relax distance constraints.

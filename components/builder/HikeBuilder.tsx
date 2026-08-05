@@ -322,7 +322,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <section className="builder-section policy-section" aria-labelledby="policy-title">
             <h3 id="policy-title">Access policy & results</h3>
             <label className="switch-row">
-              <span><strong>Include uncertain access</strong><small>Off by default. May include trails without confirmed public access.</small></span>
+              <span><strong>Include uncertain access</strong><small>On by default. May include trails without confirmed public access.</small></span>
               <input
                 type="checkbox"
                 role="switch"
