@@ -177,6 +177,64 @@ describe("multi-start route solver", () => {
 
     expect(response.diagnostics.searchedAccessPointCount).toBe(8);
     expect(maximumEdges).toHaveLength(8);
-    expect(maximumEdges[0]).toBe(DEFAULT_SOLVER_BUDGET.maximumDirectedEdges / 8);
+    expect(maximumEdges[0]).toBe(DEFAULT_SOLVER_BUDGET.maximumDirectedEdges / 2);
+    expect(maximumEdges.every((maximum) => maximum <= DEFAULT_SOLVER_BUDGET.maximumDirectedEdges / 2)).toBe(true);
+  });
+
+  it("does not let a giant uncertain urban component outrank known trail connectivity", async () => {
+    const base = repository();
+    const graph = await base.getInducedGraph({
+      bbox: [-122.19, 37.15, -122.13, 37.18],
+      includeUncertainAccess: true,
+    });
+    const urbanNode = graph.nodes.get("a")!;
+    const mountainNode = graph.nodes.get("b")!;
+    const candidate = (
+      id: string,
+      candidateNode: typeof urbanNode,
+      knownConnectivity: number,
+      inclusiveConnectivity: number,
+    ): AccessPointCandidate => ({
+      id,
+      nodeId: candidateNode.id,
+      name: id,
+      kind: "trailhead",
+      accessState: "public",
+      confidence: "medium",
+      parkingEvidence: "fixture",
+      sourceIds: ["fixture-source"],
+      lon: candidateNode.lon,
+      lat: candidateNode.lat,
+      knownConnectivity,
+      inclusiveConnectivity,
+      knownOutDegree: knownConnectivity > 0 ? 2 : 0,
+      inclusiveOutDegree: 4,
+    });
+    const candidates = [
+      candidate("urban-giant", urbanNode, 0, 1_000_000),
+      candidate("mountain-network", mountainNode, 20_000, 30_000),
+    ];
+    const queriedStarts: string[] = [];
+    const tracking: GraphRepository = {
+      packId: PACK.id,
+      getInducedGraph: (query) => base.getInducedGraph(query),
+      getAccessPoints: (bbox, include) => base.getAccessPoints(bbox, include),
+      getAccessPointCandidates: async () => candidates,
+      getReachableGraph: async (query: ReachableGraphQuery) => {
+        queriedStarts.push(query.startNodeId);
+        const reachable = await base.getReachableGraph(query);
+        return { ...reachable, graph: { ...reachable.graph, accessPoints: candidates } };
+      },
+      close: () => base.close(),
+    };
+
+    const baseContext = context();
+    await solver.generate(request({ limit: 1 }), {
+      ...baseContext,
+      repository: tracking,
+      accessFilter: { ...baseContext.accessFilter, predicates: [COVERAGE] },
+    });
+
+    expect(queriedStarts[0]).toBe(mountainNode.id);
   });
 });

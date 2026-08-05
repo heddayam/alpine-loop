@@ -10,8 +10,11 @@ import {
 import { DEFAULT_SOLVER_BUDGET, type SolverBudget } from "./budget";
 import { createCandidate, type RouteCandidate } from "./candidate";
 import { undirectedEdgeKey } from "./canonical";
+import { generateClosedTours } from "./closed-tours";
+import { compressSearchGraph, expandCompressedPath } from "./compressed-graph";
 import { SearchController, type SearchDiagnostics } from "./control";
 import { rankEligibleStarts } from "./route-graph";
+import { classifyRouteTopology } from "./topology";
 
 const METERS_PER_MILE = 1_609.344;
 const MAXIMUM_LOOP_STEM_SHARE = 0.1;
@@ -518,15 +521,57 @@ export function generateInitialCandidates(
 
   const candidates = new Map<string, RouteCandidate>();
   const distanceFloor = Math.max(0, request.distanceMiles.min * METERS_PER_MILE);
-  const distanceCap = Math.max(1, request.distanceMiles.max * METERS_PER_MILE * 1.25);
+  const requestedDistanceCap = Math.max(1, request.distanceMiles.max * METERS_PER_MILE);
+  const distanceCap = requestedDistanceCap * 1.25;
   for (const start of starts) {
     controller.checkCancellation();
+    const requestedClosedShapes = new Set(
+      request.routeTypes.filter((shape): shape is "loop" | "lollipop" =>
+        shape === "loop" || shape === "lollipop"),
+    );
+    if (requestedClosedShapes.size > 0) {
+      const compressed = compressSearchGraph(graph);
+      const compressedById = new Map(compressed.traversals.map((traversal) => [traversal.edge.id, traversal]));
+      const closed = generateClosedTours({
+        nodes: compressed.nodes,
+        edges: compressed.traversals.map(({ edge }) => edge),
+        accessPoints: compressed.accessPoints,
+      }, start, {
+        distanceMeters: {
+          min: distanceFloor,
+          max: requestedDistanceCap,
+          target: (distanceFloor + requestedDistanceCap) / 2,
+        },
+        ...(request.elevationGainFeet ? {
+          elevationGainMeters: {
+            min: request.elevationGainFeet.min * 0.3048,
+            max: request.elevationGainFeet.max * 0.3048,
+            target: (request.elevationGainFeet.min + request.elevationGainFeet.max) * 0.1524,
+          },
+        } : {}),
+        includeUncertainAccess: request.includeUncertainAccess,
+        maximumWalks: options.budget?.maximumRawCandidates ?? DEFAULT_SOLVER_BUDGET.maximumRawCandidates,
+      }, options);
+      controller.absorbWork(closed.diagnostics);
+      for (const closedCandidate of closed.candidates) {
+        const compressedPath = closedCandidate.traversals.map((traversal) => {
+          const match = compressedById.get(traversal.edge.id);
+          if (!match) throw new Error(`Closed tour references unknown compressed edge ${traversal.edge.id}`);
+          return match;
+        });
+        const path = expandCompressedPath(compressedPath);
+        const classification = classifyRouteTopology(path);
+        if ((classification === "loop" || classification === "lollipop")
+          && requestedClosedShapes.has(classification)
+          && !recordCandidate(classification, path, start, start, controller, candidates)) break;
+      }
+    }
     for (const shape of request.routeTypes) {
       if (shape === "out-and-back") {
         generateOutAndBack(start, adjacency, distanceFloor, distanceCap, graph, controller, candidates);
       } else if (shape === "point-to-point") {
         generatePointToPoint(start, accessByNode, adjacency, distanceCap, graph, controller, candidates);
-      } else {
+      } else if (![...candidates.values()].some((candidate) => candidate.shape === shape)) {
         generateTreeCycles(shape, start, adjacency, distanceCap, graph, controller, candidates, options.budget ?? DEFAULT_SOLVER_BUDGET);
       }
     }
