@@ -117,7 +117,7 @@ describe("generated route map features", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
 
     expect(mapStatusSummary(boundary, null, false, coverage, 2)).toEqual({
-      boundary: "Boundary set",
+      boundary: "Area set",
       dimensions: "2.2 × 1.6 mi (3.5 sq mi)",
       coverage: "Inside coverage",
       accessPoints: "2 access points available",
@@ -127,7 +127,7 @@ describe("generated route map features", () => {
       accessPoints: "1 access point available",
     });
     expect(mapStatusSummary(boundary, [-122.20, 37.155, -122.14, 37.178], true, coverage, 0)).toMatchObject({
-      boundary: "Drawing boundary",
+      boundary: "Drawing area",
       coverage: "Outside coverage",
       accessPoints: "0 access points available",
     });
@@ -136,7 +136,10 @@ describe("generated route map features", () => {
   it("renders compact accessible map controls, status, and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
-      bounds: boundary,
+      mode: "drawn-area",
+      drawBounds: boundary,
+      drawEnabled: true,
+      filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.155], [-122.14, 37.155], [-122.14, 37.178], [-122.18, 37.178], [-122.18, 37.155]]] },
       packCoverage: [-122.19, 37.15, -122.13, 37.18],
       suggestedBounds: boundary,
       display: { center: [-122.16, 37.165], zoom: 12 },
@@ -157,16 +160,18 @@ describe("generated route map features", () => {
     }));
 
     expect(markup).toContain('aria-label="Hike search map"');
-    expect(markup).toContain('role="toolbar" aria-label="Search boundary tools"');
-    expect(markup).toContain('aria-label="Redraw search boundary"');
-    expect(markup).toContain('aria-label="Use demo search area"');
-    expect(markup).toContain('aria-label="Clear search boundary"');
+    expect(markup).toContain('role="toolbar" aria-label="Draw-area tools"');
+    expect(markup).toContain('aria-label="Redraw trailhead filter"');
+    expect(markup).toContain('aria-label="Use demo trailhead filter"');
+    expect(markup).toContain('aria-label="Clear trailhead filter"');
     expect(markup).toContain('<output class="map-status" aria-label="Map status">');
     expect(markup).toContain('1 access point available');
     expect(markup).toContain('<details class="map-key map-key-collapsible">');
     expect(markup).not.toContain('<details open=""');
     expect(markup).toContain('<summary class="map-key-toggle">Map key</summary>');
     expect(markup).toContain('Installed coverage');
+    expect(markup).toContain('Trailhead filter');
+    expect(markup).toContain('Eligible access');
     expect(markup).toContain('Mapped trail');
     expect(markup).toContain('Suggested route');
     expect(markup).toContain('Route start');

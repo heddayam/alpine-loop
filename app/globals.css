@@ -65,6 +65,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .boundary-summary > span { display: grid; place-items: center; width: .95rem; aspect-ratio: 1; color: #fff; background: #929d97; border-radius: 50%; font-size: .58rem; }
 .boundary-summary.complete { color: var(--forest); border-style: solid; border-color: #8eb0a2; }
 .boundary-summary.complete > span { background: var(--forest-2); }
+.filter-explainer { padding: .42rem .48rem; color: #173f35 !important; background: #e7f0eb; border-left: 3px solid #2a705a; font-weight: 750; }
+.filter-mode-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .2rem; margin: .45rem 0; }
+.filter-mode-tabs label { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .06rem .22rem; align-content: start; padding: .36rem .3rem; cursor: pointer; background: #fff; border: 1px solid #c5ccc7; }
+.filter-mode-tabs label.selected { background: #eaf0ed; border-color: var(--forest-2); box-shadow: inset 0 -3px 0 var(--forest-2); }
+.filter-mode-tabs input { grid-row: 1 / span 2; margin: .08rem 0 0; accent-color: var(--forest-2); }
+.filter-mode-tabs strong { overflow: hidden; font-size: .56rem; text-overflow: ellipsis; white-space: nowrap; }
+.filter-mode-tabs small { color: var(--muted); font-size: .45rem; line-height: 1.15; }
+.filter-editor, .drive-filter-editor, .autocomplete-field { display: grid; gap: .32rem; }
+.autocomplete-field > label, .drive-filter-editor > label { font-size: .58rem; font-weight: 800; }
+.input-with-action { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.input-with-action input { min-width: 0; height: 1.9rem; padding: .25rem .4rem; border: 1px solid #b7c0ba; font-size: .61rem; }
+.input-with-action button { padding: .25rem .42rem; cursor: pointer; color: var(--forest); background: #eef2ef; border: 1px solid #b7c0ba; border-left: 0; font-size: .5rem; font-weight: 800; }
+.suggestion-list { z-index: 3; max-height: 9rem; margin: -.32rem 0 0; padding: 0; overflow-y: auto; list-style: none; background: #fff; border: 1px solid #adb8b1; box-shadow: 0 3px 8px rgb(31 55 47 / 12%); }
+.suggestion-list button { width: 100%; display: grid; gap: .08rem; padding: .38rem .45rem; cursor: pointer; text-align: left; color: var(--ink); background: #fff; border: 0; border-bottom: 1px solid #e0e4e1; }
+.suggestion-list button:hover, .suggestion-list button:focus-visible { background: #eaf1ed; }
+.suggestion-list strong { font-size: .58rem; }
+.suggestion-list span { color: var(--muted); font-size: .47rem; text-transform: capitalize; }
+.selection-chip { display: grid; grid-template-columns: auto 1fr; gap: .04rem .28rem; align-items: center; margin: 0 !important; padding: .34rem .4rem; color: var(--forest) !important; background: #edf4ef; border: 1px solid #aebfb5; }
+.selection-chip > span { grid-row: 1 / span 2; }
+.selection-chip strong { font-size: .58rem; }
+.selection-chip small { color: var(--muted); font-size: .46rem; text-transform: capitalize; }
+.field-help, .provider-note { margin: 0 !important; color: var(--muted) !important; font-size: .48rem !important; }
+.inline-status { margin: 0 !important; font-size: .52rem !important; }
+.inline-status.success { color: var(--forest-2) !important; }
+.location-button, .calculate-button { justify-self: start; padding: .34rem .45rem; cursor: pointer; color: var(--forest); background: #fff; border: 1px solid #aeb8b2; font-size: .53rem; font-weight: 800; }
+.calculate-button { width: 100%; color: #fff; background: var(--forest-2); }
+.calculate-button:disabled { cursor: not-allowed; opacity: .5; }
+.finish-filter-toggle { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--line); }
 .boundary-editor { margin-top: .4rem; color: var(--forest); font-size: .6rem; }
 .boundary-editor summary { cursor: pointer; font-weight: 700; }
 .boundary-editor p { color: var(--muted); }
@@ -164,8 +192,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .map-key a { color: #52695f; font-size: .5rem; font-weight: 600; }
 .key-trail { width: 1.35rem; border-top: 3px dotted #40594f; filter: drop-shadow(0 1px 0 #fffaf0); }
 .key-coverage { width: .8rem; height: .55rem; background: rgb(42 112 90 / 18%); border: 2px dashed #245b4b; }
+.key-filter { width: .8rem; height: .55rem; background: rgb(47 111 159 / 20%); border: 2px dotted #24587f; }
+.key-refinement { width: .8rem; height: .55rem; background: rgb(142 79 143 / 16%); border: 3px double #713e78; }
+.key-access { width: .62rem; height: .62rem; background: #173f35; border: 2px solid #fffaf0; border-radius: 50%; box-shadow: 0 0 0 1px #173f35; }
 .key-route { width: 1.35rem; border-top: 5px solid #f47b4d; box-shadow: 0 -2px 0 #173f35, 0 2px 0 #173f35; }
 .key-start { width: .62rem; height: .62rem; background: #f47b4d; border: 2px solid #173f35; border-radius: 50%; }
+.key-finish { width: .62rem; height: .62rem; background: #fffaf0; border: 2px solid #713e78; transform: rotate(45deg); }
+.route-trailhead-pin.finish .route-trailhead-pin-shape { border-radius: .18rem; background: #713e78; }
+.route-trailhead-pin.finish .route-trailhead-pin-anchor { border-color: #713e78; border-radius: .08rem; }
+.route-trailhead-pin.finish .route-trailhead-pin-stem { background: #713e78; }
+.route-trailhead-pin.finish .route-trailhead-pin-caption { background: rgb(113 62 120 / 94%); }
 .map-hint { position: absolute; z-index: 8; bottom: .5rem; left: 50%; width: max-content; max-width: calc(100% - 1rem); margin: 0; padding: .4rem .55rem; transform: translateX(-50%); color: #fff; background: rgb(61 75 87 / 92%); border: 1px solid rgb(255 255 255 / 35%); border-radius: .1rem; box-shadow: 0 2px 6px rgb(0 0 0 / 18%); font-size: .58rem; }
 
 .results-panel { z-index: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; background: #f2f1ed; border-left: 1px solid #aeb6b1; box-shadow: -2px 0 6px rgb(31 45 40 / 8%); scrollbar-width: thin; }
@@ -199,6 +235,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .route-card-detail { border-top: 1px solid #d8ddd9; background: #fff; }
 .route-endpoints { display: flex; gap: .25rem; align-items: center; margin: 0; color: var(--muted); font-size: .5rem; }
 .route-endpoints span:first-child, .route-endpoints span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-match-note { display: flex; gap: .3rem; margin: 0; padding: .32rem .38rem; color: #563f66; background: #f1ebf3; border-left: 3px solid #713e78; font-size: .51rem; font-weight: 800; }
+.violation-list { padding: .35rem .4rem; color: #64430e; background: #fbf0dc; border-left: 3px solid #c38a34; font-size: .48rem; }
+.violation-list strong { font-size: .51rem; }
+.violation-list ul { margin: .2rem 0 0; padding-left: 1rem; }
 .elevation-profile { margin: .38rem .45rem .28rem; padding: .4rem .42rem .3rem; background: #f1f5f1; border: 1px solid #cbd4cd; border-radius: .08rem; }
 .elevation-profile figcaption { margin-bottom: .18rem; color: var(--forest-2); font-size: .5rem; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
 .elevation-profile svg { display: block; width: 100%; height: 5rem; }
@@ -250,6 +290,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 @media (max-width: 420px) {
   .pack-status { padding-left: .75rem; }
   .shape-grid, .coordinate-grid { grid-template-columns: 1fr; }
+  .filter-mode-tabs { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

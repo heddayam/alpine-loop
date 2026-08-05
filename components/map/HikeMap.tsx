@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { FeatureCollection, LineString, Point } from "geojson";
+import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
 import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker as MapLibreMarker } from "maplibre-gl";
 import type { GeneratedRoute } from "@/lib/contracts";
-import type { AccessPointOption, Bounds } from "../builder/types";
+import type { AccessPointOption, Bounds, FilterMode } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
-  bounds: Bounds | null;
+  mode: FilterMode;
+  drawBounds: Bounds | null;
+  drawEnabled: boolean;
+  filterGeometry?: Polygon | MultiPolygon;
+  refinementGeometry?: Polygon | MultiPolygon;
   packCoverage: Bounds;
   suggestedBounds: Bounds;
   display: { center: [number, number]; zoom: number };
@@ -39,7 +43,7 @@ export function showCoverageHatching(bounds: Bounds | null, drawing: boolean) {
 }
 
 export type MapStatusSummary = {
-  boundary: "Draw mode" | "Drawing boundary" | "Boundary set" | "No boundary";
+  boundary: "Draw mode" | "Drawing area" | "Area set" | "No area";
   dimensions?: string;
   coverage?: "Inside coverage" | "Outside coverage";
   accessPoints: string;
@@ -60,12 +64,12 @@ export function mapStatusSummary(
 
   return {
     boundary: draftBounds
-      ? "Drawing boundary"
+      ? "Drawing area"
       : drawing
         ? "Draw mode"
         : bounds
-          ? "Boundary set"
-          : "No boundary",
+          ? "Area set"
+          : "No area",
     ...(dimensions ? {
       dimensions: `${dimensions.width.toFixed(1)} × ${dimensions.height.toFixed(1)} mi (${dimensions.area.toFixed(1)} sq mi)`,
       coverage,
@@ -76,6 +80,10 @@ export function mapStatusSummary(
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
+
+function areaFeature(geometry?: Polygon | MultiPolygon): Feature<Polygon | MultiPolygon> | FeatureCollection<Point> {
+  return geometry ? { type: "Feature", properties: { role: "trailhead-filter" }, geometry } : EMPTY_POINTS;
+}
 
 function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
   return {
@@ -160,8 +168,22 @@ export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: s
   });
 }
 
+export function routeFinishPins(routes: GeneratedRoute[], selectedRouteId?: string): RouteTrailheadPin[] {
+  const pointToPoint = routes.filter((route) => route.endAccessPoint.id !== route.startAccessPoint.id);
+  const pins = routeTrailheadPins(pointToPoint.map((route) => ({
+    ...route,
+    startAccessPoint: route.endAccessPoint,
+    geometry: { ...route.geometry, coordinates: [...route.geometry.coordinates].reverse() },
+  })), selectedRouteId);
+  return pins;
+}
+
 export function HikeMap({
-  bounds,
+  mode,
+  drawBounds: bounds,
+  drawEnabled,
+  filterGeometry,
+  refinementGeometry,
   packCoverage,
   suggestedBounds,
   display,
@@ -186,6 +208,8 @@ export function HikeMap({
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
+  const filterGeometryRef = useRef(filterGeometry);
+  const refinementGeometryRef = useRef(refinementGeometry);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [draftBounds, setDraftBounds] = useState<Bounds | null>(null);
@@ -210,6 +234,11 @@ export function HikeMap({
     routesRef.current = routes;
     selectedRouteIdRef.current = selectedRouteId;
   }, [routes, selectedRouteId]);
+
+  useEffect(() => {
+    filterGeometryRef.current = filterGeometry;
+    refinementGeometryRef.current = refinementGeometry;
+  }, [filterGeometry, refinementGeometry]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -268,25 +297,29 @@ export function HikeMap({
           source: "pack-coverage",
           paint: { "line-color": "#17604b", "line-width": 4, "line-dasharray": [3, 2] },
         });
-        map?.addSource("hard-boundary", { type: "geojson", data: initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
+        map?.addSource("trailhead-filter", { type: "geojson", data: filterGeometryRef.current ? areaFeature(filterGeometryRef.current) : initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
         map?.addLayer({
-          id: "hard-boundary-fill",
+          id: "trailhead-filter-fill",
           type: "fill",
-          source: "hard-boundary",
-          paint: { "fill-color": "#2f6f9f", "fill-opacity": 0 },
+          source: "trailhead-filter",
+          paint: { "fill-color": "#2f6f9f", "fill-opacity": 0.18 },
         });
         map?.addLayer({
-          id: "hard-boundary-casing",
+          id: "trailhead-filter-casing",
           type: "line",
-          source: "hard-boundary",
+          source: "trailhead-filter",
           paint: { "line-color": "#fffaf0", "line-width": 8, "line-opacity": 0.95 },
         });
         map?.addLayer({
-          id: "hard-boundary-line",
+          id: "trailhead-filter-line",
           type: "line",
-          source: "hard-boundary",
-          paint: { "line-color": "#24587f", "line-width": 4, "line-dasharray": [3, 2] },
+          source: "trailhead-filter",
+          paint: { "line-color": "#24587f", "line-width": 4, "line-dasharray": [1, 1.5] },
         });
+        map?.addSource("region-refinement", { type: "geojson", data: areaFeature(refinementGeometryRef.current) });
+        map?.addLayer({ id: "region-refinement-fill", type: "fill", source: "region-refinement", paint: { "fill-color": "#8e4f8f", "fill-opacity": 0.13 } });
+        map?.addLayer({ id: "region-refinement-casing", type: "line", source: "region-refinement", paint: { "line-color": "#fffaf0", "line-width": 7, "line-opacity": 0.95 } });
+        map?.addLayer({ id: "region-refinement-line", type: "line", source: "region-refinement", paint: { "line-color": "#713e78", "line-width": 3.5, "line-dasharray": [4, 1, 1, 1] } });
         map?.addSource("boundary-preview", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
           id: "boundary-preview-fill",
@@ -439,15 +472,17 @@ export function HikeMap({
   }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage]);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource("hard-boundary") as GeoJSONSource | undefined;
-    source?.setData(bounds ? boundsPolygon(bounds) : EMPTY_POINTS);
-  }, [bounds]);
+    const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
+    source?.setData(areaFeature(filterGeometry));
+    const refinementSource = mapRef.current?.getSource("region-refinement") as GeoJSONSource | undefined;
+    refinementSource?.setData(areaFeature(refinementGeometry));
+  }, [filterGeometry, refinementGeometry]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !map.getLayer("pack-coverage-fill")) return;
-    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(bounds, drawing) ? 0.14 : 0.025);
-  }, [bounds, drawing, mapReady]);
+    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(filterGeometry ? bounds : null, drawing) ? 0.14 : 0.055);
+  }, [bounds, drawing, filterGeometry, mapReady]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
@@ -479,11 +514,14 @@ export function HikeMap({
     if (!map || !Marker || !mapReady) return;
 
     routeMarkersRef.current.forEach((marker) => marker.remove());
-    routeMarkersRef.current = routeTrailheadPins(routes, selectedRouteId).map((pin) => {
+    const starts = routeTrailheadPins(routes, selectedRouteId).map((pin) => ({ ...pin, endpoint: "start" as const }));
+    const finishes = routeFinishPins(routes, selectedRouteId).map((pin) => ({ ...pin, endpoint: "finish" as const }));
+    routeMarkersRef.current = [...starts, ...finishes].map((pin) => {
       const element = document.createElement("button");
       element.type = "button";
       element.className = [
         "route-trailhead-pin",
+        pin.endpoint,
         pin.selected ? "selected" : "",
         pin.numberLabel.length > 4 ? "dense" : "",
       ].filter(Boolean).join(" ");
@@ -507,7 +545,7 @@ export function HikeMap({
       anchor.className = "route-trailhead-pin-anchor";
       const caption = document.createElement("span");
       caption.className = "route-trailhead-pin-caption";
-      caption.textContent = "Start";
+      caption.textContent = pin.endpoint === "start" ? "Start" : "Finish";
       element.append(stem, anchor, caption);
       element.addEventListener("click", (event) => {
         event.preventDefault();
@@ -530,7 +568,7 @@ export function HikeMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !drawing) return;
+    if (!map || !drawing || !drawEnabled) return;
     const previewSource = map.getSource("boundary-preview") as GeoJSONSource | undefined;
     const cornerSource = map.getSource("boundary-preview-corners") as GeoJSONSource | undefined;
     const clearPreview = () => {
@@ -590,25 +628,23 @@ export function HikeMap({
       startRef.current = null;
       clearPreview();
     };
-  }, [drawing, mapReady, onBoundsChange]);
+  }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
-  const visibleBounds = draftBounds ?? bounds;
-  const boundaryInsideCoverage = visibleBounds ? boundsContainBounds(packCoverage, visibleBounds) : true;
   const mapStatus = mapStatusSummary(bounds, draftBounds, drawing, packCoverage, accessPoints.length);
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
-      <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Search boundary tools">
+      {drawEnabled ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
         <button
           type="button"
           className={`map-tool map-tool-draw${drawing ? " active" : ""}`}
-          aria-label={bounds ? "Redraw search boundary" : "Draw search boundary"}
+          aria-label={bounds ? "Redraw trailhead filter" : "Draw trailhead filter"}
           aria-pressed={drawing}
           onClick={() => setDrawing(true)}
         >
-          {bounds ? "Redraw" : "Draw"}
+          {bounds ? "Redraw" : "Draw area"}
         </button>
-        <button type="button" className="map-tool map-tool-demo" aria-label="Use demo search area" onClick={() => {
+        <button type="button" className="map-tool map-tool-demo" aria-label="Use demo trailhead filter" onClick={() => {
           onBoundsChange([...suggestedBounds]);
           mapRef.current?.fitBounds(
             [[suggestedBounds[0], suggestedBounds[1]], [suggestedBounds[2], suggestedBounds[3]]],
@@ -617,13 +653,13 @@ export function HikeMap({
         }}>
           Demo
         </button>
-        <button type="button" className="map-tool map-tool-clear" aria-label="Clear search boundary" disabled={!bounds} onClick={() => onBoundsChange(null)}>
+        <button type="button" className="map-tool map-tool-clear" aria-label="Clear trailhead filter" disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
-      </div>
+      </div> : null}
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
       <output className="map-status" aria-label="Map status">
-        <span className="map-status-boundary">{mapStatus.boundary}</span>
+        <span className="map-status-boundary">{mode === "drawn-area" ? mapStatus.boundary : mode === "named-region" ? "Named region" : "Drive time"}</span>
         {mapStatus.dimensions ? <span className="map-status-dimensions">{mapStatus.dimensions}</span> : null}
         {mapStatus.coverage ? <span className="map-status-coverage">{mapStatus.coverage}</span> : null}
         <span className="map-status-access">{mapStatus.accessPoints}</span>
@@ -632,20 +668,24 @@ export function HikeMap({
         <summary className="map-key-toggle">Map key</summary>
         <div className="map-key-content" aria-label="Map symbol explanations">
           <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
+          {filterGeometry ? <span><i className="key-filter" aria-hidden="true" />Trailhead filter</span> : null}
+          {refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Named refinement</span> : null}
+          {accessPoints.length > 0 ? <span><i className="key-access" aria-hidden="true" />Eligible access</span> : null}
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
           {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
+          {routes.some((route) => route.endAccessPoint.id !== route.startAccessPoint.id) ? <span><i className="key-finish" aria-hidden="true" />Route finish</span> : null}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
       <p className="map-hint">
         {drawing
-          ? "Keep the blue search box entirely inside the green installed demo coverage."
-          : bounds
-            ? boundaryInsideCoverage
-              ? "Routes may not leave the outlined boundary."
-              : "Move or redraw this box entirely inside the green installed demo coverage."
-            : "Draw inside the green installed demo coverage, or use the demo area."}
+          ? "Draw a trailhead filter. It may extend beyond installed coverage."
+          : filterGeometry
+            ? "Highlighted areas filter trailheads, not route geometry. Routes remain inside installed coverage."
+            : mode === "drawn-area"
+              ? "Draw an area or use keyboard coordinates to filter trailheads."
+              : "Complete the selected trailhead filter to preview eligible access."}
       </p>
     </section>
   );

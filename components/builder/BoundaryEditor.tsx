@@ -1,19 +1,23 @@
+import { useState } from "react";
 import type { Bounds } from "./types";
 
 type BoundaryEditorProps = {
-  bounds: Bounds;
+  bounds: Bounds | null;
   onChange: (bounds: Bounds) => void;
 };
 
 const LABELS = ["West longitude", "South latitude", "East longitude", "North latitude"] as const;
 
 export function BoundaryEditor({ bounds, onChange }: BoundaryEditorProps) {
+  const [values, setValues] = useState<[string, string, string, string]>(() =>
+    bounds ? bounds.map(String) as [string, string, string, string] : ["", "", "", ""],
+  );
   return (
-    <details className="boundary-editor">
-      <summary>Edit boundary coordinates</summary>
-      <p>Every generated route must remain inside these coordinates.</p>
+    <details className="boundary-editor" open={!bounds}>
+      <summary>{bounds ? "Edit area coordinates" : "Enter area coordinates"}</summary>
+      <p>Enter west, south, east, and north coordinates. Boundary points count as inside.</p>
       <div className="coordinate-grid">
-        {bounds.map((value, index) => (
+        {values.map((value, index) => (
           <label key={LABELS[index]}>
             {LABELS[index]}
             <input
@@ -21,9 +25,13 @@ export function BoundaryEditor({ bounds, onChange }: BoundaryEditorProps) {
               step="0.0001"
               value={value}
               onChange={(event) => {
-                const next = [...bounds] as Bounds;
-                next[index] = Number(event.currentTarget.value);
-                onChange(next);
+                const next = [...values] as [string, string, string, string];
+                next[index] = event.currentTarget.value;
+                setValues(next);
+                const parsed = next.map(Number);
+                if (parsed.every(Number.isFinite) && parsed[0]! < parsed[2]! && parsed[1]! < parsed[3]!) {
+                  onChange(parsed as Bounds);
+                }
               }}
             />
           </label>

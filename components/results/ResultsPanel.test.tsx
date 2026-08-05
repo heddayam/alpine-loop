@@ -5,11 +5,11 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GeneratedRoute, GenerateRoutesResponseV1 } from "@/lib/contracts";
+import type { GeneratedRouteV2, GenerateRoutesResponseV2 } from "@/lib/contracts";
 import { ROUTE_PREVIEW_EVENT } from "../map/routeTraceOverlay";
 import { ResultsPanel } from "./ResultsPanel";
 
-function route(overrides: Partial<GeneratedRoute> = {}): GeneratedRoute {
+function route(overrides: Partial<GeneratedRouteV2> = {}): GeneratedRouteV2 {
   return {
     id: "exact-loop",
     shape: "loop",
@@ -31,16 +31,35 @@ function route(overrides: Partial<GeneratedRoute> = {}): GeneratedRoute {
       { distanceMeters: 4000, elevationMeters: 792.48 },
       { distanceMeters: 8046.72, elevationMeters: 500 },
     ],
+    filterMatch: { start: true, end: true },
     ...overrides,
   };
 }
 
-function response(overrides: Partial<GenerateRoutesResponseV1> = {}): GenerateRoutesResponseV1 {
+type ResponseOverrides = Omit<Partial<GenerateRoutesResponseV2>, "diagnostics"> & {
+  diagnostics?: Partial<GenerateRoutesResponseV2["diagnostics"]>;
+};
+
+function response(overrides: ResponseOverrides = {}): GenerateRoutesResponseV2 {
+  const diagnostics: GenerateRoutesResponseV2["diagnostics"] = {
+    elapsedMs: 42.4,
+    expandedStates: 1200,
+    candidateCount: 18,
+    eligibleAccessPointCount: 4,
+    searchedAccessPointCount: 4,
+    graphQueryCount: 4,
+    maximumLoadedDirectedEdges: 900,
+    exhausted: false,
+    truncationReasons: [],
+    shortfallReasons: [],
+    ...overrides.diagnostics,
+  };
   return {
-    version: 1,
+    version: 2,
     requestId: "request-results-1",
     pack: { id: "fixture-pack", schemaVersion: "1", dataVersion: "fixture-1", builtAt: "2026-08-01T00:00:00Z" },
     requested: 2,
+    resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" },
     exact: [route()],
     nearMisses: [{
       ...route({ id: "near-out-back", shape: "out-and-back", distanceMeters: 3218.688, trailNames: ["Skyline Trail"], warnings: [] }),
@@ -53,8 +72,8 @@ function response(overrides: Partial<GenerateRoutesResponseV1> = {}): GenerateRo
         normalizedDelta: 0.2,
       }],
     }],
-    diagnostics: { elapsedMs: 42.4, expandedStates: 1200, candidateCount: 18, exhausted: false, truncationReasons: [] },
     ...overrides,
+    diagnostics,
   };
 }
 
@@ -172,6 +191,18 @@ describe("ResultsPanel", () => {
     expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
   });
 
+  it("labels a finish outside the trailhead filter as information, not a near miss", () => {
+    const pointToPoint = route({
+      id: "outside-finish",
+      shape: "point-to-point",
+      endAccessPoint: { id: "finish", name: "Other trailhead", lon: -122.1, lat: 37.2, accessState: "public", confidence: "high" },
+      filterMatch: { start: true, end: false },
+    });
+    render(<ResultsPanel status="done" response={response({ exact: [pointToPoint], nearMisses: [] })} selectedRouteId="outside-finish" onSelectRoute={() => undefined} />);
+    expect(screen.getByRole("note")).toHaveTextContent("Finish outside trailhead filter");
+    expect(screen.queryByRole("heading", { name: "Near misses" })).not.toBeInTheDocument();
+  });
+
   it("omits generic partial-search warnings", async () => {
     render(<ResultsPanel
       status="done"
@@ -186,7 +217,7 @@ describe("ResultsPanel", () => {
     expect(screen.queryByText("Search stopped at its safety budget.")).not.toBeInTheDocument();
     expect(screen.queryByText(/time budget reached/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Partial results" })).not.toBeInTheDocument();
-    expect(screen.getByText("No routes found inside this boundary.")).toBeVisible();
+    expect(screen.getByText("No routes found from eligible trailheads.")).toBeVisible();
     await userEvent.click(screen.getByText("Search diagnostics"));
     const diagnostics = screen.getByText("Search diagnostics").closest("details");
     expect(diagnostics).not.toBeNull();
@@ -212,7 +243,7 @@ describe("ResultsPanel", () => {
 
   it("announces loading, error, and cancelled generation states", () => {
     const { rerender } = render(<ResultsPanel status="loading" response={null} onSelectRoute={() => undefined} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Generating routes");
+    expect(screen.getByRole("status")).toHaveTextContent("generating routes");
 
     rerender(<ResultsPanel status="error" response={null} message="Fixture pack is unavailable." onSelectRoute={() => undefined} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Fixture pack is unavailable.");

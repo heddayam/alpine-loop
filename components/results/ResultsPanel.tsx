@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, type KeyboardEvent } from "react";
 import type {
-  GeneratedRoute,
-  GenerateRoutesResponseV1,
+  GeneratedRouteV2,
+  GenerateRoutesResponseV2,
   RouteType,
 } from "@/lib/contracts";
 import { announceRoutePreview } from "../map/routeTraceOverlay";
@@ -12,7 +12,7 @@ export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
 
 type ResultsPanelProps = {
   status: ResultsStatus;
-  response: GenerateRoutesResponseV1 | null;
+  response: GenerateRoutesResponseV2 | null;
   message?: string;
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
@@ -47,11 +47,11 @@ function formatFreshness(value: string) {
   }).format(new Date(value));
 }
 
-function trailheadCoordinates(route: GeneratedRoute) {
+function trailheadCoordinates(route: GeneratedRouteV2) {
   return `${route.startAccessPoint.lat.toFixed(5)}, ${route.startAccessPoint.lon.toFixed(5)}`;
 }
 
-function ElevationProfile({ route }: { route: GeneratedRoute }) {
+function ElevationProfile({ route }: { route: GeneratedRouteV2 }) {
   const samples = route.elevationSamples;
   if (!samples || samples.length < 2) return null;
 
@@ -91,7 +91,7 @@ function RouteCard({
   buttonRef,
   onSelect,
 }: {
-  route: GeneratedRoute;
+  route: GeneratedRouteV2 & { violations?: GenerateRoutesResponseV2["nearMisses"][number]["violations"] };
   routeNumber: number;
   selected: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
@@ -160,6 +160,17 @@ function RouteCard({
                 <span>{route.endAccessPoint.name}</span>
               </p>
 
+              {!route.filterMatch.end ? (
+                <p className="filter-match-note" role="note"><span aria-hidden="true">ⓘ</span> Finish outside trailhead filter</p>
+              ) : null}
+
+              {route.violations?.length ? (
+                <div className="violation-list" aria-label="Near-miss constraints">
+                  <strong>Outside requested constraints</strong>
+                  <ul>{route.violations.map((violation) => <li key={violation.constraint}>{violation.constraint.replaceAll("-", " ")}: {violation.value.toFixed(1)} (requested {violation.min.toFixed(1)}–{violation.max.toFixed(1)})</li>)}</ul>
+                </div>
+              ) : null}
+
               <dl className="route-secondary-metrics">
                 <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
                 <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
@@ -219,7 +230,7 @@ export function ResultsPanel({
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><h2 id="results-title">Results</h2></div>
-        <p className="results-state loading-state" role="status" aria-live="polite">Generating routes inside your hard boundary…</p>
+        <p className="results-state loading-state" role="status" aria-live="polite">Searching eligible trailheads and generating routes…</p>
       </aside>
     );
   }
@@ -228,7 +239,7 @@ export function ResultsPanel({
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><h2 id="results-title">Results</h2></div>
-        <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different boundary or constraints."}</span></div>
+        <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different trailhead filter or constraints."}</span></div>
       </aside>
     );
   }
@@ -254,8 +265,8 @@ export function ResultsPanel({
 
       {total === 0 ? (
         <div className="no-results" role="status">
-          <strong>No routes found inside this boundary.</strong>
-          <span>Try a larger rectangle, a wider distance range, or include uncertain access.</span>
+          <strong>No routes found from eligible trailheads.</strong>
+          <span>Try a broader trailhead filter, a wider distance range, or include uncertain access.</span>
         </div>
       ) : (
         <div className="route-lists" onKeyDown={handleKeyboardNavigation} aria-label="Generated routes">
@@ -296,12 +307,19 @@ export function ResultsPanel({
 
       <details className="diagnostics">
         <summary>Search diagnostics</summary>
+        <p>{response.resolvedAccessFilter.label}</p>
         <dl>
           <div><dt>Elapsed</dt><dd>{Math.round(response.diagnostics.elapsedMs).toLocaleString("en-US")} ms</dd></div>
           <div><dt>States explored</dt><dd>{response.diagnostics.expandedStates.toLocaleString("en-US")}</dd></div>
           <div><dt>Candidates</dt><dd>{response.diagnostics.candidateCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Eligible starts</dt><dd>{response.diagnostics.eligibleAccessPointCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Searched starts</dt><dd>{response.diagnostics.searchedAccessPointCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Graph queries</dt><dd>{response.diagnostics.graphQueryCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Max loaded edges</dt><dd>{response.diagnostics.maximumLoadedDirectedEdges.toLocaleString("en-US")}</dd></div>
           <div><dt>Request ID</dt><dd>{response.requestId}</dd></div>
         </dl>
+        {response.diagnostics.truncationReasons.length ? <p><strong>Search limits:</strong> {response.diagnostics.truncationReasons.join(" · ")}</p> : null}
+        {response.diagnostics.shortfallReasons.length ? <p><strong>Shortfall:</strong> {response.diagnostics.shortfallReasons.join(" · ")}</p> : null}
       </details>
     </aside>
   );

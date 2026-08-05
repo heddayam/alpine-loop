@@ -1,205 +1,143 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
 
 vi.mock("../map/HikeMap", () => ({
-  HikeMap: ({ onBoundsChange, routes = [], selectedRouteId, onRouteSelect }: {
+  HikeMap: ({ onBoundsChange, mode, routes = [], selectedRouteId }: {
     onBoundsChange: (bounds: [number, number, number, number] | null) => void;
+    mode: string;
     routes?: Array<{ id: string }>;
     selectedRouteId?: string;
-    onRouteSelect?: (id: string) => void;
-  }) => (
-    <div aria-label="Mock map">
-      <button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture boundary</button>
-      <button type="button" onClick={() => onBoundsChange([-122.12, 37.1, -122.11, 37.11])}>Draw empty boundary</button>
-      <button type="button" onClick={() => onBoundsChange(null)}>Clear fixture boundary</button>
-      <output aria-label="Map route state">{routes.map((route) => route.id).join(",")}|selected:{selectedRouteId ?? "none"}</output>
-      {routes[1] ? <button type="button" onClick={() => onRouteSelect?.(routes[1]!.id)}>Select second map route</button> : null}
-    </div>
-  ),
+  }) => <div aria-label="Mock map"><output aria-label="Mock map mode">{mode}</output><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange(null)}>Clear fixture area</button><output aria-label="Map route state">{routes.map((route) => route.id).join(",")}|selected:{selectedRouteId ?? "none"}</output></div>,
 }));
 
-const accessPoint = {
-  id: "trailhead-a",
-  name: "Fixture Trailhead",
-  lon: -122.16,
-  lat: 37.16,
-  kind: "trailhead",
-  accessState: "public",
-  confidence: "high",
-};
-
-const routeResponse = {
-  version: 1,
-  requestId: "request-1",
-  pack: { id: "fixture-pack", schemaVersion: "1", dataVersion: "fixture-1", builtAt: "2026-08-04T00:00:00Z" },
-  requested: 10,
-  exact: [],
-  nearMisses: [],
-  diagnostics: { elapsedMs: 1, expandedStates: 1, candidateCount: 0, exhausted: false, truncationReasons: [] },
-};
-
+const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high" };
+const preview = { resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" }, filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.18, 37.18], [-122.18, 37.15]]] }, accessPoints: [accessPoint] };
 const generatedRoute = {
-  id: "exact-loop",
-  shape: "loop",
-  geometry: { type: "LineString", coordinates: [[-122.18, 37.15], [-122.16, 37.17], [-122.18, 37.15]] },
+  id: "exact-route", shape: "out-and-back", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
   startAccessPoint: { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, accessState: "public", confidence: "high" },
   endAccessPoint: { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, accessState: "public", confidence: "high" },
-  distanceMeters: 6400,
-  elevationGainMeters: 300,
-  elevationLossMeters: 300,
-  minimumElevationMeters: 300,
-  maximumElevationMeters: 600,
-  steepestSustainedGradePct: 9,
-  repeatedEdgeFraction: 0,
-  trailNames: ["Fixture Ridge"],
-  warnings: [],
-  source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] },
+  distanceMeters: 6400, elevationGainMeters: 300, elevationLossMeters: 300, minimumElevationMeters: 300, maximumElevationMeters: 600,
+  steepestSustainedGradePct: 9, repeatedEdgeFraction: 0, trailNames: ["Fixture Ridge"], warnings: [],
+  source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] }, filterMatch: { start: true, end: true },
+};
+const routeResponse = {
+  version: 2, requestId: "request-1", pack: { id: "fixture-pack", schemaVersion: "2", dataVersion: "fixture-2", builtAt: "2026-08-04T00:00:00Z" },
+  requested: 10, resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" }, exact: [generatedRoute], nearMisses: [],
+  diagnostics: { elapsedMs: 1, expandedStates: 1, candidateCount: 1, eligibleAccessPointCount: 1, searchedAccessPointCount: 1, graphQueryCount: 1, maximumLoadedDirectedEdges: 4, exhausted: false, truncationReasons: [], shortfallReasons: [] },
 };
 
-const populatedRouteResponse = {
-  ...routeResponse,
-  requested: 2,
-  exact: [generatedRoute],
-  nearMisses: [{
-    ...generatedRoute,
-    id: "near-route",
-    shape: "out-and-back",
-    violations: [{ constraint: "distance", value: 2.5, min: 3, max: 8, delta: 0.5, normalizedDelta: 0.1 }],
-  }],
-  diagnostics: { elapsedMs: 20, expandedStates: 100, candidateCount: 2, exhausted: false, truncationReasons: [] },
-};
-
-describe("HikeBuilder", () => {
+describe("HikeBuilder V2 trailhead filters", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(cleanup);
 
-  it("exposes compact console, range-row, and sticky action styling hooks", () => {
-    const { container } = render(<HikeBuilder />);
-
-    expect(container.querySelector(".builder-console-heading")).toHaveTextContent("Build your route");
-    expect(container.querySelector(".step-number")).not.toBeInTheDocument();
-    expect(container.querySelectorAll(".dense-shape-grid .shape-option")).toHaveLength(4);
-    expect(container.querySelectorAll(".range-table .range-table-row")).toHaveLength(4);
-    expect(container.querySelector(".builder-action-footer")).toContainElement(
-      screen.getByRole("button", { name: "Generate routes" }),
-    );
-  });
-
-  it("announces the pre-draw empty state and validates generation without a boundary", async () => {
+  it("defaults to Draw area and explains filter semantics", () => {
     render(<HikeBuilder />);
-    expect(screen.getByText("Draw a boundary to find access points.")).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Results" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Draw area/ })).toBeChecked();
+    expect(screen.getByText("Highlighted areas filter trailheads, not route geometry.")).toBeVisible();
+    expect(screen.getByText("No area drawn yet.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Results" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Draw a search rectangle on the map first.");
   });
 
-  it("renders accepted routes on the map and synchronizes card and map selection", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(populatedRouteResponse), { status: 200 }));
-    render(<HikeBuilder />);
-
-    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
-    await screen.findByLabelText("Access point");
-    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
-    await screen.findByRole("heading", { name: "Results" });
-
-    expect(screen.getByLabelText("Map route state")).toHaveTextContent("exact-loop,near-route|selected:exact-loop");
-    await userEvent.click(screen.getByRole("button", { name: "Select second map route" }));
-    expect(screen.getByLabelText("Map route state")).toHaveTextContent("selected:near-route");
-    expect(screen.getByRole("button", { name: /Out & back/ })).toHaveAttribute("aria-pressed", "true");
-
-    await userEvent.click(screen.getByRole("button", { name: /Loop/ }));
-    expect(screen.getByLabelText("Map route state")).toHaveTextContent("selected:exact-loop");
-  });
-
-  it("cancels an in-flight route request and announces the cancelled state", async () => {
-    let generationSignal: AbortSignal | undefined;
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 }))
-      .mockImplementationOnce((_input, init) => {
-        generationSignal = init?.signal ?? undefined;
-        return new Promise((_resolve, reject) => {
-          generationSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
-        });
-      });
-    render(<HikeBuilder />);
-
-    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
-    await screen.findByLabelText("Access point");
-    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
-    expect(screen.getByRole("button", { name: "Cancel generation" })).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Cancel generation" }));
-
-    expect(generationSignal?.aborted).toBe(true);
-    expect(await screen.findByRole("heading", { name: "Results" })).toBeVisible();
-    expect(screen.getByText("Route generation was cancelled.")).toHaveAttribute("role", "status");
-  });
-
-  it("loads fixture access points, lets one be selected, and sends the accepted request contract", async () => {
+  it("previews eligible access and submits the strict V2 drawn-area request", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(routeResponse), { status: 200 }));
     render(<HikeBuilder />);
-
-    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
-    const select = await screen.findByLabelText("Access point");
-    await userEvent.selectOptions(select, "trailhead-a");
-    expect(screen.getByRole("spinbutton", { name: "Number of routes" })).toHaveValue(10);
-    expect(screen.getByRole("switch", { name: /Include uncertain access/ })).toBeChecked();
-
-    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
-    await screen.findByText("No exact matches. 0 near matches are available.");
-    const init = fetchMock.mock.calls[1]?.[1];
-    const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    expect(request).toMatchObject({
-      version: 1,
-      packId: "fixture-pack",
-      bbox: [-122.18, 37.15, -122.13, 37.18],
-      startAccessPointId: "trailhead-a",
-      routeTypes: ["out-and-back"],
-      distanceMiles: { min: 1, max: 4 },
-      includeUncertainAccess: true,
-      limit: 10,
-    });
-  });
-
-  it("announces loading and the no-access-points state", async () => {
-    let resolveFetch!: (response: Response) => void;
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
-    render(<HikeBuilder />);
-    fireEvent.click(screen.getByRole("button", { name: "Draw empty boundary" }));
-    expect(screen.getByText("Loading access points…")).toHaveAttribute("role", "status");
-    resolveFetch(new Response(JSON.stringify({ accessPoints: [] }), { status: 200 }));
-    await waitFor(() => expect(screen.getByText("No known access points are inside this boundary.")).toHaveAttribute("role", "status"));
-  });
-
-  it("shows the actionable server message when map context is too large", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-      error: "Boundary contains too many mapped trail segments; draw a smaller rectangle",
-    }), { status: 422 }));
-    render(<HikeBuilder />);
-
-    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Boundary contains too many mapped trail segments; draw a smaller rectangle",
-    );
-  });
-
-  it("clears an access selection when the hard boundary is cleared", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 }));
-    render(<HikeBuilder />);
-    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
     await userEvent.selectOptions(await screen.findByLabelText("Access point"), "trailhead-a");
-    await userEvent.click(screen.getByRole("button", { name: "Clear fixture boundary" }));
-    expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
-    expect(screen.getByText("No boundary drawn")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
+    expect(await screen.findByText("1 exact route ready.")).toBeVisible();
+    const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>;
+    expect(request).toMatchObject({ version: 2, accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, startAccessPointId: "trailhead-a", pointToPoint: { finishMustMatchAccessFilter: true }, distanceMiles: { min: 1, max: 4 }, limit: 10 });
+    expect(screen.getByLabelText("Map route state")).toHaveTextContent("exact-route|selected:exact-route");
+  });
+
+  it("preserves each mode draft while switching and clears stale results", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(routeResponse), { status: 200 }));
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await screen.findByLabelText("Access point");
+    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
+    await screen.findByText("1 exact route ready.");
+    await userEvent.click(screen.getByRole("radio", { name: /Named region/ }));
+    expect(screen.queryByRole("heading", { name: "Results" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: /Draw area/ }));
+    expect(screen.getByText(/-122\.1800, 37\.1500/)).toBeVisible();
+  });
+
+  it("requires explicit named-region suggestion selection", async () => {
+    const summary = { id: "osm-relation-1", name: "Castle Rock State Park", kind: "park", context: "California", bbox: [-122.2, 37.1, -122.1, 37.2], sourceIds: ["osm"] };
+    const area = { ...summary, geometry: { type: "Polygon", coordinates: [[[-122.2, 37.1], [-122.1, 37.1], [-122.1, 37.2], [-122.2, 37.2], [-122.2, 37.1]]] } };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ areas: [summary] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(area), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...preview, resolvedAccessFilter: { mode: "named-region", label: summary.name }, filterGeometry: area.geometry }), { status: 200 }));
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("radio", { name: /Named region/ }));
+    await userEvent.type(screen.getByLabelText("Installed named region"), "Castle");
+    expect(screen.getByText(/typed names are never converted/i)).toBeVisible();
+    const option = await screen.findByRole("option", { name: /Castle Rock State Park/ });
+    await userEvent.click(option);
+    expect(await screen.findByText("Castle Rock State Park", { selector: ".selection-chip strong" })).toBeVisible();
+    expect(await screen.findByLabelText("Access point")).toBeVisible();
+  });
+
+  it("supports coordinate origins, 30-minute default, and drive-time calculation", async () => {
+    const requestId = "3d594650-3436-4f8b-a0e8-38d13fc148ca";
+    const geometry = { type: "Polygon", coordinates: [[[-122.2, 37.1], [-122.1, 37.1], [-122.1, 37.2], [-122.2, 37.2], [-122.2, 37.1]]] };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "complete", requestId, provider: "arcgis", durationMinutes: 30, resolvedAt: "2026-08-04T00:00:00Z", geometry }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...preview, resolvedAccessFilter: { mode: "drive-time", label: "30 minutes" }, filterGeometry: geometry }), { status: 200 }));
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("radio", { name: /Drive time/ }));
+    expect(screen.getByLabelText("Typical drive time")).toHaveValue("30");
+    await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
+    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+    await userEvent.click(screen.getByRole("button", { name: "Calculate drive-time area" }));
+    expect(await screen.findByText(/Drive-time area ready/)).toBeVisible();
+    expect(await screen.findByLabelText("Access point")).toBeVisible();
+    expect(screen.getByText(/live traffic is not used/i)).toBeVisible();
+  });
+
+  it("shows the point-to-point finish control on by default and enforces 30 miles", async () => {
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("checkbox", { name: /Point to point/ }));
+    expect(screen.getByRole("switch", { name: /Keep finish inside trailhead filter/ })).toBeChecked();
+    const maximum = screen.getByRole("spinbutton", { name: "Distance maximum" });
+    await userEvent.clear(maximum);
+    await userEvent.type(maximum, "31");
+    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Route distance may not exceed 30 miles.");
+  });
+
+  it("uses browser location only after the user asks and handles denial", async () => {
+    const getCurrentPosition = vi.fn((_success, failure: PositionErrorCallback) => failure({ code: 1, message: "denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition } });
+    render(<HikeBuilder />);
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("radio", { name: /Drive time/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Use my current location" }));
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Location permission was denied");
+  });
+
+  it("aborts an in-flight route request when the filter mode changes", async () => {
+    let signal: AbortSignal | undefined;
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
+      .mockImplementationOnce((_input, init) => { signal = init?.signal ?? undefined; return new Promise(() => undefined); });
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await screen.findByLabelText("Access point");
+    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
+    await userEvent.click(screen.getByRole("radio", { name: /Named region/ }));
+    await waitFor(() => expect(signal?.aborted).toBe(true));
   });
 });
