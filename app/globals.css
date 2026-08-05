@@ -165,19 +165,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .boundary-draft-readout strong { color: #ffd7c7; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
 .boundary-draft-readout span { font: 750 .76rem/1.2 ui-sans-serif, system-ui, sans-serif; }
 .boundary-draft-readout small { color: #dbe6df; font-size: .58rem; }
-.route-trailhead-pin { position: relative; width: 2.5rem; height: 3rem; padding: 0; cursor: pointer; background: transparent; border: 0; filter: drop-shadow(0 3px 3px rgb(24 49 42 / 38%)); }
-.route-trailhead-pin-shape { position: absolute; top: .05rem; left: 50%; z-index: 2; display: grid; width: 1.85rem; height: 1.85rem; place-items: center; transform: translateX(-50%); color: #fffaf0; background: #173f35; border: 3px solid #fffaf0; border-radius: 50%; box-shadow: 0 0 0 2px #173f35; transition: width .14s ease, height .14s ease, background .14s ease, box-shadow .14s ease; }
-.route-trailhead-pin-number { display: block; max-width: 1.45rem; overflow: hidden; font-size: .67rem; font-weight: 900; line-height: 1; letter-spacing: -.04em; text-overflow: clip; white-space: nowrap; }
-.route-trailhead-pin-stem { position: absolute; z-index: 1; bottom: .18rem; left: 50%; width: 3px; height: 1.35rem; transform: translateX(-50%); background: #173f35; box-shadow: 0 0 0 1px #fffaf0; }
-.route-trailhead-pin-anchor { position: absolute; z-index: 3; right: 50%; bottom: 0; width: .62rem; height: .62rem; transform: translate(50%, 50%); background: #fffaf0; border: 3px solid #173f35; border-radius: 50%; box-shadow: 0 0 0 2px rgb(255 250 240 / 85%); }
-.route-trailhead-pin-caption { position: absolute; z-index: 2; top: .42rem; left: calc(50% + 1.2rem); padding: .2rem .32rem; color: #fffaf0; background: rgb(23 63 53 / 94%); border: 1px solid rgb(255 250 240 / 85%); border-radius: .18rem; font-size: .5rem; font-weight: 900; letter-spacing: .06em; line-height: 1; text-transform: uppercase; white-space: nowrap; }
-.route-trailhead-pin:hover .route-trailhead-pin-shape, .route-trailhead-pin:focus-visible .route-trailhead-pin-shape { background: #245b4b; box-shadow: 0 0 0 3px #f47b4d, 0 0 0 5px rgb(255 250 240 / 90%); }
-.route-trailhead-pin:focus-visible { outline: 0; }
-.route-trailhead-pin.selected { z-index: 2; filter: drop-shadow(0 4px 5px rgb(24 49 42 / 48%)); }
-.route-trailhead-pin.selected .route-trailhead-pin-shape { top: 0; width: 2.05rem; height: 2.05rem; color: #173f35; background: #f47b4d; box-shadow: 0 0 0 3px #173f35, 0 0 0 5px rgb(255 250 240 / 78%); }
-.route-trailhead-pin.selected .route-trailhead-pin-anchor { background: #f47b4d; }
-.route-trailhead-pin.dense .route-trailhead-pin-number { font-size: .56rem; letter-spacing: -.07em; }
-.map-canvas .route-trailhead-pin, .map-canvas .route-trailhead-pin.selected { z-index: 5; }
 .map-status { position: absolute; z-index: 8; top: .5rem; right: 3.35rem; left: 10.75rem; display: flex; gap: .35rem; align-items: center; min-height: 2rem; padding: .3rem .45rem; overflow: hidden; color: #34413d; background: rgb(250 249 245 / 94%); border: 1px solid #a6afa9; border-radius: .1rem; box-shadow: 0 2px 5px rgb(31 55 47 / 14%); font-size: .5rem; white-space: nowrap; }
 .map-status span { overflow: hidden; text-overflow: ellipsis; }
 .map-status-boundary { color: var(--slate-dark); font-weight: 850; text-transform: uppercase; }
@@ -198,10 +185,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .key-route { width: 1.35rem; border-top: 5px solid #f47b4d; box-shadow: 0 -2px 0 #173f35, 0 2px 0 #173f35; }
 .key-start { width: .62rem; height: .62rem; background: #f47b4d; border: 2px solid #173f35; border-radius: 50%; }
 .key-finish { width: .62rem; height: .62rem; background: #fffaf0; border: 2px solid #713e78; transform: rotate(45deg); }
-.route-trailhead-pin.finish .route-trailhead-pin-shape { border-radius: .18rem; background: #713e78; }
-.route-trailhead-pin.finish .route-trailhead-pin-anchor { border-color: #713e78; border-radius: .08rem; }
-.route-trailhead-pin.finish .route-trailhead-pin-stem { background: #713e78; }
-.route-trailhead-pin.finish .route-trailhead-pin-caption { background: rgb(113 62 120 / 94%); }
 .map-hint { position: absolute; z-index: 8; bottom: .5rem; left: 50%; width: max-content; max-width: calc(100% - 1rem); margin: 0; padding: .4rem .55rem; transform: translateX(-50%); color: #fff; background: rgb(61 75 87 / 92%); border: 1px solid rgb(255 255 255 / 35%); border-radius: .1rem; box-shadow: 0 2px 6px rgb(0 0 0 / 18%); font-size: .58rem; }
 
 .results-panel { z-index: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; background: #f2f1ed; border-left: 1px solid #aeb6b1; box-shadow: -2px 0 6px rgb(31 45 40 / 8%); scrollbar-width: thin; }
