@@ -212,6 +212,9 @@ describe("generateClosedTours", () => {
         maximumRawCandidates: 1,
         deadlineMs: 1_000,
       },
+      // Wall-clock elapsed time is diagnostic, not solver output. Pin it so
+      // this assertion continues to cover deterministic candidate generation.
+      now: () => 0,
     };
 
     const first = generateClosedTours(fixture.graph, fixture.start, request({ min: 1_000, max: 2_000 }), options);
@@ -230,4 +233,3 @@ describe("generateClosedTours", () => {
     );
   });
 });
-
