@@ -94,6 +94,7 @@ export type ReconstructedDirectedEdge = GraphEdge & {
   edgeKey: number;
   physicalEdgeKey: number;
   stablePhysicalEdgeId: string;
+  minimumElevationMeters: number | null;
 };
 
 export type TopologyCacheDiagnostics = {
