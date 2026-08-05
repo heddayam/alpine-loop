@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { GeneratedRoute, GenerateRoutesResponseV1 } from "@/lib/contracts";
 import { ROUTE_PREVIEW_EVENT } from "../map/routeTraceOverlay";
 import { ResultsPanel } from "./ResultsPanel";
@@ -57,38 +58,70 @@ function response(overrides: Partial<GenerateRoutesResponseV1> = {}): GenerateRo
   };
 }
 
+function ControlledResultsPanel() {
+  const [selectedRouteId, setSelectedRouteId] = useState("exact-loop");
+  return (
+    <ResultsPanel
+      status="done"
+      response={response()}
+      selectedRouteId={selectedRouteId}
+      onSelectRoute={setSelectedRouteId}
+    />
+  );
+}
+
 describe("ResultsPanel", () => {
   afterEach(cleanup);
 
-  it("separates exact matches from near misses and discloses metrics, warnings, freshness, and violations", () => {
-    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+  it("renders compact exact and near-miss summaries while expanding only the selected route", () => {
+    const { rerender } = render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
 
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Near misses" })).toBeVisible();
-    const metrics = screen.getByRole("article", { name: "Loop" }).querySelector(".route-metrics");
-    expect(metrics).not.toBeNull();
-    expect(within(metrics as HTMLElement).getByText("5.0 mi")).toBeVisible();
-    expect(within(metrics as HTMLElement).getByText("1,200 ft")).toBeVisible();
-    expect(within(metrics as HTMLElement).getByText("2,600 ft")).toBeVisible();
-    expect(within(metrics as HTMLElement).getByText("12.4%")).toBeVisible();
-    expect(screen.getByText("Official access data is more than 30 days old.")).toBeVisible();
-    expect(screen.getAllByText(/Data current Jul 15, 2026/)).toHaveLength(2);
-    expect(screen.getAllByText("Sources: osm, midpen")).toHaveLength(2);
-    expect(screen.getByText(/Distance: 2.0 mi; requested 3.0 mi–8.0 mi \(off by 1.0 mi\)/)).toBeVisible();
-    expect(screen.getByText(/Planning aid only/)).toBeVisible();
+    const exactSummary = screen.getByRole("button", { name: /Loop/ });
+    const nearSummary = screen.getByRole("button", { name: /Out & back/ });
+    expect(exactSummary).toHaveAttribute("aria-expanded", "true");
+    expect(nearSummary).toHaveAttribute("aria-expanded", "false");
+    expect(within(exactSummary).getByText("5.0 mi")).toBeVisible();
+    expect(within(exactSummary).getByText("1,200 ft")).toBeVisible();
+    expect(within(exactSummary).getByText("12.4%")).toBeVisible();
+    expect(within(nearSummary).getByText("Near miss · 1 violation")).toBeVisible();
+
+    const selectedDetail = screen.getByRole("region", { name: "Loop" });
+    expect(within(selectedDetail).getByText("Elevation loss")).toBeVisible();
+    expect(within(selectedDetail).getAllByText("2,600 ft")).toHaveLength(2);
+    expect(within(selectedDetail).getByText("Official access data is more than 30 days old.")).toBeVisible();
+    expect(within(selectedDetail).getByText("Data current Jul 15, 2026")).toBeVisible();
+    expect(within(selectedDetail).getByText("Sources: osm, midpen")).toBeVisible();
+    expect(screen.queryByText(/Distance: 2.0 mi; requested 3.0 mi–8.0 mi/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Planning aid only/)).toHaveLength(1);
+
+    rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-out-back" onSelectRoute={() => undefined} />);
+    expect(screen.queryByRole("region", { name: "Loop" })).not.toBeInTheDocument();
+    const nearDetail = screen.getByRole("region", { name: "Out & back" });
+    expect(within(nearDetail).getByText(/Distance: 2.0 mi; requested 3.0 mi–8.0 mi \(off by 1.0 mi\)/)).toBeVisible();
+    expect(within(nearDetail).getByText("Source confidence:")).toBeVisible();
+    expect(within(nearDetail).getByText("Sources: osm, midpen")).toBeVisible();
   });
 
-  it("synchronizes button selection and arrow-key focus", () => {
-    const onSelect = vi.fn();
-    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={onSelect} />);
+  it("synchronizes expanded selection and arrow/Home/End keyboard focus", () => {
+    render(<ControlledResultsPanel />);
     const list = screen.getByLabelText("Generated routes");
     fireEvent.keyDown(list, { key: "ArrowDown" });
-    expect(onSelect).toHaveBeenCalledWith("near-out-back");
-    expect(screen.getByRole("button", { name: /Out & back/ })).toHaveFocus();
+    const nearSummary = screen.getByRole("button", { name: /Out & back/ });
+    expect(nearSummary).toHaveFocus();
+    expect(nearSummary).toHaveAttribute("aria-pressed", "true");
+    expect(nearSummary).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("region", { name: "Out & back" })).toBeVisible();
 
     fireEvent.keyDown(list, { key: "Home" });
-    expect(onSelect).toHaveBeenLastCalledWith("exact-loop");
-    expect(screen.getByRole("button", { name: /Loop/ })).toHaveFocus();
+    const exactSummary = screen.getByRole("button", { name: /Loop/ });
+    expect(exactSummary).toHaveFocus();
+    expect(exactSummary).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(list, { key: "End" });
+    expect(nearSummary).toHaveFocus();
+    expect(nearSummary).toHaveAttribute("aria-expanded", "true");
   });
 
   it("previews a route trace from pointer hover and keyboard focus without changing selection", () => {
@@ -109,9 +142,13 @@ describe("ResultsPanel", () => {
     window.removeEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
   });
 
-  it("shows optional elevation profiles only when samples exist", () => {
-    const { rerender } = render(<ResultsPanel status="done" response={response({ nearMisses: [] })} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+  it("shows an optional elevation profile only in the selected detail", () => {
+    const { rerender } = render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     expect(screen.getByRole("img", { name: /Elevation profile/ })).toBeVisible();
+    expect(screen.getAllByRole("img", { name: /Elevation profile/ })).toHaveLength(1);
+
+    rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-out-back" onSelectRoute={() => undefined} />);
+    expect(screen.getAllByRole("img", { name: /Elevation profile/ })).toHaveLength(1);
 
     rerender(<ResultsPanel status="done" response={response({ exact: [route({ elevationSamples: undefined })], nearMisses: [] })} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
