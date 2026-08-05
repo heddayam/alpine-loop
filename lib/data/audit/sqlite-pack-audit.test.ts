@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { compilePack } from "../compiler";
-import { fixtureCompileOptions, fixtureCompileOptionsV2 } from "../fixture-pack";
+import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3 } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -19,6 +19,12 @@ async function buildFixtureV2() {
   const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v2-"));
   temporaryDirectories.push(outputRoot);
   return compilePack(await fixtureCompileOptionsV2(outputRoot));
+}
+
+async function buildFixtureV3() {
+  const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v3-"));
+  temporaryDirectories.push(outputRoot);
+  return compilePack(await fixtureCompileOptionsV3(outputRoot));
 }
 
 function mutateDatabase(databasePath: string, sql: string): void {
@@ -139,5 +145,29 @@ describe("SQLite regional pack audit extraction", () => {
       "Named area osm:relation/1001 references an unknown source",
       "1 persisted edges leave exact pack coverage",
     ]));
+  });
+
+  it("audits schema 3 topology counts, complete member mapping, and bound content hashes", async () => {
+    const pack = await buildFixtureV3();
+    const valid = await auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath, auditPath: pack.auditPath });
+    expect(valid.schemaVersion).toBe("3");
+    expect(valid.counts).toMatchObject({ topologyProfiles: 2, topologyNetworks: 2 });
+    expect(valid.errors).toEqual([]);
+
+    mutateDatabase(pack.databasePath, "UPDATE topology_profiles SET content_hash='sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' WHERE profile='known'");
+    await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
+      .rejects.toThrow("topology content hash mismatch");
+  });
+
+  it("fails closed on schema 3 topology count or member corruption", async () => {
+    const countPack = await buildFixtureV3();
+    mutateDatabase(countPack.databasePath, "UPDATE topology_profiles SET decision_edge_count=decision_edge_count+1 WHERE profile='known'");
+    await expect(auditSqlitePack({ databasePath: countPack.databasePath, manifestPath: countPack.manifestPath }))
+      .rejects.toThrow("topology count mismatch");
+
+    const mappingPack = await buildFixtureV3();
+    mutateDatabase(mappingPack.databasePath, "DELETE FROM topology_decision_edge_members WHERE profile='known' AND edge_key=(SELECT min(edge_key) FROM topology_decision_edge_members WHERE profile='known')");
+    await expect(auditSqlitePack({ databasePath: mappingPack.databasePath, manifestPath: mappingPack.manifestPath }))
+      .rejects.toThrow(/count mismatch|member mapping mismatch/);
   });
 });

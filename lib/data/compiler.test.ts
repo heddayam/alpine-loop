@@ -3,13 +3,14 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema } from "@/lib/contracts";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
 import type { AreaGeometry } from "./area-geometry";
 import { getNamedArea, searchNamedAreas } from "./named-area-catalog";
 import {
   fixtureCompileOptions,
   fixtureCompileOptionsV2,
+  fixtureCompileOptionsV3,
   fixturePackSeed,
   fixturePackSeedV2,
 } from "./fixture-pack";
@@ -197,5 +198,37 @@ describe("fixture pack compiler", () => {
     } finally {
       database.close();
     }
+  });
+
+  it("writes deterministic schema 3 topology profiles, dense keys, mappings, and hashes", async () => {
+    const firstRoot = await temporaryOutput();
+    const secondRoot = await temporaryOutput();
+    const first = await compilePack(await fixtureCompileOptionsV3(firstRoot));
+    const second = await compilePack(await fixtureCompileOptionsV3(secondRoot));
+    const manifest = packManifestV3Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    expect(manifest.closedRouteTopology.profiles).toEqual(["known", "inclusive"]);
+    expect(first.audit.topologyProfiles).toHaveLength(2);
+    const database = new DatabaseSync(first.databasePath, { readOnly: true });
+    const replay = new DatabaseSync(second.databasePath, { readOnly: true });
+    try {
+      const profiles = database.prepare("SELECT * FROM topology_profiles ORDER BY profile").all();
+      expect(profiles).toEqual(replay.prepare("SELECT * FROM topology_profiles ORDER BY profile").all());
+      const denseNodes = database.prepare("SELECT node_key, id FROM nodes ORDER BY node_key").all();
+      expect(denseNodes).toEqual(replay.prepare("SELECT node_key, id FROM nodes ORDER BY node_key").all());
+      expect(denseNodes[0]).toEqual({ node_key: 1, id: "n-a" });
+      expect(database.prepare("SELECT edge_key, id, physical_edge_key FROM edges ORDER BY edge_key").all()).toEqual(
+        replay.prepare("SELECT edge_key, id, physical_edge_key FROM edges ORDER BY edge_key").all(),
+      );
+      expect(database.prepare("SELECT count(*) AS count FROM topology_decision_edge_members").get()).toEqual({ count: 32 });
+      expect(database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
+        JOIN edges e ON e.edge_key=m.edge_key AND e.physical_edge_key=m.physical_edge_key`).get()).toEqual({ count: 32 });
+      expect(database.prepare("SELECT connector_decision_edge_ids FROM access_topology WHERE profile='known' AND access_point_id='access-n-a'").get())
+        .toEqual({ connector_decision_edge_ids: "[]" });
+      const keys = database.prepare("SELECT decision_edge_key FROM topology_decision_edges ORDER BY decision_edge_key").all()
+        .map((row) => (row as { decision_edge_key: number }).decision_edge_key);
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    } finally { database.close(); replay.close(); }
+    expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
   });
 });

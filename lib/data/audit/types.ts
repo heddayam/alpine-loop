@@ -29,7 +29,7 @@ export type AuditEdge = {
 export type AuditAccessPoint = { id: string; accessState: AccessState; sourceRefs: string[] };
 
 export type RegionalPackAuditInput = {
-  schemaVersion?: "1" | "2";
+  schemaVersion?: "1" | "2" | "3";
   packId: string;
   dataVersion: string;
   nodes: AuditNode[];
@@ -41,7 +41,7 @@ export type RegionalPackAuditInput = {
 };
 
 export type RegionalPackAudit = {
-  schemaVersion: "1" | "2";
+  schemaVersion: "1" | "2" | "3";
   packId: string;
   dataVersion: string;
   counts: {
@@ -52,6 +52,9 @@ export type RegionalPackAudit = {
     rejectedEdges: number;
     conflicts: number;
     namedAreas?: number;
+    topologyProfiles?: number;
+    topologyNetworks?: number;
+    topologyDecisionEdges?: number;
   };
   accessStateCounts: Record<AccessState, number>;
   topology: {
