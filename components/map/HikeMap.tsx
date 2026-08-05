@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker as MapLibreMarker } from "maplibre-gl";
+import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds, FilterMode } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
@@ -169,6 +169,26 @@ export function routeTrailheadPins(routes: GeneratedClosedRouteV3[], selectedRou
   });
 }
 
+export function routeTrailheadPinFeatures(
+  routes: GeneratedClosedRouteV3[],
+  selectedRouteId?: string,
+): FeatureCollection<Point> {
+  return {
+    type: "FeatureCollection",
+    features: routeTrailheadPins(routes, selectedRouteId).map((pin) => ({
+      type: "Feature",
+      properties: {
+        id: pin.nextRouteId,
+        name: pin.name,
+        numberLabel: pin.numberLabel,
+        selected: pin.selected,
+        dense: pin.numberLabel.length > 4,
+      },
+      geometry: { type: "Point", coordinates: pin.coordinates },
+    })),
+  };
+}
+
 export function HikeMap({
   mode,
   drawBounds: bounds,
@@ -190,8 +210,6 @@ export function HikeMap({
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const routeMarkerConstructorRef = useRef<typeof import("maplibre-gl").Marker | null>(null);
-  const routeMarkersRef = useRef<MapLibreMarker[]>([]);
   const startRef = useRef<[number, number] | null>(null);
   const draftBoundsRef = useRef<Bounds | null>(null);
   const boundsRef = useRef(bounds);
@@ -236,10 +254,9 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
-    void import("maplibre-gl").then(({ Map, Marker, NavigationControl, setWorkerUrl }) => {
+    void import("maplibre-gl").then(({ Map, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
       setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
-      routeMarkerConstructorRef.current = Marker;
       map = new Map({
         container: containerRef.current,
         bounds: [
@@ -429,6 +446,51 @@ export function HikeMap({
           source: "generated-routes-hit",
           paint: { "line-color": "#000000", "line-width": 20, "line-opacity": 0.01 },
         });
+        map?.addSource("route-start-pins", {
+          type: "geojson",
+          data: routeTrailheadPinFeatures(routesRef.current, selectedRouteIdRef.current),
+        });
+        map?.addLayer({
+          id: "route-start-pins",
+          type: "circle",
+          source: "route-start-pins",
+          paint: {
+            "circle-radius": [
+              "case",
+              ["==", ["get", "dense"], true],
+              16,
+              ["==", ["get", "selected"], true],
+              14,
+              12,
+            ],
+            "circle-color": ["case", ["==", ["get", "selected"], true], "#f47b4d", "#173f35"],
+            "circle-stroke-color": "#fffaf0",
+            "circle-stroke-width": 3,
+            "circle-pitch-alignment": "map",
+            "circle-pitch-scale": "map",
+          },
+        });
+        map?.addLayer({
+          id: "route-start-pin-labels",
+          type: "symbol",
+          source: "route-start-pins",
+          layout: {
+            "text-field": ["get", "numberLabel"],
+            "text-size": ["case", ["==", ["get", "dense"], true], 9, 11],
+            "text-font": ["Open Sans Bold"],
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          },
+          paint: {
+            "text-color": ["case", ["==", ["get", "selected"], true], "#173f35", "#fffaf0"],
+          },
+        });
+        map?.addLayer({
+          id: "route-start-pin-hit-target",
+          type: "circle",
+          source: "route-start-pins",
+          paint: { "circle-radius": 20, "circle-color": "#000000", "circle-opacity": 0 },
+        });
         const selectRoute = (event: MapLayerMouseEvent) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onRouteSelect(id);
@@ -446,6 +508,17 @@ export function HikeMap({
           map?.getCanvas().style.removeProperty("cursor");
           setHoveredRouteId(undefined);
         });
+        map?.on("click", "route-start-pin-hit-target", selectRoute);
+        map?.on("mouseenter", "route-start-pin-hit-target", (event) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (typeof id !== "string") return;
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          setHoveredRouteId(id);
+        });
+        map?.on("mouseleave", "route-start-pin-hit-target", () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          setHoveredRouteId(undefined);
+        });
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelect(id);
@@ -455,11 +528,8 @@ export function HikeMap({
     });
     return () => {
       alive = false;
-      routeMarkersRef.current.forEach((marker) => marker.remove());
-      routeMarkersRef.current = [];
       map?.remove();
       mapRef.current = null;
-      routeMarkerConstructorRef.current = null;
     };
   }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage, packCoverageBbox]);
 
@@ -489,6 +559,7 @@ export function HikeMap({
     (map.getSource("generated-route-alternates") as GeoJSONSource | undefined)?.setData(partitions.alternates);
     (map.getSource("generated-route-selected") as GeoJSONSource | undefined)?.setData(partitions.selected);
     (map.getSource("generated-route-hover") as GeoJSONSource | undefined)?.setData(partitions.hovered);
+    (map.getSource("route-start-pins") as GeoJSONSource | undefined)?.setData(routeTrailheadPinFeatures(routes, selectedRouteId));
   }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
 
   useEffect(() => {
@@ -499,63 +570,6 @@ export function HikeMap({
     window.addEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
     return () => window.removeEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
   }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const Marker = routeMarkerConstructorRef.current;
-    if (!map || !Marker || !mapReady) return;
-
-    routeMarkersRef.current.forEach((marker) => marker.remove());
-    const starts = routeTrailheadPins(routes, selectedRouteId);
-    routeMarkersRef.current = starts.map((pin) => {
-      const element = document.createElement("button");
-      element.type = "button";
-      element.className = [
-        "route-trailhead-pin",
-        "start",
-        pin.selected ? "selected" : "",
-        pin.numberLabel.length > 4 ? "dense" : "",
-      ].filter(Boolean).join(" ");
-      element.dataset.routeCount = String(pin.routeIds.length);
-      const routeDescription = pin.routeNumbers.length === 1
-        ? `route ${pin.routeNumbers[0]}`
-        : `routes ${pin.routeNumbers.join(", ")}`;
-      element.setAttribute("aria-label", `${pin.name}, ${routeDescription}${pin.selected ? ", selected" : ""}`);
-      element.title = `${pin.name} · ${routeDescription}${pin.routeIds.length > 1 ? " · click to cycle matches" : ""}`;
-
-      const shape = document.createElement("span");
-      shape.className = "route-trailhead-pin-shape";
-      const label = document.createElement("span");
-      label.className = "route-trailhead-pin-number";
-      label.textContent = pin.numberLabel;
-      shape.append(label);
-      element.append(shape);
-      const stem = document.createElement("span");
-      stem.className = "route-trailhead-pin-stem";
-      const anchor = document.createElement("span");
-      anchor.className = "route-trailhead-pin-anchor";
-      const caption = document.createElement("span");
-      caption.className = "route-trailhead-pin-caption";
-      caption.textContent = "Start";
-      element.append(stem, anchor, caption);
-      element.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onRouteSelect(pin.nextRouteId);
-      });
-      element.addEventListener("mouseenter", () => setHoveredRouteId(pin.nextRouteId));
-      element.addEventListener("mouseleave", () => setHoveredRouteId(undefined));
-      element.addEventListener("focus", () => setHoveredRouteId(pin.nextRouteId));
-      element.addEventListener("blur", () => setHoveredRouteId(undefined));
-
-      return new Marker({ element, anchor: "bottom" }).setLngLat(pin.coordinates).addTo(map);
-    });
-
-    return () => {
-      routeMarkersRef.current.forEach((marker) => marker.remove());
-      routeMarkersRef.current = [];
-    };
-  }, [mapReady, onRouteSelect, routes, selectedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
