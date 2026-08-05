@@ -17,4 +17,5 @@ export * from "./prepared-official-access-adapter";
 export * from "./prepared-topology-adapter";
 export * from "./santa-cruz-pack";
 export * from "./sqlite-writer";
+export * from "./topology-compiler";
 export * from "./types";

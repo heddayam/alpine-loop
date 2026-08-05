@@ -46,6 +46,18 @@ export const fixturePackSeedV2: PackSeed = {
   capabilities: { ...fixturePackSeed.capabilities, namedAreas: true },
 };
 
+export const fixturePackSeedV3: PackSeed = {
+  ...fixturePackSeedV2,
+  schemaVersion: "3",
+  dataVersion: "fixture-v3",
+  capabilities: { ...fixturePackSeedV2.capabilities, closedRouteTopology: true },
+  closedRouteTopology: {
+    algorithmVersion: "closed-route-topology-v1",
+    policyVersion: "closed-route-decision-graph-v1",
+    profiles: ["known", "inclusive"],
+  },
+};
+
 export async function fixtureCompileOptions(
   outputRoot: string,
   fixtureRoot = path.resolve("data/fixtures/source"),
@@ -108,4 +120,16 @@ export async function fixtureCompileOptionsV2(
     ...base,
     namedAreas: { adapter: new FixtureNamedAreaAdapter(), snapshot: namedAreas },
   };
+}
+
+export async function fixtureCompileOptionsV3(
+  outputRoot: string,
+  fixtureRoot = path.resolve("data/fixtures/source"),
+  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
+  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish">> = {},
+): Promise<CompilePackOptions> {
+  return fixtureCompileOptionsV2(outputRoot, fixtureRoot, namedAreaFixtureRoot, {
+    ...overrides,
+    seed: overrides.seed ?? fixturePackSeedV3,
+  });
 }

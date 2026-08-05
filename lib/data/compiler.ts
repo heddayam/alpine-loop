@@ -6,8 +6,10 @@ import { DatabaseSync } from "node:sqlite";
 import {
   packManifestV1Schema,
   packManifestV2Schema,
+  packManifestV3Schema,
   type PackManifestV1,
   type PackManifestV2,
+  type PackManifestV3,
 } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import type {
@@ -23,6 +25,7 @@ import { calculateEdgeMetricsBatch } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
 import { writePackDatabase } from "./sqlite-writer";
+import { buildClosedRouteTopology, topologySha256 } from "./topology-compiler";
 import type {
   CompiledEdge,
   Coordinate,
@@ -35,7 +38,8 @@ import type {
 
 export type PackSeed =
   | Omit<PackManifestV1, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV2, "builtAt" | "metricAlgorithmVersion" | "sources">;
+  | Omit<PackManifestV2, "builtAt" | "metricAlgorithmVersion" | "sources">
+  | Omit<PackManifestV3, "builtAt" | "metricAlgorithmVersion" | "sources">;
 
 export type CompilePackOptions = {
   outputRoot: string;
@@ -132,6 +136,7 @@ async function compileGraph(
       };
       edges.push({
         id: `${way.id}:${segment}:forward`,
+        stablePhysicalId: `${way.id}:${segment}`,
         fromNode: way.nodeIds[segment],
         toNode: way.nodeIds[segment + 1],
         geometry,
@@ -142,6 +147,7 @@ async function compileGraph(
       if (way.bidirectional) {
         edges.push({
           id: `${way.id}:${segment}:reverse`,
+          stablePhysicalId: `${way.id}:${segment}`,
           fromNode: way.nodeIds[segment + 1],
           toNode: way.nodeIds[segment],
           geometry: [...geometry].reverse(),
@@ -266,23 +272,36 @@ function createAudit(
     missingElevationNodeCount: graph.nodes.filter(({ elevationM }) => elevationM === null).length,
     missingElevationEdgeCount: graph.edges.filter(({ maxElevationM }) => maxElevationM === null).length,
     accessStateCounts,
-    ...(seed.schemaVersion === "2" ? {
+    ...(seed.schemaVersion !== "1" ? {
       namedAreaCount: graph.namedAreas.length,
       rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
     } : {}),
   };
 }
 
-async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2"): Promise<PackBuildResult | null> {
+async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | "3"): Promise<PackBuildResult | null> {
   try {
     const manifestPath = path.join(finalDirectory, "manifest.json");
     const auditPath = path.join(finalDirectory, "audit.json");
     const databasePath = path.join(finalDirectory, "pack.sqlite");
-    const manifest = (schemaVersion === "1" ? packManifestV1Schema : packManifestV2Schema)
+    const manifest = (schemaVersion === "1" ? packManifestV1Schema : schemaVersion === "2" ? packManifestV2Schema : packManifestV3Schema)
       .parse(JSON.parse(await readFile(manifestPath, "utf8")));
     if (manifest.schemaVersion !== schemaVersion) return null;
     const audit = JSON.parse(await readFile(auditPath, "utf8")) as PackAudit;
     await access(databasePath, constants.R_OK);
+    if (manifest.schemaVersion === "3") {
+      const database = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const metadata = database.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as { value?: string } | undefined;
+        const profiles = database.prepare("SELECT profile, content_hash FROM topology_profiles ORDER BY profile DESC").all() as Array<{ profile: string; content_hash: string }>;
+        const expected = topologySha256({
+          algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
+          policyVersion: manifest.closedRouteTopology.policyVersion,
+          profiles: profiles.map(({ profile, content_hash: contentHash }) => ({ profile, contentHash })),
+        });
+        if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive" || metadata?.value !== expected || audit.topologyContentHash !== expected) return null;
+      } finally { database.close(); }
+    }
     return { packDirectory: finalDirectory, manifestPath, auditPath, databasePath, audit, reusedExisting: true };
   } catch {
     return null;
@@ -309,7 +328,7 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
 }
 
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
-  if (options.seed.schemaVersion === "2" && !options.namedAreas) throw new Error("Schema 2 pack requires a named-area adapter");
+  if (options.seed.schemaVersion !== "1" && !options.namedAreas) throw new Error(`Schema ${options.seed.schemaVersion} pack requires a named-area adapter`);
   if (options.seed.schemaVersion === "1" && options.namedAreas) throw new Error("Schema 1 pack cannot include named areas");
   const officialAccess = [options.officialAccess, ...(options.additionalOfficialAccess ?? [])];
   const sourceCandidates = [
@@ -319,7 +338,8 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
-  const manifestSchema = options.seed.schemaVersion === "1" ? packManifestV1Schema : packManifestV2Schema;
+  const manifestSchema = options.seed.schemaVersion === "1" ? packManifestV1Schema
+    : options.seed.schemaVersion === "2" ? packManifestV2Schema : packManifestV3Schema;
   const manifest = manifestSchema.parse({
     ...options.seed,
     builtAt: options.builtAt,
@@ -348,10 +368,10 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       topology,
       evidence,
       options.elevation.sampler,
-      manifest.schemaVersion === "2" ? manifest.coverage.boundary : undefined,
+      manifest.schemaVersion !== "1" ? manifest.coverage.boundary : undefined,
     );
     let namedAreas: NormalizedNamedArea[] = [];
-    if (manifest.schemaVersion === "2") {
+    if (manifest.schemaVersion !== "1") {
       await options.namedAreas!.adapter.validate(options.namedAreas!.snapshot);
       const providedAreas = await options.namedAreas!.adapter.normalize(options.namedAreas!.snapshot);
       namedAreas = validateAndSortNamedAreas([{
@@ -366,18 +386,42 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     }
     const graph = {
       ...compiledGraph,
-      accessPoints: manifest.schemaVersion === "2"
+      accessPoints: manifest.schemaVersion !== "1"
         ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
         : compiledGraph.accessPoints,
       namedAreas,
     };
+    const closedRouteTopology = manifest.schemaVersion === "3"
+      ? buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
+          builtAt: manifest.builtAt,
+          algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
+          policyVersion: manifest.closedRouteTopology.policyVersion,
+        })
+      : undefined;
     const audit = createAudit(options.seed, topology, graph, sources.length);
+    if (closedRouteTopology) {
+      audit.topologyContentHash = closedRouteTopology.contentHash;
+      audit.topologyProfiles = closedRouteTopology.profiles.map((profile) => ({
+        profile: profile.profile,
+        contentHash: profile.contentHash,
+        nodeCount: profile.nodeCount,
+        physicalEdgeCount: profile.physicalEdgeCount,
+        decisionNodeCount: profile.decisionNodeCount,
+        decisionEdgeCount: profile.decisionEdgeCount,
+        blockCount: profile.blocks.length,
+        cycleBlockCount: profile.blocks.filter(({ cycleRank }) => cycleRank > 0).length,
+        networkCount: profile.networks.length,
+        feasibleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => canReachCycle).length,
+        noCycleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => !canReachCycle).length,
+      }));
+    }
     const databasePath = path.join(stagingDirectory, "pack.sqlite");
     writePackDatabase(databasePath, {
       nodes: graph.nodes,
       edges: graph.edges,
       accessPoints: graph.accessPoints,
-      ...(manifest.schemaVersion === "2" ? { namedAreas: graph.namedAreas } : {}),
+      ...(manifest.schemaVersion !== "1" ? { namedAreas: graph.namedAreas } : {}),
+      ...(closedRouteTopology ? { closedRouteTopology } : {}),
       sources,
       metadata: {
         schemaVersion: manifest.schemaVersion,
@@ -386,6 +430,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
         builtAt: manifest.builtAt,
         compilerVersion: manifest.compilerVersion,
         metricAlgorithmVersion: manifest.metricAlgorithmVersion,
+        ...(closedRouteTopology ? { topologyContentHash: closedRouteTopology.contentHash } : {}),
       },
     });
     await writeFile(path.join(stagingDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
