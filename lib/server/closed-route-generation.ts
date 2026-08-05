@@ -18,7 +18,7 @@ import {
 } from "@/lib/solver";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 import { resolveAccessFilter, type ReachabilityResolver } from "./access-filter";
-import type { RoutePack } from "./route-generation";
+import type { RoutePack } from "./route-pack";
 
 export type ClosedRoutePack = RoutePack & {
   closedRouteRuntimeMode?: "primitive" | "reachable-graph-fallback";

@@ -9,7 +9,7 @@ import {
 } from "@/lib/graph";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 import { resolveAccessFilter, type ReachabilityResolver } from "./access-filter";
-import type { RoutePack } from "./route-generation";
+import type { RoutePack } from "./route-pack";
 
 const accessPreviewRequestSchema = z.object({
   accessFilter: accessFilterV2Schema,

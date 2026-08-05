@@ -27,9 +27,29 @@ export async function GET(
     return NextResponse.json({ error: "A valid bbox query is required" }, { status: 400 });
   }
   const includeUncertainAccess = url.searchParams.get("includeUncertainAccess") === "true";
+  const includeTrails = url.searchParams.get("includeTrails") !== "false";
   const controller = new AbortController();
   const repository = await pack.loadRepository(controller.signal);
   try {
+    if (!includeTrails) {
+      const accessPoints = await repository.getAccessPointCandidates({
+        bbox: parsedBounds.data,
+        includeUncertainAccess,
+        signal: controller.signal,
+      });
+      return NextResponse.json({
+        accessPoints: accessPoints.map((point) => ({
+          id: point.id,
+          name: point.name,
+          lon: point.lon,
+          lat: point.lat,
+          kind: point.kind,
+          accessState: point.accessState,
+          confidence: point.confidence,
+        })),
+        trailNetwork: { type: "FeatureCollection", features: [] },
+      });
+    }
     const [accessPoints, graph] = await Promise.all([
       repository.getAccessPoints(parsedBounds.data, includeUncertainAccess),
       repository.getInducedGraph({

@@ -1,5 +1,5 @@
 import { apiErrorResponse, ServerApiError } from "./api-error";
-import type { RoutePack } from "./route-generation";
+import type { RoutePack } from "./route-pack";
 
 export type NamedAreaApiDependencies = { packs: ReadonlyMap<string, RoutePack> };
 

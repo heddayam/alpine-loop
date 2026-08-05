@@ -3,7 +3,7 @@ import type { NamedArea } from "@/lib/contracts";
 import type { AccessPointCandidate, GraphRepository, InducedGraph } from "@/lib/graph";
 import { createAccessPreviewHandler } from "./access-preview";
 import { createNamedAreaDetailHandler, createNamedAreaSearchHandler } from "./named-areas-api";
-import type { RoutePack } from "./route-generation";
+import type { RoutePack } from "./route-pack";
 
 const REGION: NamedArea = {
   id: "osm:relation/42",

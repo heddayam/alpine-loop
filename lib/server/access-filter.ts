@@ -3,7 +3,7 @@ import {
   areaGeometrySchema,
   driveTimeDurationSchema,
   type AccessFilterV2,
-  type GenerateRoutesResponseV2,
+  type GenerateClosedRoutesResponseV3,
   type NamedArea,
   type NamedAreaSummary,
 } from "@/lib/contracts";
@@ -123,7 +123,7 @@ export async function resolveAccessFilter(
   }
   const reachability = parsed.data;
   const region = filter.regionId ? await requireNamedArea(pack, filter.regionId) : undefined;
-  const summary: GenerateRoutesResponseV2["resolvedAccessFilter"] = {
+  const summary: GenerateClosedRoutesResponseV3["resolvedAccessFilter"] = {
     mode: "drive-time",
     label: `${reachability.durationMinutes} min from ${reachability.originLabel}`,
     ...(region ? { region: { id: region.id, name: region.name } } : {}),
