@@ -1,4 +1,5 @@
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
+import { getNamedArea, searchNamedAreas } from "@/lib/data/named-area-catalog";
 import { FixtureGraphRepository, SQLiteGraphRepository, type FixtureGraphData } from "@/lib/graph";
 import {
   FIXTURE_PACK_COVERAGE,
@@ -24,6 +25,16 @@ const FIXTURE_PACK: RegisteredRoutePack = {
   sourceConfidence: "high",
   fallbackSourceIds: ["fixture-source"],
   coverageBbox: FIXTURE_PACK_COVERAGE,
+  coverage: {
+    type: "Polygon",
+    coordinates: [[
+      [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[1]],
+      [FIXTURE_PACK_COVERAGE[2], FIXTURE_PACK_COVERAGE[1]],
+      [FIXTURE_PACK_COVERAGE[2], FIXTURE_PACK_COVERAGE[3]],
+      [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[3]],
+      [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[1]],
+    ]],
+  },
   maximumAreaSquareKilometers: FIXTURE_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
   loadRepository: async () =>
     new FixtureGraphRepository(fixtureGraph as unknown as FixtureGraphData),
@@ -44,6 +55,12 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
       sourceConfidence: manifest.fieldConfidence.access ?? "low",
       fallbackSourceIds: manifest.sources.map(({ id }) => id),
       coverageBbox: manifest.coverage.bbox,
+      coverage: manifest.coverage.boundary,
+      databasePath: installed.databasePath,
+      ...(manifest.schemaVersion === "2" && manifest.capabilities.namedAreas ? {
+        searchNamedAreas: (text: string, limit?: number) => searchNamedAreas(installed.databasePath, text, limit),
+        getNamedArea: (id: string) => getNamedArea(installed.databasePath, id),
+      } : {}),
       maximumAreaSquareKilometers: INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
       loadRepository: async (signal) => {
         if (signal.aborted) throw signal.reason ?? new DOMException("Pack opening was cancelled", "AbortError");
