@@ -24,7 +24,7 @@ export type OsmPipelineOptions = {
   runner?: CommandRunner;
 };
 
-const ADAPTER_VERSION = "osmium-complete-ways-hiking-v2";
+const ADAPTER_VERSION = "osmium-complete-ways-hiking-v6";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
@@ -75,7 +75,8 @@ export async function prepareOsmTopology(
     ]);
     await nonempty(extracted, "OSM polygon extraction");
     await runner("osmium", [
-      "tags-filter", extracted, HIGHWAY_FILTER, "n/highway=trailhead", "n/amenity=parking",
+      "tags-filter", extracted, HIGHWAY_FILTER,
+      "nw/highway=trailhead", "nw/amenity=parking", "n/information=trailhead", "n/barrier=gate",
       "r/route=hiking,foot", "--overwrite", "--output", filtered,
     ]);
     await nonempty(filtered, "OSM hiking filter");

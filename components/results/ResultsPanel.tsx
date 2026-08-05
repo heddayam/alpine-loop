@@ -250,7 +250,7 @@ export function ResultsPanel({ status, response, message, selectedRouteId, onSel
   if (!response) return null;
 
   const total = routes.length;
-  const isPartial = response.diagnostics.exhausted || total < response.requested;
+  const isPartial = response.exact.length < response.requested;
   const reasons = response.diagnostics.truncationReasons.map(humanizeReason);
 
   return (

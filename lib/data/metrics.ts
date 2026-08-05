@@ -5,6 +5,9 @@ const EARTH_RADIUS_M = 6_371_008.8;
 const MAX_SAMPLE_SPACING_M = 25;
 const ELEVATION_NOISE_THRESHOLD_M = 1;
 const SUSTAINED_GRADE_WINDOW_M = 100;
+// 3DEP is nominally 10 m. Slopes over shorter OSM vertex gaps amplify raster
+// interpolation noise and are not defensible as a sustained-grade metric.
+const MINIMUM_GRADE_RUN_M = 10;
 
 export type EdgeMetrics = {
   lengthM: number;
@@ -81,7 +84,10 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
     else lossM += -delta;
   }
 
-  let maxSustainedGradePct = 0;
+  let maxSustainedGradePct: number | null = lengthM < MINIMUM_GRADE_RUN_M ? null : 0;
+  if (maxSustainedGradePct === null) {
+    return { lengthM, gainM, lossM, maxElevationM: Math.max(...samples), maxSustainedGradePct, samples };
+  }
   for (let start = 0; start < distances.length - 1; start += 1) {
     let end = start + 1;
     while (end < distances.length - 1 && distances[end] - distances[start] < SUSTAINED_GRADE_WINDOW_M) end += 1;

@@ -14,7 +14,7 @@ const elevationSchema = z.object({
 type ElevationSample = z.infer<typeof elevationSchema>["samples"][number];
 
 export class FixtureElevationSampler implements ElevationSampler {
-  readonly algorithmVersion = "nearest-fixture-v1+metrics-v1";
+  readonly algorithmVersion = "nearest-fixture-v1+metrics-v2";
 
   private constructor(private readonly samples: ElevationSample[]) {}
 

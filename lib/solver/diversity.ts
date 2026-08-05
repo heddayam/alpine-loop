@@ -2,21 +2,31 @@ import type { ScoredCandidate } from "./candidate";
 import { undirectedEdgeKey } from "./canonical";
 
 const MAXIMUM_ALLOWED_OVERLAP = 0.8;
+const distanceCache = new WeakMap<ScoredCandidate, {
+  distances: Map<string, number>;
+  total: number;
+}>();
 
-function undirectedDistances(candidate: ScoredCandidate): Map<string, number> {
+function undirectedDistances(candidate: ScoredCandidate): { distances: Map<string, number>; total: number } {
+  const cached = distanceCache.get(candidate);
+  if (cached) return cached;
   const distances = new Map<string, number>();
   for (const { edge } of candidate.traversals) {
     const key = undirectedEdgeKey(edge);
     distances.set(key, Math.max(distances.get(key) ?? 0, edge.lengthMeters));
   }
-  return distances;
+  const result = {
+    distances,
+    total: [...distances.values()].reduce((sum, distance) => sum + distance, 0),
+  };
+  distanceCache.set(candidate, result);
+  return result;
 }
 
 /** The share of the candidate's physical (undirected) distance used by selected. */
 export function undirectedDistanceOverlap(candidate: ScoredCandidate, selected: ScoredCandidate): number {
-  const candidateDistances = undirectedDistances(candidate);
-  const selectedDistances = undirectedDistances(selected);
-  const total = [...candidateDistances.values()].reduce((sum, distance) => sum + distance, 0);
+  const { distances: candidateDistances, total } = undirectedDistances(candidate);
+  const { distances: selectedDistances } = undirectedDistances(selected);
   if (total === 0) return 0;
   const shared = [...candidateDistances].reduce(
     (sum, [key, distance]) => sum + (selectedDistances.has(key) ? distance : 0),

@@ -24,8 +24,8 @@ import {
 import { buildGenerateRoutesRequest, isPointInsideBounds } from "./validation";
 
 const ROUTE_TYPES: Array<{ id: RouteType; label: string; description: string }> = [
-  { id: "loop", label: "Loop", description: "Return without retracing the route." },
-  { id: "lollipop", label: "Lollipop", description: "A short shared stem joins a loop." },
+  { id: "loop", label: "Loop", description: "A circuit with no retracing, except a very short access stem." },
+  { id: "lollipop", label: "Lollipop", description: "A longer shared stem joins a circuit." },
   { id: "out-and-back", label: "Out & back", description: "Return along the same trail." },
   { id: "point-to-point", label: "Point to point", description: "Finish at another access point." },
 ];
@@ -338,6 +338,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           bounds={bounds}
           packCoverage={pack.coverage}
           suggestedBounds={pack.suggestedBounds}
+          display={pack.display}
           trailNetwork={trailNetwork}
           accessPoints={accessPoints}
           selectedAccessPointId={selectedAccessPointId}

@@ -138,6 +138,22 @@ describe("ResultsPanel", () => {
     expect(within(diagnostics as HTMLElement).getByText("100,000")).toBeVisible();
   });
 
+  it("does not present a full exact result set as partial when diagnostic limits were reached", () => {
+    render(<ResultsPanel
+      status="done"
+      response={response({
+        requested: 1,
+        exact: [route()],
+        nearMisses: [],
+        diagnostics: { elapsedMs: 2250, expandedStates: 100000, candidateCount: 500, exhausted: true, truncationReasons: ["deadline"] },
+      })}
+      onSelectRoute={() => undefined}
+    />);
+
+    expect(screen.queryByText("Search stopped at its safety budget.")).not.toBeInTheDocument();
+    expect(screen.getByText("1 exact · 0 near misses")).toBeVisible();
+  });
+
   it("announces loading, error, and cancelled generation states", () => {
     const { rerender } = render(<ResultsPanel status="loading" response={null} onSelectRoute={() => undefined} />);
     expect(screen.getByRole("status")).toHaveTextContent("Generating routes");

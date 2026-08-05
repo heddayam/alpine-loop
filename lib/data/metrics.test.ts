@@ -38,6 +38,19 @@ describe("edge elevation metrics", () => {
     });
   });
 
+  it("does not report grade below the nominal DEM resolution", async () => {
+    const sampler: ElevationSampler = {
+      algorithmVersion: "test-v1",
+      async sample(coordinates) {
+        return coordinates.map((_, index) => 100 + index * 5);
+      },
+    };
+    const metrics = await calculateEdgeMetrics([[-122.16, 37.16], [-122.15995, 37.16]], sampler);
+    expect(metrics.lengthM).toBeLessThan(10);
+    expect(metrics.maxElevationM).not.toBeNull();
+    expect(metrics.maxSustainedGradePct).toBeNull();
+  });
+
   it("batches multiple edge geometries into bounded sampler calls", async () => {
     const sample = vi.fn(async (coordinates: ReadonlyArray<readonly [number, number]>) =>
       coordinates.map((_, index) => 100 + index));

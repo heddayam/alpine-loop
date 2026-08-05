@@ -109,8 +109,7 @@ export function createCandidate(
       ({ edge, from, to }) =>
         from.elevationMeters === null ||
         to.elevationMeters === null ||
-        edge.maximumElevationMeters === null ||
-        edge.maximumSustainedGradePct === null,
+        edge.maximumElevationMeters === null,
     )
   ) {
     warnings.push("Elevation data is incomplete");

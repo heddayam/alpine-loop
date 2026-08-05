@@ -8,6 +8,8 @@ import {
 import { loadSantaCruzPack } from "@/lib/packs/installed-pack";
 import type { RoutePack } from "./route-generation";
 
+export const INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS = 100;
+
 export type RegisteredRoutePack = RoutePack & {
   kind: "fixture" | "installed";
   sourceFreshness: string;
@@ -42,7 +44,7 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
       sourceConfidence: manifest.fieldConfidence.access ?? "low",
       fallbackSourceIds: manifest.sources.map(({ id }) => id),
       coverageBbox: manifest.coverage.bbox,
-      maximumAreaSquareKilometers: 25,
+      maximumAreaSquareKilometers: INSTALLED_PACK_MAXIMUM_AREA_SQUARE_KILOMETERS,
       loadRepository: async (signal) => {
         if (signal.aborted) throw signal.reason ?? new DOMException("Pack opening was cancelled", "AbortError");
         return new SQLiteGraphRepository(installed.databasePath, manifest.id);

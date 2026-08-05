@@ -203,17 +203,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .diagnostics dd { overflow: hidden; margin: .1rem 0 0; color: var(--ink); font-weight: 700; text-overflow: ellipsis; }
 
 @media (max-width: 760px) {
-  .app-frame { height: auto; min-height: 100vh; overflow: visible; }
-  .topbar { position: sticky; top: 0; z-index: 10; min-height: 4.2rem; padding: .65rem 1rem; }
+  .app-frame { height: 100dvh; min-height: 0; overflow: hidden; }
+  .topbar { position: relative; z-index: 10; min-height: 4.2rem; padding: .65rem 1rem; }
   .topbar h1 { font-size: 1.25rem; }
   .pack-status small { display: none; }
-  .workspace, .workspace.with-results { display: flex; flex-direction: column; }
-  .map-shell { order: 1; position: sticky; top: 4.2rem; z-index: 1; height: 48vh; min-height: 20rem; }
-  .mobile-panel-nav { order: 2; position: sticky; z-index: 6; top: calc(4.2rem + 48vh); display: grid; grid-template-columns: 1fr 1fr; padding: .35rem; background: #f3f1e9; border-top: 1px solid #bfc8c1; border-bottom: 1px solid #bfc8c1; box-shadow: 0 -3px 12px rgb(31 55 47 / 10%); }
+  .workspace, .workspace.with-results { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: clamp(16rem, 48dvh, 28rem) auto minmax(0, 1fr); overflow: hidden; }
+  .map-shell { grid-row: 1; position: relative; z-index: 1; height: auto; min-height: 0; }
+  .mobile-panel-nav { grid-row: 2; position: relative; z-index: 6; display: grid; grid-template-columns: 1fr 1fr; padding: .35rem; background: #f3f1e9; border-top: 1px solid #bfc8c1; border-bottom: 1px solid #bfc8c1; box-shadow: 0 -3px 12px rgb(31 55 47 / 10%); }
   .mobile-panel-nav button { padding: .6rem; cursor: pointer; color: var(--forest); background: transparent; border: 0; border-radius: .25rem; font-size: .72rem; font-weight: 800; }
   .mobile-panel-nav button[aria-pressed="true"] { color: #fff; background: var(--forest); }
   .mobile-panel-nav button:disabled { cursor: not-allowed; opacity: .45; }
-  .builder-panel, .results-panel { order: 3; position: relative; z-index: 2; overflow: visible; border-top: 3px solid #c89b65; border-right: 0; border-left: 0; box-shadow: 0 -5px 18px rgb(31 55 47 / 12%); }
+  .builder-panel, .results-panel { grid-row: 3; min-height: 0; position: relative; z-index: 2; overflow-y: auto; overscroll-behavior: contain; border-top: 3px solid #c89b65; border-right: 0; border-left: 0; box-shadow: 0 -5px 18px rgb(31 55 47 / 12%); }
   .mobile-panel-hidden { display: none; }
   .results-heading { position: static; }
   .shape-grid { grid-template-columns: 1fr 1fr; }
