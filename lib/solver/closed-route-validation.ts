@@ -3,8 +3,8 @@ import type {
   GeneratedClosedRouteV3,
 } from "@/lib/contracts";
 import {
-  coordinateIsInsideArea,
   edgeIsTraversable,
+  lineIsInsideArea,
   type AccessPointCandidate,
   type AreaGeometry,
   type ReconstructedDirectedEdge,
@@ -17,6 +17,7 @@ export type ClosedRouteValidationFailure =
   | "not-closed"
   | "illegal-access"
   | "outside-coverage"
+  | "incomplete-elevation"
   | "zero-cycle";
 
 export type ValidatedClosedRoute = {
@@ -260,20 +261,24 @@ export function validateReconstructedClosedRoute(
   if (edges.some((edge) => !edgeIsTraversable(edge, options.includeUncertainAccess))) {
     return { valid: false, reason: "illegal-access" };
   }
-  if (edges.some((edge) => edge.coordinates.some((coordinate) => !coordinateIsInsideArea(coordinate, options.coverage)))) {
+  if (edges.some((edge) => !lineIsInsideArea(edge.coordinates, options.coverage))) {
     return { valid: false, reason: "outside-coverage" };
   }
   const topology = topologyFor(edges, options.start.nodeId);
   if (!topology) return { valid: false, reason: "zero-cycle" };
   const distanceMeters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
-  const knownElevations = edges.map(({ maximumElevationMeters }) => maximumElevationMeters).filter(
+  const knownMinimumElevations = edges.map(({ minimumElevationMeters }) => minimumElevationMeters);
+  if (knownMinimumElevations.some((value) => value === null)) {
+    return { valid: false, reason: "incomplete-elevation" };
+  }
+  const knownMaximumElevations = edges.map(({ maximumElevationMeters }) => maximumElevationMeters).filter(
     (value): value is number => value !== null,
   );
-  const maximumElevationMeters = knownElevations.length > 0 ? Math.max(...knownElevations) : 0;
+  const maximumElevationMeters = knownMaximumElevations.length > 0 ? Math.max(...knownMaximumElevations) : 0;
   const warnings: string[] = [];
   if (options.start.accessState === "unknown") warnings.push("Access is uncertain");
   if (edges.some(({ accessState }) => accessState === "unknown")) warnings.push("Route uses trail access marked uncertain");
-  if (knownElevations.length !== edges.length) warnings.push("Elevation data is incomplete");
+  if (knownMaximumElevations.length !== edges.length) warnings.push("Elevation data is incomplete");
   const sourceIds = [...new Set([
     ...edges.flatMap(({ sourceIds }) => sourceIds),
     ...options.start.sourceIds,
@@ -300,7 +305,7 @@ export function validateReconstructedClosedRoute(
         distanceMeters,
         elevationGainMeters: edges.reduce((sum, edge) => sum + edge.gainMeters, 0),
         elevationLossMeters: edges.reduce((sum, edge) => sum + edge.lossMeters, 0),
-        minimumElevationMeters: knownElevations.length > 0 ? Math.min(...knownElevations) : 0,
+        minimumElevationMeters: Math.min(...knownMinimumElevations as number[]),
         maximumElevationMeters,
         steepestSustainedGradePct: Math.max(0, ...edges.map(({ maximumSustainedGradePct }) => maximumSustainedGradePct ?? 0)),
         trailNames,
