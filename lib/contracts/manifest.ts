@@ -56,11 +56,31 @@ export const packManifestV2Schema = z.object({
   sources: z.array(packSourceSchema).min(1),
 }).strict();
 
+export const topologyProfileSchema = z.enum(["known", "inclusive"]);
+
+export const packManifestV3Schema = packManifestV2Schema.extend({
+  schemaVersion: z.literal("3"),
+  capabilities: z.object({
+    elevation: z.boolean(),
+    officialAccess: z.boolean(),
+    namedAreas: z.literal(true),
+    closedRouteTopology: z.literal(true),
+  }).catchall(z.boolean()),
+  closedRouteTopology: z.object({
+    algorithmVersion: z.string().min(1),
+    policyVersion: z.string().min(1),
+    profiles: z.tuple([z.literal("known"), z.literal("inclusive")]),
+  }).strict(),
+}).strict();
+
 export const packManifestSchema = z.discriminatedUnion("schemaVersion", [
   packManifestV1Schema,
   packManifestV2Schema,
+  packManifestV3Schema,
 ]);
 
 export type PackManifestV1 = z.infer<typeof packManifestV1Schema>;
 export type PackManifestV2 = z.infer<typeof packManifestV2Schema>;
+export type TopologyProfile = z.infer<typeof topologyProfileSchema>;
+export type PackManifestV3 = z.infer<typeof packManifestV3Schema>;
 export type PackManifest = z.infer<typeof packManifestSchema>;

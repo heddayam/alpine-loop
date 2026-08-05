@@ -15,7 +15,24 @@ the evidence line.
 - [x] Gate 4 — trailhead-filter redesign, hardening, accessibility, deterministic tests, documentation
   - Evidence: the active API strictly validates `GenerateRoutesRequestV2`; Draw area, installed Named region, and ArcGIS typical Drive time filters resolve eligible trailheads without clipping hiking geometry, while exact pack coverage remains a runtime-validated route boundary. The rebuilt schema-2 Santa Cruz pack (`scm-a339bce45af76f29`) contains 425,302 nodes, 863,917 directed edges, 3,207 access points, and 476 locally searchable named areas; its persisted audit reports zero outside-coverage persisted edges, zero missing elevation values, zero unattributed records, and 11,249 rejected source edges crossing concave coverage. The offline V2 installed-pack matrix passes 25/25 runs with a 2,641.350 ms slowest typical search; its targeted regression returns an exact 8.00-mile, 1,842-foot lollipop for the previously empty 6–10 mile / 1,500–2,500 foot request. Metric-preserving graph compression, target-directed alternative-return search, adaptive edge allocation, and topology classification cover simple loops, figure-eights, chained cycles, repeated connectors, lollipops, and out-and-backs. `npm run verify` passes 269 offline tests across 51 files plus the production build; two consecutive `npm run test:browser` runs each pass all seven Chromium flows. A temporary clean clone passed `npm ci` with zero vulnerabilities and the complete `npm run verify`; all subagent worktrees and branches were removed.
 
-## Current product decisions
+- [ ] Gate 5 — topology-first closed-route engine
+  - Execution plan: `docs/rebuild/closed-route-topology-plan.md`.
+  - POC evidence: the schema-2 Santa Cruz scan found 418 of 2,293 eligible access points unable to reach a cycle and grouped 1,875 viable access points into 353 nearest cycle-network portals. A unified closed-route lane preserved six overlap-diverse exact routes across five mountain starts while reducing combined wall time from 7.92 seconds to 5.93 seconds (25.1%). The retained POC harness is `scripts/research/closed-route-topology-poc.ts`; it is read-only and does not change production behavior.
+
+## Gate 5 active product decisions
+
+- The active redesign generates trailhead-rooted closed routes only. Loop,
+  lollipop, figure-eight, chained-loop, and complex are derived result labels,
+  not separate solver lanes.
+- Maximum repeated trail is user-controlled from 0% through 100% and defaults
+  to 35%. Compound cycles are allowed by default.
+- Every eligible access point receives cheap cycle-feasibility evaluation;
+  expensive work is grouped by reusable cycle network instead of capped at
+  eight starts.
+- The remaining decisions below describe the releasable Gate 4 baseline until
+  the coordinated V3/schema-3 cutover.
+
+## Gate 4 baseline product decisions
 
 - First coverage pack: Santa Cruz Mountains.
 - User selects 1–20 routes; default 10.
@@ -37,10 +54,10 @@ the evidence line.
 
 - Gate 4 is complete on the trailhead-filter integration branch. Do not repeat
   Waves 0–4 or begin from one of the archived pre-rebuild tags.
-- The next product investigation is a more flexible Drive-time focus control:
-  a single named-region intersection is insufficient for subjective mountain
-  areas or multiple disjoint parks. Treat that as a new scoped decision, not a
-  silent change to the completed V2 filter contract.
+- The active next investigation is Gate 5's topology-first closed-route engine.
+  A more flexible Drive-time focus control remains a separate follow-up: one
+  named-region intersection is insufficient for subjective mountain areas or
+  multiple disjoint parks, and that must not become a silent V2 contract change.
 - The generated regional pack, source cache, build cache, and audits are local
   ignored artifacts. The verified pack pointer is
   `.local-data/packs/santa-cruz-mountains/current.json`, currently resolving to

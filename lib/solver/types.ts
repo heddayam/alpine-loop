@@ -3,10 +3,13 @@ import type {
   GenerateRoutesRequestV2,
   GenerateRoutesResponseV1,
   GenerateRoutesResponseV2,
+  GenerateClosedRoutesRequestV3,
+  GenerateClosedRoutesResponseV3,
 } from "@/lib/contracts";
 import type { AreaGeometry } from "@/lib/graph";
-import type { GraphRepository } from "@/lib/graph/types";
+import type { ClosedRouteTopologyRepository, GraphRepository } from "@/lib/graph/types";
 import type { SolverBudget } from "./budget";
+import type { ClosedRoutePrimitiveCatalog } from "./closed-route-types";
 
 export type RouteGenerationContext = {
   repository: GraphRepository;
@@ -31,4 +34,17 @@ export type RouteGenerationV2Context = RouteGenerationContext & {
 
 export interface RouteSolverV2 {
   generate(request: GenerateRoutesRequestV2, context: RouteGenerationV2Context): Promise<GenerateRoutesResponseV2>;
+}
+
+export type ClosedRouteGenerationV3Context = RouteGenerationContext & {
+  accessFilter: ResolvedAccessFilterContext;
+  topologyRepository: ClosedRouteTopologyRepository;
+  primitiveCatalog: ClosedRoutePrimitiveCatalog;
+};
+
+export interface ClosedRouteSolverV3 {
+  generate(
+    request: GenerateClosedRoutesRequestV3,
+    context: ClosedRouteGenerationV3Context,
+  ): Promise<GenerateClosedRoutesResponseV3>;
 }

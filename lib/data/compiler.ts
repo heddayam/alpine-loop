@@ -4,7 +4,8 @@ import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  packManifestSchema,
+  packManifestV1Schema,
+  packManifestV2Schema,
   type PackManifestV1,
   type PackManifestV2,
 } from "@/lib/contracts";
@@ -277,7 +278,8 @@ async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2"): 
     const manifestPath = path.join(finalDirectory, "manifest.json");
     const auditPath = path.join(finalDirectory, "audit.json");
     const databasePath = path.join(finalDirectory, "pack.sqlite");
-    const manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    const manifest = (schemaVersion === "1" ? packManifestV1Schema : packManifestV2Schema)
+      .parse(JSON.parse(await readFile(manifestPath, "utf8")));
     if (manifest.schemaVersion !== schemaVersion) return null;
     const audit = JSON.parse(await readFile(auditPath, "utf8")) as PackAudit;
     await access(databasePath, constants.R_OK);
@@ -317,7 +319,8 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
-  const manifest = packManifestSchema.parse({
+  const manifestSchema = options.seed.schemaVersion === "1" ? packManifestV1Schema : packManifestV2Schema;
+  const manifest = manifestSchema.parse({
     ...options.seed,
     builtAt: options.builtAt,
     metricAlgorithmVersion: options.elevation.sampler.algorithmVersion,

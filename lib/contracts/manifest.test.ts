@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema } from "./manifest";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema } from "./manifest";
 
 const manifest = {
   schemaVersion: "1",
@@ -45,6 +45,38 @@ describe("PackManifestV2", () => {
     expect(packManifestV2Schema.safeParse({
       ...v2,
       capabilities: manifest.capabilities,
+    }).success).toBe(false);
+  });
+});
+
+describe("PackManifestV3", () => {
+  const v3 = {
+    ...manifest,
+    schemaVersion: "3",
+    capabilities: {
+      ...manifest.capabilities,
+      namedAreas: true,
+      closedRouteTopology: true,
+    },
+    closedRouteTopology: {
+      algorithmVersion: "closed-topology-v1",
+      policyVersion: "closed-primitives-v1",
+      profiles: ["known", "inclusive"],
+    },
+  };
+
+  it("requires both deterministic topology profiles", () => {
+    expect(packManifestV3Schema.parse(v3).closedRouteTopology.profiles).toEqual(["known", "inclusive"]);
+    expect(packManifestV3Schema.safeParse({
+      ...v3,
+      closedRouteTopology: { ...v3.closedRouteTopology, profiles: ["inclusive", "known"] },
+    }).success).toBe(false);
+  });
+
+  it("requires the closed-route topology capability", () => {
+    expect(packManifestV3Schema.safeParse({
+      ...v3,
+      capabilities: { ...v3.capabilities, closedRouteTopology: false },
     }).success).toBe(false);
   });
 });
