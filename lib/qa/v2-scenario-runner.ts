@@ -157,7 +157,12 @@ export async function runV2ScenarioSuite(options: RunnerOptions): Promise<V2Scen
     const repository = await options.repositoryFactory();
     try {
       const filter = await options.resolveFilter(request, repository);
-      const { coverage: _coverage, ...responsePack } = options.suite.pack;
+      const responsePack: GenerateRoutesResponseV2["pack"] = {
+        id: options.suite.pack.id,
+        schemaVersion: options.suite.pack.schemaVersion,
+        dataVersion: options.suite.pack.dataVersion,
+        builtAt: options.suite.pack.builtAt,
+      };
       const solver = createMultiStartRouteSolver({ pack: responsePack });
       const started = measureNow();
       const response = await solver.generate(request, {
