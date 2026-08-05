@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { topologySha256 } from "@/lib/data/topology-compiler";
 import { SQLiteClosedRouteFeasibilityRepository } from "./sqlite-closed-route-feasibility-repository";
 
 const manifest = {
@@ -26,6 +27,7 @@ const manifest = {
     license: "CC0-1.0", contentHash: `sha256:${"0".repeat(64)}`,
   }],
   closedRouteTopology: {
+    runtimeMode: "reachable-graph-fallback",
     algorithmVersion: "closed-topology-v1",
     policyVersion: "closed-primitives-v1",
     profiles: ["known", "inclusive"],
@@ -63,14 +65,39 @@ function createFixtureDatabase(mutate?: (database: DatabaseSync) => void): strin
       ('topologyContentHash', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     INSERT INTO access_points VALUES ('start-a', 'node-a'), ('start-b', 'node-b');
     INSERT INTO topology_profiles VALUES
-      ('known', 1, 2, 1, 2, 1, '2026-08-05T00:00:00Z', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-      ('inclusive', 1, 2, 2, 2, 2, '2026-08-05T00:00:00Z', 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
+      ('known', 1, 0, 1, 0, 0, '2026-08-05T00:00:00Z', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+      ('inclusive', 1, 0, 2, 0, 0, '2026-08-05T00:00:00Z', 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
     INSERT INTO access_topology VALUES
       ('known', 'start-a', 1, 10, 'known-a', '[]', 1, 0, 1),
       ('known', 'start-b', 2, NULL, NULL, '[]', NULL, NULL, 0),
-      ('inclusive', 'start-a', 1, 20, 'inclusive-a', '[100]', 1, 12.5, 1),
-      ('inclusive', 'start-b', 2, 20, 'inclusive-b', '[101]', 1, 25, 1);
+      ('inclusive', 'start-a', 1, 20, 'inclusive-a', '[]', 1, 12.5, 1),
+      ('inclusive', 'start-b', 2, 20, 'inclusive-b', '[]', 1, 25, 1);
   `);
+  const inputs = {
+    known: [
+      { accessPointId: "start-a", attachmentDecisionNodeId: 1, cycleNetworkId: 10, connectorKey: "known-a", connectorDecisionEdgeIds: [], portalDecisionNodeId: 1, minimumStemDistanceM: 0, canReachCycle: true },
+      { accessPointId: "start-b", attachmentDecisionNodeId: 2, cycleNetworkId: null, connectorKey: null, connectorDecisionEdgeIds: [], portalDecisionNodeId: null, minimumStemDistanceM: null, canReachCycle: false },
+    ],
+    inclusive: [
+      { accessPointId: "start-a", attachmentDecisionNodeId: 1, cycleNetworkId: 20, connectorKey: "inclusive-a", connectorDecisionEdgeIds: [], portalDecisionNodeId: 1, minimumStemDistanceM: 12.5, canReachCycle: true },
+      { accessPointId: "start-b", attachmentDecisionNodeId: 2, cycleNetworkId: 20, connectorKey: "inclusive-b", connectorDecisionEdgeIds: [], portalDecisionNodeId: 1, minimumStemDistanceM: 25, canReachCycle: true },
+    ],
+  } as const;
+  const profiles = (["known", "inclusive"] as const).map((profile) => {
+    const contentHash = topologySha256({
+      profile, formatVersion: 1, nodeCount: 0, physicalEdgeCount: profile === "known" ? 1 : 2,
+      decisionNodeCount: 0, decisionEdgeCount: 0, nodes: [], decisionEdges: [], blocks: [], blockLinks: [], networks: [],
+      accessTopology: inputs[profile],
+    });
+    database.prepare("UPDATE topology_profiles SET content_hash = ? WHERE profile = ?").run(contentHash, profile);
+    return { profile, contentHash };
+  });
+  database.prepare("UPDATE metadata SET value = ? WHERE key = 'topologyContentHash'").run(topologySha256({
+    runtimeMode: "reachable-graph-fallback",
+    algorithmVersion: "closed-topology-v1",
+    policyVersion: "closed-primitives-v1",
+    profiles,
+  }));
   mutate?.(database);
   database.close();
   return databasePath;
@@ -96,7 +123,7 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
     await expect(repository.getAccessTopology("inclusive", ["start-b"]))
       .resolves.toEqual([expect.objectContaining({
         accessPointId: "start-b",
-        connectorDecisionEdgeIds: [101],
+        connectorDecisionEdgeIds: [],
         minimumStemDistanceMeters: 25,
       })]);
     expect(repository.packId).toBe("feasibility-fixture");

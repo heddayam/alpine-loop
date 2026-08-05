@@ -1,3 +1,4 @@
+import { createHash, type Hash } from "node:crypto";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { packManifestV3Schema, type PackManifestV3, type TopologyProfile } from "@/lib/contracts";
 import type { AccessTopology } from "./closed-route-topology";
@@ -35,6 +36,39 @@ const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 function corruption(message: string): Error {
   return new Error(`Closed-route feasibility corruption: ${message}`);
+}
+
+function updateCanonicalHash(hash: Hash, value: unknown): void {
+  if (Array.isArray(value)) {
+    hash.update("[");
+    value.forEach((item, index) => {
+      if (index) hash.update(",");
+      updateCanonicalHash(hash, item === undefined ? null : item);
+    });
+    hash.update("]");
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    hash.update("{");
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    entries.forEach(([key, item], index) => {
+      if (index) hash.update(",");
+      hash.update(JSON.stringify(key));
+      hash.update(":");
+      updateCanonicalHash(hash, item);
+    });
+    hash.update("}");
+    return;
+  }
+  hash.update(JSON.stringify(value));
+}
+
+function topologyHash(value: unknown): string {
+  const hash = createHash("sha256");
+  updateCanonicalHash(hash, value);
+  return `sha256:${hash.digest("hex")}`;
 }
 
 function requiredString(row: SqliteRow, column: string): string {
@@ -164,6 +198,9 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
 
   constructor(options: SQLiteClosedRouteFeasibilityRepositoryOptions) {
     this.#manifest = packManifestV3Schema.parse(options.manifest);
+    if (this.#manifest.closedRouteTopology.runtimeMode !== "reachable-graph-fallback") {
+      throw new Error("Closed-route feasibility repository requires a reachable-graph fallback pack");
+    }
     this.packId = this.#manifest.id;
     this.dataVersion = this.#manifest.dataVersion;
     this.#database = new DatabaseSync(options.databasePath, { readOnly: true });
@@ -263,24 +300,68 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
       throw corruption("invalid topologyContentHash metadata");
     }
 
-    this.#validateProfiles();
-    this.#validateAccessTopology();
+    const profiles = this.#validateProfiles();
+    const accessTopology = this.#validateAccessTopology();
+    const profileHashes = PROFILES.map((profile) => {
+      const row = profiles.get(profile)!;
+      const contentHash = topologyHash({
+        profile,
+        formatVersion: requiredInteger(row, "format_version"),
+        nodeCount: requiredInteger(row, "node_count"),
+        physicalEdgeCount: requiredInteger(row, "physical_edge_count"),
+        decisionNodeCount: requiredInteger(row, "decision_node_count"),
+        decisionEdgeCount: requiredInteger(row, "decision_edge_count"),
+        nodes: [],
+        decisionEdges: [],
+        blocks: [],
+        blockLinks: [],
+        networks: [],
+        accessTopology: accessTopology.filter((access) => access.profile === profile).map((access) => ({
+          accessPointId: access.accessPointId,
+          attachmentDecisionNodeId: access.attachmentDecisionNodeId,
+          cycleNetworkId: access.cycleNetworkId,
+          connectorKey: access.connectorKey,
+          connectorDecisionEdgeIds: [...access.connectorDecisionEdgeIds],
+          portalDecisionNodeId: access.portalDecisionNodeId,
+          minimumStemDistanceM: access.minimumStemDistanceMeters,
+          canReachCycle: access.canReachCycle,
+        })),
+      });
+      if (contentHash !== requiredString(row, "content_hash")) {
+        throw corruption(`${profile} profile content hash mismatch`);
+      }
+      return { profile, contentHash };
+    });
+    const combinedHash = topologyHash({
+      runtimeMode: this.#manifest.closedRouteTopology.runtimeMode,
+      algorithmVersion: this.#manifest.closedRouteTopology.algorithmVersion,
+      policyVersion: this.#manifest.closedRouteTopology.policyVersion,
+      profiles: profileHashes,
+    });
+    if (topologyContentHash !== combinedHash) throw corruption("combined topology content hash mismatch");
   }
 
-  #validateProfiles(): void {
+  #validateProfiles(): Map<TopologyProfile, SqliteRow> {
     const rows = this.#database.prepare("SELECT * FROM topology_profiles ORDER BY profile").all() as SqliteRow[];
     if (rows.length !== PROFILES.length) throw corruption("topology profile count mismatch");
     const seen = new Set<string>();
+    const byProfile = new Map<TopologyProfile, SqliteRow>();
     for (const row of rows) {
       const profile = requiredString(row, "profile");
       if (!PROFILES.includes(profile as TopologyProfile)) throw corruption(`unsupported topology profile ${profile}`);
       if (seen.has(profile)) throw corruption(`duplicate ${profile} topology profile`);
       seen.add(profile);
+      byProfile.set(profile as TopologyProfile, row);
       if (requiredInteger(row, "format_version") !== TOPOLOGY_FORMAT_VERSION) {
         throw corruption(`unsupported ${profile} topology format version`);
       }
       for (const column of ["node_count", "physical_edge_count", "decision_node_count", "decision_edge_count"]) {
         nonNegativeInteger(row, column);
+      }
+      if (requiredInteger(row, "node_count") !== 0
+        || requiredInteger(row, "decision_node_count") !== 0
+        || requiredInteger(row, "decision_edge_count") !== 0) {
+        throw corruption(`${profile} fallback profile contains primitive topology counts`);
       }
       if (requiredString(row, "built_at") !== this.#manifest.builtAt) {
         throw corruption(`${profile} topology build timestamp does not match the manifest`);
@@ -292,9 +373,10 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     for (const profile of PROFILES) {
       if (!seen.has(profile)) throw corruption(`missing ${profile} topology profile`);
     }
+    return byProfile;
   }
 
-  #validateAccessTopology(): void {
+  #validateAccessTopology(): AccessTopology[] {
     const accessPointRows = this.#database.prepare("SELECT id FROM access_points ORDER BY id").all() as SqliteRow[];
     const accessPointIds = new Set<string>();
     for (const row of accessPointRows) {
@@ -309,6 +391,9 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     const seen = new Set<string>();
     for (const row of rows) {
       const access = freezeAccessTopology(row);
+      if (access.connectorDecisionEdgeIds.length !== 0) {
+        throw corruption(`${access.profile} access ${access.accessPointId} contains primitive connector edges`);
+      }
       if (!accessPointIds.has(access.accessPointId)) {
         throw corruption(`${access.profile} access topology references unknown access point ${access.accessPointId}`);
       }
@@ -326,5 +411,6 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
         }
       }
     }
+    return rows.map(freezeAccessTopology);
   }
 }

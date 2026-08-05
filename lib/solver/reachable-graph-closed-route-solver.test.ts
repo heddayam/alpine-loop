@@ -63,6 +63,7 @@ function fixtureGraph(kind: GraphKind): InducedGraph {
     const toNode = nodes.get(to)!;
     edges.push({
       id: `${from}->${to}`,
+      edgeKey: edges.length + 1,
       fromNodeId: from,
       toNodeId: to,
       coordinates: [[fromNode.lon, fromNode.lat], [toNode.lon, toNode.lat]],
@@ -76,7 +77,7 @@ function fixtureGraph(kind: GraphKind): InducedGraph {
       sourceIds: ["fixture"],
       flags: [],
       physicalEdgeKey,
-    } as GraphEdge & { physicalEdgeKey: number });
+    });
   };
   const addBidirectional = (from: string, to: string, lengthMeters: number, key: number): void => {
     addDirected(from, to, lengthMeters, key);

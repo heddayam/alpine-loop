@@ -76,6 +76,9 @@ function parseAccessState(value: string): AccessState {
 function parseNode(row: SqliteRow): GraphNode {
   return {
     id: requiredString(row, "id"),
+    ...(typeof row.edge_key === "number"
+      ? { edgeKey: requiredNumber(row, "edge_key") }
+      : {}),
     ...(typeof row.physical_edge_key === "number"
       ? { physicalEdgeKey: requiredNumber(row, "physical_edge_key") }
       : {}),

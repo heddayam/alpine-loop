@@ -36,7 +36,7 @@ import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v9";
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v10";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
 const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
