@@ -85,6 +85,24 @@
       }
     },
     {
+      "id": "targeted-monte-bello-closed-tour",
+      "tags": ["real-pack", "long-loop", "target-directed", "elevation"],
+      "typical": true,
+      "request": {
+        "version": 2,
+        "packId": "santa-cruz-mountains",
+        "accessFilter": { "mode": "named-region", "regionId": "pack:santa-cruz-mountains" },
+        "startAccessPointId": "osm-access-way-419983545",
+        "routeTypes": ["loop", "lollipop"],
+        "pointToPoint": { "finishMustMatchAccessFilter": true },
+        "distanceMiles": { "min": 6, "max": 10 },
+        "elevationGainFeet": { "min": 1500, "max": 2500 },
+        "includeUncertainAccess": true,
+        "limit": 5
+      },
+      "expect": { "minimumExact": 1, "shortageMustBeExplained": true }
+    },
+    {
       "id": "requested-count-sweep",
       "tags": ["limit-1-through-20"],
       "limitSweep": { "from": 1, "to": 20 },

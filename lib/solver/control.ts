@@ -65,6 +65,15 @@ export class SearchController {
     return true;
   }
 
+  absorbWork(diagnostics: Pick<SearchDiagnostics, "expandedStates" | "truncationReasons">): void {
+    this.checkCancellation();
+    this.#expandedStates = Math.min(
+      this.#budget.maximumExpandedStates,
+      this.#expandedStates + diagnostics.expandedStates,
+    );
+    for (const reason of diagnostics.truncationReasons) this.#truncationReasons.add(reason);
+  }
+
   checkCancellation(): void {
     if (this.#signal?.aborted) throw new RouteSearchCancelledError(this.#signal.reason);
   }

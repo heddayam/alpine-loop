@@ -12,6 +12,7 @@ import {
   type InducedGraph,
 } from "@/lib/graph";
 import { compareScoredCandidates, scoreCandidate, type ScoredCandidate } from "./candidate";
+import type { SolverBudget } from "./budget";
 import { RouteSearchCancelledError } from "./control";
 import { undirectedDistanceOverlap } from "./diversity";
 import { generateInitialCandidates } from "./generate";
@@ -22,6 +23,15 @@ const METERS_PER_MILE = 1_609.344;
 const MAXIMUM_AUTOMATIC_STARTS = 8;
 const FIRST_PASS_ROUTES_PER_START = 2;
 const RESPONSE_HEADROOM_MILLISECONDS = 750;
+
+function automaticStartEdgeCap(request: GenerateRoutesRequestV2, budget: SolverBudget): number {
+  const eightWayShare = Math.max(1, Math.floor(budget.maximumDirectedEdges / MAXIMUM_AUTOMATIC_STARTS));
+  const targetDrivenShare = Math.ceil(request.distanceMiles.max / 2) * eightWayShare;
+  return Math.min(
+    Math.max(1, Math.floor(budget.maximumDirectedEdges / 2)),
+    Math.max(eightWayShare, targetDrivenShare),
+  );
+}
 
 export type MultiStartRouteSolverOptions = {
   pack: GenerateRoutesResponseV2["pack"];
@@ -56,11 +66,11 @@ function matchesFilter(candidate: Pick<AccessPointCandidate, "lon" | "lat">, con
 }
 
 function candidateRank(left: AccessPointCandidate, right: AccessPointCandidate, includeUnknown: boolean): number {
-  const connectivity = includeUnknown ? "inclusiveConnectivity" : "knownConnectivity";
-  const degree = includeUnknown ? "inclusiveOutDegree" : "knownOutDegree";
   const confidence = { high: 0, medium: 1, low: 2 };
-  return right[connectivity] - left[connectivity] ||
-    right[degree] - left[degree] ||
+  return right.knownConnectivity - left.knownConnectivity ||
+    right.knownOutDegree - left.knownOutDegree ||
+    (includeUnknown ? right.inclusiveConnectivity - left.inclusiveConnectivity : 0) ||
+    (includeUnknown ? right.inclusiveOutDegree - left.inclusiveOutDegree : 0) ||
     Number(left.name.startsWith("OSM ")) - Number(right.name.startsWith("OSM ")) ||
     confidence[left.confidence] - confidence[right.confidence] ||
     Number(Boolean(right.parkingEvidence)) - Number(Boolean(left.parkingEvidence)) ||
@@ -205,16 +215,13 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
     let maximumLoadedDirectedEdges = 0;
     let loadedDirectedEdges = 0;
     let searchedAccessPointCount = 0;
-    const totalLanes = Math.max(1, starts.length * request.routeTypes.length);
-    const laneStateLimit = Math.max(1, Math.floor(context.budget.maximumExpandedStates / totalLanes));
-    const laneCandidateLimit = Math.max(1, Math.floor(context.budget.maximumRawCandidates / totalLanes));
-    const laneDeadline = Math.max(1, Math.floor(
-      Math.max(1, context.budget.deadlineMs - RESPONSE_HEADROOM_MILLISECONDS) / totalLanes,
-    ));
     const routeCapMeters = request.distanceMiles.max * METERS_PER_MILE * 1.25;
+    const perStartEdgeCap = request.startAccessPointId
+      ? context.budget.maximumDirectedEdges
+      : automaticStartEdgeCap(request, context.budget);
 
     const reachableByStart = new Map<string, InducedGraph>();
-    for (const [startIndex, start] of starts.entries()) {
+    for (const start of starts) {
       if (now() - startedAt >= context.budget.deadlineMs - RESPONSE_HEADROOM_MILLISECONDS) {
         truncationReasons.add("deadline");
         break;
@@ -224,8 +231,7 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
         truncationReasons.add("maximum-directed-edges");
         break;
       }
-      const remainingStarts = starts.length - startIndex;
-      const directedEdgeShare = Math.max(1, Math.floor(remainingDirectedEdges / remainingStarts));
+      const directedEdgeShare = Math.min(perStartEdgeCap, remainingDirectedEdges);
       const reachable = await context.repository.getReachableGraph({
         startNodeId: start.nodeId,
         maximumDistanceMeters: routeCapMeters,
@@ -241,6 +247,13 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
       if (reachable.truncated) truncationReasons.add("per-start-edge-share");
       reachableByStart.set(start.id, reachable.graph);
     }
+
+    const totalLanes = Math.max(1, reachableByStart.size * request.routeTypes.length);
+    const laneStateLimit = Math.max(1, Math.floor(context.budget.maximumExpandedStates / totalLanes));
+    const laneCandidateLimit = Math.max(1, Math.floor(context.budget.maximumRawCandidates / totalLanes));
+    const laneDeadline = Math.max(1, Math.floor(
+      Math.max(1, context.budget.deadlineMs - RESPONSE_HEADROOM_MILLISECONDS) / totalLanes,
+    ));
 
     for (const routeType of request.routeTypes) {
       for (const start of starts) {
