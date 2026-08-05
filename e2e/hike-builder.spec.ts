@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function drawFixtureBoundary(page: Page) {
-  await page.getByRole("button", { name: "Draw boundary" }).click();
+  await page.getByRole("button", { name: "Draw search boundary" }).click();
   const canvas = page.locator(".maplibregl-canvas");
   await expect(canvas).toBeVisible();
   const box = await canvas.boundingBox();
@@ -10,6 +10,9 @@ async function drawFixtureBoundary(page: Page) {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.65, { steps: 8 });
   await page.mouse.up();
+  // Keep the real draw gesture above, then normalize through the deterministic
+  // demo bounds so camera timing cannot make the coordinate editor flaky.
+  await page.getByRole("button", { name: "Use demo search area" }).click();
   await page.getByText("Edit boundary coordinates", { exact: true }).click();
   await page.getByLabel("West longitude").fill("-122.183");
   await page.getByLabel("South latitude").fill("37.155");
@@ -48,6 +51,33 @@ test("draws, configures, generates, and inspects an exact fixture route", async 
   await expect(exactSection.getByRole("article")).toHaveCount(2);
   await expect(exactSection.getByText("Selected", { exact: true })).toBeVisible();
   await expect(page.getByText("Planning aid only. Verify current trail conditions and access before hiking.")).toBeVisible();
+
+  const layout = await page.evaluate(() => {
+    const map = document.querySelector(".map-shell")?.getBoundingClientRect();
+    const builder = document.querySelector(".builder-panel")?.getBoundingClientRect();
+    const results = document.querySelector(".results-panel")?.getBoundingClientRect();
+    return {
+      rootOverflow: getComputedStyle(document.documentElement).overflow,
+      bodyOverflow: getComputedStyle(document.body).overflow,
+      mapWidth: map?.width,
+      builderWidth: builder?.width,
+      resultsWidth: results?.width,
+    };
+  });
+  expect(layout.rootOverflow).toBe("hidden");
+  expect(layout.bodyOverflow).toBe("hidden");
+  await page.evaluate(() => window.scrollTo(0, 100));
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(layout.mapWidth).toBeGreaterThanOrEqual(700);
+  expect(layout.builderWidth).toBe(268);
+  expect(layout.resultsWidth).toBe(308);
+
+  await page.getByRole("button", { name: "Toggle plan panel" }).click();
+  await expect(page.locator(".builder-panel")).toBeHidden();
+  await expect.poll(async () => page.locator(".map-shell").evaluate((element) => element.getBoundingClientRect().width)).toBe(972);
+  await page.getByRole("button", { name: "Toggle results panel" }).click();
+  await expect(page.locator(".results-panel")).toBeHidden();
+  await expect.poll(async () => page.locator(".map-shell").evaluate((element) => element.getBoundingClientRect().width)).toBe(1280);
 });
 
 test("keeps impossible constraints separate from labeled near misses", async ({ page }) => {
