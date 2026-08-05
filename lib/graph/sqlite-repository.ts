@@ -290,9 +290,11 @@ export class SQLiteGraphRepository implements GraphRepository {
       `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, ${rankingColumns}
        FROM access_points
        JOIN nodes ON nodes.id = access_points.node_id
-       WHERE nodes.lon >= ? AND nodes.lon <= ? AND nodes.lat >= ? AND nodes.lat <= ?
+       JOIN node_spatial ON node_spatial.row_id = nodes.rowid
+       WHERE node_spatial.min_lon <= ? AND node_spatial.max_lon >= ?
+         AND node_spatial.min_lat <= ? AND node_spatial.max_lat >= ?
        ORDER BY access_points.id`,
-    ).all(west, east, south, north) as SqliteRow[];
+    ).all(east, west, north, south) as SqliteRow[];
     return rows.flatMap((row) => {
       assertNotAborted(query.signal);
       const point = parseAccessPoint(row);
