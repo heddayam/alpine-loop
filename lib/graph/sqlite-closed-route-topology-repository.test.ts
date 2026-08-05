@@ -238,6 +238,7 @@ describe("SQLiteClosedRouteTopologyRepository", () => {
       [physicalEdgeKey, stablePhysicalEdgeId])).toEqual([
       [1, "physical-alpha"], [2, "physical-beta"],
     ]);
+    expect(reconstructed.map((edge) => Reflect.get(edge, "minimumElevationMeters"))).toEqual([10, 10]);
     await repository.close();
   });
 
