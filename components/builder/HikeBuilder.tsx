@@ -266,7 +266,6 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
         ].filter(Boolean).join(" ")} aria-labelledby="builder-title">
           <div className="panel-heading builder-console-heading">
             <div className="builder-console-title">
-              <p>Plan</p>
               <h2 id="builder-title">Build your route</h2>
             </div>
             <span className="builder-console-badge">Hard boundary</span>

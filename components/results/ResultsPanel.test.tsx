@@ -4,7 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GeneratedRoute, GenerateRoutesResponseV1 } from "@/lib/contracts";
 import { ROUTE_PREVIEW_EVENT } from "../map/routeTraceOverlay";
 import { ResultsPanel } from "./ResultsPanel";
@@ -85,21 +85,25 @@ describe("ResultsPanel", () => {
     expect(within(exactSummary).getByText("5.0 mi")).toBeVisible();
     expect(within(exactSummary).getByText("1,200 ft")).toBeVisible();
     expect(within(exactSummary).getByText("12.4%")).toBeVisible();
-    expect(within(nearSummary).getByText("Near miss · 1 violation")).toBeVisible();
 
-    const selectedDetail = screen.getByRole("region", { name: "Loop" });
+    const selectedDetail = screen.getByRole("region", { name: /Ridge Trail.*Loop/ });
+    expect(within(selectedDetail).getByRole("img", { name: /Elevation profile/ })).toBeVisible();
+    expect(within(selectedDetail).queryByText("Elevation loss")).not.toBeVisible();
+    expect(screen.queryByText(/requested 3.0 mi–8.0 mi/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Planning aid only/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(selectedDetail).getByText("Route details"));
     expect(within(selectedDetail).getByText("Elevation loss")).toBeVisible();
     expect(within(selectedDetail).getAllByText("2,600 ft")).toHaveLength(2);
-    expect(within(selectedDetail).getByText("Official access data is more than 30 days old.")).toBeVisible();
+    expect(within(selectedDetail).queryByText("Official access data is more than 30 days old.")).not.toBeInTheDocument();
     expect(within(selectedDetail).getByText("Data current Jul 15, 2026")).toBeVisible();
     expect(within(selectedDetail).getByText("Sources: osm, midpen")).toBeVisible();
-    expect(screen.queryByText(/Distance: 2.0 mi; requested 3.0 mi–8.0 mi/)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Planning aid only/)).toHaveLength(1);
 
     rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-out-back" onSelectRoute={() => undefined} />);
-    expect(screen.queryByRole("region", { name: "Loop" })).not.toBeInTheDocument();
-    const nearDetail = screen.getByRole("region", { name: "Out & back" });
-    expect(within(nearDetail).getByText(/Distance: 2.0 mi; requested 3.0 mi–8.0 mi \(off by 1.0 mi\)/)).toBeVisible();
+    expect(screen.queryByRole("region", { name: /Ridge Trail.*Loop/ })).not.toBeInTheDocument();
+    const nearDetail = screen.getByRole("region", { name: /Skyline Trail.*Out & back/ });
+    expect(within(nearDetail).queryByText(/requested 3.0 mi–8.0 mi/)).not.toBeInTheDocument();
+    fireEvent.click(within(nearDetail).getByText("Route details"));
     expect(within(nearDetail).getByText("Source confidence:")).toBeVisible();
     expect(within(nearDetail).getByText("Sources: osm, midpen")).toBeVisible();
   });
@@ -112,7 +116,7 @@ describe("ResultsPanel", () => {
     expect(nearSummary).toHaveFocus();
     expect(nearSummary).toHaveAttribute("aria-pressed", "true");
     expect(nearSummary).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("region", { name: "Out & back" })).toBeVisible();
+    expect(screen.getByRole("region", { name: /Skyline Trail.*Out & back/ })).toBeVisible();
 
     fireEvent.keyDown(list, { key: "Home" });
     const exactSummary = screen.getByRole("button", { name: /Loop/ });
@@ -124,14 +128,28 @@ describe("ResultsPanel", () => {
     expect(nearSummary).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("shows and copies trailhead coordinates when a result is selected", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+
+    const exactDetail = screen.getByRole("region", { name: /Ridge Trail.*Loop/ });
+    const coordinates = within(exactDetail).getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" });
+    expect(coordinates).toBeVisible();
+    expect(screen.getByRole("button", { name: /Skyline Trail/ })).not.toHaveTextContent("37.15000, -122.18000");
+    await userEvent.click(coordinates);
+
+    expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
+  });
+
   it("previews a route trace from pointer hover and keyboard focus without changing selection", () => {
     const previews: Array<string | undefined> = [];
     const handlePreview = (event: Event) => previews.push((event as CustomEvent<{ routeId?: string }>).detail.routeId);
     window.addEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
 
     render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
-    const exactCard = screen.getByRole("article", { name: "Loop" });
-    const exactButton = within(exactCard).getByRole("button");
+    const exactCard = screen.getByRole("article", { name: /Ridge Trail.*Loop/ });
+    const exactButton = within(exactCard).getByRole("button", { name: /Ridge Trail/ });
     fireEvent.mouseEnter(exactCard);
     fireEvent.mouseLeave(exactCard);
     fireEvent.focus(exactButton);
@@ -154,7 +172,7 @@ describe("ResultsPanel", () => {
     expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
   });
 
-  it("explains partial and no-result diagnostics without silently relaxing constraints", async () => {
+  it("omits generic partial-search warnings", async () => {
     render(<ResultsPanel
       status="done"
       response={response({
@@ -165,8 +183,9 @@ describe("ResultsPanel", () => {
       })}
       onSelectRoute={() => undefined}
     />);
-    expect(screen.getByText("Search stopped at its safety budget.")).toBeVisible();
-    expect(screen.getByText("Reason: time budget reached.")).toBeVisible();
+    expect(screen.queryByText("Search stopped at its safety budget.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/time budget reached/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Partial results" })).not.toBeInTheDocument();
     expect(screen.getByText("No routes found inside this boundary.")).toBeVisible();
     await userEvent.click(screen.getByText("Search diagnostics"));
     const diagnostics = screen.getByText("Search diagnostics").closest("details");
@@ -188,7 +207,7 @@ describe("ResultsPanel", () => {
     />);
 
     expect(screen.queryByText("Search stopped at its safety budget.")).not.toBeInTheDocument();
-    expect(screen.getByText("1 exact · 0 near misses")).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Partial results" })).not.toBeInTheDocument();
   });
 
   it("announces loading, error, and cancelled generation states", () => {

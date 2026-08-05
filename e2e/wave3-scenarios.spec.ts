@@ -71,8 +71,8 @@ test("preserves keyboard focus, defaults, live status, and partial-result semant
   await expect(page.getByRole("status").filter({ hasText: "Generating routes" }).first()).toBeVisible();
   releaseGeneration?.();
 
-  await expect(page.getByRole("heading", { name: "Explore results" })).toBeVisible();
-  await expect(page.getByText("Found fewer than the 20 routes requested.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Results", exact: true })).toBeVisible();
+  await expect(page.getByText("Found fewer than the 20 routes requested.")).toHaveCount(0);
   const routeCards = page.locator(".route-card-select");
   const firstRoute = routeCards.first();
   await firstRoute.focus();
@@ -92,7 +92,7 @@ test("labels impossible constraints as near misses and announces the no-exact st
   await expect(page.getByText("No exact matches. 1 near match is available.")).toHaveAttribute("role", "status");
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Near misses" })).toBeVisible();
-  await expect(page.getByText("Outside your constraints", { exact: true })).toBeVisible();
+  await expect(page.getByText("Outside your constraints", { exact: true })).toHaveCount(0);
 });
 
 test("exposes stale source dates to assistive and visual users", async ({ page }) => {
@@ -113,6 +113,7 @@ test("exposes stale source dates to assistive and visual users", async ({ page }
   await page.getByLabel("Number of routes", { exact: true }).fill("1");
   await page.getByRole("button", { name: "Generate routes" }).click();
 
+  await page.getByText("Route details", { exact: true }).first().click();
   await expect(page.getByText("Data current Jan 15, 2020")).toBeVisible();
   await expect(page.getByText("Source confidence:")).toBeVisible();
 });

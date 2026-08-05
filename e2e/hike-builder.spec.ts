@@ -45,12 +45,12 @@ test("draws, configures, generates, and inspects an exact fixture route", async 
   await page.getByLabel("Number of routes", { exact: true }).fill("3");
   await page.getByRole("button", { name: "Generate routes" }).click();
 
-  await expect(page.getByRole("heading", { name: "Explore results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Results", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const exactSection = page.getByRole("region", { name: "Exact matches" });
   await expect(exactSection.getByRole("article")).toHaveCount(2);
-  await expect(exactSection.getByText("Selected", { exact: true })).toBeVisible();
-  await expect(page.getByText("Planning aid only. Verify current trail conditions and access before hiking.")).toBeVisible();
+  await expect(exactSection.locator(".route-card-select").first()).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Planning aid only. Verify current trail conditions and access before hiking.")).toHaveCount(0);
 
   const layout = await page.evaluate(() => {
     const map = document.querySelector(".map-shell")?.getBoundingClientRect();
@@ -110,7 +110,7 @@ test("keeps impossible constraints separate from labeled near misses", async ({ 
   await page.getByLabel("Number of routes", { exact: true }).fill("1");
   await page.getByRole("button", { name: "Generate routes" }).click();
 
-  await expect(page.getByText("No route met every constraint. Near misses are listed separately below.")).toBeVisible();
+  await expect(page.getByText("No route met every constraint. Near misses are listed separately below.")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Near misses" })).toBeVisible();
-  await expect(page.getByText("Outside your constraints", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Outside your constraints", { exact: true })).toHaveCount(0);
 });
