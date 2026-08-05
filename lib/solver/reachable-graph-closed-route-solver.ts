@@ -130,24 +130,30 @@ function groupKey(topology: AccessTopology): string {
 }
 
 function edgePhysicalKey(edge: GraphEdge): number | null {
-  const value = (edge as GraphEdge & { physicalEdgeKey?: unknown }).physicalEdgeKey;
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const value = edge.physicalEdgeKey;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function directedEdgeKey(edge: GraphEdge): number | null {
+  const value = edge.edgeKey;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 function reconstructTraversals(
   traversals: ReturnType<typeof generateClosedTours>["candidates"][number]["traversals"],
 ): ReconstructedDirectedEdge[] | null {
   const reconstructed: ReconstructedDirectedEdge[] = [];
-  for (const [index, traversal] of traversals.entries()) {
+  for (const traversal of traversals) {
     const physicalEdgeKey = edgePhysicalKey(traversal.edge);
-    if (physicalEdgeKey === null) return null;
+    const edgeKey = directedEdgeKey(traversal.edge);
+    if (physicalEdgeKey === null || edgeKey === null) return null;
     const endpointElevations = [traversal.from.elevationMeters, traversal.to.elevationMeters];
     const minimumElevationMeters = endpointElevations.every((value): value is number => value !== null)
       ? Math.min(...endpointElevations)
       : null;
     reconstructed.push({
       ...traversal.edge,
-      edgeKey: index,
+      edgeKey,
       physicalEdgeKey,
       stablePhysicalEdgeId: `physical:${physicalEdgeKey}`,
       minimumElevationMeters,
@@ -473,7 +479,9 @@ export class ReachableGraphClosedRouteSolver {
             directedValidationRejectionCount += 1;
             continue;
           }
-          const signature = reconstructed.map(({ edgeKey, physicalEdgeKey }) => `${physicalEdgeKey}:${edgeKey}`).join(">");
+          const forwardSignature = reconstructed.map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
+          const reverseSignature = [...reconstructed].reverse().map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
+          const signature = forwardSignature < reverseSignature ? forwardSignature : reverseSignature;
           const routeId = `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}`;
           const validated = validateReconstructedClosedRoute(reconstructed, {
             compressedEdgeIds: reconstructed.map(({ edgeKey }) => edgeKey),

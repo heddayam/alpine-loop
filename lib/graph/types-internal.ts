@@ -10,6 +10,8 @@ export type GraphNode = {
 
 export type GraphEdge = {
   id: string;
+  /** Stable schema-3 directed edge identity; absent on legacy packs and synthetic fixtures. */
+  edgeKey?: number;
   /** Stable schema-3 undirected physical identity; absent on legacy packs and synthetic fixtures. */
   physicalEdgeKey?: number;
   fromNodeId: string;

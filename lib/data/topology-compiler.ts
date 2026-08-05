@@ -257,10 +257,7 @@ function compactFallbackProfile(profile: TopologyProfileBuild): TopologyProfileB
     networks: [],
     accessTopology: profile.accessTopology.map((access) => ({
       ...access,
-      attachmentDecisionNodeId: 0,
-      connectorKey: null,
       connectorDecisionEdgeIds: [],
-      portalDecisionNodeId: null,
     })),
   };
   return { ...withoutHash, contentHash: topologySha256(profileHashInput(withoutHash)) };
