@@ -18,4 +18,6 @@ export type ReconstructedDirectedEdge = GraphEdge & {
   physicalEdgeKey: number;
   stablePhysicalEdgeId: string;
   minimumElevationMeters: number | null;
+  fromElevationMeters?: number | null;
+  toElevationMeters?: number | null;
 };
