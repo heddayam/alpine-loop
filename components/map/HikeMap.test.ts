@@ -1,6 +1,15 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { GeneratedRoute } from "@/lib/contracts";
-import { routeFeaturePartitions, routeFeatures, routeTrailheadPins, showCoverageHatching } from "./HikeMap";
+import {
+  HikeMap,
+  mapStatusSummary,
+  routeFeaturePartitions,
+  routeFeatures,
+  routeTrailheadPins,
+  showCoverageHatching,
+} from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedRoute {
   return {
@@ -101,5 +110,66 @@ describe("generated route map features", () => {
     const routes = Array.from({ length: 6 }, (_, index) => route(`route-${index + 1}`, -122.18));
 
     expect(routeTrailheadPins(routes)[0]?.numberLabel).toBe("1–6");
+  });
+
+  it("summarizes committed and in-progress boundaries using existing map values", () => {
+    const coverage = [-122.19, 37.15, -122.13, 37.18] as [number, number, number, number];
+    const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
+
+    expect(mapStatusSummary(boundary, null, false, coverage, 2)).toEqual({
+      boundary: "Boundary set",
+      dimensions: "2.2 × 1.6 mi (3.5 sq mi)",
+      coverage: "Inside coverage",
+      accessPoints: "2 access points available",
+    });
+    expect(mapStatusSummary(boundary, null, true, coverage, 1)).toEqual({
+      boundary: "Draw mode",
+      accessPoints: "1 access point available",
+    });
+    expect(mapStatusSummary(boundary, [-122.20, 37.155, -122.14, 37.178], true, coverage, 0)).toMatchObject({
+      boundary: "Drawing boundary",
+      coverage: "Outside coverage",
+      accessPoints: "0 access points available",
+    });
+  });
+
+  it("renders compact accessible map controls, status, and a collapsed complete key", () => {
+    const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
+    const markup = renderToStaticMarkup(createElement(HikeMap, {
+      bounds: boundary,
+      packCoverage: [-122.19, 37.15, -122.13, 37.18],
+      suggestedBounds: boundary,
+      display: { center: [-122.16, 37.165], zoom: 12 },
+      trailNetwork: { type: "FeatureCollection", features: [] },
+      accessPoints: [{
+        id: "start",
+        name: "Start",
+        lon: -122.18,
+        lat: 37.15,
+        kind: "trailhead",
+        accessState: "public",
+        confidence: "high",
+      }],
+      routes: [route("first", -122.18)],
+      onBoundsChange: () => undefined,
+      onAccessPointSelect: () => undefined,
+      onRouteSelect: () => undefined,
+    }));
+
+    expect(markup).toContain('aria-label="Hike search map"');
+    expect(markup).toContain('role="toolbar" aria-label="Search boundary tools"');
+    expect(markup).toContain('aria-label="Redraw search boundary"');
+    expect(markup).toContain('aria-label="Use demo search area"');
+    expect(markup).toContain('aria-label="Clear search boundary"');
+    expect(markup).toContain('<output class="map-status" aria-label="Map status">');
+    expect(markup).toContain('1 access point available');
+    expect(markup).toContain('<details class="map-key map-key-collapsible">');
+    expect(markup).not.toContain('<details open=""');
+    expect(markup).toContain('<summary class="map-key-toggle">Map key</summary>');
+    expect(markup).toContain('Installed coverage');
+    expect(markup).toContain('Mapped trail');
+    expect(markup).toContain('Suggested route');
+    expect(markup).toContain('Route start');
+    expect(markup).toContain('aria-label="OpenStreetMap attribution"');
   });
 });
