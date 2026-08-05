@@ -119,6 +119,9 @@ function RouteCard({
   buttonRef: (node: HTMLButtonElement | null) => void;
   onSelect: () => void;
 }) {
+  const detailId = `route-detail-${route.id}`;
+  const violationCount = route.violations?.length ?? 0;
+
   return (
     <article
       className={selected ? "route-card selected" : "route-card"}
@@ -132,68 +135,78 @@ function RouteCard({
     >
       <button
         ref={buttonRef}
-        className="route-card-select"
+        className="route-card-select route-summary"
         type="button"
         aria-pressed={selected}
+        aria-expanded={selected}
+        aria-controls={selected ? detailId : undefined}
         onClick={onSelect}
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
-        <span>
+        <span className="route-summary-main">
           <strong id={`route-${route.id}`}>{SHAPE_LABELS[route.shape]}</strong>
           <small>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</small>
+          {violationCount > 0 ? (
+            <span className="route-constraint-badge">
+              Near miss · {violationCount} violation{violationCount === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </span>
+        <span className="route-summary-metrics">
+          <span className="route-summary-stat"><small>Distance</small><strong>{formatMiles(route.distanceMeters)}</strong></span>
+          <span className="route-summary-stat"><small>Gain</small><strong>{formatFeet(route.elevationGainMeters)}</strong></span>
+          <span className="route-summary-stat"><small>Max grade</small><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong></span>
         </span>
         <span className="selection-label">{selected ? "Selected" : "View"}</span>
       </button>
 
-      <dl className="route-metrics">
-        <div><dt>Distance</dt><dd>{formatMiles(route.distanceMeters)}</dd></div>
-        <div><dt>Gain</dt><dd>{formatFeet(route.elevationGainMeters)}</dd></div>
-        <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
-        <div><dt>Max grade</dt><dd>{route.steepestSustainedGradePct.toFixed(1)}%</dd></div>
-      </dl>
+      {selected ? (
+        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-${route.id}`}>
+          <p className="route-endpoints">
+            <span>{route.startAccessPoint.name}</span>
+            <span aria-hidden="true">→</span>
+            <span>{route.endAccessPoint.name}</span>
+          </p>
 
-      <p className="route-endpoints">
-        <span>{route.startAccessPoint.name}</span>
-        <span aria-hidden="true">→</span>
-        <span>{route.endAccessPoint.name}</span>
-      </p>
+          <dl className="route-metrics route-detail-metrics">
+            <div><dt>Distance</dt><dd>{formatMiles(route.distanceMeters)}</dd></div>
+            <div><dt>Elevation gain</dt><dd>{formatFeet(route.elevationGainMeters)}</dd></div>
+            <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
+            <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
+            <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
+            <div><dt>Max grade</dt><dd>{route.steepestSustainedGradePct.toFixed(1)}%</dd></div>
+            <div><dt>Repeated trail</dt><dd>{Math.round(route.repeatedEdgeFraction * 100)}%</dd></div>
+          </dl>
 
-      <details className="route-details">
-        <summary>More route metrics</summary>
-        <dl>
-          <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
-          <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
-          <div><dt>Repeated trail</dt><dd>{Math.round(route.repeatedEdgeFraction * 100)}%</dd></div>
-        </dl>
-      </details>
+          {violationCount > 0 ? (
+            <div className="route-violations" aria-label="Violated constraints">
+              <strong>Outside your constraints</strong>
+              <ul>
+                {route.violations?.map((violation) => (
+                  <li key={violation.constraint}>
+                    {VIOLATION_LABELS[violation.constraint]}: {violationValue(violation, violation.value)}; requested {violationValue(violation, violation.min)}–{violationValue(violation, violation.max)} (off by {violationValue(violation, violation.delta)})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
-      {route.violations && route.violations.length > 0 ? (
-        <div className="route-violations" aria-label="Violated constraints">
-          <strong>Outside your constraints</strong>
-          <ul>
-            {route.violations.map((violation) => (
-              <li key={violation.constraint}>
-                {VIOLATION_LABELS[violation.constraint]}: {violationValue(violation, violation.value)}; requested {violationValue(violation, violation.min)}–{violationValue(violation, violation.max)} (off by {violationValue(violation, violation.delta)})
-              </li>
-            ))}
-          </ul>
+          {route.warnings.length > 0 ? (
+            <div className="route-warnings" aria-label="Route warnings">
+              <strong>Warnings</strong>
+              <ul>{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+            </div>
+          ) : null}
+
+          <ElevationProfile route={route} />
+
+          <footer className="route-source">
+            <span>Source confidence: <strong>{route.source.confidence}</strong></span>
+            <span>Data current {formatFreshness(route.source.freshness)}</span>
+            <span>Sources: {route.source.sourceIds.join(", ")}</span>
+          </footer>
         </div>
       ) : null}
-
-      {route.warnings.length > 0 ? (
-        <div className="route-warnings" aria-label="Route warnings">
-          <strong>Warnings</strong>
-          <ul>{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-        </div>
-      ) : null}
-
-      <ElevationProfile route={route} />
-
-      <footer className="route-source">
-        <span>Source confidence: <strong>{route.source.confidence}</strong></span>
-        <span>Data current {formatFreshness(route.source.freshness)}</span>
-        <span>Sources: {route.source.sourceIds.join(", ")}</span>
-      </footer>
     </article>
   );
 }
