@@ -76,12 +76,6 @@ function parseAccessState(value: string): AccessState {
 function parseNode(row: SqliteRow): GraphNode {
   return {
     id: requiredString(row, "id"),
-    ...(typeof row.edge_key === "number"
-      ? { edgeKey: requiredNumber(row, "edge_key") }
-      : {}),
-    ...(typeof row.physical_edge_key === "number"
-      ? { physicalEdgeKey: requiredNumber(row, "physical_edge_key") }
-      : {}),
     lon: requiredNumber(row, "lon"),
     lat: requiredNumber(row, "lat"),
     elevationMeters: nullableNumber(row, "elevation_m"),
@@ -94,6 +88,12 @@ function parseEdge(row: SqliteRow): GraphEdge {
   const encodedTrailName = flags.find((flag) => flag.startsWith("trail-name:"))?.slice("trail-name:".length);
   return {
     id: requiredString(row, "id"),
+    ...(typeof row.edge_key === "number"
+      ? { edgeKey: requiredNumber(row, "edge_key") }
+      : {}),
+    ...(typeof row.physical_edge_key === "number"
+      ? { physicalEdgeKey: requiredNumber(row, "physical_edge_key") }
+      : {}),
     fromNodeId: requiredString(row, "from_node"),
     toNodeId: requiredString(row, "to_node"),
     coordinates: parseCoordinates(row.geometry),

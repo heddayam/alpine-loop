@@ -139,6 +139,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [filterGeometry, setFilterGeometry] = useState<AreaGeometry>();
   const [refinementGeometry, setRefinementGeometry] = useState<AreaGeometry>();
   const [accessPoints, setAccessPoints] = useState<AccessPointOption[]>([]);
+  const [visibleAccessPoints, setVisibleAccessPoints] = useState<AccessPointOption[]>([]);
   const [trailNetwork, setTrailNetwork] = useState<FeatureCollection<LineString>>(pack.trailNetwork);
   const [selectedAccessPointId, setSelectedAccessPointId] = useState<string>();
   const [accessState, setAccessState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -154,6 +155,11 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const generationControllerRef = useRef<AbortController | null>(null);
   const previewControllerRef = useRef<AbortController | null>(null);
   const reachabilityControllerRef = useRef<AbortController | null>(null);
+  const eligibleAccessPointsRef = useRef(accessPoints);
+
+  useEffect(() => {
+    eligibleAccessPointsRef.current = accessPoints;
+  }, [accessPoints]);
 
   const cancelReachability = useCallback(() => {
     reachabilityControllerRef.current?.abort();
@@ -194,9 +200,29 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     invalidateResults();
   }, [invalidateResults]);
   const onAccessPointSelect = useCallback((id: string) => {
+    if (!eligibleAccessPointsRef.current.some((point) => point.id === id)) return;
     setSelectedAccessPointId(id);
     invalidateResults();
   }, [invalidateResults]);
+
+  useEffect(() => {
+    if (pack.id === FIXTURE_BUILDER_PACK.id) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      bbox: pack.coverageBbox.join(","),
+      includeUncertainAccess: "true",
+      includeTrails: "false",
+    });
+    void fetch(`/api/packs/${pack.id}/access-points?${query}`, { signal: controller.signal })
+      .then(async (response) => {
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok || !payload || typeof payload !== "object"
+          || !("accessPoints" in payload) || !Array.isArray(payload.accessPoints)) return;
+        setVisibleAccessPoints(payload.accessPoints as AccessPointOption[]);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [pack.coverageBbox, pack.id]);
 
   const activeAccessFilter = useMemo<AccessFilterV2 | null>(() => {
     if (mode === "drawn-area") return drawnDraft.bounds ? { mode, bbox: drawnDraft.bounds } : null;
@@ -547,7 +573,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <footer className="builder-action-footer">{validationErrors.length > 0 ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}<div className="builder-action-buttons"><button className="generate-button" type="button" disabled={generationState === "loading"} onClick={() => void generate()}>{generationState === "loading" ? "Generating…" : "Generate routes"}</button>{generationState === "loading" ? <button className="cancel-button" type="button" onClick={() => { generationControllerRef.current?.abort(); setGenerationMessage("Route generation was cancelled."); setGenerationState("cancelled"); setMobilePanel("results"); }}>Cancel generation</button> : null}</div>{generationMessage ? <p className={generationState === "error" ? "generation-status error-state" : "generation-status"} role={generationState === "error" ? "alert" : "status"} aria-live="polite">{generationMessage}</p> : null}</footer>
         </aside>
 
-        <HikeMap mode={mode} drawBounds={drawnDraft.bounds} drawEnabled={mode === "drawn-area"} filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={accessPoints} selectedAccessPointId={selectedAccessPointId} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={onBoundsChange} onAccessPointSelect={onAccessPointSelect} onRouteSelect={setSelectedRouteId} />
+        <HikeMap mode={mode} drawBounds={drawnDraft.bounds} drawEnabled={mode === "drawn-area"} filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={visibleAccessPoints} selectedAccessPointId={selectedAccessPointId} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={onBoundsChange} onAccessPointSelect={onAccessPointSelect} onRouteSelect={setSelectedRouteId} />
         {hasResultsPanel ? <ResultsPanel status={generationState} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} /> : null}
       </div>
     </main>

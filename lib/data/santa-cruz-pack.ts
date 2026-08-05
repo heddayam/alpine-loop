@@ -262,7 +262,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",
       algorithmVersion: "closed-route-safe-pruning-v1",
-      policyVersion: "unified-closed-tours-v1",
+      policyVersion: "penalized-closed-route-search-v1",
       profiles: ["known", "inclusive"],
     },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },

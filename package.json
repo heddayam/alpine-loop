@@ -13,8 +13,7 @@
     "test:watch": "vitest",
     "test:browser": "node scripts/run-browser-tests.mjs --config=tests/browser/playwright.config.ts",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
-    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
-    "qa:wave3:fixture": "tsx lib/qa/run-scenarios.ts --suite data/fixtures/scenarios/santa-cruz-wave3.json --fixture data/fixtures/scenarios/santa-cruz-wave3-graph.json"
+    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts"
   },
   "engines": {
     "node": ">=22.0.0"

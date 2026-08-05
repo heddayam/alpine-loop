@@ -10,6 +10,7 @@ import {
   coordinateIsInsideArea,
   type AccessPointCandidate,
   type AccessTopology,
+  type EdgeTraversal,
   type GraphEdge,
   type GraphRepository,
   type ReconstructedDirectedEdge,
@@ -20,9 +21,9 @@ import {
   validateReconstructedClosedRoute,
   type ValidatedClosedRoute,
 } from "./closed-route-validation";
-import { generateClosedTours } from "./closed-tours";
 import { RouteSearchCancelledError } from "./control";
-import { AccessFilterResolutionError } from "./multi-start-solver";
+import { AccessFilterResolutionError } from "./access-filter-error";
+import { searchPenalizedClosedRoutes } from "./penalized-closed-route-search";
 import type { ResolvedAccessFilterContext } from "./types";
 
 const METERS_PER_MILE = 1_609.344;
@@ -54,6 +55,8 @@ export type ReachableGraphClosedRouteSolverOptions = {
   sourceFreshness?: string;
   sourceConfidence?: "high" | "medium" | "low";
   fallbackSourceIds?: readonly string[];
+  onValidationRejection?: (reason: string) => void;
+  onPhaseTiming?: (phase: "graph" | "generation" | "validation", elapsedMs: number) => void;
 };
 
 type FeasibleStart = {
@@ -70,9 +73,6 @@ type RankedClosedRoute = ValidatedClosedRoute & {
 
 type SearchRound = {
   deep: boolean;
-  labelsPerNode: number;
-  maximumCompositionDepth: number;
-  maximumWalks: number;
 };
 
 function stableHash(value: string): string {
@@ -140,7 +140,7 @@ function directedEdgeKey(edge: GraphEdge): number | null {
 }
 
 function reconstructTraversals(
-  traversals: ReturnType<typeof generateClosedTours>["candidates"][number]["traversals"],
+  traversals: readonly EdgeTraversal[],
 ): ReconstructedDirectedEdge[] | null {
   const reconstructed: ReconstructedDirectedEdge[] = [];
   for (const traversal of traversals) {
@@ -359,6 +359,8 @@ export class ReachableGraphClosedRouteSolver {
     let expandedStates = 0;
     let rawCandidateCount = 0;
     let composedCandidateCount = 0;
+    let repairedCandidateCount = 0;
+    let assemblyCandidateCount = 0;
     let directedValidationRejectionCount = 0;
     let timeToFirstExactMs: number | undefined;
     const searchedStarts = new Set<string>();
@@ -367,15 +369,9 @@ export class ReachableGraphClosedRouteSolver {
     const candidates = new Map<string, RankedClosedRoute>();
     const rounds: SearchRound[] = [{
       deep: false,
-      labelsPerNode: 3,
-      maximumCompositionDepth: 1,
-      maximumWalks: Math.max(4, Math.min(12, request.limit)),
     }];
     if (request.searchEffort === "thorough") rounds.push({
       deep: true,
-      labelsPerNode: 8,
-      maximumCompositionDepth: 4,
-      maximumWalks: Math.max(24, request.limit * 3),
     });
 
     search: for (const round of rounds) {
@@ -397,6 +393,7 @@ export class ReachableGraphClosedRouteSolver {
           break search;
         }
         const startsRemainingThisRound = feasible.length - startIndex;
+        const startDeadlineAt = deadlineAt;
         const expansionAllocation = Math.max(
           1,
           Math.floor(remainingExpanded / Math.max(startsRemainingThisRound, 1)),
@@ -413,6 +410,7 @@ export class ReachableGraphClosedRouteSolver {
           Math.max(1, remainingTime),
         );
         let reachable;
+        const graphStartedAt = now();
         try {
           graphQueryCount += 1;
           searchedStarts.add(feasibleStart.start.id);
@@ -435,48 +433,54 @@ export class ReachableGraphClosedRouteSolver {
           clearTimeout(timeout);
           context.signal?.removeEventListener("abort", abortForParent);
         }
+        this.options.onPhaseTiming?.("graph", Math.max(0, now() - graphStartedAt));
         maximumLoadedDirectedEdges = Math.max(maximumLoadedDirectedEdges, reachable.graph.edges.length);
         if (reachable.truncated) hardTruncationReasons.add("maximum-directed-edges");
         if (!round.deep) probedGroups.add(feasibleStart.groupKey);
 
-        const generated = generateClosedTours(reachable.graph, feasibleStart.start, {
-          distanceMeters: {
-            min: request.distanceMiles.min * METERS_PER_MILE,
-            max: maximumDistanceMeters,
-            target: (request.distanceMiles.min + request.distanceMiles.max) * METERS_PER_MILE / 2,
-          },
-          ...(request.elevationGainFeet ? {
-            elevationGainMeters: {
-              min: request.elevationGainFeet.min * METERS_PER_FOOT,
-              max: request.elevationGainFeet.max * METERS_PER_FOOT,
-              target: (request.elevationGainFeet.min + request.elevationGainFeet.max) * METERS_PER_FOOT / 2,
-            },
-          } : {}),
-          includeUncertainAccess: request.includeUncertainAccess,
-          maximumWalks: Math.min(round.maximumWalks, rawAllocation),
-        }, {
+        const graphWithSelectedStart = reachable.graph.accessPoints.some(({ id }) => id === feasibleStart.start.id)
+          ? reachable.graph
+          : { ...reachable.graph, accessPoints: [...reachable.graph.accessPoints, feasibleStart.start] };
+        const generationStartedAt = now();
+        const generated = searchPenalizedClosedRoutes(
+          graphWithSelectedStart,
+          feasibleStart.start,
+          request,
+          {
           budget: {
             maximumDirectedEdges: budget.maximumDirectedEdges,
             maximumExpandedStates: expansionAllocation,
-            deadlineMs: Math.max(1, deadlineAt - now()),
+            deadlineMs: Math.max(1, Math.floor((startDeadlineAt - now()) * 0.7)),
             maximumRawCandidates: rawAllocation,
           },
           signal: context.signal,
           now,
-          labelsPerNode: round.labelsPerNode,
-          maximumCompositionDepth: round.maximumCompositionDepth,
-        });
+          maximumRouteOverlapFraction: MAXIMUM_ALLOWED_OVERLAP,
+          },
+        );
+        this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
         expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
         rawCandidateCount = Math.min(budget.maximumRawCandidates, rawCandidateCount + generated.diagnostics.candidateCount);
-        if (generated.diagnostics.truncationReasons.includes("deadline")) hardTruncationReasons.add("deadline");
+        repairedCandidateCount += generated.diagnostics.repairAccepted;
+        assemblyCandidateCount += generated.diagnostics.assemblyAccepted;
+        for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
         if (round.deep && !generated.diagnostics.truncationReasons.includes("deadline")) {
           deeplySearchedGroups.add(feasibleStart.groupKey);
         }
-        for (const candidate of generated.candidates) {
+        const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].sort((left, right) =>
+          left.score - right.score
+          || left.id.localeCompare(right.id));
+        const validationStartedAt = now();
+        for (const candidate of orderedCandidates) {
+          if (now() >= startDeadlineAt) {
+            hardTruncationReasons.add("deadline");
+            break;
+          }
           composedCandidateCount += 1;
           const reconstructed = reconstructTraversals(candidate.traversals);
           if (!reconstructed) {
             directedValidationRejectionCount += 1;
+            this.options.onValidationRejection?.("missing-schema-3-edge-identity");
             continue;
           }
           const forwardSignature = reconstructed.map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
@@ -495,6 +499,7 @@ export class ReachableGraphClosedRouteSolver {
           });
           if (!validated.valid) {
             directedValidationRejectionCount += 1;
+            this.options.onValidationRejection?.(validated.reason);
             continue;
           }
           if (!request.closedRoute.allowMultiCycle && validated.value.route.topology.cycleCount > 1) continue;
@@ -505,6 +510,7 @@ export class ReachableGraphClosedRouteSolver {
             timeToFirstExactMs = Math.max(0, now() - startedAt);
           }
         }
+        this.options.onPhaseTiming?.("validation", Math.max(0, now() - validationStartedAt));
       }
     }
 
@@ -552,9 +558,9 @@ export class ReachableGraphClosedRouteSolver {
         cycleBlockCount: 0,
         cyclePrimitiveCount: 0,
         composedCandidateCount,
-        repairedCandidateCount: 0,
+        repairedCandidateCount,
         directedValidationRejectionCount,
-        expandedAssemblyStates: expandedStates,
+        expandedAssemblyStates: assemblyCandidateCount,
         ...(timeToFirstExactMs === undefined ? {} : { timeToFirstExactMs }),
         hardTruncationReasons: truncationReasons,
         nonBudgetShortfallReasons: shortfallReasons,
