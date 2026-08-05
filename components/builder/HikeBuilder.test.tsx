@@ -78,6 +78,18 @@ describe("HikeBuilder", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(cleanup);
 
+  it("exposes compact console, range-row, and sticky action styling hooks", () => {
+    const { container } = render(<HikeBuilder />);
+
+    expect(container.querySelector(".builder-console-heading")).toHaveTextContent("Build your route");
+    expect(container.querySelector(".step-number")).not.toBeInTheDocument();
+    expect(container.querySelectorAll(".dense-shape-grid .shape-option")).toHaveLength(4);
+    expect(container.querySelectorAll(".range-table .range-table-row")).toHaveLength(4);
+    expect(container.querySelector(".builder-action-footer")).toContainElement(
+      screen.getByRole("button", { name: "Generate routes" }),
+    );
+  });
+
   it("announces the pre-draw empty state and validates generation without a boundary", async () => {
     render(<HikeBuilder />);
     expect(screen.getByText("Draw a boundary to find access points.")).toBeVisible();

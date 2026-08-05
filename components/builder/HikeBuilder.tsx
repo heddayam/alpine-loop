@@ -225,9 +225,12 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <button type="button" aria-pressed={mobilePanel === "results"} disabled={generationState === "idle"} onClick={() => setMobilePanel("results")}>Results{generationResponse ? ` (${generatedRoutes.length})` : ""}</button>
         </nav>
         <aside className={mobilePanel === "builder" ? "builder-panel" : "builder-panel mobile-panel-hidden"} aria-labelledby="builder-title">
-          <div className="panel-heading">
-            <span className="step-number">01</span>
-            <div><p>Plan a hike</p><h2 id="builder-title">Build your route</h2></div>
+          <div className="panel-heading builder-console-heading">
+            <div className="builder-console-title">
+              <p>Plan</p>
+              <h2 id="builder-title">Build your route</h2>
+            </div>
+            <span className="builder-console-badge">Hard boundary</span>
           </div>
 
           <section className="builder-section boundary-section" aria-labelledby="boundary-title">
@@ -261,11 +264,11 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
           <section className="builder-section" aria-labelledby="shape-title">
             <div className="section-title"><h3 id="shape-title">Route shapes</h3><span>Choose one or more</span></div>
-            <div className="shape-grid">
+            <div className="shape-grid dense-shape-grid">
               {ROUTE_TYPES.map((route) => (
                 <label key={route.id} className={values.routeTypes.includes(route.id) ? "shape-option selected" : "shape-option"}>
                   <input type="checkbox" checked={values.routeTypes.includes(route.id)} onChange={() => toggleRouteType(route.id)} />
-                  <span><strong>{route.label}</strong><small>{route.description}</small></span>
+                  <span className="shape-option-copy"><strong>{route.label}</strong><small>{route.description}</small></span>
                 </label>
               ))}
             </div>
@@ -273,10 +276,15 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
           <section className="builder-section constraints" aria-labelledby="constraints-title">
             <div className="section-title"><h3 id="constraints-title">Physical constraints</h3><span>Min – max</span></div>
-            <RangeInput id="distance" label="Distance" unit="miles" optional={false} value={values.distanceMiles} onChange={(next) => patchRange(setValues, "distanceMiles", next)} />
-            <RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => patchRange(setValues, "elevationGainFeet", next)} />
-            <RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => patchRange(setValues, "maximumElevationFeet", next)} />
-            <RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => patchRange(setValues, "steepestSustainedGradePct", next)} />
+            <div className="range-table">
+              <div className="range-table-header" aria-hidden="true">
+                <span>Constraint</span><span>Minimum</span><span>Maximum</span><span>Unit</span>
+              </div>
+              <RangeInput id="distance" label="Distance" unit="miles" optional={false} value={values.distanceMiles} onChange={(next) => patchRange(setValues, "distanceMiles", next)} />
+              <RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => patchRange(setValues, "elevationGainFeet", next)} />
+              <RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => patchRange(setValues, "maximumElevationFeet", next)} />
+              <RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => patchRange(setValues, "steepestSustainedGradePct", next)} />
+            </div>
           </section>
 
           <section className="builder-section policy-section" aria-labelledby="policy-title">
@@ -317,21 +325,25 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
             </div>
           </section>
 
-          {validationErrors.length > 0 ? (
-            <div className="validation-errors" role="alert">
-              <strong>Check your route settings:</strong>
-              <ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+          <footer className="builder-action-footer">
+            {validationErrors.length > 0 ? (
+              <div className="validation-errors" role="alert">
+                <strong>Check your route settings:</strong>
+                <ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+              </div>
+            ) : null}
+            <div className="builder-action-buttons">
+              <button className="generate-button" type="button" disabled={generationState === "loading"} onClick={() => void generate()}>
+                {generationState === "loading" ? "Generating…" : "Generate routes"}
+              </button>
+              {generationState === "loading" ? <button className="cancel-button" type="button" onClick={cancelGeneration}>Cancel generation</button> : null}
             </div>
-          ) : null}
-          <button className="generate-button" type="button" disabled={generationState === "loading"} onClick={() => void generate()}>
-            {generationState === "loading" ? "Generating…" : "Generate routes"}
-          </button>
-          {generationState === "loading" ? <button className="cancel-button" type="button" onClick={cancelGeneration}>Cancel generation</button> : null}
-          {generationMessage ? (
-            <p className={generationState === "error" ? "generation-status error-state" : "generation-status"} role={generationState === "error" ? "alert" : "status"} aria-live="polite">
-              {generationMessage}
-            </p>
-          ) : null}
+            {generationMessage ? (
+              <p className={generationState === "error" ? "generation-status error-state" : "generation-status"} role={generationState === "error" ? "alert" : "status"} aria-live="polite">
+                {generationMessage}
+              </p>
+            ) : null}
+          </footer>
         </aside>
 
         <HikeMap
