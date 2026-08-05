@@ -175,34 +175,36 @@ export class FixtureGraphRepository implements GraphRepository {
 
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
     assertNotAborted(query.signal);
-    const eligibleEdges = this.#edges.filter((edge) => edgeIsTraversable(edge, query.includeUncertainAccess));
-    const adjacency = new Map<string, Set<string>>();
-    const outDegree = new Map<string, number>();
-    for (const edge of eligibleEdges) {
-      const neighbors = adjacency.get(edge.fromNodeId) ?? new Set<string>();
-      neighbors.add(edge.toNodeId);
-      adjacency.set(edge.fromNodeId, neighbors);
-      const reverse = adjacency.get(edge.toNodeId) ?? new Set<string>();
-      reverse.add(edge.fromNodeId);
-      adjacency.set(edge.toNodeId, reverse);
-      outDegree.set(edge.fromNodeId, (outDegree.get(edge.fromNodeId) ?? 0) + 1);
-    }
-    const componentSizes = new Map<string, number>();
-    const componentSize = (nodeId: string) => {
-      const known = componentSizes.get(nodeId);
-      if (known !== undefined) return known;
-      const visited = new Set([nodeId]);
-      const pending = [nodeId];
-      while (pending.length > 0) {
-        for (const neighbor of adjacency.get(pending.pop()!) ?? []) {
-          if (visited.has(neighbor)) continue;
-          visited.add(neighbor);
-          pending.push(neighbor);
-        }
+    const graphStats = (includeUncertainAccess: boolean) => {
+      const adjacency = new Map<string, Set<string>>();
+      const outDegree = new Map<string, number>();
+      for (const edge of this.#edges.filter((candidate) => edgeIsTraversable(candidate, includeUncertainAccess))) {
+        const neighbors = adjacency.get(edge.fromNodeId) ?? new Set<string>();
+        neighbors.add(edge.toNodeId);
+        adjacency.set(edge.fromNodeId, neighbors);
+        const reverse = adjacency.get(edge.toNodeId) ?? new Set<string>();
+        reverse.add(edge.fromNodeId);
+        adjacency.set(edge.toNodeId, reverse);
+        outDegree.set(edge.fromNodeId, (outDegree.get(edge.fromNodeId) ?? 0) + 1);
       }
-      for (const id of visited) componentSizes.set(id, visited.size);
-      return visited.size;
+      const connectivity = new Map<string, number>();
+      for (const nodeId of this.#nodes.keys()) {
+        if (connectivity.has(nodeId)) continue;
+        const visited = new Set([nodeId]);
+        const pending = [nodeId];
+        while (pending.length > 0) {
+          for (const neighbor of adjacency.get(pending.pop()!) ?? []) {
+            if (visited.has(neighbor)) continue;
+            visited.add(neighbor);
+            pending.push(neighbor);
+          }
+        }
+        for (const id of visited) connectivity.set(id, visited.size);
+      }
+      return { connectivity, outDegree };
     };
+    const known = graphStats(false);
+    const inclusive = graphStats(true);
     return this.#accessPoints.flatMap((point) => {
       assertNotAborted(query.signal);
       const node = this.#nodes.get(point.nodeId);
@@ -210,16 +212,14 @@ export class FixtureGraphRepository implements GraphRepository {
         !node || !nodeIsInsideBbox(node, query.bbox) ||
         !accessPointIsEligible(point, query.includeUncertainAccess)
       ) return [];
-      const connectivity = componentSize(point.nodeId);
-      const degree = outDegree.get(point.nodeId) ?? 0;
       return [{
         ...point,
         lon: node.lon,
         lat: node.lat,
-        knownConnectivity: connectivity,
-        inclusiveConnectivity: connectivity,
-        knownOutDegree: degree,
-        inclusiveOutDegree: degree,
+        knownConnectivity: known.connectivity.get(point.nodeId) ?? 0,
+        inclusiveConnectivity: inclusive.connectivity.get(point.nodeId) ?? 0,
+        knownOutDegree: known.outDegree.get(point.nodeId) ?? 0,
+        inclusiveOutDegree: inclusive.outDegree.get(point.nodeId) ?? 0,
       }];
     });
   }
