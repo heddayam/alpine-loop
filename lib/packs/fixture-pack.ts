@@ -1,5 +1,6 @@
 import type { GenerateRoutesRequestV1, GenerateRoutesResponseV1 } from "@/lib/contracts";
 import type { FeatureCollection, LineString } from "geojson";
+import type { AreaGeometry } from "@/lib/graph";
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
 
 type Bounds = GenerateRoutesRequestV1["bbox"];
@@ -12,6 +13,16 @@ export const FIXTURE_PACK_METADATA = {
 } satisfies GenerateRoutesResponseV1["pack"];
 
 export const FIXTURE_PACK_COVERAGE: Bounds = [-122.19, 37.15, -122.13, 37.18];
+export const FIXTURE_PACK_COVERAGE_GEOMETRY: AreaGeometry = {
+  type: "Polygon",
+  coordinates: [[
+    [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[1]],
+    [FIXTURE_PACK_COVERAGE[2], FIXTURE_PACK_COVERAGE[1]],
+    [FIXTURE_PACK_COVERAGE[2], FIXTURE_PACK_COVERAGE[3]],
+    [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[3]],
+    [FIXTURE_PACK_COVERAGE[0], FIXTURE_PACK_COVERAGE[1]],
+  ]],
+};
 
 // Inset from the pack edge so a first-time local demo reliably contains the
 // committed fixture graph and remains comfortably within the area budget.
@@ -25,7 +36,8 @@ export type BuilderPackConfig = {
   subtitle: string;
   dataVersion: string;
   builtAt: string;
-  coverage: Bounds;
+  coverageBbox: Bounds;
+  coverage: AreaGeometry;
   suggestedBounds: Bounds;
   display: { center: [number, number]; zoom: number };
   trailNetwork: FeatureCollection<LineString>;
@@ -61,7 +73,8 @@ export const FIXTURE_BUILDER_PACK: BuilderPackConfig = {
   subtitle: "Santa Cruz Mountains preview",
   dataVersion: FIXTURE_PACK_METADATA.dataVersion,
   builtAt: FIXTURE_PACK_METADATA.builtAt,
-  coverage: FIXTURE_PACK_COVERAGE,
+  coverageBbox: FIXTURE_PACK_COVERAGE,
+  coverage: FIXTURE_PACK_COVERAGE_GEOMETRY,
   suggestedBounds: FIXTURE_PACK_DEMO_BOUNDS,
   display: { center: [-122.16, 37.165], zoom: 12.4 },
   trailNetwork: FIXTURE_PACK_TRAIL_NETWORK,

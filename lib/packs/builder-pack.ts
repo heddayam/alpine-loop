@@ -3,7 +3,7 @@ import { FIXTURE_BUILDER_PACK } from "./fixture-pack";
 import { loadSantaCruzPack } from "./installed-pack";
 
 function insetBounds(
-  [west, south, east, north]: BuilderPackConfig["coverage"],
+  [west, south, east, north]: BuilderPackConfig["coverageBbox"],
   [centerLon, centerLat]: BuilderPackConfig["display"]["center"],
 ): BuilderPackConfig["suggestedBounds"] {
   const longitudeRadius = Math.min(0.015, (east - west) / 2);
@@ -26,7 +26,8 @@ export async function loadBuilderPack(): Promise<BuilderPackConfig> {
     subtitle: `Data ${manifest.dataVersion}`,
     dataVersion: manifest.dataVersion,
     builtAt: manifest.builtAt,
-    coverage: manifest.coverage.bbox,
+    coverageBbox: manifest.coverage.bbox,
+    coverage: manifest.coverage.boundary,
     suggestedBounds: insetBounds(manifest.coverage.bbox, manifest.display.center),
     display: manifest.display,
     trailNetwork: { type: "FeatureCollection", features: [] },
