@@ -1,6 +1,6 @@
 import type {
   AccessFilterV2,
-  GenerateRoutesRequestV2,
+  SearchEffortV3,
   NamedArea,
   NamedAreaSummary,
   Origin,
@@ -26,8 +26,11 @@ export type RangeField = {
 };
 
 export type BuilderValues = {
-  routeTypes: GenerateRoutesRequestV2["routeTypes"];
-  pointToPointFinishMustMatchAccessFilter: boolean;
+  maximumRepeatedTrailPct: string;
+  maximumSharedStemEnabled: boolean;
+  maximumSharedStemMiles: string;
+  allowMultiCycle: boolean;
+  searchEffort: SearchEffortV3;
   distanceMiles: RangeField;
   elevationGainFeet: RangeField;
   maximumElevationFeet: RangeField;
@@ -65,8 +68,11 @@ export const EMPTY_NAMED_REGION_DRAFT: NamedRegionDraft = {
 };
 
 export const DEFAULT_BUILDER_VALUES: BuilderValues = {
-  routeTypes: ["out-and-back"],
-  pointToPointFinishMustMatchAccessFilter: true,
+  maximumRepeatedTrailPct: "35",
+  maximumSharedStemEnabled: false,
+  maximumSharedStemMiles: "2",
+  allowMultiCycle: true,
+  searchEffort: "thorough",
   distanceMiles: { enabled: true, min: "1", max: "4" },
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },

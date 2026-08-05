@@ -2,9 +2,8 @@
 
 import { useMemo, useRef, type KeyboardEvent } from "react";
 import type {
-  GeneratedRouteV2,
-  GenerateRoutesResponseV2,
-  RouteType,
+  GeneratedClosedRouteV3,
+  GenerateClosedRoutesResponseV3,
 } from "@/lib/contracts";
 import { announceRoutePreview } from "../map/routeTraceOverlay";
 
@@ -12,7 +11,7 @@ export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
 
 type ResultsPanelProps = {
   status: ResultsStatus;
-  response: GenerateRoutesResponseV2 | null;
+  response: GenerateClosedRoutesResponseV3 | null;
   message?: string;
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
@@ -23,11 +22,12 @@ type ResultsPanelProps = {
 const METERS_PER_MILE = 1609.344;
 const FEET_PER_METER = 3.28084;
 
-const SHAPE_LABELS: Record<RouteType, string> = {
-  loop: "Loop",
+const TOPOLOGY_LABELS: Record<GeneratedClosedRouteV3["topology"]["kind"], string> = {
+  "simple-loop": "Simple loop",
   lollipop: "Lollipop",
-  "out-and-back": "Out & back",
-  "point-to-point": "Point to point",
+  "figure-eight": "Figure-eight",
+  "chained-loops": "Chained loops",
+  "complex-closed": "Complex closed route",
 };
 
 function formatMiles(meters: number) {
@@ -47,11 +47,26 @@ function formatFreshness(value: string) {
   }).format(new Date(value));
 }
 
-function trailheadCoordinates(route: GeneratedRouteV2) {
+function topologySummary(route: GeneratedClosedRouteV3) {
+  const topology = route.topology;
+  return [
+    `${TOPOLOGY_LABELS[topology.kind]} · ${topology.cycleCount} ${topology.cycleCount === 1 ? "cycle" : "cycles"}`,
+    `${Math.round(topology.repeatedTrailFraction * 100)}% repeated`,
+    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} shared stem`] : []),
+  ].join(" · ");
+}
+
+function formatViolationValue(constraint: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"][number]["constraint"], value: number) {
+  if (constraint === "distance" || constraint === "shared-stem") return formatMiles(value);
+  if (constraint === "elevation-gain" || constraint === "maximum-elevation") return formatFeet(value);
+  return `${value.toFixed(1)}%`;
+}
+
+function trailheadCoordinates(route: GeneratedClosedRouteV3) {
   return `${route.startAccessPoint.lat.toFixed(5)}, ${route.startAccessPoint.lon.toFixed(5)}`;
 }
 
-function ElevationProfile({ route }: { route: GeneratedRouteV2 }) {
+function ElevationProfile({ route }: { route: GeneratedClosedRouteV3 }) {
   const samples = route.elevationSamples;
   if (!samples || samples.length < 2) return null;
 
@@ -91,7 +106,7 @@ function RouteCard({
   buttonRef,
   onSelect,
 }: {
-  route: GeneratedRouteV2 & { violations?: GenerateRoutesResponseV2["nearMisses"][number]["violations"] };
+  route: GeneratedClosedRouteV3 & { violations?: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"] };
   routeNumber: number;
   selected: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
@@ -125,7 +140,7 @@ function RouteCard({
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
         <span className="route-summary-main">
           <strong id={`route-trails-${route.id}`}>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</strong>
-          <small id={`route-${route.id}`}>{SHAPE_LABELS[route.shape]}</small>
+          <small id={`route-${route.id}`}>{topologySummary(route)}</small>
         </span>
         <span className="route-summary-metrics">
           <span className="route-summary-stat"><small>Distance</small><strong>{formatMiles(route.distanceMeters)}</strong></span>
@@ -154,20 +169,12 @@ function RouteCard({
               <small>Terrain, access & data</small>
             </summary>
             <div className="route-secondary-content">
-              <p className="route-endpoints">
-                <span>{route.startAccessPoint.name}</span>
-                <span aria-hidden="true">→</span>
-                <span>{route.endAccessPoint.name}</span>
-              </p>
-
-              {!route.filterMatch.end ? (
-                <p className="filter-match-note" role="note"><span aria-hidden="true">ⓘ</span> Finish outside trailhead filter</p>
-              ) : null}
+              <p className="route-endpoints"><span>{route.startAccessPoint.name}</span><span aria-hidden="true">↻</span><span>same trailhead</span></p>
 
               {route.violations?.length ? (
                 <div className="violation-list" aria-label="Near-miss constraints">
                   <strong>Outside requested constraints</strong>
-                  <ul>{route.violations.map((violation) => <li key={violation.constraint}>{violation.constraint.replaceAll("-", " ")}: {violation.value.toFixed(1)} (requested {violation.min.toFixed(1)}–{violation.max.toFixed(1)})</li>)}</ul>
+                  <ul>{route.violations.map((violation) => <li key={violation.constraint}>{violation.constraint.replaceAll("-", " ")}: {formatViolationValue(violation.constraint, violation.value)} (requested {formatViolationValue(violation.constraint, violation.min)}–{formatViolationValue(violation.constraint, violation.max)})</li>)}</ul>
                 </div>
               ) : null}
 
@@ -175,7 +182,9 @@ function RouteCard({
                 <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
                 <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
                 <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
-                <div><dt>Repeated trail</dt><dd>{Math.round(route.repeatedEdgeFraction * 100)}%</dd></div>
+                <div><dt>Repeated trail</dt><dd>{Math.round(route.topology.repeatedTrailFraction * 100)}%</dd></div>
+                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared stem</dt><dd>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
+                <div><dt>Cycle blocks</dt><dd>{route.topology.cycleBlockCount.toLocaleString("en-US")}</dd></div>
               </dl>
 
               <footer className="route-source">
@@ -256,12 +265,29 @@ export function ResultsPanel({
   if (!response) return null;
 
   const total = routes.length;
+  const exactShortfall = response.exact.length < response.requested;
+  const budgetLimited = response.diagnostics.hardTruncationReasons.length > 0;
+  const shortfallReasons = [
+    ...response.diagnostics.nonBudgetShortfallReasons,
+    ...response.diagnostics.shortfallReasons,
+  ];
 
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <div className="results-heading">
         <h2 id="results-title">Results</h2>
       </div>
+
+      {exactShortfall ? (
+        <div className="results-state" role="status" aria-live="polite">
+          <strong>{response.exact.length} of {response.requested} requested exact routes found.</strong>
+          <span>{budgetLimited
+            ? "The selected effort limit stopped this search before every promising option could be explored. Near misses remain labeled separately."
+            : response.diagnostics.exhausted
+              ? "The available search was exhausted without enough exact matches. Near misses remain labeled separately."
+              : "The search returned fewer exact matches than requested. Near misses remain labeled separately."}</span>
+        </div>
+      ) : null}
 
       {total === 0 ? (
         <div className="no-results" role="status">
@@ -316,10 +342,17 @@ export function ResultsPanel({
           <div><dt>Searched starts</dt><dd>{response.diagnostics.searchedAccessPointCount.toLocaleString("en-US")}</dd></div>
           <div><dt>Graph queries</dt><dd>{response.diagnostics.graphQueryCount.toLocaleString("en-US")}</dd></div>
           <div><dt>Max loaded edges</dt><dd>{response.diagnostics.maximumLoadedDirectedEdges.toLocaleString("en-US")}</dd></div>
+          <div><dt>Cycle-feasible starts</dt><dd>{response.diagnostics.feasibleAccessPointCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>No-cycle starts</dt><dd>{response.diagnostics.noCycleAccessPointCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Attachment groups probed</dt><dd>{response.diagnostics.probedAttachmentGroupCount.toLocaleString("en-US")} / {response.diagnostics.attachmentGroupCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Groups deeply searched</dt><dd>{response.diagnostics.deeplySearchedAttachmentGroupCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Cycle primitives</dt><dd>{response.diagnostics.cyclePrimitiveCount.toLocaleString("en-US")}</dd></div>
+          <div><dt>Composed candidates</dt><dd>{response.diagnostics.composedCandidateCount.toLocaleString("en-US")}</dd></div>
           <div><dt>Request ID</dt><dd>{response.requestId}</dd></div>
         </dl>
+        {response.diagnostics.hardTruncationReasons.length ? <p><strong>Hard search limits:</strong> {response.diagnostics.hardTruncationReasons.join(" · ")}</p> : null}
         {response.diagnostics.truncationReasons.length ? <p><strong>Search limits:</strong> {response.diagnostics.truncationReasons.join(" · ")}</p> : null}
-        {response.diagnostics.shortfallReasons.length ? <p><strong>Shortfall:</strong> {response.diagnostics.shortfallReasons.join(" · ")}</p> : null}
+        {shortfallReasons.length ? <p><strong>Shortfall:</strong> {[...new Set(shortfallReasons)].join(" · ")}</p> : null}
       </details>
     </aside>
   );

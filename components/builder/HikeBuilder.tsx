@@ -4,16 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection, LineString, MultiPolygon, Polygon } from "geojson";
 import {
   DRIVE_TIME_DURATIONS_MINUTES,
-  generateRoutesResponseV2Schema,
+  generateClosedRoutesResponseV3Schema,
   namedAreaSchema,
   namedAreaSummarySchema,
   originSchema,
   reachabilityResponseSchema,
   type AccessFilterV2,
-  type GenerateRoutesRequestV2,
-  type GenerateRoutesResponseV2,
+  type GenerateClosedRoutesRequestV3,
+  type GenerateClosedRoutesResponseV3,
   type NamedAreaSummary,
-  type RouteType,
 } from "@/lib/contracts";
 import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
@@ -32,13 +31,6 @@ import {
   type RangeField,
 } from "./types";
 import { buildGenerateRoutesRequest } from "./validation";
-
-const ROUTE_TYPES: Array<{ id: RouteType; label: string; description: string }> = [
-  { id: "loop", label: "Loop", description: "A circuit with little or no retracing." },
-  { id: "lollipop", label: "Lollipop", description: "A shared stem joins a circuit." },
-  { id: "out-and-back", label: "Out & back", description: "Return along the same trail." },
-  { id: "point-to-point", label: "Point to point", description: "Finish at another access point." },
-];
 
 const FILTER_MODES: Array<{ id: FilterMode; label: string; help: string }> = [
   { id: "drawn-area", label: "Draw area", help: "Draw or enter a rectangle." },
@@ -154,7 +146,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [generationState, setGenerationState] = useState<"idle" | ResultsStatus>("idle");
   const [generationMessage, setGenerationMessage] = useState("");
-  const [generationResponse, setGenerationResponse] = useState<GenerateRoutesResponseV2 | null>(null);
+  const [generationResponse, setGenerationResponse] = useState<GenerateClosedRoutesResponseV3 | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string>();
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
   const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
@@ -433,11 +425,6 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     reachabilityControllerRef.current?.abort();
   }, []);
 
-  const toggleRouteType = (routeType: RouteType) => setValues((current) => ({
-    ...current,
-    routeTypes: current.routeTypes.includes(routeType) ? current.routeTypes.filter((item) => item !== routeType) : [...current.routeTypes, routeType],
-  }));
-
   const generate = async () => {
     const validated = buildGenerateRoutesRequest(values, activeAccessFilter, selectedAccessPointId, pack.id);
     if (!validated.success) { setValidationErrors(validated.errors); return; }
@@ -452,11 +439,11 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     try {
       const response = await fetch("/api/routes/generate", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(validated.request satisfies GenerateRoutesRequestV2), signal: controller.signal,
+        body: JSON.stringify(validated.request satisfies GenerateClosedRoutesRequestV3), signal: controller.signal,
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(payload, "Routes could not be generated. Try a different filter or constraints."));
-      const parsed = generateRoutesResponseV2Schema.parse(payload);
+      const parsed = generateClosedRoutesResponseV3Schema.parse(payload);
       const firstRoute = parsed.exact[0] ?? parsed.nearMisses[0];
       setGenerationResponse(parsed);
       setSelectedRouteId(firstRoute?.id);
@@ -538,10 +525,19 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
             {accessPoints.length > 0 ? <label className="select-field" htmlFor="access-point">Access point<select id="access-point" value={selectedAccessPointId ?? ""} onChange={(event) => { setSelectedAccessPointId(event.currentTarget.value || undefined); invalidateResults(); }}><option value="">Choose automatically (up to 8 starts)</option>{accessPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label> : null}
           </section>
 
-          <section className="builder-section" aria-labelledby="shape-title">
-            <div className="section-title"><h3 id="shape-title">Route shapes</h3><span>Choose one or more</span></div>
-            <div className="shape-grid dense-shape-grid">{ROUTE_TYPES.map((route) => <label key={route.id} className={values.routeTypes.includes(route.id) ? "shape-option selected" : "shape-option"}><input type="checkbox" checked={values.routeTypes.includes(route.id)} onChange={() => { toggleRouteType(route.id); invalidateResults(); }} /><span className="shape-option-copy"><strong>{route.label}</strong><small>{route.description}</small></span></label>)}</div>
-            {values.routeTypes.includes("point-to-point") ? <label className="switch-row finish-filter-toggle"><span><strong>Keep finish inside trailhead filter</strong><small>On by default. Applies only to point-to-point routes.</small></span><input type="checkbox" role="switch" checked={values.pointToPointFinishMustMatchAccessFilter} onChange={(event) => { const checked = event.currentTarget.checked; setValues((current) => ({ ...current, pointToPointFinishMustMatchAccessFilter: checked })); invalidateResults(); }} /></label> : null}
+          <section className="builder-section" aria-labelledby="closed-route-title">
+            <div className="section-title"><h3 id="closed-route-title">Closed route</h3><span>Start and finish together</span></div>
+            <p className="filter-explainer">Closed routes start and finish at the same trailhead. Some may reuse an access stem; the repetition control limits how much trail is walked twice.</p>
+            <div className="count-field">
+              <label htmlFor="maximum-repeated-trail">Maximum repeated trail</label>
+              <input id="maximum-repeated-trail" type="range" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} aria-valuetext={`${values.maximumRepeatedTrailPct}%`} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} />
+              <output htmlFor="maximum-repeated-trail">{values.maximumRepeatedTrailPct}%</output>
+              <small>0% allows only routes with no repeated trail.</small>
+            </div>
+            <label className="switch-row"><span><strong>Limit the shared access stem</strong><small>Optional one-way distance before the loop begins.</small></span><input type="checkbox" role="switch" checked={values.maximumSharedStemEnabled} onChange={(event) => { const maximumSharedStemEnabled = event.currentTarget.checked; setValues((current) => ({ ...current, maximumSharedStemEnabled })); invalidateResults(); }} /></label>
+            {values.maximumSharedStemEnabled ? <div className="count-field"><label htmlFor="maximum-shared-stem">Maximum shared stem</label><input id="maximum-shared-stem" type="number" min="0" max="30" step="0.1" value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} /><small>Miles, one way (0 to 30)</small></div> : null}
+            <label className="switch-row"><span><strong>Allow figure-eights and chained loops</strong><small>On by default. Turn off to require exactly one cycle.</small></span><input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => { const allowMultiCycle = event.currentTarget.checked; setValues((current) => ({ ...current, allowMultiCycle })); invalidateResults(); }} /></label>
+            <label className="select-field" htmlFor="search-effort">Search effort<select id="search-effort" value={values.searchEffort} onChange={(event) => { const searchEffort = event.currentTarget.value as BuilderValues["searchEffort"]; setValues((current) => ({ ...current, searchEffort })); invalidateResults(); }}><option value="quick">Quick · up to 3 seconds</option><option value="thorough">Thorough · up to 15 seconds</option></select></label>
           </section>
 
           <section className="builder-section constraints" aria-labelledby="constraints-title"><div className="section-title"><h3 id="constraints-title">Physical constraints</h3><span>Min – max</span></div><div className="range-table"><div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Minimum</span><span>Maximum</span><span>Unit</span></div><RangeInput id="distance" label="Distance" unit="miles (max 30)" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} /><RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => patchRange(setValues, "elevationGainFeet", next)} /><RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => patchRange(setValues, "maximumElevationFeet", next)} /><RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => patchRange(setValues, "steepestSustainedGradePct", next)} /></div></section>

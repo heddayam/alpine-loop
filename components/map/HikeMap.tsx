@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
 import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker as MapLibreMarker } from "maplibre-gl";
-import type { GeneratedRoute } from "@/lib/contracts";
+import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds, FilterMode } from "../builder/types";
 import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
@@ -21,7 +21,7 @@ type HikeMapProps = {
   trailNetwork: FeatureCollection<LineString>;
   accessPoints: AccessPointOption[];
   selectedAccessPointId?: string;
-  routes: GeneratedRoute[];
+  routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
   onAccessPointSelect: (id: string) => void;
@@ -97,7 +97,7 @@ function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPo
   };
 }
 
-export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string): FeatureCollection<LineString> {
+export function routeFeatures(routes: GeneratedClosedRouteV3[], selectedRouteId?: string): FeatureCollection<LineString> {
   return {
     type: "FeatureCollection",
     features: routes.map((route, index) => ({
@@ -106,7 +106,7 @@ export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string
         id: route.id,
         selected: route.id === selectedRouteId,
         routeNumber: index + 1,
-        shape: route.shape,
+        shape: route.topology.kind,
       },
       geometry: route.geometry,
     })),
@@ -114,7 +114,7 @@ export function routeFeatures(routes: GeneratedRoute[], selectedRouteId?: string
 }
 
 export function routeFeaturePartitions(
-  routes: GeneratedRoute[],
+  routes: GeneratedClosedRouteV3[],
   selectedRouteId?: string,
   hoveredRouteId?: string,
 ) {
@@ -132,7 +132,7 @@ function numberLabel(numbers: number[]): string {
   return consecutive ? `${numbers[0]}–${numbers.at(-1)}` : `${numbers.slice(0, 3).join("·")}+${numbers.length - 3}`;
 }
 
-export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: string): RouteTrailheadPin[] {
+export function routeTrailheadPins(routes: GeneratedClosedRouteV3[], selectedRouteId?: string): RouteTrailheadPin[] {
   const groups = new Map<string, Omit<RouteTrailheadPin, "numberLabel" | "selected" | "nextRouteId">>();
   routes.forEach((route, index) => {
     const point = route.startAccessPoint;
@@ -167,16 +167,6 @@ export function routeTrailheadPins(routes: GeneratedRoute[], selectedRouteId?: s
         : group.routeIds[0]!,
     };
   });
-}
-
-export function routeFinishPins(routes: GeneratedRoute[], selectedRouteId?: string): RouteTrailheadPin[] {
-  const pointToPoint = routes.filter((route) => route.endAccessPoint.id !== route.startAccessPoint.id);
-  const pins = routeTrailheadPins(pointToPoint.map((route) => ({
-    ...route,
-    startAccessPoint: route.endAccessPoint,
-    geometry: { ...route.geometry, coordinates: [...route.geometry.coordinates].reverse() },
-  })), selectedRouteId);
-  return pins;
 }
 
 export function HikeMap({
@@ -516,14 +506,13 @@ export function HikeMap({
     if (!map || !Marker || !mapReady) return;
 
     routeMarkersRef.current.forEach((marker) => marker.remove());
-    const starts = routeTrailheadPins(routes, selectedRouteId).map((pin) => ({ ...pin, endpoint: "start" as const }));
-    const finishes = routeFinishPins(routes, selectedRouteId).map((pin) => ({ ...pin, endpoint: "finish" as const }));
-    routeMarkersRef.current = [...starts, ...finishes].map((pin) => {
+    const starts = routeTrailheadPins(routes, selectedRouteId);
+    routeMarkersRef.current = starts.map((pin) => {
       const element = document.createElement("button");
       element.type = "button";
       element.className = [
         "route-trailhead-pin",
-        pin.endpoint,
+        "start",
         pin.selected ? "selected" : "",
         pin.numberLabel.length > 4 ? "dense" : "",
       ].filter(Boolean).join(" ");
@@ -547,7 +536,7 @@ export function HikeMap({
       anchor.className = "route-trailhead-pin-anchor";
       const caption = document.createElement("span");
       caption.className = "route-trailhead-pin-caption";
-      caption.textContent = pin.endpoint === "start" ? "Start" : "Finish";
+      caption.textContent = "Start";
       element.append(stem, anchor, caption);
       element.addEventListener("click", (event) => {
         event.preventDefault();
@@ -676,7 +665,6 @@ export function HikeMap({
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
           {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
-          {routes.some((route) => route.endAccessPoint.id !== route.startAccessPoint.id) ? <span><i className="key-finish" aria-hidden="true" />Route finish</span> : null}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
