@@ -36,7 +36,7 @@ import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v7";
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v8";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
 const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
@@ -241,7 +241,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
   const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot];
   const seed: PackSeed = {
-    schemaVersion: "2",
+    schemaVersion: "3",
     id: PACK_ID,
     name: "Santa Cruz Mountains",
     dataVersion: dataVersion(
@@ -253,7 +253,17 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     compilerVersion: COMPILER_VERSION,
     coverage: { bbox: areaGeometryBounds(boundary.geometry), boundary: boundary.geometry },
     display: { center: [-122.18, 37.319], zoom: 13.5 },
-    capabilities: { elevation: true, officialAccess: true, namedAreas: true },
+    capabilities: {
+      elevation: true,
+      officialAccess: true,
+      namedAreas: true,
+      closedRouteTopology: true,
+    },
+    closedRouteTopology: {
+      algorithmVersion: "closed-route-topology-v1",
+      policyVersion: "closed-primitives-v1",
+      profiles: ["known", "inclusive"],
+    },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   };
   const [firstAuthority, ...additionalAuthorities] = authorities;
