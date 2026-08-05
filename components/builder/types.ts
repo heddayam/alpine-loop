@@ -34,6 +34,6 @@ export const DEFAULT_BUILDER_VALUES: BuilderValues = {
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
   steepestSustainedGradePct: { enabled: false, min: "0", max: "20" },
-  includeUncertainAccess: false,
+  includeUncertainAccess: true,
   limit: "10",
 };

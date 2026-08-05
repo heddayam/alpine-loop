@@ -152,7 +152,7 @@ describe("HikeBuilder", () => {
     const select = await screen.findByLabelText("Access point");
     await userEvent.selectOptions(select, "trailhead-a");
     expect(screen.getByRole("spinbutton", { name: "Number of routes" })).toHaveValue(10);
-    expect(screen.getByRole("switch", { name: /Include uncertain access/ })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: /Include uncertain access/ })).toBeChecked();
 
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
     await screen.findByText("No exact matches. 0 near matches are available.");
@@ -165,7 +165,7 @@ describe("HikeBuilder", () => {
       startAccessPointId: "trailhead-a",
       routeTypes: ["out-and-back"],
       distanceMiles: { min: 1, max: 4 },
-      includeUncertainAccess: false,
+      includeUncertainAccess: true,
       limit: 10,
     });
   });

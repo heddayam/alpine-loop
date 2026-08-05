@@ -55,15 +55,15 @@ test("preserves keyboard focus, defaults, live status, and partial-result semant
   const routeCount = page.getByLabel("Number of routes", { exact: true });
   const uncertainSwitch = page.getByRole("switch", { name: "Include uncertain access" });
   await expect(routeCount).toHaveValue("10");
-  await expect(uncertainSwitch).not.toBeChecked();
+  await expect(uncertainSwitch).toBeChecked();
   await routeCount.focus();
   await expect(routeCount).toBeFocused();
   await routeCount.fill("20");
   await uncertainSwitch.focus();
   await page.keyboard.press("Space");
-  await expect(uncertainSwitch).toBeChecked();
-  await page.keyboard.press("Space");
   await expect(uncertainSwitch).not.toBeChecked();
+  await page.keyboard.press("Space");
+  await expect(uncertainSwitch).toBeChecked();
 
   await drawFixtureBoundary(page);
   await configureDistance(page, "0", "20");

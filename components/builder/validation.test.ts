@@ -9,12 +9,12 @@ function values(overrides: Partial<BuilderValues> = {}): BuilderValues {
 }
 
 describe("builder request validation", () => {
-  it("defaults to 10 routes and excludes uncertain access", () => {
+  it("defaults to 10 routes and includes uncertain access", () => {
     const result = buildGenerateRoutesRequest(values(), [...bounds]);
     expect(result).toEqual(expect.objectContaining({ success: true }));
     if (result.success) {
       expect(result.request.limit).toBe(10);
-      expect(result.request.includeUncertainAccess).toBe(false);
+      expect(result.request.includeUncertainAccess).toBe(true);
       expect(result.request).not.toHaveProperty("elevationGainFeet");
     }
   });
