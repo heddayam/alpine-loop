@@ -160,10 +160,33 @@ Integrator builds the pack from an empty cache, reviews the audit and license
 records, runs curated scenarios, confirms typical searches meet the 3 s budget,
 updates Gate 3, and removes worktrees/branches.
 
-## Wave 4 — integrator-led hardening
+## Wave 4 — trailhead-filter redesign and hardening
 
-Delegate only isolated fixes discovered by the gate audit. The integrator:
+The integrator first updates the shared V2 route/manifest contracts, geometry
+and provider interfaces, and the product decisions in the rebuild docs. After
+that commit, run these disjoint foundations in parallel:
 
+- **Agent J — named-area pack data:** `lib/data/**`, compiler fixtures, and pack
+  audits. Deliver schema-2 named areas, aliases, spatial indexes, ranking fields,
+  and exact coverage enforcement from pinned sources.
+- **Agent K — ArcGIS reachability:** provider modules plus geocoding/reachability
+  API routes and tests. Deliver server-only geocoding, 5–300 minute typical-time
+  service areas, memory-only jobs, persistent aggregate quota counters, and
+  fixture-only automated tests.
+- **Agent L — graph and solver:** `lib/graph/**`, `lib/solver/**`, graph fixtures,
+  and focused tests. Deliver access filtering, bounded per-start graph expansion,
+  eight-start fair scheduling, point-to-point finish policy, and soft start
+  diversity under the existing global budgets.
+
+After integrating those foundations, run a second disjoint wave for route/API
+composition, builder/map/results UX, and QA/browser fixtures. All active UI and
+QA callers move to V2; version 1 is rejected after the coordinated cutover.
+
+The integrator then:
+
+- rebuilds and audits the real Santa Cruz pack at schema 2;
+- verifies Draw, Named region, and Drive time modes plus drive-region refinement;
+- confirms filter geometry never clips routes and pack coverage always does;
 - completes keyboard, screen-reader, responsive, and non-color distinctions;
 - confirms every error/partial/stale/cancelled state;
 - verifies fresh-clone setup and the bootstrap documentation;

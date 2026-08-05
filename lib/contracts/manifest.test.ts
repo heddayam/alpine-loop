@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema } from "./manifest";
+import { packManifestV1Schema, packManifestV2Schema } from "./manifest";
 
 const manifest = {
   schemaVersion: "1",
@@ -31,5 +31,20 @@ describe("PackManifestV1", () => {
   it("rejects a missing source license decision", () => {
     const source = { ...manifest.sources[0], license: "" };
     expect(packManifestV1Schema.safeParse({ ...manifest, sources: [source] }).success).toBe(false);
+  });
+});
+
+describe("PackManifestV2", () => {
+  it("requires the named-area capability", () => {
+    const v2 = {
+      ...manifest,
+      schemaVersion: "2",
+      capabilities: { ...manifest.capabilities, namedAreas: true },
+    };
+    expect(packManifestV2Schema.parse(v2).capabilities.namedAreas).toBe(true);
+    expect(packManifestV2Schema.safeParse({
+      ...v2,
+      capabilities: manifest.capabilities,
+    }).success).toBe(false);
   });
 });

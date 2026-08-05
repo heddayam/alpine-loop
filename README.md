@@ -1,9 +1,11 @@
 # Alpine Search
 
-Alpine Search is being rebuilt as a local-first **hike builder**. A user draws a
-reasonably sized rectangle on the map, optionally chooses a trailhead, specifies
-route shape and physical constraints, chooses how many alternatives to request,
-and receives generated routes from a versioned local trail-graph pack.
+Alpine Search is a local-first **hike builder**. A user filters eligible
+trailheads by a drawn area, an installed named region, or a typical drive-time
+area, optionally chooses one of those trailheads, specifies route shape and
+physical constraints, and receives generated routes from a versioned local
+trail-graph pack. Filter shapes do not clip hikes; exact installed-pack coverage
+is the route boundary.
 
 The active application is standard local Next.js plus MapLibre. The previous
 application remains excluded under `legacy/`; no hosted deployment stack is
