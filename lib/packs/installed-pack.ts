@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { packManifestV1Schema, type PackManifestV1 } from "@/lib/contracts";
+import { packManifestSchema, type PackManifest } from "@/lib/contracts";
 
 const PACK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -15,7 +15,7 @@ export type InstalledPack = {
   directory: string;
   manifestPath: string;
   databasePath: string;
-  manifest: PackManifestV1;
+  manifest: PackManifest;
 };
 
 export function localPackRoot(): string {
@@ -57,7 +57,7 @@ export async function loadInstalledPack(
 
   const manifestPath = path.resolve(packRoot, pointer.path);
   assertInside(packRoot, manifestPath);
-  const manifest = packManifestV1Schema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+  const manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
   if (manifest.id !== packId) throw new Error(`Installed manifest id ${manifest.id} does not match ${packId}`);
   if (manifest.dataVersion !== pointer.dataVersion) {
     throw new Error(`Installed manifest version ${manifest.dataVersion} does not match current pointer ${pointer.dataVersion}`);

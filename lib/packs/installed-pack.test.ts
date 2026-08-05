@@ -11,14 +11,14 @@ afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function packRoot() {
+async function packRoot(schemaVersion: "1" | "2" = "1") {
   const root = await mkdtemp(path.join(os.tmpdir(), "alpine-installed-pack-"));
   temporaryRoots.push(root);
   const directory = path.join(root, "santa-cruz-mountains", "2026-08-04");
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, "pack.sqlite"), "fixture");
   const manifest = {
-    schemaVersion: "1",
+    schemaVersion,
     id: "santa-cruz-mountains",
     name: "Santa Cruz Mountains",
     dataVersion: "2026-08-04",
@@ -30,7 +30,11 @@ async function packRoot() {
       boundary: { type: "Polygon", coordinates: [[[-122.55, 36.95], [-121.75, 36.95], [-121.75, 37.55], [-122.55, 37.55], [-122.55, 36.95]]] },
     },
     display: { center: [-122.15, 37.25], zoom: 9 },
-    capabilities: { elevation: true, officialAccess: true },
+    capabilities: {
+      elevation: true,
+      officialAccess: true,
+      ...(schemaVersion === "2" ? { namedAreas: true } : {}),
+    },
     fieldConfidence: { topology: "high", elevation: "high", access: "medium" },
     sources: [{
       id: "source",
@@ -63,6 +67,16 @@ describe("installed pack discovery", () => {
     const installed = await loadInstalledPack("santa-cruz-mountains", root);
     expect(installed?.manifest.name).toBe("Santa Cruz Mountains");
     expect(installed?.databasePath).toBe(path.join(root, "santa-cruz-mountains", "2026-08-04", "pack.sqlite"));
+  });
+
+  it("loads a schema-2 pack with exact coverage and named areas", async () => {
+    const root = await packRoot("2");
+    const installed = await loadInstalledPack("santa-cruz-mountains", root);
+    expect(installed?.manifest).toMatchObject({
+      schemaVersion: "2",
+      capabilities: { namedAreas: true },
+      coverage: { boundary: { type: "Polygon" } },
+    });
   });
 
   it("rejects a current pointer that escapes its pack directory", async () => {
