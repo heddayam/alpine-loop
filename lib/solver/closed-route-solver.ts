@@ -575,7 +575,6 @@ export class TopologyFirstClosedRouteSolver implements ClosedRouteSolverV3 {
       const network = networkCache.get(group.networkId);
       const primitives = primitivesByNetwork.get(group.networkId) ?? [];
       if (!network || primitives.length === 0) continue;
-      deeplySearchedAttachmentGroupCount += 1;
       for (const attachment of group.attachments) {
         const orderedSeeds = [...primitives].sort((left, right) => {
           const targetDistance = (request.distanceMiles.min + request.distanceMiles.max) * METERS_PER_MILE / 2;
@@ -624,6 +623,7 @@ export class TopologyFirstClosedRouteSolver implements ClosedRouteSolverV3 {
         }
         if (hardTruncationReasons.size > 0) break;
       }
+      if (hardTruncationReasons.size === 0) deeplySearchedAttachmentGroupCount += 1;
     }
 
     for (const reason of controller.diagnostics().truncationReasons) hardTruncationReasons.add(reason);

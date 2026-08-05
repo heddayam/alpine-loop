@@ -15,6 +15,7 @@ function edge(id: number, physicalEdgeKey: number, from: string, to: string, len
     edgeKey: id,
     physicalEdgeKey,
     stablePhysicalEdgeId: `p${physicalEdgeKey}`,
+    minimumElevationMeters: 10,
     fromNodeId: from,
     toNodeId: to,
     coordinates: [positions[from]!, positions[to]!],
@@ -79,6 +80,7 @@ describe("closed-route reconstruction validation", () => {
       repeatedTrailFraction: 0,
       sharedStemDistanceMeters: 0,
     });
+    expect(result.value.route.minimumElevationMeters).toBe(10);
   });
 
   test("classifies a lollipop and measures the one-way repeated stem exactly", () => {
@@ -131,5 +133,38 @@ describe("closed-route reconstruction validation", () => {
     const outside = [edge(4, 4, "s", "a"), edge(5, 5, "a", "b"), edge(6, 6, "b", "s")];
     outside[1]!.coordinates = [[2, 2], [3, 3]];
     expect(validate(outside)).toEqual({ valid: false, reason: "outside-coverage" });
+  });
+
+  test("rejects an edge whose endpoints are inside coverage but whose segment crosses a hole", () => {
+    const edges = [
+      edge(30, 30, "s", "a"), edge(31, 31, "a", "b"), edge(32, 32, "b", "s"),
+    ];
+    edges[0]!.coordinates = [[-0.5, 0], [0.5, 0]];
+    edges[1]!.coordinates = [[0.5, 0], [0.5, 0.5]];
+    edges[2]!.coordinates = [[0.5, 0.5], [-0.5, 0]];
+    const result = validateReconstructedClosedRoute(edges, {
+      compressedEdgeIds: [30, 31, 32],
+      start: start(),
+      includeUncertainAccess: false,
+      coverage: {
+        type: "Polygon",
+        coordinates: [
+          [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]],
+          [[-0.1, -0.1], [-0.1, 0.1], [0.1, 0.1], [0.1, -0.1], [-0.1, -0.1]],
+        ],
+      },
+      sourceFreshness: "2026-01-01T00:00:00.000Z",
+      sourceConfidence: "high",
+      fallbackSourceIds: ["fixture"],
+      routeId: "closed_hole_crossing",
+    });
+
+    expect(result).toEqual({ valid: false, reason: "outside-coverage" });
+  });
+
+  test("rejects missing minimum elevation instead of fabricating a route minimum", () => {
+    const edges = [edge(40, 40, "s", "a"), edge(41, 41, "a", "b"), edge(42, 42, "b", "s")];
+    edges[1]!.minimumElevationMeters = null;
+    expect(validate(edges)).toEqual({ valid: false, reason: "incomplete-elevation" });
   });
 });

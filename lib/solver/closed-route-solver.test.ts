@@ -145,6 +145,7 @@ function reconstructed(edge: TopologyDecisionEdge, network: DecisionNetwork): Re
     edgeKey: edge.id,
     physicalEdgeKey: edge.members[0]!.physicalEdgeKey,
     stablePhysicalEdgeId: `physical-${edge.members[0]!.physicalEdgeKey}`,
+    minimumElevationMeters: 0,
     fromNodeId: from,
     toNodeId: to,
     coordinates: [positionByNode.get(from)!, positionByNode.get(to)!],
@@ -379,6 +380,7 @@ describe("TopologyFirstClosedRouteSolver", () => {
     budgetContext.budget.maximumRawCandidates = 1;
     const bounded = await solver.generate(request(), budgetContext);
     expect(bounded.diagnostics.hardTruncationReasons).toContain("maximum-raw-candidates");
+    expect(bounded.diagnostics.deeplySearchedAttachmentGroupCount).toBe(0);
 
     const abort = new AbortController();
     abort.abort("cancelled fixture");
