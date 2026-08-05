@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { buildClosedRouteTopology, canonicalTopologyJson, topologySha256 } from "./topology-compiler";
+import { buildClosedRouteTopology, canonicalTopologyJson, topologyExtrema, topologySha256 } from "./topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "./types";
 
 const builtAt = "2026-08-05T00:00:00Z";
 const options = { builtAt, algorithmVersion: "test-topology-v1", policyVersion: "test-policy-v1" };
+
+it("computes extrema for real-pack-sized blocks without argument spreading", () => {
+  const values = Array.from({ length: 150_000 }, (_, index) => index - 75_000);
+  expect(topologyExtrema(values)).toEqual({ minimum: -75_000, maximum: 74_999 });
+});
 
 function graph(nodeIds: string[], definitions: Array<{
   physical: string; from: string; to: string; access?: "public" | "unknown"; reverse?: boolean;
