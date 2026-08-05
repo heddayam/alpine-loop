@@ -27,11 +27,11 @@ type ArcGisClientOptions = {
   maximumAttempts?: number;
 };
 
-function requireKey(value: string | undefined, service: string): string {
+function requireKey(value: string | undefined, service: string, configuration: string): string {
   if (value) return value;
   throw new ReachabilityError(
     "PROVIDER_NOT_CONFIGURED",
-    `${service} is not configured.`,
+    `${service} is not configured. Set ${configuration} in .env.local, then restart the development server.`,
     503,
   );
 }
@@ -201,7 +201,7 @@ export class ArcGisClient implements ArcGisProvider {
   }
 
   async suggest(text: string, signal?: AbortSignal): Promise<GeocodingSuggestion[]> {
-    const key = requireKey(this.geocodingApiKey, "ArcGIS geocoding");
+    const key = requireKey(this.geocodingApiKey, "ArcGIS geocoding", "ARCGIS_GEOCODING_API_KEY (or ARCGIS_API_KEY)");
     const url = appendToken(new URL(`${this.geocodingEndpoint}/suggest`), key);
     url.searchParams.set("text", text);
     url.searchParams.set("maxSuggestions", "8");
@@ -221,7 +221,7 @@ export class ArcGisClient implements ArcGisProvider {
   }
 
   async resolve(text: string, magicKey: string, signal?: AbortSignal): Promise<Origin> {
-    const key = requireKey(this.geocodingApiKey, "ArcGIS geocoding");
+    const key = requireKey(this.geocodingApiKey, "ArcGIS geocoding", "ARCGIS_GEOCODING_API_KEY (or ARCGIS_API_KEY)");
     const url = appendToken(new URL(`${this.geocodingEndpoint}/findAddressCandidates`), key);
     url.searchParams.set("SingleLine", text);
     url.searchParams.set("magicKey", magicKey);
@@ -251,7 +251,7 @@ export class ArcGisClient implements ArcGisProvider {
   }
 
   async submitServiceArea(request: ReachabilityRequest, signal?: AbortSignal): Promise<string> {
-    const key = requireKey(this.routingApiKey, "ArcGIS reachability");
+    const key = requireKey(this.routingApiKey, "ArcGIS reachability", "ARCGIS_ROUTING_API_KEY (or ARCGIS_API_KEY)");
     const payload = await this.json(
       `${this.serviceAreaEndpoint}/submitJob`,
       {
@@ -279,7 +279,7 @@ export class ArcGisClient implements ArcGisProvider {
     | { state: "failed"; message: string }
     | { state: "complete"; geometry: AreaGeometry }
   > {
-    const key = requireKey(this.routingApiKey, "ArcGIS reachability");
+    const key = requireKey(this.routingApiKey, "ArcGIS reachability", "ARCGIS_ROUTING_API_KEY (or ARCGIS_API_KEY)");
     const base = `${this.serviceAreaEndpoint}/jobs/${encodeURIComponent(providerJobId)}`;
     const statusUrl = appendToken(new URL(base), key);
     const statusPayload = await this.json(
@@ -310,7 +310,7 @@ export class ArcGisClient implements ArcGisProvider {
   }
 
   async cancelServiceArea(providerJobId: string, signal?: AbortSignal): Promise<void> {
-    const key = requireKey(this.routingApiKey, "ArcGIS reachability");
+    const key = requireKey(this.routingApiKey, "ArcGIS reachability", "ARCGIS_ROUTING_API_KEY (or ARCGIS_API_KEY)");
     const url = appendToken(
       new URL(`${this.serviceAreaEndpoint}/jobs/${encodeURIComponent(providerJobId)}/cancel`),
       key,

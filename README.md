@@ -24,6 +24,26 @@ npm run dev
 Without an installed regional pack the app uses its small committed fixture.
 Open <http://localhost:3000> in a browser.
 
+### Enable drive-time filters
+
+ArcGIS credentials stay server-only. Copy `.env.example` to `.env.local` and
+set either one shared scoped key or separate geocoding and routing keys:
+
+```sh
+# One key authorized for both temporary geocoding and service areas:
+ARCGIS_API_KEY=your-scoped-key
+
+# Or separate least-privilege keys:
+ARCGIS_GEOCODING_API_KEY=your-geocoding-key
+ARCGIS_ROUTING_API_KEY=your-routing-key
+```
+
+Restart `npm run dev` after changing `.env.local`. Typed place suggestions need
+geocoding access; calculating the typical drive-time area needs routing service
+area access. The browser never receives either credential. Provider jobs and
+location-bearing results stay in process memory for 30 minutes; only aggregate
+monthly usage counters are stored in ignored local SQLite.
+
 ## Build the Santa Cruz Mountains pack
 
 Real-pack builds additionally require `osmium-tool` and
