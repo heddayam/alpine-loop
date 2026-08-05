@@ -26,7 +26,8 @@ describe("ArcGIS client", () => {
     expect(body.get("break_values")).toBe("300");
     expect(body.get("break_units")).toBe("Minutes");
     expect(body.get("travel_direction")).toBe("Away from Facility");
-    expect(body.get("impedance")).toBe("TravelTime");
+    expect(body.get("impedance")).toBe("Minutes");
+    expect(body.get("time_impedance")).toBe("Minutes");
     expect(body.get("polygon_detail")).toBe("Standard");
     expect(body.get("context")).toBe(JSON.stringify({ outSR: { wkid: 4326 } }));
     expect(body.has("time_of_day")).toBe(false);
