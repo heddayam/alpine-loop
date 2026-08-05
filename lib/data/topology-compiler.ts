@@ -8,6 +8,17 @@ type DenseEdge = CompiledEdge & { edgeKey: number; from: number; to: number; phy
 type Physical = Schema3TopologyBuild["physicalEdges"][number] & { lengthM: number; stableEdgeIds: string[] };
 type BlockWork = { edgeKeys: number[]; nodeKeys: number[]; cycleRank: number; blockId: number };
 
+export function topologyExtrema(values: readonly number[]): { minimum: number; maximum: number } | null {
+  if (values.length === 0) return null;
+  let minimum = Number.POSITIVE_INFINITY;
+  let maximum = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (value < minimum) minimum = value;
+    if (value > maximum) maximum = value;
+  }
+  return { minimum, maximum };
+}
+
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue);
   if (value !== null && typeof value === "object") {
@@ -362,6 +373,8 @@ function buildProfile(
     const trailNames = [...new Set(flags.filter((flag) => flag.startsWith("trail-name:")).map((flag) => flag.slice(11)))].sort();
     const sourceIds = [...new Set(members.flatMap(({ sourceRefs }) => sourceRefs))].sort();
     const accessStates = [...new Set(members.map(({ accessState }) => accessState))];
+    const elevationExtrema = topologyExtrema(maximumElevations);
+    const gradeExtrema = topologyExtrema(grades);
     const from = decisionIdByNode.get(members[0]!.from)!;
     const to = decisionIdByNode.get(members.at(-1)!.to)!;
     decisionEdges.push({
@@ -376,8 +389,8 @@ function buildProfile(
       twoEdgeComponentId: decomposition.twoEdge[members[0]!.from]!,
       vertexBlockId: block?.blockId ?? null,
       metricsAndFlags: canonicalTopologyJson({
-        maximumElevationMeters: maximumElevations.length ? Math.max(...maximumElevations) : null,
-        maximumSustainedGradePct: grades.length ? Math.max(...grades) : null,
+        maximumElevationMeters: elevationExtrema?.maximum ?? null,
+        maximumSustainedGradePct: gradeExtrema?.maximum ?? null,
         accessState: accessStates.includes("unknown") ? "unknown" : "public",
         trailNames, sourceIds, flags,
       }),
@@ -396,6 +409,7 @@ function buildProfile(
     const blockPhysicalKeys = new Set(block.edgeKeys);
     const blockDenseEdges = edges.filter(({ physicalEdgeKey }) => blockPhysicalKeys.has(physicalEdgeKey));
     const elevations = blockDenseEdges.map(({ maxElevationM }) => maxElevationM).filter((value): value is number => value !== null);
+    const elevationExtrema = topologyExtrema(elevations);
     const trailNames = [...new Set(blockDenseEdges.flatMap(({ flags }) => flags.filter((flag) => flag.startsWith("trail-name:")).map((flag) => flag.slice(11))))].sort();
     const total = blockPhysical.reduce((sum, edge) => sum + edge.lengthM, 0);
     return {
@@ -407,7 +421,10 @@ function buildProfile(
       cycleRank: block.cycleRank,
       totalPhysicalLengthM: total,
       minimumCycleLengthM: block.cycleRank === 1 ? total : null,
-      elevationSummary: canonicalTopologyJson({ minimumElevationMeters: elevations.length ? Math.min(...elevations) : null, maximumElevationMeters: elevations.length ? Math.max(...elevations) : null }),
+      elevationSummary: canonicalTopologyJson({
+        minimumElevationMeters: elevationExtrema?.minimum ?? null,
+        maximumElevationMeters: elevationExtrema?.maximum ?? null,
+      }),
       trailSummary: canonicalTopologyJson(trailNames),
       decisionNodeIds: decisionNodeIdsForBlock(block), decisionEdgeKeys,
     };
@@ -531,16 +548,18 @@ function buildProfile(
     const elevations = networkEdges.flatMap(({ metricsAndFlags }) => {
       const value = JSON.parse(metricsAndFlags) as { maximumElevationMeters: number | null }; return value.maximumElevationMeters === null ? [] : [value.maximumElevationMeters];
     });
+    const cycleLengthExtrema = topologyExtrema(cycleLengths);
+    const elevationExtrema = topologyExtrema(elevations);
     const content = {
       networkId, decisionNodeIds: [...decisionIds].sort((a, b) => a - b), decisionEdges: networkEdges,
       blocks: networkBlocks, blockLinks: linksByNetwork.get(networkId) ?? [],
     };
     return {
       networkId, decisionNodeCount: decisionIds.size, decisionEdgeCount: networkEdges.length, cycleBlockCount: cycles.length,
-      minimumCycleLengthM: cycleLengths.length ? Math.min(...cycleLengths) : null,
-      maximumCycleLengthM: cycleLengths.length ? Math.max(...cycleLengths) : null,
-      minimumElevationM: elevations.length ? Math.min(...elevations) : null,
-      maximumElevationM: elevations.length ? Math.max(...elevations) : null,
+      minimumCycleLengthM: cycleLengthExtrema?.minimum ?? null,
+      maximumCycleLengthM: cycleLengthExtrema?.maximum ?? null,
+      minimumElevationM: elevationExtrema?.minimum ?? null,
+      maximumElevationM: elevationExtrema?.maximum ?? null,
       contentHash: topologySha256(content),
     };
   });
