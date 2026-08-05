@@ -93,7 +93,7 @@ describe("HikeBuilder", () => {
   it("announces the pre-draw empty state and validates generation without a boundary", async () => {
     render(<HikeBuilder />);
     expect(screen.getByText("Draw a boundary to find access points.")).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Explore results" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Results" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Results" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Draw a search rectangle on the map first.");
@@ -108,7 +108,7 @@ describe("HikeBuilder", () => {
     await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
     await screen.findByLabelText("Access point");
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
-    await screen.findByRole("heading", { name: "Explore results" });
+    await screen.findByRole("heading", { name: "Results" });
 
     expect(screen.getByLabelText("Map route state")).toHaveTextContent("exact-loop,near-route|selected:exact-loop");
     await userEvent.click(screen.getByRole("button", { name: "Select second map route" }));
@@ -138,7 +138,7 @@ describe("HikeBuilder", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancel generation" }));
 
     expect(generationSignal?.aborted).toBe(true);
-    expect(await screen.findByRole("heading", { name: "Search cancelled" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Results" })).toBeVisible();
     expect(screen.getByText("Route generation was cancelled.")).toHaveAttribute("role", "status");
   });
 

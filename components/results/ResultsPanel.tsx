@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, type KeyboardEvent } from "react";
 import type {
-  ConstraintViolation,
   GeneratedRoute,
   GenerateRoutesResponseV1,
   RouteType,
@@ -21,8 +20,6 @@ type ResultsPanelProps = {
   desktopVisible?: boolean;
 };
 
-type DisplayRoute = GeneratedRoute & { violations?: ConstraintViolation[] };
-
 const METERS_PER_MILE = 1609.344;
 const FEET_PER_METER = 3.28084;
 
@@ -31,13 +28,6 @@ const SHAPE_LABELS: Record<RouteType, string> = {
   lollipop: "Lollipop",
   "out-and-back": "Out & back",
   "point-to-point": "Point to point",
-};
-
-const VIOLATION_LABELS: Record<ConstraintViolation["constraint"], string> = {
-  distance: "Distance",
-  "elevation-gain": "Elevation gain",
-  "maximum-elevation": "Maximum elevation",
-  "steepest-sustained-grade": "Steepest sustained grade",
 };
 
 function formatMiles(meters: number) {
@@ -57,21 +47,8 @@ function formatFreshness(value: string) {
   }).format(new Date(value));
 }
 
-function humanizeReason(reason: string) {
-  const labels: Record<string, string> = {
-    deadline: "time budget reached",
-    "maximum-directed-edges": "trail graph was too large",
-    "maximum-expanded-states": "search-state budget reached",
-    "maximum-raw-candidates": "candidate budget reached",
-    aborted: "request was cancelled",
-  };
-  return labels[reason] ?? reason.replaceAll("-", " ");
-}
-
-function violationValue(violation: ConstraintViolation, value: number) {
-  if (violation.constraint === "distance") return `${(value / METERS_PER_MILE).toFixed(1)} mi`;
-  if (violation.constraint === "steepest-sustained-grade") return `${value.toFixed(1)}%`;
-  return `${Math.round(value * FEET_PER_METER).toLocaleString("en-US")} ft`;
+function trailheadCoordinates(route: GeneratedRoute) {
+  return `${route.startAccessPoint.lat.toFixed(5)}, ${route.startAccessPoint.lon.toFixed(5)}`;
 }
 
 function ElevationProfile({ route }: { route: GeneratedRoute }) {
@@ -114,19 +91,21 @@ function RouteCard({
   buttonRef,
   onSelect,
 }: {
-  route: DisplayRoute;
+  route: GeneratedRoute;
   routeNumber: number;
   selected: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
   onSelect: () => void;
 }) {
   const detailId = `route-detail-${route.id}`;
-  const violationCount = route.violations?.length ?? 0;
-
+  const coordinates = trailheadCoordinates(route);
+  const copyCoordinates = () => {
+    void navigator.clipboard?.writeText(coordinates).catch(() => undefined);
+  };
   return (
     <article
       className={selected ? "route-card selected" : "route-card"}
-      aria-labelledby={`route-${route.id}`}
+      aria-labelledby={`route-trails-${route.id} route-${route.id}`}
       onMouseEnter={() => announceRoutePreview(route.id)}
       onMouseLeave={() => announceRoutePreview()}
       onFocusCapture={() => announceRoutePreview(route.id)}
@@ -145,67 +124,56 @@ function RouteCard({
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
         <span className="route-summary-main">
-          <strong id={`route-${route.id}`}>{SHAPE_LABELS[route.shape]}</strong>
-          <small>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</small>
-          {violationCount > 0 ? (
-            <span className="route-constraint-badge">
-              Near miss · {violationCount} violation{violationCount === 1 ? "" : "s"}
-            </span>
-          ) : null}
+          <strong id={`route-trails-${route.id}`}>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</strong>
+          <small id={`route-${route.id}`}>{SHAPE_LABELS[route.shape]}</small>
         </span>
         <span className="route-summary-metrics">
           <span className="route-summary-stat"><small>Distance</small><strong>{formatMiles(route.distanceMeters)}</strong></span>
           <span className="route-summary-stat"><small>Gain</small><strong>{formatFeet(route.elevationGainMeters)}</strong></span>
           <span className="route-summary-stat"><small>Max grade</small><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong></span>
         </span>
-        <span className="selection-label">{selected ? "Selected" : "View"}</span>
       </button>
 
       {selected ? (
-        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-${route.id}`}>
-          <p className="route-endpoints">
-            <span>{route.startAccessPoint.name}</span>
-            <span aria-hidden="true">→</span>
-            <span>{route.endAccessPoint.name}</span>
-          </p>
-
-          <dl className="route-metrics route-detail-metrics">
-            <div><dt>Distance</dt><dd>{formatMiles(route.distanceMeters)}</dd></div>
-            <div><dt>Elevation gain</dt><dd>{formatFeet(route.elevationGainMeters)}</dd></div>
-            <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
-            <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
-            <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
-            <div><dt>Max grade</dt><dd>{route.steepestSustainedGradePct.toFixed(1)}%</dd></div>
-            <div><dt>Repeated trail</dt><dd>{Math.round(route.repeatedEdgeFraction * 100)}%</dd></div>
-          </dl>
-
-          {violationCount > 0 ? (
-            <div className="route-violations" aria-label="Violated constraints">
-              <strong>Outside your constraints</strong>
-              <ul>
-                {route.violations?.map((violation) => (
-                  <li key={violation.constraint}>
-                    {VIOLATION_LABELS[violation.constraint]}: {violationValue(violation, violation.value)}; requested {violationValue(violation, violation.min)}–{violationValue(violation, violation.max)} (off by {violationValue(violation, violation.delta)})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {route.warnings.length > 0 ? (
-            <div className="route-warnings" aria-label="Route warnings">
-              <strong>Warnings</strong>
-              <ul>{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-            </div>
-          ) : null}
-
+        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-trails-${route.id} route-${route.id}`}>
           <ElevationProfile route={route} />
+          <button
+            type="button"
+            className="trailhead-coordinates"
+            aria-label={`Copy trailhead coordinates ${coordinates}`}
+            title="Copy trailhead coordinates"
+            onClick={copyCoordinates}
+          >
+            <span>Trailhead</span>
+            <code>{coordinates}</code>
+          </button>
 
-          <footer className="route-source">
-            <span>Source confidence: <strong>{route.source.confidence}</strong></span>
-            <span>Data current {formatFreshness(route.source.freshness)}</span>
-            <span>Sources: {route.source.sourceIds.join(", ")}</span>
-          </footer>
+          <details className="route-secondary">
+            <summary>
+              <span>Route details</span>
+              <small>Terrain, access & data</small>
+            </summary>
+            <div className="route-secondary-content">
+              <p className="route-endpoints">
+                <span>{route.startAccessPoint.name}</span>
+                <span aria-hidden="true">→</span>
+                <span>{route.endAccessPoint.name}</span>
+              </p>
+
+              <dl className="route-secondary-metrics">
+                <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
+                <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
+                <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
+                <div><dt>Repeated trail</dt><dd>{Math.round(route.repeatedEdgeFraction * 100)}%</dd></div>
+              </dl>
+
+              <footer className="route-source">
+                <span>Source confidence: <strong>{route.source.confidence}</strong></span>
+                <span>Data current {formatFreshness(route.source.freshness)}</span>
+                <span>Sources: {route.source.sourceIds.join(", ")}</span>
+              </footer>
+            </div>
+          </details>
         </div>
       ) : null}
     </article>
@@ -250,7 +218,7 @@ export function ResultsPanel({
   if (status === "loading") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Searching the graph</h2></div>
+        <div className="results-heading"><h2 id="results-title">Results</h2></div>
         <p className="results-state loading-state" role="status" aria-live="polite">Generating routes inside your hard boundary…</p>
       </aside>
     );
@@ -259,7 +227,7 @@ export function ResultsPanel({
   if (status === "error") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Generation failed</h2></div>
+        <div className="results-heading"><h2 id="results-title">Results</h2></div>
         <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different boundary or constraints."}</span></div>
       </aside>
     );
@@ -268,7 +236,7 @@ export function ResultsPanel({
   if (status === "cancelled") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><p>Route alternatives</p><h2 id="results-title">Search cancelled</h2></div>
+        <div className="results-heading"><h2 id="results-title">Results</h2></div>
         <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings or generate again when you’re ready.</span></div>
       </aside>
     );
@@ -277,25 +245,12 @@ export function ResultsPanel({
   if (!response) return null;
 
   const total = routes.length;
-  const isPartial = response.exact.length < response.requested;
-  const reasons = response.diagnostics.truncationReasons.map(humanizeReason);
 
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <div className="results-heading">
-        <p>Route alternatives</p>
-        <h2 id="results-title">Explore results</h2>
-        <span>{response.exact.length} exact · {response.nearMisses.length} near miss{response.nearMisses.length === 1 ? "" : "es"}</span>
+        <h2 id="results-title">Results</h2>
       </div>
-
-      <p className="conditions-warning">Planning aid only. Verify current trail conditions and access before hiking.</p>
-
-      {isPartial ? (
-        <div className="partial-notice" role="status" aria-live="polite">
-          <strong>{response.diagnostics.exhausted ? "Search stopped at its safety budget." : `Found fewer than the ${response.requested} routes requested.`}</strong>
-          <span>{reasons.length > 0 ? `Reason: ${reasons.join(", ")}.` : `${total} alternatives were returned; ${response.exact.length} met every constraint.`}</span>
-        </div>
-      ) : null}
 
       {total === 0 ? (
         <div className="no-results" role="status">
@@ -305,8 +260,10 @@ export function ResultsPanel({
       ) : (
         <div className="route-lists" onKeyDown={handleKeyboardNavigation} aria-label="Generated routes">
           <section className="result-section" aria-labelledby="exact-results-title">
-            <div className="result-section-heading"><h3 id="exact-results-title">Exact matches</h3><span>{response.exact.length}</span></div>
-            {response.exact.length === 0 ? <p className="no-exact">No route met every constraint. Near misses are listed separately below.</p> : null}
+            <div className="result-section-heading">
+              <h3 id="exact-results-title">Exact matches</h3>
+              <span>{response.exact.length}</span>
+            </div>
             {response.exact.map((route, index) => (
               <RouteCard
                 key={route.id}
@@ -322,7 +279,6 @@ export function ResultsPanel({
           {response.nearMisses.length > 0 ? (
             <section className="result-section near-misses" aria-labelledby="near-results-title">
               <div className="result-section-heading"><h3 id="near-results-title">Near misses</h3><span>{response.nearMisses.length}</span></div>
-              <p>These routes do not meet every constraint. Review each disclosed violation.</p>
               {response.nearMisses.map((route, index) => (
                 <RouteCard
                   key={route.id}
