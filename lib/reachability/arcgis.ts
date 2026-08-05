@@ -109,7 +109,8 @@ export function buildServiceAreaSubmitBody(
   body.set("break_values", String(request.durationMinutes));
   body.set("break_units", "Minutes");
   body.set("travel_direction", "Away from Facility");
-  body.set("impedance", "TravelTime");
+  body.set("impedance", "Minutes");
+  body.set("time_impedance", "Minutes");
   body.set("use_hierarchy", "true");
   body.set("detailed_Polygons", "false");
   body.set("polygon_detail", "Standard");
