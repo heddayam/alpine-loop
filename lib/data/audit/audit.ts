@@ -81,7 +81,7 @@ export function auditRegionalPack(input: RegionalPackAuditInput): RegionalPackAu
   if (input.rejectedEdgeCount) warnings.push(`${input.rejectedEdgeCount} source edges were rejected`);
 
   return {
-    schemaVersion: "1",
+    schemaVersion: input.schemaVersion ?? "1",
     packId: input.packId,
     dataVersion: input.dataVersion,
     counts: {
