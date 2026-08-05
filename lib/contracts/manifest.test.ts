@@ -59,6 +59,7 @@ describe("PackManifestV3", () => {
       closedRouteTopology: true,
     },
     closedRouteTopology: {
+      runtimeMode: "primitive",
       algorithmVersion: "closed-topology-v1",
       policyVersion: "closed-primitives-v1",
       profiles: ["known", "inclusive"],

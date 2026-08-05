@@ -373,21 +373,36 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
         const expectedDecisionNodes = requiredNumber(row.decision_node_count, `${profile}.decision_node_count`);
         const expectedDecisionEdges = requiredNumber(row.decision_edge_count, `${profile}.decision_edge_count`);
         const actualNodes = count("topology_nodes");
-        const actualPhysical = requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count
-          FROM topology_decision_edge_members WHERE profile = ?`).get(profile) as Record<string, unknown>).count, "topology physical count");
+        const actualPhysical = manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback"
+          ? requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count FROM edges
+              WHERE access_state = 'public' OR (? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "topology physical count")
+          : requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count
+              FROM topology_decision_edge_members WHERE profile = ?`).get(profile) as Record<string, unknown>).count, "topology physical count");
         const actualDecisionNodes = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_nodes
           WHERE profile = ? AND decision_node_id IS NOT NULL`).get(profile) as Record<string, unknown>).count, "topology decision node count");
         const actualDecisionEdges = count("topology_decision_edges");
         if (expectedNodes !== actualNodes || expectedPhysical !== actualPhysical || expectedDecisionNodes !== actualDecisionNodes || expectedDecisionEdges !== actualDecisionEdges) {
           throw new Error(`Schema 3 topology count mismatch for ${profile}`);
         }
-        const mapped = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
-          JOIN edges e ON e.edge_key = m.edge_key AND e.physical_edge_key = m.physical_edge_key WHERE m.profile = ?`).get(profile) as Record<string, unknown>).count, "mapped edge count");
-        const legal = requiredNumber((database.prepare(`SELECT count(*) AS count FROM edges WHERE access_state = 'public'
-          OR (? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "legal edge count");
-        if (mapped !== legal || count("topology_decision_edge_members") !== legal) throw new Error(`Schema 3 topology member mapping mismatch for ${profile}`);
+        if (manifest.closedRouteTopology.runtimeMode === "primitive") {
+          const mapped = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
+            JOIN edges e ON e.edge_key = m.edge_key AND e.physical_edge_key = m.physical_edge_key WHERE m.profile = ?`).get(profile) as Record<string, unknown>).count, "mapped edge count");
+          const legal = requiredNumber((database.prepare(`SELECT count(*) AS count FROM edges WHERE access_state = 'public'
+            OR (? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "legal edge count");
+          if (mapped !== legal || count("topology_decision_edge_members") !== legal) throw new Error(`Schema 3 topology member mapping mismatch for ${profile}`);
+        } else {
+          const accessCount = count("access_topology");
+          if (accessCount !== accessPoints.length) throw new Error(`Schema 3 fallback access topology count mismatch for ${profile}`);
+        }
+      }
+      if (manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback") {
+        for (const table of ["topology_networks", "topology_nodes", "topology_decision_edges", "topology_decision_edge_members", "topology_blocks", "topology_block_nodes", "topology_block_edges", "topology_block_links"]) {
+          const count = requiredNumber((database.prepare(`SELECT count(*) AS count FROM ${table}`).get() as Record<string, unknown>).count, `${table} count`);
+          if (count !== 0) throw new Error(`Schema 3 fallback pack must not persist primitive rows in ${table}`);
+        }
       }
       const combinedHash = topologySha256({
+        runtimeMode: manifest.closedRouteTopology.runtimeMode,
         algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
         policyVersion: manifest.closedRouteTopology.policyVersion,
         profiles: profiles.map((row) => ({ profile: requiredString(row.profile, "topology profile"), contentHash: requiredString(row.content_hash, "topology content hash") })),

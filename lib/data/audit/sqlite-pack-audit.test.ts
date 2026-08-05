@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { compilePack } from "../compiler";
-import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3 } from "../fixture-pack";
+import { compilePack, type PackSeed } from "../compiler";
+import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3, fixturePackSeedV3 } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -24,7 +24,14 @@ async function buildFixtureV2() {
 async function buildFixtureV3() {
   const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v3-"));
   temporaryDirectories.push(outputRoot);
-  return compilePack(await fixtureCompileOptionsV3(outputRoot));
+  const seed = fixturePackSeedV3 as Extract<PackSeed, { schemaVersion: "3" }>;
+  return compilePack(await fixtureCompileOptionsV3(outputRoot, undefined, undefined, {
+    seed: {
+      ...seed,
+      dataVersion: `fixture-v3-primitive-${temporaryDirectories.length}`,
+      closedRouteTopology: { ...seed.closedRouteTopology, runtimeMode: "primitive" },
+    },
+  }));
 }
 
 function mutateDatabase(databasePath: string, sql: string): void {

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateClosedRoutesResponseV3Schema, packManifestV3Schema } from "@/lib/contracts";
-import { compilePack, fixtureCompileOptionsV3 } from "@/lib/data";
+import { compilePack, fixtureCompileOptionsV3, fixturePackSeedV3, type PackSeed } from "@/lib/data";
 import { SQLiteClosedRouteTopologyRepository, SQLiteGraphRepository } from "@/lib/graph";
 import { CLOSED_ROUTE_EFFORT_BUDGETS } from "./budget";
 import { createClosedRouteSolver } from "./closed-route-solver";
@@ -19,7 +19,14 @@ describe("compiled schema-3 closed-route integration", () => {
   it("builds, loads, reconstructs, and solves through the public topology boundaries", async () => {
     const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-closed-route-integration-"));
     temporaryDirectories.push(outputRoot);
-    const built = await compilePack(await fixtureCompileOptionsV3(outputRoot));
+    const schema3Seed = fixturePackSeedV3 as Extract<PackSeed, { schemaVersion: "3" }>;
+    const built = await compilePack(await fixtureCompileOptionsV3(outputRoot, undefined, undefined, {
+      seed: {
+        ...schema3Seed,
+        dataVersion: "fixture-v3-primitive",
+        closedRouteTopology: { ...schema3Seed.closedRouteTopology, runtimeMode: "primitive" },
+      },
+    }));
     const manifest = packManifestV3Schema.parse(JSON.parse(await readFile(built.manifestPath, "utf8")));
     const graphRepository = new SQLiteGraphRepository(built.databasePath, manifest.id);
     const topologyRepository = new SQLiteClosedRouteTopologyRepository({

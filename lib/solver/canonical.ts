@@ -24,6 +24,11 @@ function normalizedCoordinates(edge: GraphEdge): string {
 export function undirectedEdgeKey(edge: GraphEdge): string {
   const cached = undirectedEdgeKeyCache.get(edge);
   if (cached) return cached;
+  if (edge.physicalEdgeKey !== undefined) {
+    const key = `physical:${edge.physicalEdgeKey}`;
+    undirectedEdgeKeyCache.set(edge, key);
+    return key;
+  }
   const endpoints = [edge.fromNodeId, edge.toNodeId].sort().join("~");
   const key = `${endpoints}|${normalizedCoordinates(edge)}`;
   undirectedEdgeKeyCache.set(edge, key);

@@ -295,6 +295,7 @@ async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | 
         const metadata = database.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as { value?: string } | undefined;
         const profiles = database.prepare("SELECT profile, content_hash FROM topology_profiles ORDER BY profile DESC").all() as Array<{ profile: string; content_hash: string }>;
         const expected = topologySha256({
+          runtimeMode: manifest.closedRouteTopology.runtimeMode,
           algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
           policyVersion: manifest.closedRouteTopology.policyVersion,
           profiles: profiles.map(({ profile, content_hash: contentHash }) => ({ profile, contentHash })),
@@ -394,6 +395,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     const closedRouteTopology = manifest.schemaVersion === "3"
       ? buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
           builtAt: manifest.builtAt,
+          runtimeMode: manifest.closedRouteTopology.runtimeMode,
           algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
           policyVersion: manifest.closedRouteTopology.policyVersion,
         })

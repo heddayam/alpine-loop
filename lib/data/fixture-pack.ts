@@ -52,6 +52,7 @@ export const fixturePackSeedV3: PackSeed = {
   dataVersion: "fixture-v3",
   capabilities: { ...fixturePackSeedV2.capabilities, closedRouteTopology: true },
   closedRouteTopology: {
+    runtimeMode: "reachable-graph-fallback",
     algorithmVersion: "closed-route-topology-v1",
     policyVersion: "closed-route-decision-graph-v1",
     profiles: ["known", "inclusive"],

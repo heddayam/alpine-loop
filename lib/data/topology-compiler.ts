@@ -244,6 +244,28 @@ function profileHashInput(profile: Omit<TopologyProfileBuild, "contentHash">): u
   };
 }
 
+function compactFallbackProfile(profile: TopologyProfileBuild): TopologyProfileBuild {
+  const withoutHash: Omit<TopologyProfileBuild, "contentHash"> = {
+    ...profile,
+    nodeCount: 0,
+    decisionNodeCount: 0,
+    decisionEdgeCount: 0,
+    nodes: [],
+    decisionEdges: [],
+    blocks: [],
+    blockLinks: [],
+    networks: [],
+    accessTopology: profile.accessTopology.map((access) => ({
+      ...access,
+      attachmentDecisionNodeId: 0,
+      connectorKey: null,
+      connectorDecisionEdgeIds: [],
+      portalDecisionNodeId: null,
+    })),
+  };
+  return { ...withoutHash, contentHash: topologySha256(profileHashInput(withoutHash)) };
+}
+
 function buildProfile(
   profile: TopologyProfile,
   nodes: readonly NormalizedNode[],
@@ -588,7 +610,12 @@ export function buildClosedRouteTopology(
   nodesInput: readonly NormalizedNode[],
   edgesInput: readonly CompiledEdge[],
   accessPoints: readonly NormalizedAccessPoint[],
-  options: { builtAt: string; algorithmVersion: string; policyVersion: string },
+  options: {
+    builtAt: string;
+    runtimeMode?: "primitive" | "reachable-graph-fallback";
+    algorithmVersion: string;
+    policyVersion: string;
+  },
 ): Schema3TopologyBuild {
   const nodes = [...nodesInput].sort((a, b) => a.id.localeCompare(b.id));
   const nodeKeys = new Map(nodes.map((node, index) => [node.id, index + 1]));
@@ -625,13 +652,16 @@ export function buildClosedRouteTopology(
   }));
   const known = buildProfile("known", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, 0);
   const inclusive = buildProfile("inclusive", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, known.decisionEdgeCount);
-  const profiles = [known, inclusive];
+  const runtimeMode = options.runtimeMode ?? "primitive";
+  const profiles = runtimeMode === "reachable-graph-fallback"
+    ? [compactFallbackProfile(known), compactFallbackProfile(inclusive)]
+    : [known, inclusive];
   const contentHash = topologySha256({
-    algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion,
+    runtimeMode, algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion,
     profiles: profiles.map(({ profile, contentHash }) => ({ profile, contentHash })),
   });
   return {
-    algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion, contentHash,
+    runtimeMode, algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion, contentHash,
     nodeKeys,
     edgeKeys,
     physicalEdges: physicalEdges.map((edge) => ({
