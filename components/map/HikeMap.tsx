@@ -14,7 +14,8 @@ type HikeMapProps = {
   drawEnabled: boolean;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
-  packCoverage: Bounds;
+  packCoverageBbox: Bounds;
+  packCoverage: Polygon | MultiPolygon;
   suggestedBounds: Bounds;
   display: { center: [number, number]; zoom: number };
   trailNetwork: FeatureCollection<LineString>;
@@ -185,6 +186,7 @@ export function HikeMap({
   filterGeometry,
   refinementGeometry,
   packCoverage,
+  packCoverageBbox,
   suggestedBounds,
   display,
   trailNetwork,
@@ -251,8 +253,8 @@ export function HikeMap({
       map = new Map({
         container: containerRef.current,
         bounds: [
-          [packCoverage[0], packCoverage[1]],
-          [packCoverage[2], packCoverage[3]],
+          [packCoverageBbox[0], packCoverageBbox[1]],
+          [packCoverageBbox[2], packCoverageBbox[3]],
         ],
         fitBoundsOptions: {
           padding: { top: 64, right: 44, bottom: 40, left: 44 },
@@ -278,7 +280,7 @@ export function HikeMap({
       map.addControl(new NavigationControl({ showCompass: false }), "top-right");
       map.on("load", () => {
         const initialBounds = boundsRef.current;
-        map?.addSource("pack-coverage", { type: "geojson", data: boundsPolygon(packCoverage) });
+        map?.addSource("pack-coverage", { type: "geojson", data: areaFeature(packCoverage) });
         map?.addLayer({
           id: "pack-coverage-fill",
           type: "fill",
@@ -469,7 +471,7 @@ export function HikeMap({
       mapRef.current = null;
       routeMarkerConstructorRef.current = null;
     };
-  }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage]);
+  }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage, packCoverageBbox]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -630,7 +632,7 @@ export function HikeMap({
     };
   }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
-  const mapStatus = mapStatusSummary(bounds, draftBounds, drawing, packCoverage, accessPoints.length);
+  const mapStatus = mapStatusSummary(bounds, draftBounds, drawing, packCoverageBbox, accessPoints.length);
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
