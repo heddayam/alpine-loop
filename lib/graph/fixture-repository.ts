@@ -1,13 +1,17 @@
-import { edgeIsInsideBbox, lineLengthMeters, nodeIsInsideBbox } from "./geometry";
+import { edgeIsInsideBbox, lineIsInsideArea, lineLengthMeters, nodeIsInsideBbox } from "./geometry";
 import { accessPointIsEligible, edgeIsTraversable } from "./policy";
 import type {
   AccessState,
+  AccessPointCandidate,
+  AccessPointCandidateQuery,
   GraphAccessPoint,
   GraphEdge,
   GraphNode,
   GraphQuery,
   GraphRepository,
   InducedGraph,
+  ReachableGraphQuery,
+  ReachableGraphResult,
 } from "./types";
 
 type FixtureTrail = readonly [
@@ -167,6 +171,115 @@ export class FixtureGraphRepository implements GraphRepository {
       const node = this.#nodes.get(accessPoint.nodeId);
       return Boolean(node && nodeIsInsideBbox(node, bbox) && accessPointIsEligible(accessPoint, includeUncertainAccess));
     });
+  }
+
+  async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
+    assertNotAborted(query.signal);
+    const eligibleEdges = this.#edges.filter((edge) => edgeIsTraversable(edge, query.includeUncertainAccess));
+    const adjacency = new Map<string, Set<string>>();
+    const outDegree = new Map<string, number>();
+    for (const edge of eligibleEdges) {
+      const neighbors = adjacency.get(edge.fromNodeId) ?? new Set<string>();
+      neighbors.add(edge.toNodeId);
+      adjacency.set(edge.fromNodeId, neighbors);
+      const reverse = adjacency.get(edge.toNodeId) ?? new Set<string>();
+      reverse.add(edge.fromNodeId);
+      adjacency.set(edge.toNodeId, reverse);
+      outDegree.set(edge.fromNodeId, (outDegree.get(edge.fromNodeId) ?? 0) + 1);
+    }
+    const componentSizes = new Map<string, number>();
+    const componentSize = (nodeId: string) => {
+      const known = componentSizes.get(nodeId);
+      if (known !== undefined) return known;
+      const visited = new Set([nodeId]);
+      const pending = [nodeId];
+      while (pending.length > 0) {
+        for (const neighbor of adjacency.get(pending.pop()!) ?? []) {
+          if (visited.has(neighbor)) continue;
+          visited.add(neighbor);
+          pending.push(neighbor);
+        }
+      }
+      for (const id of visited) componentSizes.set(id, visited.size);
+      return visited.size;
+    };
+    return this.#accessPoints.flatMap((point) => {
+      assertNotAborted(query.signal);
+      const node = this.#nodes.get(point.nodeId);
+      if (
+        !node || !nodeIsInsideBbox(node, query.bbox) ||
+        !accessPointIsEligible(point, query.includeUncertainAccess)
+      ) return [];
+      const connectivity = componentSize(point.nodeId);
+      const degree = outDegree.get(point.nodeId) ?? 0;
+      return [{
+        ...point,
+        lon: node.lon,
+        lat: node.lat,
+        knownConnectivity: connectivity,
+        inclusiveConnectivity: connectivity,
+        knownOutDegree: degree,
+        inclusiveOutDegree: degree,
+      }];
+    });
+  }
+
+  async getReachableGraph(query: ReachableGraphQuery): Promise<ReachableGraphResult> {
+    assertNotAborted(query.signal);
+    const start = this.#nodes.get(query.startNodeId);
+    if (!start) return { graph: { nodes: new Map(), edges: [], accessPoints: [] }, truncated: false };
+    const adjacency = new Map<string, GraphEdge[]>();
+    for (const edge of this.#edges) {
+      if (!edgeIsTraversable(edge, query.includeUncertainAccess) || !lineIsInsideArea(edge.coordinates, query.coverage)) continue;
+      const edges = adjacency.get(edge.fromNodeId) ?? [];
+      edges.push(edge);
+      adjacency.set(edge.fromNodeId, edges);
+    }
+    for (const edges of adjacency.values()) edges.sort((left, right) => left.id.localeCompare(right.id));
+    const distances = new Map<string, number>([[start.id, 0]]);
+    const pending: Array<{ nodeId: string; distance: number }> = [{ nodeId: start.id, distance: 0 }];
+    const edges: GraphEdge[] = [];
+    const edgeIds = new Set<string>();
+    let truncated = false;
+    while (pending.length > 0) {
+      assertNotAborted(query.signal);
+      pending.sort((left, right) => left.distance - right.distance || left.nodeId.localeCompare(right.nodeId));
+      const current = pending.shift()!;
+      if (current.distance !== distances.get(current.nodeId)) continue;
+      for (const edge of adjacency.get(current.nodeId) ?? []) {
+        const nextDistance = current.distance + edge.lengthMeters;
+        if (nextDistance > query.maximumDistanceMeters) continue;
+        if (!edgeIds.has(edge.id)) {
+          if (edges.length >= query.maximumDirectedEdges) {
+            truncated = true;
+            break;
+          }
+          edgeIds.add(edge.id);
+          edges.push(edge);
+        }
+        const previous = distances.get(edge.toNodeId);
+        if (previous === undefined || nextDistance < previous) {
+          distances.set(edge.toNodeId, nextDistance);
+          pending.push({ nodeId: edge.toNodeId, distance: nextDistance });
+        }
+      }
+      if (truncated) break;
+    }
+    const nodeIds = new Set<string>([start.id]);
+    for (const edge of edges) {
+      nodeIds.add(edge.fromNodeId);
+      nodeIds.add(edge.toNodeId);
+    }
+    return {
+      graph: {
+        nodes: new Map([...this.#nodes].filter(([id]) => nodeIds.has(id))),
+        edges,
+        accessPoints: this.#accessPoints.filter(
+          (point) => nodeIds.has(point.nodeId) && accessPointIsEligible(point, query.includeUncertainAccess),
+        ),
+      },
+      truncated,
+    };
   }
 
   async close(): Promise<void> {}
