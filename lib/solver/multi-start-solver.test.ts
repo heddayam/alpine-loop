@@ -7,8 +7,11 @@ import {
 import {
   coordinateIsInsideArea,
   FixtureGraphRepository,
+  type AccessPointCandidate,
   type AreaGeometry,
   type FixtureGraphData,
+  type GraphRepository,
+  type ReachableGraphQuery,
 } from "@/lib/graph";
 import { DEFAULT_SOLVER_BUDGET } from "./budget";
 import { AccessFilterResolutionError, createMultiStartRouteSolver } from "./multi-start-solver";
@@ -126,5 +129,54 @@ describe("multi-start route solver", () => {
       filterMatch: { start: true, end: false },
       warnings: expect.arrayContaining(["Finish is outside the trailhead filter"]),
     });
+  });
+
+  it("searches at most eight ranked starts and reserves the first graph share fairly", async () => {
+    const base = repository();
+    const graph = await base.getInducedGraph({
+      bbox: [-122.19, 37.15, -122.13, 37.18],
+      includeUncertainAccess: true,
+    });
+    const node = graph.nodes.get("a")!;
+    const candidates: AccessPointCandidate[] = Array.from({ length: 9 }, (_, index) => ({
+      id: `ranked-${index}`,
+      nodeId: node.id,
+      name: `Ranked ${index}`,
+      kind: "trailhead",
+      accessState: "public",
+      confidence: "high",
+      parkingEvidence: "fixture",
+      sourceIds: ["fixture-source"],
+      lon: node.lon,
+      lat: node.lat,
+      knownConnectivity: 100 - index,
+      inclusiveConnectivity: 100 - index,
+      knownOutDegree: 10,
+      inclusiveOutDegree: 10,
+    }));
+    const maximumEdges: number[] = [];
+    const tracking: GraphRepository = {
+      packId: PACK.id,
+      getInducedGraph: (query) => base.getInducedGraph(query),
+      getAccessPoints: (bbox, include) => base.getAccessPoints(bbox, include),
+      getAccessPointCandidates: async () => candidates,
+      getReachableGraph: async (query: ReachableGraphQuery) => {
+        maximumEdges.push(query.maximumDirectedEdges);
+        const reachable = await base.getReachableGraph(query);
+        return {
+          ...reachable,
+          graph: { ...reachable.graph, accessPoints: candidates },
+        };
+      },
+      close: () => base.close(),
+    };
+    const response = await solver.generate(request({ limit: 1 }), {
+      ...context(),
+      repository: tracking,
+    });
+
+    expect(response.diagnostics.searchedAccessPointCount).toBe(8);
+    expect(maximumEdges).toHaveLength(8);
+    expect(maximumEdges[0]).toBe(DEFAULT_SOLVER_BUDGET.maximumDirectedEdges / 8);
   });
 });

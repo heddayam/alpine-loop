@@ -214,7 +214,7 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
     const routeCapMeters = request.distanceMiles.max * METERS_PER_MILE * 1.25;
 
     const reachableByStart = new Map<string, InducedGraph>();
-    for (const start of starts) {
+    for (const [startIndex, start] of starts.entries()) {
       if (now() - startedAt >= context.budget.deadlineMs - RESPONSE_HEADROOM_MILLISECONDS) {
         truncationReasons.add("deadline");
         break;
@@ -224,10 +224,12 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
         truncationReasons.add("maximum-directed-edges");
         break;
       }
+      const remainingStarts = starts.length - startIndex;
+      const directedEdgeShare = Math.max(1, Math.floor(remainingDirectedEdges / remainingStarts));
       const reachable = await context.repository.getReachableGraph({
         startNodeId: start.nodeId,
         maximumDistanceMeters: routeCapMeters,
-        maximumDirectedEdges: remainingDirectedEdges,
+        maximumDirectedEdges: directedEdgeShare,
         includeUncertainAccess: request.includeUncertainAccess,
         coverage: context.accessFilter.coverage,
         signal: context.signal,
@@ -236,7 +238,7 @@ export class DeterministicMultiStartRouteSolver implements RouteSolverV2 {
       searchedAccessPointCount += 1;
       loadedDirectedEdges += reachable.graph.edges.length;
       maximumLoadedDirectedEdges = Math.max(maximumLoadedDirectedEdges, reachable.graph.edges.length);
-      if (reachable.truncated) truncationReasons.add("maximum-directed-edges");
+      if (reachable.truncated) truncationReasons.add("per-start-edge-share");
       reachableByStart.set(start.id, reachable.graph);
     }
 
