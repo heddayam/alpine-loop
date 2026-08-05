@@ -402,12 +402,25 @@ function buildProfile(
 
   const decisionNodeIdsForBlock = (block: BlockWork): number[] => block.nodeKeys
     .map((key) => decisionIdByNode.get(key)).filter((id): id is number => id !== undefined).sort((a, b) => a - b);
+  const decisionEdgesByBlock = new Map<number, number[]>();
+  for (const edge of decisionEdges) {
+    if (edge.vertexBlockId === null) continue;
+    const values = decisionEdgesByBlock.get(edge.vertexBlockId) ?? [];
+    values.push(edge.decisionEdgeKey);
+    decisionEdgesByBlock.set(edge.vertexBlockId, values);
+  }
+  const denseEdgesByBlock = new Map<number, DenseEdge[]>();
+  for (const edge of edges) {
+    const blockId = blockByPhysical.get(edge.physicalEdgeKey)?.blockId;
+    if (blockId === undefined) continue;
+    const values = denseEdgesByBlock.get(blockId) ?? [];
+    values.push(edge);
+    denseEdgesByBlock.set(blockId, values);
+  }
   const blocks: TopologyProfileBuild["blocks"] = decomposition.blocks.map((block) => {
     const blockPhysical = block.edgeKeys.map((key) => physicalByKey.get(key)!);
-    const decisionEdgeKeys = decisionEdges.filter(({ vertexBlockId }) => vertexBlockId === block.blockId)
-      .map(({ decisionEdgeKey }) => decisionEdgeKey).sort((a, b) => a - b);
-    const blockPhysicalKeys = new Set(block.edgeKeys);
-    const blockDenseEdges = edges.filter(({ physicalEdgeKey }) => blockPhysicalKeys.has(physicalEdgeKey));
+    const decisionEdgeKeys = [...(decisionEdgesByBlock.get(block.blockId) ?? [])].sort((a, b) => a - b);
+    const blockDenseEdges = denseEdgesByBlock.get(block.blockId) ?? [];
     const elevations = blockDenseEdges.map(({ maxElevationM }) => maxElevationM).filter((value): value is number => value !== null);
     const elevationExtrema = topologyExtrema(elevations);
     const trailNames = [...new Set(blockDenseEdges.flatMap(({ flags }) => flags.filter((flag) => flag.startsWith("trail-name:")).map((flag) => flag.slice(11))))].sort();

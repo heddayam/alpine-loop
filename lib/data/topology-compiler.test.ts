@@ -11,6 +11,20 @@ it("computes extrema for real-pack-sized blocks without argument spreading", () 
   expect(topologyExtrema(values)).toEqual({ minimum: -75_000, maximum: 74_999 });
 });
 
+it("indexes a long bridge forest without per-block full-edge scans", () => {
+  const nodeCount = 4_000;
+  const nodeIds = Array.from({ length: nodeCount }, (_, index) => `chain-${index.toString().padStart(5, "0")}`);
+  const definitions = nodeIds.slice(1).map((nodeId, index) => ({
+    physical: `bridge-${index.toString().padStart(5, "0")}`,
+    from: nodeIds[index]!,
+    to: nodeId,
+  }));
+  const input = graph(nodeIds, definitions, nodeIds[0]);
+  const result = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options);
+  expect(result.profiles[0]?.blocks).toHaveLength(nodeCount - 1);
+  expect(result.profiles[0]?.accessTopology[0]).toMatchObject({ canReachCycle: false });
+});
+
 function graph(nodeIds: string[], definitions: Array<{
   physical: string; from: string; to: string; access?: "public" | "unknown"; reverse?: boolean;
 }>, accessNode?: string) {
