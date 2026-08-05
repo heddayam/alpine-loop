@@ -490,10 +490,14 @@ export class SQLiteClosedRouteTopologyRepository implements ClosedRouteTopologyR
     this.#assertOpen();
     const memberStatement = this.#database.prepare(`
       SELECT m.profile, m.sequence_index, m.edge_key, m.physical_edge_key,
-             e.*, p.stable_physical_id
+             e.*, p.stable_physical_id,
+             from_node.elevation_m AS from_elevation_m,
+             to_node.elevation_m AS to_elevation_m
       FROM topology_decision_edge_members m
       JOIN edges e ON e.edge_key = m.edge_key
       JOIN physical_edges p ON p.physical_edge_key = m.physical_edge_key
+      JOIN nodes from_node ON from_node.id = e.from_node
+      JOIN nodes to_node ON to_node.id = e.to_node
       WHERE m.decision_edge_key = ?
       ORDER BY m.profile, m.sequence_index
     `);
@@ -513,10 +517,15 @@ export class SQLiteClosedRouteTopologyRepository implements ClosedRouteTopologyR
         const flags = stringArray(row.flags, "edge flags");
         const encodedTrailName = flags.find((flag) => flag.startsWith("trail-name:"))?.slice("trail-name:".length);
         const physicalEdgeKey = requiredInteger(row, "physical_edge_key");
-        result.push(freezeRecord({
+        const endpointElevations = [
+          nullableNumber(row, "from_elevation_m"),
+          nullableNumber(row, "to_elevation_m"),
+        ].filter((value): value is number => value !== null);
+        const reconstructed = freezeRecord({
           edgeKey: requiredInteger(row, "edge_key"),
           physicalEdgeKey,
           stablePhysicalEdgeId: requiredString(row, "stable_physical_id"),
+          minimumElevationMeters: endpointElevations.length ? Math.min(...endpointElevations) : null,
           id: requiredString(row, "id"),
           fromNodeId: requiredString(row, "from_node"),
           toNodeId: requiredString(row, "to_node"),
@@ -532,7 +541,8 @@ export class SQLiteClosedRouteTopologyRepository implements ClosedRouteTopologyR
             : encodedTrailName || null,
           sourceIds: [...stringArray(row.source_refs, "edge source_refs")],
           flags: [...flags],
-        }));
+        });
+        result.push(reconstructed);
       });
     }
     return result;
