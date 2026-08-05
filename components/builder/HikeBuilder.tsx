@@ -93,7 +93,14 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     });
     void fetch(`/api/packs/${pack.id}/access-points?${query}`, { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Access points could not be loaded.");
+        if (!response.ok) {
+          const payload: unknown = await response.json().catch(() => null);
+          const message = payload && typeof payload === "object" && "error" in payload &&
+            typeof payload.error === "string"
+            ? payload.error
+            : "Access points could not be loaded.";
+          throw new Error(message);
+        }
         return response.json() as Promise<{ accessPoints?: AccessPointOption[]; trailNetwork?: unknown }>;
       })
       .then((payload) => {

@@ -221,8 +221,14 @@ export function HikeMap({
       routeMarkerConstructorRef.current = Marker;
       map = new Map({
         container: containerRef.current,
-        center: display.center,
-        zoom: display.zoom,
+        bounds: [
+          [packCoverage[0], packCoverage[1]],
+          [packCoverage[2], packCoverage[3]],
+        ],
+        fitBoundsOptions: {
+          padding: { top: 64, right: 44, bottom: 40, left: 44 },
+          maxZoom: display.zoom,
+        },
         attributionControl: { compact: true },
         style: {
           version: 8,

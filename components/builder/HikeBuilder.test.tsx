@@ -180,6 +180,19 @@ describe("HikeBuilder", () => {
     await waitFor(() => expect(screen.getByText("No known access points are inside this boundary.")).toHaveAttribute("role", "status"));
   });
 
+  it("shows the actionable server message when map context is too large", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      error: "Boundary contains too many mapped trail segments; draw a smaller rectangle",
+    }), { status: 422 }));
+    render(<HikeBuilder />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture boundary" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Boundary contains too many mapped trail segments; draw a smaller rectangle",
+    );
+  });
+
   it("clears an access selection when the hard boundary is cleared", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 }));
     render(<HikeBuilder />);
