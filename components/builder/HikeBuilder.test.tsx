@@ -185,6 +185,24 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByText(/Santa Cruz Mountains batch search complete/)).toBeInTheDocument();
   });
 
+  it("does not keep polling after the initial refresh when no job is active", async () => {
+    vi.useFakeTimers();
+    vi.restoreAllMocks();
+    let listRequests = 0;
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && !init?.method) {
+        listRequests += 1;
+        return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
+      }
+      return undefined;
+    });
+    render(<HikeBuilder />);
+    await act(async () => undefined);
+    expect(listRequests).toBe(1);
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    expect(listRequests).toBe(1);
+  });
+
   it("keeps the current controller when simultaneous forced refreshes replace a stale request", async () => {
     vi.restoreAllMocks();
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");

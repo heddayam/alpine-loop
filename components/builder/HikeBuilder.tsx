@@ -470,16 +470,22 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     finally { setBatchPageLoading(false); }
   };
 
+  const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
+
   useEffect(() => {
+    const needsInitialRefresh = !jobsLoadedRef.current;
+    if (!needsInitialRefresh && activeJobCount === 0) return;
     let stopped = false;
     let timer: number | undefined;
     const poll = async () => {
       await refreshJobs();
-      if (!stopped) timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
+      const hasActiveJob = jobsRef.current.some((job) => ACTIVE_JOB_STATUSES.has(job.status));
+      if (!stopped && hasActiveJob) timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
     };
-    void poll();
+    if (needsInitialRefresh) void poll();
+    else timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
     return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); };
-  }, [jobsOpen, refreshJobs]);
+  }, [activeJobCount, jobsOpen, refreshJobs]);
 
   useEffect(() => {
     const onVisibilityChange = () => { if (document.visibilityState === "visible") void refreshJobs(true); };
@@ -496,7 +502,6 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
   const generatedRoutes = useMemo(() => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [], [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
-  const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
   const selectedRegion = driveDraft.searchRegions.find(({ id }) => id === driveDraft.searchRegionId);
 
   return (
