@@ -93,6 +93,29 @@ describe("RouteJobService", () => {
     store.close();
   });
 
+  it("yields between trailheads so progress requests are not starved", async () => {
+    const accessPointIds = Array.from({ length: 500 }, (_, index) => `access-${index}`);
+    let searched = 0;
+    const { service, store } = harness({
+      openSearchSession: vi.fn(async () => ({
+        enumerateEligibleAccessPointIds: vi.fn(async () => accessPointIds),
+        searchAccessPoint: vi.fn(async () => {
+          searched += 1;
+          return { exact: [], nearMisses: [], truncated: false };
+        }),
+        close: vi.fn(async () => undefined),
+      })),
+    });
+    await service.create(request);
+    const searchedWhenTimerRan = await new Promise<number>((resolve) => {
+      setTimeout(() => resolve(searched), 0);
+    });
+    expect(searchedWhenTimerRan).toBeLessThan(accessPointIds.length);
+    await service.waitUntilIdle();
+    expect(searched).toBe(accessPointIds.length);
+    store.close();
+  });
+
   it("rejects malformed cursors and round-trips tuple cursors", () => {
     const cursor = { matchRank: 1, accessOrdinal: 2, resultOrdinal: 3, routeId: "route" };
     expect(decodeResultCursor(encodeResultCursor(cursor))).toEqual(cursor);
