@@ -4,10 +4,12 @@ import type { Coordinate } from "./types";
 const EARTH_RADIUS_M = 6_371_008.8;
 const MAX_SAMPLE_SPACING_M = 25;
 const ELEVATION_NOISE_THRESHOLD_M = 1;
-const SUSTAINED_GRADE_WINDOW_M = 100;
-// 3DEP is nominally 10 m. Slopes over shorter OSM vertex gaps amplify raster
-// interpolation noise and are not defensible as a sustained-grade metric.
-const MINIMUM_GRADE_RUN_M = 10;
+export const SUSTAINED_GRADE_WINDOW_M = 100;
+
+export type ElevationProfileSample = {
+  distanceMeters: number;
+  elevationMeters: number;
+};
 
 export type EdgeMetrics = {
   lengthM: number;
@@ -55,6 +57,60 @@ function cumulativeDistances(coordinates: readonly Coordinate[]): number[] {
   return distances;
 }
 
+function interpolatedElevation(
+  before: ElevationProfileSample,
+  after: ElevationProfileSample,
+  distanceMeters: number,
+): number {
+  if (after.distanceMeters === distanceMeters) return after.elevationMeters;
+  const ratio = (distanceMeters - before.distanceMeters) / (after.distanceMeters - before.distanceMeters);
+  return before.elevationMeters + (after.elevationMeters - before.elevationMeters) * ratio;
+}
+
+/** Maximum absolute grade over an exact rolling window, never a shorter fragment. */
+export function maximumSustainedGradePct(
+  samples: readonly ElevationProfileSample[],
+  windowMeters = SUSTAINED_GRADE_WINDOW_M,
+): number | null {
+  if (!Number.isFinite(windowMeters) || windowMeters <= 0) throw new Error("Sustained-grade window must be positive");
+  if (samples.length < 2) return null;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index]!;
+    if (!Number.isFinite(sample.distanceMeters) || !Number.isFinite(sample.elevationMeters)
+      || (index > 0 && sample.distanceMeters <= samples[index - 1]!.distanceMeters)) {
+      throw new Error("Elevation profile samples must be finite and strictly increasing by distance");
+    }
+  }
+  const firstDistance = samples[0]!.distanceMeters;
+  const finalDistance = samples.at(-1)!.distanceMeters;
+  const finalStart = finalDistance - windowMeters;
+  if (finalStart < firstDistance) return null;
+
+  // For a piecewise-linear profile, extrema of f(x + window) - f(x) occur
+  // where either endpoint crosses a profile sample. Two monotonic scans cover
+  // those candidates in O(n), which matters when evaluating many routes.
+  let maximum = 0;
+  let endIndex = 1;
+  for (const start of samples) {
+    if (start.distanceMeters > finalStart) break;
+    const endDistance = start.distanceMeters + windowMeters;
+    while (samples[endIndex]!.distanceMeters < endDistance) endIndex += 1;
+    maximum = Math.max(maximum, Math.abs(
+      interpolatedElevation(samples[endIndex - 1]!, samples[endIndex]!, endDistance) - start.elevationMeters,
+    ) / windowMeters * 100);
+  }
+  let startIndex = 1;
+  for (const end of samples) {
+    const startDistance = end.distanceMeters - windowMeters;
+    if (startDistance < firstDistance) continue;
+    while (samples[startIndex]!.distanceMeters < startDistance) startIndex += 1;
+    maximum = Math.max(maximum, Math.abs(
+      end.elevationMeters - interpolatedElevation(samples[startIndex - 1]!, samples[startIndex]!, startDistance),
+    ) / windowMeters * 100);
+  }
+  return maximum;
+}
+
 export async function calculateEdgeMetrics(
   geometry: readonly Coordinate[],
   sampler: ElevationSampler,
@@ -84,20 +140,10 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
     else lossM += -delta;
   }
 
-  let maxSustainedGradePct: number | null = lengthM < MINIMUM_GRADE_RUN_M ? null : 0;
-  if (maxSustainedGradePct === null) {
-    return { lengthM, gainM, lossM, maxElevationM: Math.max(...samples), maxSustainedGradePct, samples };
-  }
-  for (let start = 0; start < distances.length - 1; start += 1) {
-    let end = start + 1;
-    while (end < distances.length - 1 && distances[end] - distances[start] < SUSTAINED_GRADE_WINDOW_M) end += 1;
-    const runM = distances[end] - distances[start];
-    if (runM <= 0) continue;
-    maxSustainedGradePct = Math.max(
-      maxSustainedGradePct,
-      Math.abs(samples[end] - samples[start]) / runM * 100,
-    );
-  }
+  const maxSustainedGradePct = maximumSustainedGradePct(distances.map((distanceMeters, index) => ({
+    distanceMeters,
+    elevationMeters: samples[index]!,
+  })));
 
   return {
     lengthM,

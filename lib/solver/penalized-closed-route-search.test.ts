@@ -113,6 +113,20 @@ describe("searchPenalizedClosedRoutes", () => {
     }
   });
 
+  it("uses a route-wide sustained-grade prefilter and retains failures for authoritative validation", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      steepestSustainedGradePct: { min: 0, max: 5 },
+    }), { budget });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.length).toBeGreaterThan(0);
+  });
+
   it("constructs a bridge-stem lollipop when repetition is allowed", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "p", length: 500 },

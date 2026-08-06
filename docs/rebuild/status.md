@@ -51,6 +51,17 @@ the evidence line.
     Thorough checkpoint returned only validated routes with zero directed
     validation rejections.
 
+## Post-gate fixes
+
+- 2026-08-06 — corrected steepest sustained grade to use exact rolling 100 m
+  windows across reconstructed edge boundaries, with a conditional linear-time
+  search prefilter and authoritative post-reconstruction classification. The
+  rebuilt schema-4 pack `scm-dc5ca38b5b94a230` has 0 graded edges shorter than
+  100 m, 11,057 edges with valid sustained-grade measurements, and zero audit
+  errors. `npm run verify` passes 323 tests across 60 files plus the production
+  build; two consecutive `npm run test:browser` runs pass all four Chromium
+  flows; the real-pack checkpoint reports zero directed-validation rejections.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

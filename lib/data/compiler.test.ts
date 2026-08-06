@@ -41,7 +41,7 @@ describe("fixture pack compiler", () => {
     expect(manifest).toMatchObject({
       id: "fixture-pack",
       dataVersion: "fixture-v1",
-      metricAlgorithmVersion: "nearest-fixture-v1+metrics-v2",
+      metricAlgorithmVersion: "nearest-fixture-v1+metrics-v3",
       capabilities: { elevation: true, officialAccess: true },
     });
     expect(manifest.sources).toHaveLength(3);

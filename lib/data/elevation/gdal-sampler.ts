@@ -47,7 +47,7 @@ export async function prepareThreeDepVrt(
 }
 
 export class GdalThreeDepElevationSampler implements ElevationSampler {
-  readonly algorithmVersion = "usgs-3dep-13as-bilinear+metrics-v2";
+  readonly algorithmVersion = "usgs-3dep-13as-bilinear+metrics-v3";
 
   constructor(
     private readonly vrtPath: string,

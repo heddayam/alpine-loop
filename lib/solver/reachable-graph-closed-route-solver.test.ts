@@ -273,6 +273,20 @@ describe("ReachableGraphClosedRouteSolver", () => {
     ]));
   });
 
+  test("applies sustained-grade ranges after route reconstruction", async () => {
+    const point = accessPoint();
+    const result = await solver.generate(
+      request({ steepestSustainedGradePct: { min: 0, max: 1 }, limit: 1 }),
+      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+    );
+
+    expect(result.exact).toEqual([]);
+    expect(result.nearMisses[0]).toMatchObject({
+      steepestSustainedGradePct: 2,
+      violations: [expect.objectContaining({ constraint: "steepest-sustained-grade", value: 2 })],
+    });
+  });
+
   test("cheaply evaluates and fairly probes every eligible start without a top-N cutoff", async () => {
     const points = Array.from({ length: 12 }, (_, index) => accessPoint(index));
     const topology = new FixtureFeasibilityRepository(points, 0);

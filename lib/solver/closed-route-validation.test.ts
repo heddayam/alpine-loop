@@ -101,6 +101,23 @@ describe("closed-route reconstruction validation", () => {
     });
   });
 
+  test("measures sustained grade across short edge boundaries", () => {
+    const edges = [
+      edge(50, 50, "s", "a", 50), edge(51, 51, "a", "b", 50),
+      edge(52, 52, "b", "h", 50), edge(53, 53, "h", "s", 50),
+    ];
+    const elevations = [[0, 5], [5, 10], [10, 5], [5, 0]] as const;
+    edges.forEach((item, index) => {
+      item.fromElevationMeters = elevations[index]![0];
+      item.toElevationMeters = elevations[index]![1];
+      item.maximumSustainedGradePct = 80;
+    });
+    const result = validate(edges);
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    expect(result.value.route.steepestSustainedGradePct).toBeCloseTo(10, 8);
+  });
+
   test("distinguishes figure-eight, chained-loop, and complex closed structures", () => {
     const figureEight = validate([
       edge(1, 1, "s", "a"), edge(2, 2, "a", "b"), edge(3, 3, "b", "s"),

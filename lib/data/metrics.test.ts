@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ElevationSampler } from "./adapters";
-import { calculateEdgeMetrics, calculateEdgeMetricsBatch, densifyGeometry, distanceMeters } from "./metrics";
+import {
+  calculateEdgeMetrics,
+  calculateEdgeMetricsBatch,
+  densifyGeometry,
+  distanceMeters,
+  maximumSustainedGradePct,
+} from "./metrics";
 
 describe("edge elevation metrics", () => {
   it("densifies geometry and calculates noise-filtered directional metrics", async () => {
@@ -38,17 +44,27 @@ describe("edge elevation metrics", () => {
     });
   });
 
-  it("does not report grade below the nominal DEM resolution", async () => {
+  it("does not report a sustained grade for an edge shorter than 100 m", async () => {
     const sampler: ElevationSampler = {
       algorithmVersion: "test-v1",
       async sample(coordinates) {
         return coordinates.map((_, index) => 100 + index * 5);
       },
     };
-    const metrics = await calculateEdgeMetrics([[-122.16, 37.16], [-122.15995, 37.16]], sampler);
-    expect(metrics.lengthM).toBeLessThan(10);
+    const metrics = await calculateEdgeMetrics([[-122.16, 37.16], [-122.1595, 37.16]], sampler);
+    expect(metrics.lengthM).toBeGreaterThan(10);
+    expect(metrics.lengthM).toBeLessThan(100);
     expect(metrics.maxElevationM).not.toBeNull();
     expect(metrics.maxSustainedGradePct).toBeNull();
+  });
+
+  it("uses exact rolling 100 m windows, including windows between profile samples", () => {
+    expect(maximumSustainedGradePct([
+      { distanceMeters: 0, elevationMeters: 0 },
+      { distanceMeters: 40, elevationMeters: 0 },
+      { distanceMeters: 80, elevationMeters: 12 },
+      { distanceMeters: 140, elevationMeters: 12 },
+    ])).toBeCloseTo(12, 8);
   });
 
   it("batches multiple edge geometries into bounded sampler calls", async () => {

@@ -9,6 +9,7 @@ import {
   type AreaGeometry,
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
+import { maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
 
 export type ClosedRouteValidationFailure =
   | "empty"
@@ -303,6 +304,16 @@ export function validateReconstructedClosedRoute(
   ])].sort();
   const trailNames = [...new Set(edges.map(({ trailName }) => trailName).filter((name): name is string => Boolean(name)))].sort();
   const elevationSamples = routeElevationSamples(edges);
+  const routeWindowGrade = elevationSamples ? maximumSustainedGradePct(elevationSamples) : null;
+  // Older packs persisted fragment grades on edges shorter than 100 m. Those
+  // values are not sustained grades; route-wide endpoint windows replace them.
+  // Long-edge values retain DEM samples that are not present in the route
+  // endpoint profile.
+  const longEdgeGrades = edges
+    .filter(({ lengthMeters }) => lengthMeters >= SUSTAINED_GRADE_WINDOW_M)
+    .map(({ maximumSustainedGradePct: grade }) => grade)
+    .filter((grade): grade is number => grade !== null);
+  const steepestSustainedGradePct = Math.max(0, routeWindowGrade ?? 0, ...longEdgeGrades);
   return {
     valid: true,
     value: {
@@ -325,7 +336,7 @@ export function validateReconstructedClosedRoute(
         elevationLossMeters: edges.reduce((sum, edge) => sum + edge.lossMeters, 0),
         minimumElevationMeters: Math.min(...knownMinimumElevations as number[]),
         maximumElevationMeters,
-        steepestSustainedGradePct: Math.max(0, ...edges.map(({ maximumSustainedGradePct }) => maximumSustainedGradePct ?? 0)),
+        steepestSustainedGradePct,
         trailNames,
         warnings,
         ...(elevationSamples ? { elevationSamples } : {}),
