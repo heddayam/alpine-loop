@@ -18,7 +18,7 @@ describe("builder V3 request validation", () => {
       accessFilter: filter,
       routeFamily: "closed",
       closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
-      searchEffort: "thorough",
+      searchEffort: "quick",
       limit: 10,
       includeUncertainAccess: true,
       accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
@@ -47,7 +47,7 @@ describe("builder V3 request validation", () => {
     expect(repetition.success).toBe(false);
     if (!repetition.success) expect(repetition.errors).toContain("Maximum repeated trail must be a whole percentage from 0 through 100.");
 
-    const stem = buildGenerateRoutesRequest(values({ maximumSharedStemEnabled: true, maximumSharedStemMiles: "2.5", searchEffort: "quick" }), filter);
+    const stem = buildGenerateRoutesRequest(values({ maximumSharedStemEnabled: true, maximumSharedStemMiles: "2.5" }), filter);
     expect(stem.success).toBe(true);
     if (stem.success) expect(stem.request).toMatchObject({
       closedRoute: { maximumSharedStemMiles: 2.5 },

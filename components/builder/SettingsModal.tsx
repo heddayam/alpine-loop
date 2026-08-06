@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { AccessPointRemoteness, SearchEffortV3 } from "@/lib/contracts";
+import type { AccessPointRemoteness } from "@/lib/contracts";
 
 const ACCESS_POINT_OPTIONS: Array<{
   id: AccessPointRemoteness;
@@ -16,12 +16,10 @@ const ACCESS_POINT_OPTIONS: Array<{
 
 type SettingsModalProps = {
   open: boolean;
-  searchEffort: SearchEffortV3;
   includeUncertainAccess: boolean;
   accessPointRemoteness: AccessPointRemoteness[];
   limit: string;
   onChange: (patch: {
-    searchEffort?: SearchEffortV3;
     includeUncertainAccess?: boolean;
     accessPointRemoteness?: AccessPointRemoteness[];
     limit?: string;
@@ -31,7 +29,6 @@ type SettingsModalProps = {
 
 export function SettingsModal({
   open,
-  searchEffort,
   includeUncertainAccess,
   accessPointRemoteness,
   limit,
@@ -149,19 +146,8 @@ export function SettingsModal({
                 onChange={(event) => onChange({ includeUncertainAccess: event.currentTarget.checked })}
               />
             </label>
-            <label className="select-field" htmlFor="settings-search-effort">
-              Search effort
-              <select
-                id="settings-search-effort"
-                value={searchEffort}
-                onChange={(event) => onChange({ searchEffort: event.currentTarget.value as SearchEffortV3 })}
-              >
-                <option value="quick">Quick · up to 3 seconds</option>
-                <option value="thorough">Thorough · up to 15 seconds</option>
-              </select>
-            </label>
             <div className="count-field">
-              <label htmlFor="settings-route-count">Number of routes</label>
+              <label htmlFor="settings-route-count">Quick-search routes</label>
               <input
                 id="settings-route-count"
                 type="number"
@@ -170,7 +156,7 @@ export function SettingsModal({
                 value={limit}
                 onChange={(event) => onChange({ limit: event.currentTarget.value })}
               />
-              <small>1 to 20 alternatives</small>
+              <small>1 to 20 Explore alternatives</small>
             </div>
           </section>
         </div>

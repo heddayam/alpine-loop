@@ -17,6 +17,7 @@ type ResultsPanelProps = {
   onSelectRoute: (routeId: string) => void;
   mobileVisible?: boolean;
   desktopVisible?: boolean;
+  pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
 };
 
 const METERS_PER_MILE = 1609.344;
@@ -208,6 +209,7 @@ export function ResultsPanel({
   onSelectRoute,
   mobileVisible = true,
   desktopVisible = true,
+  pagination,
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const panelClassName = [
@@ -330,6 +332,15 @@ export function ResultsPanel({
           ) : null}
         </div>
       )}
+
+      {pagination ? (
+        <nav className="results-pagination" aria-label="Batch result pages">
+          <span>Showing this 50-route page</span>
+          <button type="button" disabled={!pagination.hasNext || pagination.loading} onClick={pagination.onNext}>
+            {pagination.loading ? "Loading…" : pagination.hasNext ? "Next 50 routes" : "Last page"}
+          </button>
+        </nav>
+      ) : null}
 
       <details className="diagnostics">
         <summary>Search diagnostics</summary>

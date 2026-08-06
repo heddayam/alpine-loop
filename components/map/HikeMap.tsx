@@ -681,7 +681,7 @@ export function HikeMap({
       </div> : null}
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
       <output className="map-status" aria-label="Map status">
-        <span className="map-status-boundary">{mode === "drawn-area" ? mapStatus.boundary : mode === "named-region" ? "Named region" : "Drive time"}</span>
+        <span className="map-status-boundary">{mode === "explore" ? mapStatus.boundary : "Batch search"}</span>
         {mapStatus.dimensions ? <span className="map-status-dimensions">{mapStatus.dimensions}</span> : null}
         {mapStatus.coverage ? <span className="map-status-coverage">{mapStatus.coverage}</span> : null}
         <span className="map-status-access">{mapStatus.accessPoints}</span>
@@ -707,7 +707,7 @@ export function HikeMap({
           ? "Draw a trailhead filter. It may extend beyond installed coverage."
           : filterGeometry
             ? "Highlighted areas filter trailheads, not route geometry. Routes remain inside installed coverage."
-            : mode === "drawn-area"
+          : mode === "explore"
               ? "Draw an area or use keyboard coordinates to filter trailheads."
               : "Complete the selected trailhead filter to preview eligible access."}
       </p>

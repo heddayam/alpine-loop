@@ -98,7 +98,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .boundary-summary.complete { color: var(--forest); border-style: solid; border-color: #8eb0a2; }
 .boundary-summary.complete > span { background: var(--forest-2); }
 .filter-explainer { padding: .42rem .48rem; color: #173f35 !important; background: #e7f0eb; border-left: 3px solid #2a705a; font-weight: 750; }
-.filter-mode-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .2rem; margin: .45rem 0; }
+.filter-mode-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .2rem; margin: .45rem 0; }
 .filter-mode-tabs label { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .06rem .22rem; align-content: start; padding: .36rem .3rem; cursor: pointer; background: #fff; border: 1px solid #c5ccc7; }
 .filter-mode-tabs label.selected { background: #eaf0ed; border-color: var(--forest-2); box-shadow: inset 0 -3px 0 var(--forest-2); }
 .filter-mode-tabs input { grid-row: 1 / span 2; margin: .08rem 0 0; accent-color: var(--forest-2); }
@@ -184,6 +184,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .cancel-button { min-height: 2rem; margin: 0; padding: .4rem .5rem; cursor: pointer; color: var(--danger); background: #fff; border: 1px solid #cfaaa2; border-radius: .1rem; font-size: .6rem; font-weight: 800; }
 .cancel-button:hover { background: #faece8; }
 .generation-status { margin: .35rem 0 0; padding: .38rem .45rem; color: var(--forest); background: #e8f0ec; border-radius: .1rem; font-size: .56rem; }
+.auto-search-note { margin: 0; color: var(--forest); font-size: .58rem; font-weight: 750; }
+.topbar-actions { display: flex; gap: .35rem; align-items: center; }
+.jobs-button { min-height: 1.8rem; padding: .3rem .55rem; cursor: pointer; color: #fff; background: transparent; border: 1px solid rgb(255 255 255 / 45%); border-radius: .12rem; font-size: .58rem; font-weight: 800; }
+.jobs-button:hover { background: rgb(255 255 255 / 12%); }
+.jobs-modal { width: min(44rem, 100%); }
+.jobs-list { gap: .55rem; }
+.job-card { display: grid; gap: .45rem; padding: .6rem; background: #fff; border: 1px solid #c6cec8; border-left: 3px solid var(--forest-2); }
+.job-card > header { display: flex; gap: .6rem; align-items: start; justify-content: space-between; }
+.job-card > header > div { min-width: 0; display: grid; gap: .08rem; }
+.job-card > header strong { font-size: .68rem; }
+.job-card > header small { overflow: hidden; color: var(--muted); font-size: .52rem; text-overflow: ellipsis; white-space: nowrap; }
+.job-status { flex: 0 0 auto; padding: .18rem .35rem; color: #fff; background: var(--slate); border-radius: 999px; font-size: .48rem; font-weight: 850; text-transform: uppercase; }
+.status-completed { background: var(--forest-2); }
+.status-failed { background: var(--danger); }
+.status-cancelled { color: var(--ink); background: #d9ddd9; }
+.job-card progress { width: 100%; height: .55rem; accent-color: var(--accent); }
+.job-card dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; margin: 0; }
+.job-card dl div { min-width: 0; }
+.job-card dt { overflow: hidden; color: var(--muted); font-size: .43rem; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.job-card dd { margin: .08rem 0 0; font-size: .58rem; font-weight: 800; }
+.job-card footer { display: flex; gap: .35rem; justify-content: flex-end; }
+.job-card footer button, .results-pagination button { min-height: 1.7rem; padding: .3rem .48rem; cursor: pointer; color: var(--forest); background: #fff; border: 1px solid #aeb9b1; font-size: .55rem; font-weight: 800; }
+.job-card footer .danger-button { color: var(--danger); border-color: #cfaaa2; }
+.job-note { margin: 0; color: #6b5b22; font-size: .52rem; font-weight: 750; }
+.results-pagination { display: flex; gap: .5rem; align-items: center; justify-content: space-between; margin: .25rem .5rem .5rem; padding: .45rem; background: #fff; border: 1px solid #c5cbc7; font-size: .52rem; }
 
 .map-shell { position: relative; min-width: 0; min-height: 28rem; overflow: hidden; background: #dce1da; }
 .map-canvas { position: absolute; inset: 0; }
@@ -292,6 +317,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .pack-status small { display: none; }
   .desktop-panel-controls { display: none; }
   .settings-button { margin-left: .5rem; }
+  .topbar-actions { margin-left: auto; }
   .workspace, .workspace.with-results { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: clamp(16rem, 48dvh, 28rem) auto minmax(0, 1fr); overflow: hidden; }
   .map-shell { grid-row: 1; position: relative; z-index: 1; height: auto; min-height: 0; }
   .mobile-panel-nav { grid-row: 2; position: relative; z-index: 6; display: grid; grid-template-columns: 1fr 1fr; padding: .35rem; background: #f3f1e9; border-top: 1px solid #bfc8c1; border-bottom: 1px solid #bfc8c1; box-shadow: 0 -3px 12px rgb(31 55 47 / 10%); }
@@ -310,6 +336,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .pack-status { padding-left: .75rem; }
   .pack-status strong { max-width: 7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .settings-button { padding-inline: .4rem; }
+  .jobs-button { padding-inline: .4rem; }
   .shape-grid, .coordinate-grid { grid-template-columns: 1fr; }
   .filter-mode-tabs { grid-template-columns: 1fr; }
   .settings-backdrop { padding: .35rem; }

@@ -77,7 +77,7 @@ export function buildGenerateRoutesRequest(
     ...(steepestGrade.value ? { steepestSustainedGradePct: steepestGrade.value } : {}),
     includeUncertainAccess: values.includeUncertainAccess,
     accessPointRemoteness: values.accessPointRemoteness,
-    searchEffort: values.searchEffort,
+    searchEffort: "quick",
     limit,
   };
   const parsed = generateClosedRoutesRequestV3Schema.safeParse(candidate);
