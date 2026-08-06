@@ -1,10 +1,5 @@
 import { resolve } from "node:path";
-import { getSearchRegion } from "@/lib/data/named-area-catalog";
-import {
-  SQLiteClosedRouteFeasibilityRepository,
-  SQLiteGraphRepository,
-} from "@/lib/graph";
-import { loadInstalledPack, loadInstalledPackVersion } from "@/lib/packs/installed-pack";
+import { loadInstalledPack } from "@/lib/packs/installed-pack";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import type { ReachabilityService } from "@/lib/reachability/service";
 import {
@@ -12,14 +7,9 @@ import {
   SQLiteRouteJobStore,
   type RouteJobRunnerDependencies,
 } from "@/lib/route-jobs";
-import {
-  CLOSED_ROUTE_EFFORT_BUDGETS,
-  listEligibleAccessPointCandidates,
-  ReachableGraphClosedRouteSolver,
-} from "@/lib/solver";
 import { ServerApiError } from "./api-error";
-import { resolvedDriveTimeAccessFilter } from "./access-filter";
 import { loadRoutePacks } from "./pack-registry";
+import { RouteJobSolverProcess } from "./route-job-solver-process";
 
 declare global {
   var alpineRouteJobDependencies: RouteJobRunnerDependencies | undefined;
@@ -78,12 +68,6 @@ export async function resolveBatchDriveTime(
   }
 }
 
-function yieldToEventLoop(signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolveYield) => setImmediate(resolveYield)).then(() => {
-    if (signal.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
-  });
-}
-
 function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
   return {
     async resolveJob(request, signal) {
@@ -117,88 +101,8 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
     },
 
     async openSearchSession(input) {
-      const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
-      if (!installed) throw new ServerApiError("PINNED_PACK_NOT_FOUND", "The pack version used by this job is no longer installed.", 409);
-      const manifest = installed.manifest;
-      if (manifest.schemaVersion !== "4") {
-        throw new ServerApiError("PINNED_PACK_UNSUPPORTED", "The job's pack does not support batch search.", 422);
-      }
-      const region = getSearchRegion(installed.databasePath, input.searchRegionId);
-      if (!region) throw new ServerApiError("SEARCH_REGION_NOT_FOUND", "The job's reviewed search region is unavailable.", 409);
-      const accessFilter = resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {
-        geometry: input.driveTimeGeometry,
-        durationMinutes: input.request.durationMinutes,
-        resolvedAt: new Date().toISOString(),
-        originLabel: input.request.origin.label,
-      }, region);
-      const repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
-      const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({
-        databasePath: installed.databasePath,
-        manifest,
-      });
-      const solver = new ReachableGraphClosedRouteSolver({
-        pack: {
-          id: manifest.id,
-          schemaVersion: manifest.schemaVersion,
-          dataVersion: manifest.dataVersion,
-          builtAt: manifest.builtAt,
-        },
-        sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
-        sourceConfidence: manifest.fieldConfidence.access ?? "low",
-        fallbackSourceIds: manifest.sources.map(({ id }) => id),
-      });
-      return {
-        async enumerateEligibleAccessPointIds(signal) {
-          const { eligible } = await listEligibleAccessPointCandidates({
-            repository,
-            accessFilter,
-            includeUncertainAccess: input.request.criteria.includeUncertainAccess,
-            accessPointRemoteness: input.request.criteria.accessPointRemoteness,
-            signal,
-          });
-          return eligible.map(({ id }) => id);
-        },
-        async searchAccessPoint(accessPointId, signal) {
-          const run = (searchEffort: "quick" | "thorough") => solver.generate({
-              version: 3,
-              packId: manifest.id,
-              accessFilter: {
-                mode: "drive-time",
-                reachabilityId: "00000000-0000-4000-8000-000000000000",
-                regionId: region.id,
-              },
-              startAccessPointId: accessPointId,
-              routeFamily: "closed",
-              ...input.request.criteria,
-              searchEffort,
-              limit: input.request.routesPerAccessPoint,
-            }, {
-              repository,
-              topologyRepository,
-              accessFilter,
-              budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] },
-              signal,
-            });
-          const quick = await run("quick");
-          await yieldToEventLoop(signal);
-          const thorough = await run("thorough");
-          const unique = <T extends { id: string }>(values: readonly T[]): T[] => {
-            const seen = new Set<string>();
-            return values.filter(({ id }) => !seen.has(id) && Boolean(seen.add(id)));
-          };
-          return {
-            exact: unique([...quick.exact, ...thorough.exact]).slice(0, input.request.routesPerAccessPoint),
-            nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
-            truncated: quick.diagnostics.hardTruncationReasons.length > 0
-              || thorough.diagnostics.hardTruncationReasons.length > 0,
-            diagnostics: { quick: quick.diagnostics, thorough: thorough.diagnostics },
-          };
-        },
-        async close() {
-          await topologyRepository.close();
-          await repository.close();
-        },
-      };
+      const { signal, ...workerInput } = input;
+      return RouteJobSolverProcess.open(workerInput, signal);
     },
   };
 }
