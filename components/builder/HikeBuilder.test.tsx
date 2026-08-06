@@ -185,6 +185,36 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByText(/Santa Cruz Mountains batch search complete/)).toBeInTheDocument();
   });
 
+  it("keeps the current controller when simultaneous forced refreshes replace a stale request", async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const first = deferred<Response>();
+    const second = deferred<Response>();
+    const signals: AbortSignal[] = [];
+    let listRequests = 0;
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/route-jobs" || init?.method) return undefined;
+      listRequests += 1;
+      if (init?.signal) signals.push(init.signal);
+      if (listRequests === 1) return first.promise;
+      if (listRequests === 2) return second.promise;
+      return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
+    });
+    render(<HikeBuilder />);
+    await waitFor(() => expect(listRequests).toBe(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(signals[0]?.aborted).toBe(true);
+    first.resolve(new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 }));
+    await waitFor(() => expect(listRequests).toBe(2));
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(signals[1]?.aborted).toBe(true));
+    second.resolve(new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 }));
+    await waitFor(() => expect(listRequests).toBe(3));
+  });
+
   it("guards rapid duplicate Batch launches and exposes its loading state", async () => {
     vi.restoreAllMocks();
     const launchResponse = deferred<Response>();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   routeJobResultsPageSchema,
   type RouteJob,
@@ -67,16 +67,25 @@ export function JobsModal({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const resultsControllerRef = useRef<AbortController | null>(null);
+  const openRef = useRef(open);
+  const mountedRef = useRef(true);
   const [feedback, setFeedback] = useState<{ kind: "status" | "error"; text: string }>();
   const [pendingByJob, setPendingByJob] = useState<Record<string, PendingAction>>({});
   const [now, setNow] = useState(() => Date.now());
+
+  const close = useCallback(() => {
+    openRef.current = false;
+    resultsControllerRef.current?.abort();
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key === "Escape") { event.preventDefault(); close(); return; }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')];
       const first = focusable[0];
@@ -87,7 +96,19 @@ export function JobsModal({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => { document.removeEventListener("keydown", onKeyDown); previousFocusRef.current?.focus(); };
-  }, [onClose, open]);
+  }, [close, open]);
+
+  useEffect(() => {
+    openRef.current = open;
+    if (!open) resultsControllerRef.current?.abort();
+    return () => { if (!open) resultsControllerRef.current?.abort(); };
+  }, [open]);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    openRef.current = false;
+    resultsControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (!open || !jobs.some((job) => ACTIVE_STATUSES.has(job.status) || job.status === "deleting")) return;
@@ -120,26 +141,31 @@ export function JobsModal({
   };
 
   const loadResults = async (job: RouteJob) => {
+    resultsControllerRef.current?.abort();
+    const controller = new AbortController();
+    resultsControllerRef.current = controller;
     setPendingByJob((current) => ({ ...current, [job.id]: "opening" }));
     setFeedback(undefined);
     try {
-      const response = await fetch(`/api/route-jobs/${job.id}/results?limit=50`, { cache: "no-store" });
+      const response = await fetch(`/api/route-jobs/${job.id}/results?limit=50`, { cache: "no-store", signal: controller.signal });
       const payload: unknown = await response.json().catch(() => null);
+      if (controller.signal.aborted || resultsControllerRef.current !== controller || !openRef.current) return;
       if (!response.ok) throw new Error("Job results could not be loaded.");
       onOpenResults(routeJobResultsPageSchema.parse(payload));
     } catch (error) {
-      setFeedback({ kind: "error", text: error instanceof Error ? error.message : "Job results could not be loaded." });
+      if (!controller.signal.aborted && resultsControllerRef.current === controller && openRef.current) setFeedback({ kind: "error", text: error instanceof Error ? error.message : "Job results could not be loaded." });
     } finally {
-      setPendingByJob((current) => { const next = { ...current }; delete next[job.id]; return next; });
+      if (resultsControllerRef.current === controller) resultsControllerRef.current = null;
+      if (mountedRef.current) setPendingByJob((current) => { const next = { ...current }; delete next[job.id]; return next; });
     }
   };
 
   return (
-    <div className="settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div ref={dialogRef} className="settings-modal jobs-modal" role="dialog" aria-modal="true" aria-labelledby="jobs-title" aria-describedby="jobs-description">
         <header className="settings-modal-heading">
           <div><span className="eyebrow">Background route searches</span><h2 id="jobs-title">Jobs</h2></div>
-          <button type="button" className="settings-close" aria-label="Close jobs" onClick={onClose}>×</button>
+          <button type="button" className="settings-close" aria-label="Close jobs" onClick={close}>×</button>
         </header>
         <div className="settings-modal-content jobs-list">
           <p id="jobs-description" className="settings-intro">Jobs are saved on this device, keep running while the app is open, and resume after an app restart. Completed results remain until you delete them.</p>
