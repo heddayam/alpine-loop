@@ -70,6 +70,6 @@ export const DEFAULT_BUILDER_VALUES: BuilderValues = {
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
   steepestSustainedGradePct: { enabled: false, min: "0", max: "20" },
   includeUncertainAccess: true,
-  accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
+  accessPointRemoteness: ["remote", "unknown"],
   limit: "10",
 };

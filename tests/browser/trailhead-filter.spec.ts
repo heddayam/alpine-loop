@@ -34,7 +34,7 @@ test("Batch launches a persistent job and reopens its saved result page", async 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
   await expect(jobs.getByText("Completed", { exact: true })).toBeVisible();
-  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { accessPointRemoteness: ["remote", "rural", "populated", "unknown"], includeUncertainAccess: true } });
+  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { accessPointRemoteness: ["remote", "unknown"], includeUncertainAccess: true } });
   expect(harness.batchRequests[0]).not.toHaveProperty("startAccessPointId");
   expect(harness.batchRequests[0]).not.toHaveProperty("searchEffort");
 
