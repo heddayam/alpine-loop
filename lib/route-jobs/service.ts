@@ -165,43 +165,42 @@ export class RouteJobService {
     }
     if (!job.geometry) throw new Error("Drive-time geometry was not persisted");
 
-    const ids = await this.#dependencies.enumerateEligibleAccessPointIds({
+    const sessionInput = {
       request: job.request,
       pack: job.pack,
       searchRegionId: job.searchRegion.id,
       driveTimeGeometry: job.geometry,
       signal,
-    });
-    if (signal.aborted) throw signal.reason;
-    this.#store.initializeAccessPoints(id, ids);
-
-    for (;;) {
+    };
+    const session = await this.#dependencies.openSearchSession(sessionInput);
+    try {
+      const ids = await session.enumerateEligibleAccessPointIds(signal);
       if (signal.aborted) throw signal.reason;
-      const latest = this.#store.getStored(id);
-      if (!latest || latest.cancelRequested || latest.deleteRequested) throw new DOMException("Cancelled", "AbortError");
-      const point = this.#store.nextAccessPoint(id);
-      if (!point) break;
-      try {
-        const searched = await this.#dependencies.searchAccessPoint({
-          request: latest.request,
-          pack: latest.pack,
-          searchRegionId: latest.searchRegion.id,
-          driveTimeGeometry: latest.geometry!,
-          accessPointId: point.accessPointId,
-          signal,
-        });
+      this.#store.initializeAccessPoints(id, ids);
+
+      for (;;) {
         if (signal.aborted) throw signal.reason;
-        const results: RouteJobResult[] = searched.exact.slice(0, latest.request.routesPerAccessPoint).map((route) => ({
-          matchType: "exact", accessPointId: point.accessPointId, route,
-        }));
-        if (results.length === 0 && searched.nearMisses[0]) results.push({
-          matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
-        });
-        this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
-      } catch (error) {
-        if (signal.aborted || isCancellationError(error)) throw error;
-        this.#store.failAccessPoint(id, point.ordinal, errorMessage(error));
+        const latest = this.#store.getStored(id);
+        if (!latest || latest.cancelRequested || latest.deleteRequested) throw new DOMException("Cancelled", "AbortError");
+        const point = this.#store.nextAccessPoint(id);
+        if (!point) break;
+        try {
+          const searched = await session.searchAccessPoint(point.accessPointId, signal);
+          if (signal.aborted) throw signal.reason;
+          const results: RouteJobResult[] = searched.exact.slice(0, latest.request.routesPerAccessPoint).map((route) => ({
+            matchType: "exact", accessPointId: point.accessPointId, route,
+          }));
+          if (results.length === 0 && searched.nearMisses[0]) results.push({
+            matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
+          });
+          this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
+        } catch (error) {
+          if (signal.aborted || isCancellationError(error)) throw error;
+          this.#store.failAccessPoint(id, point.ordinal, errorMessage(error));
+        }
       }
+    } finally {
+      await session?.close();
     }
     const latest = this.#store.getStored(id);
     if (!latest) return;

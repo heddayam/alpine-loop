@@ -3,6 +3,7 @@ import { finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common"
 import { originSchema } from "./discovery";
 import {
   accessPointRemotenessSelectionSchema,
+  areaGeometrySchema,
   closedRouteTopologyPreferenceV3Schema,
   constraintViolationV3Schema,
   driveTimeDurationSchema,
@@ -61,6 +62,7 @@ export const routeJobSchema = z.object({
     builtAt: isoDateSchema,
   }).strict(),
   searchRegion: z.object({ id: z.string().min(1), name: z.string().min(1) }).strict(),
+  filterGeometry: areaGeometrySchema.optional(),
   progress: routeJobProgressSchema,
   partial: z.boolean(),
   stale: z.boolean(),

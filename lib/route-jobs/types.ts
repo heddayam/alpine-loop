@@ -32,23 +32,21 @@ export type AccessPointSearchResult = {
   diagnostics?: unknown;
 };
 
+export type RouteJobSearchSession = {
+  enumerateEligibleAccessPointIds(signal: AbortSignal): Promise<readonly string[]>;
+  searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<AccessPointSearchResult>;
+  close(): Promise<void>;
+};
+
 export type RouteJobRunnerDependencies = {
   resolveJob(request: CreateBatchRouteJobV1, signal: AbortSignal): Promise<ResolvedRouteJob>;
   resolveDriveTime(request: CreateBatchRouteJobV1, signal: AbortSignal): Promise<ResolvedDriveTime>;
-  enumerateEligibleAccessPointIds(input: {
-    request: CreateBatchRouteJobV1;
-    pack: PinnedRouteJobPack;
-    searchRegionId: string;
-    driveTimeGeometry: AreaGeometry;
-    signal: AbortSignal;
-  }): Promise<readonly string[]>;
-  searchAccessPoint(input: {
-    request: CreateBatchRouteJobV1;
-    pack: PinnedRouteJobPack;
-    searchRegionId: string;
-    driveTimeGeometry: AreaGeometry;
-    accessPointId: string;
-    signal: AbortSignal;
-  }): Promise<AccessPointSearchResult>;
   currentDataVersion(packId: string): Promise<string | null>;
+  openSearchSession(input: {
+    request: CreateBatchRouteJobV1;
+    pack: PinnedRouteJobPack;
+    searchRegionId: string;
+    driveTimeGeometry: AreaGeometry;
+    signal: AbortSignal;
+  }): Promise<RouteJobSearchSession>;
 };
