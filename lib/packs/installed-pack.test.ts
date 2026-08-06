@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadInstalledPack } from "./installed-pack";
+import { loadInstalledPack, loadInstalledPackVersion } from "./installed-pack";
 
 const temporaryRoots: string[] = [];
 
@@ -67,6 +67,22 @@ describe("installed pack discovery", () => {
     const installed = await loadInstalledPack("santa-cruz-mountains", root);
     expect(installed?.manifest.name).toBe("Santa Cruz Mountains");
     expect(installed?.databasePath).toBe(path.join(root, "santa-cruz-mountains", "2026-08-04", "pack.sqlite"));
+  });
+
+  it("loads a pinned historical data version without consulting the current pointer", async () => {
+    const root = await packRoot();
+    await writeFile(path.join(root, "santa-cruz-mountains", "current.json"), JSON.stringify({
+      dataVersion: "newer-version",
+      path: "newer-version/manifest.json",
+    }));
+    const installed = await loadInstalledPackVersion("santa-cruz-mountains", "2026-08-04", root);
+    expect(installed?.manifest.dataVersion).toBe("2026-08-04");
+  });
+
+  it("rejects unsafe historical version identifiers", async () => {
+    const root = await packRoot();
+    await expect(loadInstalledPackVersion("santa-cruz-mountains", "../outside", root))
+      .rejects.toThrow("Invalid pack data version");
   });
 
   it("loads a schema-2 pack with exact coverage and named areas", async () => {

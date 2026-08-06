@@ -55,6 +55,31 @@ function drawnGeometry([west, south, east, north]: Extract<AccessFilterV2, { mod
   };
 }
 
+export function resolvedDriveTimeAccessFilter(
+  pack: Pick<FilterablePack, "coverage">,
+  reachability: ResolvedReachability,
+  region: NamedArea,
+): ResolvedServerAccessFilter {
+  const parsed = resolvedReachabilitySchema.parse(reachability);
+  return {
+    summary: {
+      mode: "drive-time",
+      label: `${parsed.durationMinutes} min from ${parsed.originLabel}`,
+      region: { id: region.id, name: region.name },
+      driveTime: {
+        minutes: parsed.durationMinutes,
+        provider: "arcgis",
+        resolvedAt: parsed.resolvedAt,
+        originLabel: parsed.originLabel,
+      },
+    },
+    predicates: [parsed.geometry, region.geometry],
+    coverage: pack.coverage,
+    filterGeometry: parsed.geometry,
+    refinementGeometry: region.geometry,
+  };
+}
+
 async function requireNamedArea(pack: FilterablePack, regionId: string): Promise<NamedArea> {
   if (!pack.getNamedArea) {
     throw new ServerApiError("NAMED_AREAS_UNAVAILABLE", "This installed pack does not provide named regions.", 422);
