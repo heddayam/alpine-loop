@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreateBatchRouteJobV1, GeneratedClosedRouteV3 } from "@/lib/contracts";
+import { createRouteJobCancelHandler, createRouteJobCollectionHandlers } from "./http";
 import { RouteJobService, decodeResultCursor, encodeResultCursor } from "./service";
 import { SQLiteRouteJobStore } from "./store";
 import type { RouteJobRunnerDependencies } from "./types";
@@ -93,26 +94,65 @@ describe("RouteJobService", () => {
     store.close();
   });
 
-  it("yields between trailheads so progress requests are not starved", async () => {
-    const accessPointIds = Array.from({ length: 500 }, (_, index) => `access-${index}`);
-    let searched = 0;
+  it("services list and cancel HTTP requests between CPU-heavy trailhead checkpoints", async () => {
+    let releaseFirst!: () => void;
+    const firstFinished = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const searched: string[] = [];
     const { service, store } = harness({
       openSearchSession: vi.fn(async () => ({
-        enumerateEligibleAccessPointIds: vi.fn(async () => accessPointIds),
-        searchAccessPoint: vi.fn(async () => {
-          searched += 1;
+        enumerateEligibleAccessPointIds: vi.fn(async () => ["first", "second"]),
+        searchAccessPoint: vi.fn(async (accessPointId: string) => {
+          searched.push(accessPointId);
+          if (accessPointId === "first") {
+            const deadline = performance.now() + 40;
+            let iterations = 0;
+            while (performance.now() < deadline) iterations += 1;
+            expect(iterations).toBeGreaterThan(0);
+            releaseFirst();
+          }
           return { exact: [], nearMisses: [], truncated: false };
         }),
         close: vi.fn(async () => undefined),
       })),
     });
-    await service.create(request);
-    const searchedWhenTimerRan = await new Promise<number>((resolve) => {
-      setTimeout(() => resolve(searched), 0);
+    const job = await service.create(request);
+    await firstFinished;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(searched).toEqual(["first"]);
+    const collection = createRouteJobCollectionHandlers(service);
+    const listResponse = await collection.GET();
+    expect(listResponse.status).toBe(200);
+    expect(await listResponse.json()).toMatchObject({
+      jobs: [{ id: job.id, progress: { processedAccessPointCount: 1 } }],
     });
-    expect(searchedWhenTimerRan).toBeLessThan(accessPointIds.length);
+
+    const cancelResponse = await createRouteJobCancelHandler(service)(
+      new Request(`http://localhost/api/route-jobs/${job.id}/cancel`, { method: "POST" }),
+      { params: Promise.resolve({ id: job.id }) },
+    );
+    expect(cancelResponse.status).toBe(200);
+    expect(searched).toEqual(["first"]);
     await service.waitUntilIdle();
-    expect(searched).toBe(accessPointIds.length);
+    expect(await service.get(job.id)).toMatchObject({
+      status: "cancelled",
+      partial: true,
+      progress: { processedAccessPointCount: 1 },
+    });
+    expect(searched).toEqual(["first"]);
+    store.close();
+  });
+
+  it("looks up the current pack version once per pack when listing jobs", async () => {
+    const { service, dependencies, store } = harness();
+    await service.create(request);
+    await service.create({ ...request, origin: { ...request.origin, label: "Other" } });
+    await service.waitUntilIdle();
+    vi.mocked(dependencies.currentDataVersion).mockClear();
+
+    expect(await service.list()).toHaveLength(2);
+    expect(dependencies.currentDataVersion).toHaveBeenCalledTimes(1);
+    expect(dependencies.currentDataVersion).toHaveBeenCalledWith("fixture-pack");
     store.close();
   });
 
