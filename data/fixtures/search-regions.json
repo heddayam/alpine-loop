@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:fixture-pack",
+      "expectedName": "Compiler Fixture Pack"
+    },
+    {
+      "namedAreaId": "osm:relation/1001",
+      "expectedName": "Redwood Preserve"
+    }
+  ]
+}

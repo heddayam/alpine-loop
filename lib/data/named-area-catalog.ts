@@ -2,8 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import {
   namedAreaSchema,
   namedAreaSummarySchema,
+  searchRegionSummarySchema,
   type NamedArea,
   type NamedAreaSummary,
+  type SearchRegionSummary,
 } from "@/lib/contracts";
 import { namedAreaSearchKey } from "./named-areas";
 
@@ -18,6 +20,25 @@ function rowSummary(row: NamedAreaRow): NamedAreaSummary {
     bbox: [row.min_lon, row.min_lat, row.max_lon, row.max_lat],
     sourceIds: JSON.parse(String(row.source_refs)),
   });
+}
+
+export function listSearchRegions(databasePath: string): SearchRegionSummary[] {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const rows = database.prepare(`
+      SELECT a.id, a.name, a.kind, a.context, a.min_lon, a.min_lat, a.max_lon, a.max_lat,
+        a.source_refs, r.display_order
+      FROM search_regions r
+      JOIN named_areas a ON a.id = r.named_area_id
+      ORDER BY r.display_order, a.id
+    `).all() as NamedAreaRow[];
+    return rows.map((row) => searchRegionSummarySchema.parse({
+      ...rowSummary(row),
+      displayOrder: row.display_order,
+    }));
+  } finally {
+    database.close();
+  }
 }
 
 function likePattern(value: string): string {

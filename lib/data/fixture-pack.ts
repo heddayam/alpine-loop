@@ -6,6 +6,7 @@ import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";
 import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
 import { sha256File } from "./file-source";
+import { readSearchRegionInput } from "./search-regions";
 
 const RETRIEVED_AT = "2026-08-04T00:00:00Z";
 
@@ -57,6 +58,13 @@ export const fixturePackSeedV3: PackSeed = {
     policyVersion: "closed-route-decision-graph-v1",
     profiles: ["known", "inclusive"],
   },
+};
+
+export const fixturePackSeedV4: PackSeed = {
+  ...fixturePackSeedV3,
+  schemaVersion: "4",
+  dataVersion: "fixture-v4",
+  capabilities: { ...fixturePackSeedV3.capabilities, batchSearchRegions: true },
 };
 
 export async function fixtureCompileOptions(
@@ -133,4 +141,21 @@ export async function fixtureCompileOptionsV3(
     ...overrides,
     seed: overrides.seed ?? fixturePackSeedV3,
   });
+}
+
+export async function fixtureCompileOptionsV4(
+  outputRoot: string,
+  fixtureRoot = path.resolve("data/fixtures/source"),
+  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
+  searchRegionPath = path.resolve("data/fixtures/search-regions.json"),
+  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish" | "searchRegions">> = {},
+): Promise<CompilePackOptions> {
+  const base = await fixtureCompileOptionsV3(outputRoot, fixtureRoot, namedAreaFixtureRoot, {
+    ...overrides,
+    seed: overrides.seed ?? fixturePackSeedV4,
+  });
+  return {
+    ...base,
+    searchRegions: overrides.searchRegions ?? await readSearchRegionInput(searchRegionPath),
+  };
 }

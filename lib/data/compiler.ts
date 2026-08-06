@@ -7,9 +7,11 @@ import {
   packManifestV1Schema,
   packManifestV2Schema,
   packManifestV3Schema,
+  packManifestV4Schema,
   type PackManifestV1,
   type PackManifestV2,
   type PackManifestV3,
+  type PackManifestV4,
 } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import type {
@@ -24,6 +26,7 @@ import { reconcileAccess } from "./access";
 import { calculateEdgeMetricsBatch } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
+import { validateSearchRegions, type SearchRegionInput } from "./search-regions";
 import type { PopulationSampler } from "./population";
 import { computeLocalRelief, RELIEF_RADIUS_M } from "./remoteness";
 import { writePackDatabase } from "./sqlite-writer";
@@ -33,6 +36,7 @@ import type {
   Coordinate,
   NormalizedAccessPoint,
   NormalizedNamedArea,
+  NormalizedSearchRegion,
   NormalizedTopology,
   PackAudit,
   PackBuildResult,
@@ -41,7 +45,8 @@ import type {
 export type PackSeed =
   | Omit<PackManifestV1, "builtAt" | "metricAlgorithmVersion" | "sources">
   | Omit<PackManifestV2, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV3, "builtAt" | "metricAlgorithmVersion" | "sources">;
+  | Omit<PackManifestV3, "builtAt" | "metricAlgorithmVersion" | "sources">
+  | Omit<PackManifestV4, "builtAt" | "metricAlgorithmVersion" | "sources">;
 
 export type CompilePackOptions = {
   outputRoot: string;
@@ -58,6 +63,7 @@ export type CompilePackOptions = {
    */
   population?: { sampler: PopulationSampler; snapshot: SourceSnapshot };
   namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
+  searchRegions?: SearchRegionInput;
   beforePublish?: () => void | Promise<void>;
 };
 
@@ -284,7 +290,10 @@ async function addRemotenessFields(
 function createAudit(
   seed: PackSeed,
   topology: NormalizedTopology,
-  graph: Awaited<ReturnType<typeof compileGraph>> & { namedAreas: NormalizedNamedArea[] },
+  graph: Awaited<ReturnType<typeof compileGraph>> & {
+    namedAreas: NormalizedNamedArea[];
+    searchRegions: NormalizedSearchRegion[];
+  },
   sourceCount: number,
 ): PackAudit {
   const accessStateCounts = { ...EMPTY_ACCESS_COUNTS };
@@ -306,6 +315,7 @@ function createAudit(
       namedAreaCount: graph.namedAreas.length,
       rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
     } : {}),
+    ...(seed.schemaVersion === "4" ? { searchRegionCount: graph.searchRegions.length } : {}),
     // Surfaced so a pack built without population data is obvious in the audit
     // rather than quietly classifying every access point as unknown.
     missingPopulationAccessPointCount: graph.accessPoints.filter(
@@ -314,17 +324,19 @@ function createAudit(
   };
 }
 
-async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | "3"): Promise<PackBuildResult | null> {
+async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | "3" | "4"): Promise<PackBuildResult | null> {
   try {
     const manifestPath = path.join(finalDirectory, "manifest.json");
     const auditPath = path.join(finalDirectory, "audit.json");
     const databasePath = path.join(finalDirectory, "pack.sqlite");
-    const manifest = (schemaVersion === "1" ? packManifestV1Schema : schemaVersion === "2" ? packManifestV2Schema : packManifestV3Schema)
+    const manifest = (schemaVersion === "1" ? packManifestV1Schema
+      : schemaVersion === "2" ? packManifestV2Schema
+      : schemaVersion === "3" ? packManifestV3Schema : packManifestV4Schema)
       .parse(JSON.parse(await readFile(manifestPath, "utf8")));
     if (manifest.schemaVersion !== schemaVersion) return null;
     const audit = JSON.parse(await readFile(auditPath, "utf8")) as PackAudit;
     await access(databasePath, constants.R_OK);
-    if (manifest.schemaVersion === "3") {
+    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4") {
       const database = new DatabaseSync(databasePath, { readOnly: true });
       try {
         const metadata = database.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as { value?: string } | undefined;
@@ -336,6 +348,12 @@ async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | 
           profiles: profiles.map(({ profile, content_hash: contentHash }) => ({ profile, contentHash })),
         });
         if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive" || metadata?.value !== expected || audit.topologyContentHash !== expected) return null;
+        if (manifest.schemaVersion === "4") {
+          const regions = database.prepare("SELECT display_order FROM search_regions ORDER BY display_order")
+            .all() as Array<{ display_order: number }>;
+          if (regions.length === 0 || regions.length !== audit.searchRegionCount
+            || regions.some(({ display_order: displayOrder }, index) => displayOrder !== index)) return null;
+        }
       } finally { database.close(); }
     }
     return { packDirectory: finalDirectory, manifestPath, auditPath, databasePath, audit, reusedExisting: true };
@@ -366,6 +384,8 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
   if (options.seed.schemaVersion !== "1" && !options.namedAreas) throw new Error(`Schema ${options.seed.schemaVersion} pack requires a named-area adapter`);
   if (options.seed.schemaVersion === "1" && options.namedAreas) throw new Error("Schema 1 pack cannot include named areas");
+  if (options.seed.schemaVersion === "4" && !options.searchRegions) throw new Error("Schema 4 pack requires reviewed search regions");
+  if (options.seed.schemaVersion !== "4" && options.searchRegions) throw new Error(`Schema ${options.seed.schemaVersion} pack cannot include search regions`);
   const officialAccess = [options.officialAccess, ...(options.additionalOfficialAccess ?? [])];
   const sourceCandidates = [
     options.topology.snapshot,
@@ -376,7 +396,8 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
   const manifestSchema = options.seed.schemaVersion === "1" ? packManifestV1Schema
-    : options.seed.schemaVersion === "2" ? packManifestV2Schema : packManifestV3Schema;
+    : options.seed.schemaVersion === "2" ? packManifestV2Schema
+    : options.seed.schemaVersion === "3" ? packManifestV3Schema : packManifestV4Schema;
   const manifest = manifestSchema.parse({
     ...options.seed,
     builtAt: options.builtAt,
@@ -421,6 +442,9 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
         sourceIds: [options.topology.snapshot.id],
       }, ...providedAreas], new Set(sources.map(({ id }) => id)));
     }
+    const searchRegions = manifest.schemaVersion === "4"
+      ? validateSearchRegions(options.searchRegions!, namedAreas)
+      : [];
     const rankedAccessPoints = manifest.schemaVersion !== "1"
       ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
       : compiledGraph.accessPoints;
@@ -430,8 +454,9 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
         ? await addRemotenessFields(compiledGraph.nodes, rankedAccessPoints, options.population.sampler)
         : rankedAccessPoints,
       namedAreas,
+      searchRegions,
     };
-    const closedRouteTopology = manifest.schemaVersion === "3"
+    const closedRouteTopology = manifest.schemaVersion === "3" || manifest.schemaVersion === "4"
       ? buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
           builtAt: manifest.builtAt,
           runtimeMode: manifest.closedRouteTopology.runtimeMode,
@@ -462,6 +487,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       edges: graph.edges,
       accessPoints: graph.accessPoints,
       ...(manifest.schemaVersion !== "1" ? { namedAreas: graph.namedAreas } : {}),
+      ...(manifest.schemaVersion === "4" ? { searchRegions: graph.searchRegions } : {}),
       ...(closedRouteTopology ? { closedRouteTopology } : {}),
       sources,
       metadata: {

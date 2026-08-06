@@ -56,6 +56,11 @@ export type NormalizedNamedArea = NamedArea & {
   aliases: string[];
 };
 
+export type NormalizedSearchRegion = {
+  namedAreaId: string;
+  displayOrder: number;
+};
+
 export type CompiledEdge = {
   id: string;
   stablePhysicalId: string;
@@ -180,7 +185,7 @@ export type Schema3TopologyBuild = {
 };
 
 export type PackAudit = {
-  schemaVersion: "1" | "2" | "3";
+  schemaVersion: "1" | "2" | "3" | "4";
   packId: string;
   dataVersion: string;
   nodeCount: number;
@@ -193,6 +198,7 @@ export type PackAudit = {
   missingElevationEdgeCount: number;
   accessStateCounts: Record<AccessState, number>;
   namedAreaCount?: number;
+  searchRegionCount?: number;
   rejectedCoverageEdgeCount?: number;
   missingPopulationAccessPointCount?: number;
   topologyContentHash?: string;

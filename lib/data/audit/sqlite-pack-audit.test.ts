@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { compilePack, type PackSeed } from "../compiler";
-import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3, fixturePackSeedV3 } from "../fixture-pack";
+import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3, fixtureCompileOptionsV4, fixturePackSeedV3 } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -32,6 +32,12 @@ async function buildFixtureV3() {
       closedRouteTopology: { ...seed.closedRouteTopology, runtimeMode: "primitive" },
     },
   }));
+}
+
+async function buildFixtureV4() {
+  const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v4-"));
+  temporaryDirectories.push(outputRoot);
+  return compilePack(await fixtureCompileOptionsV4(outputRoot));
 }
 
 function mutateDatabase(databasePath: string, sql: string): void {
@@ -176,5 +182,31 @@ describe("SQLite regional pack audit extraction", () => {
     mutateDatabase(mappingPack.databasePath, "DELETE FROM topology_decision_edge_members WHERE profile='known' AND edge_key=(SELECT min(edge_key) FROM topology_decision_edge_members WHERE profile='known')");
     await expect(auditSqlitePack({ databasePath: mappingPack.databasePath, manifestPath: mappingPack.manifestPath }))
       .rejects.toThrow(/count mismatch|member mapping mismatch/);
+  });
+
+  it("audits schema 4 search-region rows and retained topology", async () => {
+    const pack = await buildFixtureV4();
+    const valid = await auditSqlitePack({
+      databasePath: pack.databasePath,
+      manifestPath: pack.manifestPath,
+      auditPath: pack.auditPath,
+    });
+    expect(valid.schemaVersion).toBe("4");
+    expect(valid.counts).toMatchObject({ searchRegions: 2, topologyProfiles: 2 });
+    expect(valid.errors).toEqual([]);
+
+    mutateDatabase(pack.databasePath, `
+      UPDATE search_regions SET display_order = 8 WHERE named_area_id = 'osm:relation/1001';
+      UPDATE named_areas SET name = 'Redwood Preserve Closed Area' WHERE id = 'osm:relation/1001';
+    `);
+    const corrupt = await auditSqlitePack({
+      databasePath: pack.databasePath,
+      manifestPath: pack.manifestPath,
+      auditPath: pack.auditPath,
+    });
+    expect(corrupt.errors).toEqual(expect.arrayContaining([
+      "Search region osm:relation/1001 has non-contiguous display order 8; expected 1",
+      "Search region osm:relation/1001 refers to a closed-area variant",
+    ]));
   });
 });

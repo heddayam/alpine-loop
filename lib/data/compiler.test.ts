@@ -3,14 +3,15 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema } from "@/lib/contracts";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
 import type { AreaGeometry } from "./area-geometry";
-import { getNamedArea, searchNamedAreas } from "./named-area-catalog";
+import { getNamedArea, listSearchRegions, searchNamedAreas } from "./named-area-catalog";
 import {
   fixtureCompileOptions,
   fixtureCompileOptionsV2,
   fixtureCompileOptionsV3,
+  fixtureCompileOptionsV4,
   fixturePackSeed,
   fixturePackSeedV2,
 } from "./fixture-pack";
@@ -230,5 +231,39 @@ describe("fixture pack compiler", () => {
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     } finally { database.close(); replay.close(); }
     expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
+  });
+
+  it("writes schema 4 reviewed search regions in deterministic display order", async () => {
+    const firstRoot = await temporaryOutput();
+    const secondRoot = await temporaryOutput();
+    const first = await compilePack(await fixtureCompileOptionsV4(firstRoot));
+    const second = await compilePack(await fixtureCompileOptionsV4(secondRoot));
+    const manifest = packManifestV4Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    expect(manifest.capabilities.batchSearchRegions).toBe(true);
+    expect(first.audit).toMatchObject({ schemaVersion: "4", searchRegionCount: 2 });
+    expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
+    expect(listSearchRegions(first.databasePath)).toEqual([
+      expect.objectContaining({ id: "pack:fixture-pack", name: "Compiler Fixture Pack", displayOrder: 0 }),
+      expect.objectContaining({ id: "osm:relation/1001", name: "Redwood Preserve", displayOrder: 1 }),
+    ]);
+    const database = new DatabaseSync(first.databasePath, { readOnly: true });
+    const replay = new DatabaseSync(second.databasePath, { readOnly: true });
+    try {
+      expect(database.prepare("SELECT * FROM search_regions ORDER BY display_order").all())
+        .toEqual(replay.prepare("SELECT * FROM search_regions ORDER BY display_order").all());
+      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
+      expect(database.prepare("SELECT count(*) AS count FROM topology_profiles").get()).toEqual({ count: 2 });
+    } finally { database.close(); replay.close(); }
+  });
+
+  it("requires reviewed search regions only for schema 4", async () => {
+    const outputRoot = await temporaryOutput();
+    const options = await fixtureCompileOptionsV4(outputRoot);
+    await expect(compilePack({ ...options, searchRegions: undefined }))
+      .rejects.toThrow("Schema 4 pack requires reviewed search regions");
+    const v3 = await fixtureCompileOptionsV3(outputRoot);
+    await expect(compilePack({ ...v3, searchRegions: options.searchRegions }))
+      .rejects.toThrow("Schema 3 pack cannot include search regions");
   });
 });

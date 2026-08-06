@@ -52,6 +52,7 @@ export type RegionalPackAudit = {
     rejectedEdges: number;
     conflicts: number;
     namedAreas?: number;
+    searchRegions?: number;
     topologyProfiles?: number;
     topologyNetworks?: number;
     topologyDecisionEdges?: number;
