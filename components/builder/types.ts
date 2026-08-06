@@ -1,15 +1,13 @@
 import type {
   AccessPointRemoteness,
   AccessFilterV2,
-  SearchEffortV3,
-  NamedArea,
-  NamedAreaSummary,
   Origin,
+  SearchRegionSummary,
 } from "@/lib/contracts";
 import type { RemotenessClass } from "@/lib/data/remoteness";
 
 export type Bounds = Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"];
-export type FilterMode = AccessFilterV2["mode"];
+export type FilterMode = "explore" | "batch";
 
 export type AccessPointOption = {
   id: string;
@@ -39,7 +37,6 @@ export type BuilderValues = {
   maximumSharedStemEnabled: boolean;
   maximumSharedStemMiles: string;
   allowMultiCycle: boolean;
-  searchEffort: SearchEffortV3;
   distanceMiles: RangeField;
   elevationGainFeet: RangeField;
   maximumElevationFeet: RangeField;
@@ -51,30 +48,16 @@ export type BuilderValues = {
 
 export type DrawnAreaDraft = { bounds: Bounds | null };
 
-export type NamedRegionDraft = {
-  query: string;
-  suggestions: NamedAreaSummary[];
-  selected?: NamedArea;
-  state: "idle" | "searching" | "loading" | "ready" | "error";
-  error?: string;
-};
-
 export type DriveTimeDraft = {
   originText: string;
   originSuggestions: Array<{ id: string; label: string; magicKey: string }>;
   origin?: Origin;
   durationMinutes: number;
-  requestId?: string;
-  geometry?: NamedArea["geometry"];
-  state: "idle" | "suggesting" | "resolving" | "calculating" | "ready" | "error";
+  state: "idle" | "suggesting" | "resolving" | "error";
   error?: string;
-  refinement: NamedRegionDraft;
-};
-
-export const EMPTY_NAMED_REGION_DRAFT: NamedRegionDraft = {
-  query: "",
-  suggestions: [],
-  state: "idle",
+  searchRegionId: string;
+  searchRegions: SearchRegionSummary[];
+  regionsState: "idle" | "loading" | "ready" | "error";
 };
 
 export const DEFAULT_BUILDER_VALUES: BuilderValues = {
@@ -82,7 +65,6 @@ export const DEFAULT_BUILDER_VALUES: BuilderValues = {
   maximumSharedStemEnabled: false,
   maximumSharedStemMiles: "2",
   allowMultiCycle: true,
-  searchEffort: "thorough",
   distanceMiles: { enabled: true, min: "1", max: "4" },
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
