@@ -1,15 +1,20 @@
 import { expect, test } from "@playwright/test";
+import { REACHABILITY_ID } from "./fixtures";
 import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectTypedOrigin } from "./offline-harness";
 
-test("Explore auto-searches with Quick effort and aborts stale work", async ({ page }) => {
+test("one builder keeps both search actions visible and runs drawn Quick search explicitly", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
-  await expect(page.getByRole("radio", { name: /^Explore/ })).toBeChecked();
-  await expect(page.getByRole("radio", { name: /^Batch search/ })).toBeVisible();
-  await expect(page.getByRole("radio", { name: /Named region/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Generate routes" })).toHaveCount(0);
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await expect(page.getByLabel("Driving origin", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
+  await expect(page.getByLabel("Broad region")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Batch search" })).toBeVisible();
   await enterDrawnArea(page);
+  expect(harness.generationRequests).toHaveLength(0);
+  await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
   expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.155, -122.155, 37.17] } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
@@ -21,15 +26,35 @@ test("Explore auto-searches with Quick effort and aborts stale work", async ({ p
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
+test("drive-time Quick search resolves reachability and applies the curated region", async ({ page }) => {
+  const harness = await installOfflineHarness(page);
+  await page.goto("/");
+
+  await selectTypedOrigin(page);
+  await page.getByLabel("Broad region").selectOption(SEARCH_REGION.id);
+  await page.getByRole("button", { name: "Quick search" }).click();
+
+  await expect.poll(() => harness.generationRequests.length).toBe(1);
+  expect(harness.reachabilityRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, origin: { label: "Castle Rock, California" } });
+  expect(harness.calls).toContainEqual(expect.objectContaining({ method: "GET", pathname: `/api/reachability/${REACHABILITY_ID}` }));
+  expect(harness.generationRequests[0]).toMatchObject({
+    version: 3,
+    searchEffort: "quick",
+    accessFilter: { mode: "drive-time", reachabilityId: REACHABILITY_ID, regionId: SEARCH_REGION.id },
+    accessPointRemoteness: ["remote", "unknown"],
+  });
+  await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  expect(harness.blockedExternalRequests).toEqual([]);
+});
+
 test("Batch launches a persistent job and reopens its saved result page", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
-  await page.getByRole("radio", { name: /^Batch search/ }).check();
 
   await selectTypedOrigin(page);
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
-  await page.getByLabel("Search region").selectOption(SEARCH_REGION.id);
-  await page.getByRole("button", { name: "Launch batch search" }).click();
+  await page.getByLabel("Broad region").selectOption(SEARCH_REGION.id);
+  await page.getByRole("button", { name: "Batch search" }).click();
 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
@@ -41,7 +66,7 @@ test("Batch launches a persistent job and reopens its saved result page", async 
   await jobs.getByRole("button", { name: "View results" }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
-  await expect(page.getByLabel("Map status")).toContainText("Batch search");
+  await expect(page.getByLabel("Map status")).toContainText("Drive-time search");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
@@ -58,6 +83,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   await expect(jobsButton).toBeFocused();
 
   await enterDrawnArea(page);
+  await page.getByRole("button", { name: "Quick search" }).click();
   await expect(page.getByRole("heading", { name: "Results" })).toBeVisible();
   const results = page.locator(".results-panel");
   await expect.poll(() => results.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);

@@ -7,11 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
 
 vi.mock("../map/HikeMap", () => ({
-  HikeMap: ({ onBoundsChange, mode, routes = [] }: {
+  HikeMap: ({ onBoundsChange, routes = [] }: {
     onBoundsChange: (bounds: [number, number, number, number] | null) => void;
-    mode: string;
     routes?: Array<{ id: string }>;
-  }) => <div aria-label="Mock map"><output aria-label="Mock map mode">{mode}</output><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output></div>,
+  }) => <div aria-label="Mock map"><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output></div>,
 }));
 
 const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high", remoteness: "remote" };
@@ -41,22 +40,25 @@ function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response
     if (url === "/api/route-jobs") return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
     if (url.includes("/access-points/preview")) return new Response(JSON.stringify(preview), { status: 200 });
     if (url === "/api/routes/generate") return new Response(JSON.stringify(routeResponse), { status: 200 });
+    if (url === "/api/reachability") return new Response(JSON.stringify({ status: "complete", requestId: "3d594650-3436-4f8b-a0e8-38d13fc148ca", provider: "arcgis", durationMinutes: 30, resolvedAt: "2026-08-06T00:00:00Z", geometry: preview.filterGeometry }), { status: 200 });
     if (url.includes("/search-regions")) return new Response(JSON.stringify({ searchRegions: [searchRegion] }), { status: 200 });
     return new Response(JSON.stringify({}), { status: 200 });
   });
 }
 
-describe("HikeBuilder two-mode route search", () => {
+describe("HikeBuilder unified route search", () => {
   beforeEach(() => mockBaseFetch());
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-  it("offers only Explore and Batch search and removes redundant controls", async () => {
+  it("shows one shared builder with both explicit actions", async () => {
     render(<HikeBuilder />);
-    expect(screen.getByRole("radio", { name: /Explore/ })).toBeChecked();
-    expect(screen.getByRole("radio", { name: /Batch search/ })).toBeVisible();
-    expect(screen.queryByRole("radio", { name: /Named region/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate routes" })).not.toBeInTheDocument();
-    expect(screen.getByText(/search automatically after 600 ms/i)).toBeVisible();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Driving origin")).toBeVisible();
+    expect(screen.getByLabelText("Typical drive time")).toHaveValue("30");
+    expect(screen.getByLabelText("Broad region")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Quick search" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Batch search" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Drawn boundary" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
     expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
@@ -66,19 +68,37 @@ describe("HikeBuilder two-mode route search", () => {
     expect(screen.getByRole("checkbox", { name: /Populated/ })).not.toBeChecked();
   });
 
-  it("debounces a valid Explore change and always submits Quick effort", async () => {
+  it("runs Quick explicitly and uses a drawn boundary as its override", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     render(<HikeBuilder />);
     await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
-    expect(screen.queryByRole("button", { name: "Generate routes" })).not.toBeInTheDocument();
-    expect(await screen.findByText("1 exact route ready.", {}, { timeout: 2_000 })).toBeVisible();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/routes/generate")).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    expect(await screen.findByText("1 exact route ready.")).toBeVisible();
     const generationCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/routes/generate");
     const request = JSON.parse(String(generationCall?.[1]?.body));
     expect(request).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, limit: 10 });
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
   });
 
-  it("aborts a stale Explore request after a subsequent boundary change", async () => {
+  it("resolves drive time before Quick when no boundary is drawn", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    render(<HikeBuilder />);
+    expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
+    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    expect(await screen.findByText("1 exact route ready.")).toBeVisible();
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/reachability")).toBe(true);
+    const generationCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/routes/generate");
+    expect(JSON.parse(String(generationCall?.[1]?.body))).toMatchObject({
+      searchEffort: "quick",
+      accessFilter: { mode: "drive-time", reachabilityId: "3d594650-3436-4f8b-a0e8-38d13fc148ca", regionId: searchRegion.id },
+      accessPointRemoteness: ["remote", "unknown"],
+    });
+  });
+
+  it("aborts a stale Quick request after a subsequent boundary change", async () => {
     vi.restoreAllMocks();
     let generationSignal: AbortSignal | undefined;
     mockBaseFetch((url, init) => {
@@ -87,6 +107,7 @@ describe("HikeBuilder two-mode route search", () => {
     });
     render(<HikeBuilder />);
     await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
     await waitFor(() => expect(generationSignal).toBeDefined(), { timeout: 2_000 });
     await userEvent.click(screen.getByRole("button", { name: "Change fixture area" }));
     await waitFor(() => expect(generationSignal?.aborted).toBe(true));
@@ -102,12 +123,11 @@ describe("HikeBuilder two-mode route search", () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     render(<HikeBuilder />);
-    await userEvent.click(screen.getByRole("radio", { name: /Batch search/ }));
     expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
     await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
-    await userEvent.selectOptions(screen.getByLabelText("Search region"), searchRegion.id);
-    await userEvent.click(screen.getByRole("button", { name: "Launch batch search" }));
+    await userEvent.selectOptions(screen.getByLabelText("Broad region"), searchRegion.id);
+    await userEvent.click(screen.getByRole("button", { name: "Batch search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
     expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"] } });
@@ -120,7 +140,6 @@ describe("HikeBuilder two-mode route search", () => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition } });
     render(<HikeBuilder />);
     expect(getCurrentPosition).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("radio", { name: /Batch search/ }));
     await userEvent.click(screen.getByRole("button", { name: "Use my current location" }));
     expect(getCurrentPosition).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("alert")).toHaveTextContent("Location permission was denied");

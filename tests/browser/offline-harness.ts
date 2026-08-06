@@ -1,6 +1,6 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import type { CreateBatchRouteJobV1, GenerateClosedRoutesRequestV3 } from "../../lib/contracts";
-import { ACCESS_POINTS, FILTER_GEOMETRY, NAMED_AREA, NAMED_AREA_SUMMARY, TRAIL_NETWORK, routeResponse } from "./fixtures";
+import { ACCESS_POINTS, FILTER_GEOMETRY, NAMED_AREA, NAMED_AREA_SUMMARY, REACHABILITY_ID, TRAIL_NETWORK, routeResponse } from "./fixtures";
 
 const TRANSPARENT_TILE = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 export const JOB_ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
@@ -10,6 +10,7 @@ export type RecordedCall = { method: string; pathname: string; body?: unknown };
 export type OfflineHarness = {
   calls: RecordedCall[];
   generationRequests: GenerateClosedRoutesRequestV3[];
+  reachabilityRequests: unknown[];
   batchRequests: CreateBatchRouteJobV1[];
   previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">>;
   releaseGeneration(): void;
@@ -35,6 +36,7 @@ function completedJob(request: CreateBatchRouteJobV1) {
 export async function installOfflineHarness(page: Page, options: HarnessOptions = {}): Promise<OfflineHarness> {
   const calls: RecordedCall[] = [];
   const generationRequests: GenerateClosedRoutesRequestV3[] = [];
+  const reachabilityRequests: unknown[] = [];
   const batchRequests: CreateBatchRouteJobV1[] = [];
   const previewRequests: OfflineHarness["previewRequests"] = [];
   const blockedExternalRequests: string[] = [];
@@ -50,7 +52,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     const requestBody = await body(route);
     calls.push({ method: request.method(), pathname: url.pathname, body: requestBody });
 
-    if (request.method() === "GET" && url.pathname.endsWith("/search-regions")) { await route.fulfill({ json: { searchRegions: [SEARCH_REGION] } }); return; }
+    if (request.method() === "GET" && url.pathname.endsWith("/search-regions")) { await route.fulfill({ json: { regions: [SEARCH_REGION] } }); return; }
     if (request.method() === "GET" && url.pathname.endsWith(`/named-areas/${NAMED_AREA.id}`)) { await route.fulfill({ json: { region: NAMED_AREA } }); return; }
     if (request.method() === "POST" && url.pathname.endsWith("/access-points/preview")) {
       const preview = requestBody as OfflineHarness["previewRequests"][number];
@@ -60,6 +62,15 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/suggest") { await route.fulfill({ json: { suggestions: [{ id: "arcgis-castle-rock", label: "Castle Rock, California", magicKey: "fixture-magic-key" }] } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/resolve") { await route.fulfill({ json: { origin: { lon: -122.14, lat: 37.16, label: "Castle Rock, California" } } }); return; }
+    if (request.method() === "POST" && url.pathname === "/api/reachability") {
+      reachabilityRequests.push(requestBody);
+      await route.fulfill({ status: 202, json: { status: "pending", requestId: REACHABILITY_ID, pollAfterMs: 500 } });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname === `/api/reachability/${REACHABILITY_ID}`) {
+      await route.fulfill({ json: { status: "complete", requestId: REACHABILITY_ID, provider: "arcgis", durationMinutes: 30, resolvedAt: "2026-08-04T12:00:00.000Z", geometry: FILTER_GEOMETRY } });
+      return;
+    }
     if (request.method() === "POST" && url.pathname === "/api/routes/generate") {
       const generationRequest = requestBody as GenerateClosedRoutesRequestV3;
       generationRequests.push(generationRequest);
@@ -83,7 +94,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     await route.fulfill({ status: 404, json: { error: { code: "UNEXPECTED_TEST_REQUEST", message: `No offline fixture for ${url.pathname}` } } });
   });
 
-  return { calls, generationRequests, batchRequests, previewRequests, releaseGeneration, blockedExternalRequests };
+  return { calls, generationRequests, reachabilityRequests, batchRequests, previewRequests, releaseGeneration, blockedExternalRequests };
 }
 
 export async function enterDrawnArea(page: Page): Promise<void> {
@@ -91,7 +102,7 @@ export async function enterDrawnArea(page: Page): Promise<void> {
   await page.getByLabel("South latitude").fill("37.1550");
   await page.getByLabel("East longitude").fill("-122.1550");
   await page.getByLabel("North latitude").fill("37.1700");
-  await expect(page.getByRole("combobox", { name: "Access point", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Drawn boundary" }).getByRole("status")).toContainText("-122.1800, 37.1550, -122.1550, 37.1700");
 }
 
 export async function selectTypedOrigin(page: Page): Promise<void> {

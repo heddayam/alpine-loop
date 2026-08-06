@@ -144,7 +144,6 @@ describe("generated route map features", () => {
   it("renders compact accessible map controls, status, and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
-      mode: "explore",
       drawBounds: boundary,
       drawEnabled: true,
       filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.155], [-122.14, 37.155], [-122.14, 37.178], [-122.18, 37.178], [-122.18, 37.155]]] },
