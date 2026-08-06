@@ -21,6 +21,7 @@ describe("builder V3 request validation", () => {
       searchEffort: "thorough",
       limit: 10,
       includeUncertainAccess: true,
+      accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     });
   });
 

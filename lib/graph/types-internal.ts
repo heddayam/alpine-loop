@@ -37,6 +37,12 @@ export type GraphAccessPoint = {
   confidence: "high" | "medium" | "low";
   parkingEvidence: string | null;
   sourceIds: string[];
+  /**
+   * Measured remoteness inputs. Null on packs built before the population
+   * source existed, or built without one, which classify as "unknown".
+   */
+  populationWithinRadius: number | null;
+  localReliefM: number | null;
 };
 
 export type InducedGraph = {

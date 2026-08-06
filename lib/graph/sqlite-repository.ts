@@ -126,6 +126,10 @@ function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     confidence: confidence as GraphAccessPoint["confidence"],
     parkingEvidence: typeof row.parking_evidence === "string" ? row.parking_evidence : null,
     sourceIds: jsonArray<string>(row.source_refs, "access point source_refs"),
+    // Absent on packs predating the population source; nullableNumber maps the
+    // missing column to null so those packs keep loading.
+    populationWithinRadius: nullableNumber(row, "population_within_radius"),
+    localReliefM: nullableNumber(row, "local_relief_m"),
   };
 }
 

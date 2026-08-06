@@ -92,6 +92,15 @@ export const closedRouteTopologyPreferenceV3Schema = z.object({
 
 export const searchEffortV3Schema = z.enum(["quick", "thorough"]);
 
+export const accessPointRemotenessSchema = z.enum(["remote", "rural", "populated", "unknown"]);
+export const DEFAULT_ACCESS_POINT_REMOTENESS = accessPointRemotenessSchema.options;
+export const accessPointRemotenessSelectionSchema = z.array(accessPointRemotenessSchema)
+  .min(1, { message: "Select at least one access-point area type" })
+  .max(DEFAULT_ACCESS_POINT_REMOTENESS.length)
+  .refine((values) => new Set(values).size === values.length, {
+    message: "Access-point area types must be unique",
+  });
+
 export const generateClosedRoutesRequestV3Schema = z.object({
   version: z.literal(3),
   packId: z.string().trim().min(1),
@@ -106,6 +115,7 @@ export const generateClosedRoutesRequestV3Schema = z.object({
   maximumElevationFeet: orderedRangeSchema.optional(),
   steepestSustainedGradePct: orderedRangeSchema.optional(),
   includeUncertainAccess: z.boolean(),
+  accessPointRemoteness: accessPointRemotenessSelectionSchema,
   searchEffort: searchEffortV3Schema,
   limit: z.number().int().min(1).max(20),
 }).strict();
@@ -299,6 +309,7 @@ export type AccessFilterV2 = z.infer<typeof accessFilterV2Schema>;
 export type GenerateRoutesRequestV2 = z.infer<typeof generateRoutesRequestV2Schema>;
 export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopologyPreferenceV3Schema>;
 export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
+export type AccessPointRemoteness = z.infer<typeof accessPointRemotenessSchema>;
 export type GenerateClosedRoutesRequestV3 = z.infer<typeof generateClosedRoutesRequestV3Schema>;
 export type GeneratedRoute = z.infer<typeof generatedRouteSchema>;
 export type GeneratedRouteV2 = z.infer<typeof generatedRouteV2Schema>;

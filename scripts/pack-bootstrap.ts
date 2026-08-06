@@ -1,5 +1,7 @@
 import path from "node:path";
-import { buildSantaCruzPack, compilePack, fixtureCompileOptions } from "../lib/data/index";
+import { compilePack } from "../lib/data/compiler";
+import { fixtureCompileOptions } from "../lib/data/fixture-pack";
+import { buildSantaCruzPack } from "../lib/data/santa-cruz-pack";
 
 const packArgument = process.argv.find((argument) => argument.startsWith("--pack="));
 const outputArgument = process.argv.find((argument) => argument.startsWith("--output="));

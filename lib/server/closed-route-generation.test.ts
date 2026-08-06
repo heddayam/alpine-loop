@@ -55,6 +55,7 @@ const VALID_REQUEST: GenerateClosedRoutesRequestV3 = {
   closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
   distanceMiles: { min: 1, max: 5 },
   includeUncertainAccess: false,
+  accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
   searchEffort: "thorough",
   limit: 1,
 };

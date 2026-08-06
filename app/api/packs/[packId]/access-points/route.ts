@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { FeatureCollection, LineString } from "geojson";
 import { bboxSchema } from "@/lib/contracts";
+import { classifyRemoteness } from "@/lib/data/remoteness";
 import { FIXTURE_PACK_TRAIL_NETWORK } from "@/lib/packs/fixture-pack";
 import { loadRoutePacks } from "@/lib/server/pack-registry";
 
@@ -46,6 +47,9 @@ export async function GET(
           kind: point.kind,
           accessState: point.accessState,
           confidence: point.confidence,
+          populationWithinRadius: point.populationWithinRadius,
+          localReliefM: point.localReliefM,
+          remoteness: classifyRemoteness(point),
         })),
         trailNetwork: { type: "FeatureCollection", features: [] },
       });
@@ -99,6 +103,9 @@ export async function GET(
           kind: point.kind,
           accessState: point.accessState,
           confidence: point.confidence,
+          populationWithinRadius: point.populationWithinRadius,
+          localReliefM: point.localReliefM,
+          remoteness: classifyRemoteness(point),
         }];
       }),
       trailNetwork: pack.kind === "fixture"

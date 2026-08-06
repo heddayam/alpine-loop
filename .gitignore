@@ -3,7 +3,6 @@ node_modules/
 .venv/
 .next/
 .next-playwright/
-.next-playwright-v2/
 out/
 coverage/
 playwright-report/
@@ -30,8 +29,8 @@ data/packs/
 *.osm
 *.osm.gz
 
-# Retired hosting/build systems must not reappear at the root. Their archived
-# copies under legacy/ remain intentionally trackable.
+# Retired hosting/build systems must not reappear at the root. Their history is
+# preserved by the archive/pre-redo-* tags.
 /.openai/
 /.vinext/
 /.wrangler/

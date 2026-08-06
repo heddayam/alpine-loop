@@ -24,6 +24,8 @@ import { reconcileAccess } from "./access";
 import { calculateEdgeMetricsBatch } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
+import type { PopulationSampler } from "./population";
+import { computeLocalRelief, RELIEF_RADIUS_M } from "./remoteness";
 import { writePackDatabase } from "./sqlite-writer";
 import { buildClosedRouteTopology, topologySha256 } from "./topology-compiler";
 import type {
@@ -49,6 +51,12 @@ export type CompilePackOptions = {
   officialAccess: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
   additionalOfficialAccess?: Array<{ adapter: OfficialAccessAdapter; snapshot: SourceSnapshot }>;
   elevation: { sampler: ElevationSampler; snapshot: SourceSnapshot };
+  /**
+   * Optional so existing packs and fixtures keep compiling. When absent,
+   * access points carry null population and classify as "unknown" rather than
+   * being silently treated as remote.
+   */
+  population?: { sampler: PopulationSampler; snapshot: SourceSnapshot };
   namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
   beforePublish?: () => void | Promise<void>;
 };
@@ -251,6 +259,28 @@ function addAccessRankingFields(
   }));
 }
 
+/**
+ * Attaches the measured remoteness inputs. Population is sampled at the access
+ * point's snapped network node so it lines up with what the map draws.
+ */
+async function addRemotenessFields(
+  nodes: readonly NormalizedTopology["nodes"][number][],
+  accessPoints: readonly NormalizedAccessPoint[],
+  sampler: PopulationSampler,
+): Promise<NormalizedAccessPoint[]> {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const located = accessPoints.map((point) => ({ point, node: nodeById.get(point.nodeId) }));
+  const samples = await sampler.sample(
+    located.map(({ node }) => (node ? [node.lon, node.lat] as const : [0, 0] as const)),
+  );
+  const relief = computeLocalRelief(nodes, accessPoints, RELIEF_RADIUS_M);
+  return located.map(({ point, node }, index) => ({
+    ...point,
+    populationWithinRadius: node ? samples[index] : null,
+    localReliefM: relief.get(point.id) ?? null,
+  }));
+}
+
 function createAudit(
   seed: PackSeed,
   topology: NormalizedTopology,
@@ -276,6 +306,11 @@ function createAudit(
       namedAreaCount: graph.namedAreas.length,
       rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
     } : {}),
+    // Surfaced so a pack built without population data is obvious in the audit
+    // rather than quietly classifying every access point as unknown.
+    missingPopulationAccessPointCount: graph.accessPoints.filter(
+      ({ populationWithinRadius }) => populationWithinRadius === null || populationWithinRadius === undefined,
+    ).length,
   };
 }
 
@@ -336,6 +371,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     options.topology.snapshot,
     ...officialAccess.map(({ snapshot }) => snapshot),
     options.elevation.snapshot,
+    ...(options.population ? [options.population.snapshot] : []),
     ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
@@ -385,11 +421,14 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
         sourceIds: [options.topology.snapshot.id],
       }, ...providedAreas], new Set(sources.map(({ id }) => id)));
     }
+    const rankedAccessPoints = manifest.schemaVersion !== "1"
+      ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
+      : compiledGraph.accessPoints;
     const graph = {
       ...compiledGraph,
-      accessPoints: manifest.schemaVersion !== "1"
-        ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
-        : compiledGraph.accessPoints,
+      accessPoints: options.population
+        ? await addRemotenessFields(compiledGraph.nodes, rankedAccessPoints, options.population.sampler)
+        : rankedAccessPoints,
       namedAreas,
     };
     const closedRouteTopology = manifest.schemaVersion === "3"

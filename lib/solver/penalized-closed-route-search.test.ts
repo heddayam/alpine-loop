@@ -24,6 +24,8 @@ const start: GraphAccessPoint = {
   accessState: "public",
   confidence: "high",
   parkingEvidence: "fixture",
+  populationWithinRadius: null,
+  localReliefM: null,
   sourceIds: ["fixture"],
 };
 
@@ -77,6 +79,7 @@ function request(overrides: Partial<GenerateClosedRoutesRequestV3> = {}): Genera
     },
     distanceMiles: { min: 1.8, max: 2 },
     includeUncertainAccess: true,
+    accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     searchEffort: "quick",
     limit: 3,
     ...overrides,

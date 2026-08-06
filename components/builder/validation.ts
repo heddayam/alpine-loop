@@ -76,6 +76,7 @@ export function buildGenerateRoutesRequest(
     ...(maximumElevation.value ? { maximumElevationFeet: maximumElevation.value } : {}),
     ...(steepestGrade.value ? { steepestSustainedGradePct: steepestGrade.value } : {}),
     includeUncertainAccess: values.includeUncertainAccess,
+    accessPointRemoteness: values.accessPointRemoteness,
     searchEffort: values.searchEffort,
     limit,
   };

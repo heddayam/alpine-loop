@@ -1,5 +1,10 @@
 # Hike Builder implementation plan
 
+This document records the completed Gates 0–4 foundation. Gate 5's V3
+closed-route product and solver decisions are in
+`docs/rebuild/closed-route-topology-plan.md` and supersede the V2 route-shape
+sections below.
+
 ## 1. Product outcome
 
 Build a strong, region-independent foundation that generates plausible hiking
@@ -95,10 +100,10 @@ lib/data/               adapters and pack compiler
 scripts/                explicit source refresh and pack commands
 data/fixtures/          tiny committed deterministic graph/source fixtures
 public/                 static application assets only
-legacy/                 build-excluded historical reference
+legacy/                 build-excluded pointer to historical archive tags
 ```
 
-Root `tsconfig` and lint/test discovery must exclude `legacy/**`. There must be
+Root `tsconfig` and lint/test discovery exclude `legacy/**`. There must be
 no root `.openai/hosting.json`, Vite/vinext config, Cloudflare worker config, D1,
 R2, or deployment scripts.
 

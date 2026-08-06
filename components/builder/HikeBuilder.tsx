@@ -19,6 +19,7 @@ import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
 import { RangeInput } from "./RangeInput";
+import { SettingsModal } from "./SettingsModal";
 import {
   DEFAULT_BUILDER_VALUES,
   EMPTY_NAMED_REGION_DRAFT,
@@ -152,6 +153,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
   const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
   const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const generationControllerRef = useRef<AbortController | null>(null);
   const previewControllerRef = useRef<AbortController | null>(null);
   const reachabilityControllerRef = useRef<AbortController | null>(null);
@@ -177,6 +179,12 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     setGenerationResponse(null);
     setSelectedRouteId(undefined);
   }, []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const updateSettings = useCallback((patch: Partial<Pick<BuilderValues,
+    "searchEffort" | "includeUncertainAccess" | "accessPointRemoteness" | "limit">>) => {
+    setValues((current) => ({ ...current, ...patch }));
+    invalidateResults();
+  }, [invalidateResults]);
 
   const changeMode = (next: FilterMode) => {
     if (next === mode) return;
@@ -234,6 +242,14 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       ...(driveDraft.refinement.selected ? { regionId: driveDraft.refinement.selected.id } : {}),
     };
   }, [drawnDraft.bounds, driveDraft.geometry, driveDraft.refinement.selected, driveDraft.requestId, driveDraft.state, mode, namedDraft.selected]);
+
+  const displayedAccessPoints = useMemo(() => visibleAccessPoints.filter((point) =>
+    values.accessPointRemoteness.includes(point.remoteness ?? "unknown")
+    && (values.includeUncertainAccess || point.accessState !== "unknown")), [
+    values.accessPointRemoteness,
+    values.includeUncertainAccess,
+    visibleAccessPoints,
+  ]);
 
   const setRegionQuery = useCallback((target: "named" | "refinement", query: string) => {
     const patch = (current: NamedRegionDraft): NamedRegionDraft => ({
@@ -427,7 +443,11 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     setAccessError("");
     void fetch(`/api/packs/${pack.id}/access-points/preview`, {
       method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
-      body: JSON.stringify({ accessFilter: activeAccessFilter, includeUncertainAccess: values.includeUncertainAccess }),
+      body: JSON.stringify({
+        accessFilter: activeAccessFilter,
+        includeUncertainAccess: values.includeUncertainAccess,
+        accessPointRemoteness: values.accessPointRemoteness,
+      }),
     }).then(async (response) => {
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(payload, "Eligible access points could not be loaded."));
@@ -443,7 +463,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       setAccessError(error instanceof Error ? error.message : "Eligible access points could not be loaded.");
     });
     return () => controller.abort();
-  }, [activeAccessFilter, pack.id, values.includeUncertainAccess]);
+  }, [activeAccessFilter, pack.id, values.accessPointRemoteness, values.includeUncertainAccess]);
 
   useEffect(() => () => {
     generationControllerRef.current?.abort();
@@ -501,11 +521,28 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       <header className="topbar">
         <div><span className="eyebrow">Trail graph route builder</span><h1>Alpine Search</h1></div>
         <div className="pack-status" aria-label="Installed region pack"><span className="status-dot" aria-hidden="true" /><span><strong>{pack.name}</strong><small>{pack.subtitle}</small></span></div>
+        <button
+          type="button"
+          className="settings-button"
+          aria-haspopup="dialog"
+          aria-expanded={settingsOpen}
+          onClick={() => setSettingsOpen(true)}
+        >Settings</button>
         <nav className="desktop-panel-controls" aria-label="Desktop panels">
           <button type="button" aria-label="Toggle plan panel" aria-pressed={desktopBuilderVisible} onClick={() => setDesktopBuilderVisible((value) => !value)}>Plan</button>
           <button type="button" aria-label="Toggle results panel" aria-pressed={desktopResultsVisible && hasResultsPanel} disabled={!hasResultsPanel} onClick={() => setDesktopResultsVisible((value) => !value)}>Results</button>
         </nav>
       </header>
+
+      <SettingsModal
+        open={settingsOpen}
+        searchEffort={values.searchEffort}
+        includeUncertainAccess={values.includeUncertainAccess}
+        accessPointRemoteness={values.accessPointRemoteness}
+        limit={values.limit}
+        onChange={updateSettings}
+        onClose={closeSettings}
+      />
 
       <div className={["workspace", hasResultsPanel ? "with-results" : "", desktopBuilderVisible ? "" : "without-builder", hasResultsPanel && !desktopResultsVisible ? "without-results" : ""].filter(Boolean).join(" ")}>
         <nav className="mobile-panel-nav" aria-label="Workspace panels">
@@ -543,12 +580,12 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
           <section className="builder-section" aria-labelledby="access-title">
             <div className="section-title"><h3 id="access-title">Starting access point</h3><span>Optional</span></div>
-            <p>Choose an eligible trailhead, or search up to eight automatically.</p>
+            <p>Choose an eligible trailhead, or search automatically.</p>
             {!activeAccessFilter ? <p className="empty-state">Complete the trailhead filter to preview eligible access.</p> : null}
             {accessState === "loading" ? <p className="loading-state" role="status">Finding eligible access points…</p> : null}
             {accessState === "error" ? <p className="error-state" role="alert">{accessError}</p> : null}
             {activeAccessFilter && accessState === "ready" && accessPoints.length === 0 ? <p className="empty-state" role="status">No eligible access points match this filter.</p> : null}
-            {accessPoints.length > 0 ? <label className="select-field" htmlFor="access-point">Access point<select id="access-point" value={selectedAccessPointId ?? ""} onChange={(event) => { setSelectedAccessPointId(event.currentTarget.value || undefined); invalidateResults(); }}><option value="">Choose automatically (up to 8 starts)</option>{accessPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label> : null}
+            {accessPoints.length > 0 ? <label className="select-field" htmlFor="access-point">Access point<select id="access-point" value={selectedAccessPointId ?? ""} onChange={(event) => { setSelectedAccessPointId(event.currentTarget.value || undefined); invalidateResults(); }}><option value="">Choose automatically</option>{accessPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label> : null}
           </section>
 
           <section className="builder-section" aria-labelledby="closed-route-title">
@@ -563,17 +600,14 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
             <label className="switch-row"><span><strong>Limit the shared access stem</strong><small>Optional one-way distance before the loop begins.</small></span><input type="checkbox" role="switch" checked={values.maximumSharedStemEnabled} onChange={(event) => { const maximumSharedStemEnabled = event.currentTarget.checked; setValues((current) => ({ ...current, maximumSharedStemEnabled })); invalidateResults(); }} /></label>
             {values.maximumSharedStemEnabled ? <div className="count-field"><label htmlFor="maximum-shared-stem">Maximum shared stem</label><input id="maximum-shared-stem" type="number" min="0" max="30" step="0.1" value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} /><small>Miles, one way (0 to 30)</small></div> : null}
             <label className="switch-row"><span><strong>Allow figure-eights and chained loops</strong><small>On by default. Turn off to require exactly one cycle.</small></span><input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => { const allowMultiCycle = event.currentTarget.checked; setValues((current) => ({ ...current, allowMultiCycle })); invalidateResults(); }} /></label>
-            <label className="select-field" htmlFor="search-effort">Search effort<select id="search-effort" value={values.searchEffort} onChange={(event) => { const searchEffort = event.currentTarget.value as BuilderValues["searchEffort"]; setValues((current) => ({ ...current, searchEffort })); invalidateResults(); }}><option value="quick">Quick · up to 3 seconds</option><option value="thorough">Thorough · up to 15 seconds</option></select></label>
           </section>
 
           <section className="builder-section constraints" aria-labelledby="constraints-title"><div className="section-title"><h3 id="constraints-title">Physical constraints</h3><span>Min – max</span></div><div className="range-table"><div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Minimum</span><span>Maximum</span><span>Unit</span></div><RangeInput id="distance" label="Distance" unit="miles (max 30)" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} /><RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => patchRange(setValues, "elevationGainFeet", next)} /><RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => patchRange(setValues, "maximumElevationFeet", next)} /><RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => patchRange(setValues, "steepestSustainedGradePct", next)} /></div></section>
 
-          <section className="builder-section policy-section" aria-labelledby="policy-title"><h3 id="policy-title">Access policy & results</h3><label className="switch-row"><span><strong>Include uncertain access</strong><small>On by default. May include trails without confirmed public access.</small></span><input type="checkbox" role="switch" checked={values.includeUncertainAccess} onChange={(event) => { const checked = event.currentTarget.checked; setValues((current) => ({ ...current, includeUncertainAccess: checked })); invalidateResults(); }} /></label><div className="count-field"><label htmlFor="route-count">Number of routes</label><input id="route-count" type="number" min="1" max="20" value={values.limit} onChange={(event) => { const limit = event.currentTarget.value; setValues((current) => ({ ...current, limit })); }} /><small>1 to 20 alternatives</small></div></section>
-
           <footer className="builder-action-footer">{validationErrors.length > 0 ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}<div className="builder-action-buttons"><button className="generate-button" type="button" disabled={generationState === "loading"} onClick={() => void generate()}>{generationState === "loading" ? "Generating…" : "Generate routes"}</button>{generationState === "loading" ? <button className="cancel-button" type="button" onClick={() => { generationControllerRef.current?.abort(); setGenerationMessage("Route generation was cancelled."); setGenerationState("cancelled"); setMobilePanel("results"); }}>Cancel generation</button> : null}</div>{generationMessage ? <p className={generationState === "error" ? "generation-status error-state" : "generation-status"} role={generationState === "error" ? "alert" : "status"} aria-live="polite">{generationMessage}</p> : null}</footer>
         </aside>
 
-        <HikeMap mode={mode} drawBounds={drawnDraft.bounds} drawEnabled={mode === "drawn-area"} filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={visibleAccessPoints} selectedAccessPointId={selectedAccessPointId} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={onBoundsChange} onAccessPointSelect={onAccessPointSelect} onRouteSelect={setSelectedRouteId} />
+        <HikeMap mode={mode} drawBounds={drawnDraft.bounds} drawEnabled={mode === "drawn-area"} filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} selectedAccessPointId={selectedAccessPointId} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={onBoundsChange} onAccessPointSelect={onAccessPointSelect} onRouteSelect={setSelectedRouteId} />
         {hasResultsPanel ? <ResultsPanel status={generationState} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} /> : null}
       </div>
     </main>

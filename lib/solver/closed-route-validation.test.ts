@@ -41,6 +41,8 @@ function start(nodeId = "s"): AccessPointCandidate {
     accessState: "public",
     confidence: "high",
     parkingEvidence: "fixture",
+    populationWithinRadius: null,
+    localReliefM: null,
     sourceIds: ["fixture"],
     lon,
     lat,

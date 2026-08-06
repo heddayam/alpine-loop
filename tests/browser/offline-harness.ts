@@ -1,5 +1,5 @@
 import { expect, type Page, type Route } from "@playwright/test";
-import type { GenerateRoutesRequestV2 } from "../../lib/contracts";
+import type { GenerateClosedRoutesRequestV3 } from "../../lib/contracts";
 import {
   ACCESS_POINTS,
   FILTER_GEOMETRY,
@@ -24,8 +24,8 @@ export type RecordedCall = {
 
 export type OfflineHarness = {
   calls: RecordedCall[];
-  generationRequests: GenerateRoutesRequestV2[];
-  previewRequests: Array<{ accessFilter: GenerateRoutesRequestV2["accessFilter"] }>;
+  generationRequests: GenerateClosedRoutesRequestV3[];
+  previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">>;
   releaseReachability(): void;
   releaseGeneration(): void;
   blockedExternalRequests: string[];
@@ -47,8 +47,8 @@ export async function installOfflineHarness(
   options: HarnessOptions = {},
 ): Promise<OfflineHarness> {
   const calls: RecordedCall[] = [];
-  const generationRequests: GenerateRoutesRequestV2[] = [];
-  const previewRequests: Array<{ accessFilter: GenerateRoutesRequestV2["accessFilter"] }> = [];
+  const generationRequests: GenerateClosedRoutesRequestV3[] = [];
+  const previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">> = [];
   const blockedExternalRequests: string[] = [];
   let releaseReachability: () => void = () => undefined;
   const reachabilityMayFinish = options.deferReachability
@@ -88,10 +88,12 @@ export async function installOfflineHarness(
       return;
     }
     if (request.method() === "POST" && url.pathname.endsWith("/access-points/preview")) {
-      const preview = requestBody as { accessFilter: GenerateRoutesRequestV2["accessFilter"] };
+      const preview = requestBody as Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">;
       previewRequests.push(preview);
       await route.fulfill({ json: {
-        accessPoints: ACCESS_POINTS,
+        accessPoints: ACCESS_POINTS.filter((point) =>
+          preview.accessPointRemoteness.includes(point.remoteness)
+          && (preview.includeUncertainAccess || point.accessState !== "unknown")),
         filterGeometry: FILTER_GEOMETRY,
         ...(preview.accessFilter.mode === "drive-time" && preview.accessFilter.regionId
           ? { refinementGeometry: REFINEMENT_GEOMETRY }
@@ -142,7 +144,7 @@ export async function installOfflineHarness(
       return;
     }
     if (request.method() === "POST" && url.pathname === "/api/routes/generate") {
-      const generationRequest = requestBody as GenerateRoutesRequestV2;
+      const generationRequest = requestBody as GenerateClosedRoutesRequestV3;
       generationRequests.push(generationRequest);
       await generationMayFinish;
       await route.fulfill({ json: routeResponse(generationRequest, options.routeCount ?? 1) })

@@ -1,7 +1,7 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
 import { CaliforniaStateParksAccessAdapter, CALIFORNIA_STATE_PARKS_QUERY_URL } from "./california-state-parks";
@@ -12,6 +12,17 @@ import { SanMateoCountyParksAccessAdapter, SAN_MATEO_COUNTY_GEOJSON_URL } from "
 import { SantaClaraCountyParksAccessAdapter, SANTA_CLARA_COUNTY_QUERY_URL } from "./santa-clara-county";
 
 const fixture = (name: string) => path.resolve("data/fixtures/source/authorities", name);
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+async function temporaryDirectory(prefix: string): Promise<string> {
+  const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
+  temporaryDirectories.push(directory);
+  return directory;
+}
 
 async function snapshot(
   localPath: string,
@@ -69,7 +80,7 @@ describe("official authority adapters", () => {
   });
 
   it("reports authority records without geometry instead of treating them as joinable", async () => {
-    const temporary = await mkdtemp(path.join(os.tmpdir(), "authority-missing-geometry-"));
+    const temporary = await temporaryDirectory("authority-missing-geometry-");
     const input = JSON.parse(await readFile(fixture("santa-clara-query.json"), "utf8")) as {
       features: Array<{ attributes: Record<string, unknown>; geometry?: unknown }>;
     };
@@ -93,7 +104,7 @@ describe("official authority adapters", () => {
   });
 
   it("fails on schema drift, undocumented domains, unexpected CRS, empty data, URL drift, and hash changes", async () => {
-    const temporary = await mkdtemp(path.join(os.tmpdir(), "authority-adapter-"));
+    const temporary = await temporaryDirectory("authority-adapter-");
     type TestArcGis = {
       fields: Array<{ name: string; type: string }>;
       spatialReference: { wkid: number };
