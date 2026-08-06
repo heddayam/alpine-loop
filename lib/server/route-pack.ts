@@ -1,4 +1,4 @@
-import type { NamedArea, NamedAreaSummary } from "@/lib/contracts";
+import type { NamedArea, NamedAreaSummary, SearchRegionSummary } from "@/lib/contracts";
 import type { AreaGeometry, GraphRepository } from "@/lib/graph";
 
 export type RoutePack = {
@@ -12,5 +12,7 @@ export type RoutePack = {
   databasePath?: string;
   searchNamedAreas?: (text: string, limit?: number) => NamedAreaSummary[] | Promise<NamedAreaSummary[]>;
   getNamedArea?: (id: string) => NamedArea | null | Promise<NamedArea | null>;
+  listSearchRegions?: () => SearchRegionSummary[] | Promise<SearchRegionSummary[]>;
+  getSearchRegion?: (id: string) => NamedArea | null | Promise<NamedArea | null>;
   loadRepository: (signal: AbortSignal) => Promise<GraphRepository>;
 };

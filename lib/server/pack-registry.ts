@@ -1,5 +1,5 @@
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
-import { getNamedArea, searchNamedAreas } from "@/lib/data/named-area-catalog";
+import { getNamedArea, getSearchRegion, listSearchRegions, searchNamedAreas } from "@/lib/data/named-area-catalog";
 import {
   FixtureGraphRepository,
   SQLiteClosedRouteFeasibilityRepository,
@@ -67,6 +67,10 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
       ...(manifest.capabilities.namedAreas ? {
         searchNamedAreas: (text: string, limit?: number) => searchNamedAreas(installed.databasePath, text, limit),
         getNamedArea: (id: string) => getNamedArea(installed.databasePath, id),
+      } : {}),
+      ...(manifest.schemaVersion === "4" ? {
+        listSearchRegions: () => listSearchRegions(installed.databasePath),
+        getSearchRegion: (id: string) => getSearchRegion(installed.databasePath, id),
       } : {}),
       ...(manifest.schemaVersion === "3" || manifest.schemaVersion === "4" ? {
         closedRouteRuntimeMode: manifest.closedRouteTopology.runtimeMode,
