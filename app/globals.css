@@ -183,6 +183,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .generate-button:disabled { cursor: wait; opacity: .7; }
 .cancel-button { min-height: 2rem; margin: 0; padding: .4rem .5rem; cursor: pointer; color: var(--danger); background: #fff; border: 1px solid #cfaaa2; border-radius: .1rem; font-size: .6rem; font-weight: 800; }
 .cancel-button:hover { background: #faece8; }
+.unified-actions > button { flex: 1; }
+.quick-button { min-height: 2rem; padding: .4rem .55rem; cursor: pointer; color: var(--forest); background: #fff; border: 1px solid var(--forest-2); border-radius: .1rem; font-size: .68rem; font-weight: 800; }
+.quick-button:hover:not(:disabled) { color: #fff; background: var(--forest-2); }
+.quick-button:disabled { cursor: wait; opacity: .7; }
+.optional-boundary > p { line-height: 1.35; }
 .generation-status { margin: .35rem 0 0; padding: .38rem .45rem; color: var(--forest); background: #e8f0ec; border-radius: .1rem; font-size: .56rem; }
 .auto-search-note { margin: 0; color: var(--forest); font-size: .58rem; font-weight: 750; }
 .topbar-actions { display: flex; gap: .35rem; align-items: center; }

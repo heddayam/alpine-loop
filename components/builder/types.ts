@@ -7,8 +7,6 @@ import type {
 import type { RemotenessClass } from "@/lib/data/remoteness";
 
 export type Bounds = Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"];
-export type FilterMode = "explore" | "batch";
-
 export type AccessPointOption = {
   id: string;
   name: string;

@@ -156,7 +156,7 @@ export function SettingsModal({
                 value={limit}
                 onChange={(event) => onChange({ limit: event.currentTarget.value })}
               />
-              <small>1 to 20 Explore alternatives</small>
+              <small>1 to 20 Quick-search alternatives</small>
             </div>
           </section>
         </div>
