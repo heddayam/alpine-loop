@@ -1,16 +1,20 @@
-import type { GenerateRoutesRequestV1, GenerateRoutesResponseV1 } from "@/lib/contracts";
 import type { FeatureCollection, LineString } from "geojson";
 import type { AreaGeometry } from "@/lib/graph";
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
 
-type Bounds = GenerateRoutesRequestV1["bbox"];
+type Bounds = [west: number, south: number, east: number, north: number];
 
-export const FIXTURE_PACK_METADATA = {
+export const FIXTURE_PACK_METADATA: {
+  id: string;
+  schemaVersion: string;
+  dataVersion: string;
+  builtAt: string;
+} = {
   id: "fixture-pack",
   schemaVersion: "1",
   dataVersion: "fixture-v1",
   builtAt: "2026-08-04T00:00:00Z",
-} satisfies GenerateRoutesResponseV1["pack"];
+};
 
 export const FIXTURE_PACK_COVERAGE: Bounds = [-122.19, 37.15, -122.13, 37.18];
 export const FIXTURE_PACK_COVERAGE_GEOMETRY: AreaGeometry = {

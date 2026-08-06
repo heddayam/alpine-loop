@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { accessStateSchema, confidenceSchema, finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
 
-export const routeTypeSchema = z.enum(["loop", "lollipop", "out-and-back", "point-to-point"]);
-
 export const DRIVE_TIME_DURATIONS_MINUTES = [
   5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
   75, 90, 105, 120, 135, 150, 165, 180, 210, 240, 270, 300,
@@ -43,20 +41,6 @@ export const bboxSchema = z
     message: "Bounding box coordinates are outside valid longitude/latitude ranges",
   });
 
-export const generateRoutesRequestV1Schema = z.object({
-  version: z.literal(1),
-  packId: z.string().trim().min(1),
-  bbox: bboxSchema,
-  startAccessPointId: z.string().trim().min(1).optional(),
-  routeTypes: z.array(routeTypeSchema).min(1).max(4),
-  distanceMiles: orderedRangeSchema,
-  elevationGainFeet: orderedRangeSchema.optional(),
-  maximumElevationFeet: orderedRangeSchema.optional(),
-  steepestSustainedGradePct: orderedRangeSchema.optional(),
-  includeUncertainAccess: z.boolean(),
-  limit: z.number().int().min(1).max(20),
-}).strict();
-
 export const accessFilterV2Schema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("drawn-area"), bbox: bboxSchema }).strict(),
   z.object({ mode: z.literal("named-region"), regionId: z.string().trim().min(1) }).strict(),
@@ -66,23 +50,6 @@ export const accessFilterV2Schema = z.discriminatedUnion("mode", [
     regionId: z.string().trim().min(1).optional(),
   }).strict(),
 ]);
-
-export const generateRoutesRequestV2Schema = z.object({
-  version: z.literal(2),
-  packId: z.string().trim().min(1),
-  accessFilter: accessFilterV2Schema,
-  startAccessPointId: z.string().trim().min(1).optional(),
-  routeTypes: z.array(routeTypeSchema).min(1).max(4),
-  pointToPoint: z.object({ finishMustMatchAccessFilter: z.boolean() }).strict(),
-  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= 30, {
-    message: "Route distance may not exceed 30 miles",
-  }),
-  elevationGainFeet: orderedRangeSchema.optional(),
-  maximumElevationFeet: orderedRangeSchema.optional(),
-  steepestSustainedGradePct: orderedRangeSchema.optional(),
-  includeUncertainAccess: z.boolean(),
-  limit: z.number().int().min(1).max(20),
-}).strict();
 
 export const closedRouteTopologyPreferenceV3Schema = z.object({
   maximumRepeatedTrailPct: z.number().int().min(0).max(100),
@@ -140,19 +107,16 @@ export const elevationSampleSchema = z.object({
   elevationMeters: finiteNumberSchema,
 }).strict();
 
-export const generatedRouteSchema = z.object({
+const generatedClosedRouteBaseSchema = z.object({
   id: z.string().min(1),
-  shape: routeTypeSchema,
   geometry: lineStringSchema,
   startAccessPoint: routeAccessPointSchema,
-  endAccessPoint: routeAccessPointSchema,
   distanceMeters: finiteNumberSchema.nonnegative(),
   elevationGainMeters: finiteNumberSchema.nonnegative(),
   elevationLossMeters: finiteNumberSchema.nonnegative(),
   minimumElevationMeters: finiteNumberSchema,
   maximumElevationMeters: finiteNumberSchema,
   steepestSustainedGradePct: finiteNumberSchema.nonnegative(),
-  repeatedEdgeFraction: finiteNumberSchema.min(0).max(1),
   trailNames: z.array(z.string().min(1)),
   warnings: z.array(z.string()),
   source: z.object({
@@ -161,10 +125,6 @@ export const generatedRouteSchema = z.object({
     sourceIds: z.array(z.string().min(1)).min(1),
   }).strict(),
   elevationSamples: z.array(elevationSampleSchema).optional(),
-}).strict();
-
-export const generatedRouteV2Schema = generatedRouteSchema.extend({
-  filterMatch: z.object({ start: z.literal(true), end: z.boolean() }).strict(),
 }).strict();
 
 export const closedRouteTopologyV3Schema = z.object({
@@ -177,11 +137,7 @@ export const closedRouteTopologyV3Schema = z.object({
   connectorCount: z.number().int().nonnegative(),
 }).strict();
 
-export const generatedClosedRouteV3Schema = generatedRouteSchema.omit({
-  shape: true,
-  endAccessPoint: true,
-  repeatedEdgeFraction: true,
-}).extend({
+export const generatedClosedRouteV3Schema = generatedClosedRouteBaseSchema.extend({
   topology: closedRouteTopologyV3Schema,
 }).strict();
 
@@ -203,27 +159,6 @@ export const constraintViolationV3Schema = constraintViolationSchema.extend({
     "repeated-trail",
     "shared-stem",
   ]),
-}).strict();
-
-export const generateRoutesResponseV1Schema = z.object({
-  version: z.literal(1),
-  requestId: z.string().min(1),
-  pack: z.object({
-    id: z.string().min(1),
-    schemaVersion: z.string().min(1),
-    dataVersion: z.string().min(1),
-    builtAt: isoDateSchema,
-  }).strict(),
-  requested: z.number().int().min(1).max(20),
-  exact: z.array(generatedRouteSchema),
-  nearMisses: z.array(generatedRouteSchema.extend({ violations: z.array(constraintViolationSchema).min(1) })).max(3),
-  diagnostics: z.object({
-    elapsedMs: finiteNumberSchema.nonnegative(),
-    expandedStates: z.number().int().nonnegative(),
-    candidateCount: z.number().int().nonnegative(),
-    exhausted: z.boolean(),
-    truncationReasons: z.array(z.string()),
-  }).strict(),
 }).strict();
 
 export const resolvedAccessFilterV2Schema = z.object({
@@ -269,22 +204,6 @@ export const closedRouteDiagnosticsV3Schema = diagnosticsV2Schema.extend({
   nonBudgetShortfallReasons: z.array(z.string()),
 }).strict();
 
-export const generateRoutesResponseV2Schema = z.object({
-  version: z.literal(2),
-  requestId: z.string().min(1),
-  pack: z.object({
-    id: z.string().min(1),
-    schemaVersion: z.string().min(1),
-    dataVersion: z.string().min(1),
-    builtAt: isoDateSchema,
-  }).strict(),
-  requested: z.number().int().min(1).max(20),
-  resolvedAccessFilter: resolvedAccessFilterV2Schema,
-  exact: z.array(generatedRouteV2Schema),
-  nearMisses: z.array(generatedRouteV2Schema.extend({ violations: z.array(constraintViolationSchema).min(1) })).max(3),
-  diagnostics: diagnosticsV2Schema,
-}).strict();
-
 export const generateClosedRoutesResponseV3Schema = z.object({
   version: z.literal(3),
   requestId: z.string().min(1),
@@ -303,21 +222,14 @@ export const generateClosedRoutesResponseV3Schema = z.object({
   diagnostics: closedRouteDiagnosticsV3Schema,
 }).strict();
 
-export type RouteType = z.infer<typeof routeTypeSchema>;
-export type GenerateRoutesRequestV1 = z.infer<typeof generateRoutesRequestV1Schema>;
 export type AccessFilterV2 = z.infer<typeof accessFilterV2Schema>;
-export type GenerateRoutesRequestV2 = z.infer<typeof generateRoutesRequestV2Schema>;
 export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopologyPreferenceV3Schema>;
 export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
 export type AccessPointRemoteness = z.infer<typeof accessPointRemotenessSchema>;
 export type GenerateClosedRoutesRequestV3 = z.infer<typeof generateClosedRoutesRequestV3Schema>;
-export type GeneratedRoute = z.infer<typeof generatedRouteSchema>;
-export type GeneratedRouteV2 = z.infer<typeof generatedRouteV2Schema>;
 export type ClosedRouteTopologyV3 = z.infer<typeof closedRouteTopologyV3Schema>;
 export type GeneratedClosedRouteV3 = z.infer<typeof generatedClosedRouteV3Schema>;
 export type ConstraintViolation = z.infer<typeof constraintViolationSchema>;
 export type ConstraintViolationV3 = z.infer<typeof constraintViolationV3Schema>;
-export type GenerateRoutesResponseV1 = z.infer<typeof generateRoutesResponseV1Schema>;
-export type GenerateRoutesResponseV2 = z.infer<typeof generateRoutesResponseV2Schema>;
 export type ClosedRouteDiagnosticsV3 = z.infer<typeof closedRouteDiagnosticsV3Schema>;
 export type GenerateClosedRoutesResponseV3 = z.infer<typeof generateClosedRoutesResponseV3Schema>;
