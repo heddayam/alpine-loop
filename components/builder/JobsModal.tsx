@@ -91,7 +91,10 @@ export function JobsModal({
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string" ? payload.error : `Job could not be ${action === "cancel" ? "cancelled" : "deleted"}.`);
       if (action === "delete") onJobsChange(jobs.filter(({ id }) => id !== job.id));
-      else if (payload && typeof payload === "object" && "job" in payload) onJobsChange(jobs.map((item) => item.id === job.id ? payload.job as RouteJob : item));
+      else {
+        const updated = payload && typeof payload === "object" && "job" in payload ? payload.job : payload;
+        onJobsChange(jobs.map((item) => item.id === job.id ? updated as RouteJob : item));
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The job could not be updated.");
     } finally { setLoadingJobId(undefined); }

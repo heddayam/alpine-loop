@@ -357,6 +357,10 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     setMode("batch");
     setJobsOpen(false);
     setMobilePanel("results");
+    if (page.job.filterGeometry) {
+      setFilterGeometry(page.job.filterGeometry);
+      return;
+    }
     const region = driveDraft.searchRegions.find(({ id }) => id === page.job.searchRegion.id);
     if (region) setFilterGeometry(boundsGeometry(region.bbox));
     void fetch(`/api/packs/${pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`)
