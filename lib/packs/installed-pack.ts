@@ -72,6 +72,37 @@ export async function loadInstalledPack(
   return { root: resolvedRoot, directory: resolvedDirectory, manifestPath, databasePath, manifest };
 }
 
+export async function loadInstalledPackVersion(
+  packId: string,
+  dataVersion: string,
+  root = localPackRoot(),
+): Promise<InstalledPack | null> {
+  if (!PACK_ID.test(packId)) throw new Error(`Invalid pack id: ${packId}`);
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(dataVersion)) {
+    throw new Error(`Invalid pack data version: ${dataVersion}`);
+  }
+  const packRoot = path.join(root, packId);
+  const directory = path.resolve(packRoot, dataVersion);
+  assertInside(packRoot, directory);
+  const manifestPath = path.join(directory, "manifest.json");
+  let manifest: PackManifest;
+  try {
+    manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (manifest.id !== packId || manifest.dataVersion !== dataVersion) {
+    throw new Error(`Installed pack version identity does not match ${packId}/${dataVersion}`);
+  }
+  const databasePath = path.join(directory, "pack.sqlite");
+  await access(databasePath, constants.R_OK);
+  const resolvedRoot = await realpath(root);
+  const resolvedDirectory = await realpath(directory);
+  assertInside(resolvedRoot, resolvedDirectory);
+  return { root: resolvedRoot, directory: resolvedDirectory, manifestPath, databasePath, manifest };
+}
+
 export async function loadSantaCruzPack(root = localPackRoot()): Promise<InstalledPack | null> {
   return loadInstalledPack("santa-cruz-mountains", root);
 }

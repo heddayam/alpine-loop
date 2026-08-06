@@ -5,9 +5,6 @@ import type {
   TopologyProfile,
 } from "@/lib/contracts";
 import {
-  accessPointIsEligible,
-  areaBounds,
-  coordinateIsInsideArea,
   type AccessPointCandidate,
   type AccessTopology,
   type EdgeTraversal,
@@ -15,7 +12,6 @@ import {
   type GraphRepository,
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
-import { classifyRemoteness } from "@/lib/data/remoteness";
 
 import { CLOSED_ROUTE_EFFORT_BUDGETS, type SolverBudget } from "./budget";
 import {
@@ -25,6 +21,10 @@ import {
 import { RouteSearchCancelledError } from "./control";
 import { AccessFilterResolutionError } from "./access-filter-error";
 import { searchPenalizedClosedRoutes } from "./penalized-closed-route-search";
+import {
+  accessPointMatchesResolvedFilter,
+  listEligibleAccessPointCandidates,
+} from "./eligible-access-points";
 import type { ResolvedAccessFilterContext } from "./types";
 
 const METERS_PER_MILE = 1_609.344;
@@ -93,21 +93,6 @@ function effectiveBudget(request: GenerateClosedRoutesRequestV3, supplied: Solve
     deadlineMs: Math.min(supplied.deadlineMs, effort.deadlineMs),
     maximumRawCandidates: Math.min(supplied.maximumRawCandidates, effort.maximumRawCandidates),
   };
-}
-
-function matchesFilter(candidate: Pick<AccessPointCandidate, "lon" | "lat">, context: ReachableGraphClosedRouteContext): boolean {
-  return context.accessFilter.predicates.every((geometry) =>
-    coordinateIsInsideArea([candidate.lon, candidate.lat], geometry));
-}
-
-function candidateRank(left: AccessPointCandidate, right: AccessPointCandidate, includeUnknown: boolean): number {
-  const confidence = { high: 0, medium: 1, low: 2 };
-  return right.knownConnectivity - left.knownConnectivity
-    || right.knownOutDegree - left.knownOutDegree
-    || (includeUnknown ? right.inclusiveConnectivity - left.inclusiveConnectivity : 0)
-    || (includeUnknown ? right.inclusiveOutDegree - left.inclusiveOutDegree : 0)
-    || confidence[left.confidence] - confidence[right.confidence]
-    || left.id.localeCompare(right.id);
 }
 
 function safeFeasibility(
@@ -309,33 +294,27 @@ export class ReachableGraphClosedRouteSolver {
     const deadlineAt = startedAt + budget.deadlineMs;
     const hardTruncationReasons = new Set<string>();
     const nonBudgetShortfallReasons = new Set<string>();
-    const coverageBbox = areaBounds(context.accessFilter.coverage);
-    const allCandidates = await context.repository.getAccessPointCandidates({
-      bbox: coverageBbox,
-      includeUncertainAccess: true,
+    const { all: allCandidates, eligible } = await listEligibleAccessPointCandidates({
+      repository: context.repository,
+      accessFilter: context.accessFilter,
+      includeUncertainAccess: request.includeUncertainAccess,
+      accessPointRemoteness: request.accessPointRemoteness,
       signal: context.signal,
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
-    const filtered = allCandidates.filter((candidate) => matchesFilter(candidate, context));
-    const eligible = filtered
-      .filter((candidate) => accessPointIsEligible(candidate, request.includeUncertainAccess))
-      .filter((candidate) => request.accessPointRemoteness.includes(classifyRemoteness(candidate)));
     let starts: AccessPointCandidate[];
     if (request.startAccessPointId) {
       const selected = allCandidates.find(({ id }) => id === request.startAccessPointId);
       if (!selected) throw new AccessFilterResolutionError("START_NOT_FOUND", "The selected access point was not found");
-      if (!matchesFilter(selected, context)) {
+      if (!accessPointMatchesResolvedFilter(selected, context.accessFilter)) {
         throw new AccessFilterResolutionError("START_OUTSIDE_FILTER", "The selected access point is outside the trailhead filter");
       }
-      if (!accessPointIsEligible(selected, request.includeUncertainAccess)) {
-        throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point is excluded by the access policy");
-      }
-      if (!request.accessPointRemoteness.includes(classifyRemoteness(selected))) {
+      if (!eligible.some(({ id }) => id === selected.id)) {
         throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point is excluded by the access-point area settings");
       }
       starts = [selected];
     } else {
-      starts = [...eligible].sort((left, right) => candidateRank(left, right, request.includeUncertainAccess));
+      starts = eligible;
     }
 
     // This single batched lookup is intentionally performed for every eligible

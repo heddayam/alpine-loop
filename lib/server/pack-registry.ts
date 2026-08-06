@@ -68,7 +68,7 @@ export async function loadRoutePacks(): Promise<ReadonlyMap<string, RegisteredRo
         searchNamedAreas: (text: string, limit?: number) => searchNamedAreas(installed.databasePath, text, limit),
         getNamedArea: (id: string) => getNamedArea(installed.databasePath, id),
       } : {}),
-      ...(manifest.schemaVersion === "3" ? {
+      ...(manifest.schemaVersion === "3" || manifest.schemaVersion === "4" ? {
         closedRouteRuntimeMode: manifest.closedRouteTopology.runtimeMode,
         ...(manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback" ? {
           loadClosedRouteFeasibilityRepository: async (signal: AbortSignal) => {
