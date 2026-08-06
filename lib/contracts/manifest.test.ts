@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema } from "./manifest";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema } from "./manifest";
 
 const manifest = {
   schemaVersion: "1",
@@ -78,6 +78,32 @@ describe("PackManifestV3", () => {
     expect(packManifestV3Schema.safeParse({
       ...v3,
       capabilities: { ...v3.capabilities, closedRouteTopology: false },
+    }).success).toBe(false);
+  });
+});
+
+describe("PackManifestV4", () => {
+  it("requires the reviewed batch-search-region capability", () => {
+    const v4 = {
+      ...manifest,
+      schemaVersion: "4",
+      capabilities: {
+        ...manifest.capabilities,
+        namedAreas: true,
+        closedRouteTopology: true,
+        batchSearchRegions: true,
+      },
+      closedRouteTopology: {
+        runtimeMode: "reachable-graph-fallback",
+        algorithmVersion: "closed-topology-v1",
+        policyVersion: "closed-primitives-v1",
+        profiles: ["known", "inclusive"],
+      },
+    };
+    expect(packManifestV4Schema.parse(v4).capabilities.batchSearchRegions).toBe(true);
+    expect(packManifestV4Schema.safeParse({
+      ...v4,
+      capabilities: { ...v4.capabilities, batchSearchRegions: false },
     }).success).toBe(false);
   });
 });

@@ -290,7 +290,7 @@ export const generateClosedRoutesResponseV3Schema = z.object({
   requestId: z.string().min(1),
   pack: z.object({
     id: z.string().min(1),
-    schemaVersion: z.literal("3"),
+    schemaVersion: z.enum(["3", "4"]),
     dataVersion: z.string().min(1),
     builtAt: isoDateSchema,
   }).strict(),
