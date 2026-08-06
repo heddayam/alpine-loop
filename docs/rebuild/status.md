@@ -34,7 +34,7 @@ the evidence line.
     Quick and Batch actions, with an optional collapsed drawn-boundary override.
     Persistent SQLite FIFO jobs recover checkpoints, pin pack versions, retain
     partial cancellations, delete transactionally, and page exact-first results.
-    `npm run verify` passes 302 tests across 58 files plus the production build;
+    `npm run verify` passes 303 tests across 58 files plus the production build;
     two consecutive `npm run test:browser` runs each pass all four Quick,
     Batch/Jobs, drawn-boundary, and mobile/dialog flows. The real schema-4 Santa
     Cruz pack `scm-c0d3a8aca0653798` contains 425,302 nodes, 863,917 directed

@@ -198,6 +198,10 @@ export class RouteJobService {
           if (signal.aborted || isCancellationError(error)) throw error;
           this.#store.failAccessPoint(id, point.ordinal, errorMessage(error));
         }
+        // The solver and SQLite checkpoints are local CPU/synchronous work.
+        // Yield between trailheads so progress polling and cancellation remain
+        // responsive while a long FIFO job is running.
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
     } finally {
       await session?.close();
