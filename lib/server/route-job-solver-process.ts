@@ -41,7 +41,11 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
 
   private constructor(options: RouteJobSolverProcessOptions) {
     const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-job-solver-child.ts");
-    this.#child = fork(modulePath, [], {
+    const forkAtRuntime = (...arguments_: Parameters<typeof fork>): ReturnType<typeof fork> => Reflect.apply(fork, undefined, arguments_);
+    // A direct fork(modulePath) call is treated as a bundle-time module
+    // reference by Turbopack. This child is intentionally a local Node runtime
+    // entrypoint resolved from the source checkout instead.
+    this.#child = forkAtRuntime(modulePath, [], {
       env: { ...process.env, ...options.env },
       execArgv: ["--import", "tsx"],
       serialization: "advanced",
