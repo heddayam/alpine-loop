@@ -1,0 +1,139 @@
+import { fork, type ChildProcess } from "node:child_process";
+import { resolve } from "node:path";
+import type { AccessPointSearchResult, RouteJobSearchSession } from "@/lib/route-jobs";
+import type {
+  RouteJobSolverRequest,
+  RouteJobSolverResponse,
+  RouteJobSolverWorkerInput,
+} from "./route-job-solver-protocol";
+
+type PendingRequest = {
+  resolve(value: unknown): void;
+  reject(error: unknown): void;
+  removeAbortListener(): void;
+};
+
+type RouteJobSolverProcessOptions = {
+  modulePath?: string;
+  env?: Record<string, string | undefined>;
+};
+
+type RouteJobSolverRequestWithoutId = RouteJobSolverRequest extends infer Request
+  ? Request extends { id: number } ? Omit<Request, "id"> : never
+  : never;
+
+function cancellationError(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("Cancelled", "AbortError");
+}
+
+function remoteError(value: Extract<RouteJobSolverResponse, { ok: false }>["error"]): Error {
+  const error = new Error(value.message);
+  error.name = value.name;
+  if (value.stack) error.stack = value.stack;
+  return error;
+}
+
+export class RouteJobSolverProcess implements RouteJobSearchSession {
+  readonly #child: ChildProcess;
+  readonly #pending = new Map<number, PendingRequest>();
+  #nextRequestId = 1;
+  #ended = false;
+
+  private constructor(options: RouteJobSolverProcessOptions) {
+    const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-job-solver-child.ts");
+    this.#child = fork(modulePath, [], {
+      env: { ...process.env, ...options.env },
+      execArgv: ["--import", "tsx"],
+      serialization: "advanced",
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+    });
+    this.#child.on("message", (message: RouteJobSolverResponse) => this.#handleResponse(message));
+    this.#child.on("error", (error) => this.#finish(error));
+    this.#child.on("exit", (code, signal) => {
+      if (!this.#ended) this.#finish(new Error(`Route solver process exited unexpectedly (${signal ?? code ?? "unknown"}).`));
+    });
+  }
+
+  static async open(
+    input: RouteJobSolverWorkerInput,
+    signal: AbortSignal,
+    options: RouteJobSolverProcessOptions = {},
+  ): Promise<RouteJobSolverProcess> {
+    const process = new RouteJobSolverProcess(options);
+    try {
+      await process.#request({ type: "initialize", input }, signal);
+      return process;
+    } catch (error) {
+      process.#terminate();
+      throw error;
+    }
+  }
+
+  async enumerateEligibleAccessPointIds(signal: AbortSignal): Promise<readonly string[]> {
+    return this.#request({ type: "enumerate" }, signal) as Promise<readonly string[]>;
+  }
+
+  async searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<AccessPointSearchResult> {
+    return this.#request({ type: "search", accessPointId }, signal) as Promise<AccessPointSearchResult>;
+  }
+
+  async close(): Promise<void> {
+    if (this.#ended) return;
+    try {
+      await this.#request({ type: "close" }, new AbortController().signal);
+    } finally {
+      this.#terminate();
+    }
+  }
+
+  #request(
+    request: RouteJobSolverRequestWithoutId,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    if (signal.aborted) {
+      this.#terminate();
+      return Promise.reject(cancellationError(signal));
+    }
+    if (this.#ended || !this.#child.connected) return Promise.reject(new Error("Route solver process is unavailable."));
+    const id = this.#nextRequestId++;
+    return new Promise((resolveRequest, reject) => {
+      const abort = () => {
+        this.#terminate(cancellationError(signal));
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      this.#pending.set(id, {
+        resolve: resolveRequest,
+        reject,
+        removeAbortListener: () => signal.removeEventListener("abort", abort),
+      });
+      this.#child.send({ ...request, id } as RouteJobSolverRequest, (error) => {
+        if (error) this.#finish(error);
+      });
+    });
+  }
+
+  #handleResponse(message: RouteJobSolverResponse): void {
+    if (!message || typeof message.id !== "number") return;
+    const pending = this.#pending.get(message.id);
+    if (!pending) return;
+    this.#pending.delete(message.id);
+    pending.removeAbortListener();
+    if (message.ok) pending.resolve(message.value);
+    else pending.reject(remoteError(message.error));
+  }
+
+  #terminate(reason: unknown = new Error("Route solver process was closed.")): void {
+    if (!this.#ended) this.#child.kill();
+    this.#finish(reason);
+  }
+
+  #finish(reason: unknown): void {
+    if (this.#ended) return;
+    this.#ended = true;
+    for (const pending of this.#pending.values()) {
+      pending.removeAbortListener();
+      pending.reject(reason);
+    }
+    this.#pending.clear();
+  }
+}
