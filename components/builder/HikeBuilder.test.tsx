@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
@@ -46,9 +46,15 @@ function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
 describe("HikeBuilder unified route search", () => {
   beforeEach(() => mockBaseFetch());
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
   it("shows one shared builder with both explicit actions", async () => {
     render(<HikeBuilder />);
@@ -148,6 +154,58 @@ describe("HikeBuilder unified route search", () => {
     expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"] } });
     expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Calculate drive-time/ })).not.toBeInTheDocument();
+  });
+
+  it("serializes background polling and continues while Jobs is closed", async () => {
+    vi.useFakeTimers();
+    vi.restoreAllMocks();
+    const firstJobs = deferred<Response>();
+    let listRequests = 0;
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && !init?.method) {
+        listRequests += 1;
+        if (listRequests === 1) return firstJobs.promise;
+        return new Response(JSON.stringify({ version: 1, jobs: [{ ...job, status: "completed", completedAt: "2026-08-06T00:00:05Z" }] }), { status: 200 });
+      }
+      return undefined;
+    });
+    render(<HikeBuilder />);
+    await act(async () => undefined);
+    expect(listRequests).toBe(1);
+    await act(async () => { vi.advanceTimersByTime(20_000); });
+    expect(listRequests).toBe(1);
+
+    firstJobs.resolve(new Response(JSON.stringify({ version: 1, jobs: [job] }), { status: 200 }));
+    await act(async () => { await firstJobs.promise; });
+    expect(screen.getByRole("button", { name: "Jobs (1)" })).toBeVisible();
+    await act(async () => { vi.advanceTimersByTime(5_000); });
+    await act(async () => undefined);
+    expect(listRequests).toBe(2);
+    expect(screen.getByRole("button", { name: "Jobs" })).toBeVisible();
+    expect(screen.getByText(/Santa Cruz Mountains batch search complete/)).toBeInTheDocument();
+  });
+
+  it("guards rapid duplicate Batch launches and exposes its loading state", async () => {
+    vi.restoreAllMocks();
+    const launchResponse = deferred<Response>();
+    let launches = 0;
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && init?.method === "POST") { launches += 1; return launchResponse.promise; }
+      return undefined;
+    });
+    render(<HikeBuilder />);
+    expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
+    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
+    const launch = screen.getByRole("button", { name: "Batch search" });
+    fireEvent.click(launch);
+    fireEvent.click(launch);
+    expect(launches).toBe(1);
+    expect(screen.getByRole("button", { name: "Starting batch…" })).toBeDisabled();
+
+    launchResponse.resolve(new Response(JSON.stringify({ job }), { status: 202 }));
+    expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Batch search" })).toBeEnabled();
   });
 
   it("uses location only on request and reports denial", async () => {

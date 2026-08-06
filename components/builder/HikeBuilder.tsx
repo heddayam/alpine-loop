@@ -23,7 +23,7 @@ import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixtur
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { BoundaryEditor } from "./BoundaryEditor";
-import { JobsModal } from "./JobsModal";
+import { JobsModal, type JobsLoadState } from "./JobsModal";
 import { RangeInput } from "./RangeInput";
 import { SettingsModal } from "./SettingsModal";
 import {
@@ -37,6 +37,9 @@ import {
 import { buildGenerateRoutesRequest } from "./validation";
 
 type AreaGeometry = Polygon | MultiPolygon;
+const ACTIVE_JOB_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-drive-time", "running"]);
+const JOB_POLL_OPEN_MS = 2_000;
+const JOB_POLL_CLOSED_MS = 5_000;
 
 function boundsGeometry(bounds: Bounds): Polygon {
   const [west, south, east, north] = bounds;
@@ -131,7 +134,12 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [batchPage, setBatchPage] = useState<RouteJobResultsPage>();
   const [batchPageLoading, setBatchPageLoading] = useState(false);
   const [jobs, setJobs] = useState<RouteJob[]>([]);
+  const [jobsLoadState, setJobsLoadState] = useState<JobsLoadState>("loading");
+  const [jobsLoadError, setJobsLoadError] = useState<string>();
+  const [jobsRefreshedAt, setJobsRefreshedAt] = useState<number>();
+  const [jobsAnnouncement, setJobsAnnouncement] = useState("");
   const [jobsOpen, setJobsOpen] = useState(false);
+  const [batchLaunching, setBatchLaunching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
   const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
@@ -139,6 +147,71 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const generationControllerRef = useRef<AbortController | null>(null);
   const reachabilityControllerRef = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
+  const jobsRef = useRef<RouteJob[]>([]);
+  const jobsLoadedRef = useRef(false);
+  const jobsRefreshControllerRef = useRef<AbortController | null>(null);
+  const jobsRefreshPromiseRef = useRef<Promise<void> | null>(null);
+  const jobsRefreshGenerationRef = useRef(0);
+  const batchLaunchInFlightRef = useRef(false);
+
+  const acceptJobs = useCallback((next: RouteJob[], refreshedAt: number, announceTransitions = true) => {
+    if (announceTransitions && jobsLoadedRef.current) {
+      const previousById = new Map(jobsRef.current.map((job) => [job.id, job]));
+      const finished = next.find((job) => {
+        const previous = previousById.get(job.id);
+        return previous && ACTIVE_JOB_STATUSES.has(previous.status) && ["completed", "cancelled", "failed"].includes(job.status);
+      });
+      if (finished) {
+        const message = finished.status === "completed"
+          ? `${finished.searchRegion.name} batch search complete. Open Jobs to view results.`
+          : finished.status === "cancelled"
+            ? `${finished.searchRegion.name} batch search cancelled.`
+            : `${finished.searchRegion.name} batch search failed. Open Jobs for details.`;
+        setJobsAnnouncement(message);
+      }
+    }
+    jobsRef.current = next;
+    jobsLoadedRef.current = true;
+    setJobs(next);
+    setJobsRefreshedAt(refreshedAt);
+    setJobsLoadState("ready");
+    setJobsLoadError(undefined);
+  }, []);
+
+  const refreshJobs = useCallback(async (abortStale = false): Promise<void> => {
+    const existing = jobsRefreshPromiseRef.current;
+    if (existing) {
+      if (!abortStale) return existing;
+      jobsRefreshControllerRef.current?.abort();
+      await existing;
+      if (jobsRefreshPromiseRef.current === existing) jobsRefreshPromiseRef.current = null;
+      jobsRefreshControllerRef.current = null;
+    }
+    if (jobsRefreshPromiseRef.current) return jobsRefreshPromiseRef.current;
+    const controller = new AbortController();
+    const generation = ++jobsRefreshGenerationRef.current;
+    jobsRefreshControllerRef.current = controller;
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/route-jobs", { cache: "no-store", signal: controller.signal });
+        const raw: unknown = await response.json().catch(() => null);
+        if (!response.ok) throw new Error("Jobs could not be refreshed.");
+        const parsed = routeJobListSchema.parse(raw);
+        if (!controller.signal.aborted && jobsRefreshGenerationRef.current === generation) acceptJobs(parsed.jobs, Date.now());
+      } catch (error) {
+        if (!controller.signal.aborted && jobsRefreshGenerationRef.current === generation) {
+          setJobsLoadState("error");
+          setJobsLoadError(error instanceof Error ? error.message : "Jobs could not be refreshed.");
+        }
+      }
+    })();
+    jobsRefreshPromiseRef.current = request;
+    try { await request; }
+    finally {
+      if (jobsRefreshPromiseRef.current === request) jobsRefreshPromiseRef.current = null;
+      if (jobsRefreshControllerRef.current === controller) jobsRefreshControllerRef.current = null;
+    }
+  }, [acceptJobs]);
 
   const invalidateResults = useCallback(() => {
     generationControllerRef.current?.abort();
@@ -313,6 +386,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   };
 
   const launchBatch = async () => {
+    if (batchLaunchInFlightRef.current) return;
     const errors: string[] = [];
     if (!driveDraft.origin) errors.push("Resolve a driving origin.");
     if (!driveDraft.searchRegionId) errors.push("Choose a search region.");
@@ -337,6 +411,8 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       },
       routesPerAccessPoint: 10,
     };
+    batchLaunchInFlightRef.current = true;
+    setBatchLaunching(true);
     setValidationErrors([]);
     setGenerationMessage("Launching batch search…");
     try {
@@ -344,10 +420,17 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       const raw: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(raw, "Batch search could not be launched."));
       const job = routeJobSchema.parse(raw && typeof raw === "object" && "job" in raw ? raw.job : raw);
-      setJobs((current) => [job, ...current.filter(({ id }) => id !== job.id)]);
+      jobsRefreshGenerationRef.current += 1;
+      jobsRefreshControllerRef.current?.abort();
+      acceptJobs([job, ...jobsRef.current.filter(({ id }) => id !== job.id)], Date.now(), false);
       setGenerationMessage("Batch search queued. Track it in Jobs.");
       setJobsOpen(true);
+      void refreshJobs(true);
     } catch (error) { setGenerationMessage(error instanceof Error ? error.message : "Batch search could not be launched."); }
+    finally {
+      batchLaunchInFlightRef.current = false;
+      setBatchLaunching(false);
+    }
   };
 
   const openBatchResults = useCallback((page: RouteJobResultsPage) => {
@@ -387,16 +470,32 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   };
 
   useEffect(() => {
-    void fetch("/api/route-jobs", { cache: "no-store" }).then(async (response) => response.ok ? response.json() : null).then((raw: unknown) => {
-      const parsed = routeJobListSchema.safeParse(raw);
-      if (parsed.success) setJobs(parsed.data.jobs);
-    }).catch(() => undefined);
-    return () => { generationControllerRef.current?.abort(); reachabilityControllerRef.current?.abort(); };
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await refreshJobs();
+      if (!stopped) timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
+    };
+    void poll();
+    return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [jobsOpen, refreshJobs]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") void refreshJobs(true); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [refreshJobs]);
+
+  useEffect(() => () => {
+    generationControllerRef.current?.abort();
+    reachabilityControllerRef.current?.abort();
+    jobsRefreshGenerationRef.current += 1;
+    jobsRefreshControllerRef.current?.abort();
   }, []);
 
   const generatedRoutes = useMemo(() => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [], [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
-  const activeJobCount = jobs.filter((job) => ["queued", "resolving-drive-time", "running"].includes(job.status)).length;
+  const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
   const selectedRegion = driveDraft.searchRegions.find(({ id }) => id === driveDraft.searchRegionId);
 
   return (
@@ -405,9 +504,10 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
         <div><span className="eyebrow">Trail graph route builder</span><h1>Alpine Search</h1></div>
         <div className="pack-status" aria-label="Installed region pack"><span className="status-dot" aria-hidden="true" /><span><strong>{pack.name}</strong><small>{pack.subtitle}</small></span></div>
         <div className="topbar-actions">
-          <button type="button" className="jobs-button" aria-haspopup="dialog" aria-expanded={jobsOpen} onClick={() => setJobsOpen(true)}>Jobs{activeJobCount ? ` (${activeJobCount})` : ""}</button>
+          <button type="button" className="jobs-button" aria-haspopup="dialog" aria-expanded={jobsOpen} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>Jobs{activeJobCount ? ` (${activeJobCount})` : ""}</button>
           <button type="button" className="settings-button" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
+        <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
         <nav className="desktop-panel-controls" aria-label="Desktop panels">
           <button type="button" aria-label="Toggle plan panel" aria-pressed={desktopBuilderVisible} onClick={() => setDesktopBuilderVisible((value) => !value)}>Plan</button>
           <button type="button" aria-label="Toggle results panel" aria-pressed={desktopResultsVisible && hasResultsPanel} disabled={!hasResultsPanel} onClick={() => setDesktopResultsVisible((value) => !value)}>Results</button>
@@ -415,7 +515,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       </header>
 
       <SettingsModal open={settingsOpen} includeUncertainAccess={values.includeUncertainAccess} accessPointRemoteness={values.accessPointRemoteness} limit={values.limit} onChange={updateSettings} onClose={closeSettings} />
-      <JobsModal open={jobsOpen} jobs={jobs} onJobsChange={setJobs} onOpenResults={openBatchResults} onClose={closeJobs} />
+      <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsLoadState} loadError={jobsLoadError} refreshedAt={jobsRefreshedAt} onRefresh={refreshJobs} onOpenResults={openBatchResults} onClose={closeJobs} />
 
       <div className={["workspace", hasResultsPanel ? "with-results" : "", desktopBuilderVisible ? "" : "without-builder", hasResultsPanel && !desktopResultsVisible ? "without-results" : ""].filter(Boolean).join(" ")}>
         <nav className="mobile-panel-nav" aria-label="Workspace panels">
@@ -454,7 +554,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
           <section className="builder-section constraints" aria-labelledby="constraints-title"><div className="section-title"><h3 id="constraints-title">Physical constraints</h3><span>Min – max</span></div><div className="range-table"><div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Minimum</span><span>Maximum</span><span>Unit</span></div><RangeInput id="distance" label="Distance" unit="miles (max 30)" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} /><RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} /><RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} /><RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => { patchRange(setValues, "steepestSustainedGradePct", next); invalidateResults(); }} /></div></section>
 
-          <footer className="builder-action-footer">{validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}<div className="builder-action-buttons unified-actions"><button className="quick-button" type="button" disabled={generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button><button className="generate-button" type="button" onClick={() => void launchBatch()}>Batch search</button></div>{generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}</footer>
+          <footer className="builder-action-footer">{validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}<div className="builder-action-buttons unified-actions"><button className="quick-button" type="button" disabled={generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button><button className="generate-button" type="button" disabled={batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting batch…" : "Batch search"}</button></div>{generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}</footer>
         </aside>
 
         <HikeMap drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={setSelectedRouteId} />
