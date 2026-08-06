@@ -63,18 +63,13 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
         origin: request.origin,
         durationMinutes: request.durationMinutes,
       }, signal);
-      try {
-        while (response.status === "pending") {
-          await abortableDelay(response.pollAfterMs, signal);
-          response = await service.poll(response.requestId, signal);
-        }
-        return { geometry: response.geometry, resolvedAt: response.resolvedAt };
-      } catch (error) {
-        if (signal.aborted && response.status === "pending") {
-          await service.cancel(response.requestId).catch(() => undefined);
-        }
-        throw error;
+      // Identical Quick and Batch requests may share this process-local job.
+      // Aborting this consumer must not cancel the provider job for the others.
+      while (response.status === "pending") {
+        await abortableDelay(response.pollAfterMs, signal);
+        response = await service.poll(response.requestId, signal);
       }
+      return { geometry: response.geometry, resolvedAt: response.resolvedAt };
     },
 
     async currentDataVersion(packId) {

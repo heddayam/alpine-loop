@@ -286,13 +286,15 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     const migrations = (this.#database.prepare(
       "SELECT version FROM schema_migrations ORDER BY version",
     ).all() as SqliteRow[]).map((row) => requiredInteger(row, "version"));
-    if (migrations.length !== 3 || migrations.some((version, index) => version !== index + 1)) {
-      throw corruption(`expected schema migrations 1, 2, 3; got ${migrations.join(", ") || "none"}`);
+    const expectedMigrationCount = Number(this.#manifest.schemaVersion);
+    const expectedMigrations = Array.from({ length: expectedMigrationCount }, (_, index) => index + 1);
+    if (migrations.length !== expectedMigrationCount || migrations.some((version, index) => version !== expectedMigrations[index])) {
+      throw corruption(`expected schema migrations ${expectedMigrations.join(", ")}; got ${migrations.join(", ") || "none"}`);
     }
 
     const values = metadata(this.#database);
     const expectedMetadata = {
-      schemaVersion: "3",
+      schemaVersion: this.#manifest.schemaVersion,
       packId: this.packId,
       dataVersion: this.dataVersion,
       builtAt: this.#manifest.builtAt,

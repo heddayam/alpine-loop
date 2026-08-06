@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { packManifestV3Schema, type GenerateClosedRoutesRequestV3 } from "@/lib/contracts";
+import { packManifestSchema, type GenerateClosedRoutesRequestV3 } from "@/lib/contracts";
 import { SQLiteClosedRouteFeasibilityRepository, SQLiteGraphRepository } from "@/lib/graph";
 import {
   CLOSED_ROUTE_EFFORT_BUDGETS,
@@ -25,7 +25,11 @@ if (!databasePath || !manifestPath) {
   throw new Error("Usage: node --import tsx scripts/research/gate5-topology-real-checkpoint.ts --database=<path> --manifest=<path>");
 }
 
-const manifest = packManifestV3Schema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+if (parsedManifest.schemaVersion !== "3" && parsedManifest.schemaVersion !== "4") {
+  throw new Error("The closed-route checkpoint requires a schema-3 or schema-4 pack");
+}
+const manifest = parsedManifest;
 const effortArgument = argument("--effort") ?? "thorough";
 if (effortArgument !== "quick" && effortArgument !== "thorough") throw new Error("--effort must be quick or thorough");
 const effort = effortArgument;
@@ -37,7 +41,7 @@ const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ database
 const validationRejections: Record<string, number> = {};
 const phaseTimings: Array<{ phase: string; elapsedMs: number }> = [];
 const solver = new ReachableGraphClosedRouteSolver({
-  pack: { id: manifest.id, schemaVersion: "3", dataVersion: manifest.dataVersion, builtAt: manifest.builtAt },
+  pack: { id: manifest.id, schemaVersion: manifest.schemaVersion, dataVersion: manifest.dataVersion, builtAt: manifest.builtAt },
   onValidationRejection: (reason) => { validationRejections[reason] = (validationRejections[reason] ?? 0) + 1; },
   onPhaseTiming: (phase, elapsedMs) => { phaseTimings.push({ phase, elapsedMs }); },
 });
