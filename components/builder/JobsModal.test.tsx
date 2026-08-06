@@ -43,6 +43,12 @@ const baseProps = {
   onOpenResults: vi.fn(),
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("JobsModal", () => {
@@ -110,5 +116,36 @@ describe("JobsModal", () => {
     expect(screen.getByText("Santa Cruz Mountains")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(onRefresh).toHaveBeenCalledWith(true));
+  });
+
+  it("aborts and ignores a pending View results response when the modal closes", async () => {
+    const response = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      signal = init?.signal ?? undefined;
+      return response.promise;
+    });
+    const onOpenResults = vi.fn();
+    render(<JobsModal {...baseProps} jobs={[{ ...job, status: "completed", completedAt: "2026-08-06T00:00:15Z" }]} onOpenResults={onOpenResults} />);
+    await userEvent.click(screen.getByRole("button", { name: "View results for Santa Cruz Mountains" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close jobs" }));
+    expect(signal?.aborted).toBe(true);
+    response.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    await act(async () => { await response.promise; });
+    expect(onOpenResults).not.toHaveBeenCalled();
+  });
+
+  it("aborts pending View results work on unmount", async () => {
+    const response = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      signal = init?.signal ?? undefined;
+      return response.promise;
+    });
+    const view = render(<JobsModal {...baseProps} jobs={[{ ...job, status: "completed", completedAt: "2026-08-06T00:00:15Z" }]} />);
+    await userEvent.click(screen.getByRole("button", { name: "View results for Santa Cruz Mountains" }));
+    view.unmount();
+    expect(signal?.aborted).toBe(true);
+    response.resolve(new Response(JSON.stringify({}), { status: 200 }));
   });
 });

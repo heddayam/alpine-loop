@@ -182,10 +182,11 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     const existing = jobsRefreshPromiseRef.current;
     if (existing) {
       if (!abortStale) return existing;
-      jobsRefreshControllerRef.current?.abort();
+      const existingController = jobsRefreshControllerRef.current;
+      existingController?.abort();
       await existing;
       if (jobsRefreshPromiseRef.current === existing) jobsRefreshPromiseRef.current = null;
-      jobsRefreshControllerRef.current = null;
+      if (jobsRefreshControllerRef.current === existingController) jobsRefreshControllerRef.current = null;
     }
     if (jobsRefreshPromiseRef.current) return jobsRefreshPromiseRef.current;
     const controller = new AbortController();
