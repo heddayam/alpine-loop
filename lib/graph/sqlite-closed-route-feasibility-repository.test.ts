@@ -34,6 +34,13 @@ const manifest = {
   },
 } as const;
 
+const manifestV4 = {
+  ...manifest,
+  schemaVersion: "4",
+  dataVersion: "fixture-v4",
+  capabilities: { ...manifest.capabilities, batchSearchRegions: true },
+} as const;
+
 const directories: string[] = [];
 
 function createFixtureDatabase(mutate?: (database: DatabaseSync) => void): string {
@@ -107,6 +114,10 @@ function open(databasePath: string) {
   return new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
 }
 
+function openV4(databasePath: string) {
+  return new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest: manifestV4 });
+}
+
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
@@ -136,6 +147,17 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
     expect(() => open(createFixtureDatabase((database) => {
       database.prepare("DELETE FROM schema_migrations WHERE version = 3").run();
     }))).toThrow(/schema migrations 1, 2, 3/);
+  });
+
+  it("opens schema-4 packs with the complete migration chain", async () => {
+    const repository = openV4(createFixtureDatabase((database) => {
+      database.prepare("INSERT INTO schema_migrations VALUES (4, '2026-08-05T00:00:00Z')").run();
+      database.prepare("UPDATE metadata SET value = '4' WHERE key = 'schemaVersion'").run();
+      database.prepare("UPDATE metadata SET value = 'fixture-v4' WHERE key = 'dataVersion'").run();
+    }));
+    await expect(repository.getAccessTopology("known", ["start-a"]))
+      .resolves.toEqual([expect.objectContaining({ accessPointId: "start-a" })]);
+    await repository.close();
   });
 
   it("rejects stale manifest identity and missing topology metadata", () => {
