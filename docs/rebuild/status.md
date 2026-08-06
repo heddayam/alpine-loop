@@ -29,16 +29,20 @@ the evidence line.
     heuristic behavior is documented in `closed-route-topology-plan.md` and the
     batch runner now preserves the Quick baseline before adding Thorough results.
 
-- [ ] Gate 6 — two-mode builder and persistent batch jobs
-  - Implemented: Explore auto-search, Batch origin/drive-time/reviewed-region
-    launch, schema-4 search regions, persistent SQLite FIFO jobs, restart
-    checkpoints, pinned packs, cancel/delete/partial results, Jobs modal, and
-    exact-first cursor pagination.
-  - Current evidence: `npm run verify` passes 299 tests across 58 files plus the
-    production build. Two consecutive `npm run test:browser` runs each pass the
-    3 Explore, Batch/Jobs, and mobile/dialog flows. Schema-4 fixture compiler and
-    audit suites pass; the real Santa Cruz schema-4 rebuild is the final gate
-    artifact.
+- [x] Gate 6 — unified route builder and persistent batch jobs
+  - Evidence: one shared origin/drive-time/reviewed-region form exposes explicit
+    Quick and Batch actions, with an optional collapsed drawn-boundary override.
+    Persistent SQLite FIFO jobs recover checkpoints, pin pack versions, retain
+    partial cancellations, delete transactionally, and page exact-first results.
+    `npm run verify` passes 302 tests across 58 files plus the production build;
+    two consecutive `npm run test:browser` runs each pass all four Quick,
+    Batch/Jobs, drawn-boundary, and mobile/dialog flows. The real schema-4 Santa
+    Cruz pack `scm-c0d3a8aca0653798` contains 425,302 nodes, 863,917 directed
+    edges, 3,207 access points, 476 named areas, and all 8 reviewed search
+    regions, with zero audit errors, missing elevation/population values,
+    conflicts, integrity errors, or foreign-key errors. Its representative
+    Thorough checkpoint returned only validated routes with zero directed
+    validation rejections.
 
 ## Local data and risks
 

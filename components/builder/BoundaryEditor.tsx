@@ -13,7 +13,7 @@ export function BoundaryEditor({ bounds, onChange }: BoundaryEditorProps) {
     bounds ? bounds.map(String) as [string, string, string, string] : ["", "", "", ""],
   );
   return (
-    <details className="boundary-editor" open={!bounds}>
+    <details className="boundary-editor">
       <summary>{bounds ? "Edit area coordinates" : "Enter area coordinates"}</summary>
       <p>Enter west, south, east, and north coordinates. Boundary points count as inside.</p>
       <div className="coordinate-grid">

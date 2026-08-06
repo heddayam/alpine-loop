@@ -7,14 +7,17 @@ It is not a catalog of known hikes. The first installed pack covers the Santa
 Cruz Mountains; regional behavior comes from versioned packs rather than UI or
 solver branches.
 
-The active route builder has two modes:
+The active route builder is one shared search form. Origin, typical drive time,
+a reviewed pack-provided region, route constraints, and access policy are
+configured once. Two buttons at the bottom choose execution only:
 
-1. **Explore** — draw a boundary and automatically run a short foreground search
-   after the boundary or criteria settle. The boundary filters eligible access
+1. **Quick search** — resolve the selected drive-time area and run a short
+   foreground search. A user may instead draw a boundary on the map as an
+   optional Quick-search area override. Filter geometry selects eligible access
    points; it never clips route geometry.
-2. **Batch search** — choose an origin, typical drive time, and one reviewed
-   pack-provided search region. Launch a persistent background job that attempts
-   every eligible trailhead under the snapshotted route/access criteria.
+2. **Batch search** — launch a persistent background job that attempts every
+   eligible trailhead in the drive-time and reviewed-region intersection under
+   the same snapshotted route/access criteria.
 
 Generated routes start and finish at one trailhead and contain a physical-trail
 cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
@@ -24,10 +27,11 @@ result labels. Exact matches and explicitly labeled near misses remain separate.
 
 - The top bar shows the installed pack, Settings, panel controls, and a Jobs
   button with active-job state.
-- The left panel switches between Explore and Batch search and owns closed-route
-  constraints and physical ranges.
+- The left panel has no product-mode switch. Drive-time inputs and shared
+  closed-route/physical constraints are visible together.
 - Settings controls access-point remoteness, uncertain access, and the number of
-  Quick Explore results. Mode determines effort; there is no effort selector.
+  Quick-search results. The chosen action determines effort; there is no effort
+  selector.
 - The map shows pack coverage, active filter geometry, eligible access points,
   and only the currently loaded result page.
 - The results panel compares exact routes first, then near misses, with topology,
@@ -37,10 +41,10 @@ result labels. Exact matches and explicitly labeled near misses remain separate.
   records. Opening a completed/cancelled job restores its contour and paginated
   routes to the map workspace.
 
-Explore debounces valid changes by 600 ms, aborts stale requests, and always uses
-the Quick server budget. Batch mode has no explicit-start control. It retains up
-to ten diverse exact routes per trailhead, or the single best labeled near miss
-when that trailhead has no exact result.
+Quick search is explicit, cancellable, and always uses the Quick server budget.
+Batch search has no explicit-start control. It retains up to ten diverse exact
+routes per trailhead, or the single best labeled near miss when that trailhead
+has no exact result.
 
 ## Active contracts and storage
 
@@ -82,16 +86,16 @@ failures remain visible in job diagnostics.
 - Drive-time service areas use ArcGIS typical/static time, not live traffic.
 - Exact pack coverage is the only hard route-geometry boundary.
 - Unknown access is included by default and can be explicitly disabled.
-- Remote/rural/populated/unknown settings control map visibility, previews,
-  explicit Explore starts, and automatic solver starts.
+- Remote/rural/populated/unknown settings control map visibility, previews, and
+  automatic solver starts. Remote and unknown are enabled by default.
 - Automated tests use committed fixtures and never require network access.
 - Generated packs, runtime databases, source downloads, caches, and secrets stay
   out of Git.
 
 ## Acceptance
 
-- Explore auto-search is debounced, cancellable, deterministic, accessible, and
-  suppresses stale responses.
+- Quick search resolves drive time without a separate calculation step, is
+  cancellable, deterministic, accessible, and suppresses stale responses.
 - Batch launch validates origin, drive time, reviewed region, and all snapshotted
   criteria before enqueueing.
 - Persistent jobs recover across server restarts; cancellation retains partial

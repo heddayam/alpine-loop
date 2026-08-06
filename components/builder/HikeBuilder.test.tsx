@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
@@ -66,6 +66,21 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByRole("checkbox", { name: /Unknown/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Rural/ })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Populated/ })).not.toBeChecked();
+  });
+
+  it("updates drive-time and closed-route controls without retaining synthetic events", async () => {
+    render(<HikeBuilder />);
+    await userEvent.selectOptions(screen.getByLabelText("Typical drive time"), "45");
+    expect(screen.getByLabelText("Typical drive time")).toHaveValue("45");
+    fireEvent.change(screen.getByLabelText("Maximum repeated trail"), { target: { value: "20" } });
+    expect(screen.getByLabelText("Maximum repeated trail")).toHaveValue("20");
+    await userEvent.click(screen.getByRole("switch", { name: /Limit the shared access stem/ }));
+    expect(screen.getByLabelText("Maximum shared stem")).toBeVisible();
+    await userEvent.clear(screen.getByLabelText("Maximum shared stem"));
+    await userEvent.type(screen.getByLabelText("Maximum shared stem"), "2.5");
+    expect(screen.getByLabelText("Maximum shared stem")).toHaveValue(2.5);
+    await userEvent.click(screen.getByRole("switch", { name: /Allow figure-eights/ }));
+    expect(screen.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
   });
 
   it("runs Quick explicitly and uses a drawn boundary as its override", async () => {

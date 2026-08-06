@@ -50,6 +50,6 @@ access and access-point remoteness follow the explicit request snapshot.
 The August 2026 schema-3 checkpoint validated all returned routes and produced
 deterministic result counts. Thorough effort did not monotonically dominate
 Quick for every representative start; this is retained as a solver-quality
-diagnostic, not as an unfinished rebuild gate. The two-mode product removes the
+diagnostic, not as an unfinished rebuild gate. The unified builder removes the
 effort selector and batch coverage evaluates every eligible trailhead under a
 fixed per-start budget.
