@@ -22,11 +22,11 @@ npm run dev
 
 Open <http://localhost:3000> in a browser. The committed fixture keeps the UI
 and automated tests usable without generated data; route generation requires
-an installed schema-3 regional pack.
+an installed schema-4 regional pack for Batch search.
 
 ### Enable drive-time filters
 
-ArcGIS credentials stay server-only. Copy `.env.example` to `.env.local` and
+ArcGIS credentials stay server-only. Copy `.env.example` to `.env` and
 set either one shared scoped key or separate geocoding and routing keys:
 
 ```sh
@@ -38,11 +38,12 @@ ARCGIS_GEOCODING_API_KEY=your-geocoding-key
 ARCGIS_ROUTING_API_KEY=your-routing-key
 ```
 
-Restart `npm run dev` after changing `.env.local`. Typed place suggestions need
+Restart `npm run dev` after changing `.env`. Typed place suggestions need
 geocoding access; calculating the typical drive-time area needs routing service
 area access. The browser never receives either credential. Provider jobs and
-location-bearing results stay in process memory for 30 minutes; only aggregate
-monthly usage counters are stored in ignored local SQLite.
+reachability results stay in process memory for 30 minutes. A launched Batch
+job snapshots its origin and contour in ignored local SQLite until that job is
+deleted; aggregate monthly provider counters are stored separately.
 
 ## Build the Santa Cruz Mountains pack
 
@@ -70,7 +71,7 @@ Downloads, build caches, SQLite databases, audit output, and generated packs
 remain local and ignored by Git. Normal runtime and automated tests never use
 the network.
 
-### Verify an installed schema-3 pack
+### Verify an installed closed-route pack
 
 The retained real-pack checkpoint exercises the active V3 closed-route runtime
 against representative Santa Cruz trailheads:
@@ -90,7 +91,7 @@ coverage, topology, repetition, shared stem, and exact-versus-near-miss status.
 
 - [Current status and resume point](docs/rebuild/status.md)
 - [Implementation specification](docs/rebuild/implementation-plan.md)
-- [Gate 5 closed-route plan](docs/rebuild/closed-route-topology-plan.md)
+- [Closed-route engine reference](docs/rebuild/closed-route-topology-plan.md)
 - [Data-source and licensing policy](docs/rebuild/data-sources.md)
 
 The removed pre-rebuild app remains recoverable from the

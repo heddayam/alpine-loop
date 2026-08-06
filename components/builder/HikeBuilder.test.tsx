@@ -60,6 +60,10 @@ describe("HikeBuilder two-mode route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
     expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Remote/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Unknown/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Rural/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Populated/ })).not.toBeChecked();
   });
 
   it("debounces a valid Explore change and always submits Quick effort", async () => {
@@ -106,7 +110,7 @@ describe("HikeBuilder two-mode route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Launch batch search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
-    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "rural", "populated", "unknown"] } });
+    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"] } });
     expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Calculate drive-time/ })).not.toBeInTheDocument();
   });
