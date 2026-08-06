@@ -31,7 +31,7 @@ function requireKey(value: string | undefined, service: string, configuration: s
   if (value) return value;
   throw new ReachabilityError(
     "PROVIDER_NOT_CONFIGURED",
-    `${service} is not configured. Set ${configuration} in .env.local, then restart the development server.`,
+    `${service} is not configured. Set ${configuration} in .env, then restart the development server.`,
     503,
   );
 }

@@ -73,6 +73,16 @@ One FIFO worker runs at a time. Interrupted jobs resume at the first unfinished
 trailhead and reopen their pinned pack version. Pack upgrades mark old jobs stale
 without invalidating stored result geometry.
 
+The FIFO coordinator stays in the app process, while each active job opens one
+dedicated local solver process that reuses the pinned pack repositories for the
+whole session. CPU-heavy Quick/Thorough work therefore cannot block status,
+cancellation, refresh, or other application requests; cancellation terminates
+the active solver process immediately. The coordinator also yields around setup
+and every persisted trailhead checkpoint. Drive-time resolution has a bounded
+overall deadline. The browser keeps exactly one serialized jobs poll in flight,
+polls more frequently while the Jobs modal is open, suppresses stale responses,
+and advances the displayed elapsed time locally between accepted server snapshots.
+
 Batch completeness means every eligible trailhead was attempted. It does not
 claim enumeration of every possible closed walk. Per-trailhead truncation and
 failures remain visible in job diagnostics.
@@ -100,6 +110,9 @@ failures remain visible in job diagnostics.
   criteria before enqueueing.
 - Persistent jobs recover across server restarts; cancellation retains partial
   results; deletion cascades through checkpoints and routes.
+- Job polling never overlaps, elapsed progress remains visibly live between
+  responses, duplicate launches are blocked, and interruption during a pending
+  cancellation recovers as a terminal cancellation rather than a stranded job.
 - Every eligible batch trailhead is attempted once, with at most ten exact routes
   or one otherwise-empty near miss retained.
 - Pagination, stale pack labeling, map restoration, responsive layout, keyboard
