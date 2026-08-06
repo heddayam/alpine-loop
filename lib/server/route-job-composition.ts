@@ -124,31 +124,38 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
           return eligible.map(({ id }) => id);
         },
         async searchAccessPoint(accessPointId, signal) {
-          const response = await solver.generate({
-            version: 3,
-            packId: manifest.id,
-            accessFilter: {
-              mode: "drive-time",
-              reachabilityId: "00000000-0000-4000-8000-000000000000",
-              regionId: region.id,
-            },
-            startAccessPointId: accessPointId,
-            routeFamily: "closed",
-            ...input.request.criteria,
-            searchEffort: "thorough",
-            limit: input.request.routesPerAccessPoint,
-          }, {
-            repository,
-            topologyRepository,
-            accessFilter,
-            budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS.thorough },
-            signal,
-          });
+          const run = (searchEffort: "quick" | "thorough") => solver.generate({
+              version: 3,
+              packId: manifest.id,
+              accessFilter: {
+                mode: "drive-time",
+                reachabilityId: "00000000-0000-4000-8000-000000000000",
+                regionId: region.id,
+              },
+              startAccessPointId: accessPointId,
+              routeFamily: "closed",
+              ...input.request.criteria,
+              searchEffort,
+              limit: input.request.routesPerAccessPoint,
+            }, {
+              repository,
+              topologyRepository,
+              accessFilter,
+              budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] },
+              signal,
+            });
+          const quick = await run("quick");
+          const thorough = await run("thorough");
+          const unique = <T extends { id: string }>(values: readonly T[]): T[] => {
+            const seen = new Set<string>();
+            return values.filter(({ id }) => !seen.has(id) && Boolean(seen.add(id)));
+          };
           return {
-            exact: response.exact,
-            nearMisses: response.nearMisses,
-            truncated: response.diagnostics.hardTruncationReasons.length > 0,
-            diagnostics: response.diagnostics,
+            exact: unique([...quick.exact, ...thorough.exact]).slice(0, input.request.routesPerAccessPoint),
+            nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
+            truncated: quick.diagnostics.hardTruncationReasons.length > 0
+              || thorough.diagnostics.hardTruncationReasons.length > 0,
+            diagnostics: { quick: quick.diagnostics, thorough: thorough.diagnostics },
           };
         },
         async close() {
