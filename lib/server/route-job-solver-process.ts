@@ -1,4 +1,4 @@
-import { fork, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import type { AccessPointSearchResult, RouteJobSearchSession } from "@/lib/route-jobs";
 import type {
@@ -41,10 +41,10 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
 
   private constructor(options: RouteJobSolverProcessOptions) {
     const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-job-solver-child.ts");
-    const forkAtRuntime = (...arguments_: Parameters<typeof fork>): ReturnType<typeof fork> => Reflect.apply(fork, undefined, arguments_);
     // A direct fork(modulePath) call is treated as a bundle-time module
     // reference by Turbopack. This child is intentionally a local Node runtime
     // entrypoint resolved from the source checkout instead.
+    const forkAtRuntime: typeof import("node:child_process").fork = process.getBuiltinModule("node:child_process").fork;
     this.#child = forkAtRuntime(modulePath, [], {
       env: { ...process.env, ...options.env },
       execArgv: ["--import", "tsx"],
