@@ -27,6 +27,10 @@ export const namedAreaSchema = namedAreaSummarySchema.extend({
   geometry: areaGeometrySchema,
 }).strict();
 
+export const searchRegionSummarySchema = namedAreaSummarySchema.extend({
+  displayOrder: z.number().int().nonnegative(),
+}).strict();
+
 export const geocodingSuggestRequestSchema = z.object({
   packId: z.string().min(1),
   text: z.string().trim().min(2).max(200),
@@ -79,6 +83,7 @@ export const reachabilityResponseSchema = z.discriminatedUnion("status", [
 
 export type NamedAreaSummary = z.infer<typeof namedAreaSummarySchema>;
 export type NamedArea = z.infer<typeof namedAreaSchema>;
+export type SearchRegionSummary = z.infer<typeof searchRegionSummarySchema>;
 export type Origin = z.infer<typeof originSchema>;
 export type ReachabilityRequest = z.infer<typeof reachabilityRequestSchema>;
 export type ReachabilityResponse = z.infer<typeof reachabilityResponseSchema>;

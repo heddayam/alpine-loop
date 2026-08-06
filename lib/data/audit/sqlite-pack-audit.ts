@@ -7,6 +7,7 @@ import {
   type PackManifestV1,
   type PackManifestV2,
   type PackManifestV3,
+  type PackManifestV4,
 } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import { edgeInsideCoverage } from "../area-geometry";
@@ -23,7 +24,7 @@ import { topologySha256 } from "../topology-compiler";
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
 type Metadata = Record<string, string>;
-type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3;
+type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4;
 type BuildMetrics = {
   rejectedEdgeCount: number;
   conflictRecordIds: string[];
@@ -358,10 +359,10 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
-    if (manifest.schemaVersion === "3") {
+    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4") {
       const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
         decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
-      if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Schema 3 topology profiles must be exactly known,inclusive");
+      if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
       for (const row of profiles) {
         const profile = requiredString(row.profile, "topology profile");
         const count = (table: string, predicate = "profile = ?") => requiredNumber(
@@ -382,7 +383,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
           WHERE profile = ? AND decision_node_id IS NOT NULL`).get(profile) as Record<string, unknown>).count, "topology decision node count");
         const actualDecisionEdges = count("topology_decision_edges");
         if (expectedNodes !== actualNodes || expectedPhysical !== actualPhysical || expectedDecisionNodes !== actualDecisionNodes || expectedDecisionEdges !== actualDecisionEdges) {
-          throw new Error(`Schema 3 topology count mismatch for ${profile}`);
+          throw new Error(`Closed-route topology count mismatch for ${profile}`);
         }
         if (manifest.closedRouteTopology.runtimeMode === "primitive") {
           const mapped = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
@@ -398,7 +399,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
       if (manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback") {
         for (const table of ["topology_networks", "topology_nodes", "topology_decision_edges", "topology_decision_edge_members", "topology_blocks", "topology_block_nodes", "topology_block_edges", "topology_block_links"]) {
           const count = requiredNumber((database.prepare(`SELECT count(*) AS count FROM ${table}`).get() as Record<string, unknown>).count, `${table} count`);
-          if (count !== 0) throw new Error(`Schema 3 fallback pack must not persist primitive rows in ${table}`);
+          if (count !== 0) throw new Error(`Reachable-graph fallback packs must not persist primitive rows in ${table}`);
         }
       }
       const combinedHash = topologySha256({

@@ -74,14 +74,27 @@ export const packManifestV3Schema = packManifestV2Schema.extend({
   }).strict(),
 }).strict();
 
+export const packManifestV4Schema = packManifestV3Schema.extend({
+  schemaVersion: z.literal("4"),
+  capabilities: z.object({
+    elevation: z.boolean(),
+    officialAccess: z.boolean(),
+    namedAreas: z.literal(true),
+    closedRouteTopology: z.literal(true),
+    batchSearchRegions: z.literal(true),
+  }).catchall(z.boolean()),
+}).strict();
+
 export const packManifestSchema = z.discriminatedUnion("schemaVersion", [
   packManifestV1Schema,
   packManifestV2Schema,
   packManifestV3Schema,
+  packManifestV4Schema,
 ]);
 
 export type PackManifestV1 = z.infer<typeof packManifestV1Schema>;
 export type PackManifestV2 = z.infer<typeof packManifestV2Schema>;
 export type TopologyProfile = z.infer<typeof topologyProfileSchema>;
 export type PackManifestV3 = z.infer<typeof packManifestV3Schema>;
+export type PackManifestV4 = z.infer<typeof packManifestV4Schema>;
 export type PackManifest = z.infer<typeof packManifestSchema>;
