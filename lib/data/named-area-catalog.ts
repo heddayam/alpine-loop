@@ -41,6 +41,23 @@ export function listSearchRegions(databasePath: string): SearchRegionSummary[] {
   }
 }
 
+export function getSearchRegion(databasePath: string, id: string): NamedArea | null {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const row = database.prepare(`
+      SELECT a.id, a.name, a.kind, a.context, a.min_lon, a.min_lat, a.max_lon, a.max_lat,
+        a.geometry, a.source_refs
+      FROM search_regions r
+      JOIN named_areas a ON a.id = r.named_area_id
+      WHERE r.named_area_id = ?
+    `).get(id) as NamedAreaRow | undefined;
+    if (!row) return null;
+    return namedAreaSchema.parse({ ...rowSummary(row), geometry: JSON.parse(String(row.geometry)) });
+  } finally {
+    database.close();
+  }
+}
+
 function likePattern(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
