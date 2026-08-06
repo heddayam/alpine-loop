@@ -1,4 +1,5 @@
 import type { GenerateClosedRoutesRequestV3 } from "@/lib/contracts";
+import { maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
 import {
   edgeIsTraversable,
   type EdgeTraversal,
@@ -77,7 +78,8 @@ type InternalGraph = {
   length: Float64Array;
   gain: Float64Array;
   maximumElevation: Float64Array;
-  maximumGrade: Float64Array;
+  maximumGrade: Float64Array | null;
+  nodeElevation: Float64Array | null;
   physical: string[];
   directed: string[];
   outgoing: number[][];
@@ -189,6 +191,7 @@ function buildGraph(
   graph: InducedGraph,
   startNodeId: string,
   includeUncertainAccess: boolean,
+  measureSustainedGrade: boolean,
 ): InternalGraph {
   const traversals: EdgeTraversal[] = [];
   for (const edge of graph.edges) {
@@ -207,7 +210,13 @@ function buildGraph(
   const length = new Float64Array(traversals.length);
   const gain = new Float64Array(traversals.length);
   const maximumElevation = new Float64Array(traversals.length);
-  const maximumGrade = new Float64Array(traversals.length);
+  const maximumGrade = measureSustainedGrade ? new Float64Array(traversals.length) : null;
+  const nodeElevation = measureSustainedGrade ? new Float64Array(nodeIds.length) : null;
+  if (nodeElevation) {
+    nodeIds.forEach((id, index) => {
+      nodeElevation[index] = graph.nodes.get(id)?.elevationMeters ?? Number.NaN;
+    });
+  }
   const physical: string[] = [];
   const directed: string[] = [];
   const outgoing = Array.from({ length: nodeIds.length }, () => [] as number[]);
@@ -220,7 +229,7 @@ function buildGraph(
     length[index] = traversal.edge.lengthMeters;
     gain[index] = traversal.edge.gainMeters;
     maximumElevation[index] = traversal.edge.maximumElevationMeters ?? Number.NEGATIVE_INFINITY;
-    maximumGrade[index] = traversal.edge.maximumSustainedGradePct ?? 0;
+    if (maximumGrade) maximumGrade[index] = traversal.edge.maximumSustainedGradePct ?? 0;
     physical[index] = physicalKeyOf(traversal.edge);
     directed[index] = traversal.edge.edgeKey === undefined
       ? traversal.edge.id
@@ -239,6 +248,7 @@ function buildGraph(
     gain,
     maximumElevation,
     maximumGrade,
+    nodeElevation,
     physical,
     directed,
     outgoing,
@@ -275,6 +285,7 @@ export function searchPenalizedClosedRoutes(
     sourceGraph,
     typeof start === "string" ? start : start.nodeId,
     request.includeUncertainAccess,
+    request.steepestSustainedGradePct !== undefined,
   );
   const truncationReasons = new Set<string>();
   const penalties = new Map<string, number>();
@@ -398,14 +409,26 @@ export function searchPenalizedClosedRoutes(
     let repeated = 0;
     const physicalLengths = new Map<string, number>();
     const nodes = new Set([graph.start]);
+    const elevationProfile = graph.nodeElevation
+      ? [{ distanceMeters: 0, elevationMeters: graph.nodeElevation[graph.start]! }]
+      : null;
     for (const edge of edges) {
       distance += graph.length[edge]!;
       gain += graph.gain[edge]!;
       maximumElevation = Math.max(maximumElevation, graph.maximumElevation[edge]!);
-      maximumGrade = Math.max(maximumGrade, graph.maximumGrade[edge]!);
+      if (graph.maximumGrade && graph.length[edge]! >= SUSTAINED_GRADE_WINDOW_M) {
+        maximumGrade = Math.max(maximumGrade, graph.maximumGrade[edge]!);
+      }
       if (physicalLengths.has(graph.physical[edge]!)) repeated += graph.length[edge]!;
       else physicalLengths.set(graph.physical[edge]!, graph.length[edge]!);
       nodes.add(graph.to[edge]!);
+      elevationProfile?.push({
+        distanceMeters: distance,
+        elevationMeters: graph.nodeElevation![graph.to[edge]!]!,
+      });
+    }
+    if (elevationProfile?.every(({ elevationMeters }) => Number.isFinite(elevationMeters))) {
+      maximumGrade = Math.max(maximumGrade, maximumSustainedGradePct(elevationProfile) ?? 0);
     }
     return {
       distance,
@@ -477,6 +500,7 @@ export function searchPenalizedClosedRoutes(
     "distance-above-maximum",
     "gain-below-minimum",
     "gain-above-maximum",
+    "sustained-grade-outside-range",
     "repeated-trail-above-maximum",
   ]);
 

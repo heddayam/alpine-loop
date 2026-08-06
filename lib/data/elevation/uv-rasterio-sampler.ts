@@ -33,7 +33,7 @@ export async function validateUvRasterioPrerequisites(options: UvRasterioOptions
 }
 
 export class UvRasterioThreeDepElevationSampler implements ElevationSampler {
-  readonly algorithmVersion = "usgs-3dep-13as-rasterio-bilinear+metrics-v2";
+  readonly algorithmVersion = "usgs-3dep-13as-rasterio-bilinear+metrics-v3";
   readonly #collectionPath: string;
   readonly #options: ReturnType<typeof resolvedOptions>;
 
