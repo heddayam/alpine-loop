@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:santa-cruz-mountains",
+      "expectedName": "Santa Cruz Mountains"
+    },
+    {
+      "namedAreaId": "osm:relation/7091447",
+      "expectedName": "Big Basin Redwoods State Park"
+    },
+    {
+      "namedAreaId": "osm:relation/7062297",
+      "expectedName": "Castle Rock State Park"
+    },
+    {
+      "namedAreaId": "osm:relation/7091570",
+      "expectedName": "Henry Cowell Redwoods State Park"
+    },
+    {
+      "namedAreaId": "osm:relation/10558949",
+      "expectedName": "The Forest of Nisene Marks State Park"
+    },
+    {
+      "namedAreaId": "osm:relation/9671226",
+      "expectedName": "Bear Creek Redwoods Open Space Preserve"
+    },
+    {
+      "namedAreaId": "osm:relation/193005",
+      "expectedName": "Sierra Azul Open Space Preserve"
+    },
+    {
+      "namedAreaId": "osm:way/296113630",
+      "expectedName": "Rancho San Antonio Open Space Preserve"
+    }
+  ]
+}

@@ -225,6 +225,38 @@ function auditNamedAreas(
   return { count: rows.length, errors };
 }
 
+function auditSearchRegions(
+  database: DatabaseSync,
+  manifest: AuditablePackManifest,
+): { count: number; errors: string[] } {
+  if (manifest.schemaVersion !== "4") return { count: 0, errors: [] };
+  const rows = database.prepare(`
+    SELECT r.named_area_id, r.display_order, a.name, a.kind
+    FROM search_regions r
+    LEFT JOIN named_areas a ON a.id = r.named_area_id
+    ORDER BY r.display_order, r.named_area_id
+  `).all() as Array<Record<string, unknown>>;
+  const errors: string[] = [];
+  if (rows.length === 0) errors.push("Search-region catalog is empty");
+  const allowedKinds = new Set(["pack", "park", "preserve", "protected-area"]);
+  rows.forEach((row, index) => {
+    const id = requiredString(row.named_area_id, "search_regions.named_area_id");
+    if (row.name === null || row.kind === null) {
+      errors.push(`Search region ${id} references a missing named area`);
+      return;
+    }
+    const name = requiredString(row.name, `search region ${id}.name`);
+    const kind = requiredString(row.kind, `search region ${id}.kind`);
+    const displayOrder = requiredNumber(row.display_order, `search region ${id}.display_order`);
+    if (!Number.isSafeInteger(displayOrder) || displayOrder !== index) {
+      errors.push(`Search region ${id} has non-contiguous display order ${displayOrder}; expected ${index}`);
+    }
+    if (!allowedKinds.has(kind)) errors.push(`Search region ${id} has unsupported kind ${kind}`);
+    if (/\bclosed areas?\b/i.test(name)) errors.push(`Search region ${id} refers to a closed-area variant`);
+  });
+  return { count: rows.length, errors };
+}
+
 function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNode[] {
   const incidentSources = new Map<string, Set<string>>();
   for (const edge of edges) {
@@ -350,6 +382,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   let nodes: AuditNode[];
   let accessPoints: AuditAccessPoint[];
   let namedAreas: ReturnType<typeof auditNamedAreas>;
+  let searchRegions: ReturnType<typeof auditSearchRegions>;
   let topologyCounts: { profiles: number; networks: number; decisionEdges: number } | null = null;
   try {
     metadata = databaseMetadata(database);
@@ -359,6 +392,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
+    searchRegions = auditSearchRegions(database, manifest);
     if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4") {
       const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
         decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
@@ -446,6 +480,10 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     if (audit.outsideCoverageEdgeIds.length) {
       audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
     }
+  }
+  if (manifest.schemaVersion === "4") {
+    audit.counts.searchRegions = searchRegions.count;
+    audit.errors.push(...searchRegions.errors);
   }
   if (topologyCounts) audit.counts = { ...audit.counts, topologyProfiles: topologyCounts.profiles, topologyNetworks: topologyCounts.networks, topologyDecisionEdges: topologyCounts.decisionEdges };
   return audit;

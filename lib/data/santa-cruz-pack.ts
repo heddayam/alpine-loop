@@ -41,10 +41,11 @@ import {
 import { POPULATION_RADIUS_M } from "./remoteness";
 import { PreparedOfficialAccessAdapter } from "./prepared-official-access-adapter";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
+import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v10";
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v11";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
 const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
@@ -147,12 +148,14 @@ function newestRetrieval(snapshots: SourceSnapshot[]): string {
 
 function dataVersion(
   boundaryContents: string,
+  searchRegionContents: string,
   snapshots: SourceSnapshot[],
   topologyAdapterVersion: string,
   metricAlgorithmVersion: string,
 ): string {
   const hash = createHash("sha256");
   hash.update(boundaryContents);
+  hash.update(searchRegionContents);
   hash.update(COMPILER_VERSION);
   hash.update(topologyAdapterVersion);
   hash.update(metricAlgorithmVersion);
@@ -186,6 +189,9 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   const regionRoot = path.resolve("data/regions/santa-cruz-mountains");
   const boundaryPath = path.join(regionRoot, "boundary.geojson");
   const boundaryContents = await readFile(boundaryPath, "utf8");
+  const searchRegionPath = path.join(regionRoot, "search-regions.json");
+  const searchRegionContents = await readFile(searchRegionPath, "utf8");
+  const searchRegions = await readSearchRegionInput(searchRegionPath);
   const boundary = JSON.parse(boundaryContents) as BoundaryFeature;
   const osmConfig = await readOsmSourceConfig(path.join(regionRoot, "osm-source.json"));
   const elevationConfig = await readElevationSourceConfig(path.join(regionRoot, "elevation-source.json"));
@@ -262,11 +268,12 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   await populationSampler.verify(population.collection);
   const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot, population.snapshot];
   const seed: PackSeed = {
-    schemaVersion: "3",
+    schemaVersion: "4",
     id: PACK_ID,
     name: "Santa Cruz Mountains",
     dataVersion: dataVersion(
       boundaryContents,
+      searchRegionContents,
       snapshots,
       `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}`,
       // Retuning the population radius must produce a new pack version.
@@ -280,6 +287,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       officialAccess: true,
       namedAreas: true,
       closedRouteTopology: true,
+      batchSearchRegions: true,
     },
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",
@@ -309,6 +317,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
     population: { sampler: populationSampler, snapshot: population.snapshot },
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
+    searchRegions,
   });
 
   const regionalAudit = await auditSqlitePack({
