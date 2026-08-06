@@ -36,8 +36,11 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
   const dependencies: RouteJobRunnerDependencies = {
     resolveJob: vi.fn(async () => ({ pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" }, searchRegion: { id: "pack:fixture-pack", name: "Fixture" } })),
     resolveDriveTime: vi.fn(async () => ({ geometry, resolvedAt: "2026-01-01T00:00:00.000Z" })),
-    enumerateEligibleAccessPointIds: vi.fn(async () => ["first", "second"]),
-    searchAccessPoint: vi.fn(async ({ accessPointId }) => ({ exact: [route(accessPointId)], nearMisses: [], truncated: false })),
+    openSearchSession: vi.fn(async () => ({
+      enumerateEligibleAccessPointIds: vi.fn(async () => ["first", "second"]),
+      searchAccessPoint: vi.fn(async (accessPointId: string) => ({ exact: [route(accessPointId)], nearMisses: [], truncated: false })),
+      close: vi.fn(async () => undefined),
+    })),
     currentDataVersion: vi.fn(async () => "v4"),
     ...overrides,
   };
@@ -54,7 +57,10 @@ describe("RouteJobService", () => {
     await service.waitUntilIdle();
     expect((await service.get(first.id))?.status).toBe("completed");
     expect((await service.get(second.id))?.status).toBe("completed");
-    expect(vi.mocked(dependencies.searchAccessPoint).mock.calls.map(([input]) => input.accessPointId)).toEqual(["first", "second", "first", "second"]);
+    const sessions = await Promise.all(vi.mocked(dependencies.openSearchSession).mock.results.map(({ value }) => value));
+    expect(sessions.flatMap((session) => vi.mocked(session.searchAccessPoint).mock.calls.map((call: unknown[]) => call[0])))
+      .toEqual(["first", "second", "first", "second"]);
+    expect(sessions.every((session) => vi.mocked(session.close).mock.calls.length === 1)).toBe(true);
     expect((await service.results(first.id)).results.map(({ route: value }) => value.id)).toEqual(["first", "second"]);
     store.close();
   });
@@ -63,13 +69,17 @@ describe("RouteJobService", () => {
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
     const { service, store } = harness({
-      searchAccessPoint: vi.fn(async ({ accessPointId, signal }) => {
-        if (accessPointId === "second") await Promise.race([
-          blocked,
-          new Promise((_, reject) => signal.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true })),
-        ]);
-        return { exact: [route(accessPointId)], nearMisses: [], truncated: false };
-      }),
+      openSearchSession: vi.fn(async () => ({
+        enumerateEligibleAccessPointIds: vi.fn(async () => ["first", "second"]),
+        searchAccessPoint: vi.fn(async (accessPointId: string, signal: AbortSignal) => {
+          if (accessPointId === "second") await Promise.race([
+            blocked,
+            new Promise((_, reject) => signal.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true })),
+          ]);
+          return { exact: [route(accessPointId)], nearMisses: [], truncated: false };
+        }),
+        close: vi.fn(async () => undefined),
+      })),
     });
     const job = await service.create(request);
     await vi.waitFor(async () => expect((await service.get(job.id))?.progress.processedAccessPointCount).toBe(1));

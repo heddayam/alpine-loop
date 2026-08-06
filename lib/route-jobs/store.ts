@@ -185,6 +185,9 @@ export class SQLiteRouteJobStore {
         builtAt: requiredString(row, "pack_built_at"),
       },
       searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
+      ...(typeof row.drive_time_geometry_json === "string"
+        ? { filterGeometry: areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json)) }
+        : {}),
       status: requiredString(row, "status") as RouteJobStatus,
       ...(typeof geometryText === "string" ? { geometry: areaGeometrySchema.parse(parseJson(geometryText)) } : {}),
       ...(typeof row.drive_time_resolved_at === "string" ? { resolvedAt: row.drive_time_resolved_at } : {}),
