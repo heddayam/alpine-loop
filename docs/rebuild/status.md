@@ -34,7 +34,14 @@ the evidence line.
     Quick and Batch actions, with an optional collapsed drawn-boundary override.
     Persistent SQLite FIFO jobs recover checkpoints, pin pack versions, retain
     partial cancellations, delete transactionally, and page exact-first results.
-    `npm run verify` passes 303 tests across 58 files plus the production build;
+    A dedicated per-job solver process isolates CPU-heavy Quick/Thorough work
+    from the app/API event loop, while the FIFO coordinator bounds drive-time
+    resolution, yields at setup/checkpoint boundaries, terminates active solving
+    on cancellation, and recovers interrupted cancellation requests without
+    stranding a queued job.
+    The UI serializes polling, rejects stale responses and duplicate launches,
+    and advances elapsed time locally between server snapshots. `npm run verify`
+    passes 317 tests across 60 files plus the production build;
     two consecutive `npm run test:browser` runs each pass all four Quick,
     Batch/Jobs, drawn-boundary, and mobile/dialog flows. The real schema-4 Santa
     Cruz pack `scm-c0d3a8aca0653798` contains 425,302 nodes, 863,917 directed
