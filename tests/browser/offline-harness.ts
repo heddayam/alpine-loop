@@ -98,6 +98,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
 }
 
 export async function enterDrawnArea(page: Page): Promise<void> {
+  await page.getByText("Enter area coordinates", { exact: true }).click();
   await page.getByLabel("West longitude").fill("-122.1800");
   await page.getByLabel("South latitude").fill("37.1550");
   await page.getByLabel("East longitude").fill("-122.1550");

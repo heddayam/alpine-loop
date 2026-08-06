@@ -30,7 +30,8 @@ single commit. Subagents inspect freely but edit only their ownership set.
   migrations, and audits.
 - `lib/solver/**` and `lib/graph/**`: closed-route search and pack read surfaces.
 - `lib/route-jobs/**` and `app/api/route-jobs/**`: persistent batch lifecycle.
-- `components/**`, `app/globals.css`, and browser fixtures: Explore/Batch UI.
+- `components/**`, `app/globals.css`, and browser fixtures: unified builder and
+  Jobs UI.
 
 Never have parallel agents edit the same boundary or redesign an accepted API.
 Automated tests remain deterministic and network-free. Runtime filter geometry
