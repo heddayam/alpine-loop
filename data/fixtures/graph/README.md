@@ -1,7 +1,8 @@
-# Tiny route graph
+# Graph fixtures
 
-This synthetic, CC0 fixture contains a square cycle at `a-b-c-d-a`, a stem from
-`a` to the `e-f-g-e` cycle, a reversible path for out-and-back generation, and
-two public access points connected by `a-b-h`. It therefore exercises loop,
-lollipop, out-and-back, and point-to-point route construction without network
-access or generated regional data.
+These synthetic CC0 fixtures keep graph, access-policy, and closed-route tests
+deterministic and offline:
+
+- `tiny.json` is the mapped demo graph used by the fixture repository.
+- `policy.json` isolates direction and known/unknown access behavior.
+- `closed-route-topologies.json` freezes the Gate 5 structural cases.

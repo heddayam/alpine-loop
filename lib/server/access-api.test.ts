@@ -24,6 +24,7 @@ function candidate(id: string, lon: number, lat: number, accessState: "public" |
   return {
     id, nodeId: `node-${id}`, name: id, kind: "trailhead", accessState,
     confidence: "high", parkingEvidence: null, sourceIds: ["osm"], lon, lat,
+    populationWithinRadius: null, localReliefM: null,
     knownConnectivity: 10, inclusiveConnectivity: 12, knownOutDegree: 2, inclusiveOutDegree: 3,
   };
 }
@@ -81,6 +82,7 @@ describe("access-point preview API", () => {
     const response = await handler(previewRequest({
       accessFilter: { mode: "named-region", regionId: REGION.id },
       includeUncertainAccess: false,
+      accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     }), "fixture-pack");
     expect(response.status).toBe(200);
     const payload = await response.json() as {
@@ -106,6 +108,7 @@ describe("access-point preview API", () => {
         regionId: REGION.id,
       },
       includeUncertainAccess: true,
+      accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     }), "fixture-pack");
     const payload = await response.json() as { filterGeometry: unknown; refinementGeometry: unknown; accessPoints: unknown[] };
     expect(payload.filterGeometry).toBeDefined();
@@ -113,11 +116,38 @@ describe("access-point preview API", () => {
     expect(payload.accessPoints).toHaveLength(1);
   });
 
+  it("filters previews by measured access-point area type", async () => {
+    const remote = candidate("remote", 2, 2);
+    remote.populationWithinRadius = 10;
+    const rural = candidate("rural", 3, 3);
+    rural.populationWithinRadius = 500;
+    const populated = candidate("populated", 7, 7);
+    populated.populationWithinRadius = 5_000;
+    const unknown = candidate("unknown-area", 8, 8);
+    const handler = createAccessPreviewHandler({
+      packs: new Map([["fixture-pack", pack(new PreviewRepository([remote, rural, populated, unknown]))]]),
+      resolveReachability: reachability,
+    });
+
+    const response = await handler(previewRequest({
+      accessFilter: { mode: "drawn-area", bbox: [0, 0, 10, 10] },
+      includeUncertainAccess: true,
+      accessPointRemoteness: ["rural", "populated"],
+    }), "fixture-pack");
+    const payload = await response.json() as { accessPoints: Array<{ id: string; remoteness: string }> };
+    expect(payload.accessPoints).toEqual([
+      expect.objectContaining({ id: "populated", remoteness: "populated" }),
+      expect.objectContaining({ id: "rural", remoteness: "rural" }),
+    ]);
+  });
+
   it("returns structured validation and pack errors", async () => {
     const handler = createAccessPreviewHandler({ packs: new Map([["fixture-pack", pack()]]), resolveReachability: reachability });
     expect((await handler(previewRequest({ accessFilter: {} }), "fixture-pack")).status).toBe(400);
     expect((await handler(previewRequest({
-      accessFilter: { mode: "drawn-area", bbox: [0, 0, 1, 1] }, includeUncertainAccess: true,
+      accessFilter: { mode: "drawn-area", bbox: [0, 0, 1, 1] },
+      includeUncertainAccess: true,
+      accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     }), "missing")).status).toBe(404);
   });
 });

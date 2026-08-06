@@ -64,7 +64,9 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         known_connectivity INTEGER NOT NULL CHECK(known_connectivity >= 0),
         inclusive_connectivity INTEGER NOT NULL CHECK(inclusive_connectivity >= 0),
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
-        inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0)` : ""}
+        inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
+        population_within_radius REAL CHECK(population_within_radius IS NULL OR population_within_radius >= 0),
+        local_relief_m REAL CHECK(local_relief_m IS NULL OR local_relief_m >= 0)` : ""}
       ) STRICT;
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
@@ -186,8 +188,8 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
     const insertAccess = database.prepare(`
       INSERT INTO access_points(
         id, node_id, name, kind, access_state, confidence, parking_evidence, source_refs
-        ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree" : ""}
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?" : ""})
+        ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, population_within_radius, local_relief_m" : ""}
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?, ?" : ""})
     `);
     const insertNamedArea = schemaVersion !== "1" ? database.prepare(`
       INSERT INTO named_areas(
@@ -238,9 +240,14 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
           throw new Error(`Access point ${point.id} is missing schema ${schemaVersion} ranking fields`);
         }
         const ranking = rankingValues.map((value) => value!);
+        // Remoteness is optional: a pack built without a population source stores
+        // nulls, which classify as "unknown" rather than as remote.
+        const remoteness = schemaVersion !== "1"
+          ? [point.populationWithinRadius ?? null, point.localReliefM ?? null]
+          : [];
         insertAccess.run(
           point.id, point.nodeId, point.name, point.kind, point.accessState,
-          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking,
+          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...remoteness,
         );
       }
       contents.namedAreas?.forEach((area, index) => {

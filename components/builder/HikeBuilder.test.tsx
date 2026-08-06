@@ -15,7 +15,7 @@ vi.mock("../map/HikeMap", () => ({
   }) => <div aria-label="Mock map"><output aria-label="Mock map mode">{mode}</output><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange(null)}>Clear fixture area</button><output aria-label="Map route state">{routes.map((route) => route.id).join(",")}|selected:{selectedRouteId ?? "none"}</output></div>,
 }));
 
-const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high" };
+const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high", remoteness: "remote" };
 const preview = { resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" }, filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.18, 37.18], [-122.18, 37.15]]] }, accessPoints: [accessPoint] };
 const generatedRoute = {
   id: "exact-route", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
@@ -52,7 +52,7 @@ describe("HikeBuilder V3 closed routes", () => {
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
     expect(await screen.findByText("1 exact route ready.")).toBeVisible();
     const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>;
-    expect(request).toMatchObject({ version: 3, accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, startAccessPointId: "trailhead-a", routeFamily: "closed", closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, searchEffort: "thorough", distanceMiles: { min: 1, max: 4 }, limit: 10 });
+    expect(request).toMatchObject({ version: 3, accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, startAccessPointId: "trailhead-a", routeFamily: "closed", closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, accessPointRemoteness: ["remote", "rural", "populated", "unknown"], searchEffort: "thorough", distanceMiles: { min: 1, max: 4 }, limit: 10 });
     expect(request).not.toHaveProperty("routeTypes");
     expect(request).not.toHaveProperty("pointToPoint");
     expect(screen.getByLabelText("Map route state")).toHaveTextContent("exact-route|selected:exact-route");
@@ -113,9 +113,12 @@ describe("HikeBuilder V3 closed routes", () => {
     expect(screen.queryByRole("checkbox", { name: /Out & back/ })).not.toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "Maximum repeated trail" })).toHaveValue("35");
     expect(screen.getByRole("switch", { name: /Allow figure-eights and chained loops/ })).toBeChecked();
+    expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByLabelText("Search effort")).toHaveValue("thorough");
     await userEvent.selectOptions(screen.getByLabelText("Search effort"), "quick");
     expect(screen.getByLabelText("Search effort")).toHaveValue("quick");
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await userEvent.click(screen.getByRole("switch", { name: /Limit the shared access stem/ }));
     expect(screen.getByLabelText("Maximum shared stem")).toHaveValue(2);
     const maximum = screen.getByRole("spinbutton", { name: "Distance maximum" });
@@ -123,6 +126,49 @@ describe("HikeBuilder V3 closed routes", () => {
     await userEvent.type(maximum, "31");
     await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Route distance may not exceed 30 miles.");
+  });
+
+  it("moves operational preferences into an accessible modal and applies area types to preview and search", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return url.endsWith("/api/routes/generate")
+        ? new Response(JSON.stringify(routeResponse), { status: 200 })
+        : new Response(JSON.stringify(preview), { status: 200 });
+    });
+    render(<HikeBuilder />);
+
+    const settingsButton = screen.getByRole("button", { name: "Settings" });
+    await userEvent.click(settingsButton);
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close settings" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("checkbox", { name: /Rural/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Populated/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Unknown/ }));
+    expect(screen.getByRole("checkbox", { name: /Remote/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole("switch", { name: /Include uncertain trail access/ }));
+    await userEvent.selectOptions(screen.getByLabelText("Search effort"), "quick");
+    await userEvent.clear(screen.getByLabelText("Number of routes"));
+    await userEvent.type(screen.getByLabelText("Number of routes"), "5");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
+    expect(settingsButton).toHaveFocus();
+
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await screen.findByLabelText("Access point");
+    const previewRequest = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(previewRequest).toMatchObject({
+      includeUncertainAccess: false,
+      accessPointRemoteness: ["remote"],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Generate routes" }));
+    await screen.findByText("1 exact route ready.");
+    const generationRequest = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)) as Record<string, unknown>;
+    expect(generationRequest).toMatchObject({
+      includeUncertainAccess: false,
+      accessPointRemoteness: ["remote"],
+      searchEffort: "quick",
+      limit: 5,
+    });
   });
 
   it("uses browser location only after the user asks and handles denial", async () => {

@@ -24,8 +24,8 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       ...process.env,
-      ALPINE_PACK_ROOT: path.join(tmpdir(), "alpine-search-playwright-v2-empty-packs"),
-      ALPINE_NEXT_DIST_DIR: ".next-playwright-v2",
+      ALPINE_PACK_ROOT: path.join(tmpdir(), "alpine-search-playwright-empty-packs"),
+      ALPINE_NEXT_DIST_DIR: ".next-playwright",
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

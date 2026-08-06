@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { accessFilterV2Schema } from "@/lib/contracts";
+import { accessFilterV2Schema, accessPointRemotenessSelectionSchema } from "@/lib/contracts";
 import {
   accessPointIsEligible,
   areaBounds,
@@ -7,6 +7,7 @@ import {
   type AccessPointCandidate,
   type GraphRepository,
 } from "@/lib/graph";
+import { classifyRemoteness } from "@/lib/data/remoteness";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 import { resolveAccessFilter, type ReachabilityResolver } from "./access-filter";
 import type { RoutePack } from "./route-pack";
@@ -14,6 +15,7 @@ import type { RoutePack } from "./route-pack";
 const accessPreviewRequestSchema = z.object({
   accessFilter: accessFilterV2Schema,
   includeUncertainAccess: z.boolean(),
+  accessPointRemoteness: accessPointRemotenessSelectionSchema,
 }).strict();
 
 export type AccessPreviewDependencies = {
@@ -64,6 +66,7 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
         .filter((candidate) => resolved.predicates.every((geometry) =>
           coordinateIsInsideArea([candidate.lon, candidate.lat], geometry)))
         .filter((candidate) => accessPointIsEligible(candidate, parsed.data.includeUncertainAccess))
+        .filter((candidate) => parsed.data.accessPointRemoteness.includes(classifyRemoteness(candidate)))
         .sort((left, right) => candidateRank(left, right, parsed.data.includeUncertainAccess));
       return Response.json({
         resolvedAccessFilter: resolved.summary,
@@ -78,6 +81,9 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
           accessState: point.accessState,
           confidence: point.confidence,
           parkingEvidence: point.parkingEvidence,
+          populationWithinRadius: point.populationWithinRadius,
+          localReliefM: point.localReliefM,
+          remoteness: classifyRemoteness(point),
         })),
       });
     } catch (error) {

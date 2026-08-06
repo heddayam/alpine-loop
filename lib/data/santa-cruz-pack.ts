@@ -31,6 +31,14 @@ import {
   refreshPinnedOsmSnapshot,
   validateOsmPrerequisites,
 } from "./osm";
+import {
+  readPinnedPopulationCollection,
+  readPopulationSourceConfig,
+  refreshPinnedPopulationCollection,
+  UvRasterioPopulationSampler,
+  validateUvRasterioPopulationPrerequisites,
+} from "./population";
+import { POPULATION_RADIUS_M } from "./remoteness";
 import { PreparedOfficialAccessAdapter } from "./prepared-official-access-adapter";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { NormalizedTopology, PackBuildResult } from "./types";
@@ -181,16 +189,24 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   const boundary = JSON.parse(boundaryContents) as BoundaryFeature;
   const osmConfig = await readOsmSourceConfig(path.join(regionRoot, "osm-source.json"));
   const elevationConfig = await readElevationSourceConfig(path.join(regionRoot, "elevation-source.json"));
+  const populationConfig = await readPopulationSourceConfig(path.join(regionRoot, "population-source.json"));
 
   // Fail before downloading hundreds of megabytes when the local build tools are unavailable.
-  await Promise.all([validateOsmPrerequisites(), validateUvRasterioPrerequisites()]);
-  const [osmSnapshot, dem, officialSnapshots] = await Promise.all([
+  await Promise.all([
+    validateOsmPrerequisites(),
+    validateUvRasterioPrerequisites(),
+    validateUvRasterioPopulationPrerequisites(),
+  ]);
+  const [osmSnapshot, dem, population, officialSnapshots] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
     options.refresh
       ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
+    options.refresh
+      ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
+      : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
     options.refresh
       ? refreshOfficialSourceSnapshots(options.sourceCacheRoot)
       : readOfficialSourceSnapshots(options.sourceCacheRoot),
@@ -239,7 +255,12 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   if (joinAudit.errors.length) throw new Error(`Official access join audit failed:\n${joinAudit.errors.join("\n")}`);
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-  const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot];
+  const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
+  // Confirms the downloaded rasters are georeferenced where the GHSL tile index
+  // predicted. Without this a grid irregularity in a future region would sample
+  // population from the wrong part of the world and silently call everything remote.
+  await populationSampler.verify(population.collection);
+  const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot, population.snapshot];
   const seed: PackSeed = {
     schemaVersion: "3",
     id: PACK_ID,
@@ -248,7 +269,8 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       boundaryContents,
       snapshots,
       `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}`,
-      elevationSampler.algorithmVersion,
+      // Retuning the population radius must produce a new pack version.
+      `${elevationSampler.algorithmVersion}+${populationSampler.algorithmVersion}`,
     ),
     compilerVersion: COMPILER_VERSION,
     coverage: { bbox: areaGeometryBounds(boundary.geometry), boundary: boundary.geometry },
@@ -285,6 +307,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       snapshot: authority.snapshot,
     })),
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
+    population: { sampler: populationSampler, snapshot: population.snapshot },
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
   });
 

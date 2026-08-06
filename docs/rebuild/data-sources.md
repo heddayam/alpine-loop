@@ -52,8 +52,8 @@ Precedence should be explicit:
 4. unknown.
 
 Conflicting evidence becomes a build-audit error or `unknown`; it is never
-silently resolved toward permissive access. “Unknown access” is excluded from
-normal generation and only included after the user enables the toggle.
+silently resolved toward permissive access. Unknown access is included by
+default and can be explicitly disabled by the user.
 
 Agency services change. Adapter code must fail loudly on missing fields, schema
 drift, unexpected coordinate systems, or empty responses. Do not scrape the
@@ -73,6 +73,31 @@ or an official downloadable dataset during Gate 3.
   direction-aware gain/loss, maximum elevation, and rolling-100 m grade.
 - Never calculate route elevation by calling a remote elevation API at request
   time.
+
+### Population (access-point remoteness)
+
+- Primary source: [GHSL GHS-POP
+  R2023A](https://data.jrc.ec.europa.eu/dataset/2ff68a52-5b5b-4a22-8f40-c41da8332cfe),
+  3 arc-second (nominal 90 m) product in EPSG:4326. Use only the `4326_3ss`
+  variant; the 100 m and 1 km products are Mollweide (ESRI:54009) and would need
+  reprojection.
+- Purpose: decide whether an access point sits in a populated area. GHS-POP
+  disaggregates census counts using satellite-detected built-up area, which is a
+  far better signal in the rural US than OSM `landuse=residential`, whose
+  coverage is patchy exactly where it matters.
+- Query the raster as a **sum over a radius**, not an interpolated point sample.
+  Values are people-per-cell, and a trailhead at the edge of a subdivision sits
+  in a near-zero cell while thousands live 300 m away.
+- Tiles are 10 deg x 10 deg on a grid whose origin is offset from (-180, 90);
+  `lib/data/population/tiles.ts` documents the verified constants. GHSL omits
+  all-zero tiles, so an absent tile means zero people, not unknown. Every
+  downloaded raster is checked against the predicted bounds at build time so a
+  future region landing on a grid irregularity fails loudly instead of sampling
+  the wrong part of the world.
+- Persist only the raw measurement. Thresholds live in `lib/data/remoteness.ts`
+  so they can be retuned without recompiling packs.
+- Attribution: European Commission, Joint Research Centre. Reuse is authorised
+  provided the source is acknowledged.
 
 ### Basemap
 

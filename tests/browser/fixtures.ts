@@ -1,7 +1,7 @@
 import type {
-  GenerateRoutesRequestV2,
-  GenerateRoutesResponseV2,
-  GeneratedRouteV2,
+  GenerateClosedRoutesRequestV3,
+  GenerateClosedRoutesResponseV3,
+  GeneratedClosedRouteV3,
   NamedArea,
   NamedAreaSummary,
 } from "../../lib/contracts";
@@ -9,35 +9,26 @@ import type {
 type PolygonGeometry = Extract<NamedArea["geometry"], { type: "Polygon" }>;
 
 export const PACK_COVERAGE: PolygonGeometry = {
-  type: "Polygon" as const,
+  type: "Polygon",
   coordinates: [[
-    [-122.19, 37.15],
-    [-122.13, 37.15],
-    [-122.13, 37.18],
-    [-122.19, 37.18],
-    [-122.19, 37.15],
+    [-122.19, 37.15], [-122.13, 37.15], [-122.13, 37.18],
+    [-122.19, 37.18], [-122.19, 37.15],
   ]],
 };
 
 export const FILTER_GEOMETRY: PolygonGeometry = {
-  type: "Polygon" as const,
+  type: "Polygon",
   coordinates: [[
-    [-122.18, 37.155],
-    [-122.155, 37.155],
-    [-122.155, 37.17],
-    [-122.18, 37.17],
-    [-122.18, 37.155],
+    [-122.18, 37.155], [-122.155, 37.155], [-122.155, 37.17],
+    [-122.18, 37.17], [-122.18, 37.155],
   ]],
 };
 
 export const REFINEMENT_GEOMETRY: PolygonGeometry = {
-  type: "Polygon" as const,
+  type: "Polygon",
   coordinates: [[
-    [-122.175, 37.157],
-    [-122.158, 37.157],
-    [-122.158, 37.168],
-    [-122.175, 37.168],
-    [-122.175, 37.157],
+    [-122.175, 37.157], [-122.158, 37.157], [-122.158, 37.168],
+    [-122.175, 37.168], [-122.175, 37.157],
   ]],
 };
 
@@ -50,30 +41,11 @@ export const NAMED_AREA_SUMMARY: NamedAreaSummary = {
   sourceIds: ["openstreetmap:relation:4242"],
 };
 
-export const NAMED_AREA: NamedArea = {
-  ...NAMED_AREA_SUMMARY,
-  geometry: FILTER_GEOMETRY,
-};
+export const NAMED_AREA: NamedArea = { ...NAMED_AREA_SUMMARY, geometry: FILTER_GEOMETRY };
 
 export const ACCESS_POINTS = [
-  {
-    id: "trailhead-a",
-    name: "Stevens Creek Trailhead",
-    lon: -122.17,
-    lat: 37.16,
-    kind: "trailhead" as const,
-    accessState: "public" as const,
-    confidence: "high" as const,
-  },
-  {
-    id: "trailhead-b",
-    name: "Canyon Trail Access",
-    lon: -122.16,
-    lat: 37.165,
-    kind: "parking" as const,
-    accessState: "unknown" as const,
-    confidence: "medium" as const,
-  },
+  { id: "trailhead-a", name: "Stevens Creek Trailhead", lon: -122.17, lat: 37.16, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const, remoteness: "remote" as const },
+  { id: "trailhead-b", name: "Canyon Trail Access", lon: -122.16, lat: 37.165, kind: "parking" as const, accessState: "unknown" as const, confidence: "medium" as const, remoteness: "populated" as const },
 ];
 
 export const TRAIL_NETWORK = {
@@ -83,59 +55,52 @@ export const TRAIL_NETWORK = {
     properties: { id: "trail-fixture", name: "Canyon Trail" },
     geometry: {
       type: "LineString" as const,
-      coordinates: [
-        [-122.17, 37.16],
-        [-122.145, 37.172],
-        [-122.135, 37.175],
-      ],
+      coordinates: [[-122.17, 37.16], [-122.145, 37.172], [-122.135, 37.175]],
     },
   }],
 };
 
 export const REACHABILITY_ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
 
-function route(index: number, pointToPoint = false): GeneratedRouteV2 {
-  const id = `fixture-route-${index}`;
+function route(index: number): GeneratedClosedRouteV3 {
   const accessPoint = ACCESS_POINTS[index % ACCESS_POINTS.length]!;
-  const start = {
-    id: accessPoint.id,
-    name: accessPoint.name,
-    lon: accessPoint.lon,
-    lat: accessPoint.lat,
-    accessState: accessPoint.accessState,
-    confidence: accessPoint.confidence,
-  };
-  const end = pointToPoint
-    ? {
-      id: `finish-${index}`,
-      name: "Outside-filter shuttle point",
-      lon: -122.135,
-      lat: 37.175,
-      accessState: "public" as const,
-      confidence: "high" as const,
-    }
-    : start;
+  const repeated = index % 2 === 1;
   return {
-    id,
-    shape: pointToPoint ? "point-to-point" : "out-and-back",
+    id: `fixture-closed-route-${index}`,
     geometry: {
       type: "LineString",
-      coordinates: pointToPoint
-        ? [[start.lon, start.lat], [-122.145, 37.172], [end.lon, end.lat]]
-        : [[start.lon, start.lat], [-122.14, 37.174], [start.lon, start.lat]],
+      coordinates: [
+        [accessPoint.lon, accessPoint.lat],
+        [-122.145, 37.172],
+        [-122.135, 37.175],
+        [accessPoint.lon, accessPoint.lat],
+      ],
     },
-    startAccessPoint: start,
-    endAccessPoint: end,
-    filterMatch: { start: true, end: !pointToPoint },
+    startAccessPoint: {
+      id: accessPoint.id,
+      name: accessPoint.name,
+      lon: accessPoint.lon,
+      lat: accessPoint.lat,
+      accessState: accessPoint.accessState,
+      confidence: accessPoint.confidence,
+    },
     distanceMeters: 4_200 + index * 100,
     elevationGainMeters: 280,
     elevationLossMeters: 280,
     minimumElevationMeters: 410,
     maximumElevationMeters: 690,
     steepestSustainedGradePct: 11.4,
-    repeatedEdgeFraction: pointToPoint ? 0 : 0.5,
+    topology: {
+      kind: repeated ? "lollipop" : "simple-loop",
+      cycleCount: 1,
+      cycleBlockCount: 1,
+      repeatedTrailDistanceMeters: repeated ? 420 : 0,
+      repeatedTrailFraction: repeated ? 0.1 : 0,
+      sharedStemDistanceMeters: repeated ? 210 : 0,
+      connectorCount: repeated ? 1 : 0,
+    },
     trailNames: [`Canyon Trail ${index + 1}`],
-    warnings: pointToPoint ? ["Point-to-point route requires a shuttle or two vehicles."] : [],
+    warnings: [],
     source: {
       freshness: "2026-08-04T00:00:00Z",
       confidence: "high",
@@ -145,19 +110,18 @@ function route(index: number, pointToPoint = false): GeneratedRouteV2 {
 }
 
 export function routeResponse(
-  request: GenerateRoutesRequestV2,
+  request: GenerateClosedRoutesRequestV3,
   count = 1,
-): GenerateRoutesResponseV2 {
-  const pointToPoint = request.routeTypes.includes("point-to-point");
-  const exact = Array.from({ length: count }, (_, index) => route(index, pointToPoint));
+): GenerateClosedRoutesResponseV3 {
+  const exact = Array.from({ length: count }, (_, index) => route(index));
   const mode = request.accessFilter.mode;
   return {
-    version: 2,
+    version: 3,
     requestId: `browser-${mode}`,
     pack: {
       id: "fixture-pack",
-      schemaVersion: "2",
-      dataVersion: "fixture-v2",
+      schemaVersion: "3",
+      dataVersion: "fixture-v3",
       builtAt: "2026-08-04T00:00:00Z",
     },
     requested: request.limit,
@@ -167,9 +131,7 @@ export function routeResponse(
         label: request.accessFilter.regionId
           ? "30 minutes from Castle Rock, refined to Monte Bello Open Space Preserve"
           : "30 minutes from Castle Rock",
-        ...(request.accessFilter.regionId
-          ? { region: { id: NAMED_AREA.id, name: NAMED_AREA.name } }
-          : {}),
+        ...(request.accessFilter.regionId ? { region: { id: NAMED_AREA.id, name: NAMED_AREA.name } } : {}),
         driveTime: {
           minutes: 30,
           provider: "arcgis",
@@ -178,11 +140,7 @@ export function routeResponse(
         },
       }
       : mode === "named-region"
-        ? {
-          mode,
-          label: NAMED_AREA.name,
-          region: { id: NAMED_AREA.id, name: NAMED_AREA.name },
-        }
+        ? { mode, label: NAMED_AREA.name, region: { id: NAMED_AREA.id, name: NAMED_AREA.name } }
         : { mode, label: "Drawn trailhead area" },
     exact,
     nearMisses: [],
@@ -197,6 +155,21 @@ export function routeResponse(
       exhausted: false,
       truncationReasons: [],
       shortfallReasons: count < request.limit ? ["fewer-diverse-routes-than-requested"] : [],
+      noCycleAccessPointCount: 0,
+      feasibleAccessPointCount: 2,
+      attachmentGroupCount: 1,
+      probedAttachmentGroupCount: 1,
+      deeplySearchedAttachmentGroupCount: request.searchEffort === "thorough" ? 1 : 0,
+      loadedTopologyNetworkCount: 1,
+      cycleBlockCount: 1,
+      cyclePrimitiveCount: count,
+      composedCandidateCount: count,
+      repairedCandidateCount: 0,
+      directedValidationRejectionCount: 0,
+      expandedAssemblyStates: 84,
+      timeToFirstExactMs: 8,
+      hardTruncationReasons: [],
+      nonBudgetShortfallReasons: count < request.limit ? ["fewer-diverse-routes-than-requested"] : [],
     },
   };
 }

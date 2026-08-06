@@ -8,7 +8,6 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".next-playwright/**",
-    ".next-playwright-v2/**",
     "coverage/**",
     "legacy/**",
     ".cache/**",

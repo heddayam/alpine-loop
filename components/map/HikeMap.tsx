@@ -86,12 +86,17 @@ function areaFeature(geometry?: Polygon | MultiPolygon): Feature<Polygon | Multi
   return geometry ? { type: "Feature", properties: { role: "trailhead-filter" }, geometry } : EMPTY_POINTS;
 }
 
-function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
+export function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
   return {
     type: "FeatureCollection",
     features: accessPoints.map((point) => ({
       type: "Feature",
-      properties: { id: point.id, name: point.name, selected: point.id === selectedAccessPointId },
+      properties: {
+        id: point.id,
+        name: point.name,
+        selected: point.id === selectedAccessPointId,
+        remoteness: point.remoteness ?? "unknown",
+      },
       geometry: { type: "Point", coordinates: [point.lon, point.lat] },
     })),
   };
@@ -383,8 +388,20 @@ export function HikeMap({
           source: "access-points",
           paint: {
             "circle-radius": ["case", ["==", ["get", "selected"], true], 9, 6],
-            "circle-color": ["case", ["==", ["get", "selected"], true], "#ed7b4f", "#173f35"],
-            "circle-stroke-color": "#fffaf0",
+            "circle-color": [
+              "case",
+              ["==", ["get", "selected"], true], "#ed7b4f",
+              ["==", ["get", "remoteness"], "populated"], "#9a9a9a",
+              ["==", ["get", "remoteness"], "rural"], "#6f8f7d",
+              ["==", ["get", "remoteness"], "unknown"], "#fffaf0",
+              "#173f35",
+            ],
+            "circle-opacity": ["case", ["==", ["get", "remoteness"], "populated"], 0.55, 1],
+            "circle-stroke-color": [
+              "case",
+              ["==", ["get", "remoteness"], "unknown"], "#756a59",
+              "#fffaf0",
+            ],
             "circle-stroke-width": 2,
           },
         });
@@ -675,7 +692,10 @@ export function HikeMap({
           <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
           {filterGeometry ? <span><i className="key-filter" aria-hidden="true" />Trailhead filter</span> : null}
           {refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Named refinement</span> : null}
-          {accessPoints.length > 0 ? <span><i className="key-access" aria-hidden="true" />Eligible access</span> : null}
+          {accessPoints.some((point) => point.remoteness === "remote") ? <span><i className="key-access" aria-hidden="true" />Remote access</span> : null}
+          {accessPoints.some((point) => point.remoteness === "rural") ? <span><i className="key-access-rural" aria-hidden="true" />Rural access</span> : null}
+          {accessPoints.some((point) => point.remoteness === "populated") ? <span><i className="key-access-populated" aria-hidden="true" />Populated area</span> : null}
+          {accessPoints.some((point) => (point.remoteness ?? "unknown") === "unknown") ? <span><i className="key-access-unknown" aria-hidden="true" />Unknown area type</span> : null}
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
           {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}

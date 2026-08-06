@@ -15,6 +15,7 @@ import {
   type GraphRepository,
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
+import { classifyRemoteness } from "@/lib/data/remoteness";
 
 import { CLOSED_ROUTE_EFFORT_BUDGETS, type SolverBudget } from "./budget";
 import {
@@ -316,7 +317,9 @@ export class ReachableGraphClosedRouteSolver {
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const filtered = allCandidates.filter((candidate) => matchesFilter(candidate, context));
-    const eligible = filtered.filter((candidate) => accessPointIsEligible(candidate, request.includeUncertainAccess));
+    const eligible = filtered
+      .filter((candidate) => accessPointIsEligible(candidate, request.includeUncertainAccess))
+      .filter((candidate) => request.accessPointRemoteness.includes(classifyRemoteness(candidate)));
     let starts: AccessPointCandidate[];
     if (request.startAccessPointId) {
       const selected = allCandidates.find(({ id }) => id === request.startAccessPointId);
@@ -326,6 +329,9 @@ export class ReachableGraphClosedRouteSolver {
       }
       if (!accessPointIsEligible(selected, request.includeUncertainAccess)) {
         throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point is excluded by the access policy");
+      }
+      if (!request.accessPointRemoteness.includes(classifyRemoteness(selected))) {
+        throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point is excluded by the access-point area settings");
       }
       starts = [selected];
     } else {

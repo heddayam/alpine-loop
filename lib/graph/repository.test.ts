@@ -4,13 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import policyFixture from "@/data/fixtures/graph/policy.json";
-import tinyFixture from "@/data/fixtures/graph/solver-shapes.json";
 import mappedFixture from "@/data/fixtures/graph/tiny.json";
 import { FixtureGraphRepository, type FixtureGraphData } from "./fixture-repository";
 import { SQLiteGraphRepository } from "./sqlite-repository";
 
 const policy = policyFixture as unknown as FixtureGraphData;
-const tiny = tinyFixture as unknown as FixtureGraphData;
 const mapped = mappedFixture as unknown as FixtureGraphData;
 const WORLD_FIXTURE_BBOX = [-122.19, 37.15, -122.13, 37.18] as const;
 
@@ -42,7 +40,7 @@ describe("FixtureGraphRepository", () => {
   it("honors cancellation before a graph query", async () => {
     const controller = new AbortController();
     controller.abort(new Error("stop"));
-    const repository = new FixtureGraphRepository(tiny);
+    const repository = new FixtureGraphRepository(mapped);
     await expect(
       repository.getInducedGraph({ bbox: WORLD_FIXTURE_BBOX, includeUncertainAccess: false, signal: controller.signal }),
     ).rejects.toThrow("stop");

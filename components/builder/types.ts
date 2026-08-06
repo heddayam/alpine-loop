@@ -1,10 +1,12 @@
 import type {
+  AccessPointRemoteness,
   AccessFilterV2,
   SearchEffortV3,
   NamedArea,
   NamedAreaSummary,
   Origin,
 } from "@/lib/contracts";
+import type { RemotenessClass } from "@/lib/data/remoteness";
 
 export type Bounds = Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"];
 export type FilterMode = AccessFilterV2["mode"];
@@ -17,6 +19,13 @@ export type AccessPointOption = {
   kind: "trailhead" | "parking" | "transit";
   accessState: "public" | "unknown";
   confidence: "high" | "medium" | "low";
+  /**
+   * Measured remoteness. Currently only drives map colouring so the
+   * classification can be eyeballed before it becomes a real filter.
+   */
+  remoteness?: RemotenessClass;
+  populationWithinRadius?: number | null;
+  localReliefM?: number | null;
 };
 
 export type RangeField = {
@@ -36,6 +45,7 @@ export type BuilderValues = {
   maximumElevationFeet: RangeField;
   steepestSustainedGradePct: RangeField;
   includeUncertainAccess: boolean;
+  accessPointRemoteness: AccessPointRemoteness[];
   limit: string;
 };
 
@@ -78,5 +88,6 @@ export const DEFAULT_BUILDER_VALUES: BuilderValues = {
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
   steepestSustainedGradePct: { enabled: false, min: "0", max: "20" },
   includeUncertainAccess: true,
+  accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
   limit: "10",
 };

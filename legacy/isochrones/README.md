@@ -1,18 +1,7 @@
-# Legacy reachability / isochrone source
+# Legacy reachability / isochrone app
 
-`source/` is an exact snapshot of `archive/pre-redo-main-2026-08-04`. It contains
-the former Next.js reachability app, ArcGIS/Google integration, D1/Cloudflare
-pieces, Sites/OpenAI hosting configuration, migrations, worker, tests, and its
-own lockfile.
-
-It is reference material only:
-
-- do not run package installation from the repository root against this folder;
-- do not import it from the active app;
-- exclude `legacy/**` from TypeScript, lint, test, and build discovery;
-- do not update its dependencies or hosting configuration;
-- port a small, reviewed concept into the active architecture if an isochrone
-  feature is deliberately revived later.
-
-The archive tag and external pre-redo Git bundle preserve the complete history;
-this copy exists only to make relevant implementation ideas easy to inspect.
+The duplicate working-tree snapshot was removed to keep the active repository
+lean. Its complete source and history remain available at
+`archive/pre-redo-main-2026-08-04`; the related trail and working snapshots are
+`archive/pre-redo-trails-2026-08-04` and
+`archive/pre-redo-working-2026-08-04`.

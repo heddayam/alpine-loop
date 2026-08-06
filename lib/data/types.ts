@@ -46,6 +46,10 @@ export type NormalizedAccessPoint = {
   inclusiveConnectivity?: number;
   knownOutDegree?: number;
   inclusiveOutDegree?: number;
+  /** People living within POPULATION_RADIUS_M, from GHS-POP. Null when unmeasured. */
+  populationWithinRadius?: number | null;
+  /** Elevation range of network nodes within RELIEF_RADIUS_M. Null when unmeasured. */
+  localReliefM?: number | null;
 };
 
 export type NormalizedNamedArea = NamedArea & {
@@ -190,6 +194,7 @@ export type PackAudit = {
   accessStateCounts: Record<AccessState, number>;
   namedAreaCount?: number;
   rejectedCoverageEdgeCount?: number;
+  missingPopulationAccessPointCount?: number;
   topologyContentHash?: string;
   topologyProfiles?: Array<{
     profile: TopologyProfile;

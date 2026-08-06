@@ -1,5 +1,10 @@
 # Multi-agent implementation runbook
 
+Waves 0–4 below are completed historical context. For current work, start at
+Gate 5 in `status.md` and use the work sequence in
+`closed-route-topology-plan.md`; retain the integration and Git hygiene rules
+from this runbook.
+
 ## Integrator contract
 
 The primary agent runs the whole effort. It reads `AGENTS.md`, this runbook, the

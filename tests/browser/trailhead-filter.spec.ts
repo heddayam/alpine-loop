@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { GenerateRoutesRequestV2 } from "../../lib/contracts";
+import type { GenerateClosedRoutesRequestV3 } from "../../lib/contracts";
 import {
   FILTER_GEOMETRY,
   NAMED_AREA,
@@ -24,16 +24,28 @@ async function generate(page: Page) {
   await expect(page.getByRole("heading", { name: "Results", exact: true })).toBeVisible();
 }
 
-test("draw and keyboard-selected named-region modes preserve separate drafts and send V2 filters", async ({ page }) => {
+test("draw and named-region modes preserve drafts and send V3 closed-route settings", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
   await expect(page.getByRole("radio", { name: /^Draw area/ })).toBeChecked();
   await expect(page.getByText("Highlighted areas filter trailheads, not route geometry.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Maximum repeated trail" })).toHaveValue("35");
+  await expect(page.getByRole("switch", { name: /Allow figure-eights and chained loops/ })).toBeChecked();
+  await expect(page.getByLabel("Search effort")).toHaveCount(0);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("Search effort")).toHaveValue("thorough");
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("checkbox", { name: /^Out & back/ })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: /^Point to point/ })).toHaveCount(0);
   await enterDrawnArea(page);
   await generate(page);
   expect(harness.generationRequests.at(-1)).toMatchObject({
-    version: 2,
+    version: 3,
+    routeFamily: "closed",
+    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
+    searchEffort: "thorough",
     accessFilter: {
       mode: "drawn-area",
       bbox: [-122.18, 37.155, -122.155, 37.17],
@@ -46,7 +58,8 @@ test("draw and keyboard-selected named-region modes preserve separate drafts and
   await expect(page.getByRole("combobox", { name: "Access point", exact: true })).toBeVisible();
   await generate(page);
   expect(harness.generationRequests.at(-1)).toMatchObject({
-    version: 2,
+    version: 3,
+    routeFamily: "closed",
     accessFilter: { mode: "named-region", regionId: NAMED_AREA.id },
   });
 
@@ -54,6 +67,34 @@ test("draw and keyboard-selected named-region modes preserve separate drafts and
   await expect(page.getByLabel("West longitude")).toHaveValue("-122.18");
   await chooseMode(page, "Named region");
   await expect(page.getByText(NAMED_AREA.name, { exact: true })).toBeVisible();
+  expect(harness.blockedExternalRequests).toEqual([]);
+});
+
+test("settings modal filters displayed and searched access-point area types", async ({ page }) => {
+  const harness = await installOfflineHarness(page);
+  await page.goto("/");
+
+  const settingsButton = page.getByRole("button", { name: "Settings" });
+  await settingsButton.click();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  await page.getByRole("checkbox", { name: /Rural/ }).uncheck();
+  await page.getByRole("checkbox", { name: /Populated/ }).uncheck();
+  await page.getByRole("checkbox", { name: /Unknown/ }).uncheck();
+  await expect(page.getByRole("checkbox", { name: /Remote/ })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
+  await expect(settingsButton).toBeFocused();
+
+  await enterDrawnArea(page);
+  await expect.poll(() => harness.previewRequests.at(-1)?.accessPointRemoteness).toEqual(["remote"]);
+  const accessPointSelect = page.getByRole("combobox", { name: "Access point", exact: true });
+  await expect(accessPointSelect.locator("option")).toHaveCount(2);
+  await expect(accessPointSelect.locator("option").last()).toHaveText("Stevens Creek Trailhead");
+
+  await generate(page);
+  expect(harness.generationRequests.at(-1)).toMatchObject({
+    accessPointRemoteness: ["remote"],
+  });
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
@@ -74,7 +115,8 @@ test("typed ArcGIS origin and keyboard refinement produce a drive-plus-region fi
 
   await generate(page);
   expect(harness.generationRequests.at(-1)).toMatchObject({
-    version: 2,
+    version: 3,
+    routeFamily: "closed",
     accessFilter: {
       mode: "drive-time",
       reachabilityId: "db52ceda-c6ef-47f1-9153-dba294a9eccc",
@@ -180,28 +222,30 @@ test("mode switching aborts stale drive-time and route-generation responses", as
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("point-to-point finish policy remains explicit while routes may leave the filter", async ({ page }) => {
+test("closed routes expose topology while route geometry may leave the trailhead filter", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
   await enterDrawnArea(page);
 
-  await page.getByRole("checkbox", { name: /^Out & back/ }).uncheck();
-  await page.getByRole("checkbox", { name: /^Point to point/ }).check();
-  const finishToggle = page.getByRole("switch", { name: /^Keep finish inside trailhead filter/ });
-  await expect(finishToggle).toBeChecked();
-  await finishToggle.uncheck();
+  await page.getByRole("slider", { name: "Maximum repeated trail" }).fill("20");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Search effort").selectOption("quick");
+  await page.getByRole("button", { name: "Done" }).click();
   await generate(page);
 
   expect(harness.generationRequests.at(-1)).toMatchObject({
-    routeTypes: ["point-to-point"],
-    pointToPoint: { finishMustMatchAccessFilter: false },
+    version: 3,
+    routeFamily: "closed",
+    closedRoute: { maximumRepeatedTrailPct: 20 },
+    searchEffort: "quick",
   });
   await page.getByText("Route details", { exact: true }).click();
-  await expect(page.getByRole("note").filter({ hasText: "Finish outside trailhead filter" })).toBeVisible();
+  await expect(page.getByText("Repeated trail", { exact: true })).toBeVisible();
+  await expect(page.getByText("Simple loop · 1 cycle · 0% repeated", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Near misses" })).toHaveCount(0);
 
-  const request = harness.generationRequests.at(-1) as GenerateRoutesRequestV2;
+  const request = harness.generationRequests.at(-1) as GenerateClosedRoutesRequestV3;
   const fixtureRoute = routeResponse(request).exact[0]!;
   expect(fixtureRoute.geometry.coordinates.some((position) => !pointInsideArea(position, FILTER_GEOMETRY))).toBe(true);
   expect(fixtureRoute.geometry.coordinates.every((position) => pointInsideArea(position, PACK_COVERAGE))).toBe(true);
@@ -210,9 +254,6 @@ test("point-to-point finish policy remains explicit while routes may leave the f
   await expect(mapKey.getByText("Trailhead filter", { exact: true })).toBeVisible();
   await expect(mapKey.getByText("Suggested route", { exact: true })).toBeVisible();
   await expect(mapKey.getByText("Route start", { exact: true })).toBeVisible();
-  await expect(mapKey.getByText("Route finish", { exact: true })).toBeVisible();
-  await expect(page.locator(".route-trailhead-pin.start")).toBeVisible();
-  await expect(page.locator(".route-trailhead-pin.finish")).toBeVisible();
   await expect(page.getByText(
     "Highlighted areas filter trailheads, not route geometry. Routes remain inside installed coverage.",
     { exact: true },
