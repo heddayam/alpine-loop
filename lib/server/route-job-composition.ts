@@ -6,6 +6,7 @@ import {
 } from "@/lib/graph";
 import { loadInstalledPack, loadInstalledPackVersion } from "@/lib/packs/installed-pack";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
+import type { ReachabilityService } from "@/lib/reachability/service";
 import {
   RouteJobService,
   SQLiteRouteJobStore,
@@ -36,6 +37,53 @@ function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void
   });
 }
 
+const DRIVE_TIME_RESOLUTION_DEADLINE_MS = 2 * 60 * 1_000;
+
+type DriveTimeService = Pick<ReachabilityService, "submit" | "poll">;
+
+export async function resolveBatchDriveTime(
+  service: DriveTimeService,
+  request: Parameters<DriveTimeService["submit"]>[0],
+  signal: AbortSignal,
+  options: {
+    deadlineMs?: number;
+    delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
+  } = {},
+) {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(signal.reason ?? new DOMException("Cancelled", "AbortError"));
+  if (signal.aborted) abortFromParent();
+  else signal.addEventListener("abort", abortFromParent, { once: true });
+  const deadlineMs = options.deadlineMs ?? DRIVE_TIME_RESOLUTION_DEADLINE_MS;
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`Drive-time resolution exceeded ${deadlineMs} ms.`);
+      controller.abort(error);
+      reject(error);
+    }, deadlineMs);
+  });
+  try {
+    return await Promise.race([deadline, (async () => {
+      let response = await service.submit(request, controller.signal);
+      while (response.status === "pending") {
+        await (options.delay ?? abortableDelay)(response.pollAfterMs, controller.signal);
+        response = await service.poll(response.requestId, controller.signal);
+      }
+      return { geometry: response.geometry, resolvedAt: response.resolvedAt };
+    })()]);
+  } finally {
+    clearTimeout(timer!);
+    signal.removeEventListener("abort", abortFromParent);
+  }
+}
+
+function yieldToEventLoop(signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolveYield) => setImmediate(resolveYield)).then(() => {
+    if (signal.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
+  });
+}
+
 function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
   return {
     async resolveJob(request, signal) {
@@ -56,20 +104,12 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
     },
 
     async resolveDriveTime(request, signal) {
-      const service = defaultReachabilityService();
-      let response = await service.submit({
+      return resolveBatchDriveTime(defaultReachabilityService(), {
         version: 1,
         packId: request.packId,
         origin: request.origin,
         durationMinutes: request.durationMinutes,
       }, signal);
-      // Identical Quick and Batch requests may share this process-local job.
-      // Aborting this consumer must not cancel the provider job for the others.
-      while (response.status === "pending") {
-        await abortableDelay(response.pollAfterMs, signal);
-        response = await service.poll(response.requestId, signal);
-      }
-      return { geometry: response.geometry, resolvedAt: response.resolvedAt };
     },
 
     async currentDataVersion(packId) {
@@ -140,6 +180,7 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
               signal,
             });
           const quick = await run("quick");
+          await yieldToEventLoop(signal);
           const thorough = await run("thorough");
           const unique = <T extends { id: string }>(values: readonly T[]): T[] => {
             const seen = new Set<string>();

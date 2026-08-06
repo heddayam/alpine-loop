@@ -41,11 +41,11 @@ function route(id: string) {
   };
 }
 
-function setup() {
+function setup(now: () => Date = () => new Date("2026-01-01T00:00:00.000Z")) {
   const directory = mkdtempSync(join(tmpdir(), "route-job-store-"));
   temporary.push(directory);
   const path = join(directory, "jobs.sqlite");
-  return { path, store: new SQLiteRouteJobStore(path, () => new Date("2026-01-01T00:00:00.000Z")) };
+  return { path, store: new SQLiteRouteJobStore(path, now) };
 }
 
 const resolved = {
@@ -62,15 +62,58 @@ describe("SQLiteRouteJobStore", () => {
       geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
       resolvedAt: "2026-01-01T00:00:01.000Z",
     });
-    store.initializeAccessPoints("00000000-0000-4000-8000-000000000001", ["b", "a"]);
-    expect(store.nextAccessPoint("00000000-0000-4000-8000-000000000001")).toEqual({ ordinal: 0, accessPointId: "b" });
+    const id = "00000000-0000-4000-8000-000000000001";
+    store.initializeAccessPoints(id, ["b", "a"]);
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "b" });
+    store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "b", route: route("saved") }], false);
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a" });
     store.close();
 
     const reopened = new SQLiteRouteJobStore(path);
-    expect(reopened.getStored("00000000-0000-4000-8000-000000000001")?.status).toBe("queued");
+    expect(reopened.getStored(id)).toMatchObject({ status: "queued", geometry: { type: "Polygon" } });
+    expect(reopened.toPublic(id, false)?.progress.processedAccessPointCount).toBe(1);
+    expect(reopened.pageResults(id, undefined, 50).results.map(({ route: result }) => result.id)).toEqual(["saved"]);
     expect(reopened.claimNext()?.status).toBe("running");
-    expect(reopened.nextAccessPoint("00000000-0000-4000-8000-000000000001")).toEqual({ ordinal: 0, accessPointId: "b" });
+    expect(reopened.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a" });
     reopened.close();
+  });
+
+  it("finalizes an interrupted cancellation instead of leaving it unclaimable in the queue", () => {
+    const { path, store } = setup();
+    const id = "00000000-0000-4000-8000-000000000004";
+    store.create(id, request, resolved);
+    expect(store.claimNext()?.status).toBe("resolving-drive-time");
+    store.saveDriveTime(id, {
+      geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
+      resolvedAt: "2026-01-01T00:00:01.000Z",
+    });
+    store.initializeAccessPoints(id, ["first", "second"]);
+    store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "first", route: route("saved") }], false);
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "second" });
+    expect(store.requestCancel(id)).toBe("requested");
+    store.close();
+
+    const reopened = new SQLiteRouteJobStore(path);
+    expect(reopened.getStored(id)?.status).toBe("cancelled");
+    expect(reopened.toPublic(id, false)).toMatchObject({
+      status: "cancelled",
+      partial: true,
+      progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 1, exactRouteCount: 1 },
+    });
+    expect(reopened.claimNext()).toBeNull();
+    reopened.close();
+  });
+
+  it("updates the job heartbeat when a checkpoint starts", () => {
+    let current = new Date("2026-01-01T00:00:00.000Z");
+    const { store } = setup(() => current);
+    const id = "00000000-0000-4000-8000-000000000005";
+    store.create(id, request, resolved);
+    store.initializeAccessPoints(id, ["first"]);
+    current = new Date("2026-01-01T00:00:05.000Z");
+    store.nextAccessPoint(id);
+    expect(store.toPublic(id, false)?.updatedAt).toBe("2026-01-01T00:00:05.000Z");
+    store.close();
   });
 
   it("checkpoints results atomically and paginates exact matches before near misses", () => {

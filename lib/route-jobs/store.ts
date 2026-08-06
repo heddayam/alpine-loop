@@ -130,8 +130,10 @@ export class SQLiteRouteJobStore {
     try {
       this.#database.prepare("DELETE FROM route_jobs WHERE status = 'deleting' OR delete_requested = 1").run();
       this.#database.prepare("UPDATE route_job_access_points SET status = 'pending', started_at = NULL WHERE status = 'running'").run();
+      this.#database.prepare(`UPDATE route_jobs SET status = 'cancelled', completed_at = COALESCE(completed_at, ?), updated_at = ?
+        WHERE cancel_requested = 1 AND status IN ('queued', 'resolving-drive-time', 'running')`).run(timestamp, timestamp);
       this.#database.prepare(`UPDATE route_jobs SET status = 'queued', updated_at = ?
-        WHERE status IN ('resolving-drive-time', 'running')`).run(timestamp);
+        WHERE cancel_requested = 0 AND status IN ('resolving-drive-time', 'running')`).run(timestamp);
       this.#database.exec("COMMIT");
     } catch (error) {
       this.#database.exec("ROLLBACK");
@@ -228,8 +230,16 @@ export class SQLiteRouteJobStore {
     if (!row) return null;
     const timestamp = nowIso(this.#now);
     const ordinal = integer(row, "ordinal");
-    this.#database.prepare(`UPDATE route_job_access_points SET status = 'running', started_at = ?
-      WHERE job_id = ? AND ordinal = ?`).run(timestamp, id, ordinal);
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      this.#database.prepare(`UPDATE route_job_access_points SET status = 'running', started_at = ?
+        WHERE job_id = ? AND ordinal = ?`).run(timestamp, id, ordinal);
+      this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(timestamp, id);
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
     return { ordinal, accessPointId: requiredString(row, "access_point_id") };
   }
 

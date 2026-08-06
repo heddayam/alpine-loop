@@ -16,6 +16,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim() ? error.message : "Batch route search failed unexpectedly.";
 }
 
+function yieldToEventLoop(signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => setImmediate(resolve)).then(() => {
+    if (signal?.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
+  });
+}
+
 export function encodeResultCursor(cursor: ResultCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
@@ -94,7 +100,17 @@ export class RouteJobService {
   }
 
   async list(): Promise<RouteJob[]> {
-    const jobs = await Promise.all(this.#store.listIds().map((id) => this.get(id)));
+    const stored = this.#store.listIds()
+      .map((id) => this.#store.getStored(id))
+      .filter((job): job is NonNullable<typeof job> => job !== null);
+    const versions = new Map(await Promise.all([...new Set(stored.map(({ pack }) => pack.id))].map(async (packId) => [
+      packId,
+      await this.#dependencies.currentDataVersion(packId).catch(() => null),
+    ] as const)));
+    const jobs = stored.map(({ id, pack }) => {
+      const current = versions.get(pack.id) ?? null;
+      return this.#store.toPublic(id, current !== null && current !== pack.dataVersion);
+    });
     return routeJobListSchema.parse({ version: 1, jobs: jobs.filter((job): job is RouteJob => job !== null) }).jobs;
   }
 
@@ -172,11 +188,15 @@ export class RouteJobService {
       driveTimeGeometry: job.geometry,
       signal,
     };
+    await yieldToEventLoop(signal);
     const session = await this.#dependencies.openSearchSession(sessionInput);
     try {
+      await yieldToEventLoop(signal);
       const ids = await session.enumerateEligibleAccessPointIds(signal);
+      await yieldToEventLoop(signal);
       if (signal.aborted) throw signal.reason;
       this.#store.initializeAccessPoints(id, ids);
+      await yieldToEventLoop(signal);
 
       for (;;) {
         if (signal.aborted) throw signal.reason;
@@ -201,7 +221,7 @@ export class RouteJobService {
         // The solver and SQLite checkpoints are local CPU/synchronous work.
         // Yield between trailheads so progress polling and cancellation remain
         // responsive while a long FIFO job is running.
-        await new Promise<void>((resolve) => setImmediate(resolve));
+        await yieldToEventLoop(signal);
       }
     } finally {
       await session?.close();
