@@ -160,8 +160,9 @@ function RouteCard({
           <span title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
           <span title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
           {route.gradeExperience ? (
-            <span title={`90% of uphill 100 m sections are ${route.gradeExperience.climbP90Pct.toFixed(0)}% grade or less · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of uphill distance is at least ${route.gradeExperience.steepThresholdPct}% grade · longest uninterrupted steep section ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · downhill p90 ${route.gradeExperience.descentP90Pct.toFixed(0)}%`}>
-              90% climb ≤ <strong>{route.gradeExperience.climbP90Pct.toFixed(0)}%</strong> · {route.gradeExperience.steepClimbingSharePct.toFixed(0)}% uphill ≥{route.gradeExperience.steepThresholdPct}% · {(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi run
+            <span className="route-grade-metrics" title={`90% of uphill 100 m sections are ${route.gradeExperience.climbP90Pct.toFixed(0)}% grade or less · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of uphill distance is at least ${route.gradeExperience.steepThresholdPct}% grade · longest uninterrupted steep section ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · downhill p90 ${route.gradeExperience.descentP90Pct.toFixed(0)}%`}>
+              <span>↑P90 <strong>{route.gradeExperience.climbP90Pct.toFixed(0)}%</strong></span>
+              <span>≥{route.gradeExperience.steepThresholdPct}% <strong>{route.gradeExperience.steepClimbingSharePct.toFixed(0)}%</strong></span>
             </span>
           ) : <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
         </span>

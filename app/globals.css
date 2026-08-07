@@ -629,9 +629,11 @@ details.result-section[open] > summary::before { content: "▾"; }
 }
 .route-summary-main > small { display: block; margin-top: 1px; color: var(--ink-3); font-size: var(--fs-xs); }
 /* Values carry their own units, so no repeated column labels per card. */
-.route-summary-metrics { display: flex; gap: var(--s3); min-width: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.route-summary-metrics { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); min-width: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .route-summary-metrics > span { color: var(--ink-2); white-space: nowrap; }
 .route-summary-metrics strong { color: var(--ink); font-size: var(--fs-sm); font-weight: 700; }
+.route-summary-metrics > .route-grade-metrics { display: flex; flex: 1 0 100%; gap: var(--s3); white-space: normal; }
+.route-grade-metrics > span { white-space: nowrap; }
 
 .route-card-detail { padding: 0 var(--s2) var(--s2); border-top: 1px solid var(--line); }
 .elevation-profile { margin-top: var(--s2); }
