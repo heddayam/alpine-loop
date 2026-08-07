@@ -128,6 +128,7 @@ describe("ResultsPanel V3", () => {
     expect(exactSummary).toHaveAttribute("aria-expanded", "true");
     expect(nearSummary).toHaveAttribute("aria-expanded", "false");
     expect(exactSummary).toHaveTextContent("5.0 mi");
+    expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
     rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
