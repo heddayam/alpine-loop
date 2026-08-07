@@ -29,6 +29,7 @@ export const populationSourceConfigSchema = z.object({
   resolution: z.literal("3 arc-second (nominal 90 m)"),
   crs: z.literal("EPSG:4326"),
   license: z.string().min(1),
+  cacheNamespace: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
 }).strict();
 
 export type PopulationSourceConfig = z.infer<typeof populationSourceConfigSchema>;
@@ -48,8 +49,8 @@ export function ghslProductFor(config: PopulationSourceConfig): GhslProduct {
   };
 }
 
-function pointerPath(cacheRoot: string, sourceId: string): string {
-  return path.join(cacheRoot, sourceId, "pinned.json");
+export function populationPointerPath(cacheRoot: string, config: PopulationSourceConfig): string {
+  return path.join(cacheRoot, config.cacheNamespace ?? config.id, "pinned.json");
 }
 
 export type PinnedPopulationCollection = {
@@ -62,7 +63,7 @@ export async function readPinnedPopulationCollection(
   cacheRoot: string,
   config: PopulationSourceConfig,
 ): Promise<PinnedPopulationCollection> {
-  const pointer = JSON.parse(await readFile(pointerPath(cacheRoot, config.id), "utf8")) as PopulationPointer;
+  const pointer = JSON.parse(await readFile(populationPointerPath(cacheRoot, config), "utf8")) as PopulationPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached population collection does not match configured version");
   const collection = await readPopulationCollection(pointer.collectionPath);
   return {
@@ -89,7 +90,7 @@ export async function refreshPinnedPopulationCollection(
 ): Promise<PinnedPopulationCollection> {
   const result = await refreshPopulationCollection({
     cacheRoot,
-    collectionRoot: path.join(cacheRoot, config.id, "collections"),
+    collectionRoot: path.join(cacheRoot, config.cacheNamespace ?? config.id, "collections"),
     product: ghslProductFor(config),
     bbox: config.bbox as Bbox,
     paddingDegrees: config.tilePaddingDegrees,
@@ -99,7 +100,7 @@ export async function refreshPinnedPopulationCollection(
     license: config.license,
     ...(fetchImpl ? { fetchImpl } : {}),
   });
-  await writeJsonAtomically(pointerPath(cacheRoot, config.id), {
+  await writeJsonAtomically(populationPointerPath(cacheRoot, config), {
     configVersion: config.version,
     collectionPath: result.collectionPath,
   });
