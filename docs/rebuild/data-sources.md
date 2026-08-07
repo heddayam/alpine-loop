@@ -141,7 +141,10 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
 
-Adding a region should require only:
+The authoritative region order, boundary intent, selector behavior, and
+onboarding/activation gates are defined in the [regional expansion
+roadmap](regional-expansion-plan.md). At the data layer, adding a region should
+require only:
 
 1. a new versioned coverage polygon and manifest seed;
 2. source/adapters needed for authoritative local access evidence;
