@@ -80,7 +80,7 @@ describe("OSM OPL normalization", () => {
       "n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2",
       "w1 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway Nn1,n2",
       "w2 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway,name=Creek%20%Trail Nn1,n2",
-      "w3 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=track,motor_vehicle=yes Nn1,n2",
+      "w3 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=track,motor_vehicle=yes,foot=no Nn1,n2",
       "w4 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=secondary Nn1,n2",
     ].join("\n"), "osm-fixture");
 

@@ -25,7 +25,7 @@ export type OsmPipelineOptions = {
 };
 
 const ADAPTER_VERSION = "osmium-complete-ways-road-context-v8";
-const HIGHWAY_FILTER = "w/highway";
+const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
   const fileStat = await stat(filePath);

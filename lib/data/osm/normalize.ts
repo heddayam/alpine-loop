@@ -21,6 +21,7 @@ const featureSchema = z.object({
 }).passthrough();
 
 const TRAIL_HIGHWAYS = new Set(["path", "bridleway", "steps"]);
+const LEGACY_WALKING_CONNECTORS = new Set(["service", "unclassified", "residential", "living_street"]);
 const STREET_HIGHWAYS = new Set([
   "motorway", "motorway_link",
   "trunk", "trunk_link",
@@ -52,14 +53,24 @@ function hasAffirmativeMotorVehicleEvidence(values: Record<string, string>): boo
   return AFFIRMATIVE_MOTOR_ACCESS.has(motorAccess ?? "");
 }
 
+function wasWalkingConnector(values: Record<string, string>): boolean {
+  return LEGACY_WALKING_CONNECTORS.has(values.highway ?? "") && (
+    ["yes", "designated", "permissive", "public"].includes(values.foot ?? "")
+    || /(?:^|\s)(trail|path|walk)(?:\s|$)/i.test(values.name ?? "")
+  );
+}
+
 /** Classify OSM ways once at the adapter boundary; null means no graph context is retained. */
 export function classifyOsmWay(values: Record<string, string>): EdgeClass | null {
   const highway = values.highway ?? "";
-  if (SIDEWALK_SUBTAGS.has(values.footway ?? "") || SIDEWALK_SUBTAGS.has(values.service ?? "")) {
+  if (wasWalkingConnector(values)) return "trail";
+  if (SIDEWALK_SUBTAGS.has(values.footway ?? "")) {
     return "sidewalk";
   }
   if (TRAIL_HIGHWAYS.has(highway)) return "trail";
-  if (highway === "track") return hasAffirmativeMotorVehicleEvidence(values) ? "service-road" : "trail";
+  if (highway === "track") {
+    return hasAffirmativeMotorVehicleEvidence(values) && values.foot === "no" ? "service-road" : "trail";
+  }
   if (highway === "footway") return hasTrailContext(values) ? "trail" : "sidewalk";
   if (highway === "pedestrian") return hasTrailContext(values) ? "trail" : "sidewalk";
   if (highway === "service") return "service-road";

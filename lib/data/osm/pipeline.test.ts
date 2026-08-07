@@ -54,7 +54,7 @@ describe("resume-safe osmium preparation", () => {
     expect(extract).toEqual(expect.arrayContaining(["--strategy", "complete_ways", "--polygon"]));
     const tagsFilter = vi.mocked(runner).mock.calls.find(([, arguments_]) => arguments_[0] === "tags-filter")?.[1];
     expect(tagsFilter).toEqual(expect.arrayContaining([
-      "w/highway",
+      "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary",
       "nw/highway=trailhead",
       "nw/amenity=parking",
       "nw/information=trailhead,guidepost,board,map",

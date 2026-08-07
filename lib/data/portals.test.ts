@@ -5,6 +5,7 @@ import {
   deriveTrailheadPortals,
   PORTAL_CLUSTER_DISTANCE_M,
   PORTAL_EVIDENCE_DISTANCE_M,
+  stripPortalBuildContext,
 } from "./portals";
 import type {
   EdgeClass,
@@ -209,6 +210,21 @@ describe("trailhead portal derivation", () => {
 
     const legacyWays = ways.map((item) => ({ ...item, edgeClass: undefined }));
     expect(() => deriveTrailheadPortals(topology(nodes, legacyWays))).toThrow(/classified trail and street/);
+  });
+
+  it("removes build-only roads and their nodes while preserving walking connectors and portals", () => {
+    const nodes = [node("start", 0), node("trail-end", -300), node("road-only", 0, 100)];
+    const ways = [
+      way("walking-service", ["trail-end", "start"], nodes, "trail"),
+      way("road-context", ["start", "road-only"], nodes, "street"),
+    ];
+    const derived = deriveTrailheadPortals(topology(nodes, ways));
+    const published = stripPortalBuildContext(derived);
+
+    expect(published.ways.map(({ id }) => id)).toEqual(["walking-service"]);
+    expect(published.nodes.map(({ id }) => id).sort()).toEqual(["start", "trail-end"]);
+    expect(published.accessPoints).toEqual(derived.accessPoints);
+    expect(published.portalEvidence).toEqual([]);
   });
 });
 
