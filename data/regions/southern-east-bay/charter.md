@@ -50,11 +50,11 @@ leaving the exact polygon is rejected by compilation.
 - Current closure/prohibition evidence outranks current permission, which
   outranks clear OSM access tags, with unresolved evidence remaining unknown.
 
-The EBRPD road/trail layer pinned below has no current-closure field. The EBRPD
-entrance layer adds explicit mapped entrance closures, but it is not a complete
-trail-closure feed. Activation therefore requires a current human closure
-review and, if necessary, another pinned machine-readable authority source. No
-page or PDF is scraped into the build.
+Every route start is now derived as an OSM trail/street portal. EBRPD entrance
+points are optional name overlays and cannot create starts or change access.
+Safety-critical removals live in the committed exact-way restriction list,
+which includes the current reviewed closures. No page or PDF is scraped into
+the build.
 
 ## Reviewed search-region decisions
 
@@ -166,23 +166,14 @@ JRC attribution. The region-specific collection namespace is
 `southern-east-bay-population`; missing all-zero tiles retain the documented
 zero-population meaning.
 
-### Official road/trail access
+### Reviewed access removals
 
-EBRPD ArcGIS item `581946f2fbfa4ba39f04213369c2aa85`, layer 13 **Roads and
-Trails-by Access**, filtered to the six major `PARK_NAME` values. At inspection
-the query returned 1,307 features with 1,307 distinct non-null `GlobalID`
-values and no transfer-limit flag. The `ACCESS` distribution was 57 `Foot`, 28
-`Foot Bicycle`, 2 `Foot Bicycle Vehicle`, 142 `Foot Horse`, 608 `Foot Horse
-Bicycle`, 95 `Foot Horse Bicycle Vehicle`, 374 `Service`, and 1 null.
-
-The public item supplies an EBRPD accuracy/warranty disclaimer but no
-affirmative reuse grant. Local evaluation is permitted; normalized derivative
-pack redistribution requires review or written permission. Documented
-`ACCESS` values containing `Foot` are affirmative hiking evidence. Documented
-`Service`, `Horse`, `Bicycle`, and `EVMA` modes prohibit hiking; null is unknown
-and undocumented non-empty values fail. Exact item, layer-metadata, and
-inspected-snapshot hashes are recorded in the source config and explained in
-`official-sources/README.md`.
+The former live EBRPD Roads and Trails line source is no longer a pack input.
+`access-restrictions.json` preserves only its safety-relevant algorithmic
+effect: 42 reviewed public/unknown-to-prohibited changes, plus the 3 current
+Shady Glen closures. Eighteen already-private/prohibited matches were inert and
+were omitted. The committed list targets exact OSM way IDs, accepts only
+restrictive states, and is applied before portal derivation.
 
 ### Official entrances
 
@@ -190,10 +181,10 @@ EBRPD ArcGIS item `3795cd719b834488b3d2a208e2a9cef8`, layer 1 **EBRPD Park
 Entrances**, filtered to the same six park names. The pinned query returned 25
 features with 25 distinct non-null `GlobalID` values and no transfer-limit
 flag: 12 Del Valle, 3 Mission Peak, 4 Pleasanton Ridge, 5 Sunol, 1 Vargas
-Plateau, and no direct Ohlone entrance. Explicit `Entrance Closed / No Park
-Access` is closure evidence. An explicitly open, walkable entrance is public
-pedestrian evidence; parking or point presence alone is not. Null or unexpected
-values remain unknown unless a documented combination is approved.
+Plateau, and no direct Ohlone entrance. The adapter validates the documented
+fields, but the build uses these records only to name and raise confidence on
+already-derived portals. Entrance presence, parking, walking, and closure
+fields cannot create or remove a portal.
 
 The entrance item has the same disclaimer and no affirmative reuse grant, so
 local evaluation is permitted while normalized derivative redistribution
@@ -209,15 +200,13 @@ had SHA-256
 The only current trail closure found in the included systems was Shady Glen
 Trail at Sunol, first published July 23 and updated July 29, 2026.
 
-`current-closures.json` records that human-reviewed fact against the three
+`access-restrictions.json` records that human-reviewed fact against the three
 matching ways in the pinned regional OSM snapshot: `way/133590543`,
-`way/284501998`, and `way/284501999`. Builds read this committed JSON and never
-scrape live HTML. Its adapter accepts closure evidence only, verifies the exact
-reviewed-page URL/hash/length and review identity, rejects malformed or
-duplicate OSM targets, and emits high-confidence `closed` evidence. The public
-page offers no affirmative data-reuse grant, so the same local-evaluation and
-derivative-redistribution review requirement applies. A fresh human review and
-new pinned overlay are required before a later pack release.
+`way/284501998`, and `way/284501999`. Builds read this committed list and never
+scrape live HTML. The public page offers no affirmative data-reuse grant, so
+the same local-evaluation and derivative-redistribution review requirement
+applies. A fresh human review and updated restriction list are required before
+a later pack release.
 
 ## Activation blockers and acceptance
 
