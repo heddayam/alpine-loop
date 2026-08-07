@@ -200,6 +200,25 @@ local evaluation is permitted while normalized derivative redistribution
 requires review or written permission. Exact item, layer, and inspected-response
 hashes are recorded in `official-sources/ebrpd-park-entrances.json`.
 
+### Current closure review
+
+The official EBRPD [Alerts & Closures](https://www.ebparks.org/alerts-closures)
+page was reviewed on 2026-08-06 local time. The 181,487-byte reviewed response
+had SHA-256
+`7da0a19c3982406e9171ad802c0d697e491f0d79bd79e90241b30a32a771c83b`.
+The only current trail closure found in the included systems was Shady Glen
+Trail at Sunol, first published July 23 and updated July 29, 2026.
+
+`current-closures.json` records that human-reviewed fact against the three
+matching ways in the pinned regional OSM snapshot: `way/133590543`,
+`way/284501998`, and `way/284501999`. Builds read this committed JSON and never
+scrape live HTML. Its adapter accepts closure evidence only, verifies the exact
+reviewed-page URL/hash/length and review identity, rejects malformed or
+duplicate OSM targets, and emits high-confidence `closed` evidence. The public
+page offers no affirmative data-reuse grant, so the same local-evaluation and
+derivative-redistribution review requirement applies. A fresh human review and
+new pinned overlay are required before a later pack release.
+
 ## Activation blockers and acceptance
 
 This charter and data definition do not activate the pack or add the registry
