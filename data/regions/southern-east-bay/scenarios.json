@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "packId": "southern-east-bay",
+  "scenarios": [
+    {
+      "id": "pleasanton-ridge-foothill",
+      "cluster": "Pleasanton Ridge",
+      "referencePoint": {
+        "name": "Foothill Road Staging Area",
+        "coordinates": [-121.8815061965, 37.6145243526]
+      },
+      "searchRegionId": "osm:relation/11518106",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 500, "max": 3000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "mission-peak-stanford",
+      "cluster": "Mission Peak",
+      "referencePoint": {
+        "name": "Stanford Avenue Park Entrance",
+        "coordinates": [-121.9084791072, 37.5044639584]
+      },
+      "searchRegionId": "pack:southern-east-bay",
+      "candidateNamedAreaId": "osm:relation/11274796",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 800, "max": 4000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "vargas-plateau-morrison-canyon",
+      "cluster": "Vargas Plateau",
+      "referencePoint": {
+        "name": "Vargas Plateau Staging Area",
+        "coordinates": [-121.9321342635, 37.5752020221]
+      },
+      "searchRegionId": "pack:southern-east-bay",
+      "exactExpectation": {
+        "distanceMiles": { "min": 2, "max": 8 },
+        "elevationGainFeet": { "min": 200, "max": 1800 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "sunol-geary-road",
+      "cluster": "Sunol",
+      "referencePoint": {
+        "name": "Sunol Main Entrance",
+        "coordinates": [-121.8340647261, 37.515502941]
+      },
+      "searchRegionId": "osm:relation/317363",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 14 },
+        "elevationGainFeet": { "min": 500, "max": 3500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "ohlone-wilderness-sunol-approach",
+      "cluster": "Ohlone Wilderness",
+      "referencePoint": {
+        "name": "Ohlone Wilderness Trail, Sunol approach (synthetic QA point)",
+        "coordinates": [-121.7908, 37.5188],
+        "synthetic": true
+      },
+      "searchRegionId": "pack:southern-east-bay",
+      "candidateNamedAreaId": "osm:relation/11520322",
+      "exactExpectation": {
+        "distanceMiles": { "min": 6, "max": 18 },
+        "elevationGainFeet": { "min": 1200, "max": 5000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "del-valle-east-beach",
+      "cluster": "Del Valle",
+      "referencePoint": {
+        "name": "East Swim Beach Parking",
+        "coordinates": [-121.697152193, 37.585111116]
+      },
+      "searchRegionId": "osm:relation/226483",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 14 },
+        "elevationGainFeet": { "min": 500, "max": 3500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}

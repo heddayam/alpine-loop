@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "ghsl-ghs-pop-r2023a-3ss",
+  "cacheNamespace": "southern-east-bay-population",
+  "authority": "European Commission Joint Research Centre",
+  "dataset": "GHS-POP R2023A population grid, 3 arc-second, epoch 2020",
+  "version": "southern-east-bay-ghs-pop-pinned-2026-08-07-v1",
+  "baseUrl": "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL",
+  "release": "R2023A",
+  "epoch": 2020,
+  "productVersion": "V1-0",
+  "productFileVersion": "V1_0",
+  "bbox": [-122.08, 37.365, -121.515, 37.75],
+  "tilePaddingDegrees": 0.25,
+  "resolution": "3 arc-second (nominal 90 m)",
+  "crs": "EPSG:4326",
+  "license": "European Commission reuse notice (Decision 2011/833/EU); attribution to the European Commission, Joint Research Centre required; https://ec.europa.eu/info/legal-notice_en"
+}

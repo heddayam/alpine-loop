@@ -1,0 +1,32 @@
+{
+  "id": "ebrpd-park-entrances",
+  "authority": "East Bay Regional Park District",
+  "dataset": "EBRPD Park Entrances",
+  "version": "item-modified-2025-11-06T23:21:05.000Z-layer-1-data-updated-2025-04-25T20:22:15.225Z",
+  "retrievedAt": "2026-08-07T04:57:13.000Z",
+  "itemUrl": "https://www.arcgis.com/home/item.html?id=3795cd719b834488b3d2a208e2a9cef8",
+  "downloadUrl": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json",
+  "nativeCrs": {
+    "wkid": 102643,
+    "latestWkid": 2227
+  },
+  "downloadCrs": 4326,
+  "stableIdField": "GlobalID",
+  "accessFields": ["WALKING", "ENTRANCE", "CLOSED", "PARKING"],
+  "scopeField": "PARK",
+  "scopeValues": [
+    "Mission Peak",
+    "Ohlone",
+    "Pleasanton Ridge",
+    "Vargas Plateau",
+    "Sunol",
+    "Del Valle"
+  ],
+  "expectedFeatureCount": 25,
+  "license": "EBRPD map disclaimer; no affirmative data-reuse license",
+  "termsDecision": "The public item disclaims accuracy and warranty but grants no affirmative redistribution right. Use the pinned response for local evaluation only; review or written permission is required before redistributing a normalized derivative pack. Explicit closure values take precedence; parking or entrance presence alone never establishes hiking permission.",
+  "redistribution": "requires-review",
+  "metadataContentHash": "sha256:dd44958988f15ced9edbd9b83476d6819ef3c6bfece93e1a73671be03f9e2bab",
+  "layerMetadataContentHash": "sha256:59e7f0859ab8aaa9218563ed946297ea3e0c608702c704ba0f79bfe3b9de65cc",
+  "inspectedSnapshotContentHash": "sha256:80c5f9e2cdc15f64ed78bb53299329d65db674644127fccdaac2de9c55198844"
+}
