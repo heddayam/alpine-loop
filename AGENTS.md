@@ -1,4 +1,4 @@
-# Alpine Search agent instructions
+# Alpine Loop agent instructions
 
 This repository is a clean reboot. The product and technical decisions are in
 `docs/rebuild/implementation-plan.md`; the execution protocol is in

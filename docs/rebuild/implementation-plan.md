@@ -1,8 +1,8 @@
-# Alpine Search implementation plan
+# Alpine Loop implementation plan
 
 ## Product outcome
 
-Alpine Search generates closed hiking routes from a local, bounded trail graph.
+Alpine Loop generates closed hiking routes from a local, bounded trail graph.
 It is not a catalog of known hikes. The first installed pack covers the Santa
 Cruz Mountains; regional behavior comes from versioned packs rather than UI or
 solver branches.

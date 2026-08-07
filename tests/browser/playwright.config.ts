@@ -24,7 +24,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       ...process.env,
-      ALPINE_PACK_ROOT: path.join(tmpdir(), "alpine-search-playwright-empty-packs"),
+      ALPINE_PACK_ROOT: path.join(tmpdir(), "alpine-loop-playwright-empty-packs"),
       ALPINE_NEXT_DIST_DIR: ".next-playwright",
     },
   },

@@ -148,7 +148,7 @@ def describe(collection_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Offline batched GHS-POP radius sampler for Alpine Search")
+    parser = argparse.ArgumentParser(description="Offline batched GHS-POP radius sampler for Alpine Loop")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--describe", action="store_true")
     parser.add_argument("--collection", type=Path)
