@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MultiPolygon, Polygon } from "geojson";
+import { useRouter } from "next/navigation";
 import {
   DRIVE_TIME_DURATIONS_MINUTES,
   appSettingsV1Schema,
   generateClosedRoutesResponseV3Schema,
   namedAreaSchema,
   originSchema,
+  packCatalogRegionV1Schema,
   reachabilityResponseSchema,
   routeJobListSchema,
   routeJobSchema,
@@ -16,6 +18,7 @@ import {
   type CreateBatchRouteJobV1,
   type AppSettingsV1,
   type GradePresetId,
+  type PackCatalogRegionV1,
   type AccessFilterV2,
   type GenerateClosedRoutesRequestV3,
   type GenerateClosedRoutesResponseV3,
@@ -43,6 +46,23 @@ type AreaGeometry = Polygon | MultiPolygon;
 const ACTIVE_JOB_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-drive-time", "running"]);
 const JOB_POLL_OPEN_MS = 2_000;
 const JOB_POLL_CLOSED_MS = 5_000;
+
+const FIXTURE_REGION: PackCatalogRegionV1 = packCatalogRegionV1Schema.parse({
+  id: "santa-cruz-mountains",
+  label: "Santa Cruz Mountains",
+  displayOrder: 1,
+  state: "available",
+  packId: FIXTURE_BUILDER_PACK.id,
+  pack: {
+    id: FIXTURE_BUILDER_PACK.id,
+    name: FIXTURE_BUILDER_PACK.name,
+    dataVersion: FIXTURE_BUILDER_PACK.dataVersion,
+    builtAt: FIXTURE_BUILDER_PACK.builtAt,
+    coverageBbox: FIXTURE_BUILDER_PACK.coverageBbox,
+    coverage: FIXTURE_BUILDER_PACK.coverage,
+    display: FIXTURE_BUILDER_PACK.display,
+  },
+});
 
 function boundsGeometry(bounds: Bounds): Polygon {
   const [west, south, east, north] = bounds;
@@ -114,7 +134,16 @@ function batchPageAsResponse(page: RouteJobResultsPage): GenerateClosedRoutesRes
   };
 }
 
-export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPackConfig }) {
+export function HikeBuilder({
+  pack = FIXTURE_BUILDER_PACK,
+  regions = [FIXTURE_REGION],
+  restoreJobId,
+}: {
+  pack?: BuilderPackConfig;
+  regions?: PackCatalogRegionV1[];
+  restoreJobId?: string;
+}) {
+  const router = useRouter();
   const [drawnBounds, setDrawnBounds] = useState<Bounds | null>(null);
   const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({
     originText: "",
@@ -159,6 +188,22 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const jobsRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const jobsRefreshGenerationRef = useRef(0);
   const batchLaunchInFlightRef = useRef(false);
+  const restoredJobRef = useRef<string | undefined>(undefined);
+
+  const orderedRegions = useMemo(
+    () => [...regions].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label)),
+    [regions],
+  );
+  const availablePackIds = useMemo(
+    () => new Set(orderedRegions.flatMap((region) => region.state === "available" ? [region.packId] : [])),
+    [orderedRegions],
+  );
+
+  const switchPack = useCallback((packId: string, jobId?: string) => {
+    const query = new URLSearchParams({ pack: packId });
+    if (jobId) query.set("job", jobId);
+    router.push(`/?${query}`);
+  }, [router]);
 
   const acceptJobs = useCallback((next: RouteJob[], refreshedAt: number, announceTransitions = true) => {
     if (announceTransitions && jobsLoadedRef.current) {
@@ -510,7 +555,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     }
   };
 
-  const openBatchResults = useCallback((page: RouteJobResultsPage) => {
+  const applyBatchResults = useCallback((page: RouteJobResultsPage) => {
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
@@ -532,6 +577,50 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
         if (parsed.success) setFilterGeometry(parsed.data.geometry);
       }).catch(() => undefined);
   }, [driveDraft.searchRegions, pack.id]);
+
+  const openBatchResults = useCallback((page: RouteJobResultsPage) => {
+    if (page.job.pack.id !== pack.id) {
+      setJobsOpen(false);
+      if (availablePackIds.has(page.job.pack.id)) switchPack(page.job.pack.id, page.job.id);
+      else {
+        setGenerationState("error");
+        setGenerationMessage("The region pack for this saved job is not installed.");
+      }
+      return;
+    }
+    applyBatchResults(page);
+  }, [applyBatchResults, availablePackIds, pack.id, switchPack]);
+
+  useEffect(() => {
+    if (!restoreJobId || restoredJobRef.current === restoreJobId) return;
+    restoredJobRef.current = restoreJobId;
+    const controller = new AbortController();
+    void fetch(`/api/route-jobs/${encodeURIComponent(restoreJobId)}/results?limit=50`, {
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      const raw: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error("Job results could not be loaded.");
+      const page = routeJobResultsPageSchema.parse(raw);
+      if (page.job.pack.id !== pack.id) {
+        if (availablePackIds.has(page.job.pack.id)) switchPack(page.job.pack.id, page.job.id);
+        else {
+          setGenerationState("error");
+          setGenerationMessage("The region pack for this saved job is not installed.");
+          router.replace(`/?${new URLSearchParams({ pack: pack.id })}`);
+        }
+        return;
+      }
+      applyBatchResults(page);
+      router.replace(`/?${new URLSearchParams({ pack: pack.id })}`);
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setGenerationState("error");
+        setGenerationMessage(error instanceof Error ? error.message : "Job results could not be loaded.");
+      }
+    });
+    return () => controller.abort();
+  }, [applyBatchResults, availablePackIds, pack.id, restoreJobId, router, switchPack]);
 
   const loadNextBatchPage = async () => {
     if (!batchPage?.nextCursor) return;
@@ -603,10 +692,37 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     <main className="app-frame">
       <header className="topbar">
         <h1>Alpine Loop</h1>
-        <span className="pack-chip" aria-label="Installed region pack" title={`${pack.name} — ${pack.subtitle}`}>
-          <span className="status-dot" aria-hidden="true" />
-          <span>{pack.name}</span>
-        </span>
+        <nav className="region-strip" aria-label="Region packs">
+          <div className="region-list">
+            {orderedRegions.map((region) => {
+              const available = region.state === "available";
+              const selected = available && region.packId === pack.id;
+              const status = region.state === "planned"
+                ? "Planned; pack not yet available."
+                : region.state === "unavailable"
+                  ? "Pack unavailable on this device."
+                  : selected
+                    ? "Available; currently selected."
+                    : "Available.";
+              return (
+                <button
+                  type="button"
+                  className={["region-pill", selected ? "region-pill-selected" : ""].filter(Boolean).join(" ")}
+                  key={region.id}
+                  disabled={!available}
+                  aria-pressed={available ? selected : undefined}
+                  aria-label={`${region.label}. ${status}`}
+                  title={available ? `${region.pack.name} — Data ${region.pack.dataVersion}` : status}
+                  onClick={() => { if (available && !selected) switchPack(region.packId); }}
+                >
+                  {available ? <span className="status-dot" aria-hidden="true" /> : null}
+                  <span>{region.label}</span>
+                  <span className="visually-hidden"> {status}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
         <div className="topbar-actions">
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
             Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
