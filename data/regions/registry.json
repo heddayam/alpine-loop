@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "id": "santa-cruz-mountains",
+      "label": "Santa Cruz Mountains",
+      "displayOrder": 1,
+      "packId": "santa-cruz-mountains"
+    },
+    {
+      "id": "southern-east-bay",
+      "label": "Southern East Bay",
+      "displayOrder": 2
+    },
+    {
+      "id": "monterey-carmel",
+      "label": "Monterey–Carmel",
+      "displayOrder": 3
+    },
+    {
+      "id": "henry-coe",
+      "label": "Henry Coe",
+      "displayOrder": 4
+    },
+    {
+      "id": "marin-mount-tam",
+      "label": "Marin & Mount Tam",
+      "displayOrder": 5
+    },
+    {
+      "id": "tahoe-eldorado",
+      "label": "Tahoe–Eldorado",
+      "displayOrder": 6
+    }
+  ]
+}
