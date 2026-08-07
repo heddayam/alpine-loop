@@ -152,7 +152,7 @@ def main() -> None:
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--describe", action="store_true")
     parser.add_argument("--collection", type=Path)
-    parser.add_argument("--radius-m", type=float, default=1000.0)
+    parser.add_argument("--radius-m", type=float, default=2000.0)
     args = parser.parse_args()
     if args.version:
         print(f"rasterio {rasterio.__version__}; GDAL {rasterio.__gdal_version__}")

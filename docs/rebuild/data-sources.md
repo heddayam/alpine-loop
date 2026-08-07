@@ -85,9 +85,11 @@ or an official downloadable dataset during Gate 3.
   disaggregates census counts using satellite-detected built-up area, which is a
   far better signal in the rural US than OSM `landuse=residential`, whose
   coverage is patchy exactly where it matters.
-- Query the raster as a **sum over a radius**, not an interpolated point sample.
-  Values are people-per-cell, and a trailhead at the edge of a subdivision sits
-  in a near-zero cell while thousands live 300 m away.
+- Query the raster as a **sum over a 2 km radius**, not an interpolated point
+  sample. Values are people-per-cell, and a trailhead at the edge of a
+  subdivision sits in a near-zero cell while thousands may live nearby. The
+  wider context prevents developed urban-edge access points from appearing
+  remote merely because their immediate raster cells are sparse.
 - Tiles are 10 deg x 10 deg on a grid whose origin is offset from (-180, 90);
   `lib/data/population/tiles.ts` documents the verified constants. GHSL omits
   all-zero tiles, so an absent tile means zero people, not unknown. Every

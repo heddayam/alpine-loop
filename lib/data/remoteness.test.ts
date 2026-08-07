@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRemoteness, computeLocalRelief, remotenessScore } from "./remoteness";
+import { classifyRemoteness, computeLocalRelief, POPULATION_RADIUS_M, remotenessScore } from "./remoteness";
 import type { NormalizedAccessPoint, NormalizedNode } from "./types";
 
 function node(id: string, lon: number, lat: number, elevationM: number | null): NormalizedNode {
@@ -14,7 +14,10 @@ function accessPoint(id: string, nodeId: string): NormalizedAccessPoint {
 }
 
 describe("classifyRemoteness", () => {
-  // Values measured from GHS-POP R2023A for real Santa Cruz Mountains locations.
+  it("uses the 2 km population context radius", () => {
+    expect(POPULATION_RADIUS_M).toBe(2_000);
+  });
+
   it.each([
     ["Big Basin", 0.092461, "remote"],
     ["Castle Rock State Park", 14.061229, "remote"],

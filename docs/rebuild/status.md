@@ -140,6 +140,17 @@ the evidence line.
   verify` passes 338 tests across 62 files plus the production build; two
   consecutive browser runs pass all five Chromium flows.
 
+- 2026-08-07 — widened the GHS-POP access-point context radius from 1 km to
+  2 km so urban-edge access points are not labeled remote solely because their
+  immediate raster cells are sparse. With the existing classification
+  thresholds, the rebuilt Southern East Bay pack `seb-fbb73433186eb5f5`
+  changes the inventory from 112 remote / 218 rural / 1,801 populated to 39
+  remote / 60 rural / 2,032 populated. Its audit retains 2,131 access points
+  with zero missing population samples or errors. The rebuilt Santa Cruz pack
+  `scm-cf499195b533cbbd` retains 3,203 access points with zero missing
+  population samples or audit errors. `npm run verify` passes 377 tests across
+  74 files plus the production build.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are
