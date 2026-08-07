@@ -3,6 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouteJob } from "@/lib/contracts";
 import { JobsModal } from "./JobsModal";
@@ -116,6 +117,23 @@ describe("JobsModal", () => {
     expect(screen.getByText("Santa Cruz Mountains")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(onRefresh).toHaveBeenCalledWith(true));
+  });
+
+  it("clears Opening after successfully loading results in Strict Mode", async () => {
+    const completed = { ...job, status: "completed" as const, completedAt: "2026-08-06T00:00:15Z" };
+    const page = { version: 1 as const, job: completed, results: [] };
+    const onOpenResults = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(page), { status: 200 }));
+
+    render(
+      <StrictMode>
+        <JobsModal {...baseProps} jobs={[completed]} onOpenResults={onOpenResults} />
+      </StrictMode>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "View results for Santa Cruz Mountains" }));
+
+    await waitFor(() => expect(onOpenResults).toHaveBeenCalledWith(page));
+    expect(screen.getByRole("button", { name: "View results for Santa Cruz Mountains" })).toHaveTextContent("View results");
   });
 
   it("aborts and ignores a pending View results response when the modal closes", async () => {
