@@ -68,6 +68,25 @@ export const accessPointRemotenessSelectionSchema = z.array(accessPointRemotenes
     message: "Access-point area types must be unique",
   });
 
+export const GRADE_WINDOW_METERS = 100;
+export const STEEP_GRADE_THRESHOLD_PCT = 10;
+
+export const gradeExperienceConstraintsSchema = z.object({
+  maximumClimbP90Pct: finiteNumberSchema.nonnegative().max(100),
+  maximumSteepClimbingSharePct: finiteNumberSchema.min(0).max(100),
+  maximumSteepRunMiles: finiteNumberSchema.nonnegative().max(30),
+  maximumDescentP90Pct: finiteNumberSchema.nonnegative().max(100),
+}).strict();
+
+export const gradeExperienceMetricsSchema = z.object({
+  climbP90Pct: finiteNumberSchema.nonnegative(),
+  steepClimbingSharePct: finiteNumberSchema.min(0).max(100),
+  longestSteepClimbMeters: finiteNumberSchema.nonnegative(),
+  descentP90Pct: finiteNumberSchema.nonnegative(),
+  windowMeters: z.literal(GRADE_WINDOW_METERS),
+  steepThresholdPct: z.literal(STEEP_GRADE_THRESHOLD_PCT),
+}).strict();
+
 export const generateClosedRoutesRequestV3Schema = z.object({
   version: z.literal(3),
   packId: z.string().trim().min(1),
@@ -81,6 +100,7 @@ export const generateClosedRoutesRequestV3Schema = z.object({
   elevationGainFeet: orderedRangeSchema.optional(),
   maximumElevationFeet: orderedRangeSchema.optional(),
   steepestSustainedGradePct: orderedRangeSchema.optional(),
+  gradeExperience: gradeExperienceConstraintsSchema.optional(),
   includeUncertainAccess: z.boolean(),
   accessPointRemoteness: accessPointRemotenessSelectionSchema,
   searchEffort: searchEffortV3Schema,
@@ -117,6 +137,7 @@ const generatedClosedRouteBaseSchema = z.object({
   minimumElevationMeters: finiteNumberSchema,
   maximumElevationMeters: finiteNumberSchema,
   steepestSustainedGradePct: finiteNumberSchema.nonnegative(),
+  gradeExperience: gradeExperienceMetricsSchema.optional(),
   trailNames: z.array(z.string().min(1)),
   warnings: z.array(z.string()),
   source: z.object({
@@ -156,6 +177,10 @@ export const constraintViolationV3Schema = constraintViolationSchema.extend({
     "elevation-gain",
     "maximum-elevation",
     "steepest-sustained-grade",
+    "climb-p90-grade",
+    "steep-climbing-share",
+    "longest-steep-climb",
+    "descent-p90-grade",
     "repeated-trail",
     "shared-stem",
   ]),
@@ -209,7 +234,7 @@ export const generateClosedRoutesResponseV3Schema = z.object({
   requestId: z.string().min(1),
   pack: z.object({
     id: z.string().min(1),
-    schemaVersion: z.enum(["3", "4"]),
+    schemaVersion: z.enum(["3", "4", "5"]),
     dataVersion: z.string().min(1),
     builtAt: isoDateSchema,
   }).strict(),
@@ -226,6 +251,8 @@ export type AccessFilterV2 = z.infer<typeof accessFilterV2Schema>;
 export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopologyPreferenceV3Schema>;
 export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
 export type AccessPointRemoteness = z.infer<typeof accessPointRemotenessSchema>;
+export type GradeExperienceConstraints = z.infer<typeof gradeExperienceConstraintsSchema>;
+export type GradeExperienceMetrics = z.infer<typeof gradeExperienceMetricsSchema>;
 export type GenerateClosedRoutesRequestV3 = z.infer<typeof generateClosedRoutesRequestV3Schema>;
 export type ClosedRouteTopologyV3 = z.infer<typeof closedRouteTopologyV3Schema>;
 export type GeneratedClosedRouteV3 = z.infer<typeof generatedClosedRouteV3Schema>;
