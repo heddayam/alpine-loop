@@ -398,6 +398,26 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
   return { ...topology, accessPoints };
 }
 
+/**
+ * Removes build-only road, sidewalk, and POI context after portals have been
+ * derived. The published graph keeps every trail-class walking connector and
+ * exactly the nodes needed by hiking edges and portal attachments.
+ */
+export function stripPortalBuildContext(topology: NormalizedTopology): NormalizedTopology {
+  const ways = topology.ways.filter(({ edgeClass }) => edgeClass === "trail");
+  if (ways.length === 0) throw new Error("Published portal topology requires trail ways");
+  if (topology.accessPoints.some(({ reachableTrailKm, trailComponentId, portalRoadClass }) =>
+    typeof reachableTrailKm !== "number" || !trailComponentId || !portalRoadClass)) {
+    throw new Error("Published portal topology requires derived portal measurements");
+  }
+  const retainedNodeIds = new Set([
+    ...ways.flatMap(({ nodeIds }) => nodeIds),
+    ...topology.accessPoints.map(({ nodeId }) => nodeId),
+  ]);
+  const nodes = topology.nodes.filter(({ id }) => retainedNodeIds.has(id));
+  return { ...topology, nodes, ways, portalEvidence: [] };
+}
+
 function confidenceScore(confidence: NormalizedAccessEvidence["confidence"]): number {
   return confidence === "high" ? 3 : confidence === "medium" ? 2 : 1;
 }
