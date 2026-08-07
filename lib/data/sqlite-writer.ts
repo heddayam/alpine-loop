@@ -53,7 +53,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         id TEXT PRIMARY KEY${hasClosedRouteTopology ? ", edge_key INTEGER NOT NULL UNIQUE, physical_edge_key INTEGER NOT NULL REFERENCES physical_edges(physical_edge_key)" : ""}, from_node TEXT NOT NULL REFERENCES nodes(id),
         to_node TEXT NOT NULL REFERENCES nodes(id), geometry TEXT NOT NULL,
         length_m REAL NOT NULL, gain_m REAL, loss_m REAL,
-        max_elevation_m REAL, max_sustained_grade_pct REAL${hasElevationProfiles ? ", elevation_profile TEXT NOT NULL" : ""},
+        max_elevation_m REAL, max_sustained_grade_pct REAL${hasElevationProfiles ? `, elevation_profile TEXT${schemaVersion === "5" ? " NOT NULL" : ""}` : ""},
         access_state TEXT NOT NULL${schemaVersion === "6" ? ", edge_class TEXT NOT NULL CHECK(edge_class IN ('trail','service-road','street','sidewalk'))" : ""}, source_refs TEXT NOT NULL, flags TEXT NOT NULL
       ) STRICT;
       CREATE INDEX edges_from_node ON edges(from_node);
@@ -238,14 +238,16 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         }
       }
       contents.edges.forEach((edge, index) => {
-        if (hasElevationProfiles && !edge.elevationProfile) throw new Error(`Schema ${schemaVersion} edge ${edge.id} requires a complete elevation profile`);
+        if (hasElevationProfiles && (schemaVersion === "5" || edge.edgeClass === "trail") && !edge.elevationProfile) {
+          throw new Error(`Schema ${schemaVersion} trail edge ${edge.id} requires a complete elevation profile`);
+        }
         if (schemaVersion === "6" && !edge.edgeClass) throw new Error(`Schema 6 edge ${edge.id} requires an edge class`);
         insertEdge.run(
           edge.id, ...(hasClosedRouteTopology ? [contents.closedRouteTopology!.edgeKeys.get(edge.id)!, contents.closedRouteTopology!.physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!] : []), edge.fromNode, edge.toNode, JSON.stringify(edge.geometry), edge.lengthM,
           edge.gainM, edge.lossM, edge.maxElevationM, edge.maxSustainedGradePct,
-          ...(hasElevationProfiles ? [JSON.stringify(edge.elevationProfile!.map(
+          ...(hasElevationProfiles ? [edge.elevationProfile ? JSON.stringify(edge.elevationProfile.map(
             ({ distanceMeters, elevationMeters }) => [distanceMeters, elevationMeters],
-          ))] : []),
+          )) : null] : []),
           edge.accessState, ...(schemaVersion === "6" ? [edge.edgeClass!] : []), JSON.stringify(edge.sourceRefs), JSON.stringify(edge.flags),
         );
         insertEdgeSpatial.run(index + 1, ...geometryBounds(edge.geometry));

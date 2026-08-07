@@ -160,10 +160,10 @@ function sourcesFromDatabase(database: DatabaseSync, manifest: AuditablePackMani
   });
 }
 
-function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
+function edgesFromDatabase(database: DatabaseSync, manifest: AuditablePackManifest): AuditEdge[] {
   const rows = database.prepare(`
     SELECT id, from_node, to_node, geometry, length_m, gain_m, loss_m, max_elevation_m,
-      max_sustained_grade_pct, access_state, source_refs, flags
+      max_sustained_grade_pct, access_state, ${manifest.schemaVersion === "6" ? "edge_class" : "'trail' AS edge_class"}, source_refs, flags
     FROM edges ORDER BY id
   `).all() as Array<Record<string, unknown>>;
   return rows.map((row) => {
@@ -178,6 +178,7 @@ function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
       maxElevationM: nullableNumber(row.max_elevation_m, `edge ${id}.max_elevation_m`),
       maxSustainedGradePct: nullableNumber(row.max_sustained_grade_pct, `edge ${id}.max_sustained_grade_pct`),
       accessState: accessState(row.access_state, `edge ${id}.access_state`),
+      edgeClass: requiredString(row.edge_class, `edge ${id}.edge_class`) as AuditEdge["edgeClass"],
       sourceRefs: jsonStringArray(row.source_refs, `edge ${id}.source_refs`),
       flags: jsonStringArray(row.flags, `edge ${id}.flags`),
       geometry: jsonCoordinates(row.geometry, `edge ${id}.geometry`),
@@ -262,7 +263,8 @@ function auditSearchRegions(
 function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
   if (manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") return [];
   const errors: string[] = [];
-  const edges = database.prepare("SELECT edge_key, id, length_m, elevation_profile FROM edges ORDER BY edge_key")
+  const edges = database.prepare(`SELECT edge_key, id, length_m, elevation_profile FROM edges
+    ${manifest.schemaVersion === "6" ? "WHERE edge_class = 'trail'" : ""} ORDER BY edge_key`)
     .all() as Array<Record<string, unknown>>;
   for (const edge of edges) {
     requiredNumber(edge.edge_key, "edges.edge_key");
@@ -421,7 +423,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     metadata = databaseMetadata(database);
     assertManifestMetadata(manifest, metadata);
     sources = sourcesFromDatabase(database, manifest);
-    edges = edgesFromDatabase(database);
+    edges = edgesFromDatabase(database, manifest);
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
@@ -458,8 +460,9 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
         if (manifest.closedRouteTopology.runtimeMode === "primitive") {
           const mapped = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
             JOIN edges e ON e.edge_key = m.edge_key AND e.physical_edge_key = m.physical_edge_key WHERE m.profile = ?`).get(profile) as Record<string, unknown>).count, "mapped edge count");
-          const legal = requiredNumber((database.prepare(`SELECT count(*) AS count FROM edges WHERE access_state = 'public'
-            OR (? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "legal edge count");
+          const legal = requiredNumber((database.prepare(`SELECT count(*) AS count FROM edges
+            WHERE (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} access_state = 'public')
+               OR (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} ? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "legal edge count");
           if (mapped !== legal || count("topology_decision_edge_members") !== legal) throw new Error(`Schema 3 topology member mapping mismatch for ${profile}`);
         } else {
           const accessCount = count("access_topology");

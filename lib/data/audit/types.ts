@@ -1,4 +1,4 @@
-import type { AccessState } from "@/lib/graph/types";
+import type { AccessState, EdgeClass } from "@/lib/graph/types";
 
 export type AuditSource = {
   id: string;
@@ -22,6 +22,7 @@ export type AuditEdge = {
   maxElevationM: number | null;
   maxSustainedGradePct: number | null;
   accessState: AccessState;
+  edgeClass?: EdgeClass;
   sourceRefs: string[];
   flags?: string[];
   geometry?: Array<readonly [number, number]>;
