@@ -11,7 +11,8 @@ import type {
 
 export const PORTAL_CLUSTER_DISTANCE_M = 150;
 export const PORTAL_EVIDENCE_DISTANCE_M = 250;
-export const PORTAL_DERIVATION_VERSION = "portal-derivation-v2";
+export const PARKING_ROAD_CONTACT_DISTANCE_M = 25;
+export const PORTAL_DERIVATION_VERSION = "portal-derivation-v3";
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const RESTRICTIVE_ACCESS = new Set<AccessState>(["private", "closed", "prohibited"]);
@@ -25,6 +26,7 @@ type SpatialEntry<T> = {
 type PortalCandidate = {
   node: NormalizedNode;
   directStreetIntersection: boolean;
+  roadClass: "street" | "service-road";
   nearbyEvidence: Array<{ evidence: NormalizedPortalEvidence; distanceM: number }>;
   componentId: string;
   reachableTrailKm: number;
@@ -308,7 +310,7 @@ function accessPointForCandidate(candidate: PortalCandidate): NormalizedAccessPo
     ])].sort(),
     reachableTrailKm: candidate.reachableTrailKm,
     trailComponentId: candidate.componentId,
-    portalRoadClass: "street",
+    portalRoadClass: candidate.roadClass,
     parkingDistanceM: parking?.distanceM ?? null,
   };
 }
@@ -332,6 +334,10 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
   const nonRestrictiveStreetNodes = new Set(
     streetWays.filter(nonRestrictive).flatMap(({ nodeIds }) => nodeIds),
   );
+  const nonRestrictiveServiceRoadNodes = new Set(
+    parkingRoadWays.filter(({ edgeClass }) => edgeClass === "service-road")
+      .filter(nonRestrictive).flatMap(({ nodeIds }) => nodeIds),
+  );
   const nonRestrictiveParkingRoadNodes = new Set(
     parkingRoadWays.filter(nonRestrictive).flatMap(({ nodeIds }) => nodeIds),
   );
@@ -342,9 +348,31 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
     for (const coordinate of evidenceCoordinates(item, nodesById)) evidenceGrid.add({ coordinate, value: item });
   }
 
-  const candidateKinds = new Map<string, { directStreetIntersection: boolean }>();
+  const candidateKinds = new Map<string, {
+    directStreetIntersection: boolean;
+    roadClass: "street" | "service-road";
+  }>();
   for (const nodeId of trailsByNode.keys()) {
-    if (nonRestrictiveStreetNodes.has(nodeId)) candidateKinds.set(nodeId, { directStreetIntersection: true });
+    if (nonRestrictiveStreetNodes.has(nodeId)) {
+      candidateKinds.set(nodeId, { directStreetIntersection: true, roadClass: "street" });
+      continue;
+    }
+    if (nonRestrictiveServiceRoadNodes.has(nodeId)) {
+      const node = nodesById.get(nodeId);
+      if (node && nearbyEvidenceForCandidate(coordinateForNode(node), evidenceGrid).length > 0) {
+        candidateKinds.set(nodeId, { directStreetIntersection: true, roadClass: "service-road" });
+      }
+    }
+  }
+
+  const parkingRoadGrid = new SpatialGrid<"street" | "service-road">(PARKING_ROAD_CONTACT_DISTANCE_M);
+  for (const nodeId of nonRestrictiveParkingRoadNodes) {
+    const node = nodesById.get(nodeId);
+    if (!node) throw new Error(`Road context references missing node ${nodeId}`);
+    parkingRoadGrid.add({
+      coordinate: coordinateForNode(node),
+      value: nonRestrictiveStreetNodes.has(nodeId) ? "street" : "service-road",
+    });
   }
 
   const trailNodeGrid = new SpatialGrid<NormalizedNode>(PORTAL_EVIDENCE_DISTANCE_M);
@@ -354,7 +382,18 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
     trailNodeGrid.add({ coordinate: coordinateForNode(node), value: node });
   }
   for (const parking of evidence.filter(({ kind }) => kind === "parking")) {
-    if (!parking.nodeIds.some((nodeId) => nonRestrictiveParkingRoadNodes.has(nodeId))) continue;
+    let parkingRoadClass: "street" | "service-road" | undefined = parking.nodeIds.some((nodeId) =>
+      nonRestrictiveStreetNodes.has(nodeId)) ? "street"
+      : parking.nodeIds.some((nodeId) => nonRestrictiveServiceRoadNodes.has(nodeId)) ? "service-road"
+        : undefined;
+    if (!parkingRoadClass) {
+      const contact = evidenceCoordinates(parking, nodesById).flatMap((coordinate) =>
+        parkingRoadGrid.within(coordinate, PARKING_ROAD_CONTACT_DISTANCE_M))
+        .sort((first, second) => first.distanceM - second.distanceM
+          || Number(second.value === "street") - Number(first.value === "street"))[0];
+      parkingRoadClass = contact?.value;
+    }
+    if (!parkingRoadClass) continue;
     let nearest: { node: NormalizedNode; distanceM: number } | undefined;
     for (const coordinate of evidenceCoordinates(parking, nodesById)) {
       for (const match of trailNodeGrid.within(coordinate, PORTAL_EVIDENCE_DISTANCE_M)) {
@@ -365,7 +404,10 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
       }
     }
     if (nearest && !candidateKinds.has(nearest.node.id)) {
-      candidateKinds.set(nearest.node.id, { directStreetIntersection: false });
+      candidateKinds.set(nearest.node.id, {
+        directStreetIntersection: false,
+        roadClass: parkingRoadClass,
+      });
     }
   }
 
@@ -376,6 +418,7 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
     return {
       node,
       directStreetIntersection: kind.directStreetIntersection,
+      roadClass: kind.roadClass,
       nearbyEvidence: nearbyEvidenceForCandidate(coordinateForNode(node), evidenceGrid),
       componentId: component.id,
       reachableTrailKm: component.lengthKm,

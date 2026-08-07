@@ -6,6 +6,7 @@ import {
   PORTAL_CLUSTER_DISTANCE_M,
   PORTAL_DERIVATION_VERSION,
   PORTAL_EVIDENCE_DISTANCE_M,
+  PARKING_ROAD_CONTACT_DISTANCE_M,
   stripPortalBuildContext,
 } from "./portals";
 import type {
@@ -163,23 +164,44 @@ describe("trailhead portal derivation", () => {
   it("accepts a non-restrictive service road as parking access without minting a direct service-road portal", () => {
     const nodes = [
       node("trail-a", 200), node("trail-b", 500),
-      node("parking-road-node", 0), node("road-end", 0, 100),
+      node("parking-road-node", 0), node("road-end", 0, 100), node("parking", 10),
     ];
     const ways = [
       way("trail", ["trail-a", "trail-b"], nodes, "trail"),
       way("service", ["parking-road-node", "road-end"], nodes, "service-road"),
     ];
     const portalEvidence = [
-      evidence("connected", "parking", [[nodes[2]!.lon, nodes[2]!.lat]], ["parking-road-node"]),
+      evidence("connected", "parking", [[nodes[4]!.lon, nodes[4]!.lat]], ["parking"]),
     ];
 
     const derived = deriveTrailheadPortals(topology(nodes, ways, portalEvidence));
 
-    expect(PORTAL_DERIVATION_VERSION).toBe("portal-derivation-v2");
+    expect(PORTAL_DERIVATION_VERSION).toBe("portal-derivation-v3");
+    expect(PARKING_ROAD_CONTACT_DISTANCE_M).toBe(25);
     expect(derived.accessPoints).toHaveLength(1);
     expect(derived.accessPoints[0]).toMatchObject({
       nodeId: "trail-a",
       parkingEvidence: "portal-evidence:parking/connected",
+      portalRoadClass: "service-road",
+    });
+  });
+
+  it("uses evidenced service-road intersections without admitting every service junction", () => {
+    const nodes = [node("start", 0), node("trail-end", -300), node("service-end", 0, 100)];
+    const ways = [
+      way("trail", ["trail-end", "start"], nodes, "trail"),
+      way("service", ["start", "service-end"], nodes, "service-road"),
+    ];
+
+    expect(deriveTrailheadPortals(topology(nodes, ways)).accessPoints).toEqual([]);
+    const marked = deriveTrailheadPortals(topology(nodes, ways, [
+      evidence("gate", "gate", [[nodes[0]!.lon, nodes[0]!.lat]], ["start"], "Trail gate"),
+    ]));
+    expect(marked.accessPoints).toHaveLength(1);
+    expect(marked.accessPoints[0]).toMatchObject({
+      nodeId: "start",
+      name: "Trail gate",
+      portalRoadClass: "service-road",
     });
   });
 
