@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:monterey-carmel",
+      "expectedName": "Monterey–Carmel"
+    },
+    {
+      "namedAreaId": "osm:relation/15100521",
+      "expectedName": "Palo Corona Regional Park"
+    },
+    {
+      "namedAreaId": "osm:way/682362148",
+      "expectedName": "Garland Ranch Regional Park"
+    },
+    {
+      "namedAreaId": "osm:relation/13029412",
+      "expectedName": "Point Lobos State Natural Reserve"
+    },
+    {
+      "namedAreaId": "osm:relation/184336",
+      "expectedName": "Garrapata State Park"
+    }
+  ]
+}
