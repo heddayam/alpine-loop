@@ -47,11 +47,20 @@ describe("resume-safe osmium preparation", () => {
     const callsAfterFirstBuild = vi.mocked(runner).mock.calls.length;
     const second = await prepareOsmTopology(snapshot, options);
 
-    expect(first.ways).toHaveLength(2);
+    expect(first.ways).toHaveLength(3);
     expect(second).toEqual(first);
     expect(vi.mocked(runner).mock.calls).toHaveLength(callsAfterFirstBuild + 1);
     const extract = vi.mocked(runner).mock.calls.find(([, arguments_]) => arguments_[0] === "extract")?.[1];
     expect(extract).toEqual(expect.arrayContaining(["--strategy", "complete_ways", "--polygon"]));
+    const tagsFilter = vi.mocked(runner).mock.calls.find(([, arguments_]) => arguments_[0] === "tags-filter")?.[1];
+    expect(tagsFilter).toEqual(expect.arrayContaining([
+      "w/highway",
+      "nw/highway=trailhead",
+      "nw/amenity=parking",
+      "nw/information=trailhead,guidepost,board,map",
+      "nw/tourism=information",
+      "nw/barrier=gate",
+    ]));
     const [preparedDirectory] = await readdir(options.preparationRoot);
     const preparedFiles = await readFile(path.join(options.preparationRoot, preparedDirectory, "topology.json"), "utf8");
     expect(preparedFiles).toContain("osm-way-101");
