@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema } from "./manifest";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV5Schema } from "./manifest";
 
 const manifest = {
   schemaVersion: "1",
@@ -104,6 +104,33 @@ describe("PackManifestV4", () => {
     expect(packManifestV4Schema.safeParse({
       ...v4,
       capabilities: { ...v4.capabilities, batchSearchRegions: false },
+    }).success).toBe(false);
+  });
+});
+
+describe("PackManifestV5", () => {
+  it("requires persisted elevation profiles", () => {
+    const v5 = {
+      ...manifest,
+      schemaVersion: "5",
+      capabilities: {
+        ...manifest.capabilities,
+        namedAreas: true,
+        closedRouteTopology: true,
+        batchSearchRegions: true,
+        elevationProfiles: true,
+      },
+      closedRouteTopology: {
+        runtimeMode: "reachable-graph-fallback",
+        algorithmVersion: "closed-topology-v1",
+        policyVersion: "closed-primitives-v1",
+        profiles: ["known", "inclusive"],
+      },
+    };
+    expect(packManifestV5Schema.parse(v5).capabilities.elevationProfiles).toBe(true);
+    expect(packManifestV5Schema.safeParse({
+      ...v5,
+      capabilities: { ...v5.capabilities, elevationProfiles: false },
     }).success).toBe(false);
   });
 });
