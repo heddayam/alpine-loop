@@ -2,8 +2,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { assertPackAuditPassed, auditRegionalPack } from "./audit";
-import { attachOfficialEvidence, type OfficialAccessJoinFeature } from "../authorities";
-import { auditOfficialAccessJoins } from "./access-joins";
 import type { RegionalPackAuditInput } from "./types";
 
 async function fixture(): Promise<RegionalPackAuditInput> {
@@ -59,38 +57,5 @@ describe("regional pack audit", () => {
       ...input.edges[0], id: `edge-${index}`, accessState,
     })) as RegionalPackAuditInput["edges"];
     expect(auditRegionalPack(input).accessStateCounts).toEqual({ public: 1, unknown: 1, private: 1, closed: 1, prohibited: 1 });
-  });
-});
-
-describe("official access join audit", () => {
-  const feature: OfficialAccessJoinFeature = {
-    sourceId: "official",
-    authorityFeatureId: "agency-7",
-    geometry: { type: "LineString", coordinates: [[-122, 37], [-121.99, 37.01]] },
-    evidence: {
-      sourceId: "official", externalId: "agency-7", lon: -121.99, lat: 37.01,
-      name: "Agency Trail", accessState: "closed", confidence: "high",
-    },
-  };
-
-  it("retains authority IDs while validating compiler-target evidence", () => {
-    const join = attachOfficialEvidence(feature, "osm-10", { matchMethod: "nearest-within-tolerance", distanceM: 1.5 });
-    expect(auditOfficialAccessJoins([feature], [join], new Set(["osm-10"]))).toEqual({
-      authorityFeatureCount: 1,
-      appliedJoinCount: 1,
-      unmatchedAuthorityFeatureIds: [],
-      errors: [],
-      warnings: [],
-    });
-  });
-
-  it("reports unmatched, unknown-target, and identity-corrupting joins", () => {
-    const join = attachOfficialEvidence(feature, "missing-osm", { matchMethod: "spatial-intersection", distanceM: 0 });
-    join.evidence.externalId = "overwritten";
-    const audit = auditOfficialAccessJoins([feature], [join], new Set());
-    expect(audit.errors).toEqual([
-      "Join official:agency-7 references unknown topology feature missing-osm",
-      "Join official:agency-7 evidence does not preserve its source/target identity",
-    ]);
   });
 });

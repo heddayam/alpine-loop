@@ -24,21 +24,10 @@ export type OfficialSourceConfig = z.infer<typeof sourceConfigSchema>;
 type PointerRecord = { id: string; metadataContentHash: string; localPath: string };
 type OfficialPointer = { schemaVersion: 1; sources: PointerRecord[] };
 
-export const SANTA_CRUZ_OFFICIAL_CONFIGS = [
-  "midpen.json",
-  "santa-clara-county-parks.json",
-] as const;
-
 export type OfficialSourceSet = {
   configRoot: string;
   filenames: readonly string[];
   cacheNamespace: string;
-};
-
-export const SANTA_CRUZ_OFFICIAL_SOURCE_SET: OfficialSourceSet = {
-  configRoot: path.resolve("data/regions/santa-cruz-mountains/official-sources"),
-  filenames: SANTA_CRUZ_OFFICIAL_CONFIGS,
-  cacheNamespace: "santa-cruz-official-access",
 };
 
 function validateSourceSet(sourceSet: OfficialSourceSet): OfficialSourceSet {
@@ -54,7 +43,7 @@ function validateSourceSet(sourceSet: OfficialSourceSet): OfficialSourceSet {
 }
 
 export async function readOfficialSourceConfigs(
-  sourceSet: OfficialSourceSet = SANTA_CRUZ_OFFICIAL_SOURCE_SET,
+  sourceSet: OfficialSourceSet,
 ): Promise<OfficialSourceConfig[]> {
   const validated = validateSourceSet(sourceSet);
   return Promise.all(validated.filenames.map(async (filename) =>
@@ -81,7 +70,7 @@ function snapshot(config: OfficialSourceConfig, localPath: string, contentHash: 
 
 export async function refreshOfficialSourceSnapshots(
   cacheRoot: string,
-  sourceSet: OfficialSourceSet = SANTA_CRUZ_OFFICIAL_SOURCE_SET,
+  sourceSet: OfficialSourceSet,
 ): Promise<SourceSnapshot[]> {
   const configs = await readOfficialSourceConfigs(sourceSet);
   const records: PointerRecord[] = [];
@@ -109,7 +98,7 @@ export async function refreshOfficialSourceSnapshots(
 
 export async function readOfficialSourceSnapshots(
   cacheRoot: string,
-  sourceSet: OfficialSourceSet = SANTA_CRUZ_OFFICIAL_SOURCE_SET,
+  sourceSet: OfficialSourceSet,
 ): Promise<SourceSnapshot[]> {
   const configs = await readOfficialSourceConfigs(sourceSet);
   const pointer = JSON.parse(await readFile(pointerPath(cacheRoot, sourceSet), "utf8")) as OfficialPointer;
