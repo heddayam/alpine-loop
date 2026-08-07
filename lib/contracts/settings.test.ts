@@ -17,6 +17,7 @@ describe("AppSettingsV1", () => {
       quickSearchRouteCount: 10,
       gradeConstraintEnabled: false,
       selectedGradePreset: "moderate",
+      loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },
       gradePresets: { gentle: preset, moderate: preset, steep: preset },
     }).success).toBe(true);
   });

@@ -7,6 +7,12 @@ export const DEFAULT_APP_SETTINGS: AppSettingsV1 = {
   quickSearchRouteCount: 10,
   gradeConstraintEnabled: false,
   selectedGradePreset: "moderate",
+  loopOptions: {
+    maximumRepeatedTrailPct: 35,
+    sharedApproachEnabled: false,
+    maximumSharedApproachMiles: 2,
+    allowMultiCycle: true,
+  },
   gradePresets: {
     gentle: {
       maximumClimbP90Pct: 8,

@@ -89,7 +89,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("grade presets explain their limits and persist edited values", async ({ page }) => {
+test("grade and loop defaults persist across reloads", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
@@ -102,8 +102,22 @@ test("grade presets explain their limits and persist edited values", async ({ pa
   await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Done" }).click();
   await expect.poll(() => harness.settingsRequests.at(-1)?.gradePresets.moderate.maximumClimbP90Pct).toBe(13);
 
+  await page.getByText("Loop options", { exact: true }).click();
+  await page.getByLabel("Maximum repeated trail").fill("20");
+  await page.getByLabel("Maximum repeated trail").press("Tab");
+  await page.getByRole("checkbox", { name: "Shared approach" }).check();
+  await page.getByLabel("Maximum shared approach").fill("1.2");
+  await page.getByLabel("Maximum shared approach").press("Tab");
+  await page.getByRole("switch", { name: /Allow figure-eights/ }).uncheck();
+  await expect.poll(() => harness.settingsRequests.at(-1)?.loopOptions).toEqual({ maximumRepeatedTrailPct: 20, sharedApproachEnabled: true, maximumSharedApproachMiles: 1.2, allowMultiCycle: false });
+
   await page.reload();
   await expect(page.getByLabel("Selected climbing grade")).toHaveText("13%");
+  await page.getByText("Loop options", { exact: true }).click();
+  await expect(page.getByLabel("Maximum repeated trail")).toHaveValue("20");
+  await expect(page.getByRole("checkbox", { name: "Shared approach" })).toBeChecked();
+  await expect(page.getByLabel("Maximum shared approach")).toHaveValue("1.2");
+  await expect(page.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
   await page.getByRole("checkbox", { name: "Grade" }).check();
   await enterDrawnArea(page);
   await page.getByRole("button", { name: "Quick search" }).click();

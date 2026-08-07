@@ -245,7 +245,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     gradeConstraintEnabled: values.gradeConstraintEnabled,
     selectedGradePreset: values.selectedGradePreset,
     gradePresets: values.gradePresets,
-  }), [values.accessPointRemoteness, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.selectedGradePreset]);
+    loopOptions: {
+      maximumRepeatedTrailPct: Number(values.maximumRepeatedTrailPct),
+      sharedApproachEnabled: values.maximumSharedStemEnabled,
+      maximumSharedApproachMiles: Number(values.maximumSharedStemMiles),
+      allowMultiCycle: values.allowMultiCycle,
+    },
+  }), [values.accessPointRemoteness, values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
 
   const applySettings = useCallback((settings: AppSettingsV1) => {
     setValues((current) => ({
@@ -256,6 +262,10 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       gradeConstraintEnabled: settings.gradeConstraintEnabled,
       selectedGradePreset: settings.selectedGradePreset,
       gradePresets: settings.gradePresets,
+      maximumRepeatedTrailPct: String(settings.loopOptions.maximumRepeatedTrailPct),
+      maximumSharedStemEnabled: settings.loopOptions.sharedApproachEnabled,
+      maximumSharedStemMiles: String(settings.loopOptions.maximumSharedApproachMiles),
+      allowMultiCycle: settings.loopOptions.allowMultiCycle,
     }));
   }, []);
 
@@ -280,6 +290,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
 
   const changeGradePreference = useCallback((patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => {
     const next = { ...appSettings, ...patch };
+    applySettings(next);
+    invalidateResults();
+    void putSettings(next);
+  }, [appSettings, applySettings, invalidateResults, putSettings]);
+
+  const changeLoopPreference = useCallback((patch: Partial<AppSettingsV1["loopOptions"]>) => {
+    const next = { ...appSettings, loopOptions: { ...appSettings.loopOptions, ...patch } };
     applySettings(next);
     invalidateResults();
     void putSettings(next);
@@ -678,25 +695,27 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
             <details className="advanced" aria-labelledby="closed-route-title">
               <summary id="closed-route-title">Loop options</summary>
               <div className="advanced-content">
-                <div className="slider-field">
-                  <label htmlFor="maximum-repeated-trail">Maximum repeated trail</label>
-                  <output htmlFor="maximum-repeated-trail">{values.maximumRepeatedTrailPct}%</output>
-                  <input id="maximum-repeated-trail" type="range" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} aria-valuetext={`${values.maximumRepeatedTrailPct}%`} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} />
-                  <small>0% allows no repeated trail.</small>
+                <div className="range-table loop-constraint-table">
+                  <div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Min</span><span>Max</span><span>Unit</span></div>
+                  <div className="range-row">
+                    <label className="range-label-text" htmlFor="maximum-repeated-trail" title="Maximum share of the full route that may retrace any trail">Repeated trail</label>
+                    <span aria-hidden="true" />
+                    <label className="range-value-cell"><span>Maximum repeated trail</span><input id="maximum-repeated-trail" aria-label="Maximum repeated trail" type="number" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} onBlur={(event) => { const maximumRepeatedTrailPct = Number(event.currentTarget.value); if (Number.isInteger(maximumRepeatedTrailPct) && maximumRepeatedTrailPct >= 0 && maximumRepeatedTrailPct <= 100) changeLoopPreference({ maximumRepeatedTrailPct }); }} /></label>
+                    <span className="range-unit-cell">%</span>
+                  </div>
+                  <div className="range-row">
+                    <label className="range-toggle" title="Same approach trail used while leaving and returning near the trailhead">
+                      <input type="checkbox" checked={values.maximumSharedStemEnabled} onChange={(event) => changeLoopPreference({ sharedApproachEnabled: event.currentTarget.checked })} />
+                      <span>Shared approach</span>
+                    </label>
+                    <span aria-hidden="true" />
+                    <label className="range-value-cell"><span>Maximum shared approach</span><input id="maximum-shared-stem" aria-label="Maximum shared approach" type="number" min="0" max="30" step="0.1" disabled={!values.maximumSharedStemEnabled} value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} onBlur={(event) => { const maximumSharedApproachMiles = Number(event.currentTarget.value); if (Number.isFinite(maximumSharedApproachMiles) && maximumSharedApproachMiles >= 0 && maximumSharedApproachMiles <= 30) changeLoopPreference({ maximumSharedApproachMiles }); }} /></label>
+                    <span className="range-unit-cell">mi</span>
+                  </div>
                 </div>
                 <label className="switch-row">
-                  <span>Limit the shared access stem</span>
-                  <input type="checkbox" role="switch" checked={values.maximumSharedStemEnabled} onChange={(event) => { const maximumSharedStemEnabled = event.currentTarget.checked; setValues((current) => ({ ...current, maximumSharedStemEnabled })); invalidateResults(); }} />
-                </label>
-                {values.maximumSharedStemEnabled ? (
-                  <div className="field-row">
-                    <label htmlFor="maximum-shared-stem">Max stem</label>
-                    <input id="maximum-shared-stem" className="control" aria-label="Maximum shared stem" type="number" min="0" max="30" step="0.1" value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} />
-                  </div>
-                ) : null}
-                <label className="switch-row">
                   <span>Allow figure-eights and chained loops</span>
-                  <input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => { const allowMultiCycle = event.currentTarget.checked; setValues((current) => ({ ...current, allowMultiCycle })); invalidateResults(); }} />
+                  <input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => changeLoopPreference({ allowMultiCycle: event.currentTarget.checked })} />
                 </label>
               </div>
             </details>

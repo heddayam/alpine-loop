@@ -31,6 +31,7 @@ const searchRegion = { id: "osm-relation-1", name: "Santa Cruz Mountains", kind:
 const appSettings = {
   schemaVersion: 1, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"], quickSearchRouteCount: 10,
   gradeConstraintEnabled: false, selectedGradePreset: "moderate",
+  loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },
   gradePresets: {
     gentle: { maximumClimbP90Pct: 8, maximumSteepClimbingSharePct: 5, maximumSteepRunMiles: 0.1, maximumDescentP90Pct: 10 },
     moderate: { maximumClimbP90Pct: 12, maximumSteepClimbingSharePct: 20, maximumSteepRunMiles: 0.5, maximumDescentP90Pct: 15 },
@@ -91,14 +92,22 @@ describe("HikeBuilder unified route search", () => {
     const loopOptions = screen.getByText("Loop options").closest("details") as HTMLDetailsElement;
     loopOptions.open = true;
     fireEvent.change(screen.getByLabelText("Maximum repeated trail"), { target: { value: "20" } });
-    expect(screen.getByLabelText("Maximum repeated trail")).toHaveValue("20");
-    await userEvent.click(screen.getByRole("switch", { name: /Limit the shared access stem/ }));
-    expect(screen.getByLabelText("Maximum shared stem")).toBeVisible();
-    await userEvent.clear(screen.getByLabelText("Maximum shared stem"));
-    await userEvent.type(screen.getByLabelText("Maximum shared stem"), "2.5");
-    expect(screen.getByLabelText("Maximum shared stem")).toHaveValue(2.5);
+    fireEvent.blur(screen.getByLabelText("Maximum repeated trail"));
+    expect(screen.getByLabelText("Maximum repeated trail")).toHaveValue(20);
+    expect(screen.getByLabelText("Maximum shared approach")).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Shared approach" }));
+    expect(screen.getByLabelText("Maximum shared approach")).toBeEnabled();
+    await userEvent.clear(screen.getByLabelText("Maximum shared approach"));
+    await userEvent.type(screen.getByLabelText("Maximum shared approach"), "2.5");
+    await userEvent.tab();
+    expect(screen.getByLabelText("Maximum shared approach")).toHaveValue(2.5);
     await userEvent.click(screen.getByRole("switch", { name: /Allow figure-eights/ }));
     expect(screen.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
+    const savedLoopOptions = vi.mocked(globalThis.fetch).mock.calls
+      .filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT")
+      .map(([, init]) => JSON.parse(String(init?.body)).loopOptions)
+      .at(-1);
+    expect(savedLoopOptions).toEqual({ maximumRepeatedTrailPct: 20, sharedApproachEnabled: true, maximumSharedApproachMiles: 2.5, allowMultiCycle: false });
   });
 
   it("resolves the compact grade preset into numeric constraints and persists edits", async () => {

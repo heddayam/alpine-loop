@@ -36,6 +36,10 @@ function mergeWithDefaults(value: unknown): unknown {
   return {
     ...defaults,
     ...value,
+    loopOptions: {
+      ...defaults.loopOptions,
+      ...(isRecord(value.loopOptions) ? value.loopOptions : {}),
+    },
     gradePresets: {
       gentle: {
         ...defaults.gradePresets.gentle,

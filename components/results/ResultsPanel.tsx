@@ -64,7 +64,7 @@ function topologySummary(route: GeneratedClosedRouteV3) {
   return [
     TOPOLOGY_LABELS[topology.kind],
     ...(topology.repeatedTrailFraction > 0 ? [`${Math.round(topology.repeatedTrailFraction * 100)}% repeated`] : []),
-    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} stem`] : []),
+    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} shared approach`] : []),
   ].join(" · ");
 }
 
@@ -160,8 +160,8 @@ function RouteCard({
           <span title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
           <span title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
           {route.gradeExperience ? (
-            <span title={`Climb p90 · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of climbing above ${route.gradeExperience.steepThresholdPct}% · longest ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · descent p90 ${route.gradeExperience.descentP90Pct.toFixed(1)}%`}>
-              <strong>{route.gradeExperience.climbP90Pct.toFixed(1)}%</strong> climb · {route.gradeExperience.steepClimbingSharePct.toFixed(0)}% steep · {(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi run
+            <span title={`90% of uphill 100 m sections are ${route.gradeExperience.climbP90Pct.toFixed(0)}% grade or less · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of uphill distance is at least ${route.gradeExperience.steepThresholdPct}% grade · longest uninterrupted steep section ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · downhill p90 ${route.gradeExperience.descentP90Pct.toFixed(0)}%`}>
+              90% climb ≤ <strong>{route.gradeExperience.climbP90Pct.toFixed(0)}%</strong> · {route.gradeExperience.steepClimbingSharePct.toFixed(0)}% uphill ≥{route.gradeExperience.steepThresholdPct}% · {(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi run
             </span>
           ) : <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
         </span>
@@ -201,7 +201,7 @@ function RouteCard({
                 <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
                 <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
                 <div><dt>Repeated trail</dt><dd>{Math.round(route.topology.repeatedTrailFraction * 100)}%</dd></div>
-                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared stem</dt><dd>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
+                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared approach</dt><dd>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
                 <div><dt>Cycle blocks</dt><dd>{route.topology.cycleBlockCount.toLocaleString("en-US")}</dd></div>
               </dl>
 

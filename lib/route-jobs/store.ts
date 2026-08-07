@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -54,6 +55,10 @@ function parseJson(text: string): unknown {
 
 function nowIso(now: () => Date): string {
   return now().toISOString();
+}
+
+function routeGeometryHash(result: RouteJobResult): string {
+  return createHash("sha256").update(JSON.stringify(result.route.geometry.coordinates)).digest("hex");
 }
 
 export class SQLiteRouteJobStore {
@@ -114,6 +119,7 @@ export class SQLiteRouteJobStore {
         result_ordinal INTEGER NOT NULL CHECK(result_ordinal >= 0),
         route_id TEXT NOT NULL,
         payload_json TEXT NOT NULL,
+        geometry_hash TEXT,
         PRIMARY KEY(job_id, match_rank, access_ordinal, result_ordinal, route_id),
         UNIQUE(job_id, route_id)
       ) STRICT;
@@ -122,6 +128,46 @@ export class SQLiteRouteJobStore {
     `);
     this.#database.prepare("INSERT OR IGNORE INTO route_job_migrations(version, applied_at) VALUES (1, ?)")
       .run(nowIso(this.#now));
+
+    const columns = this.#database.prepare("PRAGMA table_info(route_job_results)").all() as Row[];
+    if (!columns.some((column) => column.name === "geometry_hash")) {
+      this.#database.exec("ALTER TABLE route_job_results ADD COLUMN geometry_hash TEXT");
+    }
+    const migrated = this.#database.prepare("SELECT 1 FROM route_job_migrations WHERE version = 2").get();
+    if (!migrated) {
+      this.#database.exec("BEGIN IMMEDIATE");
+      try {
+        const rows = this.#database.prepare(`SELECT rowid, job_id, match_rank, payload_json
+          FROM route_job_results ORDER BY job_id, match_rank, access_ordinal, result_ordinal, route_id`).all() as Row[];
+        const retained = new Map<string, { rowid: number; matchRank: number }>();
+        const update = this.#database.prepare("UPDATE route_job_results SET geometry_hash = ? WHERE rowid = ?");
+        const remove = this.#database.prepare("DELETE FROM route_job_results WHERE rowid = ?");
+        for (const row of rows) {
+          const result = routeJobResultSchema.parse(parseJson(requiredString(row, "payload_json")));
+          const hash = routeGeometryHash(result);
+          const key = `${requiredString(row, "job_id")}:${hash}`;
+          const rowid = integer(row, "rowid");
+          const matchRank = integer(row, "match_rank");
+          const existing = retained.get(key);
+          if (!existing) {
+            update.run(hash, rowid);
+            retained.set(key, { rowid, matchRank });
+          } else if (matchRank < existing.matchRank) {
+            remove.run(existing.rowid);
+            update.run(hash, rowid);
+            retained.set(key, { rowid, matchRank });
+          } else {
+            remove.run(rowid);
+          }
+        }
+        this.#database.exec("CREATE UNIQUE INDEX IF NOT EXISTS route_job_results_geometry ON route_job_results(job_id, geometry_hash)");
+        this.#database.prepare("INSERT INTO route_job_migrations(version, applied_at) VALUES (2, ?)").run(nowIso(this.#now));
+        this.#database.exec("COMMIT");
+      } catch (error) {
+        this.#database.exec("ROLLBACK");
+        throw error;
+      }
+    }
   }
 
   #recover(): void {
@@ -253,16 +299,22 @@ export class SQLiteRouteJobStore {
     this.#database.exec("BEGIN IMMEDIATE");
     try {
       this.#database.prepare("DELETE FROM route_job_results WHERE job_id = ? AND access_ordinal = ?").run(id, ordinal);
+      const existingGeometry = this.#database.prepare(`SELECT rowid, match_rank FROM route_job_results
+        WHERE job_id = ? AND geometry_hash = ?`);
       const insert = this.#database.prepare(`INSERT INTO route_job_results(
-        job_id, match_rank, access_ordinal, result_ordinal, route_id, payload_json
-      ) VALUES (?, ?, ?, ?, ?, ?)`);
+        job_id, match_rank, access_ordinal, result_ordinal, route_id, payload_json, geometry_hash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`);
       let exactOrdinal = 0;
       let nearOrdinal = 0;
       for (const raw of results) {
         const result = routeJobResultSchema.parse(raw);
         const matchRank = result.matchType === "exact" ? 0 : 1;
         const resultOrdinal = matchRank === 0 ? exactOrdinal++ : nearOrdinal++;
-        insert.run(id, matchRank, ordinal, resultOrdinal, result.route.id, JSON.stringify(result));
+        const geometryHash = routeGeometryHash(result);
+        const existing = existingGeometry.get(id, geometryHash) as Row | undefined;
+        if (existing && integer(existing, "match_rank") <= matchRank) continue;
+        if (existing) this.#database.prepare("DELETE FROM route_job_results WHERE rowid = ?").run(integer(existing, "rowid"));
+        insert.run(id, matchRank, ordinal, resultOrdinal, result.route.id, JSON.stringify(result), geometryHash);
       }
       this.#database.prepare(`UPDATE route_job_access_points SET status = 'done', truncated = ?, diagnostics_json = ?,
         error = NULL, completed_at = ? WHERE job_id = ? AND ordinal = ?`).run(

@@ -81,22 +81,21 @@ export function snapAccessPointsToTopology(
   }
 
   const deduplicated: NormalizedAccessPoint[] = [];
-  const genericByNodeAndKind = new Map<string, number>();
-  const namedNodeAndKinds = new Set<string>();
+  const genericByNode = new Map<string, number>();
+  const namedNodes = new Set<string>();
   for (const point of accessPoints) {
-    const key = `${point.nodeId}:${point.kind}`;
-    const existingIndex = genericByNodeAndKind.get(key);
+    const existingIndex = genericByNode.get(point.nodeId);
     const generic = point.name.startsWith("OSM ");
     if (generic) {
-      if (namedNodeAndKinds.has(key) || existingIndex !== undefined) continue;
+      if (namedNodes.has(point.nodeId) || existingIndex !== undefined) continue;
       deduplicated.push(point);
-      genericByNodeAndKind.set(key, deduplicated.length - 1);
+      genericByNode.set(point.nodeId, deduplicated.length - 1);
       continue;
     }
-    namedNodeAndKinds.add(key);
+    namedNodes.add(point.nodeId);
     if (existingIndex !== undefined) {
       deduplicated[existingIndex] = point;
-      genericByNodeAndKind.delete(key);
+      genericByNode.delete(point.nodeId);
     } else {
       deduplicated.push(point);
     }

@@ -49,12 +49,17 @@ describe("SettingsStore", () => {
       includeUncertainAccess: false,
       accessPointRemoteness: ["rural"],
       quickSearchRouteCount: 4,
+      loopOptions: { maximumRepeatedTrailPct: 20 },
       gradePresets: { moderate: { maximumClimbP90Pct: 13 } },
     }));
 
     const settings = await new SettingsStore({ filePath }).get();
     expect(settings.gradeConstraintEnabled).toBe(false);
     expect(settings.selectedGradePreset).toBe("moderate");
+    expect(settings.loopOptions).toEqual({
+      ...defaultAppSettings().loopOptions,
+      maximumRepeatedTrailPct: 20,
+    });
     expect(settings.gradePresets.moderate).toEqual({
       ...defaultAppSettings().gradePresets.moderate,
       maximumClimbP90Pct: 13,
