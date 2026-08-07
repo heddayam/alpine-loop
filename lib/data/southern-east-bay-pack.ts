@@ -2,15 +2,24 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  EAST_BAY_CURRENT_CLOSURES_AUTHORITY,
+  EAST_BAY_CURRENT_CLOSURES_DATASET,
+  EAST_BAY_CURRENT_CLOSURES_RETRIEVED_AT,
+  EAST_BAY_CURRENT_CLOSURES_SOURCE_ID,
+  EAST_BAY_CURRENT_CLOSURES_SOURCE_URL,
+  EAST_BAY_CURRENT_CLOSURES_VERSION,
   EastBayRegionalParkDistrictAccessAdapter,
   EastBayRegionalParkDistrictEntranceAdapter,
+  EastBayCurrentClosuresAdapter,
   matchOfficialAccessToOsmWithReport,
   readOfficialSourceSnapshots,
   refreshOfficialSourceSnapshots,
+  type OfficialAccessJoin,
+  type OfficialAccessJoinFeature,
   type OfficialSourceSet,
 } from "./authorities";
 import { assertPackAuditPassed, auditOfficialAccessJoins, auditSqlitePack } from "./audit";
-import type { SourceSnapshot } from "./adapters";
+import type { NormalizedAccessEvidence, SourceSnapshot } from "./adapters";
 import { applyOfficialWayEvidenceToAccessPoints } from "./access-point-evidence";
 import { snapAccessPointsToTopology } from "./access-point-snap";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
@@ -22,6 +31,7 @@ import {
   UvRasterioThreeDepElevationSampler,
   validateUvRasterioPrerequisites,
 } from "./elevation";
+import { sha256File } from "./file-source";
 import { addOfficialAccessPointsToTopology, officialAccessPointId } from "./official-access-points";
 import {
   OsmPbfNamedAreaAdapter,
@@ -45,10 +55,11 @@ import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "southern-east-bay";
-const COMPILER_VERSION = "southern-east-bay-pack-compiler-v1";
+const COMPILER_VERSION = "southern-east-bay-pack-compiler-v2";
 const ACCESS_SNAP_DISTANCE_M = 200;
 const OFFICIAL_ROADS_SOURCE_ID = "ebrpd-roads-and-trails-access";
 const OFFICIAL_ENTRANCES_SOURCE_ID = "ebrpd-park-entrances";
+const CURRENT_CLOSURES_LICENSE = "Human-reviewed facts for local evaluation; derivative redistribution requires review";
 
 export const SOUTHERN_EAST_BAY_REGION_ROOT = path.resolve("data/regions/southern-east-bay");
 
@@ -86,6 +97,7 @@ export type SouthernEastBayPackBuildResult = {
     linePromotedPublicCount: number;
     lineRestrictedCount: number;
     lineConflictCount: number;
+    currentClosureCount: number;
   };
   officialAccess: {
     entrances: {
@@ -102,6 +114,12 @@ export type SouthernEastBayPackBuildResult = {
       ambiguousOsmWayCount: number;
       unmatchedAuthorityFeatureCount: number;
       rejectedGeometryFeatureCount: number;
+    };
+    currentClosures: {
+      sourceId: string;
+      exactJoinCount: number;
+      suppressedLineJoinCount: number;
+      targetExternalIds: string[];
     };
   };
   regionalAudit: Awaited<ReturnType<typeof auditSqlitePack>>;
@@ -193,17 +211,83 @@ async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceS
   return topologies[0]!;
 }
 
+function joinOrder(first: OfficialAccessJoin, second: OfficialAccessJoin): number {
+  return first.sourceId.localeCompare(second.sourceId)
+    || first.authorityFeatureId.localeCompare(second.authorityFeatureId)
+    || first.targetExternalId.localeCompare(second.targetExternalId);
+}
+
+export function prioritizeCurrentClosureJoins(
+  lineJoins: readonly OfficialAccessJoin[],
+  closureJoins: readonly OfficialAccessJoin[],
+): {
+  lineJoins: OfficialAccessJoin[];
+  combinedJoins: OfficialAccessJoin[];
+  suppressedLineJoinCount: number;
+} {
+  const closureTargets = new Set(closureJoins.map(({ targetExternalId }) => targetExternalId));
+  const retainedLineJoins = lineJoins.filter(({ targetExternalId }) => !closureTargets.has(targetExternalId));
+  return {
+    lineJoins: retainedLineJoins,
+    combinedJoins: [...retainedLineJoins, ...closureJoins].sort(joinOrder),
+    suppressedLineJoinCount: lineJoins.length - retainedLineJoins.length,
+  };
+}
+
+function exactCurrentClosureJoins(
+  topology: NormalizedTopology,
+  evidence: readonly NormalizedAccessEvidence[],
+): { features: OfficialAccessJoinFeature[]; joins: OfficialAccessJoin[] } {
+  const ways = new Map(topology.ways.map((way) => [way.externalId, way]));
+  const features: OfficialAccessJoinFeature[] = [];
+  const joins: OfficialAccessJoin[] = [];
+  for (const item of evidence) {
+    const way = ways.get(item.externalId);
+    if (!way) throw new Error(`Current closure targets missing pinned topology way ${item.externalId}`);
+    if (item.accessState !== "closed") throw new Error(`Current closure ${item.externalId} is not closed evidence`);
+    features.push({
+      sourceId: item.sourceId,
+      authorityFeatureId: item.externalId,
+      geometry: { type: "LineString", coordinates: way.coordinates.map((coordinate) => [...coordinate]) },
+      evidence: item,
+    });
+    joins.push({
+      sourceId: item.sourceId,
+      authorityFeatureId: item.externalId,
+      targetExternalId: item.externalId,
+      matchMethod: "spatial-intersection",
+      distanceM: 0,
+      evidence: item,
+    });
+  }
+  return { features, joins: joins.sort(joinOrder) };
+}
+
 export async function buildSouthernEastBayPack(
   options: SouthernEastBayPackBuildOptions,
 ): Promise<SouthernEastBayPackBuildResult> {
   const regionRoot = SOUTHERN_EAST_BAY_REGION_ROOT;
   const boundaryPath = path.join(regionRoot, "boundary.geojson");
   const searchRegionPath = path.join(regionRoot, "search-regions.json");
-  const [boundaryContents, searchRegionContents] = await Promise.all([
+  const currentClosuresPath = path.join(regionRoot, "current-closures.json");
+  const [boundaryContents, searchRegionContents, currentClosuresContentHash] = await Promise.all([
     readFile(boundaryPath, "utf8"),
     readFile(searchRegionPath, "utf8"),
+    sha256File(currentClosuresPath),
   ]);
   const boundary = parseBoundary(boundaryContents);
+  const currentClosuresSnapshot: SourceSnapshot = {
+    id: EAST_BAY_CURRENT_CLOSURES_SOURCE_ID,
+    authority: EAST_BAY_CURRENT_CLOSURES_AUTHORITY,
+    dataset: EAST_BAY_CURRENT_CLOSURES_DATASET,
+    version: EAST_BAY_CURRENT_CLOSURES_VERSION,
+    retrievedAt: EAST_BAY_CURRENT_CLOSURES_RETRIEVED_AT,
+    url: EAST_BAY_CURRENT_CLOSURES_SOURCE_URL,
+    license: CURRENT_CLOSURES_LICENSE,
+    contentHash: currentClosuresContentHash,
+    localPath: currentClosuresPath,
+  };
+  const currentClosuresAdapter = new EastBayCurrentClosuresAdapter();
   const [searchRegions, osmConfig, elevationConfig, populationConfig] = await Promise.all([
     readSearchRegionInput(searchRegionPath),
     readOsmSourceConfig(path.join(regionRoot, "osm-source.json")),
@@ -215,6 +299,7 @@ export async function buildSouthernEastBayPack(
     validateOsmPrerequisites(),
     validateUvRasterioPrerequisites(),
     validateUvRasterioPopulationPrerequisites(),
+    currentClosuresAdapter.validate(currentClosuresSnapshot),
   ]);
   const [osmSnapshot, dem, population, officialSnapshots] = await Promise.all([
     options.refresh
@@ -264,26 +349,40 @@ export async function buildSouthernEastBayPack(
   // produce connector edges.
   const lineNormalization = await roadsAdapter.normalizeForJoinWithReport(roadsSnapshot);
   const lineMatch = matchOfficialAccessToOsmWithReport(entrances.topology, lineNormalization.features);
-  const lineEvidence = applyOfficialWayEvidenceToAccessPoints(entrances.topology, lineMatch.joins);
-  const inventory = accessInventory(lineEvidence.topology, boundary.geometry);
-  const lineJoinAudit = auditOfficialAccessJoins(
-    lineNormalization.features,
-    lineMatch.joins,
+  const currentClosureEvidence = await currentClosuresAdapter.normalize(currentClosuresSnapshot);
+  const currentClosureMatches = exactCurrentClosureJoins(entrances.topology, currentClosureEvidence);
+  // A current reviewed closure supersedes the older EBRPD permission for the
+  // same way. Removing that stale permission lets the existing official-
+  // restriction reconciliation close both the way and unknown trailheads.
+  const prioritizedJoins = prioritizeCurrentClosureJoins(lineMatch.joins, currentClosureMatches.joins);
+  const accessEvidence = applyOfficialWayEvidenceToAccessPoints(entrances.topology, prioritizedJoins.combinedJoins);
+  const inventory = accessInventory(accessEvidence.topology, boundary.geometry);
+  const officialJoinAudit = auditOfficialAccessJoins(
+    [...lineNormalization.features, ...currentClosureMatches.features],
+    [...lineMatch.joins, ...currentClosureMatches.joins],
     new Set(entrances.topology.ways.map(({ externalId }) => externalId)),
   );
-  if (lineJoinAudit.errors.length) {
-    throw new Error(`Official access join audit failed:\n${lineJoinAudit.errors.join("\n")}`);
+  if (officialJoinAudit.errors.length) {
+    throw new Error(`Official access join audit failed:\n${officialJoinAudit.errors.join("\n")}`);
   }
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
   const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
   await populationSampler.verify(population.collection);
-  const snapshots = [osmSnapshot, roadsSnapshot, entrancesSnapshot, dem.snapshot, population.snapshot];
+  const snapshots = [
+    osmSnapshot,
+    roadsSnapshot,
+    entrancesSnapshot,
+    currentClosuresSnapshot,
+    dem.snapshot,
+    population.snapshot,
+  ];
   const adapterVersions = [
     sourceTopologyAdapter.adapterVersion,
     namedAreaAdapter.adapterVersion,
     roadsAdapter.adapterVersion,
     entrancesAdapter.adapterVersion,
+    currentClosuresAdapter.adapterVersion,
   ];
   const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
   const seed: PackSeed = {
@@ -321,20 +420,26 @@ export async function buildSouthernEastBayPack(
     seed,
     builtAt: newestRetrieval(snapshots),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, lineEvidence.topology),
+      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, accessEvidence.topology),
       snapshot: osmSnapshot,
     },
     officialAccess: {
       adapter: new PreparedOfficialAccessAdapter(
         roadsAdapter,
-        lineMatch.joins.map(({ evidence }) => evidence),
+        prioritizedJoins.lineJoins.map(({ evidence }) => evidence),
       ),
       snapshot: roadsSnapshot,
     },
-    additionalOfficialAccess: [{
-      adapter: new PreparedOfficialAccessAdapter(entrancesAdapter, acceptedEntranceEvidence),
-      snapshot: entrancesSnapshot,
-    }],
+    additionalOfficialAccess: [
+      {
+        adapter: new PreparedOfficialAccessAdapter(entrancesAdapter, acceptedEntranceEvidence),
+        snapshot: entrancesSnapshot,
+      },
+      {
+        adapter: new PreparedOfficialAccessAdapter(currentClosuresAdapter, currentClosureEvidence),
+        snapshot: currentClosuresSnapshot,
+      },
+    ],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
     population: { sampler: populationSampler, snapshot: population.snapshot },
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
@@ -358,9 +463,10 @@ export async function buildSouthernEastBayPack(
     officialEntranceRejectedCount: entrances.rejectedCount,
     officialEntranceDeduplicatedCount: entrances.deduplicatedCount,
     officialEntranceRejectedAccessPointIds: entrances.rejectedAccessPointIds,
-    linePromotedPublicCount: lineEvidence.promotedPublicCount,
-    lineRestrictedCount: lineEvidence.restrictedCount,
-    lineConflictCount: lineEvidence.conflictedCount,
+    linePromotedPublicCount: accessEvidence.promotedPublicCount,
+    lineRestrictedCount: accessEvidence.restrictedCount,
+    lineConflictCount: accessEvidence.conflictedCount,
+    currentClosureCount: currentClosureMatches.joins.length,
   };
   const officialAccess = {
     entrances: {
@@ -378,6 +484,12 @@ export async function buildSouthernEastBayPack(
       unmatchedAuthorityFeatureCount: lineMatch.unmatchedAuthorityFeatureCount,
       rejectedGeometryFeatureCount: lineNormalization.rejectedGeometryFeatureIds.length,
     },
+    currentClosures: {
+      sourceId: currentClosuresSnapshot.id,
+      exactJoinCount: currentClosureMatches.joins.length,
+      suppressedLineJoinCount: prioritizedJoins.suppressedLineJoinCount,
+      targetExternalIds: currentClosureMatches.joins.map(({ targetExternalId }) => targetExternalId),
+    },
   };
   await writeFile(
     path.join(pack.packDirectory, "regional-audit.json"),
@@ -388,14 +500,14 @@ export async function buildSouthernEastBayPack(
     accessNormalization,
     accessInventory: inventory,
     officialAccess,
-    lineJoinAudit,
+    officialJoinAudit,
     lineMatchReport: {
       sourceId: roadsSnapshot.id,
       rejectedGeometryFeatureIds: lineNormalization.rejectedGeometryFeatureIds,
       ambiguousOsmWayCount: lineMatch.ambiguousOsmWayCount,
       unmatchedAuthorityFeatureCount: lineMatch.unmatchedAuthorityFeatureCount,
     },
-    joins: lineMatch.joins,
+    joins: [...lineMatch.joins, ...currentClosureMatches.joins].sort(joinOrder),
   }, null, 2)}\n`);
 
   return { pack, accessNormalization, officialAccess, regionalAudit };
