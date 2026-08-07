@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:southern-east-bay",
+      "expectedName": "Southern East Bay"
+    },
+    {
+      "namedAreaId": "osm:relation/11518106",
+      "expectedName": "Pleasanton Ridge Regional Park"
+    },
+    {
+      "namedAreaId": "osm:relation/317363",
+      "expectedName": "Sunol Regional Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/226483",
+      "expectedName": "Del Valle Regional Park"
+    }
+  ]
+}
