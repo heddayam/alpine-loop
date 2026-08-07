@@ -34,7 +34,12 @@ import {
   UvRasterioPopulationSampler,
   validateUvRasterioPopulationPrerequisites,
 } from "./population";
-import { applyOfficialEntranceOverlay, deriveTrailheadPortals, stripPortalBuildContext } from "./portals";
+import {
+  applyOfficialEntranceOverlay,
+  deriveTrailheadPortals,
+  PORTAL_DERIVATION_VERSION,
+  stripPortalBuildContext,
+} from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { POPULATION_RADIUS_M } from "./remoteness";
 import { readSearchRegionInput } from "./search-regions";
@@ -350,6 +355,7 @@ export async function buildSouthernEastBayPack(
     sourceTopologyAdapter.adapterVersion,
     namedAreaAdapter.adapterVersion,
     entrancesAdapter.adapterVersion,
+    PORTAL_DERIVATION_VERSION,
   ];
   const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
   const seed = createSouthernEastBayPackSeed({

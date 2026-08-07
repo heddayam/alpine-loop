@@ -11,6 +11,7 @@ import type {
 
 export const PORTAL_CLUSTER_DISTANCE_M = 150;
 export const PORTAL_EVIDENCE_DISTANCE_M = 250;
+export const PORTAL_DERIVATION_VERSION = "portal-derivation-v2";
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const RESTRICTIVE_ACCESS = new Set<AccessState>(["private", "closed", "prohibited"]);
@@ -269,8 +270,8 @@ function evidenceQuality(candidate: PortalCandidate): number {
 
 function representativeForCluster(candidates: readonly PortalCandidate[]): PortalCandidate {
   return [...candidates].sort((first, second) =>
-    evidenceQuality(second) - evidenceQuality(first)
-      || second.reachableTrailKm - first.reachableTrailKm
+    second.reachableTrailKm - first.reachableTrailKm
+      || evidenceQuality(second) - evidenceQuality(first)
       || first.node.id.localeCompare(second.node.id))[0]!;
 }
 
@@ -320,14 +321,19 @@ function accessPointForCandidate(candidate: PortalCandidate): NormalizedAccessPo
 export function deriveTrailheadPortals(topology: NormalizedTopology): NormalizedTopology {
   const trailWays = topology.ways.filter(({ edgeClass }) => edgeClass === "trail");
   const streetWays = topology.ways.filter(({ edgeClass }) => edgeClass === "street");
-  if (trailWays.length === 0 || streetWays.length === 0) {
-    throw new Error("Portal derivation requires classified trail and street ways");
+  const parkingRoadWays = topology.ways.filter(({ edgeClass }) =>
+    edgeClass === "street" || edgeClass === "service-road");
+  if (trailWays.length === 0 || parkingRoadWays.length === 0) {
+    throw new Error("Portal derivation requires classified trail and road ways");
   }
 
   const nodesById = new Map(topology.nodes.map((node) => [node.id, node]));
   const trailsByNode = buildWaysByNode(trailWays);
   const nonRestrictiveStreetNodes = new Set(
     streetWays.filter(nonRestrictive).flatMap(({ nodeIds }) => nodeIds),
+  );
+  const nonRestrictiveParkingRoadNodes = new Set(
+    parkingRoadWays.filter(nonRestrictive).flatMap(({ nodeIds }) => nodeIds),
   );
   const componentsByNode = trailComponents(trailWays, nodesById);
   const evidence = topology.portalEvidence ?? [];
@@ -348,7 +354,7 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
     trailNodeGrid.add({ coordinate: coordinateForNode(node), value: node });
   }
   for (const parking of evidence.filter(({ kind }) => kind === "parking")) {
-    if (!parking.nodeIds.some((nodeId) => nonRestrictiveStreetNodes.has(nodeId))) continue;
+    if (!parking.nodeIds.some((nodeId) => nonRestrictiveParkingRoadNodes.has(nodeId))) continue;
     let nearest: { node: NormalizedNode; distanceM: number } | undefined;
     for (const coordinate of evidenceCoordinates(parking, nodesById)) {
       for (const match of trailNodeGrid.within(coordinate, PORTAL_EVIDENCE_DISTANCE_M)) {
