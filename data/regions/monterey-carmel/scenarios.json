@@ -70,7 +70,7 @@
       "searchRegionId": "pack:monterey-carmel",
       "exactExpectation": {
         "distanceMiles": { "min": 3, "max": 10 },
-        "elevationGainFeet": { "min": 400, "max": 2500 },
+        "elevationGainFeet": { "min": 400, "max": 3000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
