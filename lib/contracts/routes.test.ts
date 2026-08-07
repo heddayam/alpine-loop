@@ -60,6 +60,18 @@ describe("GenerateClosedRoutesRequestV3", () => {
     expect(generateClosedRoutesRequestV3Schema.safeParse({ ...validV3Request, searchEffort }).success).toBe(true);
   });
 
+  it("accepts bounded experience-grade constraints", () => {
+    expect(generateClosedRoutesRequestV3Schema.safeParse({
+      ...validV3Request,
+      gradeExperience: {
+        maximumClimbP90Pct: 12,
+        maximumSteepClimbingSharePct: 20,
+        maximumSteepRunMiles: 0.5,
+        maximumDescentP90Pct: 15,
+      },
+    }).success).toBe(true);
+  });
+
   it("accepts any non-empty unique access-point area selection", () => {
     expect(generateClosedRoutesRequestV3Schema.safeParse({
       ...validV3Request,
