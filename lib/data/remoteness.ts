@@ -19,13 +19,13 @@ import type { AccessPointRemoteness } from "@/lib/contracts";
  * function so thresholds can be retuned without recompiling every pack.
  */
 
-export const POPULATION_RADIUS_M = 1_000;
+export const POPULATION_RADIUS_M = 2_000;
 export const RELIEF_RADIUS_M = 2_000;
 
 /**
- * Calibrated against measured GHS-POP values in the Santa Cruz Mountains pack
- * area (people within 1 km): Big Basin 0.1, Castle Rock 14, Saratoga foothills
- * 3,336, downtown San Jose 20,095.
+ * Population is summed across a 2 km disc so access points on the edge of a
+ * populated neighborhood are not mislabeled remote because their immediate
+ * raster cells are sparse.
  */
 export const POPULATION_REMOTE_MAX = 100;
 export const POPULATION_RURAL_MAX = 2_500;
