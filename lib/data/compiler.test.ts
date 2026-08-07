@@ -29,6 +29,19 @@ afterEach(async () => {
 });
 
 describe("fixture pack compiler", () => {
+  it("accepts a prepared topology with attributed additional sources and no live official adapter", async () => {
+    const outputRoot = await temporaryOutput();
+    const options = await fixtureCompileOptions(outputRoot);
+    const { officialAccess, ...withoutOfficialAdapter } = options;
+    const result = await compilePack({
+      ...withoutOfficialAdapter,
+      additionalSources: officialAccess ? [officialAccess.snapshot] : [],
+    });
+    expect(result.audit.sourceCount).toBe(3);
+    const manifest = packManifestV1Schema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
+    expect(manifest.sources.map(({ id }) => id)).toContain("fixture-official-access");
+  });
+
   it("writes a validated manifest, audit, runtime tables, indexes, and records", async () => {
     const outputRoot = await temporaryOutput();
     const result = await compilePack(await fixtureCompileOptions(outputRoot));
