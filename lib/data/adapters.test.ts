@@ -19,8 +19,9 @@ describe("fixture source adapters", () => {
 
   it("normalizes official access evidence with provenance", async () => {
     const options = await fixtureCompileOptions("/unused");
-    await options.officialAccess.adapter.validate(options.officialAccess.snapshot);
-    const records = await options.officialAccess.adapter.normalize(options.officialAccess.snapshot);
+    const officialAccess = options.officialAccess!;
+    await officialAccess.adapter.validate(officialAccess.snapshot);
+    const records = await officialAccess.adapter.normalize(officialAccess.snapshot);
 
     expect(records).toEqual(expect.arrayContaining([
       expect.objectContaining({

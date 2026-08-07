@@ -59,8 +59,10 @@ export type CompilePackOptions = {
   seed: PackSeed;
   builtAt: string;
   topology: { adapter: TopologySourceAdapter<NormalizedTopology>; snapshot: SourceSnapshot };
-  officialAccess: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
+  officialAccess?: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
   additionalOfficialAccess?: Array<{ adapter: OfficialAccessAdapter; snapshot: SourceSnapshot }>;
+  /** Sources already applied to a prepared topology, such as curated way removals. */
+  additionalSources?: SourceSnapshot[];
   elevation: { sampler: ElevationSampler; snapshot: SourceSnapshot };
   /**
    * Optional so existing packs and fixtures keep compiling. When absent,
@@ -439,9 +441,10 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   if (options.seed.schemaVersion === "1" && options.namedAreas) throw new Error("Schema 1 pack cannot include named areas");
   if ((options.seed.schemaVersion === "4" || options.seed.schemaVersion === "5" || options.seed.schemaVersion === "6") && !options.searchRegions) throw new Error(`Schema ${options.seed.schemaVersion} pack requires reviewed search regions`);
   if (options.seed.schemaVersion !== "4" && options.seed.schemaVersion !== "5" && options.seed.schemaVersion !== "6" && options.searchRegions) throw new Error(`Schema ${options.seed.schemaVersion} pack cannot include search regions`);
-  const officialAccess = [options.officialAccess, ...(options.additionalOfficialAccess ?? [])];
+  const officialAccess = [...(options.officialAccess ? [options.officialAccess] : []), ...(options.additionalOfficialAccess ?? [])];
   const sourceCandidates = [
     options.topology.snapshot,
+    ...(options.additionalSources ?? []),
     ...officialAccess.map(({ snapshot }) => snapshot),
     options.elevation.snapshot,
     ...(options.population ? [options.population.snapshot] : []),
