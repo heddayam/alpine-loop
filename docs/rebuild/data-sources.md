@@ -35,30 +35,30 @@ input so it can be adjusted without changing app or solver code.
   explicitly directs large/frequent readers to bulk downloads and geographic
   extracts.
 
-### Official access and status overlays
+### Access portals and reviewed restrictions
 
-Implement one adapter per authority. For the first pack, prioritize datasets from
-Midpeninsula Regional Open Space District, California State Parks, Santa Clara
-County Parks, and San Mateo County Parks. USGS National Digital Trails can be a
-cross-check/fallback where its license and current availability fit.
+Derive route starts from the same pinned OSM extract as the hiking graph. During
+preparation, classify hiking ways plus only the road classes needed to detect
+where a drivable network touches a trail. Cluster those contacts into portals,
+rank them by reachable trail network and nearby trailhead/parking evidence, then
+discard every road, sidewalk, and evidence-only row before publishing the pack.
+The runtime graph remains trail-only.
 
-Each adapter must save the original authority URL and version/date, normalize
-only documented fields, and retain source references on every affected record.
-Precedence should be explicit:
+OSM access tags remain the baseline. Preserve `public` and `unknown` separately
+for provenance, ranking, and review; both are traversable by default, while
+`private`, `closed`, and `prohibited` are never traversable. Conflicting evidence
+must never be resolved toward permissive access.
 
-1. current official closure/prohibition;
-2. current official public permission;
-3. clear OSM access tags;
-4. unknown.
+Keep safety-critical authority removals in a small, committed per-region file
+keyed by exact OSM way ID. Every entry must be restrictive, reviewed, attributed,
+and covered by a pinned content hash; a missing, duplicate, or conflicting target
+fails the build. Do not call a live authority line service or spatially match its
+features during a pack build.
 
-Conflicting evidence becomes a build-audit error or `unknown`; it is never
-silently resolved toward permissive access. Unknown access is included by
-default and can be explicitly disabled by the user.
-
-Agency services change. Adapter code must fail loudly on missing fields, schema
-drift, unexpected coordinate systems, or empty responses. Do not scrape the
-Midpen dashboard UI; find and pin its underlying authoritative ArcGIS REST layer
-or an official downloadable dataset during Gate 3.
+Official entrance points are optional cosmetic evidence. A validated, pinned
+entrance snapshot may rename or raise confidence on a nearby derived portal, but
+it cannot create a portal, change its access state, or add a connector edge. A
+region without such a source gets generic portal names, not missing routes.
 
 ### Elevation
 
@@ -149,7 +149,8 @@ roadmap](regional-expansion-plan.md). At the data layer, adding a region should
 require only:
 
 1. a new versioned coverage polygon and manifest seed;
-2. source/adapters needed for authoritative local access evidence;
+2. a pinned OSM extract plus any reviewed exact-way removals and optional
+   entrance-name overlay;
 3. the same topology, elevation, metric, validation, and publish pipeline;
 4. curated scenario tests for that region.
 
