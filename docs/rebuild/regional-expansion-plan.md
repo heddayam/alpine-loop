@@ -101,10 +101,10 @@ Use pack ID `southern-east-bay`.
   watershed boundaries. Park or agency boundaries must not cut a connected,
   loop-capable hiking network.
 - Exclude Mount Diablo, the Berkeley/Oakland hills, Henry Coe, and Stanislaus.
-- Start official access research with [EBRPD maps and GIS](https://www.ebparks.org/maps)
-  and the [Ohlone Wilderness](https://www.ebparks.org/parks/ohlone) source
-  material, then record every authority and license decision in the region
-  charter.
+- Derive starts from OSM portals. Use [EBRPD maps and GIS](https://www.ebparks.org/maps)
+  and [Ohlone Wilderness](https://www.ebparks.org/parks/ohlone) material only to
+  review exact restrictive exceptions and, when licensing permits, optional
+  entrance names; record every decision in the region charter.
 - Review the whole pack plus Pleasanton Ridge, Mission Peak, Sunol, Ohlone
   Wilderness, and Del Valle as candidate pack-provided search regions.
 
@@ -118,8 +118,9 @@ Use pack ID `monterey-carmel`.
 - Exclude deep Big Sur, Ventana backcountry, and the broader Los Padres National
   Forest. This is a multi-agency Monterey–Carmel pack, not a Los Padres-only
   pack.
-- Preserve signed-trail-only and permit-dependent entrances as explicit access
-  evidence. Begin authority research with [Fort Ord](https://www.blm.gov/programs/national-conservation-lands/california/fort-ord-national-monument),
+- Preserve signed-trail-only and permit-dependent entrances as reviewed portal
+  metadata, never as independently created route starts. Begin review with [Fort
+  Ord](https://www.blm.gov/programs/national-conservation-lands/california/fort-ord-national-monument),
   [Garland Ranch](https://www.mprpd.org/garland-ranch-regional-park), and [Palo
   Corona](https://www.mprpd.org/palo-corona-regional-park).
 - Review the whole pack plus Fort Ord, Palo Corona, Garland Ranch, Point Lobos,
@@ -161,22 +162,24 @@ change.
 
 ### 3. Sources and licensing
 
-- Pin topology, elevation, population, and official-access sources with
-  retrieval and upstream dates, URLs, hashes, license terms, redistribution
-  decisions, and adapter versions.
-- Prefer managing-authority evidence for permission and restrictions. Retain
-  OSM as the topology baseline and unknown-access fallback.
-- Fail closed on schema drift, empty authority responses, undocumented fields,
-  unresolved conflicts, or unresolved licensing. Network refresh remains
-  explicit; offline rebuilds and automated tests use pinned caches and committed
-  fixtures.
+- Pin topology, elevation, and population sources with retrieval and upstream
+  dates, URLs, hashes, license terms, redistribution decisions, and adapter
+  versions. Pin every optional entrance overlay the same way.
+- Derive access portals from OSM topology. Record reviewed managing-authority
+  restrictions as exact OSM-way removals in a committed, hash-pinned regional
+  file; do not make a live authority line service an onboarding dependency.
+- Fail closed on OSM or optional entrance schema drift, empty expected responses,
+  undocumented fields, restriction conflicts, or unresolved licensing. Network
+  refresh remains explicit; offline rebuilds and automated tests use pinned
+  caches and committed fixtures.
 
 ### 4. Pack implementation
 
 - Keep region-specific boundary, source configuration, reviewed search regions,
   access expectations, and scenarios under `data/regions/<pack-id>/`.
-- Add an authority adapter only when the existing generic ArcGIS or file
-  adapters cannot represent the source.
+- Use the generic portal derivation pipeline. Region-specific access code is
+  limited to reviewed exact-way removals and an optional entrance-name reader;
+  do not add a line-matching authority adapter.
 - Keep the pack compiler, route algorithms, request schemas, UI copy, and
   database tables region-independent.
 
@@ -187,8 +190,10 @@ change.
 - Require zero audit errors, unattributed records, missing elevation, profile,
   or population values, integrity failures, and unintended out-of-coverage
   persisted edges.
-- Review source conflicts, access-state distribution, disconnected components,
-  viable cycle-bearing access points, and reviewed-region ordering.
+- Review restriction conflicts, portal access-state distribution, reachable
+  trail kilometres, disconnected components, viable cycle-bearing portals, and
+  reviewed-region ordering. Assert that previously walkable road connectors
+  remain in the published trail graph and that build-only road context does not.
 - Run representative Quick and Batch searches across every major included
   trail cluster. Include exact routes and deliberately impossible requests that
   remain honestly labeled near misses.
