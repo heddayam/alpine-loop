@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type { NormalizedNode, NormalizedPortalEvidence, NormalizedTopology, NormalizedWay } from "../types";
-import { classifyOsmWay, osmAccessState, osmFootDirection, osmPortalEvidenceKinds } from "./normalize";
+import {
+  classifyOsmWay,
+  contextualTrailWayIds,
+  osmAccessState,
+  osmFootDirection,
+  osmPortalEvidenceKinds,
+} from "./normalize";
 
 type OplNode = { id: string; lon: number; lat: number; tags: Record<string, string> };
 type OplWay = { id: string; nodeIds: string[]; tags: Record<string, string> };
@@ -112,8 +118,13 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
   };
   const ways: NormalizedWay[] = [];
   let rejectedWayCount = 0;
+  const contextualTrails = contextualTrailWayIds(inputWays.map((way) => ({
+    id: way.id,
+    nodeIds: way.nodeIds,
+    values: way.tags,
+  })));
   for (const way of inputWays) {
-    const edgeClass = classifyOsmWay(way.tags);
+    const edgeClass = contextualTrails.has(way.id) ? "trail" : classifyOsmWay(way.tags);
     if (!edgeClass) {
       rejectedWayCount += 1;
       continue;

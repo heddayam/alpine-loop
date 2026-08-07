@@ -85,7 +85,31 @@ describe("OSM OPL normalization", () => {
     ].join("\n"), "osm-fixture");
 
     expect(topology.ways.map(({ edgeClass }) => edgeClass)).toEqual([
-      "sidewalk", "trail", "service-road", "street",
+      "trail", "trail", "service-road", "street",
+    ]);
+  });
+
+  it("promotes untagged footway components only when they connect to an explicit trail", () => {
+    const topology = normalizeOsmOpl([
+      "n1 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.2 y37.2",
+      "n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2",
+      "n3 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.18 y37.2",
+      "n4 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.17 y37.2",
+      "n5 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.16 y37.2",
+      "n6 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.15 y37.2",
+      "w1 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path Nn1,n2",
+      "w2 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway Nn2,n3",
+      "w3 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway Nn3,n4",
+      "w4 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway Nn5,n6",
+      "w5 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=footway,footway=sidewalk Nn1,n6",
+    ].join("\n"), "osm-fixture");
+
+    expect(topology.ways.map(({ externalId, edgeClass }) => ({ externalId, edgeClass }))).toEqual([
+      { externalId: "way/1", edgeClass: "trail" },
+      { externalId: "way/2", edgeClass: "trail" },
+      { externalId: "way/3", edgeClass: "trail" },
+      { externalId: "way/4", edgeClass: "sidewalk" },
+      { externalId: "way/5", edgeClass: "sidewalk" },
     ]);
   });
 });
