@@ -21,6 +21,7 @@ export const elevationSourceConfigSchema = z.object({
   horizontalDatum: z.literal("NAD83"),
   verticalDatum: z.literal("NAVD88"),
   license: z.string().min(1),
+  cacheNamespace: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
 }).strict();
 
 export type ElevationSourceConfig = z.infer<typeof elevationSourceConfigSchema>;
@@ -30,15 +31,15 @@ export async function readElevationSourceConfig(configPath: string): Promise<Ele
   return elevationSourceConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
 }
 
-function pointerPath(cacheRoot: string, sourceId: string): string {
-  return path.join(cacheRoot, sourceId, "pinned.json");
+export function elevationPointerPath(cacheRoot: string, config: ElevationSourceConfig): string {
+  return path.join(cacheRoot, config.cacheNamespace ?? config.id, "pinned.json");
 }
 
 export async function readPinnedThreeDepCollection(
   cacheRoot: string,
   config: ElevationSourceConfig,
 ): Promise<{ collection: ThreeDepCollection; collectionPath: string; snapshot: SourceSnapshot }> {
-  const pointer = JSON.parse(await readFile(pointerPath(cacheRoot, config.id), "utf8")) as ElevationPointer;
+  const pointer = JSON.parse(await readFile(elevationPointerPath(cacheRoot, config), "utf8")) as ElevationPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached 3DEP collection does not match configured version");
   const collection = await readThreeDepCollection(pointer.collectionPath);
   return {
@@ -65,7 +66,7 @@ export async function refreshPinnedThreeDepCollection(
 ): Promise<Awaited<ReturnType<typeof readPinnedThreeDepCollection>>> {
   const result = await refreshThreeDepCollection({
     cacheRoot,
-    collectionRoot: path.join(cacheRoot, config.id, "collections"),
+    collectionRoot: path.join(cacheRoot, config.cacheNamespace ?? config.id, "collections"),
     query: {
       endpoint: config.endpoint,
       dataset: config.dataset,
@@ -76,7 +77,7 @@ export async function refreshPinnedThreeDepCollection(
     catalogId: config.catalogId,
     ...(fetchImpl ? { fetchImpl } : {}),
   });
-  await writeJsonAtomically(pointerPath(cacheRoot, config.id), {
+  await writeJsonAtomically(elevationPointerPath(cacheRoot, config), {
     configVersion: config.version,
     collectionPath: result.collectionPath,
   });
