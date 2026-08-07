@@ -89,13 +89,37 @@ the evidence line.
     console errors. Two consecutive `npm run verify` runs each pass 376 tests
     across 74 files plus the production build, and two consecutive `npm run
     test:browser` runs each pass all five Chromium flows.
-- [ ] Gate 9 — Monterey Peninsula and Carmel Valley regional pack
+- [x] Gate 9 — Monterey Peninsula and Carmel Valley regional pack
   - Acceptance: the approved multi-agency boundary covers the planned
     Monterey–Carmel systems and only necessary northern Los Padres connections,
     while excluding deep Big Sur, Ventana, and broader Los Padres; pinned
     sources and licenses, two identical offline builds, a clean audit,
     representative exact/near-miss searches, and activation checks satisfy the
     [regional onboarding protocol](regional-expansion-plan.md).
+  - Evidence: the reviewed boundary bbox `[-121.985, 36.32, -121.66,
+    36.715]` contains Fort Ord, Palo Corona, Garland/Kahn, Point Lobos, and
+    Garrapata while excluding deep Big Sur, Ventana, and broader Los Padres.
+    Schema-5 pack `mc-8cd6885ec6e0215a` pins five attributed sources and
+    contains 134,167 nodes, 272,717 directed edges, 1,650 access points, 168
+    named areas, and five reviewed search regions. Its core and regional audits
+    report zero errors, conflicts, missing elevation/profile/population values,
+    unattributed records, unknown source references, or persisted edges outside
+    coverage. The reviewed official overlay preserves BLM signed-trail rules,
+    MPRPD entrance permit/parking conditions, State Parks designated-trail and
+    hours conditions, and closes only Rocky Ridge ways `55856070` and
+    `55856129`; the USFS line cross-check remains unknown-only, and the unusable
+    State Parks ArcGIS layer is explicitly excluded. Two fresh offline builds
+    were byte-identical: manifest SHA-256
+    `9b1731fcd42e532ca5ad3e69572a42b9beca682f7c80454ccec01c2d58086945`
+    and SQLite SHA-256
+    `d814b48b3d841ceb124bca70e9fab47799381801cc7752dd0e258e3a3bc843f8`,
+    with matching core, regional, and access-join audits. The Thorough checkpoint
+    passed all six clusters with 28 exact routes, a labeled near miss for every
+    deliberately impossible request, and zero directed-validation rejections.
+    Catalog/API inspection exposes Monterey as available and selected and
+    returns all five reviewed regions. Two consecutive `npm run verify` runs
+    each pass 386 tests across 77 files plus the production build, and two
+    consecutive `npm run test:browser` runs each pass all five Chromium flows.
 
 ## Post-gate fixes
 

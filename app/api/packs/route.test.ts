@@ -33,6 +33,11 @@ describe("GET /api/packs", () => {
       state: "unavailable",
       packId: "southern-east-bay",
     });
-    expect(payload.regions.slice(2).every(({ state }) => state === "planned")).toBe(true);
+    expect(payload.regions[2]).toMatchObject({
+      id: "monterey-carmel",
+      state: "unavailable",
+      packId: "monterey-carmel",
+    });
+    expect(payload.regions.slice(3).every(({ state }) => state === "planned")).toBe(true);
   });
 });

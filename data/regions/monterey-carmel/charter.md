@@ -68,10 +68,11 @@ rejected during compilation.
 
 Current official closure/prohibition evidence outranks current permission,
 which outranks clear OSM access tags. Unresolved conflicts remain unknown. The
-authority pages reviewed for this charter establish requirements but are not
-machine-readable pinned build inputs. Activation requires versioned official
-access snapshots or reviewed overlays, adapter semantics, hashes, freshness,
-and explicit redistribution decisions.
+committed reviewed overlay preserves the official page/map hashes, review date,
+entrance conditions, and exact closure targets without redistributing the
+copyrighted source pages or maps. The separate USFS line inventory is a pinned
+machine-readable cross-check and remains unknown unless its fields become
+affirmative.
 
 ## Reviewed search-region decisions
 
@@ -104,16 +105,18 @@ named selector.
 
 ## Representative starts and scenarios
 
-`scenarios.json` spans every major planned cluster: Creekside Terrace at Fort
-Ord, permit-free Rancho Cañada at Palo Corona, Garland's visitor-center side,
+`scenarios.json` spans every major planned cluster: the mapped public Main
+Entrance & Gate on Fort Ord's eastern network, permit-free Rancho Cañada at
+Palo Corona, Garland's visitor-center side,
 the permit-dependent Hitchcock Canyon entrance at Kahn Ranch, Piney Woods at
-Point Lobos, and the Soberanes Canyon/Rocky Ridge entrance area at Garrapata.
+Point Lobos, and official gate 8 at Garrapata.
 Each scenario contains a plausible distance/elevation request intended to
 produce at least one exact closed route and a deliberately impossible 1–2 mile
-/ 8,000–9,000 foot request that must remain near-miss-only. These are
-activation expectations, not preflight claims. They must be rerun after
-official access/closure evidence is joined, especially at Fort Ord, Kahn Ranch,
-Palo Corona, and Garrapata.
+/ 8,000–9,000 foot request that must remain near-miss-only. The final Thorough
+checkpoint passed all six scenarios with 28 exact routes, an explicitly labeled
+near miss for every impossible request, and zero directed-validation
+rejections. Garrapata's honest exact range is 1–3 miles because the current
+Rocky Ridge closure removes the longer ridge loop from eligible topology.
 
 ## Neighboring-pack overlap
 
@@ -156,9 +159,8 @@ predicate, and production named-area normalization.
   areas. Every retained and deferred candidate ID/name in the table was
   present.
 
-These are boundary-spike observations, not a clean schema-5 pack audit.
-Elevation/profile/population completeness, authority joins, source conflicts,
-direction-aware topology, and final solver eligibility remain build-gate work.
+These boundary-spike observations were subsequently verified by the clean
+schema-5 pack build summarized below.
 
 ## Pinned source and license decisions
 
@@ -193,24 +195,43 @@ retain the documented zero-population meaning.
 
 ### Official access and current restrictions
 
-Authority research began with the official BLM Fort Ord visitor page and 2022
-trail map, MPRPD Palo Corona/Garland/Kahn pages and permit conditions, and
-California State Parks Point Lobos/Garrapata pages and maps. Those pages provide
-the signed-trail, entrance, permit, hours, and closure semantics summarized
-above. They do not by themselves constitute pinned normalized build datasets,
-and no affirmative derivative-data redistribution decision has been recorded
-for MPRPD or State Parks material. Activation is blocked until each build input
-has a cache receipt, exact content hash, review date, adapter version, field
-mapping, freshness rule, and explicit license/redistribution decision. OSM
-remains the topology baseline and unknown-access fallback, never a substitute
-for a current official closure.
+`official-sources/reviewed-access.json` is the strict, committed v1 overlay for
+the official BLM, MPRPD, and California State Parks pages, maps, and the BLM
+Trail Head query reviewed on 2026-08-07. It records eight exact source URLs,
+content hashes, byte lengths, review/upstream dates, and source-specific reuse
+decisions; normalizes ten conservative entrance points; preserves every permit,
+parking, hours, signed-trail, and designated-trail condition; and targets the
+current Rocky Ridge closure only to OSM ways `55856070` and `55856129`. Source
+page and map bytes are not redistributed. The adapter fails closed on schema or
+hash drift and never creates connector edges.
 
-## Activation blockers and acceptance
+The official USDA Forest Service National Forest System Trails query is the
+only refreshable Monterey official-source config. Its 15 northern Los Padres
+line features are U.S. Government works, but the inspected fields contain no
+affirmative pedestrian permission or prohibition. Adapter v1 therefore emits
+unknown only; ten spatial joins are retained as cross-check evidence and do not
+promote access. The statewide California State Parks recreational-routes layer
+is explicitly excluded: the exact Point Lobos/Garrapata query returned no
+features, exposes no access/closure field, and its terms do not support this
+derived-pack use. OSM remains the topology baseline and unknown-access fallback,
+never a substitute for a current official closure.
 
-This charter and preflight do not activate the catalog entry. Remaining work
-includes approved official-access and closure inputs; explicit MPRPD, BLM, and
-State Parks license/redistribution review; two identical offline schema-5
-builds; zero audit errors or missing elevation/profile/population values;
-representative exact and honest near-miss scenario passes; Fort Ord entrance
-resolution or continued selector deferral; pack switching and saved-Job checks;
-the full verify suite; and two consecutive browser-suite passes.
+## Final build and activation evidence
+
+The activated schema-5 pack is `mc-8cd6885ec6e0215a`: 134,167 nodes, 272,717
+directed edges, 1,650 access points, 168 named areas, five reviewed search
+regions, and five manifest sources. Its core and regional audits report zero
+errors, conflicts, missing elevation/profile/population values, unattributed
+records, unknown source references, or persisted edges outside exact coverage.
+The compiler intentionally rejected 1,555 crossing/outside source edges.
+
+The reviewed overlay added nine entrances, rejected one point that could not be
+snapped safely, and deduplicated one entrance against existing topology. Both
+Rocky Ridge way targets were present and closed exactly. Two fresh offline
+builds from the same pinned cache were byte-for-byte identical: manifest
+SHA-256 `9b1731fcd42e532ca5ad3e69572a42b9beca682f7c80454ccec01c2d58086945`
+and SQLite SHA-256
+`d814b48b3d841ceb124bca70e9fab47799381801cc7752dd0e258e3a3bc843f8`,
+with identical core, regional, and access-join audit hashes. Fort Ord stays
+covered and scenario-tested through the whole-pack selector; its standalone
+selector remains deferred for the documented topology/access reason.
