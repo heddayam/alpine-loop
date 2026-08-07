@@ -63,7 +63,7 @@ describe("catalog-linked pack discovery", () => {
       "tahoe-eldorado",
     ]);
     expect(catalog.regions.map(({ state }) => state)).toEqual([
-      "unavailable", "planned", "planned", "planned", "planned", "planned",
+      "unavailable", "unavailable", "planned", "planned", "planned", "planned",
     ]);
   });
 

@@ -10,7 +10,8 @@
     {
       "id": "southern-east-bay",
       "label": "Southern East Bay",
-      "displayOrder": 2
+      "displayOrder": 2,
+      "packId": "southern-east-bay"
     },
     {
       "id": "monterey-carmel",

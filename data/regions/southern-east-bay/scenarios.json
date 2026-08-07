@@ -55,7 +55,7 @@
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 1, "max": 2 },
+        "distanceMiles": { "min": 2, "max": 8 },
         "elevationGainFeet": { "min": 8000, "max": 9000 },
         "result": "near-miss-only"
       }
