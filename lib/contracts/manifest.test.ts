@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV5Schema } from "./manifest";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV5Schema, packManifestV6Schema } from "./manifest";
 
 const manifest = {
   schemaVersion: "1",
@@ -131,6 +131,34 @@ describe("PackManifestV5", () => {
     expect(packManifestV5Schema.safeParse({
       ...v5,
       capabilities: { ...v5.capabilities, elevationProfiles: false },
+    }).success).toBe(false);
+  });
+});
+
+describe("PackManifestV6", () => {
+  it("requires derived portal access points", () => {
+    const v6 = {
+      ...manifest,
+      schemaVersion: "6",
+      capabilities: {
+        ...manifest.capabilities,
+        namedAreas: true,
+        closedRouteTopology: true,
+        batchSearchRegions: true,
+        elevationProfiles: true,
+        portalAccessPoints: true,
+      },
+      closedRouteTopology: {
+        runtimeMode: "reachable-graph-fallback",
+        algorithmVersion: "closed-topology-v1",
+        policyVersion: "closed-primitives-v1",
+        profiles: ["known", "inclusive"],
+      },
+    };
+    expect(packManifestV6Schema.parse(v6).capabilities.portalAccessPoints).toBe(true);
+    expect(packManifestV6Schema.safeParse({
+      ...v6,
+      capabilities: { ...v6.capabilities, portalAccessPoints: false },
     }).success).toBe(false);
   });
 });

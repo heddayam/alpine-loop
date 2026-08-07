@@ -31,7 +31,8 @@ export function rankAccessPointCandidates(
   includeUnknown: boolean,
 ): number {
   const confidence = { high: 0, medium: 1, low: 2 };
-  return right.knownConnectivity - left.knownConnectivity
+  return (right.reachableTrailKm ?? 0) - (left.reachableTrailKm ?? 0)
+    || right.knownConnectivity - left.knownConnectivity
     || right.knownOutDegree - left.knownOutDegree
     || (includeUnknown ? right.inclusiveConnectivity - left.inclusiveConnectivity : 0)
     || (includeUnknown ? right.inclusiveOutDegree - left.inclusiveOutDegree : 0)

@@ -23,11 +23,13 @@ function geometryBounds(geometry: CompiledEdge["geometry"]): [number, number, nu
 export function writePackDatabase(path: string, contents: DatabaseContents): void {
   const database = new DatabaseSync(path);
   const schemaVersion = contents.metadata.schemaVersion;
-  const hasClosedRouteTopology = schemaVersion === "3" || schemaVersion === "4" || schemaVersion === "5";
-  if (schemaVersion !== "1" && schemaVersion !== "2" && schemaVersion !== "3" && schemaVersion !== "4" && schemaVersion !== "5") throw new Error(`Unsupported database schema version ${schemaVersion}`);
+  const hasClosedRouteTopology = schemaVersion === "3" || schemaVersion === "4" || schemaVersion === "5" || schemaVersion === "6";
+  const hasElevationProfiles = schemaVersion === "5" || schemaVersion === "6";
+  const hasSearchRegions = schemaVersion === "4" || schemaVersion === "5" || schemaVersion === "6";
+  if (schemaVersion !== "1" && schemaVersion !== "2" && schemaVersion !== "3" && schemaVersion !== "4" && schemaVersion !== "5" && schemaVersion !== "6") throw new Error(`Unsupported database schema version ${schemaVersion}`);
   if (schemaVersion !== "1" && !contents.namedAreas) throw new Error(`Schema ${schemaVersion} database requires named areas`);
   if (hasClosedRouteTopology && !contents.closedRouteTopology) throw new Error(`Schema ${schemaVersion} database requires closed-route topology`);
-  if ((schemaVersion === "4" || schemaVersion === "5") && !contents.searchRegions) throw new Error(`Schema ${schemaVersion} database requires search regions`);
+  if (hasSearchRegions && !contents.searchRegions) throw new Error(`Schema ${schemaVersion} database requires search regions`);
   try {
     database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;");
     database.exec(`
@@ -51,8 +53,8 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         id TEXT PRIMARY KEY${hasClosedRouteTopology ? ", edge_key INTEGER NOT NULL UNIQUE, physical_edge_key INTEGER NOT NULL REFERENCES physical_edges(physical_edge_key)" : ""}, from_node TEXT NOT NULL REFERENCES nodes(id),
         to_node TEXT NOT NULL REFERENCES nodes(id), geometry TEXT NOT NULL,
         length_m REAL NOT NULL, gain_m REAL, loss_m REAL,
-        max_elevation_m REAL, max_sustained_grade_pct REAL${schemaVersion === "5" ? ", elevation_profile TEXT NOT NULL" : ""},
-        access_state TEXT NOT NULL, source_refs TEXT NOT NULL, flags TEXT NOT NULL
+        max_elevation_m REAL, max_sustained_grade_pct REAL${hasElevationProfiles ? ", elevation_profile TEXT NOT NULL" : ""},
+        access_state TEXT NOT NULL${schemaVersion === "6" ? ", edge_class TEXT NOT NULL CHECK(edge_class IN ('trail','service-road','street','sidewalk'))" : ""}, source_refs TEXT NOT NULL, flags TEXT NOT NULL
       ) STRICT;
       CREATE INDEX edges_from_node ON edges(from_node);
       CREATE INDEX edges_to_node ON edges(to_node);
@@ -69,7 +71,12 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
         inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
         population_within_radius REAL CHECK(population_within_radius IS NULL OR population_within_radius >= 0),
-        local_relief_m REAL CHECK(local_relief_m IS NULL OR local_relief_m >= 0)` : ""}
+        local_relief_m REAL CHECK(local_relief_m IS NULL OR local_relief_m >= 0)
+        ${schemaVersion === "6" ? `,
+        reachable_trail_km REAL NOT NULL CHECK(reachable_trail_km >= 0),
+        trail_component_id TEXT NOT NULL,
+        portal_road_class TEXT NOT NULL CHECK(portal_road_class IN ('street','service-road')),
+        parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)` : ""}` : ""}
       ) STRICT;
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
@@ -97,7 +104,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       CREATE VIRTUAL TABLE named_area_spatial USING rtree(
         row_id, min_lon, max_lon, min_lat, max_lat
       );` : ""}
-      ${schemaVersion === "4" || schemaVersion === "5" ? `
+      ${hasSearchRegions ? `
       CREATE TABLE search_regions (
         named_area_id TEXT PRIMARY KEY REFERENCES named_areas(id),
         display_order INTEGER NOT NULL UNIQUE CHECK(display_order >= 0)
@@ -187,8 +194,8 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
     const insertEdge = database.prepare(`
       INSERT INTO edges(
         id${hasClosedRouteTopology ? ", edge_key, physical_edge_key" : ""}, from_node, to_node, geometry, length_m, gain_m, loss_m,
-        max_elevation_m, max_sustained_grade_pct${schemaVersion === "5" ? ", elevation_profile" : ""}, access_state, source_refs, flags
-      ) VALUES (?${hasClosedRouteTopology ? ", ?, ?" : ""}, ?, ?, ?, ?, ?, ?, ?, ?${schemaVersion === "5" ? ", ?" : ""}, ?, ?, ?)
+        max_elevation_m, max_sustained_grade_pct${hasElevationProfiles ? ", elevation_profile" : ""}, access_state${schemaVersion === "6" ? ", edge_class" : ""}, source_refs, flags
+      ) VALUES (?${hasClosedRouteTopology ? ", ?, ?" : ""}, ?, ?, ?, ?, ?, ?, ?, ?${hasElevationProfiles ? ", ?" : ""}, ?${schemaVersion === "6" ? ", ?" : ""}, ?, ?)
     `);
     const insertEdgeSpatial = database.prepare(
       "INSERT INTO edge_spatial(row_id, min_lon, max_lon, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)",
@@ -197,7 +204,8 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       INSERT INTO access_points(
         id, node_id, name, kind, access_state, confidence, parking_evidence, source_refs
         ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, population_within_radius, local_relief_m" : ""}
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?, ?" : ""})
+        ${schemaVersion === "6" ? ", reachable_trail_km, trail_component_id, portal_road_class, parking_distance_m" : ""}
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?, ?" : ""}${schemaVersion === "6" ? ", ?, ?, ?, ?" : ""})
     `);
     const insertNamedArea = schemaVersion !== "1" ? database.prepare(`
       INSERT INTO named_areas(
@@ -230,14 +238,15 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         }
       }
       contents.edges.forEach((edge, index) => {
-        if (schemaVersion === "5" && !edge.elevationProfile) throw new Error(`Schema 5 edge ${edge.id} requires a complete elevation profile`);
+        if (hasElevationProfiles && !edge.elevationProfile) throw new Error(`Schema ${schemaVersion} edge ${edge.id} requires a complete elevation profile`);
+        if (schemaVersion === "6" && !edge.edgeClass) throw new Error(`Schema 6 edge ${edge.id} requires an edge class`);
         insertEdge.run(
           edge.id, ...(hasClosedRouteTopology ? [contents.closedRouteTopology!.edgeKeys.get(edge.id)!, contents.closedRouteTopology!.physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!] : []), edge.fromNode, edge.toNode, JSON.stringify(edge.geometry), edge.lengthM,
           edge.gainM, edge.lossM, edge.maxElevationM, edge.maxSustainedGradePct,
-          ...(schemaVersion === "5" ? [JSON.stringify(edge.elevationProfile!.map(
+          ...(hasElevationProfiles ? [JSON.stringify(edge.elevationProfile!.map(
             ({ distanceMeters, elevationMeters }) => [distanceMeters, elevationMeters],
           ))] : []),
-          edge.accessState, JSON.stringify(edge.sourceRefs), JSON.stringify(edge.flags),
+          edge.accessState, ...(schemaVersion === "6" ? [edge.edgeClass!] : []), JSON.stringify(edge.sourceRefs), JSON.stringify(edge.flags),
         );
         insertEdgeSpatial.run(index + 1, ...geometryBounds(edge.geometry));
       });
@@ -257,9 +266,18 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         const remoteness = schemaVersion !== "1"
           ? [point.populationWithinRadius ?? null, point.localReliefM ?? null]
           : [];
+        if (schemaVersion === "6" && (typeof point.reachableTrailKm !== "number" || !point.trailComponentId || !point.portalRoadClass)) {
+          throw new Error(`Access point ${point.id} is missing schema 6 portal fields`);
+        }
+        const portal = schemaVersion === "6" ? [
+          point.reachableTrailKm!,
+          point.trailComponentId!,
+          point.portalRoadClass!,
+          point.parkingDistanceM ?? null,
+        ] : [];
         insertAccess.run(
           point.id, point.nodeId, point.name, point.kind, point.accessState,
-          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...remoteness,
+          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...remoteness, ...portal,
         );
       }
       contents.namedAreas?.forEach((area, index) => {
@@ -271,7 +289,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         insertNamedAreaSpatial!.run(index + 1, area.bbox[0], area.bbox[2], area.bbox[1], area.bbox[3]);
         for (const alias of area.aliases) insertNamedAreaAlias!.run(area.id, alias, namedAreaSearchKey(alias));
       });
-      if (schemaVersion === "4" || schemaVersion === "5") {
+      if (hasSearchRegions) {
         const insertSearchRegion = database.prepare("INSERT INTO search_regions(named_area_id, display_order) VALUES (?, ?)");
         for (const region of contents.searchRegions!) insertSearchRegion.run(region.namedAreaId, region.displayOrder);
       }
@@ -319,10 +337,11 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       }
       if (hasClosedRouteTopology) database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (3, ?)").run(contents.metadata.builtAt);
       if (schemaVersion === "4") database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (4, ?)").run(contents.metadata.builtAt);
-      if (schemaVersion === "5") {
+      if (schemaVersion === "5" || schemaVersion === "6") {
         database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (4, ?)").run(contents.metadata.builtAt);
         database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (5, ?)").run(contents.metadata.builtAt);
       }
+      if (schemaVersion === "6") database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (6, ?)").run(contents.metadata.builtAt);
       database.exec("COMMIT");
     } catch (error) {
       database.exec("ROLLBACK");

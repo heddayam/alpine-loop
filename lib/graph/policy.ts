@@ -10,6 +10,7 @@ export function accessStateIsAllowed(accessState: AccessState, includeUncertainA
 
 export function edgeIsTraversable(edge: GraphEdge, includeUncertainAccess: boolean): boolean {
   return (
+    (edge.edgeClass === undefined || edge.edgeClass === "trail") &&
     accessStateIsAllowed(edge.accessState, includeUncertainAccess) &&
     !edge.flags.some((flag) => NON_PEDESTRIAN_FLAGS.has(flag.toLowerCase()))
   );

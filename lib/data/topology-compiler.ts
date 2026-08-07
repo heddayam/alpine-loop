@@ -273,7 +273,7 @@ function buildProfile(
   globalDecisionEdgeOffset: number,
 ): TopologyProfileBuild {
   const accepted = profile === "known" ? new Set(["public"]) : new Set(["public", "unknown"]);
-  const edges = denseEdges.filter((edge) => accepted.has(edge.accessState));
+  const edges = denseEdges.filter((edge) => (edge.edgeClass === undefined || edge.edgeClass === "trail") && accepted.has(edge.accessState));
   const includedPhysicalKeys = new Set(edges.map(({ physicalEdgeKey }) => physicalEdgeKey));
   const physical = physicalEdges.filter(({ physicalEdgeKey }) => includedPhysicalKeys.has(physicalEdgeKey));
   const physicalByKey = new Map(physical.map((edge) => [edge.physicalEdgeKey, edge]));

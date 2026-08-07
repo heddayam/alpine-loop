@@ -3,6 +3,8 @@ import type { NamedArea, TopologyProfile } from "@/lib/contracts";
 
 export type Coordinate = readonly [lon: number, lat: number];
 
+export type EdgeClass = "trail" | "service-road" | "street" | "sidewalk";
+
 export type NormalizedNode = {
   id: string;
   externalId: string;
@@ -21,6 +23,8 @@ export type NormalizedWay = {
   name: string | null;
   accessState: AccessState;
   bidirectional: boolean;
+  /** Required from the schema-6 OSM adapter; absent on legacy fixtures. */
+  edgeClass?: EdgeClass;
   sourceRefs: string[];
   flags: string[];
 };
@@ -29,7 +33,19 @@ export type NormalizedTopology = {
   nodes: NormalizedNode[];
   ways: NormalizedWay[];
   accessPoints: NormalizedAccessPoint[];
+  portalEvidence?: NormalizedPortalEvidence[];
   rejectedWayCount: number;
+};
+
+export type NormalizedPortalEvidence = {
+  id: string;
+  externalId: string;
+  kind: "parking" | "trailhead" | "information" | "gate";
+  name: string | null;
+  nodeIds: string[];
+  coordinates: Coordinate[];
+  accessState: AccessState;
+  sourceRefs: string[];
 };
 
 export type NormalizedAccessPoint = {
@@ -46,6 +62,10 @@ export type NormalizedAccessPoint = {
   inclusiveConnectivity?: number;
   knownOutDegree?: number;
   inclusiveOutDegree?: number;
+  reachableTrailKm?: number;
+  trailComponentId?: string | null;
+  portalRoadClass?: "street" | "service-road" | null;
+  parkingDistanceM?: number | null;
   /** People living within POPULATION_RADIUS_M, from GHS-POP. Null when unmeasured. */
   populationWithinRadius?: number | null;
   /** Elevation range of network nodes within RELIEF_RADIUS_M. Null when unmeasured. */
@@ -74,6 +94,7 @@ export type CompiledEdge = {
   maxSustainedGradePct: number | null;
   elevationProfile?: Array<{ distanceMeters: number; elevationMeters: number }> | null;
   accessState: AccessState;
+  edgeClass?: EdgeClass;
   sourceRefs: string[];
   flags: string[];
 };
@@ -186,7 +207,7 @@ export type Schema3TopologyBuild = {
 };
 
 export type PackAudit = {
-  schemaVersion: "1" | "2" | "3" | "4" | "5";
+  schemaVersion: "1" | "2" | "3" | "4" | "5" | "6";
   packId: string;
   dataVersion: string;
   nodeCount: number;

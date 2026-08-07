@@ -6,7 +6,7 @@ export type {
   ReconstructedDirectedEdge,
 } from "./closed-route-topology";
 
-export type { AccessState, GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "./types-internal";
+export type { AccessState, EdgeClass, GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "./types-internal";
 
 export type GraphQuery = {
   bbox: readonly [west: number, south: number, east: number, north: number];
@@ -21,6 +21,10 @@ export type AccessPointCandidate = GraphAccessPoint & {
   inclusiveConnectivity: number;
   knownOutDegree: number;
   inclusiveOutDegree: number;
+  reachableTrailKm?: number;
+  trailComponentId?: string | null;
+  portalRoadClass?: "street" | "service-road" | null;
+  parkingDistanceM?: number | null;
 };
 
 export type AccessPointCandidateQuery = {
