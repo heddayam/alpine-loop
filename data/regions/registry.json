@@ -16,7 +16,8 @@
     {
       "id": "monterey-carmel",
       "label": "Monterey–Carmel",
-      "displayOrder": 3
+      "displayOrder": 3,
+      "packId": "monterey-carmel"
     },
     {
       "id": "henry-coe",

@@ -3,11 +3,11 @@
   "packId": "monterey-carmel",
   "scenarios": [
     {
-      "id": "fort-ord-creekside-terrace",
+      "id": "fort-ord-main-entrance",
       "cluster": "Fort Ord National Monument",
       "referencePoint": {
-        "name": "Creekside Terrace Trailhead",
-        "coordinates": [-121.69152, 36.62688]
+        "name": "Fort Ord Main Entrance & Gate",
+        "coordinates": [-121.6930502, 36.6046406]
       },
       "searchRegionId": "pack:monterey-carmel",
       "candidateNamedAreaId": "osm:relation/6188476",
@@ -99,16 +99,16 @@
       }
     },
     {
-      "id": "garrapata-soberanes-canyon",
+      "id": "garrapata-gate-8",
       "cluster": "Garrapata",
       "referencePoint": {
-        "name": "Soberanes Canyon and Rocky Ridge trailhead area",
-        "coordinates": [-121.9118333, 36.4644167]
+        "name": "Garrapata gate 8",
+        "coordinates": [-121.9241845, 36.454479]
       },
       "searchRegionId": "osm:relation/184336",
       "exactExpectation": {
-        "distanceMiles": { "min": 3, "max": 8 },
-        "elevationGainFeet": { "min": 600, "max": 3000 },
+        "distanceMiles": { "min": 1, "max": 3 },
+        "elevationGainFeet": { "min": 100, "max": 1000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {

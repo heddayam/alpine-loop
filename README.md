@@ -46,7 +46,7 @@ reachability results stay in process memory for 30 minutes. A launched Batch
 job snapshots its origin and contour in ignored local SQLite until that job is
 deleted; aggregate monthly provider counters are stored separately.
 
-## Build the Santa Cruz Mountains pack
+## Build a regional pack
 
 Real-pack builds additionally require `osmium-tool` and
 [uv](https://docs.astral.sh/uv/). Python and rasterio are invoked through uv;
@@ -54,17 +54,17 @@ do not install project Python packages with pip. This explicit command is the
 only workflow that refreshes sources over the network:
 
 ```sh
-npm run pack:bootstrap -- --pack=santa-cruz-mountains
+npm run pack:bootstrap -- --pack=monterey-carmel
 ```
 
 To rebuild only from an already populated pinned source cache:
 
 ```sh
 npm run pack:bootstrap -- \
-  --pack=santa-cruz-mountains \
+  --pack=monterey-carmel \
   --offline \
   --cache=.cache/sources \
-  --build-cache=.cache/build/santa-cruz-mountains/sources \
+  --build-cache=.cache/build/monterey-carmel/sources \
   --output=.local-data/packs
 ```
 
@@ -74,8 +74,17 @@ the network.
 
 ### Verify an installed closed-route pack
 
-The retained real-pack checkpoint exercises the active V3 closed-route runtime
-against representative Santa Cruz trailheads:
+The retained real-pack checkpoints exercise the active V3 closed-route runtime
+against representative starts. For Monterey–Carmel:
+
+```sh
+node --import tsx scripts/research/gate9-monterey-carmel-checkpoint.ts \
+  --database=.local-data/packs/monterey-carmel/<data-version>/pack.sqlite \
+  --manifest=.local-data/packs/monterey-carmel/<data-version>/manifest.json \
+  --effort=thorough
+```
+
+The original Santa Cruz checkpoint remains available:
 
 ```sh
 node --import tsx scripts/research/gate5-topology-real-checkpoint.ts \

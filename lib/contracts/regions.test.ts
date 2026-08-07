@@ -29,6 +29,7 @@ describe("regional pack catalog contracts", () => {
     expect(parsed.regions.filter(({ packId }) => packId)).toEqual([
       expect.objectContaining({ id: "santa-cruz-mountains", packId: "santa-cruz-mountains" }),
       expect.objectContaining({ id: "southern-east-bay", packId: "southern-east-bay" }),
+      expect.objectContaining({ id: "monterey-carmel", packId: "monterey-carmel" }),
     ]);
   });
 
