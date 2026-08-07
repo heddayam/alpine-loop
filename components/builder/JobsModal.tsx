@@ -104,10 +104,13 @@ export function JobsModal({
     return () => { if (!open) resultsControllerRef.current?.abort(); };
   }, [open]);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    openRef.current = false;
-    resultsControllerRef.current?.abort();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      openRef.current = false;
+      resultsControllerRef.current?.abort();
+    };
   }, []);
 
   useEffect(() => {

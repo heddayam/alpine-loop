@@ -87,6 +87,13 @@ the evidence line.
   plus the production build; two consecutive browser runs pass all five Chromium
   flows.
 
+- 2026-08-06 — fixed the Jobs modal result-opening state under React Strict
+  Mode. The mount lifecycle flag is restored when effects are replayed, so a
+  successful result load always clears `Opening…` before the modal is reopened.
+  A Strict Mode regression test covers the successful load path. `npm run
+  verify` passes 338 tests across 62 files plus the production build; two
+  consecutive browser runs pass all five Chromium flows.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are
