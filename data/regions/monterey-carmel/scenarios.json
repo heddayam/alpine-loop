@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "packId": "monterey-carmel",
+  "scenarios": [
+    {
+      "id": "fort-ord-creekside-terrace",
+      "cluster": "Fort Ord National Monument",
+      "referencePoint": {
+        "name": "Creekside Terrace Trailhead",
+        "coordinates": [-121.69152, 36.62688]
+      },
+      "searchRegionId": "pack:monterey-carmel",
+      "candidateNamedAreaId": "osm:relation/6188476",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 300, "max": 2500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "palo-corona-rancho-canada",
+      "cluster": "Palo Corona",
+      "referencePoint": {
+        "name": "Rancho Cañada permit-free entrance",
+        "coordinates": [-121.8918, 36.5402]
+      },
+      "searchRegionId": "osm:relation/15100521",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 600, "max": 3500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "garland-ranch-visitor-center",
+      "cluster": "Garland Ranch",
+      "referencePoint": {
+        "name": "Garland Ranch Visitor Center",
+        "coordinates": [-121.7716295, 36.5060832]
+      },
+      "searchRegionId": "osm:way/682362148",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 500, "max": 3500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "kahn-ranch-hitchcock-canyon",
+      "cluster": "Kahn Ranch",
+      "referencePoint": {
+        "name": "Kahn Ranch permit entrance, Hitchcock Canyon Road",
+        "coordinates": [-121.73649, 36.4573665]
+      },
+      "searchRegionId": "pack:monterey-carmel",
+      "exactExpectation": {
+        "distanceMiles": { "min": 3, "max": 10 },
+        "elevationGainFeet": { "min": 400, "max": 2500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "point-lobos-piney-woods",
+      "cluster": "Point Lobos",
+      "referencePoint": {
+        "name": "Piney Woods parking area",
+        "coordinates": [-121.9462651, 36.5157215]
+      },
+      "searchRegionId": "osm:relation/13029412",
+      "exactExpectation": {
+        "distanceMiles": { "min": 2, "max": 8 },
+        "elevationGainFeet": { "min": 100, "max": 1200 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "garrapata-soberanes-canyon",
+      "cluster": "Garrapata",
+      "referencePoint": {
+        "name": "Soberanes Canyon and Rocky Ridge trailhead area",
+        "coordinates": [-121.9118333, 36.4644167]
+      },
+      "searchRegionId": "osm:relation/184336",
+      "exactExpectation": {
+        "distanceMiles": { "min": 3, "max": 8 },
+        "elevationGainFeet": { "min": 600, "max": 3000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}
