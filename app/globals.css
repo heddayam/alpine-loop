@@ -162,8 +162,8 @@ select.control { padding-right: var(--s1); cursor: pointer; }
   cursor: pointer;
 }
 .region-pill:hover:not(:disabled) { color: var(--ink); border-color: var(--line-3); }
-.region-pill:disabled { cursor: not-allowed; color: var(--ink-3); background: var(--surface-3); }
-.region-pill-selected { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+.region-pill:disabled { cursor: not-allowed; color: var(--ink-3); background: var(--surface); opacity: .72; }
+.region-pill-selected { border-color: var(--line-3); font-weight: 600; }
 .status-dot { flex: 0 0 auto; width: .4rem; height: .4rem; background: var(--accent); border-radius: 50%; }
 
 .topbar-actions { display: flex; flex: 0 0 auto; gap: var(--s2); align-items: center; margin-left: auto; }
@@ -687,8 +687,10 @@ details.result-section[open] > summary::before { content: "▾"; }
 /* -------------------------------------------------------------- mobile */
 @media (max-width: 760px) {
   .app-frame { position: static; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
-  .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; padding: var(--s2) var(--s3); }
-  .topbar-actions { width: auto; margin-left: 0; }
+  .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); padding: var(--s2) var(--s3); }
+  .topbar h1 { grid-column: 1; grid-row: 1; }
+  .region-strip { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .topbar-actions { grid-column: 2; grid-row: 1; width: auto; margin-left: 0; }
   .segmented { display: none; }
   /* Every desktop column variant has to be beaten here, or a panel collapsed
      on a wide screen leaves the phone layout stuck in a 20rem sidebar. */

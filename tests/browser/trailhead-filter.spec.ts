@@ -87,6 +87,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   await expect(plannedRegion).toBeDisabled();
   await expect(plannedRegion.locator(".status-dot")).toHaveCount(0);
   await expect.poll(() => regionStrip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect.poll(() => regionStrip.evaluate((element) => element.clientWidth)).toBeGreaterThan(300);
   await expect(page.getByRole("button", { name: "Jobs" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Settings" })).toBeVisible();
 
