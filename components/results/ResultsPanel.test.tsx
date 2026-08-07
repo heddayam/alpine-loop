@@ -167,7 +167,8 @@ describe("ResultsPanel V3", () => {
       nearMisses: [],
     })} onSelectRoute={() => undefined} />);
     const summary = screen.getByRole("button", { name: /Simple loop/ });
-    expect(summary).toHaveTextContent("90% climb ≤ 11% · 19% uphill ≥10% · 0.2 mi run");
+    expect(summary).toHaveTextContent(/↑P90 11%≥10% 19%/);
+    expect(summary).not.toHaveTextContent("mi run");
     expect(within(summary).getByTitle(/90% of uphill 100 m sections are 11% grade or less/)).toBeVisible();
   });
 
