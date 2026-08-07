@@ -23,6 +23,11 @@ Generated routes start and finish at one trailhead and contain a physical-trail
 cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
 result labels. Exact matches and explicitly labeled near misses remain separate.
 
+Regional growth follows the catalog, activation rules, boundaries, and
+repeatable approval process in the [regional expansion roadmap](regional-expansion-plan.md).
+Planned regions may be visible before their packs are approved, but only a
+catalog-linked, valid installed pack is selectable.
+
 ## User experience
 
 - The top bar shows the installed pack, Settings, panel controls, and a Jobs

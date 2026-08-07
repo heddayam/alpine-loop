@@ -51,6 +51,26 @@ the evidence line.
     Thorough checkpoint returned only validated routes with zero directed
     validation rejections.
 
+- [ ] Gate 7 — multi-pack foundation and catalog-driven region selector
+  - Acceptance: the versioned region catalog drives all planned, unavailable,
+    available, and selected header pills; valid linked packs load through the
+    region-independent runtime; switching updates the URL, recenters the map,
+    resets pack-specific state, and restores cross-pack Jobs correctly; focused
+    contract/backend/browser coverage and the complete verification suites pass.
+- [ ] Gate 8 — Southern East Bay regional pack
+  - Acceptance: the approved boundary keeps the connected southern Alameda
+    hiking corridor whole while excluding Mount Diablo, Henry Coe, and
+    Stanislaus; pinned sources and licenses, two identical offline builds, a
+    clean audit, representative exact/near-miss searches, and activation checks
+    satisfy the [regional onboarding protocol](regional-expansion-plan.md).
+- [ ] Gate 9 — Monterey Peninsula and Carmel Valley regional pack
+  - Acceptance: the approved multi-agency boundary covers the planned
+    Monterey–Carmel systems and only necessary northern Los Padres connections,
+    while excluding deep Big Sur, Ventana, and broader Los Padres; pinned
+    sources and licenses, two identical offline builds, a clean audit,
+    representative exact/near-miss searches, and activation checks satisfy the
+    [regional onboarding protocol](regional-expansion-plan.md).
+
 ## Post-gate fixes
 
 - 2026-08-06 — corrected steepest sustained grade to use exact rolling 100 m
