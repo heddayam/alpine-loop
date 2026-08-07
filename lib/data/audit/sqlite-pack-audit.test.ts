@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { compilePack, type PackSeed } from "../compiler";
-import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3, fixtureCompileOptionsV4, fixturePackSeedV3 } from "../fixture-pack";
+import { fixtureCompileOptions, fixtureCompileOptionsV2, fixtureCompileOptionsV3, fixtureCompileOptionsV4, fixtureCompileOptionsV6, fixturePackSeedV3 } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -38,6 +38,12 @@ async function buildFixtureV4() {
   const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v4-"));
   temporaryDirectories.push(outputRoot);
   return compilePack(await fixtureCompileOptionsV4(outputRoot));
+}
+
+async function buildFixtureV6() {
+  const outputRoot = await mkdtemp(path.join(os.tmpdir(), "alpine-sqlite-audit-v6-"));
+  temporaryDirectories.push(outputRoot);
+  return compilePack(await fixtureCompileOptionsV6(outputRoot));
 }
 
 function mutateDatabase(databasePath: string, sql: string): void {
@@ -208,5 +214,20 @@ describe("SQLite regional pack audit extraction", () => {
       "Search region osm:relation/1001 has non-contiguous display order 8; expected 1",
       "Search region osm:relation/1001 refers to a closed-area variant",
     ]));
+  });
+
+  it("audits schema 6 portal measurements and rejects published road context", async () => {
+    const pack = await buildFixtureV6();
+    const valid = await auditSqlitePack({
+      databasePath: pack.databasePath,
+      manifestPath: pack.manifestPath,
+      auditPath: pack.auditPath,
+    });
+    expect(valid.schemaVersion).toBe("6");
+    expect(valid.errors).toEqual([]);
+
+    mutateDatabase(pack.databasePath, "UPDATE edges SET edge_class = 'street' WHERE id = (SELECT min(id) FROM edges)");
+    await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
+      .rejects.toThrow(/build-only road or sidewalk edges were published/);
   });
 });

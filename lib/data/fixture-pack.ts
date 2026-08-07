@@ -5,8 +5,10 @@ import { FixtureElevationSampler } from "./fixture-elevation-sampler";
 import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";
 import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
+import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { sha256File } from "./file-source";
 import { readSearchRegionInput } from "./search-regions";
+import type { NormalizedTopology } from "./types";
 
 const RETRIEVED_AT = "2026-08-04T00:00:00Z";
 
@@ -65,6 +67,17 @@ export const fixturePackSeedV4: PackSeed = {
   schemaVersion: "4",
   dataVersion: "fixture-v4",
   capabilities: { ...fixturePackSeedV3.capabilities, batchSearchRegions: true },
+};
+
+export const fixturePackSeedV6: PackSeed = {
+  ...fixturePackSeedV4,
+  schemaVersion: "6",
+  dataVersion: "fixture-v6",
+  capabilities: {
+    ...fixturePackSeedV4.capabilities,
+    elevationProfiles: true,
+    portalAccessPoints: true,
+  },
 };
 
 export async function fixtureCompileOptions(
@@ -157,5 +170,43 @@ export async function fixtureCompileOptionsV4(
   return {
     ...base,
     searchRegions: overrides.searchRegions ?? await readSearchRegionInput(searchRegionPath),
+  };
+}
+
+export async function fixtureCompileOptionsV6(
+  outputRoot: string,
+  fixtureRoot = path.resolve("data/fixtures/source"),
+  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
+  searchRegionPath = path.resolve("data/fixtures/search-regions.json"),
+  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish" | "searchRegions">> = {},
+): Promise<CompilePackOptions> {
+  const base = await fixtureCompileOptionsV4(
+    outputRoot,
+    fixtureRoot,
+    namedAreaFixtureRoot,
+    searchRegionPath,
+    { ...overrides, seed: overrides.seed ?? fixturePackSeedV6 },
+  );
+  const normalized: NormalizedTopology[] = [];
+  for await (const topology of base.topology.adapter.normalize(base.topology.snapshot)) normalized.push(topology);
+  if (normalized.length !== 1) throw new Error("Fixture topology adapter must produce exactly one graph");
+  const portalTopology = {
+    ...normalized[0]!,
+    ways: normalized[0]!.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
+    accessPoints: normalized[0]!.accessPoints.map((point, index) => ({
+      ...point,
+      kind: "trailhead" as const,
+      reachableTrailKm: 5 + index,
+      trailComponentId: `fixture-component-${index + 1}`,
+      portalRoadClass: "street" as const,
+      parkingDistanceM: index === 0 ? 25 : null,
+    })),
+  };
+  return {
+    ...base,
+    topology: {
+      adapter: new PreparedTopologyAdapter(base.topology.adapter, portalTopology),
+      snapshot: base.topology.snapshot,
+    },
   };
 }

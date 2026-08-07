@@ -292,6 +292,33 @@ function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackM
   return errors;
 }
 
+function auditPortalAccess(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
+  if (manifest.schemaVersion !== "6") return [];
+  const errors: string[] = [];
+  const contextEdges = requiredNumber(
+    (database.prepare("SELECT count(*) AS count FROM edges WHERE edge_class <> 'trail'").get() as Record<string, unknown>).count,
+    "schema 6 context edge count",
+  );
+  if (contextEdges > 0) errors.push(`${contextEdges} build-only road or sidewalk edges were published`);
+  const rows = database.prepare(`SELECT id, kind, reachable_trail_km, trail_component_id,
+    portal_road_class, parking_distance_m FROM access_points ORDER BY id`).all() as Array<Record<string, unknown>>;
+  for (const row of rows) {
+    const id = requiredString(row.id, "access_points.id");
+    if (row.kind !== "trailhead") errors.push(`Schema 6 access point ${id} is not a trailhead portal`);
+    const reachable = requiredNumber(row.reachable_trail_km, `access point ${id}.reachable_trail_km`);
+    if (!Number.isFinite(reachable) || reachable < 0) errors.push(`Schema 6 access point ${id} has invalid trail reach`);
+    requiredString(row.trail_component_id, `access point ${id}.trail_component_id`);
+    if (row.portal_road_class !== "street" && row.portal_road_class !== "service-road") {
+      errors.push(`Schema 6 access point ${id} has invalid portal road class`);
+    }
+    if (row.parking_distance_m !== null) {
+      const parkingDistance = requiredNumber(row.parking_distance_m, `access point ${id}.parking_distance_m`);
+      if (!Number.isFinite(parkingDistance) || parkingDistance < 0) errors.push(`Schema 6 access point ${id} has invalid parking distance`);
+    }
+  }
+  return errors;
+}
+
 function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNode[] {
   const incidentSources = new Map<string, Set<string>>();
   for (const edge of edges) {
@@ -430,6 +457,8 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     searchRegions = auditSearchRegions(database, manifest);
     const elevationProfileErrors = auditElevationProfiles(database, manifest);
     if (elevationProfileErrors.length) throw new Error(elevationProfileErrors.join("; "));
+    const portalErrors = auditPortalAccess(database, manifest);
+    if (portalErrors.length) throw new Error(portalErrors.join("; "));
     if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
       const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
         decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;

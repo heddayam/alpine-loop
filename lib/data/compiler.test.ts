@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema } from "@/lib/contracts";
+import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV6Schema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
 import type { AreaGeometry } from "./area-geometry";
 import { getNamedArea, listSearchRegions, searchNamedAreas } from "./named-area-catalog";
@@ -12,6 +12,7 @@ import {
   fixtureCompileOptionsV2,
   fixtureCompileOptionsV3,
   fixtureCompileOptionsV4,
+  fixtureCompileOptionsV6,
   fixturePackSeed,
   fixturePackSeedV2,
 } from "./fixture-pack";
@@ -283,6 +284,37 @@ describe("fixture pack compiler", () => {
         .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
       expect(database.prepare("SELECT count(*) AS count FROM topology_profiles").get()).toEqual({ count: 2 });
     } finally { database.close(); replay.close(); }
+  });
+
+  it("writes schema 6 classified hiking edges and measured portals", async () => {
+    const outputRoot = await temporaryOutput();
+    const result = await compilePack(await fixtureCompileOptionsV6(outputRoot));
+    const manifest = packManifestV6Schema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
+    expect(manifest.capabilities.portalAccessPoints).toBe(true);
+    const database = new DatabaseSync(result.databasePath, { readOnly: true });
+    try {
+      expect(database.prepare("SELECT DISTINCT edge_class FROM edges ORDER BY edge_class").all())
+        .toEqual([{ edge_class: "trail" }]);
+      expect(database.prepare(`SELECT kind, reachable_trail_km, trail_component_id,
+        portal_road_class, parking_distance_m FROM access_points ORDER BY id`).all()).toEqual([
+        {
+          kind: "trailhead",
+          reachable_trail_km: 5,
+          trail_component_id: "fixture-component-1",
+          portal_road_class: "street",
+          parking_distance_m: 25,
+        },
+        {
+          kind: "trailhead",
+          reachable_trail_km: 6,
+          trail_component_id: "fixture-component-2",
+          portal_road_class: "street",
+          parking_distance_m: null,
+        },
+      ]);
+      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }]);
+    } finally { database.close(); }
   });
 
   it("requires reviewed search regions only for schema 4", async () => {
