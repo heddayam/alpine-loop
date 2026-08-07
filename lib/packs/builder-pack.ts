@@ -1,6 +1,7 @@
 import type { BuilderPackConfig } from "./fixture-pack";
 import { FIXTURE_BUILDER_PACK } from "./fixture-pack";
-import { loadSantaCruzPack } from "./installed-pack";
+import { localPackRoot } from "./installed-pack";
+import { discoverCatalogPacks } from "./pack-catalog";
 
 function insetBounds(
   [west, south, east, north]: BuilderPackConfig["coverageBbox"],
@@ -16,8 +17,13 @@ function insetBounds(
   ];
 }
 
-export async function loadBuilderPack(): Promise<BuilderPackConfig> {
-  const installed = await loadSantaCruzPack();
+export async function loadBuilderPack(
+  packId?: string,
+  root = localPackRoot(),
+): Promise<BuilderPackConfig> {
+  const { installedPacks } = await discoverCatalogPacks(root);
+  const installed = (packId ? installedPacks.get(packId) : undefined)
+    ?? installedPacks.values().next().value;
   if (!installed) return FIXTURE_BUILDER_PACK;
   const manifest = installed.manifest;
   return {
