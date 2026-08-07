@@ -51,12 +51,20 @@ the evidence line.
     Thorough checkpoint returned only validated routes with zero directed
     validation rejections.
 
-- [ ] Gate 7 — multi-pack foundation and catalog-driven region selector
-  - Acceptance: the versioned region catalog drives all planned, unavailable,
-    available, and selected header pills; valid linked packs load through the
-    region-independent runtime; switching updates the URL, recenters the map,
-    resets pack-specific state, and restores cross-pack Jobs correctly; focused
-    contract/backend/browser coverage and the complete verification suites pass.
+- [x] Gate 7 — multi-pack foundation and catalog-driven region selector
+  - Evidence: the validated version-1 catalog exposes all six roadmap regions
+    through `GET /api/packs`; only explicitly linked, valid installed packs enter
+    the generic builder/route registries, while planned and malformed/missing
+    links remain disabled and the fixture is used only when no valid linked pack
+    exists. Generic build dispatch and official-source cache namespaces remove
+    the Santa Cruz bootstrap assumptions. Header pills preserve catalog order,
+    use URL-driven pack remount/reset, and restore cross-pack Jobs through a
+    one-time job URL. Two consecutive `npm run verify` runs each pass 357 tests
+    across 68 files plus the production build, and two consecutive `npm run
+    test:browser` runs each pass all five Chromium flows. Live desktop/mobile
+    inspection with the real Santa Cruz pack confirmed the green selected state,
+    disabled undotted roadmap pills, horizontal overflow at 390 px without
+    displacing Jobs/Settings, and zero browser console errors.
 - [ ] Gate 8 — Southern East Bay regional pack
   - Acceptance: the approved boundary keeps the connected southern Alameda
     hiking corridor whole while excluding Mount Diablo, Henry Coe, and
