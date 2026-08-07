@@ -107,6 +107,21 @@ describe("fixture pack compiler", () => {
       .rejects.toThrow();
   });
 
+  it("prunes the previous validated version only after publishing its replacement", async () => {
+    const outputRoot = await temporaryOutput();
+    const first = await compilePack(await fixtureCompileOptions(outputRoot));
+    const second = await compilePack(await fixtureCompileOptions(outputRoot, undefined, {
+      seed: { ...fixturePackSeed, dataVersion: "fixture-v2" },
+      builtAt: "2026-08-04T01:00:00Z",
+    }));
+
+    expect(second.reusedExisting).toBe(false);
+    await expect(readFile(path.join(first.packDirectory, "manifest.json"), "utf8")).rejects.toThrow();
+    expect(JSON.parse(await readFile(path.join(outputRoot, "fixture-pack", "current.json"), "utf8"))).toMatchObject({
+      dataVersion: "fixture-v2",
+    });
+  });
+
   it("writes deterministic schema 2 named areas, aliases, spatial rows, and access ranking fields", async () => {
     const firstRoot = await temporaryOutput();
     const secondRoot = await temporaryOutput();

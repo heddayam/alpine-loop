@@ -88,3 +88,26 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   await expect.poll(() => results.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
+
+test("grade presets explain their limits and persist edited values", async ({ page }) => {
+  const harness = await installOfflineHarness(page);
+  await page.goto("/");
+
+  await expect(page.getByLabel("Selected climbing grade")).toHaveText("12%");
+  await page.getByRole("button", { name: "Grade preset definitions" }).hover();
+  await expect(page.getByRole("tooltip").getByRole("row", { name: /Moderate 12% 20% 0.5 mi 15%/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Moderate climb grade").fill("13");
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Done" }).click();
+  await expect.poll(() => harness.settingsRequests.at(-1)?.gradePresets.moderate.maximumClimbP90Pct).toBe(13);
+
+  await page.reload();
+  await expect(page.getByLabel("Selected climbing grade")).toHaveText("13%");
+  await page.getByRole("checkbox", { name: "Grade" }).check();
+  await enterDrawnArea(page);
+  await page.getByRole("button", { name: "Quick search" }).click();
+  await expect.poll(() => harness.generationRequests.length).toBe(1);
+  expect(harness.generationRequests[0]?.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
+  expect(harness.blockedExternalRequests).toEqual([]);
+});

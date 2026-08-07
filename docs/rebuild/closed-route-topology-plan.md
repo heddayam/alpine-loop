@@ -20,8 +20,8 @@ Every returned route:
 - reports repeated physical trail independently of its topology label;
 - is either an exact match or an explicitly labeled near miss.
 
-`POST /api/routes/generate` accepts the V3 closed-route request. Schema-3 and
-schema-4 packs are supported. Quick foreground searches use a three-second
+`POST /api/routes/generate` accepts the V3 closed-route request. Schema-3,
+schema-4, and schema-5 packs are supported. Quick foreground searches use a three-second
 budget; batch jobs use the Thorough per-trailhead budget. Neither effort means
 enumerating every mathematically possible closed walk.
 

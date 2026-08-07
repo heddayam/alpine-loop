@@ -74,7 +74,7 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
       if (signal.aborted) throw signal.reason;
       const pack = (await loadRoutePacks()).get(request.packId);
       if (!pack) throw new ServerApiError("PACK_NOT_FOUND", `Pack '${request.packId}' is not installed.`, 404);
-      if (pack.schemaVersion !== "4" || !pack.getSearchRegion) {
+      if ((pack.schemaVersion !== "4" && pack.schemaVersion !== "5") || !pack.getSearchRegion) {
         throw new ServerApiError("BATCH_SEARCH_UNAVAILABLE", "Rebuild this pack with reviewed batch-search regions.", 422);
       }
       const searchRegion = await pack.getSearchRegion(request.searchRegionId);

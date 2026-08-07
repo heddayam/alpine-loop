@@ -177,6 +177,12 @@ export function SettingsModal({
                 </fieldset>;
               })}
             </div>
+            <dl className="grade-preset-definitions">
+              <div><dt>↑p90</dt><dd>90% of uphill 100 m windows are at or below this grade.</dd></div>
+              <div><dt>&gt;10%</dt><dd>Maximum share of uphill-window distance at 10% grade or steeper.</dd></div>
+              <div><dt>Run mi</dt><dd>Longest uninterrupted distance at 10% grade or steeper, in miles, before the trail eases below 10%.</dd></div>
+              <div><dt>↓p90</dt><dd>90% of downhill 100 m windows are at or below this absolute grade.</dd></div>
+            </dl>
           </section>
         </div>
 
