@@ -1,5 +1,6 @@
 export * from "./arcgis";
 export * from "./california-state-parks";
+export * from "./east-bay";
 export * from "./join";
 export * from "./midpen";
 export * from "./reconcile";
