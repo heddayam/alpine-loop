@@ -8,6 +8,7 @@ import {
   constraintViolationV3Schema,
   driveTimeDurationSchema,
   generatedClosedRouteV3Schema,
+  gradeExperienceConstraintsSchema,
 } from "./routes";
 
 export const batchRouteCriteriaV1Schema = z.object({
@@ -18,6 +19,7 @@ export const batchRouteCriteriaV1Schema = z.object({
   elevationGainFeet: orderedRangeSchema.optional(),
   maximumElevationFeet: orderedRangeSchema.optional(),
   steepestSustainedGradePct: orderedRangeSchema.optional(),
+  gradeExperience: gradeExperienceConstraintsSchema.optional(),
   includeUncertainAccess: z.boolean(),
   accessPointRemoteness: accessPointRemotenessSelectionSchema,
 }).strict();
