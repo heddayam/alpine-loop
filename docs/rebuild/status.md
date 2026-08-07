@@ -65,12 +65,30 @@ the evidence line.
     inspection with the real Santa Cruz pack confirmed the green selected state,
     disabled undotted roadmap pills, horizontal overflow at 390 px without
     displacing Jobs/Settings, and zero browser console errors.
-- [ ] Gate 8 — Southern East Bay regional pack
-  - Acceptance: the approved boundary keeps the connected southern Alameda
-    hiking corridor whole while excluding Mount Diablo, Henry Coe, and
-    Stanislaus; pinned sources and licenses, two identical offline builds, a
-    clean audit, representative exact/near-miss searches, and activation checks
-    satisfy the [regional onboarding protocol](regional-expansion-plan.md).
+- [x] Gate 8 — Southern East Bay regional pack
+  - Evidence: the reviewed concave boundary covers Pleasanton Ridge, Mission
+    Peak, Vargas Plateau, Sunol, the Ohlone corridor, and Del Valle while its
+    retained OSM inventory excludes Mount Diablo, the Berkeley/Oakland hills,
+    Henry Coe, and Stanislaus. Schema-5 pack `seb-7f40689cb63a6971` pins six
+    licensed/provenanced inputs: Geofabrik OSM, EBRPD Roads and Trails by
+    Access, EBRPD Park Entrances, a human-reviewed current-closure overlay,
+    USGS 3DEP, and GHSL population. Its clean regional audit records 248,750
+    nodes, 506,597 directed edges, 2,131 access points, 364 named areas, four
+    reviewed search regions, zero conflicts, zero missing elevation/population,
+    zero unattributed records, and zero outside-coverage persisted edges. The
+    closure overlay suppresses older public evidence and closes all three
+    pinned Shady Glen Trail ways. Two independent offline builds were byte-for-
+    byte identical: manifest SHA-256 `43077fd1de6a6603cd1243e6f0a3dc312b64e60abeca68d49e3a53c27be992b7`
+    and SQLite SHA-256 `f302202e60f9996af7c51929b8e4e4890681907a1a37c9e05f0da5d6f234483c`,
+    with matching core and regional audits and access-join report. The Thorough
+    real-pack checkpoint passed exact and explicitly labeled impossible/near-
+    miss searches for all six representative clusters (30 exact routes total,
+    zero directed-validation rejections). Registry/API discovery exposes the
+    installed pack as available; live inspection confirmed selection, all four
+    reviewed region choices, correct East Bay map coverage, and zero browser
+    console errors. Two consecutive `npm run verify` runs each pass 376 tests
+    across 74 files plus the production build, and two consecutive `npm run
+    test:browser` runs each pass all five Chromium flows.
 - [ ] Gate 9 — Monterey Peninsula and Carmel Valley regional pack
   - Acceptance: the approved multi-agency boundary covers the planned
     Monterey–Carmel systems and only necessary northern Los Padres connections,
