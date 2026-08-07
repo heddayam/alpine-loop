@@ -48,6 +48,7 @@ import type { NormalizedTopology, PackBuildResult } from "./types";
 const PACK_ID = "southern-east-bay";
 const COMPILER_VERSION = "southern-east-bay-pack-compiler-v3";
 const OFFICIAL_ENTRANCES_SOURCE_ID = "ebrpd-park-entrances";
+const CURATED_ACCESS_HASH = "sha256:1401faa586587ad34bc49ab675be621709a2fab90a2c3a04418700c1caf27a88";
 
 export const SOUTHERN_EAST_BAY_SCHEMA_VERSION = "6" as const;
 export const SOUTHERN_EAST_BAY_REGION_ROOT = path.resolve("data/regions/southern-east-bay");
@@ -289,7 +290,7 @@ export async function buildSouthernEastBayPack(
   const [boundaryContents, searchRegionContents, curatedAccess] = await Promise.all([
     readFile(boundaryPath, "utf8"),
     readFile(searchRegionPath, "utf8"),
-    readCuratedAccessFile(accessRestrictionsPath),
+    readCuratedAccessFile(accessRestrictionsPath, CURATED_ACCESS_HASH),
   ]);
   const boundary = parseBoundary(boundaryContents);
   const [searchRegions, osmConfig, elevationConfig, populationConfig] = await Promise.all([

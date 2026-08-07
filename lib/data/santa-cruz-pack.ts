@@ -36,6 +36,7 @@ import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from 
 
 export const SANTA_CRUZ_REGION_ROOT = path.resolve("data/regions/santa-cruz-mountains");
 export const SANTA_CRUZ_CURATED_ACCESS_PATH = path.join(SANTA_CRUZ_REGION_ROOT, "access-restrictions.json");
+const SANTA_CRUZ_CURATED_ACCESS_HASH = "sha256:b648fdd3fae2f51d33b72398657ec297ea6a0e69c2c8167161b6c54c26aee5ea";
 
 const PACK_ID = "santa-cruz-mountains";
 const COMPILER_VERSION = "santa-cruz-pack-compiler-v14-portals";
@@ -160,7 +161,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     readOsmSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "osm-source.json")),
     readElevationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "elevation-source.json")),
     readPopulationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "population-source.json")),
-    readCuratedAccessFile(SANTA_CRUZ_CURATED_ACCESS_PATH),
+    readCuratedAccessFile(SANTA_CRUZ_CURATED_ACCESS_PATH, SANTA_CRUZ_CURATED_ACCESS_HASH),
   ]);
 
   // Fail before downloading hundreds of megabytes when the local build tools are unavailable.
