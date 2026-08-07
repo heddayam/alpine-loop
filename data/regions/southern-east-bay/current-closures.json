@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "authority": "East Bay Regional Park District",
+  "dataset": "Human-reviewed current trail closures",
+  "reviewedAt": "2026-08-07T00:00:00Z",
+  "sourcePage": {
+    "url": "https://www.ebparks.org/alerts-closures",
+    "contentHash": "sha256:7da0a19c3982406e9171ad802c0d697e491f0d79bd79e90241b30a32a771c83b",
+    "byteLength": 181487
+  },
+  "records": [
+    {
+      "id": "ebrpd-shady-glen-trail-closure-2026-07-29",
+      "name": "Shady Glen Trail closure",
+      "park": "Sunol Regional Wilderness",
+      "status": "closed",
+      "firstPublishedOn": "2026-07-23",
+      "updatedOn": "2026-07-29",
+      "coordinates": [-121.831, 37.5175],
+      "targetExternalIds": [
+        "way/133590543",
+        "way/284501998",
+        "way/284501999"
+      ]
+    }
+  ]
+}
