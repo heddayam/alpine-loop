@@ -26,7 +26,7 @@ if (!databasePath || !manifestPath) {
 }
 
 const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
-if (parsedManifest.schemaVersion !== "3" && parsedManifest.schemaVersion !== "4" && parsedManifest.schemaVersion !== "5") {
+if (parsedManifest.schemaVersion !== "3" && parsedManifest.schemaVersion !== "4" && parsedManifest.schemaVersion !== "5" && parsedManifest.schemaVersion !== "6") {
   throw new Error("The closed-route checkpoint requires a schema-3, schema-4, or schema-5 pack");
 }
 const manifest = parsedManifest;

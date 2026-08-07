@@ -43,7 +43,7 @@ async function initialize(input: RouteJobSolverWorkerInput): Promise<void> {
   const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
   if (!installed) throw new Error("The pinned pack version is no longer installed.");
   const { manifest } = installed;
-  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5") throw new Error("The pinned pack does not support batch search.");
+  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") throw new Error("The pinned pack does not support batch search.");
   const region = getSearchRegion(installed.databasePath, input.searchRegionId);
   if (!region) throw new Error("The job's reviewed search region is unavailable.");
   const accessFilter = resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {

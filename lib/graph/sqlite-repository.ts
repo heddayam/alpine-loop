@@ -7,6 +7,7 @@ import type {
   AccessPointCandidateQuery,
   GraphAccessPoint,
   GraphEdge,
+  EdgeClass,
   GraphNode,
   GraphQuery,
   GraphRepository,
@@ -73,6 +74,12 @@ function parseAccessState(value: string): AccessState {
   throw new Error(`Invalid access state: ${value}`);
 }
 
+function parseEdgeClass(value: SQLInputValue | undefined): EdgeClass {
+  if (value === undefined || value === null) return "trail";
+  if (["trail", "service-road", "street", "sidewalk"].includes(String(value))) return value as EdgeClass;
+  throw new Error(`Invalid edge class: ${String(value)}`);
+}
+
 function parseNode(row: SqliteRow): GraphNode {
   return {
     id: requiredString(row, "id"),
@@ -112,6 +119,7 @@ function parseEdge(row: SqliteRow): GraphEdge {
     maximumSustainedGradePct: nullableNumber(row, "max_sustained_grade_pct"),
     ...(elevationProfile.length > 0 ? { elevationProfile } : {}),
     accessState: parseAccessState(requiredString(row, "access_state")),
+    edgeClass: parseEdgeClass(row.edge_class),
     trailName:
       typeof row.trail_name === "string" && row.trail_name.length > 0
         ? row.trail_name
@@ -139,6 +147,12 @@ function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     // missing column to null so those packs keep loading.
     populationWithinRadius: nullableNumber(row, "population_within_radius"),
     localReliefM: nullableNumber(row, "local_relief_m"),
+    reachableTrailKm: numberOrZero(row, "reachable_trail_km"),
+    trailComponentId: typeof row.trail_component_id === "string" ? row.trail_component_id : null,
+    portalRoadClass: row.portal_road_class === "street" || row.portal_road_class === "service-road"
+      ? row.portal_road_class
+      : null,
+    parkingDistanceM: nullableNumber(row, "parking_distance_m"),
   };
 }
 
@@ -302,9 +316,11 @@ export class SQLiteGraphRepository implements GraphRepository {
     assertNotAborted(query.signal);
     const [west, south, east, north] = query.bbox;
     const hasRanking = this.#hasColumn("access_points", "known_connectivity");
+    const hasPortalRanking = this.#hasColumn("access_points", "reachable_trail_km");
     const rankingColumns = hasRanking
-      ? "access_points.known_connectivity, access_points.inclusive_connectivity, access_points.known_out_degree, access_points.inclusive_out_degree"
-      : "0 AS known_connectivity, 0 AS inclusive_connectivity, 0 AS known_out_degree, 0 AS inclusive_out_degree";
+      ? `access_points.known_connectivity, access_points.inclusive_connectivity, access_points.known_out_degree, access_points.inclusive_out_degree,
+         ${hasPortalRanking ? "access_points.reachable_trail_km, access_points.trail_component_id, access_points.portal_road_class, access_points.parking_distance_m" : "0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m"}`
+      : "0 AS known_connectivity, 0 AS inclusive_connectivity, 0 AS known_out_degree, 0 AS inclusive_out_degree, 0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m";
     const rows = this.#database.prepare(
       `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, ${rankingColumns}
        FROM access_points
@@ -326,6 +342,12 @@ export class SQLiteGraphRepository implements GraphRepository {
         inclusiveConnectivity: requiredNumber(row, "inclusive_connectivity"),
         knownOutDegree: requiredNumber(row, "known_out_degree"),
         inclusiveOutDegree: requiredNumber(row, "inclusive_out_degree"),
+        reachableTrailKm: requiredNumber(row, "reachable_trail_km"),
+        trailComponentId: typeof row.trail_component_id === "string" ? row.trail_component_id : null,
+        portalRoadClass: row.portal_road_class === "street" || row.portal_road_class === "service-road"
+          ? row.portal_road_class
+          : null,
+        parkingDistanceM: nullableNumber(row, "parking_distance_m"),
       }];
     });
   }

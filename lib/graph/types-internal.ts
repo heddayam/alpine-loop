@@ -1,4 +1,5 @@
 export type AccessState = "public" | "unknown" | "private" | "closed" | "prohibited";
+export type EdgeClass = "trail" | "service-road" | "street" | "sidewalk";
 
 export type GraphNode = {
   id: string;
@@ -25,6 +26,8 @@ export type GraphEdge = {
   /** Complete direction-aware profile on schema-5 packs; samples are <=25 m apart. */
   elevationProfile?: Array<{ distanceMeters: number; elevationMeters: number }>;
   accessState: AccessState;
+  /** Schema-6 semantic class. Legacy fixtures default to trail at read time. */
+  edgeClass?: EdgeClass;
   trailName: string | null;
   sourceIds: string[];
   flags: string[];
@@ -45,6 +48,10 @@ export type GraphAccessPoint = {
    */
   populationWithinRadius: number | null;
   localReliefM: number | null;
+  reachableTrailKm?: number;
+  trailComponentId?: string | null;
+  portalRoadClass?: "street" | "service-road" | null;
+  parkingDistanceM?: number | null;
 };
 
 export type InducedGraph = {

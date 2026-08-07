@@ -66,11 +66,11 @@ function registeredInstalledPack(installed: InstalledPack): RegisteredRoutePack 
       searchNamedAreas: (text: string, limit?: number) => searchNamedAreas(installed.databasePath, text, limit),
       getNamedArea: (id: string) => getNamedArea(installed.databasePath, id),
     } : {}),
-    ...(manifest.schemaVersion === "4" || manifest.schemaVersion === "5" ? {
+    ...(manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6" ? {
       listSearchRegions: () => listSearchRegions(installed.databasePath),
       getSearchRegion: (id: string) => getSearchRegion(installed.databasePath, id),
     } : {}),
-    ...(manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" ? {
+    ...(manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6" ? {
       closedRouteRuntimeMode: manifest.closedRouteTopology.runtimeMode,
       ...(manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback" ? {
         loadClosedRouteFeasibilityRepository: async (signal: AbortSignal) => {

@@ -28,7 +28,7 @@ export type ClosedRoutePack = RoutePack & {
 };
 
 export type ReachableGraphFallbackPack = ClosedRoutePack & {
-  schemaVersion: "3" | "4" | "5";
+  schemaVersion: "3" | "4" | "5" | "6";
   closedRouteRuntimeMode: "reachable-graph-fallback";
   loadClosedRouteFeasibilityRepository: (
     signal: AbortSignal,
@@ -58,7 +58,7 @@ function validationDetails(issues: Array<{ path: PropertyKey[]; message: string 
 }
 
 function isFallbackPack(pack: ClosedRoutePack): pack is ReachableGraphFallbackPack {
-  return (pack.schemaVersion === "3" || pack.schemaVersion === "4" || pack.schemaVersion === "5")
+  return (pack.schemaVersion === "3" || pack.schemaVersion === "4" || pack.schemaVersion === "5" || pack.schemaVersion === "6")
     && pack.closedRouteRuntimeMode === "reachable-graph-fallback"
     && typeof pack.loadClosedRouteFeasibilityRepository === "function";
 }

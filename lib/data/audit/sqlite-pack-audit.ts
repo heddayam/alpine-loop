@@ -9,6 +9,7 @@ import {
   type PackManifestV3,
   type PackManifestV4,
   type PackManifestV5,
+  type PackManifestV6,
 } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import { edgeInsideCoverage } from "../area-geometry";
@@ -25,7 +26,7 @@ import { topologySha256 } from "../topology-compiler";
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
 type Metadata = Record<string, string>;
-type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4 | PackManifestV5;
+type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4 | PackManifestV5 | PackManifestV6;
 type BuildMetrics = {
   rejectedEdgeCount: number;
   conflictRecordIds: string[];
@@ -230,7 +231,7 @@ function auditSearchRegions(
   database: DatabaseSync,
   manifest: AuditablePackManifest,
 ): { count: number; errors: string[] } {
-  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5") return { count: 0, errors: [] };
+  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") return { count: 0, errors: [] };
   const rows = database.prepare(`
     SELECT r.named_area_id, r.display_order, a.name, a.kind
     FROM search_regions r
@@ -259,7 +260,7 @@ function auditSearchRegions(
 }
 
 function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
-  if (manifest.schemaVersion !== "5") return [];
+  if (manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") return [];
   const errors: string[] = [];
   const edges = database.prepare("SELECT edge_key, id, length_m, elevation_profile FROM edges ORDER BY edge_key")
     .all() as Array<Record<string, unknown>>;
@@ -427,7 +428,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     searchRegions = auditSearchRegions(database, manifest);
     const elevationProfileErrors = auditElevationProfiles(database, manifest);
     if (elevationProfileErrors.length) throw new Error(elevationProfileErrors.join("; "));
-    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5") {
+    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
       const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
         decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
       if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
@@ -444,7 +445,8 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
         const actualNodes = count("topology_nodes");
         const actualPhysical = manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback"
           ? requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count FROM edges
-              WHERE access_state = 'public' OR (? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "topology physical count")
+              WHERE (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} access_state = 'public')
+                 OR (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} ? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "topology physical count")
           : requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count
               FROM topology_decision_edge_members WHERE profile = ?`).get(profile) as Record<string, unknown>).count, "topology physical count");
         const actualDecisionNodes = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_nodes
@@ -515,7 +517,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
       audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
     }
   }
-  if (manifest.schemaVersion === "4" || manifest.schemaVersion === "5") {
+  if (manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
     audit.counts.searchRegions = searchRegions.count;
     audit.errors.push(...searchRegions.errors);
   }
