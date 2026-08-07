@@ -74,26 +74,26 @@ export async function fixtureCompileOptions(
 ): Promise<CompilePackOptions> {
   const topology = await fixtureSnapshot(fixtureRoot, "topology.json", {
     id: "fixture-topology",
-    authority: "Alpine Search",
+    authority: "Alpine Loop",
     dataset: "Synthetic OSM-like topology",
     version: "1",
-    url: "https://example.invalid/alpine-search/fixture-topology",
+    url: "https://example.invalid/alpine-loop/fixture-topology",
     license: "CC0-1.0",
   });
   const officialAccess = await fixtureSnapshot(fixtureRoot, "official-access.json", {
     id: "fixture-official-access",
-    authority: "Alpine Search",
+    authority: "Alpine Loop",
     dataset: "Synthetic official access overlay",
     version: "1",
-    url: "https://example.invalid/alpine-search/fixture-official-access",
+    url: "https://example.invalid/alpine-loop/fixture-official-access",
     license: "CC0-1.0",
   });
   const elevation = await fixtureSnapshot(fixtureRoot, "elevation.json", {
     id: "fixture-elevation",
-    authority: "Alpine Search",
+    authority: "Alpine Loop",
     dataset: "Synthetic elevation samples",
     version: "1",
-    url: "https://example.invalid/alpine-search/fixture-elevation",
+    url: "https://example.invalid/alpine-loop/fixture-elevation",
     license: "CC0-1.0",
   });
   return {
@@ -119,10 +119,10 @@ export async function fixtureCompileOptionsV2(
   });
   const namedAreas = await fixtureSnapshot(namedAreaFixtureRoot, "areas.json", {
     id: "fixture-named-areas",
-    authority: "Alpine Search",
+    authority: "Alpine Loop",
     dataset: "Synthetic OSM named areas",
     version: "1",
-    url: "https://example.invalid/alpine-search/fixture-named-areas",
+    url: "https://example.invalid/alpine-loop/fixture-named-areas",
     license: "CC0-1.0",
   });
   return {

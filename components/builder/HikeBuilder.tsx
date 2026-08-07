@@ -602,7 +602,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   return (
     <main className="app-frame">
       <header className="topbar">
-        <h1>Alpine Search</h1>
+        <h1>Alpine Loop</h1>
         <span className="pack-chip" aria-label="Installed region pack" title={`${pack.name} — ${pack.subtitle}`}>
           <span className="status-dot" aria-hidden="true" />
           <span>{pack.name}</span>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Alpine Search",
+  title: "Alpine Loop",
   description: "Build hiking routes inside a boundary you choose.",
 };
 

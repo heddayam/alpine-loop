@@ -9,7 +9,7 @@ function request(query = "bbox=-122.183,37.155,-122.14,37.178") {
 
 describe("pack map-context endpoint", () => {
   beforeEach(() => {
-    vi.stubEnv("ALPINE_PACK_ROOT", path.join(tmpdir(), "alpine-search-route-test-empty-packs"));
+    vi.stubEnv("ALPINE_PACK_ROOT", path.join(tmpdir(), "alpine-loop-route-test-empty-packs"));
   });
 
   afterEach(() => vi.unstubAllEnvs());

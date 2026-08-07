@@ -12,7 +12,7 @@ wheels = [
 ]
 
 [[package]]
-name = "alpine-search-dem-tools"
+name = "alpine-loop-dem-tools"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

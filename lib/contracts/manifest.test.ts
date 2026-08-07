@@ -17,7 +17,7 @@ const manifest = {
   capabilities: { elevation: true, officialAccess: true },
   fieldConfidence: { elevation: "high" },
   sources: [{
-    id: "fixture-source", authority: "Alpine Search", dataset: "Synthetic fixture", version: "1",
+    id: "fixture-source", authority: "Alpine Loop", dataset: "Synthetic fixture", version: "1",
     retrievedAt: "2026-08-04T00:00:00Z", url: "https://example.invalid/fixture", license: "CC0-1.0",
     contentHash: `sha256:${"0".repeat(64)}`,
   }],
