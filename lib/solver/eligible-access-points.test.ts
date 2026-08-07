@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessPointCandidate, GraphRepository } from "@/lib/graph";
-import { listEligibleAccessPointCandidates } from "./eligible-access-points";
+import { listEligibleAccessPointCandidates, rankAccessPointCandidates } from "./eligible-access-points";
 
 const AREA = {
   type: "Polygon" as const,
@@ -30,6 +30,25 @@ function point(id: string, patch: Partial<AccessPointCandidate> = {}): AccessPoi
 }
 
 describe("eligible access-point enumeration", () => {
+  it("ranks schema-6 portals by trail reach and evidence, not public/unknown connectivity", () => {
+    const smallerPublicGraph = point("public", {
+      reachableTrailKm: 2,
+      trailComponentId: "trail:public",
+      portalRoadClass: "street",
+      parkingDistanceM: 10,
+      knownConnectivity: 10_000,
+    });
+    const largerUnknownGraph = point("unknown", {
+      reachableTrailKm: 25,
+      trailComponentId: "trail:unknown",
+      portalRoadClass: "street",
+      parkingDistanceM: null,
+      knownConnectivity: 0,
+    });
+    expect(rankAccessPointCandidates(smallerPublicGraph, largerUnknownGraph, false)).toBeGreaterThan(0);
+    expect(rankAccessPointCandidates(smallerPublicGraph, largerUnknownGraph, true)).toBeGreaterThan(0);
+  });
+
   it("applies geometry, access policy, remoteness, and stable ranking once", async () => {
     const points = [
       point("lower-rank"),
