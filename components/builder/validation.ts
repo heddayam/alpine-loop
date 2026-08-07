@@ -44,8 +44,7 @@ export function buildGenerateRoutesRequest(
   const distance = parseRange(values.distanceMiles, "Distance");
   const elevationGain = parseRange(values.elevationGainFeet, "Elevation gain");
   const maximumElevation = parseRange(values.maximumElevationFeet, "Maximum elevation");
-  const steepestGrade = parseRange(values.steepestSustainedGradePct, "Steepest sustained grade");
-  errors.push(...distance.errors, ...elevationGain.errors, ...maximumElevation.errors, ...steepestGrade.errors);
+  errors.push(...distance.errors, ...elevationGain.errors, ...maximumElevation.errors);
   if (distance.value && distance.value.max > 30) errors.push("Route distance may not exceed 30 miles.");
 
   const limit = Number(values.limit);
@@ -74,7 +73,7 @@ export function buildGenerateRoutesRequest(
     distanceMiles: distance.value,
     ...(elevationGain.value ? { elevationGainFeet: elevationGain.value } : {}),
     ...(maximumElevation.value ? { maximumElevationFeet: maximumElevation.value } : {}),
-    ...(steepestGrade.value ? { steepestSustainedGradePct: steepestGrade.value } : {}),
+    ...(values.gradeConstraintEnabled ? { gradeExperience: values.gradePresets[values.selectedGradePreset] } : {}),
     includeUncertainAccess: values.includeUncertainAccess,
     accessPointRemoteness: values.accessPointRemoteness,
     searchEffort: "quick",

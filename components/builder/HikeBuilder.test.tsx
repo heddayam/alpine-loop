@@ -28,6 +28,15 @@ const routeResponse = {
   diagnostics: { elapsedMs: 1, expandedStates: 1, candidateCount: 1, eligibleAccessPointCount: 1, searchedAccessPointCount: 1, graphQueryCount: 1, maximumLoadedDirectedEdges: 4, exhausted: true, truncationReasons: [], shortfallReasons: [], noCycleAccessPointCount: 0, feasibleAccessPointCount: 1, attachmentGroupCount: 1, probedAttachmentGroupCount: 1, deeplySearchedAttachmentGroupCount: 1, loadedTopologyNetworkCount: 1, cycleBlockCount: 1, cyclePrimitiveCount: 1, composedCandidateCount: 1, repairedCandidateCount: 0, directedValidationRejectionCount: 0, expandedAssemblyStates: 1, timeToFirstExactMs: 1, hardTruncationReasons: [], nonBudgetShortfallReasons: ["fewer-exact-routes-than-requested"] },
 };
 const searchRegion = { id: "osm-relation-1", name: "Santa Cruz Mountains", kind: "protected-area", context: "California", bbox: [-122.3, 37, -121.8, 37.5], sourceIds: ["osm"], displayOrder: 0 };
+const appSettings = {
+  schemaVersion: 1, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"], quickSearchRouteCount: 10,
+  gradeConstraintEnabled: false, selectedGradePreset: "moderate",
+  gradePresets: {
+    gentle: { maximumClimbP90Pct: 8, maximumSteepClimbingSharePct: 5, maximumSteepRunMiles: 0.1, maximumDescentP90Pct: 10 },
+    moderate: { maximumClimbP90Pct: 12, maximumSteepClimbingSharePct: 20, maximumSteepRunMiles: 0.5, maximumDescentP90Pct: 15 },
+    steep: { maximumClimbP90Pct: 18, maximumSteepClimbingSharePct: 50, maximumSteepRunMiles: 1.5, maximumDescentP90Pct: 22 },
+  },
+};
 const job = {
   version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "rural", "populated", "unknown"] }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
 };
@@ -37,6 +46,7 @@ function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response
     const url = String(input);
     const custom = onRequest?.(url, init);
     if (custom) return custom;
+    if (url === "/api/settings") return new Response(JSON.stringify(appSettings), { status: 200 });
     if (url === "/api/route-jobs") return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
     if (url.includes("/access-points/preview")) return new Response(JSON.stringify(preview), { status: 200 });
     if (url === "/api/routes/generate") return new Response(JSON.stringify(routeResponse), { status: 200 });
@@ -89,6 +99,28 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByLabelText("Maximum shared stem")).toHaveValue(2.5);
     await userEvent.click(screen.getByRole("switch", { name: /Allow figure-eights/ }));
     expect(screen.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
+  });
+
+  it("resolves the compact grade preset into numeric constraints and persists edits", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Grade" }));
+    await userEvent.selectOptions(screen.getByLabelText("Grade preset"), "steep");
+    expect(screen.getByLabelText("Selected climbing grade")).toHaveTextContent("18%");
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    await screen.findByText("1 exact route ready.");
+    const generationCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/routes/generate");
+    expect(JSON.parse(String(generationCall?.[1]?.body))).toMatchObject({ gradeExperience: appSettings.gradePresets.steep });
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await userEvent.clear(screen.getByLabelText("Moderate climb grade"));
+    await userEvent.type(screen.getByLabelText("Moderate climb grade"), "13");
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
+    const saves = fetchMock.mock.calls.filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT");
+    expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"], quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
   });
 
   it("runs Quick explicitly and uses a drawn boundary as its override", async () => {

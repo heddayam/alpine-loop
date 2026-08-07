@@ -1,6 +1,8 @@
 import type {
   AccessPointRemoteness,
   AccessFilterV2,
+  GradePresetId,
+  GradePresets,
   Origin,
   SearchRegionSummary,
 } from "@/lib/contracts";
@@ -38,7 +40,9 @@ export type BuilderValues = {
   distanceMiles: RangeField;
   elevationGainFeet: RangeField;
   maximumElevationFeet: RangeField;
-  steepestSustainedGradePct: RangeField;
+  gradeConstraintEnabled: boolean;
+  selectedGradePreset: GradePresetId;
+  gradePresets: GradePresets;
   includeUncertainAccess: boolean;
   accessPointRemoteness: AccessPointRemoteness[];
   limit: string;
@@ -66,7 +70,13 @@ export const DEFAULT_BUILDER_VALUES: BuilderValues = {
   distanceMiles: { enabled: true, min: "1", max: "4" },
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
-  steepestSustainedGradePct: { enabled: false, min: "0", max: "20" },
+  gradeConstraintEnabled: false,
+  selectedGradePreset: "moderate",
+  gradePresets: {
+    gentle: { maximumClimbP90Pct: 8, maximumSteepClimbingSharePct: 5, maximumSteepRunMiles: 0.1, maximumDescentP90Pct: 10 },
+    moderate: { maximumClimbP90Pct: 12, maximumSteepClimbingSharePct: 20, maximumSteepRunMiles: 0.5, maximumDescentP90Pct: 15 },
+    steep: { maximumClimbP90Pct: 18, maximumSteepClimbingSharePct: 50, maximumSteepRunMiles: 1.5, maximumDescentP90Pct: 22 },
+  },
   includeUncertainAccess: true,
   accessPointRemoteness: ["remote", "unknown"],
   limit: "10",

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MultiPolygon, Polygon } from "geojson";
 import {
   DRIVE_TIME_DURATIONS_MINUTES,
+  appSettingsV1Schema,
   generateClosedRoutesResponseV3Schema,
   namedAreaSchema,
   originSchema,
@@ -13,6 +14,8 @@ import {
   routeJobResultsPageSchema,
   searchRegionSummarySchema,
   type CreateBatchRouteJobV1,
+  type AppSettingsV1,
+  type GradePresetId,
   type AccessFilterV2,
   type GenerateClosedRoutesRequestV3,
   type GenerateClosedRoutesResponseV3,
@@ -23,6 +26,7 @@ import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixtur
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { JobsModal, type JobsLoadState } from "./JobsModal";
+import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
 import { SettingsModal } from "./SettingsModal";
 import {
@@ -45,7 +49,7 @@ function boundsGeometry(bounds: Bounds): Polygon {
   return { type: "Polygon", coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
 }
 
-function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderValues>>, key: keyof Pick<BuilderValues, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet" | "steepestSustainedGradePct">, next: RangeField) {
+function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderValues>>, key: keyof Pick<BuilderValues, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">, next: RangeField) {
   setValues((current) => ({ ...current, [key]: next }));
 }
 
@@ -140,6 +144,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [jobsOpen, setJobsOpen] = useState(false);
   const [batchLaunching, setBatchLaunching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [nearMissesOpen, setNearMissesOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
@@ -225,16 +230,75 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     setSelectedRouteId(undefined);
   }, []);
 
-  const updateSettings = useCallback((patch: Partial<Pick<BuilderValues, "includeUncertainAccess" | "accessPointRemoteness" | "limit">>) => {
-    setValues((current) => ({ ...current, ...patch }));
-    invalidateResults();
-  }, [invalidateResults]);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeJobs = useCallback(() => setJobsOpen(false), []);
 
   const displayedAccessPoints = useMemo(() => visibleAccessPoints.filter((point) =>
     values.accessPointRemoteness.includes(point.remoteness ?? "unknown")
     && (values.includeUncertainAccess || point.accessState !== "unknown")), [values.accessPointRemoteness, values.includeUncertainAccess, visibleAccessPoints]);
+
+  const appSettings = useMemo<AppSettingsV1>(() => ({
+    schemaVersion: 1,
+    includeUncertainAccess: values.includeUncertainAccess,
+    accessPointRemoteness: values.accessPointRemoteness,
+    quickSearchRouteCount: Number(values.limit),
+    gradeConstraintEnabled: values.gradeConstraintEnabled,
+    selectedGradePreset: values.selectedGradePreset,
+    gradePresets: values.gradePresets,
+  }), [values.accessPointRemoteness, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.selectedGradePreset]);
+
+  const applySettings = useCallback((settings: AppSettingsV1) => {
+    setValues((current) => ({
+      ...current,
+      includeUncertainAccess: settings.includeUncertainAccess,
+      accessPointRemoteness: settings.accessPointRemoteness,
+      limit: String(settings.quickSearchRouteCount),
+      gradeConstraintEnabled: settings.gradeConstraintEnabled,
+      selectedGradePreset: settings.selectedGradePreset,
+      gradePresets: settings.gradePresets,
+    }));
+  }, []);
+
+  const putSettings = useCallback(async (settings: AppSettingsV1) => {
+    try {
+      const response = await fetch("/api/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) });
+      if (!response.ok) throw new Error("Settings could not be saved.");
+      setSettingsError("");
+      return true;
+    } catch {
+      setSettingsError("Settings could not be saved.");
+      return false;
+    }
+  }, []);
+
+  const saveSettings = useCallback(async (settings: AppSettingsV1) => {
+    if (!await putSettings(settings)) return false;
+    applySettings(settings);
+    invalidateResults();
+    return true;
+  }, [applySettings, invalidateResults, putSettings]);
+
+  const changeGradePreference = useCallback((patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => {
+    const next = { ...appSettings, ...patch };
+    applySettings(next);
+    invalidateResults();
+    void putSettings(next);
+  }, [appSettings, applySettings, invalidateResults, putSettings]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const raw: unknown = await response.json().catch(() => null);
+        if (!response.ok) throw new Error("Settings could not be loaded.");
+        const candidate = raw && typeof raw === "object" && "settings" in raw ? raw.settings : raw;
+        const parsed = appSettingsV1Schema.safeParse(candidate);
+        if (!parsed.success) throw new Error("Settings could not be loaded.");
+        applySettings(parsed.data);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [applySettings]);
 
   useEffect(() => {
     if (pack.id === FIXTURE_BUILDER_PACK.id) return;
@@ -401,6 +465,7 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
         ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
         ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
         ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
+        ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}),
         includeUncertainAccess: request.includeUncertainAccess,
         accessPointRemoteness: request.accessPointRemoteness,
       },
@@ -532,9 +597,10 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
         <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
+        {settingsError ? <p className="settings-error-banner" role="alert">{settingsError}</p> : null}
       </header>
 
-      <SettingsModal open={settingsOpen} includeUncertainAccess={values.includeUncertainAccess} accessPointRemoteness={values.accessPointRemoteness} limit={values.limit} onChange={updateSettings} onClose={closeSettings} />
+      {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
       <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsLoadState} loadError={jobsLoadError} refreshedAt={jobsRefreshedAt} onRefresh={refreshJobs} onOpenResults={openBatchResults} onClose={closeJobs} />
 
       <div className={["workspace", hasResultsPanel ? "with-results" : "", desktopBuilderVisible ? "" : "without-builder", hasResultsPanel && !desktopResultsVisible ? "without-results" : ""].filter(Boolean).join(" ")}>
@@ -599,7 +665,13 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
                 <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} />
                 <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} />
                 <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} />
-                <RangeInput id="grade" label="Grade" unit="%" title="Steepest sustained grade over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => { patchRange(setValues, "steepestSustainedGradePct", next); invalidateResults(); }} />
+                <GradePresetInput
+                  enabled={values.gradeConstraintEnabled}
+                  selected={values.selectedGradePreset}
+                  presets={values.gradePresets}
+                  onEnabledChange={(gradeConstraintEnabled) => changeGradePreference({ gradeConstraintEnabled })}
+                  onSelectedChange={(selectedGradePreset) => changeGradePreference({ selectedGradePreset })}
+                />
               </div>
             </section>
 
