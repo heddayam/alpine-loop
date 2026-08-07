@@ -5,6 +5,7 @@ import {
   packManifestSchema,
   type GenerateClosedRoutesRequestV3,
   type PackManifestV5,
+  type PackManifestV6,
   type SearchEffortV3,
 } from "@/lib/contracts";
 import { getSearchRegion } from "@/lib/data/named-area-catalog";
@@ -83,8 +84,10 @@ function nearestCandidate(
       || left.candidate.id.localeCompare(right.candidate.id))[0];
 }
 
+type CheckpointPackManifest = PackManifestV5 | PackManifestV6;
+
 function buildRequest(
-  manifest: PackManifestV5,
+  manifest: CheckpointPackManifest,
   scenario: Scenario,
   startAccessPointId: string,
   expectation: Expectation,
@@ -107,7 +110,7 @@ function buildRequest(
 }
 
 async function runExpectation(options: {
-  manifest: PackManifestV5;
+  manifest: CheckpointPackManifest;
   scenario: Scenario;
   expectationName: "exact" | "impossible";
   expectation: Expectation;
@@ -186,8 +189,9 @@ if (effortArgument !== "quick" && effortArgument !== "thorough") {
 const effort: SearchEffortV3 = effortArgument;
 
 const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
-if (parsedManifest.schemaVersion !== "5" || parsedManifest.id !== PACK_ID) {
-  throw new Error(`Gate 8 requires the schema-5 ${PACK_ID} manifest`);
+if ((parsedManifest.schemaVersion !== "5" && parsedManifest.schemaVersion !== "6")
+  || parsedManifest.id !== PACK_ID) {
+  throw new Error(`Gate 8 requires the schema-5 or schema-6 ${PACK_ID} manifest`);
 }
 const manifest = parsedManifest;
 const scenarioFile = scenarioFileSchema.parse(JSON.parse(await readFile(scenariosPath, "utf8")));
