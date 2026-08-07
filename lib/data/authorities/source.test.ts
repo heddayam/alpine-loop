@@ -29,6 +29,7 @@ describe("regional official source sets", () => {
     const cacheNamespace = "southern-east-bay-official-access";
     const localPath = path.join(root, "source.json");
     const metadataContentHash = `sha256:${"a".repeat(64)}`;
+    const inspectedSnapshotContentHash = `sha256:${createHash("sha256").update("fixture source bytes").digest("hex")}`;
     const sourceSet: OfficialSourceSet = { configRoot, filenames: ["ebrpd.json"], cacheNamespace };
     await mkdir(configRoot, { recursive: true });
     await mkdir(path.join(cacheRoot, cacheNamespace), { recursive: true });
@@ -44,6 +45,7 @@ describe("regional official source sets", () => {
       termsDecision: "Fixture use only",
       redistribution: "allowed",
       metadataContentHash,
+      inspectedSnapshotContentHash,
     }));
     await writeFile(path.join(cacheRoot, cacheNamespace, "pinned.json"), JSON.stringify({
       schemaVersion: 1,
@@ -53,9 +55,12 @@ describe("regional official source sets", () => {
     await expect(readOfficialSourceConfigs(sourceSet)).resolves.toMatchObject([{ id: "ebrpd-trails" }]);
     await expect(readOfficialSourceSnapshots(cacheRoot, sourceSet)).resolves.toMatchObject([{
       id: "ebrpd-trails",
-      contentHash: `sha256:${createHash("sha256").update("fixture source bytes").digest("hex")}`,
+      contentHash: inspectedSnapshotContentHash,
       localPath,
     }]);
+
+    await writeFile(localPath, "changed source bytes");
+    await expect(readOfficialSourceSnapshots(cacheRoot, sourceSet)).rejects.toThrow(/inspected snapshot hash/);
   });
 
   it("rejects unsafe cache namespaces and config paths", async () => {

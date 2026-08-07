@@ -17,6 +17,7 @@ const sourceConfigSchema = z.object({
   redistribution: z.enum(["allowed", "blocked", "requires-review"]),
   availability: z.string().optional(),
   metadataContentHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  inspectedSnapshotContentHash: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
 }).passthrough();
 
 export type OfficialSourceConfig = z.infer<typeof sourceConfigSchema>;
@@ -95,6 +96,9 @@ export async function refreshOfficialSourceSnapshots(
       url: config.downloadUrl,
       fileName: `${config.id}.json`,
       retrievedAt: config.retrievedAt,
+      ...(config.inspectedSnapshotContentHash
+        ? { expectedSha256: config.inspectedSnapshotContentHash as `sha256:${string}` }
+        : {}),
     });
     records.push({ id: config.id, metadataContentHash: config.metadataContentHash, localPath: cached.filePath });
     snapshots.push(snapshot(config, cached.filePath, cached.receipt.sha256));
@@ -115,6 +119,10 @@ export async function readOfficialSourceSnapshots(
     if (!record || record.metadataContentHash !== config.metadataContentHash) {
       throw new Error(`Cached official source ${config.id} does not match the pinned metadata`);
     }
-    return snapshot(config, record.localPath, await sha256File(record.localPath));
+    const contentHash = await sha256File(record.localPath);
+    if (config.inspectedSnapshotContentHash && contentHash !== config.inspectedSnapshotContentHash) {
+      throw new Error(`Cached official source ${config.id} does not match the inspected snapshot hash`);
+    }
+    return snapshot(config, record.localPath, contentHash);
   }));
 }
