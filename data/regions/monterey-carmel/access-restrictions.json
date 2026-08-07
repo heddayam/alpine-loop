@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "id": "monterey-carmel-curated-access-restrictions-2026-08-07",
+    "authority": "California State Parks",
+    "dataset": "Human-reviewed Monterey–Carmel trail access restrictions",
+    "version": "reviewed-2026-08-07-v1",
+    "retrievedAt": "2026-08-07T17:28:17Z",
+    "url": "https://www.parks.ca.gov/?page_id=579",
+    "license": "Human-reviewed facts for local evaluation; derivative redistribution requires review"
+  },
+  "restrictions": [
+    {
+      "externalId": "way/55856070",
+      "accessState": "closed",
+      "reason": "California State Parks reports Rocky Ridge Trail closed because of hazardous conditions.",
+      "review": {
+        "reviewedAt": "2026-08-07T17:28:17Z",
+        "reviewer": "Alpine Loop data review"
+      }
+    },
+    {
+      "externalId": "way/55856129",
+      "accessState": "closed",
+      "reason": "California State Parks reports Rocky Ridge Trail closed because of hazardous conditions.",
+      "review": {
+        "reviewedAt": "2026-08-07T17:28:17Z",
+        "reviewer": "Alpine Loop data review"
+      }
+    }
+  ]
+}

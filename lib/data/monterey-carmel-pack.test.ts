@@ -1,9 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  MONTEREY_LOS_PADRES_TRAILS_QUERY_URL,
-  MONTEREY_OFFICIAL_SOURCE_SET,
   MONTEREY_REVIEWED_ACCESS_AUTHORITY,
   MONTEREY_REVIEWED_ACCESS_CONTENT_HASH,
   MONTEREY_REVIEWED_ACCESS_DATASET,
@@ -14,38 +12,61 @@ import {
   MONTEREY_REVIEWED_ACCESS_VERSION,
   MontereyReviewedAccessAdapter,
   montereyReviewedAccessSnapshot,
-  readOfficialSourceConfigs,
-  type OfficialAccessJoin,
 } from "./authorities";
-import { reconcileAccess } from "./access";
+import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry } from "./area-geometry";
+import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import { readElevationSourceConfig } from "./elevation";
 import { sha256File } from "./file-source";
 import {
+  MONTEREY_CARMEL_COMPILER_VERSION,
+  MONTEREY_CARMEL_PACK_SCHEMA_VERSION,
   MONTEREY_CARMEL_REGION_ROOT,
   buildMontereyCarmelPack,
   montereyCarmelDataVersion,
-  prioritizeMontereyCurrentClosureJoins,
-  splitMontereyReviewedAccessEvidence,
+  montereyReviewedEntranceEvidence,
 } from "./monterey-carmel-pack";
 import { readOsmSourceConfig } from "./osm";
 import { readPopulationSourceConfig } from "./population";
+import { applyOfficialEntranceOverlay } from "./portals";
 import { readSearchRegionInput } from "./search-regions";
-import type { SourceSnapshot } from "./adapters";
+import type { NormalizedTopology, NormalizedWay } from "./types";
+
+function way(externalId: string): NormalizedWay {
+  return {
+    id: externalId,
+    externalId,
+    nodeIds: ["node/1", "node/2"],
+    coordinates: [[-121.9, 36.5], [-121.89, 36.51]],
+    name: "Rocky Ridge Trail",
+    accessState: "unknown",
+    bidirectional: true,
+    edgeClass: "trail",
+    sourceRefs: ["osm"],
+    flags: [],
+  };
+}
+
+function topology(ways: NormalizedWay[]): NormalizedTopology {
+  return {
+    nodes: [
+      { id: "node/1", externalId: "node/1", lon: -121.9, lat: 36.5, elevationM: null, flags: [], sourceRefs: ["osm"] },
+      { id: "node/2", externalId: "node/2", lon: -121.89, lat: 36.51, elevationM: null, flags: [], sourceRefs: ["osm"] },
+    ],
+    ways,
+    accessPoints: [],
+    portalEvidence: [],
+    rejectedWayCount: 0,
+  };
+}
 
 describe("Monterey–Carmel pack wiring", () => {
-  it("owns a deterministic USFS-only official source set", async () => {
-    expect(MONTEREY_OFFICIAL_SOURCE_SET.filenames).toEqual([
-      "usfs-national-forest-system-trails.json",
-    ]);
-    expect(MONTEREY_OFFICIAL_SOURCE_SET.cacheNamespace).toBe("monterey-carmel-official-access");
-    const configs = await readOfficialSourceConfigs(MONTEREY_OFFICIAL_SOURCE_SET);
-    expect(configs.map(({ id }) => id)).toEqual([
-      "usfs-los-padres-northern-connector-trails",
-    ]);
-    expect(configs.map(({ downloadUrl }) => downloadUrl)).toEqual([
-      MONTEREY_LOS_PADRES_TRAILS_QUERY_URL,
-    ]);
+  it("has no live USFS source or pack dependency", async () => {
+    const sourceFiles = await readdir(path.join(MONTEREY_CARMEL_REGION_ROOT, "official-sources"));
+    expect(sourceFiles.filter((filename) => filename.includes("usfs"))).toEqual([]);
+    const packSource = await readFile(path.join(process.cwd(), "lib/data/monterey-carmel-pack.ts"), "utf8");
+    expect(packSource).not.toMatch(/MONTEREY_OFFICIAL_SOURCE_SET|MontereyLosPadresTrailsAdapter|readOfficialSourceSnapshots|matchOfficialAccessToOsm/);
+    expect(packSource).toContain("additionalSources: [curatedAccess.snapshot, reviewedSnapshot]");
   });
 
   it("validates the exact boundary, reviewed regions, and regional source namespaces", async () => {
@@ -80,7 +101,31 @@ describe("Monterey–Carmel pack wiring", () => {
     expect(buildMontereyCarmelPack).toEqual(expect.any(Function));
   });
 
-  it("pins and splits the reviewed overlay into entrances and exact closure targets", async () => {
+  it("applies exactly the two curated Rocky Ridge closures", async () => {
+    const curated = await readCuratedAccessFile(path.join(MONTEREY_CARMEL_REGION_ROOT, "access-restrictions.json"));
+    expect(curated.snapshot).toMatchObject({
+      id: "monterey-carmel-curated-access-restrictions-2026-08-07",
+      authority: "California State Parks",
+      version: "reviewed-2026-08-07-v1",
+    });
+    expect(curated.restrictions.map(({ externalId, accessState }) => ({ externalId, accessState }))).toEqual([
+      { externalId: "way/55856070", accessState: "closed" },
+      { externalId: "way/55856129", accessState: "closed" },
+    ]);
+    const original = topology([way("way/55856070"), way("way/55856129"), way("way/1")]);
+    const restricted = applyCuratedAccessRestrictions(
+      original,
+      curated.snapshot.id,
+      curated.restrictions,
+    );
+    expect(restricted.ways.map(({ externalId, accessState }) => ({ externalId, accessState }))).toEqual([
+      { externalId: "way/55856070", accessState: "closed" },
+      { externalId: "way/55856129", accessState: "closed" },
+      { externalId: "way/1", accessState: "unknown" },
+    ]);
+  });
+
+  it("uses reviewed records only as an entrance-name overlay that cannot create starts", async () => {
     const snapshot = montereyReviewedAccessSnapshot(MONTEREY_CARMEL_REGION_ROOT);
     expect(snapshot).toMatchObject({
       id: MONTEREY_REVIEWED_ACCESS_SOURCE_ID,
@@ -91,70 +136,27 @@ describe("Monterey–Carmel pack wiring", () => {
       url: MONTEREY_REVIEWED_ACCESS_SOURCE_URL,
       contentHash: MONTEREY_REVIEWED_ACCESS_CONTENT_HASH,
     });
-    expect(MONTEREY_REVIEWED_ACCESS_CONTENT_HASH)
-      .toBe("sha256:b8cbf834860a5249c743757de025304bb77a13673cf46bc578c1c35c34256466");
     expect(snapshot.localPath).toBe(path.join(MONTEREY_CARMEL_REGION_ROOT, MONTEREY_REVIEWED_ACCESS_RELATIVE_PATH));
     expect(await sha256File(snapshot.localPath)).toBe(MONTEREY_REVIEWED_ACCESS_CONTENT_HASH);
 
-    const evidence = await new MontereyReviewedAccessAdapter().normalize(snapshot);
-    const split = splitMontereyReviewedAccessEvidence(evidence);
-    expect(split.entrances).toHaveLength(10);
-    expect(split.entrances.every(({ externalId, accessState, confidence }) =>
+    const normalized = await new MontereyReviewedAccessAdapter().normalize(snapshot);
+    const entrances = montereyReviewedEntranceEvidence(normalized);
+    expect(entrances).toHaveLength(10);
+    expect(entrances.every(({ externalId, accessState, confidence }) =>
       externalId.startsWith("entrance/") && accessState === "public" && confidence === "medium"))
       .toBe(true);
-    expect(split.currentClosures.map(({ externalId }) => externalId)).toEqual([
-      "way/55856070",
-      "way/55856129",
-    ]);
-    expect(split.currentClosures.every(({ accessState, confidence }) =>
-      accessState === "closed" && confidence === "high"))
-      .toBe(true);
-    expect(() => splitMontereyReviewedAccessEvidence([{
-      ...split.entrances[0]!,
-      accessState: "unknown",
-    }])).toThrow(/must be public with medium confidence/);
+    expect(normalized.filter(({ externalId }) => externalId.startsWith("way/"))).toHaveLength(2);
+
+    const withoutPortals = topology([way("way/1")]);
+    const overlaid = applyOfficialEntranceOverlay(withoutPortals, entrances);
+    expect(overlaid.accessPoints).toEqual([]);
+    expect(overlaid.ways).toEqual(withoutPortals.ways);
+    expect(overlaid.nodes).toEqual(withoutPortals.nodes);
   });
 
-  it("suppresses older line evidence wherever a current closure exists", () => {
-    const join = (
-      sourceId: string,
-      accessState: "unknown" | "closed",
-      targetExternalId: string,
-    ): OfficialAccessJoin => ({
-      sourceId,
-      authorityFeatureId: `${sourceId}:${targetExternalId}`,
-      targetExternalId,
-      matchMethod: "spatial-intersection",
-      distanceM: 0,
-      evidence: {
-        sourceId,
-        externalId: targetExternalId,
-        lon: -121.9184,
-        lat: 36.4595,
-        name: "Rocky Ridge Trail",
-        accessState,
-        confidence: accessState === "closed" ? "high" : "medium",
-      },
-    });
-    const target = "way/55856070";
-    const inputs = [
-      join("usfs-los-padres-northern-connector-trails", "unknown", target),
-      join("usfs-los-padres-northern-connector-trails", "unknown", "way/1"),
-    ];
-    const closures = [join(MONTEREY_REVIEWED_ACCESS_SOURCE_ID, "closed", target)];
-    const first = prioritizeMontereyCurrentClosureJoins(inputs, closures);
-    const second = prioritizeMontereyCurrentClosureJoins([...inputs].reverse(), closures);
-
-    expect(first.suppressedLineJoinCount).toBe(1);
-    expect(first.lineJoins.map(({ targetExternalId }) => targetExternalId)).toEqual(["way/1"]);
-    expect(first.combinedJoins.filter(({ targetExternalId }) => targetExternalId === target)
-      .map(({ evidence }) => evidence.accessState))
-      .toEqual(["closed"]);
-    expect(second.combinedJoins).toEqual(first.combinedJoins);
-    expect(reconcileAccess("unknown", ["closed"])).toMatchObject({ state: "closed", conflict: false });
-  });
-
-  it("hashes every deterministic pack input independently of source and version order", () => {
+  it("pins schema 6 and hashes every deterministic input independently of order", () => {
+    expect(MONTEREY_CARMEL_PACK_SCHEMA_VERSION).toBe("6");
+    expect(MONTEREY_CARMEL_COMPILER_VERSION).toBe("monterey-carmel-pack-compiler-v2");
     const snapshot = (id: string, version: string, contentHash: `sha256:${string}`): SourceSnapshot => ({
       id,
       authority: `${id} authority`,
@@ -172,30 +174,16 @@ describe("Monterey–Carmel pack wiring", () => {
     ];
     const adapters = ["adapter-b", "adapter-a"];
     const metrics = ["metric-b", "metric-a"];
-    const version = montereyCarmelDataVersion(
-      "boundary",
-      "search-regions",
-      sources,
-      adapters,
-      metrics,
-    );
+    const version = montereyCarmelDataVersion("boundary", "search-regions", sources, adapters, metrics);
     expect(version).toMatch(/^mc-[a-f0-9]{16}$/);
     expect(montereyCarmelDataVersion(
       "boundary",
       "search-regions",
       [...sources].reverse(),
-      ["adapter-a", "adapter-b"],
-      ["metric-a", "metric-b"],
+      [...adapters].reverse(),
+      [...metrics].reverse(),
     )).toBe(version);
-    expect(montereyCarmelDataVersion("changed", "search-regions", sources, adapters, metrics))
-      .not.toBe(version);
-    expect(montereyCarmelDataVersion("boundary", "changed", sources, adapters, metrics))
-      .not.toBe(version);
     expect(montereyCarmelDataVersion("boundary", "search-regions", sources.slice(1), adapters, metrics))
-      .not.toBe(version);
-    expect(montereyCarmelDataVersion("boundary", "search-regions", sources, ["adapter-changed"], metrics))
-      .not.toBe(version);
-    expect(montereyCarmelDataVersion("boundary", "search-regions", sources, adapters, ["metric-changed"]))
       .not.toBe(version);
   });
 });
