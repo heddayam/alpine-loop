@@ -1,5 +1,5 @@
 import { expect, type Page, type Route } from "@playwright/test";
-import type { CreateBatchRouteJobV1, GenerateClosedRoutesRequestV3 } from "../../lib/contracts";
+import type { AppSettingsV1, CreateBatchRouteJobV1, GenerateClosedRoutesRequestV3 } from "../../lib/contracts";
 import { ACCESS_POINTS, FILTER_GEOMETRY, NAMED_AREA, NAMED_AREA_SUMMARY, REACHABILITY_ID, TRAIL_NETWORK, routeResponse } from "./fixtures";
 
 const TRANSPARENT_TILE = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
@@ -12,6 +12,7 @@ export type OfflineHarness = {
   generationRequests: GenerateClosedRoutesRequestV3[];
   reachabilityRequests: unknown[];
   batchRequests: CreateBatchRouteJobV1[];
+  settingsRequests: AppSettingsV1[];
   previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">>;
   releaseGeneration(): void;
   blockedExternalRequests: string[];
@@ -38,10 +39,24 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
   const generationRequests: GenerateClosedRoutesRequestV3[] = [];
   const reachabilityRequests: unknown[] = [];
   const batchRequests: CreateBatchRouteJobV1[] = [];
+  const settingsRequests: AppSettingsV1[] = [];
   const previewRequests: OfflineHarness["previewRequests"] = [];
   const blockedExternalRequests: string[] = [];
   let releaseGeneration: () => void = () => undefined;
   const generationMayFinish = options.deferGeneration ? new Promise<void>((resolve) => { releaseGeneration = resolve; }) : Promise.resolve();
+  let settings: AppSettingsV1 = {
+    schemaVersion: 1,
+    includeUncertainAccess: true,
+    accessPointRemoteness: ["remote", "unknown"],
+    quickSearchRouteCount: 10,
+    gradeConstraintEnabled: false,
+    selectedGradePreset: "moderate",
+    gradePresets: {
+      gentle: { maximumClimbP90Pct: 8, maximumSteepClimbingSharePct: 5, maximumSteepRunMiles: 0.1, maximumDescentP90Pct: 10 },
+      moderate: { maximumClimbP90Pct: 12, maximumSteepClimbingSharePct: 20, maximumSteepRunMiles: 0.5, maximumDescentP90Pct: 15 },
+      steep: { maximumClimbP90Pct: 18, maximumSteepClimbingSharePct: 50, maximumSteepRunMiles: 1.5, maximumDescentP90Pct: 22 },
+    },
+  };
 
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -52,6 +67,13 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     const requestBody = await body(route);
     calls.push({ method: request.method(), pathname: url.pathname, body: requestBody });
 
+    if (request.method() === "GET" && url.pathname === "/api/settings") { await route.fulfill({ json: settings }); return; }
+    if (request.method() === "PUT" && url.pathname === "/api/settings") {
+      settings = structuredClone(requestBody as AppSettingsV1);
+      settingsRequests.push(settings);
+      await route.fulfill({ json: settings });
+      return;
+    }
     if (request.method() === "GET" && url.pathname.endsWith("/search-regions")) { await route.fulfill({ json: { regions: [SEARCH_REGION] } }); return; }
     if (request.method() === "GET" && url.pathname.endsWith(`/named-areas/${NAMED_AREA.id}`)) { await route.fulfill({ json: { region: NAMED_AREA } }); return; }
     if (request.method() === "POST" && url.pathname.endsWith("/access-points/preview")) {
@@ -94,7 +116,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     await route.fulfill({ status: 404, json: { error: { code: "UNEXPECTED_TEST_REQUEST", message: `No offline fixture for ${url.pathname}` } } });
   });
 
-  return { calls, generationRequests, reachabilityRequests, batchRequests, previewRequests, releaseGeneration, blockedExternalRequests };
+  return { calls, generationRequests, reachabilityRequests, batchRequests, settingsRequests, previewRequests, releaseGeneration, blockedExternalRequests };
 }
 
 export async function enterDrawnArea(page: Page): Promise<void> {

@@ -62,6 +62,18 @@ the evidence line.
   build; two consecutive `npm run test:browser` runs pass all four Chromium
   flows; the real-pack checkpoint reports zero directed-validation rejections.
 
+- 2026-08-06 — added practical grade-experience presets and persistent local
+  settings. Gentle, Moderate, and Steep constrain uphill/downhill 100 m p90
+  grade, the share of uphill distance at 10% or steeper, and the longest
+  uninterrupted 10%+ run. Schema-5 pack `scm-93c6efbcff4fde42` contains compact
+  direction-aware elevation profiles for all 863,917 directed edges and passes
+  audit with zero missing elevation profiles or audit errors. Settings persist
+  in ignored `.local-data/runtime/settings.json`; all previous Settings controls
+  remain available. Successful pack publication now removes older validated
+  builds for the same pack. The Batch resolver accepts schema 5. `npm run verify`
+  passes 334 tests across 62 files plus the production build, and two consecutive
+  `npm run test:browser` runs pass all five Chromium flows.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

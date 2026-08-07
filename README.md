@@ -22,7 +22,8 @@ npm run dev
 
 Open <http://localhost:3000> in a browser. The committed fixture keeps the UI
 and automated tests usable without generated data; route generation requires
-an installed schema-4 regional pack for Batch search.
+an installed schema-5 regional pack for Batch search and exact grade-experience
+filtering.
 
 ### Enable drive-time filters
 

@@ -329,11 +329,11 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .range-value-cell input::-webkit-inner-spin-button { margin: 0; appearance: none; }
 .range-value-cell input:disabled { color: var(--ink-3); background: var(--surface-3); }
 .range-unit-cell { overflow: hidden; color: var(--ink-3); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.grade-preset-row { min-height: 2.1rem; display: grid; grid-template-columns: minmax(0, 1fr) 7rem 2.6rem; gap: var(--s1); align-items: center; padding: 0 var(--s3); border-bottom: 1px solid var(--line); }
+.grade-preset-row { min-height: 2.1rem; display: grid; grid-template-columns: minmax(0, 1fr) 3.4rem 3.4rem 1.6rem; gap: var(--s1); align-items: center; padding: 0 var(--s3); border-bottom: 1px solid var(--line); }
 .grade-label-wrap { display: flex; gap: var(--s1); align-items: center; min-width: 0; }
-.grade-preset-row select { width: 100%; height: 1.5rem; min-width: 0; padding: 0 var(--s1); color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius); font-size: var(--fs-xs); }
+.grade-preset-row select { grid-column: 2 / 4; width: 100%; height: 1.5rem; min-width: 0; padding: 0 var(--s1); color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius); font-size: var(--fs-xs); }
 .grade-preset-row select:disabled { color: var(--ink-3); background: var(--surface-3); }
-.grade-preset-row output { color: var(--ink-2); font-size: var(--fs-xs); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.grade-preset-row output { grid-column: 4; color: var(--ink-2); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .grade-info { position: relative; flex: 0 0 auto; }
 .grade-info-button { display: grid; place-items: center; width: 1rem; height: 1rem; padding: 0; cursor: help; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 50%; font: 700 10px/1 serif; }
 .grade-info-popover { position: absolute; z-index: 20; top: calc(100% + var(--s1)); left: -.25rem; display: none; width: 20rem; padding: var(--s2); color: var(--ink); background: var(--surface); border: 1px solid var(--line-3); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(16 24 21 / 18%); }
@@ -448,6 +448,10 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .grade-preset-editor strong { font-size: var(--fs-xs); }
 .grade-preset-editor input { width: 100%; min-width: 0; height: 1.6rem; padding: 0 var(--s1); text-align: center; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius); font-size: var(--fs-xs); appearance: textfield; }
 .grade-preset-editor input::-webkit-inner-spin-button { appearance: none; }
+.grade-preset-definitions { display: grid; gap: 3px; margin-top: var(--s2); color: var(--ink-2); font-size: 10px; line-height: 1.35; }
+.grade-preset-definitions > div { display: grid; grid-template-columns: 3.5rem 1fr; gap: var(--s1); }
+.grade-preset-definitions dt { color: var(--ink); font-weight: 700; text-transform: uppercase; }
+.grade-preset-definitions dd { margin: 0; }
 .settings-error-banner { position: fixed; z-index: 80; top: 2.8rem; right: var(--s3); max-width: 22rem; padding: var(--s2) var(--s3); color: var(--danger); background: var(--danger-soft); border: 1px solid #ddb9b3; border-radius: var(--radius); font-size: var(--fs-xs); box-shadow: 0 4px 16px rgb(16 24 21 / 14%); }
 
 /* ---------------------------------------------------------------- jobs */

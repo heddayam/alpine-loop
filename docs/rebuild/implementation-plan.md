@@ -49,8 +49,9 @@ has no exact result.
 ## Active contracts and storage
 
 `POST /api/routes/generate` accepts the V3 closed-route request described in
-`closed-route-topology-plan.md`. Schema-3 and schema-4 packs may serve foreground
-generation.
+`closed-route-topology-plan.md`. Schema-3, schema-4, and schema-5 packs may serve
+foreground generation. Schema 5 adds compact direction-aware elevation profiles
+for exact grade-experience filtering.
 
 Schema 4 adds a reviewed `search_regions` catalog referencing named-area
 geometry. The Santa Cruz pack initially exposes the whole pack plus Big Basin,
@@ -70,8 +71,9 @@ Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The database
 stores the immutable request/origin snapshot, resolved contour, pinned pack data
 version, per-trailhead checkpoints, results, and diagnostics until deletion.
 One FIFO worker runs at a time. Interrupted jobs resume at the first unfinished
-trailhead and reopen their pinned pack version. Pack upgrades mark old jobs stale
-without invalidating stored result geometry.
+trailhead while their pinned pack version remains installed. Publishing a new
+pack prunes older builds, so unfinished jobs pinned to an older version become
+stale and cannot resume; already stored result geometry remains viewable.
 
 The FIFO coordinator stays in the app process, while each active job opens one
 dedicated local solver process that reuses the pinned pack repositories for the
@@ -117,5 +119,5 @@ failures remain visible in job diagnostics.
   or one otherwise-empty near miss retained.
 - Pagination, stale pack labeling, map restoration, responsive layout, keyboard
   focus, and screen-reader progress announcements pass browser coverage.
-- A real schema-4 Santa Cruz pack rebuild/audit and the complete verify/browser
+- A real schema-5 Santa Cruz pack rebuild/audit and the complete verify/browser
   suites pass before the gate is recorded complete.

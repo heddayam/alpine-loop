@@ -121,8 +121,8 @@ data/fixtures/                          committed tiny deterministic inputs
 - Download to a temporary filename, verify, then atomically rename.
 - Never mutate a source snapshot in place.
 - Build to a staging directory and publish only after all validation succeeds.
-- Point an atomic `current` manifest/symlink at the new version; preserve the
-  previous valid version for rollback.
+- Point an atomic `current` manifest/symlink at the new version, then prune older
+  validated builds for that pack. Failed builds leave the current build intact.
 - Database and manifest schema versions are separate from data versions.
 - Runtime opens packs read-only and verifies manifest/database compatibility.
 - Large files are not committed and Git LFS is unnecessary for the first slice.

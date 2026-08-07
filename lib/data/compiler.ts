@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -376,6 +376,24 @@ async function writeCurrentPointer(packRoot: string, dataVersion: string): Promi
   await rename(temporary, path.join(packRoot, "current.json"));
 }
 
+async function pruneOldPackVersions(packRoot: string, packId: string, currentDataVersion: string): Promise<void> {
+  const entries = await readdir(packRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === currentDataVersion || entry.name.startsWith(".")) continue;
+    const directory = path.join(packRoot, entry.name);
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    if (!candidate || typeof candidate !== "object") continue;
+    const manifest = candidate as { id?: unknown; dataVersion?: unknown };
+    if (manifest.id !== packId || manifest.dataVersion !== entry.name) continue;
+    await rm(directory, { recursive: true });
+  }
+}
+
 function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath"> {
   return {
     id: source.id,
@@ -521,6 +539,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     await options.beforePublish?.();
     await rename(stagingDirectory, finalDirectory);
     await writeCurrentPointer(packRoot, manifest.dataVersion);
+    await pruneOldPackVersions(packRoot, manifest.id, manifest.dataVersion);
     return {
       packDirectory: finalDirectory,
       databasePath: path.join(finalDirectory, "pack.sqlite"),
