@@ -47,6 +47,7 @@ import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from 
 const PACK_ID = "monterey-carmel";
 export const MONTEREY_CARMEL_PACK_SCHEMA_VERSION = "6" as const;
 export const MONTEREY_CARMEL_COMPILER_VERSION = "monterey-carmel-pack-compiler-v2";
+const CURATED_ACCESS_HASH = "sha256:b9e5faa29030c6c0ea7c86d1a5f675cd5ae2ca0d8d68928cbf98f80a4b67b2f1";
 
 export const MONTEREY_CARMEL_REGION_ROOT = path.resolve("data/regions/monterey-carmel");
 
@@ -274,7 +275,7 @@ export async function buildMontereyCarmelPack(
   const [boundaryContents, searchRegionContents, curatedAccess] = await Promise.all([
     readFile(boundaryPath, "utf8"),
     readFile(searchRegionPath, "utf8"),
-    readCuratedAccessFile(restrictionPath),
+    readCuratedAccessFile(restrictionPath, CURATED_ACCESS_HASH),
   ]);
   const boundary = parseBoundary(boundaryContents);
   const reviewedSnapshot = montereyReviewedAccessSnapshot(regionRoot);
