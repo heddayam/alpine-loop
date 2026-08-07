@@ -1,6 +1,7 @@
 import registryInput from "@/data/regions/registry.json";
 import { regionRegistryV1Schema } from "@/lib/contracts";
 import { buildSantaCruzPack } from "./santa-cruz-pack";
+import { buildSouthernEastBayPack } from "./southern-east-bay-pack";
 import type { PackBuildResult } from "./types";
 
 export type RegionalPackBuildOptions = {
@@ -20,6 +21,7 @@ export type RegionalPackBuilder = (options: RegionalPackBuildOptions) => Promise
 const registry = regionRegistryV1Schema.parse(registryInput);
 const builders = new Map<string, RegionalPackBuilder>([
   ["santa-cruz-mountains", buildSantaCruzPack],
+  ["southern-east-bay", buildSouthernEastBayPack],
 ]);
 
 export function listRegionalPackBuilderIds(): string[] {
