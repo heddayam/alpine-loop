@@ -27,7 +27,7 @@ if (!databasePath || !manifestPath) {
 
 const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
 if (parsedManifest.schemaVersion !== "3" && parsedManifest.schemaVersion !== "4" && parsedManifest.schemaVersion !== "5" && parsedManifest.schemaVersion !== "6") {
-  throw new Error("The closed-route checkpoint requires a schema-3, schema-4, or schema-5 pack");
+  throw new Error("The closed-route checkpoint requires a schema-3, schema-4, schema-5, or schema-6 pack");
 }
 const manifest = parsedManifest;
 const effortArgument = argument("--effort") ?? "thorough";
@@ -57,7 +57,7 @@ try {
       closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
       distanceMiles: { min: minimumDistanceMiles, max: maximumDistanceMiles },
       ...(minimumDistanceMiles === 6 && maximumDistanceMiles === 10
-        ? { elevationGainFeet: { min: 1_500, max: 2_500 } }
+        ? { elevationGainFeet: { min: 1_500, max: 2_600 } }
         : {}),
       includeUncertainAccess: true,
       accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
@@ -80,6 +80,7 @@ try {
       wallTimeMs: performance.now() - startedAt,
       exactCount: response.exact.length,
       nearMissCount: response.nearMisses.length,
+      nearMissViolations: response.nearMisses.map(({ id, violations }) => ({ id, violations })),
       diagnostics: response.diagnostics,
     });
   }
