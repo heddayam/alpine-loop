@@ -1,56 +1,31 @@
-# Monterey–Carmel official access evidence
+# Monterey–Carmel reviewed access evidence
 
-Reviewed on 2026-08-07. Runtime and automated tests never call these services.
-Refresh downloads are immutable, hashed, and fail closed on an empty response,
-schema or feature-count drift, transfer truncation, undocumented values, or a
-license decision other than the one pinned here.
+Reviewed on 2026-08-07. Runtime and automated tests never call the documented
+services. The pack has no live official-access refresh dependency.
 
-## Build inputs
+## Published build inputs
 
-`reviewed-access.json` is a small committed overlay because MPRPD and California
-State Parks do not publish a reusable entrance/closure feed covering these
-systems. BLM's machine-readable national Trail Head layer supplies the exact
-Fort Ord entrance geometry. The overlay records eight exact official page/map
-or query responses (URL,
-upstream/review date, SHA-256, byte length, license decision, and reviewed
-facts), ten named entrance points, and the current Garrapata Rocky Ridge Trail
-closure. Coordinates were manually cross-checked against the named map feature;
-they are conservative snap candidates and do not create connector edges.
+`../access-restrictions.json` is the sole algorithmic official-access input. It
+contains exactly two reviewed removals, `way/55856070` and `way/55856129`, for
+the California State Parks Rocky Ridge Trail hazard closure. The pack build
+applies them by exact OSM way ID before deriving portals and fails if either way
+is absent from the pinned extract.
 
-The normalized ID convention is deliberate:
+`reviewed-access.json` remains committed as a provenance-rich name overlay. Its
+ten entrance records may rename a nearby topology-derived portal, but never
+create an access point or connector edge. The closure record retained in that
+historical review is provenance only; it is not applied by the pack. Both
+committed files are hashed pack sources.
 
-- `entrance/<stable-id>` is a named entrance candidate. It is public evidence
-  with medium confidence; permit, parking, signed-trail, and designated-trail
-  conditions remain explicit in the committed record and display name.
-- `way/<id>` is high-confidence current closure evidence for an exact OSM way.
-  The reviewed Rocky Ridge closure targets `way/55856070` and `way/55856129`.
-  The pack build must verify both targets exist in the pinned Geofabrik snapshot
-  before applying the closure and must fail if either is absent.
-
-Creekside Terrace and Badger Hills use the exact EPSG:4326 geometry from BLM's
+Creekside Terrace and Badger Hills use exact EPSG:4326 geometry from BLM's
 filtered two-feature Trail Head query. The query's `LAT`/`LONG` attributes agree
-with its geometry within two metres; the layer credits BLM's Network Operations
-Center and is a U.S. Government work.
+with its geometry within two metres. Other entrance coordinates were manually
+cross-checked against the named official map feature.
 
-No separate `current-closures.json` is needed: the strict reviewed snapshot
-distinguishes entrance records from exact trail-closure targets and the adapter
-emits closures at the higher official-restriction precedence.
-
-`usfs-national-forest-system-trails.json` pins the official USDA Forest Service
-EDW layer and a northern Monterey review envelope. The exact query returned 15
-features with unique `globalid` values. The response exposes `allowed_terra_use`
-values `21` or `321`, null `hiker_pedestrian_managed`,
-`hiker_pedestrian_accpt`, `hiker_pedestrian_disc`, and
-`hiker_pedestrian_restricted`, plus `hiker_pedestrian_accpt_disc` equal to
-`01/01-12/31`. Those codes do not document affirmative pedestrian permission or
-a current closure by themselves. Adapter v1 therefore maps every accepted
-record to **unknown** access, maps no value to public/prohibited/closed, and
-fails on any other value. The lines are cross-check/join candidates only; exact
-pack coverage still discards deep Big Sur and Ventana geometry.
-
-`MONTEREY_OFFICIAL_SOURCE_SET` contains only the USFS config. The reviewed
-overlay is read from its exact committed path by
-`montereyReviewedAccessSnapshot()` and is not refreshed from the network.
+The former USFS National Forest System Trails input was removed. Its 15 matched
+features had no affirmative pedestrian permission or prohibition and measured
+zero algorithmic route-set delta, so refreshing and line-matching it added no
+pack behavior.
 
 ## Excluded cross-check
 
@@ -58,13 +33,10 @@ overlay is read from its exact committed path by
 statewide ArcGIS layer and an exact Point Lobos/Garrapata query. The inspected
 query returned zero features; the layer has no pedestrian access or closure
 field. Its terms prohibit alteration, require attribution, and require advance
-approval for commercial use. It is therefore excluded from
-`MONTEREY_OFFICIAL_SOURCE_SET` and never ingested. The reviewed State Parks
-pages/map are used instead, with derivative-pack redistribution still marked
-for review.
+approval for commercial use. It is therefore documentation only and is never
+ingested.
 
 The State Parks host's certificate chain could not be validated by the local
 review environment. Exact page bytes were retrieved only for hashing after the
 same canonical pages were independently verified through the web retrieval
-service. Refresh automation must not disable TLS verification; it should fail
-closed until the host presents a verifiable chain.
+service. Refresh automation must not disable TLS verification.

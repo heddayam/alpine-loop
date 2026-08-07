@@ -2,23 +2,15 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  MONTEREY_OFFICIAL_SOURCE_SET,
   MONTEREY_REVIEWED_ACCESS_SOURCE_ID,
-  MontereyLosPadresTrailsAdapter,
   MontereyReviewedAccessAdapter,
-  matchOfficialAccessToOsmWithReport,
   montereyReviewedAccessSnapshot,
-  readOfficialSourceSnapshots,
-  refreshOfficialSourceSnapshots,
-  type OfficialAccessJoin,
-  type OfficialAccessJoinFeature,
 } from "./authorities";
-import { applyOfficialWayEvidenceToAccessPoints } from "./access-point-evidence";
-import { snapAccessPointsToTopology } from "./access-point-snap";
 import type { NormalizedAccessEvidence, SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
-import { assertPackAuditPassed, auditOfficialAccessJoins, auditSqlitePack } from "./audit";
+import { assertPackAuditPassed, auditSqlitePack } from "./audit";
 import { compilePack, type PackSeed } from "./compiler";
+import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import {
   readElevationSourceConfig,
   readPinnedThreeDepCollection,
@@ -26,7 +18,6 @@ import {
   UvRasterioThreeDepElevationSampler,
   validateUvRasterioPrerequisites,
 } from "./elevation";
-import { addOfficialAccessPointsToTopology, officialAccessPointId } from "./official-access-points";
 import {
   OsmPbfNamedAreaAdapter,
   OsmPbfTopologyAdapter,
@@ -42,16 +33,19 @@ import {
   UvRasterioPopulationSampler,
   validateUvRasterioPopulationPrerequisites,
 } from "./population";
-import { PreparedOfficialAccessAdapter } from "./prepared-official-access-adapter";
+import {
+  applyOfficialEntranceOverlay,
+  deriveTrailheadPortals,
+  stripPortalBuildContext,
+} from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { POPULATION_RADIUS_M } from "./remoteness";
 import { readSearchRegionInput } from "./search-regions";
-import type { NormalizedTopology, PackBuildResult } from "./types";
+import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from "./types";
 
 const PACK_ID = "monterey-carmel";
-const COMPILER_VERSION = "monterey-carmel-pack-compiler-v1";
-const ACCESS_SNAP_DISTANCE_M = 200;
-const OFFICIAL_TRAILS_SOURCE_ID = "usfs-los-padres-northern-connector-trails";
+export const MONTEREY_CARMEL_PACK_SCHEMA_VERSION = "6" as const;
+export const MONTEREY_CARMEL_COMPILER_VERSION = "monterey-carmel-pack-compiler-v2";
 
 export const MONTEREY_CARMEL_REGION_ROOT = path.resolve("data/regions/monterey-carmel");
 
@@ -67,46 +61,45 @@ export type MontereyCarmelPackBuildOptions = {
   refresh: boolean;
 };
 
+type PortalAccessReport = {
+  portals: {
+    total: number;
+    insideCoverageCount: number;
+    outsideCoverageCount: number;
+    byAccessState: Record<"public" | "unknown" | "private" | "closed" | "prohibited", number>;
+    byConfidence: Record<"high" | "medium" | "low", number>;
+    withParkingEvidenceCount: number;
+  };
+  entranceOverlay: {
+    sourceId: string;
+    inputCount: number;
+    matchedEvidenceCount: number;
+    unmatchedExternalIds: string[];
+    matchedPortalCount: number;
+  };
+  restrictions: {
+    sourceId: string;
+    appliedCount: number;
+    targetExternalIds: string[];
+  };
+  buildContext: {
+    inputNodeCount: number;
+    publishedNodeCount: number;
+    inputWayCount: number;
+    publishedWayCount: number;
+    trailWayCount: number;
+    serviceRoadWayCount: number;
+    streetWayCount: number;
+    sidewalkWayCount: number;
+    portalEvidenceCount: number;
+    strippedNodeCount: number;
+    strippedWayCount: number;
+  };
+};
+
 export type MontereyCarmelPackBuildResult = {
   pack: PackBuildResult;
-  accessNormalization: {
-    snapDistanceM: number;
-    osmSnappedCount: number;
-    osmAlreadyConnectedCount: number;
-    osmDeduplicatedCount: number;
-    osmRejectedAccessPointIds: string[];
-    officialEntranceInputCount: number;
-    officialEntranceAddedCount: number;
-    officialEntranceRejectedCount: number;
-    officialEntranceDeduplicatedCount: number;
-    officialEntranceRejectedAccessPointIds: string[];
-    linePromotedPublicCount: number;
-    lineRestrictedCount: number;
-    lineConflictCount: number;
-    currentClosureCount: number;
-  };
-  officialAccess: {
-    entrances: {
-      sourceId: string;
-      inputCount: number;
-      addedCount: number;
-      rejectedCount: number;
-      deduplicatedCount: number;
-    };
-    lineMatch: {
-      sourceId: string;
-      authorityFeatureCount: number;
-      appliedJoinCount: number;
-      ambiguousOsmWayCount: number;
-      unmatchedAuthorityFeatureCount: number;
-    };
-    currentClosures: {
-      sourceId: string;
-      exactJoinCount: number;
-      suppressedLineJoinCount: number;
-      targetExternalIds: string[];
-    };
-  };
+  portalAccess: PortalAccessReport;
   regionalAudit: Awaited<ReturnType<typeof auditSqlitePack>>;
 };
 
@@ -128,12 +121,6 @@ function parseBoundary(contents: string): BoundaryFeature {
   };
 }
 
-function requiredSnapshot(snapshots: readonly SourceSnapshot[], id: string): SourceSnapshot {
-  const snapshot = snapshots.find((candidate) => candidate.id === id);
-  if (!snapshot) throw new Error(`Missing official snapshot ${id}`);
-  return snapshot;
-}
-
 function newestRetrieval(snapshots: readonly SourceSnapshot[]): string {
   return snapshots.map(({ retrievedAt }) => retrievedAt).sort().at(-1)!;
 }
@@ -148,7 +135,7 @@ export function montereyCarmelDataVersion(
   const hash = createHash("sha256");
   hash.update(boundaryContents);
   hash.update(searchRegionContents);
-  hash.update(`${COMPILER_VERSION}\n`);
+  hash.update(`${MONTEREY_CARMEL_COMPILER_VERSION}\n`);
   for (const version of [...adapterVersions].sort()) hash.update(`adapter\0${version}\n`);
   for (const version of [...metricVersions].sort()) hash.update(`metric\0${version}\n`);
   for (const snapshot of [...snapshots].sort((first, second) => first.id.localeCompare(second.id))) {
@@ -157,36 +144,32 @@ export function montereyCarmelDataVersion(
   return `mc-${hash.digest("hex").slice(0, 16)}`;
 }
 
-function accessInventory(topology: NormalizedTopology, boundary: AreaGeometry) {
-  const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
-  const byKind = { trailhead: 0, parking: 0 };
-  const byState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
-  const cluster = {
-    northernFortOrd: 0,
-    carmelValley: 0,
-    coastal: 0,
-  };
-  let outsideCoverageCount = 0;
-  for (const accessPoint of topology.accessPoints) {
-    const node = nodes.get(accessPoint.nodeId);
-    if (!node) throw new Error(`Access point ${accessPoint.id} references missing node ${accessPoint.nodeId}`);
-    if (!pointInArea([node.lon, node.lat], boundary)) {
-      outsideCoverageCount += 1;
+/**
+ * The committed reviewed file still records its original closure review for
+ * provenance, but only entrance records participate in the portal overlay.
+ * Exact way restrictions are exclusively sourced from access-restrictions.json.
+ */
+export function montereyReviewedEntranceEvidence(
+  evidence: readonly NormalizedAccessEvidence[],
+): NormalizedAccessEvidence[] {
+  const entrances: NormalizedAccessEvidence[] = [];
+  for (const item of evidence) {
+    if (/^entrance\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.externalId)) {
+      if (item.accessState !== "public" || item.confidence !== "medium") {
+        throw new Error(`Reviewed entrance evidence ${item.externalId} must be public with medium confidence`);
+      }
+      entrances.push(item);
       continue;
     }
-    byKind[accessPoint.kind] += 1;
-    byState[accessPoint.accessState] += 1;
-    if (node.lat >= 36.58) cluster.northernFortOrd += 1;
-    else if (node.lon <= -121.84) cluster.coastal += 1;
-    else cluster.carmelValley += 1;
+    if (/^way\/[1-9]\d*$/.test(item.externalId)) {
+      if (item.accessState !== "closed" || item.confidence !== "high") {
+        throw new Error(`Reviewed closure provenance ${item.externalId} must be closed with high confidence`);
+      }
+      continue;
+    }
+    throw new Error(`Reviewed access evidence has unsupported target ${item.externalId}`);
   }
-  const total = byKind.trailhead + byKind.parking;
-  const inventory = { total, byKind, byState, cluster, outsideCoverageCount };
-  if (total < 1_000 || byKind.trailhead < 10 || byState.public < 1
-    || cluster.northernFortOrd < 1 || cluster.carmelValley < 1 || cluster.coastal < 1) {
-    throw new Error(`Access inventory is not regionally useful: ${JSON.stringify(inventory)}`);
-  }
-  return inventory;
+  return entrances.sort((first, second) => first.externalId.localeCompare(second.externalId));
 }
 
 async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceSnapshot): Promise<NormalizedTopology> {
@@ -196,82 +179,88 @@ async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceS
   return topologies[0]!;
 }
 
-function joinOrder(first: OfficialAccessJoin, second: OfficialAccessJoin): number {
-  return first.sourceId.localeCompare(second.sourceId)
-    || first.authorityFeatureId.localeCompare(second.authorityFeatureId)
-    || first.targetExternalId.localeCompare(second.targetExternalId);
+function newlyCarriesSource(
+  before: readonly NormalizedAccessPoint[],
+  after: readonly NormalizedAccessPoint[],
+  sourceId: string,
+): boolean {
+  const beforeById = new Map(before.map((portal) => [portal.id, portal]));
+  return after.some((portal) =>
+    portal.sourceRefs.includes(sourceId) && !beforeById.get(portal.id)?.sourceRefs.includes(sourceId));
 }
 
-export function splitMontereyReviewedAccessEvidence(evidence: readonly NormalizedAccessEvidence[]): {
-  entrances: NormalizedAccessEvidence[];
-  currentClosures: NormalizedAccessEvidence[];
-} {
-  const entrances: NormalizedAccessEvidence[] = [];
-  const currentClosures: NormalizedAccessEvidence[] = [];
+function entranceOverlayReport(
+  topology: NormalizedTopology,
+  evidence: readonly NormalizedAccessEvidence[],
+  overlaid: NormalizedTopology,
+): PortalAccessReport["entranceOverlay"] {
+  const unmatchedExternalIds: string[] = [];
   for (const item of evidence) {
-    if (/^entrance\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.externalId)) {
-      if (item.accessState !== "public" || item.confidence !== "medium") {
-        throw new Error(`Reviewed entrance evidence ${item.externalId} must be public with medium confidence`);
-      }
-      entrances.push(item);
-    } else if (/^way\/[1-9]\d*$/.test(item.externalId)) {
-      if (item.accessState !== "closed" || item.confidence !== "high") {
-        throw new Error(`Reviewed way evidence ${item.externalId} must be a high-confidence current closure`);
-      }
-      currentClosures.push(item);
-    } else {
-      throw new Error(`Reviewed access evidence has unsupported target ${item.externalId}`);
+    const singlyOverlaid = applyOfficialEntranceOverlay(topology, [item]);
+    if (!newlyCarriesSource(topology.accessPoints, singlyOverlaid.accessPoints, item.sourceId)) {
+      unmatchedExternalIds.push(item.externalId);
     }
   }
-  const order = (first: NormalizedAccessEvidence, second: NormalizedAccessEvidence) =>
-    first.externalId.localeCompare(second.externalId);
-  return { entrances: entrances.sort(order), currentClosures: currentClosures.sort(order) };
-}
-
-export function prioritizeMontereyCurrentClosureJoins(
-  lineJoins: readonly OfficialAccessJoin[],
-  closureJoins: readonly OfficialAccessJoin[],
-): {
-  lineJoins: OfficialAccessJoin[];
-  combinedJoins: OfficialAccessJoin[];
-  suppressedLineJoinCount: number;
-} {
-  const closureTargets = new Set(closureJoins.map(({ targetExternalId }) => targetExternalId));
-  const retainedLineJoins = lineJoins.filter(({ targetExternalId }) => !closureTargets.has(targetExternalId));
+  const matchedPortalCount = overlaid.accessPoints.filter((portal) =>
+    evidence.some(({ sourceId }) => portal.sourceRefs.includes(sourceId)))
+    .length;
   return {
-    lineJoins: retainedLineJoins,
-    combinedJoins: [...retainedLineJoins, ...closureJoins].sort(joinOrder),
-    suppressedLineJoinCount: lineJoins.length - retainedLineJoins.length,
+    sourceId: MONTEREY_REVIEWED_ACCESS_SOURCE_ID,
+    inputCount: evidence.length,
+    matchedEvidenceCount: evidence.length - unmatchedExternalIds.length,
+    unmatchedExternalIds: unmatchedExternalIds.sort(),
+    matchedPortalCount,
   };
 }
 
-function exactCurrentClosureJoins(
-  topology: NormalizedTopology,
-  evidence: readonly NormalizedAccessEvidence[],
-): { features: OfficialAccessJoinFeature[]; joins: OfficialAccessJoin[] } {
-  const ways = new Map(topology.ways.map((way) => [way.externalId, way]));
-  const features: OfficialAccessJoinFeature[] = [];
-  const joins: OfficialAccessJoin[] = [];
-  for (const item of evidence) {
-    const way = ways.get(item.externalId);
-    if (!way) throw new Error(`Current closure targets missing pinned topology way ${item.externalId}`);
-    if (item.accessState !== "closed") throw new Error(`Current closure ${item.externalId} is not closed evidence`);
-    features.push({
-      sourceId: item.sourceId,
-      authorityFeatureId: item.externalId,
-      geometry: { type: "LineString", coordinates: way.coordinates.map((coordinate) => [...coordinate]) },
-      evidence: item,
-    });
-    joins.push({
-      sourceId: item.sourceId,
-      authorityFeatureId: item.externalId,
-      targetExternalId: item.externalId,
-      matchMethod: "spatial-intersection",
-      distanceM: 0,
-      evidence: item,
-    });
+function portalInventory(topology: NormalizedTopology, boundary: AreaGeometry): PortalAccessReport["portals"] {
+  const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
+  const byAccessState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
+  const byConfidence = { high: 0, medium: 0, low: 0 };
+  let insideCoverageCount = 0;
+  let outsideCoverageCount = 0;
+  let withParkingEvidenceCount = 0;
+  for (const portal of topology.accessPoints) {
+    const node = nodes.get(portal.nodeId);
+    if (!node) throw new Error(`Portal ${portal.id} references missing node ${portal.nodeId}`);
+    if (pointInArea([node.lon, node.lat], boundary)) insideCoverageCount += 1;
+    else outsideCoverageCount += 1;
+    byAccessState[portal.accessState] += 1;
+    byConfidence[portal.confidence] += 1;
+    if (portal.parkingEvidence) withParkingEvidenceCount += 1;
   }
-  return { features, joins: joins.sort(joinOrder) };
+  if (topology.accessPoints.length === 0 || insideCoverageCount === 0) {
+    throw new Error("Portal derivation produced no in-coverage Monterey–Carmel access points");
+  }
+  return {
+    total: topology.accessPoints.length,
+    insideCoverageCount,
+    outsideCoverageCount,
+    byAccessState,
+    byConfidence,
+    withParkingEvidenceCount,
+  };
+}
+
+function buildContextReport(
+  input: NormalizedTopology,
+  published: NormalizedTopology,
+): PortalAccessReport["buildContext"] {
+  const wayCount = (edgeClass: "trail" | "service-road" | "street" | "sidewalk") =>
+    input.ways.filter((way) => way.edgeClass === edgeClass).length;
+  return {
+    inputNodeCount: input.nodes.length,
+    publishedNodeCount: published.nodes.length,
+    inputWayCount: input.ways.length,
+    publishedWayCount: published.ways.length,
+    trailWayCount: wayCount("trail"),
+    serviceRoadWayCount: wayCount("service-road"),
+    streetWayCount: wayCount("street"),
+    sidewalkWayCount: wayCount("sidewalk"),
+    portalEvidenceCount: input.portalEvidence?.length ?? 0,
+    strippedNodeCount: input.nodes.length - published.nodes.length,
+    strippedWayCount: input.ways.length - published.ways.length,
+  };
 }
 
 export async function buildMontereyCarmelPack(
@@ -280,9 +269,11 @@ export async function buildMontereyCarmelPack(
   const regionRoot = MONTEREY_CARMEL_REGION_ROOT;
   const boundaryPath = path.join(regionRoot, "boundary.geojson");
   const searchRegionPath = path.join(regionRoot, "search-regions.json");
-  const [boundaryContents, searchRegionContents] = await Promise.all([
+  const restrictionPath = path.join(regionRoot, "access-restrictions.json");
+  const [boundaryContents, searchRegionContents, curatedAccess] = await Promise.all([
     readFile(boundaryPath, "utf8"),
     readFile(searchRegionPath, "utf8"),
+    readCuratedAccessFile(restrictionPath),
   ]);
   const boundary = parseBoundary(boundaryContents);
   const reviewedSnapshot = montereyReviewedAccessSnapshot(regionRoot);
@@ -303,7 +294,7 @@ export async function buildMontereyCarmelPack(
     validateUvRasterioPopulationPrerequisites(),
     reviewedAdapter.validate(reviewedSnapshot),
   ]);
-  const [osmSnapshot, dem, population, officialSnapshots] = await Promise.all([
+  const [osmSnapshot, dem, population] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
@@ -313,13 +304,8 @@ export async function buildMontereyCarmelPack(
     options.refresh
       ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
       : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
-    options.refresh
-      ? refreshOfficialSourceSnapshots(options.sourceCacheRoot, MONTEREY_OFFICIAL_SOURCE_SET)
-      : readOfficialSourceSnapshots(options.sourceCacheRoot, MONTEREY_OFFICIAL_SOURCE_SET),
   ]);
 
-  const trailsSnapshot = requiredSnapshot(officialSnapshots, OFFICIAL_TRAILS_SOURCE_ID);
-  const trailsAdapter = new MontereyLosPadresTrailsAdapter();
   const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
     boundaryPath,
     preparationRoot: path.join(options.preparationRoot, "osm"),
@@ -329,56 +315,35 @@ export async function buildMontereyCarmelPack(
     preparationRoot: path.join(options.preparationRoot, "osm"),
     namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
   });
-
-  const osmAccess = snapAccessPointsToTopology(
-    await collectTopology(sourceTopologyAdapter, osmSnapshot),
-    ACCESS_SNAP_DISTANCE_M,
+  const classifiedTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
+  const restrictedTopology = applyCuratedAccessRestrictions(
+    classifiedTopology,
+    curatedAccess.snapshot.id,
+    curatedAccess.restrictions,
   );
-  const reviewedEvidence = splitMontereyReviewedAccessEvidence(
+  const reviewedEntrances = montereyReviewedEntranceEvidence(
     await reviewedAdapter.normalize(reviewedSnapshot),
   );
-  const entrances = addOfficialAccessPointsToTopology(
-    osmAccess.topology,
-    reviewedEvidence.entrances,
-    ACCESS_SNAP_DISTANCE_M,
-  );
-  const acceptedEntranceIds = new Set(entrances.topology.accessPoints.map(({ id }) => id));
-  const acceptedEntranceEvidence = reviewedEvidence.entrances.filter((evidence) =>
-    acceptedEntranceIds.has(officialAccessPointId(evidence)));
-
-  // The reviewed entrance points are handled by the conservative node snap
-  // above and never produce invented connector edges. Only the official USFS
-  // trail lines participate in spatial matching to OSM ways.
-  const lineFeatures = await trailsAdapter.normalizeForJoin(trailsSnapshot);
-  const lineMatch = matchOfficialAccessToOsmWithReport(entrances.topology, lineFeatures);
-  const currentClosureMatches = exactCurrentClosureJoins(
-    entrances.topology,
-    reviewedEvidence.currentClosures,
-  );
-  const prioritizedJoins = prioritizeMontereyCurrentClosureJoins(
-    lineMatch.joins,
-    currentClosureMatches.joins,
-  );
-  const accessEvidence = applyOfficialWayEvidenceToAccessPoints(
-    entrances.topology,
-    prioritizedJoins.combinedJoins,
-  );
-  const inventory = accessInventory(accessEvidence.topology, boundary.geometry);
-  const officialJoinAudit = auditOfficialAccessJoins(
-    [...lineFeatures, ...currentClosureMatches.features],
-    [...lineMatch.joins, ...currentClosureMatches.joins],
-    new Set(entrances.topology.ways.map(({ externalId }) => externalId)),
-  );
-  if (officialJoinAudit.errors.length) {
-    throw new Error(`Official access join audit failed:\n${officialJoinAudit.errors.join("\n")}`);
-  }
+  const derivedTopology = deriveTrailheadPortals(restrictedTopology);
+  const overlaidTopology = applyOfficialEntranceOverlay(derivedTopology, reviewedEntrances);
+  const publishedTopology = stripPortalBuildContext(overlaidTopology);
+  const portalAccess: PortalAccessReport = {
+    portals: portalInventory(overlaidTopology, boundary.geometry),
+    entranceOverlay: entranceOverlayReport(derivedTopology, reviewedEntrances, overlaidTopology),
+    restrictions: {
+      sourceId: curatedAccess.snapshot.id,
+      appliedCount: curatedAccess.restrictions.length,
+      targetExternalIds: curatedAccess.restrictions.map(({ externalId }) => externalId),
+    },
+    buildContext: buildContextReport(restrictedTopology, publishedTopology),
+  };
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
   const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
   await populationSampler.verify(population.collection);
   const snapshots = [
     osmSnapshot,
-    trailsSnapshot,
+    curatedAccess.snapshot,
     reviewedSnapshot,
     dem.snapshot,
     population.snapshot,
@@ -386,12 +351,11 @@ export async function buildMontereyCarmelPack(
   const adapterVersions = [
     sourceTopologyAdapter.adapterVersion,
     namedAreaAdapter.adapterVersion,
-    trailsAdapter.adapterVersion,
     reviewedAdapter.adapterVersion,
   ];
   const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
   const seed: PackSeed = {
-    schemaVersion: "5",
+    schemaVersion: MONTEREY_CARMEL_PACK_SCHEMA_VERSION,
     id: PACK_ID,
     name: "Monterey–Carmel",
     dataVersion: montereyCarmelDataVersion(
@@ -401,7 +365,7 @@ export async function buildMontereyCarmelPack(
       adapterVersions,
       metricVersions,
     ),
-    compilerVersion: COMPILER_VERSION,
+    compilerVersion: MONTEREY_CARMEL_COMPILER_VERSION,
     coverage: { bbox: areaGeometryBounds(boundary.geometry), boundary: boundary.geometry },
     display: { center: [-121.83, 36.52], zoom: 10.5 },
     capabilities: {
@@ -411,6 +375,7 @@ export async function buildMontereyCarmelPack(
       closedRouteTopology: true,
       batchSearchRegions: true,
       elevationProfiles: true,
+      portalAccessPoints: true,
     },
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",
@@ -425,25 +390,10 @@ export async function buildMontereyCarmelPack(
     seed,
     builtAt: newestRetrieval(snapshots),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, accessEvidence.topology),
+      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, publishedTopology),
       snapshot: osmSnapshot,
     },
-    officialAccess: {
-      adapter: new PreparedOfficialAccessAdapter(
-        trailsAdapter,
-        prioritizedJoins.lineJoins.map(({ evidence }) => evidence),
-      ),
-      snapshot: trailsSnapshot,
-    },
-    additionalOfficialAccess: [
-      {
-        adapter: new PreparedOfficialAccessAdapter(
-          reviewedAdapter,
-          [...acceptedEntranceEvidence, ...reviewedEvidence.currentClosures],
-        ),
-        snapshot: reviewedSnapshot,
-      },
-    ],
+    additionalSources: [curatedAccess.snapshot, reviewedSnapshot],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
     population: { sampler: populationSampler, snapshot: population.snapshot },
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
@@ -456,61 +406,14 @@ export async function buildMontereyCarmelPack(
     auditPath: pack.auditPath,
   });
   assertPackAuditPassed(regionalAudit);
-  const accessNormalization = {
-    snapDistanceM: ACCESS_SNAP_DISTANCE_M,
-    osmSnappedCount: osmAccess.snappedCount,
-    osmAlreadyConnectedCount: osmAccess.alreadyConnectedCount,
-    osmDeduplicatedCount: osmAccess.deduplicatedCount,
-    osmRejectedAccessPointIds: osmAccess.rejectedAccessPointIds,
-    officialEntranceInputCount: reviewedEvidence.entrances.length,
-    officialEntranceAddedCount: entrances.addedCount,
-    officialEntranceRejectedCount: entrances.rejectedCount,
-    officialEntranceDeduplicatedCount: entrances.deduplicatedCount,
-    officialEntranceRejectedAccessPointIds: entrances.rejectedAccessPointIds,
-    linePromotedPublicCount: accessEvidence.promotedPublicCount,
-    lineRestrictedCount: accessEvidence.restrictedCount,
-    lineConflictCount: accessEvidence.conflictedCount,
-    currentClosureCount: currentClosureMatches.joins.length,
-  };
-  const officialAccess = {
-    entrances: {
-      sourceId: reviewedSnapshot.id,
-      inputCount: reviewedEvidence.entrances.length,
-      addedCount: entrances.addedCount,
-      rejectedCount: entrances.rejectedCount,
-      deduplicatedCount: entrances.deduplicatedCount,
-    },
-    lineMatch: {
-      sourceId: trailsSnapshot.id,
-      authorityFeatureCount: lineFeatures.length,
-      appliedJoinCount: lineMatch.joins.length,
-      ambiguousOsmWayCount: lineMatch.ambiguousOsmWayCount,
-      unmatchedAuthorityFeatureCount: lineMatch.unmatchedAuthorityFeatureCount,
-    },
-    currentClosures: {
-      sourceId: reviewedSnapshot.id,
-      exactJoinCount: currentClosureMatches.joins.length,
-      suppressedLineJoinCount: prioritizedJoins.suppressedLineJoinCount,
-      targetExternalIds: currentClosureMatches.joins.map(({ targetExternalId }) => targetExternalId),
-    },
-  };
   await writeFile(
     path.join(pack.packDirectory, "regional-audit.json"),
     `${JSON.stringify(regionalAudit, null, 2)}\n`,
   );
-  await writeFile(path.join(pack.packDirectory, "access-join-audit.json"), `${JSON.stringify({
-    schemaVersion: "1",
-    accessNormalization,
-    accessInventory: inventory,
-    officialAccess,
-    officialJoinAudit,
-    lineMatchReport: {
-      sourceId: trailsSnapshot.id,
-      ambiguousOsmWayCount: lineMatch.ambiguousOsmWayCount,
-      unmatchedAuthorityFeatureCount: lineMatch.unmatchedAuthorityFeatureCount,
-    },
-    joins: [...lineMatch.joins, ...currentClosureMatches.joins].sort(joinOrder),
-  }, null, 2)}\n`);
+  await writeFile(
+    path.join(pack.packDirectory, "portal-access-audit.json"),
+    `${JSON.stringify({ schemaVersion: "1", ...portalAccess }, null, 2)}\n`,
+  );
 
-  return { pack, accessNormalization, officialAccess, regionalAudit };
+  return { pack, portalAccess, regionalAudit };
 }
