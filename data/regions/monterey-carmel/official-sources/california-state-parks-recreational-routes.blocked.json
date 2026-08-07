@@ -1,0 +1,19 @@
+{
+  "id": "california-state-parks-recreational-routes-monterey-cross-check",
+  "authority": "California State Parks",
+  "dataset": "Recreational Routes",
+  "version": "item-modified-2026-02-18T18:18:12.000Z-layer-data-updated-2026-08-06T21:05:24.528Z",
+  "retrievedAt": "2026-08-07T17:28:17Z",
+  "itemUrl": "https://www.arcgis.com/home/item.html?id=45fa4fba9dde4a8dbb23cdd56da40703",
+  "downloadUrl": "https://services2.arcgis.com/AhxrK3F6WM8ECvDi/arcgis/rest/services/RecreationalRoutes/FeatureServer/0/query?where=UNITNAME%20LIKE%20%27%25LOBOS%25%27%20OR%20UNITNAME%20LIKE%20%27%25GARRAPATA%25%27&outFields=FID%2CROUTENAME%2CGISID%2CROUTECLASS%2CUNITNAME%2CROUTECAT%2CROUTETYPE%2CGlobalID&returnGeometry=true&outSR=4326&f=json",
+  "expectedFeatureCount": 0,
+  "license": "Copyright 2022 California State Parks; custom Terms of Use",
+  "termsDecision": "The item prohibits alteration and sale, requires attribution, and requires advance approval for commercial use. The Monterey-only query is empty and the schema has no pedestrian permission or closure field. Exclude this config from the refresh source set and use it only as a documented cross-check.",
+  "redistribution": "blocked",
+  "metadataContentHash": "sha256:526593e18d883928c576f64e82a25e047287af820ecba35e2f5bf3f1a871dbd1",
+  "metadataByteLength": 5258,
+  "layerMetadataContentHash": "sha256:fd239e503a922fc5d981bf090578ee7cd0e84fd6a387dac5c0e362eeb59fec4a",
+  "layerMetadataByteLength": 17020,
+  "inspectedSnapshotContentHash": "sha256:08f78cee4f981a795548c35cf8d168750c67c82b39b93df5c854fdb91271c909",
+  "inspectedSnapshotByteLength": 212
+}

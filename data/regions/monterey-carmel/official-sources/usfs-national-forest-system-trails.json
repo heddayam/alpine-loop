@@ -1,0 +1,32 @@
+{
+  "id": "usfs-los-padres-northern-connector-trails",
+  "authority": "USDA Forest Service",
+  "dataset": "National Forest System Trails / northern Monterey connector review",
+  "version": "edw-daily-snapshot-2026-08-07",
+  "retrievedAt": "2026-08-07T17:28:17Z",
+  "itemUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublishWithDataStatus_01/MapServer/0",
+  "downloadUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublishWithDataStatus_01/MapServer/0/query?where=admin_org%3D%27050751%27&geometry=-121.86%2C36.35%2C-121.65%2C36.52&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=globalid%2Ctrail_name%2Ctrail_no%2Cadmin_org%2Cmanaging_org%2Cattributesubset%2Callowed_terra_use%2Chiker_pedestrian_managed%2Chiker_pedestrian_accpt%2Chiker_pedestrian_disc%2Chiker_pedestrian_accpt_disc%2Chiker_pedestrian_restricted&returnGeometry=true&outSR=4326&f=json",
+  "nativeCrs": 4269,
+  "downloadCrs": 4326,
+  "stableIdField": "globalid",
+  "scope": {
+    "adminOrg": "050751",
+    "envelope": [-121.86, 36.35, -121.65, 36.52]
+  },
+  "expectedFeatureCount": 15,
+  "accessFields": [
+    "allowed_terra_use",
+    "hiker_pedestrian_managed",
+    "hiker_pedestrian_accpt",
+    "hiker_pedestrian_disc",
+    "hiker_pedestrian_accpt_disc",
+    "hiker_pedestrian_restricted"
+  ],
+  "license": "U.S. Government work (17 USC 105); credit USDA Forest Service",
+  "termsDecision": "Redistribution with source attribution is allowed. The filtered response is a line-inventory cross-check only: all 15 features have no affirmative hiker permission or prohibition field, so the adapter emits unknown access and presence never establishes permission.",
+  "redistribution": "allowed",
+  "metadataContentHash": "sha256:c029cd6cf51772bda798196b0c3b6c8a82167717d38b30d1af93e82fd240386e",
+  "metadataByteLength": 27931,
+  "inspectedSnapshotContentHash": "sha256:9dc3643b5d28a48c6511cc196b94ca3ea9d09904e1841f0c5d63e4aa508f979b",
+  "inspectedSnapshotByteLength": 169892
+}
