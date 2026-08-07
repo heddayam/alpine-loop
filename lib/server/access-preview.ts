@@ -3,10 +3,10 @@ import { accessFilterV2Schema, accessPointRemotenessSelectionSchema } from "@/li
 import {
   accessPointIsEligible,
   areaBounds,
-  coordinateIsInsideArea,
   type AccessPointCandidate,
   type GraphRepository,
 } from "@/lib/graph";
+import { accessPointMatchesResolvedFilter } from "@/lib/solver";
 import { classifyRemoteness } from "@/lib/data/remoteness";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 import { resolveAccessFilter, type ReachabilityResolver } from "./access-filter";
@@ -63,8 +63,7 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
         signal: request.signal,
       });
       const eligible = candidates
-        .filter((candidate) => resolved.predicates.every((geometry) =>
-          coordinateIsInsideArea([candidate.lon, candidate.lat], geometry)))
+        .filter((candidate) => accessPointMatchesResolvedFilter(candidate, resolved))
         .filter((candidate) => accessPointIsEligible(candidate, parsed.data.includeUncertainAccess))
         .filter((candidate) => parsed.data.accessPointRemoteness.includes(classifyRemoteness(candidate)))
         .sort((left, right) => candidateRank(left, right, parsed.data.includeUncertainAccess));

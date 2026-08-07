@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AccessPointCandidate, GraphRepository } from "@/lib/graph";
-import { listEligibleAccessPointCandidates, rankAccessPointCandidates } from "./eligible-access-points";
+import {
+  accessPointMatchesResolvedFilter,
+  listEligibleAccessPointCandidates,
+  PORTAL_NAMED_REGION_TOLERANCE_M,
+  rankAccessPointCandidates,
+} from "./eligible-access-points";
 
 const AREA = {
   type: "Polygon" as const,
@@ -69,5 +74,43 @@ describe("eligible access-point enumeration", () => {
     });
     expect(result.all).toHaveLength(5);
     expect(result.eligible.map(({ id }) => id)).toEqual(["higher-rank", "lower-rank"]);
+  });
+
+  it("includes portal nodes just outside a named boundary without relaxing drawn or drive-time geometry", () => {
+    const nearBoundaryPortal = point("portal", {
+      lon: 1 + 10 / 111_195,
+      trailComponentId: "trail:portal",
+      reachableTrailKm: 10,
+    });
+    const namedFilter = {
+      predicates: [AREA],
+      coverage: AREA,
+      summary: { mode: "named-region" as const, label: "Park", region: { id: "park", name: "Park" } },
+    };
+    expect(PORTAL_NAMED_REGION_TOLERANCE_M).toBe(25);
+    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, namedFilter)).toBe(true);
+    expect(accessPointMatchesResolvedFilter(
+      { ...nearBoundaryPortal, lon: 1 + 30 / 111_195 },
+      namedFilter,
+    )).toBe(false);
+    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
+      ...namedFilter,
+      summary: { mode: "drawn-area", label: "Drawn" },
+    })).toBe(false);
+    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
+      predicates: [AREA, AREA],
+      coverage: AREA,
+      summary: {
+        mode: "drive-time",
+        label: "Drive",
+        region: { id: "park", name: "Park" },
+        driveTime: {
+          minutes: 30,
+          provider: "arcgis",
+          resolvedAt: "2026-08-07T00:00:00.000Z",
+          originLabel: "Origin",
+        },
+      },
+    })).toBe(false);
   });
 });

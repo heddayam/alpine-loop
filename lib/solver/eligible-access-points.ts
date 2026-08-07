@@ -4,6 +4,7 @@ import {
   accessPointIsEligible,
   areaBounds,
   coordinateIsInsideArea,
+  distanceMetersToArea,
   type AccessPointCandidate,
   type GraphRepository,
 } from "@/lib/graph";
@@ -17,12 +18,22 @@ export type EligibleAccessPointQuery = {
   signal?: AbortSignal;
 };
 
+export const PORTAL_NAMED_REGION_TOLERANCE_M = 25;
+
 export function accessPointMatchesResolvedFilter(
-  candidate: Pick<AccessPointCandidate, "lon" | "lat">,
+  candidate: Pick<AccessPointCandidate, "lon" | "lat" | "trailComponentId">,
   accessFilter: ResolvedAccessFilterContext,
 ): boolean {
-  return accessFilter.predicates.every((geometry) =>
-    coordinateIsInsideArea([candidate.lon, candidate.lat], geometry));
+  const namedRegionPredicateIndex = accessFilter.summary.region
+    ? accessFilter.predicates.length - 1
+    : -1;
+  return accessFilter.predicates.every((geometry, index) => {
+    const coordinate = [candidate.lon, candidate.lat] as const;
+    if (coordinateIsInsideArea(coordinate, geometry)) return true;
+    return candidate.trailComponentId !== undefined
+      && index === namedRegionPredicateIndex
+      && distanceMetersToArea(coordinate, geometry) <= PORTAL_NAMED_REGION_TOLERANCE_M;
+  });
 }
 
 export function rankAccessPointCandidates(

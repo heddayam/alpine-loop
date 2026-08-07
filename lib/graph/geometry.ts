@@ -171,6 +171,34 @@ export function distanceMetersBetween(
   return 2 * EARTH_RADIUS_METERS * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function distanceMetersToSegment(point: Position, start: Position, end: Position): number {
+  const latitudeRadians = point[1] * Math.PI / 180;
+  const metersPerLongitudeDegree = Math.PI * EARTH_RADIUS_METERS / 180 * Math.cos(latitudeRadians);
+  const metersPerLatitudeDegree = Math.PI * EARTH_RADIUS_METERS / 180;
+  const startX = (start[0] - point[0]) * metersPerLongitudeDegree;
+  const startY = (start[1] - point[1]) * metersPerLatitudeDegree;
+  const endX = (end[0] - point[0]) * metersPerLongitudeDegree;
+  const endY = (end[1] - point[1]) * metersPerLatitudeDegree;
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const squaredLength = segmentX ** 2 + segmentY ** 2;
+  if (squaredLength === 0) return Math.hypot(startX, startY);
+  const parameter = Math.max(0, Math.min(1, -(startX * segmentX + startY * segmentY) / squaredLength));
+  return Math.hypot(startX + parameter * segmentX, startY + parameter * segmentY);
+}
+
+/** Returns zero inside an area, otherwise the nearest boundary distance. */
+export function distanceMetersToArea(coordinate: Position, geometry: AreaGeometry): number {
+  if (coordinateIsInsideArea(coordinate, geometry)) return 0;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const ring of boundaryRings(geometry)) {
+    for (let index = 1; index < ring.length; index += 1) {
+      nearest = Math.min(nearest, distanceMetersToSegment(coordinate, ring[index - 1], ring[index]));
+    }
+  }
+  return nearest;
+}
+
 export function lineLengthMeters(coordinates: ReadonlyArray<readonly [number, number]>): number {
   let length = 0;
   for (let index = 1; index < coordinates.length; index += 1) {
