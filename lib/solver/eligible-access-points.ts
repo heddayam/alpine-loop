@@ -31,8 +31,14 @@ export function rankAccessPointCandidates(
   includeUnknown: boolean,
 ): number {
   const confidence = { high: 0, medium: 1, low: 2 };
-  return (right.reachableTrailKm ?? 0) - (left.reachableTrailKm ?? 0)
-    || right.knownConnectivity - left.knownConnectivity
+  const portalRanking = left.trailComponentId !== undefined || right.trailComponentId !== undefined;
+  if (portalRanking) {
+    return (right.reachableTrailKm ?? 0) - (left.reachableTrailKm ?? 0)
+      || (left.parkingDistanceM ?? Number.POSITIVE_INFINITY) - (right.parkingDistanceM ?? Number.POSITIVE_INFINITY)
+      || confidence[left.confidence] - confidence[right.confidence]
+      || left.id.localeCompare(right.id);
+  }
+  return right.knownConnectivity - left.knownConnectivity
     || right.knownOutDegree - left.knownOutDegree
     || (includeUnknown ? right.inclusiveConnectivity - left.inclusiveConnectivity : 0)
     || (includeUnknown ? right.inclusiveOutDegree - left.inclusiveOutDegree : 0)
