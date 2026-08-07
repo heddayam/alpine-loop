@@ -5,6 +5,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
+import { FIXTURE_BUILDER_PACK } from "@/lib/packs/fixture-pack";
+import { packCatalogResponseV1Schema } from "@/lib/contracts";
+
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 vi.mock("../map/HikeMap", () => ({
   HikeMap: ({ onBoundsChange, routes = [] }: {
@@ -41,6 +46,18 @@ const appSettings = {
 const job = {
   version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "rural", "populated", "unknown"] }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
 };
+const catalogRegions = packCatalogResponseV1Schema.parse({ version: 1, regions: [
+  {
+    id: "santa-cruz-mountains", label: "Santa Cruz Mountains", displayOrder: 1, state: "available", packId: "fixture-pack",
+    pack: { id: "fixture-pack", name: "Fixture pack", dataVersion: "fixture-v1", builtAt: "2026-08-04T00:00:00Z", coverageBbox: FIXTURE_BUILDER_PACK.coverageBbox, coverage: FIXTURE_BUILDER_PACK.coverage, display: FIXTURE_BUILDER_PACK.display },
+  },
+  {
+    id: "southern-east-bay", label: "Southern East Bay", displayOrder: 2, state: "available", packId: "southern-east-bay",
+    pack: { id: "southern-east-bay", name: "Southern East Bay", dataVersion: "east-bay-v1", builtAt: "2026-08-05T00:00:00Z", coverageBbox: FIXTURE_BUILDER_PACK.coverageBbox, coverage: FIXTURE_BUILDER_PACK.coverage, display: FIXTURE_BUILDER_PACK.display },
+  },
+  { id: "monterey-carmel", label: "Monterey–Carmel", displayOrder: 3, state: "planned" },
+  { id: "henry-coe", label: "Henry Coe", displayOrder: 4, state: "unavailable", packId: "henry-coe" },
+] }).regions;
 
 function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -65,7 +82,90 @@ function deferred<T>() {
 
 describe("HikeBuilder unified route search", () => {
   beforeEach(() => mockBaseFetch());
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); router.push.mockReset(); router.replace.mockReset(); });
+
+  it("shows every catalog region and only enables installed packs", async () => {
+    render(<HikeBuilder regions={catalogRegions} />);
+    const selected = screen.getByRole("button", { name: /Santa Cruz Mountains.*Available; currently selected/ });
+    const available = screen.getByRole("button", { name: /Southern East Bay.*Available/ });
+    const planned = screen.getByRole("button", { name: /Monterey–Carmel.*Planned; pack not yet available/ });
+    const unavailable = screen.getByRole("button", { name: /Henry Coe.*Pack unavailable on this device/ });
+    expect(selected).toHaveAttribute("aria-pressed", "true");
+    expect(available).toHaveAttribute("aria-pressed", "false");
+    expect(planned).toBeDisabled();
+    expect(unavailable).toBeDisabled();
+    expect(planned.querySelector(".status-dot")).toBeNull();
+    expect(unavailable.querySelector(".status-dot")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Region packs" })).toBeVisible();
+
+    await userEvent.click(available);
+    expect(router.push).toHaveBeenCalledWith("/?pack=southern-east-bay");
+  });
+
+  it("navigates to a saved job's pack before restoring cross-pack results", async () => {
+    vi.restoreAllMocks();
+    const otherJob = {
+      ...job,
+      status: "completed" as const,
+      request: { ...job.request, packId: "southern-east-bay" },
+      pack: { ...job.pack, id: "southern-east-bay" },
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && !init?.method) return new Response(JSON.stringify({ version: 1, jobs: [otherJob] }), { status: 200 });
+      if (url === `/api/route-jobs/${otherJob.id}/results?limit=50`) return new Response(JSON.stringify({
+        version: 1,
+        job: otherJob,
+        results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      }), { status: 200 });
+      return undefined;
+    });
+
+    render(<HikeBuilder regions={catalogRegions} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Jobs" })).toBeVisible());
+    await userEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    await userEvent.click(await screen.findByRole("button", { name: `View results for ${searchRegion.name}` }));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/?pack=southern-east-bay&job=${otherJob.id}`));
+    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+  });
+
+  it("restores a linked job after pack navigation and removes the one-time URL state", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    mockBaseFetch((url) => {
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50`) return new Response(JSON.stringify({
+        version: 1,
+        job: completed,
+        results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      }), { status: 200 });
+      return undefined;
+    });
+
+    render(<HikeBuilder restoreJobId={completed.id} />);
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(router.replace).toHaveBeenCalledWith("/?pack=fixture-pack");
+  });
+
+  it("remounts the workspace for a new pack so pack-specific draft and results state reset", async () => {
+    const view = render(<HikeBuilder key="fixture-pack" />);
+    await userEvent.selectOptions(screen.getByLabelText("Typical drive time"), "45");
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+
+    const nextPack = { ...FIXTURE_BUILDER_PACK, id: "southern-east-bay", name: "Southern East Bay" };
+    view.rerender(<HikeBuilder key="southern-east-bay" pack={nextPack} regions={[]} />);
+    expect(screen.getByLabelText("Typical drive time")).toHaveValue("30");
+    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("");
+  });
 
   it("shows one shared builder with both explicit actions", async () => {
     render(<HikeBuilder />);

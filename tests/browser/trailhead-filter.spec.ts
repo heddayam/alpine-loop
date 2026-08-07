@@ -74,6 +74,22 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   const harness = await installOfflineHarness(page, { routeCount: 10 });
   await page.goto("/");
 
+  const regionStrip = page.getByRole("navigation", { name: "Region packs" });
+  await expect(regionStrip.locator(".region-pill > span:not(.visually-hidden)")).toHaveText([
+    "Santa Cruz Mountains",
+    "Southern East Bay",
+    "Monterey–Carmel",
+    "Henry Coe",
+    "Marin & Mount Tam",
+    "Tahoe–Eldorado",
+  ]);
+  const plannedRegion = regionStrip.locator(".region-pill").filter({ hasText: "Southern East Bay" });
+  await expect(plannedRegion).toBeDisabled();
+  await expect(plannedRegion.locator(".status-dot")).toHaveCount(0);
+  await expect.poll(() => regionStrip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect(page.getByRole("button", { name: "Jobs" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Settings" })).toBeVisible();
+
   const jobsButton = page.getByRole("button", { name: "Jobs" });
   await jobsButton.click();
   await expect(page.getByRole("dialog", { name: "Jobs" })).toBeVisible();
