@@ -98,24 +98,21 @@ export function SettingsModal({
         aria-describedby="settings-description"
       >
         <header className="settings-modal-heading">
-          <div>
-            <span className="eyebrow">Route builder preferences</span>
-            <h2 id="settings-title">Settings</h2>
-          </div>
+          <h2 id="settings-title">Settings</h2>
           <button type="button" className="settings-close" aria-label="Close settings" onClick={onClose}>×</button>
         </header>
 
         <div className="settings-modal-content">
-          <p id="settings-description" className="settings-intro">
-            These preferences control which trailheads appear and how broadly each route search runs.
+          <p id="settings-description" className="visually-hidden">
+            Preferences controlling which trailheads appear and how broadly each route search runs.
           </p>
 
           <section className="settings-group" aria-labelledby="access-point-settings-title">
             <div className="settings-group-heading">
               <h3 id="access-point-settings-title">Access point areas</h3>
-              <span>{accessPointRemoteness.length} of {ACCESS_POINT_OPTIONS.length}</span>
+              <span>{accessPointRemoteness.length} of {ACCESS_POINT_OPTIONS.length} shown</span>
             </div>
-            <p>Only selected area types are shown on the map and considered as route starts.</p>
+            <p>Only these area types appear on the map and start routes. &ldquo;Unknown&rdquo; means population data is missing, not uncertain trail access.</p>
             <div className="access-point-setting-grid">
               {ACCESS_POINT_OPTIONS.map((option) => {
                 const checked = accessPointRemoteness.includes(option.id);
@@ -132,13 +129,12 @@ export function SettingsModal({
                 );
               })}
             </div>
-            <p className="settings-note">Unknown here means population data is unavailable. It is separate from uncertain trail access below.</p>
           </section>
 
           <section className="settings-group" aria-labelledby="search-settings-title">
-            <h3 id="search-settings-title">Search & results</h3>
-            <label className="switch-row">
-              <span><strong>Include uncertain trail access</strong><small>May use trailheads or trails without confirmed public access.</small></span>
+            <div className="settings-group-heading"><h3 id="search-settings-title">Search &amp; results</h3></div>
+            <label className="switch-row" title="May use trailheads or trails without confirmed public access.">
+              <span>Include uncertain trail access</span>
               <input
                 type="checkbox"
                 role="switch"
@@ -156,13 +152,13 @@ export function SettingsModal({
                 value={limit}
                 onChange={(event) => onChange({ limit: event.currentTarget.value })}
               />
-              <small>1 to 20 Quick-search alternatives</small>
+              <small>1 to 20 alternatives</small>
             </div>
           </section>
         </div>
 
         <footer className="settings-modal-footer">
-          <button type="button" onClick={onClose}>Done</button>
+          <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
         </footer>
       </div>
     </div>

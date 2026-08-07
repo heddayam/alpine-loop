@@ -98,17 +98,13 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
 }
 
 export async function enterDrawnArea(page: Page): Promise<void> {
-  await page.getByText("Enter area coordinates", { exact: true }).click();
-  await page.getByLabel("West longitude").fill("-122.1800");
-  await page.getByLabel("South latitude").fill("37.1550");
-  await page.getByLabel("East longitude").fill("-122.1550");
-  await page.getByLabel("North latitude").fill("37.1700");
-  await expect(page.getByRole("region", { name: "Drawn boundary" }).getByRole("status")).toContainText("-122.1800, 37.1550, -122.1550, 37.1700");
+  await page.getByRole("button", { name: "Use demo trailhead filter" }).click();
+  await expect(page.getByRole("region", { name: "Drawn boundary" }).getByRole("status")).toContainText("-122.1830, 37.1550, -122.1400, 37.1780");
 }
 
 export async function selectTypedOrigin(page: Page): Promise<void> {
   const input = page.getByLabel("Driving origin", { exact: true });
   await input.fill("Castle Rock");
   await page.getByRole("option", { name: /Castle Rock, California/ }).click();
-  await expect(page.getByText("Castle Rock, California", { exact: true })).toBeVisible();
+  await expect(input).toHaveValue("Castle Rock, California");
 }

@@ -4,17 +4,19 @@ type RangeInputProps = {
   id: string;
   label: string;
   unit: string;
+  /** Spelled out on hover so the compact row can stay a single line. */
+  title?: string;
   optional?: boolean;
   value: RangeField;
   onChange: (value: RangeField) => void;
 };
 
-export function RangeInput({ id, label, unit, optional = true, value, onChange }: RangeInputProps) {
+export function RangeInput({ id, label, unit, title, optional = true, value, onChange }: RangeInputProps) {
   const enabled = optional ? value.enabled : true;
   return (
-    <fieldset className="range-field range-table-field">
+    <fieldset className="range-field">
       <legend className="range-field-legend">{label} range</legend>
-      <div className="range-row range-table-row">
+      <div className="range-row" title={title}>
         <div className="range-label-cell">
           {optional ? (
             <label className="range-toggle">
@@ -42,7 +44,6 @@ export function RangeInput({ id, label, unit, optional = true, value, onChange }
             onChange={(event) => onChange({ ...value, min: event.currentTarget.value })}
           />
         </label>
-        <span className="range-separator" aria-hidden="true">–</span>
         <label className="range-value-cell" htmlFor={`${id}-max`}>
           <span>Maximum</span>
           <input

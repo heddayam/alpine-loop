@@ -63,7 +63,7 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByLabelText("Typical drive time")).toHaveValue("30");
     expect(screen.getByLabelText("Broad region")).toBeVisible();
     expect(screen.getByRole("button", { name: "Quick search" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Batch search" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Full search" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Drawn boundary" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
@@ -78,6 +78,8 @@ describe("HikeBuilder unified route search", () => {
     render(<HikeBuilder />);
     await userEvent.selectOptions(screen.getByLabelText("Typical drive time"), "45");
     expect(screen.getByLabelText("Typical drive time")).toHaveValue("45");
+    const loopOptions = screen.getByText("Loop options").closest("details") as HTMLDetailsElement;
+    loopOptions.open = true;
     fireEvent.change(screen.getByLabelText("Maximum repeated trail"), { target: { value: "20" } });
     expect(screen.getByLabelText("Maximum repeated trail")).toHaveValue("20");
     await userEvent.click(screen.getByRole("switch", { name: /Limit the shared access stem/ }));
@@ -107,7 +109,6 @@ describe("HikeBuilder unified route search", () => {
     render(<HikeBuilder />);
     expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
-    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
     await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
     expect(await screen.findByText("1 exact route ready.")).toBeVisible();
     expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/reachability")).toBe(true);
@@ -146,9 +147,8 @@ describe("HikeBuilder unified route search", () => {
     render(<HikeBuilder />);
     expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
-    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
     await userEvent.selectOptions(screen.getByLabelText("Broad region"), searchRegion.id);
-    await userEvent.click(screen.getByRole("button", { name: "Batch search" }));
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
     expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"] } });
@@ -244,16 +244,15 @@ describe("HikeBuilder unified route search", () => {
     render(<HikeBuilder />);
     expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
-    await userEvent.click(screen.getByRole("button", { name: "Use coordinates" }));
-    const launch = screen.getByRole("button", { name: "Batch search" });
+    const launch = screen.getByRole("button", { name: "Full search" });
     fireEvent.click(launch);
     fireEvent.click(launch);
     expect(launches).toBe(1);
-    expect(screen.getByRole("button", { name: "Starting batch…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
 
     launchResponse.resolve(new Response(JSON.stringify({ job }), { status: 202 }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Batch search" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled();
   });
 
   it("uses location only on request and reports denial", async () => {

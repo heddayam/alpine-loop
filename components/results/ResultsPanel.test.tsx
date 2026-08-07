@@ -123,14 +123,15 @@ describe("ResultsPanel V3", () => {
 
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Near misses" })).toBeVisible();
-    const exactSummary = screen.getByRole("button", { name: /Simple loop · 1 cycle/ });
-    const nearSummary = screen.getByRole("button", { name: /Lollipop · 1 cycle/ });
+    const exactSummary = screen.getByRole("button", { name: /Simple loop/ });
+    const nearSummary = screen.getByRole("button", { name: /Lollipop/ });
     expect(exactSummary).toHaveAttribute("aria-expanded", "true");
     expect(nearSummary).toHaveAttribute("aria-expanded", "false");
-    expect(within(exactSummary).getByText("5.0 mi")).toBeVisible();
+    expect(exactSummary).toHaveTextContent("5.0 mi");
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
     rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
+    (screen.getByText("Near misses").closest("details") as HTMLDetailsElement).open = true;
     const detail = screen.getByRole("region", { name: /Skyline Trail.*Lollipop/ });
     fireEvent.click(within(detail).getByText("Route details"));
     expect(within(detail).getByText("Repeated trail")).toBeVisible();
@@ -190,7 +191,7 @@ describe("ResultsPanel V3", () => {
       onSelectRoute={() => undefined}
     />);
     expect(screen.getByText("0 of 10 requested exact routes found.")).toBeVisible();
-    expect(screen.getByText(/effort limit stopped this search/)).toBeVisible();
+    expect(screen.getByText(/effort limit stopped the search early/)).toBeVisible();
     await userEvent.click(screen.getByText("Search diagnostics"));
     const diagnostics = screen.getByText("Search diagnostics").closest("details") as HTMLElement;
     expect(within(diagnostics).getByText(/Hard search limits:/).closest("p")).toHaveTextContent("deadline");

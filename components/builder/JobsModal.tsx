@@ -164,13 +164,13 @@ export function JobsModal({
     <div className="settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div ref={dialogRef} className="settings-modal jobs-modal" role="dialog" aria-modal="true" aria-labelledby="jobs-title" aria-describedby="jobs-description">
         <header className="settings-modal-heading">
-          <div><span className="eyebrow">Background route searches</span><h2 id="jobs-title">Jobs</h2></div>
+          <h2 id="jobs-title">Jobs</h2>
           <button type="button" className="settings-close" aria-label="Close jobs" onClick={close}>×</button>
         </header>
         <div className="settings-modal-content jobs-list">
-          <p id="jobs-description" className="settings-intro">Jobs are saved on this device, keep running while the app is open, and resume after an app restart. Completed results remain until you delete them.</p>
+          <p id="jobs-description" className="hint">Saved on this device. Full searches resume after a restart; results stay until deleted.</p>
           {feedback ? <p className={feedback.kind === "error" ? "error-state" : "job-note"} role={feedback.kind === "error" ? "alert" : "status"} aria-live={feedback.kind === "status" ? "polite" : undefined}>{feedback.text}</p> : null}
-          {loadState === "error" ? <div className="jobs-refresh-error" role="alert"><span>{loadError ?? "Progress may be out of date."}</span><button type="button" onClick={() => void onRefresh(true)}>Retry</button></div> : null}
+          {loadState === "error" ? <div className="jobs-refresh-error" role="alert"><span>{loadError ?? "Progress may be out of date."}</span><button type="button" className="btn btn-danger" onClick={() => void onRefresh(true)}>Retry</button></div> : null}
           {loadState === "loading" && jobs.length === 0 ? <p className="loading-state" role="status">Loading saved jobs…</p> : null}
           {loadState !== "loading" && jobs.length === 0 ? <p className="empty-state" role="status">No batch searches yet.</p> : jobs.map((job) => {
             const progress = job.progress;
@@ -205,10 +205,10 @@ export function JobsModal({
                 {job.status === "cancelled" && !job.partial && progress.exactRouteCount + progress.nearMissRouteCount === 0 ? <p className="job-note">No routes were saved before cancellation.</p> : null}
                 {job.error ? <p className="error-state">{job.error}</p> : null}
                 <footer>
-                  {canOpen ? <button type="button" disabled={busy} aria-label={`View results for ${job.searchRegion.name}`} onClick={() => void loadResults(job)}>{pending === "opening" ? "Opening…" : "View results"}</button> : null}
-                  {canCancel ? <button type="button" disabled={busy} aria-label={`Cancel ${job.searchRegion.name} search`} onClick={() => void mutate(job, "cancel")}>Cancel</button> : null}
-                  {pending === "cancelling" ? <button type="button" disabled>Cancelling…</button> : null}
-                  <button type="button" className="danger-button" disabled={busy || job.status === "deleting"} aria-label={`Delete ${job.searchRegion.name} job and saved routes`} onClick={() => void mutate(job, "delete")}>{pending === "deleting" || job.status === "deleting" ? "Deleting…" : "Delete"}</button>
+                  {canOpen ? <button type="button" className="btn" disabled={busy} aria-label={`View results for ${job.searchRegion.name}`} onClick={() => void loadResults(job)}>{pending === "opening" ? "Opening…" : "View results"}</button> : null}
+                  {canCancel ? <button type="button" className="btn" disabled={busy} aria-label={`Cancel ${job.searchRegion.name} search`} onClick={() => void mutate(job, "cancel")}>Cancel</button> : null}
+                  {pending === "cancelling" ? <button type="button" className="btn" disabled>Cancelling…</button> : null}
+                  <button type="button" className="btn btn-danger" disabled={busy || job.status === "deleting"} aria-label={`Delete ${job.searchRegion.name} job and saved routes`} onClick={() => void mutate(job, "delete")}>{pending === "deleting" || job.status === "deleting" ? "Deleting…" : "Delete"}</button>
                 </footer>
               </article>
             );

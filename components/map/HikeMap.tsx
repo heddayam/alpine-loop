@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
-import { boundsContainBounds, boundsCorners, boundsDimensionsMiles, boundsPolygon, normalizeBounds } from "./geometry";
+import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
@@ -25,7 +25,31 @@ type HikeMapProps = {
   onBoundsChange: (bounds: Bounds | null) => void;
   onAccessPointSelect: (id: string) => void;
   onRouteSelect: (id: string) => void;
+  onRouteHover?: (id?: string) => void;
 };
+
+/* One hue per meaning: orange is the selection and nothing else, green is
+   every unselected route, white is the casing that lifts both off the topo. */
+const ROUTE_SELECTED = "#c9552a";
+const ROUTE_ALTERNATE = "#2f6a55";
+const CASING = "#ffffff";
+
+/* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
+function zoomWidth(wide: number): DataDrivenPropertyValueSpecification<number> {
+  return ["interpolate", ["linear"], ["zoom"], 8, wide * 0.45, 12, wide * 0.8, 15, wide];
+}
+
+export function lineBounds(geometry: LineString): Bounds | null {
+  const coordinates = geometry.coordinates;
+  if (coordinates.length === 0) return null;
+  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+  for (const [lon, lat] of coordinates) {
+    if (lon === undefined || lat === undefined) continue;
+    west = Math.min(west, lon); east = Math.max(east, lon);
+    south = Math.min(south, lat); north = Math.max(north, lat);
+  }
+  return Number.isFinite(west) ? [west, south, east, north] : null;
+}
 
 export type RouteTrailheadPin = {
   key: string;
@@ -40,42 +64,6 @@ export type RouteTrailheadPin = {
 
 export function showCoverageHatching(bounds: Bounds | null, drawing: boolean) {
   return !bounds || drawing;
-}
-
-export type MapStatusSummary = {
-  boundary: "Draw mode" | "Drawing area" | "Area set" | "No area";
-  dimensions?: string;
-  coverage?: "Inside coverage" | "Outside coverage";
-  accessPoints: string;
-};
-
-export function mapStatusSummary(
-  bounds: Bounds | null,
-  draftBounds: Bounds | null,
-  drawing: boolean,
-  packCoverage: Bounds,
-  accessPointCount: number,
-): MapStatusSummary {
-  const statusBounds = draftBounds ?? (drawing ? null : bounds);
-  const dimensions = statusBounds ? boundsDimensionsMiles(statusBounds) : null;
-  const coverage = statusBounds
-    ? boundsContainBounds(packCoverage, statusBounds) ? "Inside coverage" as const : "Outside coverage" as const
-    : undefined;
-
-  return {
-    boundary: draftBounds
-      ? "Drawing area"
-      : drawing
-        ? "Draw mode"
-        : bounds
-          ? "Area set"
-          : "No area",
-    ...(dimensions ? {
-      dimensions: `${dimensions.width.toFixed(1)} × ${dimensions.height.toFixed(1)} mi (${dimensions.area.toFixed(1)} sq mi)`,
-      coverage,
-    } : {}),
-    accessPoints: `${accessPointCount} access point${accessPointCount === 1 ? "" : "s"} available`,
-  };
 }
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
@@ -126,7 +114,9 @@ export function routeFeaturePartitions(
     all: routeFeatures(routes, selectedRouteId),
     alternates: routeFeatures(routes.filter((route) => route.id !== selectedRouteId), selectedRouteId),
     selected: routeFeatures(routes.filter((route) => route.id === selectedRouteId), selectedRouteId),
-    hovered: routeFeatures(routes.filter((route) => route.id === hoveredRouteId), selectedRouteId),
+    // The selected route keeps its own styling while hovered; otherwise
+    // pointing at the selected card would recolour it mid-interaction.
+    hovered: routeFeatures(routes.filter((route) => route.id === hoveredRouteId && route.id !== selectedRouteId), selectedRouteId),
   };
 }
 
@@ -210,9 +200,16 @@ export function HikeMap({
   onBoundsChange,
   onAccessPointSelect,
   onRouteSelect,
+  onRouteHover,
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const markerFactoryRef = useRef<typeof Marker | null>(null);
+  const markersRef = useRef<Marker[]>([]);
+  const fittedRouteSetRef = useRef<string>(undefined);
+  const onRouteHoverRef = useRef(onRouteHover);
+  const onRouteSelectRef = useRef(onRouteSelect);
+  const onAccessPointSelectRef = useRef(onAccessPointSelect);
   const startRef = useRef<[number, number] | null>(null);
   const draftBoundsRef = useRef<Bounds | null>(null);
   const boundsRef = useRef(bounds);
@@ -225,8 +222,22 @@ export function HikeMap({
   const refinementGeometryRef = useRef(refinementGeometry);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
-  const [draftBounds, setDraftBounds] = useState<Bounds | null>(null);
   const [mapReady, setMapReady] = useState(false);
+
+  // Map-originated hover drives the results list as well as the map itself.
+  const previewRoute = useCallback((id?: string) => {
+    setHoveredRouteId(id);
+    onRouteHoverRef.current?.(id);
+  }, []);
+
+  // Callback props are read through refs so that a parent re-render can never
+  // land in the map-construction effect's dependency list. It used to, which
+  // tore down and rebuilt the whole map on every keystroke in the plan panel.
+  useEffect(() => {
+    onRouteHoverRef.current = onRouteHover;
+    onRouteSelectRef.current = onRouteSelect;
+    onAccessPointSelectRef.current = onAccessPointSelect;
+  }, [onAccessPointSelect, onRouteHover, onRouteSelect]);
 
   useEffect(() => {
     boundsRef.current = bounds;
@@ -257,9 +268,10 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
-    void import("maplibre-gl").then(({ Map, NavigationControl, setWorkerUrl }) => {
+    void import("maplibre-gl").then(({ Map, Marker: MarkerClass, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
       setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
+      markerFactoryRef.current = MarkerClass;
       map = new Map({
         container: containerRef.current,
         bounds: [
@@ -291,31 +303,21 @@ export function HikeMap({
       map.on("load", () => {
         const initialBounds = boundsRef.current;
         map?.addSource("pack-coverage", { type: "geojson", data: areaFeature(packCoverage) });
-        map?.addLayer({
-          id: "pack-coverage-fill",
-          type: "fill",
-          source: "pack-coverage",
-          paint: { "fill-color": "#2a705a", "fill-opacity": 0.14 },
-        });
+        // Coverage is a reference outline, not a highlight: no fill, and a
+        // hairline edge that never competes with routes or the boundary box.
         map?.addLayer({
           id: "pack-coverage-casing",
           type: "line",
           source: "pack-coverage",
-          paint: { "line-color": "#fffaf0", "line-width": 7, "line-opacity": 0.9 },
+          paint: { "line-color": CASING, "line-width": 3, "line-opacity": 0.7 },
         });
         map?.addLayer({
           id: "pack-coverage-line",
           type: "line",
           source: "pack-coverage",
-          paint: { "line-color": "#17604b", "line-width": 4, "line-dasharray": [3, 2] },
+          paint: { "line-color": "#5c7f72", "line-width": 1.25, "line-opacity": 0.8, "line-dasharray": [4, 3] },
         });
         map?.addSource("trailhead-filter", { type: "geojson", data: filterGeometryRef.current ? areaFeature(filterGeometryRef.current) : initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
-        map?.addLayer({
-          id: "trailhead-filter-fill",
-          type: "fill",
-          source: "trailhead-filter",
-          paint: { "fill-color": "#2f6f9f", "fill-opacity": 0.18 },
-        });
         map?.addLayer({
           id: "trailhead-filter-casing",
           type: "line",
@@ -333,12 +335,6 @@ export function HikeMap({
         map?.addLayer({ id: "region-refinement-casing", type: "line", source: "region-refinement", paint: { "line-color": "#fffaf0", "line-width": 7, "line-opacity": 0.95 } });
         map?.addLayer({ id: "region-refinement-line", type: "line", source: "region-refinement", paint: { "line-color": "#713e78", "line-width": 3.5, "line-dasharray": [4, 1, 1, 1] } });
         map?.addSource("boundary-preview", { type: "geojson", data: EMPTY_POINTS });
-        map?.addLayer({
-          id: "boundary-preview-fill",
-          type: "fill",
-          source: "boundary-preview",
-          paint: { "fill-color": "#4f91c2", "fill-opacity": 0.25 },
-        });
         map?.addLayer({
           id: "boundary-preview-casing",
           type: "line",
@@ -364,31 +360,62 @@ export function HikeMap({
           },
         });
         map?.addSource("trail-network", { type: "geojson", data: trailNetworkRef.current });
+        // The trail network is context, not content: keep it hairline so
+        // generated routes are the only prominent lines on the map.
         map?.addLayer({
           id: "trail-network-casing",
           type: "line",
           source: "trail-network",
-          paint: { "line-color": "#fffaf0", "line-width": 8, "line-opacity": 0.92 },
+          paint: { "line-color": CASING, "line-width": zoomWidth(4), "line-opacity": 0.75 },
         });
         map?.addLayer({
           id: "trail-network-lines",
           type: "line",
           source: "trail-network",
-          paint: { "line-color": "#314e43", "line-width": 3.5, "line-opacity": 1, "line-dasharray": [1.5, 1] },
+          paint: { "line-color": "#4a6559", "line-width": zoomWidth(1.5), "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
         });
+        // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
           type: "geojson",
           data: accessPointFeatures(accessPointsRef.current, selectedAccessPointIdRef.current),
+          cluster: true,
+          clusterRadius: 42,
+          clusterMaxZoom: 13,
+        });
+        map?.addLayer({
+          id: "access-point-cluster-halo",
+          type: "circle",
+          source: "access-points",
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-radius": ["step", ["get", "point_count"], 13, 10, 17, 30, 21, 100, 26],
+            "circle-color": "#2f6a55",
+            "circle-opacity": 0.18,
+          },
+        });
+        map?.addLayer({
+          id: "access-point-clusters",
+          type: "circle",
+          source: "access-points",
+          filter: ["has", "point_count"],
+          paint: {
+            // Cluster size reads as "how many trailheads are hiding here".
+            "circle-radius": ["step", ["get", "point_count"], 7, 10, 9.5, 30, 12, 100, 15],
+            "circle-color": "#1f4a3d",
+            "circle-stroke-color": CASING,
+            "circle-stroke-width": 2,
+          },
         });
         map?.addLayer({
           id: "access-points",
           type: "circle",
           source: "access-points",
+          filter: ["!", ["has", "point_count"]],
           paint: {
-            "circle-radius": ["case", ["==", ["get", "selected"], true], 9, 6],
+            "circle-radius": zoomWidth(5.5),
             "circle-color": [
               "case",
-              ["==", ["get", "selected"], true], "#ed7b4f",
+              ["==", ["get", "selected"], true], ROUTE_SELECTED,
               ["==", ["get", "remoteness"], "populated"], "#9a9a9a",
               ["==", ["get", "remoteness"], "rural"], "#6f8f7d",
               ["==", ["get", "remoteness"], "unknown"], "#fffaf0",
@@ -398,9 +425,9 @@ export function HikeMap({
             "circle-stroke-color": [
               "case",
               ["==", ["get", "remoteness"], "unknown"], "#756a59",
-              "#fffaf0",
+              CASING,
             ],
-            "circle-stroke-width": 2,
+            "circle-stroke-width": 1.5,
           },
         });
         map?.addSource("generated-routes-hit", {
@@ -419,134 +446,100 @@ export function HikeMap({
           type: "geojson",
           data: EMPTY_LINES,
         });
+        // Three states, one visual language: unselected routes are thin green,
+        // the hovered route is the same green but heavier, and the selected
+        // route is orange. Every state shares a white casing, so the only thing
+        // that changes between them is weight and hue — never line pattern.
         map?.addLayer({
           id: "generated-route-alternate-casing",
           type: "line",
           source: "generated-route-alternates",
-          paint: { "line-color": "#18312a", "line-width": 7, "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": CASING, "line-width": zoomWidth(5), "line-opacity": 0.85 },
         });
         map?.addLayer({
           id: "generated-route-alternates",
           type: "line",
           source: "generated-route-alternates",
-          paint: { "line-color": "#fffaf0", "line-width": 3, "line-opacity": 0.95, "line-dasharray": [2, 3.5] },
-        });
-        map?.addLayer({
-          id: "generated-route-selected-casing",
-          type: "line",
-          source: "generated-route-selected",
-          paint: { "line-color": "#173f35", "line-width": 12, "line-opacity": 0.98 },
-        });
-        map?.addLayer({
-          id: "generated-route-selected",
-          type: "line",
-          source: "generated-route-selected",
-          paint: { "line-color": "#f47b4d", "line-width": 8 },
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(2.5), "line-opacity": 0.85 },
         });
         map?.addLayer({
           id: "generated-route-hover-casing",
           type: "line",
           source: "generated-route-hover",
-          paint: { "line-color": "#173f35", "line-width": 12, "line-opacity": 0.98 },
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": CASING, "line-width": zoomWidth(8) },
         });
         map?.addLayer({
           id: "generated-route-hover",
           type: "line",
           source: "generated-route-hover",
-          paint: { "line-color": "#fff0a8", "line-width": 7, "line-dasharray": [3, 1] },
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(4) },
+        });
+        map?.addLayer({
+          id: "generated-route-selected-casing",
+          type: "line",
+          source: "generated-route-selected",
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": CASING, "line-width": zoomWidth(9) },
+        });
+        map?.addLayer({
+          id: "generated-route-selected",
+          type: "line",
+          source: "generated-route-selected",
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": ROUTE_SELECTED, "line-width": zoomWidth(5) },
         });
         map?.addLayer({
           id: "generated-route-hit-target",
           type: "line",
           source: "generated-routes-hit",
-          paint: { "line-color": "#000000", "line-width": 20, "line-opacity": 0.01 },
-        });
-        map?.addSource("route-start-pins", {
-          type: "geojson",
-          data: routeTrailheadPinFeatures(routesRef.current, selectedRouteIdRef.current),
-        });
-        map?.addLayer({
-          id: "route-start-pins",
-          type: "circle",
-          source: "route-start-pins",
-          paint: {
-            "circle-radius": [
-              "case",
-              ["==", ["get", "dense"], true],
-              16,
-              ["==", ["get", "selected"], true],
-              14,
-              12,
-            ],
-            "circle-color": ["case", ["==", ["get", "selected"], true], "#f47b4d", "#173f35"],
-            "circle-stroke-color": "#fffaf0",
-            "circle-stroke-width": 3,
-            "circle-pitch-alignment": "map",
-            "circle-pitch-scale": "map",
-          },
-        });
-        map?.addLayer({
-          id: "route-start-pin-labels",
-          type: "symbol",
-          source: "route-start-pins",
-          layout: {
-            "text-field": ["get", "numberLabel"],
-            "text-size": ["case", ["==", ["get", "dense"], true], 9, 11],
-            "text-font": ["Open Sans Bold"],
-            "text-allow-overlap": true,
-            "text-ignore-placement": true,
-          },
-          paint: {
-            "text-color": ["case", ["==", ["get", "selected"], true], "#173f35", "#fffaf0"],
-          },
-        });
-        map?.addLayer({
-          id: "route-start-pin-hit-target",
-          type: "circle",
-          source: "route-start-pins",
-          paint: { "circle-radius": 20, "circle-color": "#000000", "circle-opacity": 0 },
+          paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
         });
         const selectRoute = (event: MapLayerMouseEvent) => {
           const id = event.features?.[0]?.properties?.id;
-          if (typeof id === "string") onRouteSelect(id);
+          if (typeof id === "string") onRouteSelectRef.current(id);
         };
-        map?.on("click", "generated-route-alternates", selectRoute);
-        map?.on("click", "generated-route-selected", selectRoute);
         map?.on("click", "generated-route-hit-target", selectRoute);
-        map?.on("mouseenter", "generated-route-hit-target", (event) => {
+        map?.on("mousemove", "generated-route-hit-target", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id !== "string") return;
           map?.getCanvas().style.setProperty("cursor", "pointer");
-          setHoveredRouteId(id);
+          previewRoute(id);
         });
         map?.on("mouseleave", "generated-route-hit-target", () => {
           map?.getCanvas().style.removeProperty("cursor");
-          setHoveredRouteId(undefined);
+          previewRoute(undefined);
         });
-        map?.on("click", "route-start-pin-hit-target", selectRoute);
-        map?.on("mouseenter", "route-start-pin-hit-target", (event) => {
-          const id = event.features?.[0]?.properties?.id;
-          if (typeof id !== "string") return;
-          map?.getCanvas().style.setProperty("cursor", "pointer");
-          setHoveredRouteId(id);
+        // Clicking a cluster zooms to the level where it breaks apart.
+        map?.on("click", "access-point-clusters", (event) => {
+          const clusterId = event.features?.[0]?.properties?.cluster_id;
+          const source = map?.getSource("access-points") as GeoJSONSource | undefined;
+          if (typeof clusterId !== "number" || !source) return;
+          void source.getClusterExpansionZoom(clusterId).then((zoom) => {
+            map?.easeTo({ center: event.lngLat, zoom, duration: 350 });
+          }).catch(() => undefined);
         });
-        map?.on("mouseleave", "route-start-pin-hit-target", () => {
-          map?.getCanvas().style.removeProperty("cursor");
-          setHoveredRouteId(undefined);
-        });
+        map?.on("mouseenter", "access-point-clusters", () => map?.getCanvas().style.setProperty("cursor", "pointer"));
+        map?.on("mouseleave", "access-point-clusters", () => map?.getCanvas().style.removeProperty("cursor"));
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
-          if (typeof id === "string") onAccessPointSelect(id);
+          if (typeof id === "string") onAccessPointSelectRef.current(id);
         });
         setMapReady(true);
       });
     });
     return () => {
       alive = false;
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
       map?.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
-  }, [display.center, display.zoom, onAccessPointSelect, onRouteSelect, packCoverage, packCoverageBbox]);
+  }, [display.center, display.zoom, packCoverage, packCoverageBbox, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -557,8 +550,8 @@ export function HikeMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !map.getLayer("pack-coverage-fill")) return;
-    map.setPaintProperty("pack-coverage-fill", "fill-opacity", showCoverageHatching(filterGeometry ? bounds : null, drawing) ? 0.14 : 0.055);
+    if (!map || !mapReady || !map.getLayer("pack-coverage-line")) return;
+    map.setPaintProperty("pack-coverage-line", "line-opacity", showCoverageHatching(filterGeometry ? bounds : null, drawing) ? 0.8 : 0.35);
   }, [bounds, drawing, filterGeometry, mapReady]);
 
   useEffect(() => {
@@ -574,13 +567,75 @@ export function HikeMap({
     (map.getSource("generated-route-alternates") as GeoJSONSource | undefined)?.setData(partitions.alternates);
     (map.getSource("generated-route-selected") as GeoJSONSource | undefined)?.setData(partitions.selected);
     (map.getSource("generated-route-hover") as GeoJSONSource | undefined)?.setData(partitions.hovered);
-    (map.getSource("route-start-pins") as GeoJSONSource | undefined)?.setData(routeTrailheadPinFeatures(routes, selectedRouteId));
   }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
 
+  // Numbered start pins are DOM markers rather than a symbol layer: the style
+  // ships no glyph endpoint, so map-rendered text would never appear at all.
+  useEffect(() => {
+    const map = mapRef.current;
+    const MarkerFactory = markerFactoryRef.current;
+    if (!map || !mapReady || !MarkerFactory) return;
+    const markers = routeTrailheadPins(routes, selectedRouteId).map((pin) => {
+      // MapLibre writes its positioning transform onto the element it is given,
+      // so the anchor must be a bare wrapper. Any transform or transition on
+      // that element fights the map and makes the pin drift while zooming.
+      const anchor = document.createElement("div");
+      anchor.className = "route-pin-anchor";
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = ["route-pin", pin.selected ? "selected" : "", pin.numberLabel.length > 3 ? "wide" : ""].filter(Boolean).join(" ");
+      element.textContent = pin.numberLabel;
+      element.title = pin.name;
+      element.setAttribute("aria-label", `Route ${pin.numberLabel} start at ${pin.name}`);
+      element.addEventListener("click", (event) => { event.stopPropagation(); onRouteSelectRef.current(pin.nextRouteId); });
+      element.addEventListener("mouseenter", () => previewRoute(pin.selected ? selectedRouteId : pin.routeIds[0]));
+      element.addEventListener("mouseleave", () => previewRoute(undefined));
+      anchor.append(element);
+      return new MarkerFactory({ element: anchor, anchor: "center", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
+    });
+    markersRef.current = markers;
+    return () => { markers.forEach((marker) => marker.remove()); };
+  }, [mapReady, previewRoute, routes, selectedRouteId]);
+
+  // Framing rules, in priority order:
+  //   1. A brand new result set frames every route, so results are never left
+  //      as an unreadable speck inside the whole drive-time area.
+  //   2. Afterwards, selecting a route only moves the map when that route is
+  //      off screen — otherwise walking the results list jitters the view.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (routes.length === 0) { fittedRouteSetRef.current = undefined; return; }
+
+    const signature = `${routes.length}:${routes[0]?.id ?? ""}:${routes.at(-1)?.id ?? ""}`;
+    if (fittedRouteSetRef.current !== signature) {
+      fittedRouteSetRef.current = signature;
+      const union = routes.reduce<Bounds | null>((accumulated, route) => {
+        const next = lineBounds(route.geometry);
+        if (!next) return accumulated;
+        if (!accumulated) return next;
+        return [
+          Math.min(accumulated[0], next[0]), Math.min(accumulated[1], next[1]),
+          Math.max(accumulated[2], next[2]), Math.max(accumulated[3], next[3]),
+        ];
+      }, null);
+      if (union) map.fitBounds([[union[0], union[1]], [union[2], union[3]]], { padding: 64, maxZoom: 14, duration: 550 });
+      return;
+    }
+
+    if (!selectedRouteId) return;
+    const route = routes.find(({ id }) => id === selectedRouteId);
+    const target = route ? lineBounds(route.geometry) : null;
+    if (!target) return;
+    const view = map.getBounds();
+    if (view.contains([target[0], target[1]]) && view.contains([target[2], target[3]])) return;
+    map.fitBounds([[target[0], target[1]], [target[2], target[3]]], { padding: 72, maxZoom: 15, duration: 450 });
+  }, [mapReady, routes, selectedRouteId]);
+
+  // Hover announced by the results list (card pointer or focus).
   useEffect(() => {
     const handleRoutePreview = (event: Event) => {
-      const routeId = (event as CustomEvent<{ routeId?: string }>).detail?.routeId;
-      setHoveredRouteId(routeId);
+      setHoveredRouteId((event as CustomEvent<{ routeId?: string }>).detail?.routeId);
     };
     window.addEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
     return () => window.removeEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
@@ -595,7 +650,6 @@ export function HikeMap({
       previewSource?.setData(EMPTY_POINTS);
       cornerSource?.setData(EMPTY_POINTS);
       draftBoundsRef.current = null;
-      setDraftBounds(null);
     };
     const handleDown = (event: MapMouseEvent) => {
       event.preventDefault();
@@ -609,7 +663,6 @@ export function HikeMap({
       previewSource?.setData(boundsPolygon(next));
       cornerSource?.setData(boundsCorners(next));
       draftBoundsRef.current = next;
-      setDraftBounds(next);
     };
     const finishDrawing = (next: Bounds | null) => {
       if (!startRef.current) return;
@@ -650,8 +703,6 @@ export function HikeMap({
     };
   }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
-  const mapStatus = mapStatusSummary(bounds, draftBounds, drawing, packCoverageBbox, accessPoints.length);
-
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
       {drawEnabled ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
@@ -678,12 +729,6 @@ export function HikeMap({
         </button>
       </div> : null}
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
-      <output className="map-status" aria-label="Map status">
-        <span className="map-status-boundary">{bounds ? mapStatus.boundary : "Drive-time search"}</span>
-        {mapStatus.dimensions ? <span className="map-status-dimensions">{mapStatus.dimensions}</span> : null}
-        {mapStatus.coverage ? <span className="map-status-coverage">{mapStatus.coverage}</span> : null}
-        <span className="map-status-access">{mapStatus.accessPoints}</span>
-      </output>
       <details className="map-key map-key-collapsible">
         <summary className="map-key-toggle">Map key</summary>
         <div className="map-key-content" aria-label="Map symbol explanations">

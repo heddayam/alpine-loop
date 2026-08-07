@@ -6,7 +6,6 @@ import type { AccessPointOption } from "@/components/builder/types";
 import {
   accessPointFeatures,
   HikeMap,
-  mapStatusSummary,
   routeFeaturePartitions,
   routeFeatures,
   routeTrailheadPins,
@@ -120,28 +119,7 @@ describe("generated route map features", () => {
     expect(routeTrailheadPins(routes)[0]?.numberLabel).toBe("1–6");
   });
 
-  it("summarizes committed and in-progress boundaries using existing map values", () => {
-    const coverage = [-122.19, 37.15, -122.13, 37.18] as [number, number, number, number];
-    const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
-
-    expect(mapStatusSummary(boundary, null, false, coverage, 2)).toEqual({
-      boundary: "Area set",
-      dimensions: "2.2 × 1.6 mi (3.5 sq mi)",
-      coverage: "Inside coverage",
-      accessPoints: "2 access points available",
-    });
-    expect(mapStatusSummary(boundary, null, true, coverage, 1)).toEqual({
-      boundary: "Draw mode",
-      accessPoints: "1 access point available",
-    });
-    expect(mapStatusSummary(boundary, [-122.20, 37.155, -122.14, 37.178], true, coverage, 0)).toMatchObject({
-      boundary: "Drawing area",
-      coverage: "Outside coverage",
-      accessPoints: "0 access points available",
-    });
-  });
-
-  it("renders compact accessible map controls, status, and a collapsed complete key", () => {
+  it("renders compact accessible map controls and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
       drawBounds: boundary,
@@ -173,8 +151,7 @@ describe("generated route map features", () => {
     expect(markup).toContain('aria-label="Redraw trailhead filter"');
     expect(markup).toContain('aria-label="Use demo trailhead filter"');
     expect(markup).toContain('aria-label="Clear trailhead filter"');
-    expect(markup).toContain('<output class="map-status" aria-label="Map status">');
-    expect(markup).toContain('1 access point available');
+    expect(markup).not.toContain('map-status');
     expect(markup).toContain('<details class="map-key map-key-collapsible">');
     expect(markup).not.toContain('<details open=""');
     expect(markup).toContain('<summary class="map-key-toggle">Map key</summary>');
