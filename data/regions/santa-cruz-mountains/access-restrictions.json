@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "id": "santa-cruz-reviewed-access-restrictions",
+    "authority": "Midpeninsula Regional Open Space District and Santa Clara County Parks",
+    "dataset": "Reviewed exact OSM way access removals",
+    "version": "schema-5-pack-scm-cf499195b533cbbd-review-2026-08-07",
+    "retrievedAt": "2026-08-04T19:00:00.000Z",
+    "url": "https://www.openspace.org/where-to-go/trail-maps",
+    "license": "Reviewed access facts for local evaluation; underlying authority reuse terms apply"
+  },
+  "restrictions": [
+    {
+      "externalId": "way/38903758",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00400 marks Peters Creek Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/38903882",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/38903893",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00167 marks Razorback Ridge Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/38904206",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00073 marks Toyon Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/39158068",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR01004 marks Peters Creek Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/39161341",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00920 marks Council Circle Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/39428990",
+      "accessState": "prohibited",
+      "reason": "Santa Clara County Parks feature 494646fb-57ad-4d47-a559-273cdb3a3988 prohibits hiking on Charcoal Road; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/69844556",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00502 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/111475473",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR02574 marks White Oak Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/141456929",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR01154 marks Betsy Crowder Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/222603845",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR01785 marks Razorback Ridge Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892062",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892063",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892064",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892065",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892067",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/352892068",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00370 marks Stevens Creek Nature Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/427738829",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR05311 marks Mindego Hill Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/427738837",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00920 marks Council Circle Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/808148863",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR02574 marks White Oak Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/808148864",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR02574 marks White Oak Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1254704454",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00502 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1469336136",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR07134 marks this trail segment closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1475165257",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00077 marks Toyon Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1483129226",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR01004 marks Peters Creek Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878799",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878800",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878801",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878802",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878804",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    },
+    {
+      "externalId": "way/1539878805",
+      "accessState": "closed",
+      "reason": "Midpen Trail feature TR00346 marks Lost Trail closed; exact match retained from schema-5 pack audit.",
+      "review": { "reviewedAt": "2026-08-07T12:00:00.000Z", "reviewer": "Alpine Loop access migration review" }
+    }
+  ]
+}

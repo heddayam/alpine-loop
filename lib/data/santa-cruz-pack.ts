@@ -1,21 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  MidpenOfficialAccessAdapter,
-  SantaClaraCountyParksAccessAdapter,
-  matchOfficialAccessToOsmWithReport,
-  readOfficialSourceSnapshots,
-  refreshOfficialSourceSnapshots,
-  type OfficialAccessJoin,
-  type OfficialAccessJoinFeature,
-} from "./authorities";
-import { assertPackAuditPassed, auditOfficialAccessJoins, auditSqlitePack } from "./audit";
-import type { OfficialAccessAdapter, SourceSnapshot } from "./adapters";
-import { snapAccessPointsToTopology } from "./access-point-snap";
-import { applyOfficialWayEvidenceToAccessPoints } from "./access-point-evidence";
+import { assertPackAuditPassed, auditSqlitePack } from "./audit";
 import { areaGeometryBounds, type AreaGeometry } from "./area-geometry";
 import { compilePack, type PackSeed } from "./compiler";
+import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import {
   readElevationSourceConfig,
   readPinnedThreeDepCollection,
@@ -24,8 +13,8 @@ import {
   validateUvRasterioPrerequisites,
 } from "./elevation";
 import {
-  OsmPbfTopologyAdapter,
   OsmPbfNamedAreaAdapter,
+  OsmPbfTopologyAdapter,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -38,33 +27,26 @@ import {
   UvRasterioPopulationSampler,
   validateUvRasterioPopulationPrerequisites,
 } from "./population";
+import { deriveTrailheadPortals, stripPortalBuildContext } from "./portals";
 import { POPULATION_RADIUS_M } from "./remoteness";
-import { PreparedOfficialAccessAdapter } from "./prepared-official-access-adapter";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
-import type { NormalizedTopology, PackBuildResult } from "./types";
+import type { AccessState } from "@/lib/graph/types";
+import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from "./types";
+
+export const SANTA_CRUZ_REGION_ROOT = path.resolve("data/regions/santa-cruz-mountains");
+export const SANTA_CRUZ_CURATED_ACCESS_PATH = path.join(SANTA_CRUZ_REGION_ROOT, "access-restrictions.json");
 
 const PACK_ID = "santa-cruz-mountains";
-const COMPILER_VERSION = "santa-cruz-pack-compiler-v13";
-const ACCESS_SNAP_DISTANCE_M = 200;
-const REPRESENTATIVE_MOUNTAIN_BBOX = [-122.195, 37.305, -122.165, 37.333] as const;
-const UCSC_AUDIT_BBOX = [-122.075, 36.975, -122.045, 37.01] as const;
+const COMPILER_VERSION = "santa-cruz-pack-compiler-v14-portals";
 
 type BoundaryFeature = {
   type: "Feature";
   geometry: AreaGeometry;
 };
 
-type AuthorityInput = {
-  adapter: MidpenOfficialAccessAdapter | SantaClaraCountyParksAccessAdapter;
-  sourceAdapter: OfficialAccessAdapter;
-  snapshot: SourceSnapshot;
-  features: OfficialAccessJoinFeature[];
-  joins: OfficialAccessJoin[];
-  ambiguousOsmWayCount: number;
-  unmatchedAuthorityFeatureCount: number;
-  rejectedGeometryFeatureIds: string[];
-};
+type CountByAccessState = Record<AccessState, number>;
+type CountByConfidence = Record<NormalizedAccessPoint["confidence"], number>;
 
 export type SantaCruzPackBuildOptions = {
   outputRoot: string;
@@ -75,81 +57,35 @@ export type SantaCruzPackBuildOptions = {
 
 export type SantaCruzPackBuildResult = {
   pack: PackBuildResult;
-  accessNormalization: {
-    snapDistanceM: number;
-    snappedCount: number;
-    alreadyConnectedCount: number;
-    deduplicatedCount: number;
-    officialPublicCount: number;
-    officialRestrictedCount: number;
-    officialConflictCount: number;
-    rejectedAccessPointIds: string[];
+  portalDerivation: {
+    curatedRestrictionCount: number;
+    portalCount: number;
+    portalByAccessState: CountByAccessState;
+    portalByConfidence: CountByConfidence;
+    inputWayCount: number;
+    trailWayCount: number;
+    streetWayCount: number;
+    serviceRoadWayCount: number;
+    sidewalkWayCount: number;
+    publishedWayCount: number;
+    strippedBuildContextWayCount: number;
+    inputNodeCount: number;
+    publishedNodeCount: number;
+    strippedBuildContextNodeCount: number;
+    inputEvidenceCount: number;
+    publishedEvidenceCount: number;
   };
-  officialAccess: Array<{
-    sourceId: string;
-    authorityFeatureCount: number;
-    appliedJoinCount: number;
-    ambiguousOsmWayCount: number;
-    unmatchedAuthorityFeatureCount: number;
-    rejectedGeometryFeatureCount: number;
-  }>;
   regionalAudit: Awaited<ReturnType<typeof auditSqlitePack>>;
 };
 
-function pointInside(lon: number, lat: number, bbox: readonly [number, number, number, number]): boolean {
-  return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
-}
-
-function accessInventory(topology: NormalizedTopology) {
-  const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
-  const byKind = { trailhead: 0, parking: 0 };
-  const byState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
-  let representativeMountainCount = 0;
-  let representativeMountainPublicCount = 0;
-  let publicOutsideUcscCount = 0;
-  for (const point of topology.accessPoints) {
-    byKind[point.kind] += 1;
-    byState[point.accessState] += 1;
-    const node = nodes.get(point.nodeId);
-    if (!node) throw new Error(`Access point ${point.id} references missing node ${point.nodeId}`);
-    const representative = pointInside(node.lon, node.lat, REPRESENTATIVE_MOUNTAIN_BBOX);
-    if (representative) representativeMountainCount += 1;
-    if (representative && point.accessState === "public") representativeMountainPublicCount += 1;
-    if (point.accessState === "public" && !pointInside(node.lon, node.lat, UCSC_AUDIT_BBOX)) publicOutsideUcscCount += 1;
-  }
-  const inventory = {
-    total: topology.accessPoints.length,
-    byKind,
-    byState,
-    defaultPublicCount: byState.public,
-    publicOutsideUcscCount,
-    representativeMountain: {
-      bbox: REPRESENTATIVE_MOUNTAIN_BBOX,
-      totalCount: representativeMountainCount,
-      publicCount: representativeMountainPublicCount,
-    },
-  };
-  if (inventory.defaultPublicCount < 100 || inventory.publicOutsideUcscCount < 50
-    || inventory.representativeMountain.publicCount < 2) {
-    throw new Error(`Access inventory is not regionally useful: ${JSON.stringify(inventory)}`);
-  }
-  return inventory;
-}
-
-function requiredSnapshot(snapshots: SourceSnapshot[], id: string): SourceSnapshot {
-  const snapshot = snapshots.find((candidate) => candidate.id === id);
-  if (!snapshot) throw new Error(`Missing official snapshot ${id}`);
-  return snapshot;
-}
-
-function newestRetrieval(snapshots: SourceSnapshot[]): string {
-  return snapshots.map(({ retrievedAt }) => retrievedAt).sort().at(-1)!;
+function newestRetrieval(retrievedAt: readonly string[]): string {
+  return [...retrievedAt].sort().at(-1)!;
 }
 
 function dataVersion(
   boundaryContents: string,
   searchRegionContents: string,
-  snapshots: SourceSnapshot[],
+  sourceFingerprints: readonly string[],
   topologyAdapterVersion: string,
   metricAlgorithmVersion: string,
 ): string {
@@ -159,43 +95,73 @@ function dataVersion(
   hash.update(COMPILER_VERSION);
   hash.update(topologyAdapterVersion);
   hash.update(metricAlgorithmVersion);
-  for (const snapshot of [...snapshots].sort((first, second) => first.id.localeCompare(second.id))) {
-    hash.update(`${snapshot.id}\0${snapshot.version}\0${snapshot.contentHash}\0${snapshot.license}\n`);
-  }
+  for (const fingerprint of [...sourceFingerprints].sort()) hash.update(`${fingerprint}\n`);
   return `scm-${hash.digest("hex").slice(0, 16)}`;
 }
 
-async function authorityInput(
-  adapter: MidpenOfficialAccessAdapter | SantaClaraCountyParksAccessAdapter,
-  snapshot: SourceSnapshot,
-  topology: NormalizedTopology,
-): Promise<AuthorityInput> {
-  const normalized = await adapter.normalizeForJoinWithReport(snapshot);
-  const features = normalized.features;
-  const matched = matchOfficialAccessToOsmWithReport(topology, features);
+async function normalizedTopology(
+  adapter: OsmPbfTopologyAdapter,
+  snapshot: Parameters<OsmPbfTopologyAdapter["normalize"]>[0],
+): Promise<NormalizedTopology> {
+  const normalized: NormalizedTopology[] = [];
+  for await (const topology of adapter.normalize(snapshot)) normalized.push(topology);
+  if (normalized.length !== 1) throw new Error(`OSM adapter produced ${normalized.length} topologies`);
+  return normalized[0]!;
+}
+
+function countByAccessState(points: readonly NormalizedAccessPoint[]): CountByAccessState {
+  const counts: CountByAccessState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
+  for (const point of points) counts[point.accessState] += 1;
+  return counts;
+}
+
+function countByConfidence(points: readonly NormalizedAccessPoint[]): CountByConfidence {
+  const counts: CountByConfidence = { high: 0, medium: 0, low: 0 };
+  for (const point of points) counts[point.confidence] += 1;
+  return counts;
+}
+
+function portalDerivationReport(
+  input: NormalizedTopology,
+  portals: NormalizedTopology,
+  published: NormalizedTopology,
+  curatedRestrictionCount: number,
+): SantaCruzPackBuildResult["portalDerivation"] {
+  const countClass = (edgeClass: NonNullable<NormalizedTopology["ways"][number]["edgeClass"]>) =>
+    input.ways.filter((way) => way.edgeClass === edgeClass).length;
   return {
-    adapter,
-    sourceAdapter: adapter,
-    snapshot,
-    features,
-    joins: matched.joins,
-    ambiguousOsmWayCount: matched.ambiguousOsmWayCount,
-    unmatchedAuthorityFeatureCount: matched.unmatchedAuthorityFeatureCount,
-    rejectedGeometryFeatureIds: normalized.rejectedGeometryFeatureIds,
+    curatedRestrictionCount,
+    portalCount: portals.accessPoints.length,
+    portalByAccessState: countByAccessState(portals.accessPoints),
+    portalByConfidence: countByConfidence(portals.accessPoints),
+    inputWayCount: input.ways.length,
+    trailWayCount: countClass("trail"),
+    streetWayCount: countClass("street"),
+    serviceRoadWayCount: countClass("service-road"),
+    sidewalkWayCount: countClass("sidewalk"),
+    publishedWayCount: published.ways.length,
+    strippedBuildContextWayCount: input.ways.length - published.ways.length,
+    inputNodeCount: input.nodes.length,
+    publishedNodeCount: published.nodes.length,
+    strippedBuildContextNodeCount: input.nodes.length - published.nodes.length,
+    inputEvidenceCount: input.portalEvidence?.length ?? 0,
+    publishedEvidenceCount: published.portalEvidence?.length ?? 0,
   };
 }
 
 export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Promise<SantaCruzPackBuildResult> {
-  const regionRoot = path.resolve("data/regions/santa-cruz-mountains");
-  const boundaryPath = path.join(regionRoot, "boundary.geojson");
+  const boundaryPath = path.join(SANTA_CRUZ_REGION_ROOT, "boundary.geojson");
   const boundaryContents = await readFile(boundaryPath, "utf8");
-  const searchRegionPath = path.join(regionRoot, "search-regions.json");
+  const searchRegionPath = path.join(SANTA_CRUZ_REGION_ROOT, "search-regions.json");
   const searchRegionContents = await readFile(searchRegionPath, "utf8");
   const searchRegions = await readSearchRegionInput(searchRegionPath);
   const boundary = JSON.parse(boundaryContents) as BoundaryFeature;
-  const osmConfig = await readOsmSourceConfig(path.join(regionRoot, "osm-source.json"));
-  const elevationConfig = await readElevationSourceConfig(path.join(regionRoot, "elevation-source.json"));
-  const populationConfig = await readPopulationSourceConfig(path.join(regionRoot, "population-source.json"));
+  const [osmConfig, elevationConfig, populationConfig, curatedAccess] = await Promise.all([
+    readOsmSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "osm-source.json")),
+    readElevationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "elevation-source.json")),
+    readPopulationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "population-source.json")),
+    readCuratedAccessFile(SANTA_CRUZ_CURATED_ACCESS_PATH),
+  ]);
 
   // Fail before downloading hundreds of megabytes when the local build tools are unavailable.
   await Promise.all([
@@ -203,7 +169,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     validateUvRasterioPrerequisites(),
     validateUvRasterioPopulationPrerequisites(),
   ]);
-  const [osmSnapshot, dem, population, officialSnapshots] = await Promise.all([
+  const [osmSnapshot, dem, population] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
@@ -213,9 +179,6 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     options.refresh
       ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
       : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
-    options.refresh
-      ? refreshOfficialSourceSnapshots(options.sourceCacheRoot)
-      : readOfficialSourceSnapshots(options.sourceCacheRoot),
   ]);
 
   const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
@@ -227,56 +190,34 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     preparationRoot: path.join(options.preparationRoot, "osm"),
     namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
   });
-  const preparedTopology = snapAccessPointsToTopology(
-    await (async () => {
-      const normalized: NormalizedTopology[] = [];
-      for await (const topology of sourceTopologyAdapter.normalize(osmSnapshot)) normalized.push(topology);
-      if (normalized.length !== 1) throw new Error(`OSM adapter produced ${normalized.length} topologies`);
-      return normalized[0];
-    })(),
-    ACCESS_SNAP_DISTANCE_M,
+  const classifiedTopology = await normalizedTopology(sourceTopologyAdapter, osmSnapshot);
+  const restrictedTopology = applyCuratedAccessRestrictions(
+    classifiedTopology,
+    curatedAccess.snapshot.id,
+    curatedAccess.restrictions,
   );
-
-  const authorities = await Promise.all([
-    authorityInput(
-      new MidpenOfficialAccessAdapter(),
-      requiredSnapshot(officialSnapshots, "midpen-trails"),
-      preparedTopology.topology,
-    ),
-    authorityInput(
-      new SantaClaraCountyParksAccessAdapter(),
-      requiredSnapshot(officialSnapshots, "santa-clara-county-parks-trails"),
-      preparedTopology.topology,
-    ),
-  ]);
-  const allFeatures = authorities.flatMap(({ features }) => features);
-  const allJoins = authorities.flatMap(({ joins }) => joins);
-  const accessEvidence = applyOfficialWayEvidenceToAccessPoints(preparedTopology.topology, allJoins);
-  const inventory = accessInventory(accessEvidence.topology);
-  const joinAudit = auditOfficialAccessJoins(
-    allFeatures,
-    allJoins,
-    new Set(preparedTopology.topology.ways.map(({ externalId }) => externalId)),
+  const portalTopology = deriveTrailheadPortals(restrictedTopology);
+  const publishedTopology = stripPortalBuildContext(portalTopology);
+  const portalDerivation = portalDerivationReport(
+    classifiedTopology,
+    portalTopology,
+    publishedTopology,
+    curatedAccess.restrictions.length,
   );
-  if (joinAudit.errors.length) throw new Error(`Official access join audit failed:\n${joinAudit.errors.join("\n")}`);
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
   const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
-  // Confirms the downloaded rasters are georeferenced where the GHSL tile index
-  // predicted. Without this a grid irregularity in a future region would sample
-  // population from the wrong part of the world and silently call everything remote.
   await populationSampler.verify(population.collection);
-  const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot, population.snapshot];
+  const snapshots = [osmSnapshot, curatedAccess.snapshot, dem.snapshot, population.snapshot];
   const seed: PackSeed = {
-    schemaVersion: "5",
+    schemaVersion: "6",
     id: PACK_ID,
     name: "Santa Cruz Mountains",
     dataVersion: dataVersion(
       boundaryContents,
       searchRegionContents,
-      snapshots,
+      snapshots.map((snapshot) => `${snapshot.id}\0${snapshot.version}\0${snapshot.contentHash}\0${snapshot.license}`),
       `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}`,
-      // Retuning the population radius must produce a new pack version.
       `${elevationSampler.algorithmVersion}+${populationSampler.algorithmVersion}`,
     ),
     compilerVersion: COMPILER_VERSION,
@@ -284,11 +225,12 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     display: { center: [-122.18, 37.319], zoom: 13.5 },
     capabilities: {
       elevation: true,
-      officialAccess: true,
+      officialAccess: false,
       namedAreas: true,
       closedRouteTopology: true,
       batchSearchRegions: true,
       elevationProfiles: true,
+      portalAccessPoints: true,
     },
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",
@@ -298,23 +240,15 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   };
-  const [firstAuthority, ...additionalAuthorities] = authorities;
   const pack = await compilePack({
     outputRoot: options.outputRoot,
     seed,
-    builtAt: newestRetrieval(snapshots),
+    builtAt: newestRetrieval(snapshots.map(({ retrievedAt }) => retrievedAt)),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, accessEvidence.topology),
+      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, publishedTopology),
       snapshot: osmSnapshot,
     },
-    officialAccess: {
-      adapter: new PreparedOfficialAccessAdapter(firstAuthority.sourceAdapter, firstAuthority.joins.map(({ evidence }) => evidence)),
-      snapshot: firstAuthority.snapshot,
-    },
-    additionalOfficialAccess: additionalAuthorities.map((authority) => ({
-      adapter: new PreparedOfficialAccessAdapter(authority.sourceAdapter, authority.joins.map(({ evidence }) => evidence)),
-      snapshot: authority.snapshot,
-    })),
+    additionalSources: [curatedAccess.snapshot],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
     population: { sampler: populationSampler, snapshot: population.snapshot },
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
@@ -328,51 +262,11 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   });
   assertPackAuditPassed(regionalAudit);
   await writeFile(path.join(pack.packDirectory, "regional-audit.json"), `${JSON.stringify(regionalAudit, null, 2)}\n`);
-  await writeFile(path.join(pack.packDirectory, "access-join-audit.json"), `${JSON.stringify({
+  await writeFile(path.join(pack.packDirectory, "portal-derivation-audit.json"), `${JSON.stringify({
     schemaVersion: "1",
-    snapDistanceM: ACCESS_SNAP_DISTANCE_M,
-    accessNormalization: {
-      snappedCount: preparedTopology.snappedCount,
-      alreadyConnectedCount: preparedTopology.alreadyConnectedCount,
-      deduplicatedCount: preparedTopology.deduplicatedCount,
-      officialPublicCount: accessEvidence.promotedPublicCount,
-      officialRestrictedCount: accessEvidence.restrictedCount,
-      officialConflictCount: accessEvidence.conflictedCount,
-      rejectedAccessPointIds: preparedTopology.rejectedAccessPointIds,
-    },
-    accessInventory: inventory,
-    joinAudit,
-    matchReports: authorities.map((authority) => ({
-      sourceId: authority.snapshot.id,
-      authorityFeatureCount: authority.features.length,
-      appliedJoinCount: authority.joins.length,
-      ambiguousOsmWayCount: authority.ambiguousOsmWayCount,
-      unmatchedAuthorityFeatureCount: authority.unmatchedAuthorityFeatureCount,
-      rejectedGeometryFeatureIds: authority.rejectedGeometryFeatureIds,
-    })),
-    joins: allJoins,
+    curatedAccessSourceId: curatedAccess.snapshot.id,
+    ...portalDerivation,
   }, null, 2)}\n`);
 
-  return {
-    pack,
-    accessNormalization: {
-      snapDistanceM: ACCESS_SNAP_DISTANCE_M,
-      snappedCount: preparedTopology.snappedCount,
-      alreadyConnectedCount: preparedTopology.alreadyConnectedCount,
-      deduplicatedCount: preparedTopology.deduplicatedCount,
-      officialPublicCount: accessEvidence.promotedPublicCount,
-      officialRestrictedCount: accessEvidence.restrictedCount,
-      officialConflictCount: accessEvidence.conflictedCount,
-      rejectedAccessPointIds: preparedTopology.rejectedAccessPointIds,
-    },
-    officialAccess: authorities.map((authority) => ({
-      sourceId: authority.snapshot.id,
-      authorityFeatureCount: authority.features.length,
-      appliedJoinCount: authority.joins.length,
-      ambiguousOsmWayCount: authority.ambiguousOsmWayCount,
-      unmatchedAuthorityFeatureCount: authority.unmatchedAuthorityFeatureCount,
-      rejectedGeometryFeatureCount: authority.rejectedGeometryFeatureIds.length,
-    })),
-    regionalAudit,
-  };
+  return { pack, portalDerivation, regionalAudit };
 }
