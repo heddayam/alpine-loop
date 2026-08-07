@@ -86,6 +86,14 @@ function parseNode(row: SqliteRow): GraphNode {
 function parseEdge(row: SqliteRow): GraphEdge {
   const flags = jsonArray<string>(row.flags, "edge flags");
   const encodedTrailName = flags.find((flag) => flag.startsWith("trail-name:"))?.slice("trail-name:".length);
+  const encodedElevationProfile = jsonArray<unknown>(row.elevation_profile, "edge elevation_profile");
+  if (encodedElevationProfile.some((sample) => !Array.isArray(sample) || sample.length !== 2
+    || sample.some((value) => typeof value !== "number" || !Number.isFinite(value)))) {
+    throw new Error("Invalid SQLite edge elevation_profile");
+  }
+  const elevationProfile = (encodedElevationProfile as Array<[number, number]>).map(
+    ([distanceMeters, elevationMeters]) => ({ distanceMeters, elevationMeters }),
+  );
   return {
     id: requiredString(row, "id"),
     ...(typeof row.edge_key === "number"
@@ -102,6 +110,7 @@ function parseEdge(row: SqliteRow): GraphEdge {
     lossMeters: numberOrZero(row, "loss_m"),
     maximumElevationMeters: nullableNumber(row, "max_elevation_m"),
     maximumSustainedGradePct: nullableNumber(row, "max_sustained_grade_pct"),
+    ...(elevationProfile.length > 0 ? { elevationProfile } : {}),
     accessState: parseAccessState(requiredString(row, "access_state")),
     trailName:
       typeof row.trail_name === "string" && row.trail_name.length > 0

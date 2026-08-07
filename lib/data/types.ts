@@ -72,6 +72,7 @@ export type CompiledEdge = {
   lossM: number | null;
   maxElevationM: number | null;
   maxSustainedGradePct: number | null;
+  elevationProfile?: Array<{ distanceMeters: number; elevationMeters: number }> | null;
   accessState: AccessState;
   sourceRefs: string[];
   flags: string[];
@@ -185,7 +186,7 @@ export type Schema3TopologyBuild = {
 };
 
 export type PackAudit = {
-  schemaVersion: "1" | "2" | "3" | "4";
+  schemaVersion: "1" | "2" | "3" | "4" | "5";
   packId: string;
   dataVersion: string;
   nodeCount: number;

@@ -3,8 +3,10 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import {
   packManifestV3Schema,
   packManifestV4Schema,
+  packManifestV5Schema,
   type PackManifestV3,
   type PackManifestV4,
+  type PackManifestV5,
   type TopologyProfile,
 } from "@/lib/contracts";
 import type { AccessTopology } from "./closed-route-topology";
@@ -198,7 +200,7 @@ function metadata(database: DatabaseSync): Map<string, string> {
 export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasibilityRepository {
   readonly packId: string;
   readonly dataVersion: string;
-  readonly #manifest: PackManifestV3 | PackManifestV4;
+  readonly #manifest: PackManifestV3 | PackManifestV4 | PackManifestV5;
   readonly #database: DatabaseSync;
   #closed = false;
 
@@ -206,8 +208,8 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     const version = typeof options.manifest === "object" && options.manifest !== null
       ? (options.manifest as { schemaVersion?: unknown }).schemaVersion
       : undefined;
-    this.#manifest = version === "4"
-      ? packManifestV4Schema.parse(options.manifest)
+    this.#manifest = version === "5" ? packManifestV5Schema.parse(options.manifest)
+      : version === "4" ? packManifestV4Schema.parse(options.manifest)
       : packManifestV3Schema.parse(options.manifest);
     if (this.#manifest.closedRouteTopology.runtimeMode !== "reachable-graph-fallback") {
       throw new Error("Closed-route feasibility repository requires a reachable-graph fallback pack");

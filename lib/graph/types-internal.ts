@@ -22,6 +22,8 @@ export type GraphEdge = {
   lossMeters: number;
   maximumElevationMeters: number | null;
   maximumSustainedGradePct: number | null;
+  /** Complete direction-aware profile on schema-5 packs; samples are <=25 m apart. */
+  elevationProfile?: Array<{ distanceMeters: number; elevationMeters: number }>;
   accessState: AccessState;
   trailName: string | null;
   sourceIds: string[];
