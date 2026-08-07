@@ -1,24 +1,9 @@
 import { readFile } from "node:fs/promises";
-import type { NormalizedAccessPoint, NormalizedNode, NormalizedTopology, NormalizedWay } from "../types";
-import { osmAccessState, osmFootDirection, osmWayIsHikingRelevant } from "./normalize";
+import type { NormalizedNode, NormalizedPortalEvidence, NormalizedTopology, NormalizedWay } from "../types";
+import { classifyOsmWay, osmAccessState, osmFootDirection, osmPortalEvidenceKinds } from "./normalize";
 
 type OplNode = { id: string; lon: number; lat: number; tags: Record<string, string> };
 type OplWay = { id: string; nodeIds: string[]; tags: Record<string, string> };
-
-function accessPointKind(tags: Record<string, string>): NormalizedAccessPoint["kind"] | null {
-  if (tags.amenity === "parking") return "parking";
-  if (tags.highway === "trailhead" || tags.information === "trailhead") return "trailhead";
-  if (tags.barrier !== "gate") return null;
-  const explicitlyRestricted = [tags.foot, tags.access].some((value) =>
-    ["no", "private", "customers", "agricultural", "forestry"].includes(value ?? ""),
-  );
-  const namedEntrance = /(?:trail\s*head|trail\s+access|access\s+(?:point|gate)|entrance|entry)/i.test(tags.name ?? "");
-  return namedEntrance && !explicitlyRestricted ? "trailhead" : null;
-}
-
-function accessPointName(tags: Record<string, string>, kind: NormalizedAccessPoint["kind"]): string {
-  return tags.name ?? (kind === "parking" ? "OSM parking" : tags.barrier === "gate" ? "OSM trail gate" : "OSM trailhead");
-}
 
 function decode(value: string): string {
   let result = "";
@@ -128,7 +113,8 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
   const ways: NormalizedWay[] = [];
   let rejectedWayCount = 0;
   for (const way of inputWays) {
-    if (!osmWayIsHikingRelevant(way.tags)) {
+    const edgeClass = classifyOsmWay(way.tags);
+    if (!edgeClass) {
       rejectedWayCount += 1;
       continue;
     }
@@ -144,6 +130,7 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
       name: way.tags.name ?? null,
       accessState: osmAccessState(way.tags),
       bidirectional: direction === "both",
+      edgeClass,
       sourceRefs: [sourceId],
       flags: [
         `osm-highway:${way.tags.highway}`,
@@ -153,54 +140,44 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
       ],
     });
   }
-  if (ways.length === 0) throw new Error("OSM extraction produced no supported pedestrian ways");
+  if (ways.length === 0) throw new Error("OSM extraction produced no supported ways");
 
-  const accessPoints: NormalizedAccessPoint[] = [];
+  const portalEvidence: NormalizedPortalEvidence[] = [];
   for (const node of nodes.values()) {
-    const kind = accessPointKind(node.tags);
-    if (!kind) continue;
+    const kinds = osmPortalEvidenceKinds(node.tags);
+    if (kinds.length === 0) continue;
     const normalizedNode = retainNode(node.id);
-    accessPoints.push({
-      id: `osm-access-node-${node.id}`,
-      externalId: `node/${node.id}`,
-      nodeId: normalizedNode.id,
-      name: accessPointName(node.tags, kind),
-      kind,
-      accessState: osmAccessState(node.tags),
-      confidence: node.tags.foot || node.tags.access ? "medium" : "low",
-      parkingEvidence: kind === "parking" ? "osm:amenity=parking" : null,
-      sourceRefs: [sourceId],
-    });
+    for (const kind of kinds) {
+      portalEvidence.push({
+        id: `osm-evidence-${kind}-node-${node.id}`,
+        externalId: `node/${node.id}`,
+        kind,
+        name: node.tags.name ?? null,
+        nodeIds: [normalizedNode.id],
+        coordinates: [[normalizedNode.lon, normalizedNode.lat]],
+        accessState: osmAccessState(node.tags),
+        sourceRefs: [sourceId],
+      });
+    }
   }
   for (const way of inputWays) {
-    const kind = accessPointKind(way.tags);
-    if (!kind) continue;
-    const distinctNodeIds = [...new Set(way.nodeIds)];
-    const wayNodes = distinctNodeIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node));
-    if (wayNodes.length === 0) continue;
-    const normalizedNode: NormalizedNode = {
-      id: `osm-node-way-${way.id}-access`,
-      externalId: `way/${way.id}#access`,
-      lon: wayNodes.reduce((sum, node) => sum + node.lon, 0) / wayNodes.length,
-      lat: wayNodes.reduce((sum, node) => sum + node.lat, 0) / wayNodes.length,
-      elevationM: null,
-      flags: ["synthetic-access-centroid"],
-      sourceRefs: [sourceId],
-    };
-    retainedNodes.set(`way-access-${way.id}`, normalizedNode);
-    accessPoints.push({
-      id: `osm-access-way-${way.id}`,
-      externalId: `way/${way.id}`,
-      nodeId: normalizedNode.id,
-      name: accessPointName(way.tags, kind),
-      kind,
-      accessState: osmAccessState(way.tags),
-      confidence: way.tags.foot || way.tags.access ? "medium" : "low",
-      parkingEvidence: kind === "parking" ? "osm:amenity=parking-area" : null,
-      sourceRefs: [sourceId],
-    });
+    const kinds = osmPortalEvidenceKinds(way.tags);
+    if (kinds.length === 0) continue;
+    const wayNodes = way.nodeIds.map(retainNode);
+    for (const kind of kinds) {
+      portalEvidence.push({
+        id: `osm-evidence-${kind}-way-${way.id}`,
+        externalId: `way/${way.id}`,
+        kind,
+        name: way.tags.name ?? null,
+        nodeIds: wayNodes.map(({ id }) => id),
+        coordinates: wayNodes.map(({ lon, lat }) => [lon, lat] as const),
+        accessState: osmAccessState(way.tags),
+        sourceRefs: [sourceId],
+      });
+    }
   }
-  return { nodes: [...retainedNodes.values()], ways, accessPoints, rejectedWayCount };
+  return { nodes: [...retainedNodes.values()], ways, accessPoints: [], portalEvidence, rejectedWayCount };
 }
 
 export async function readAndNormalizeOsmOpl(filePath: string, sourceId: string): Promise<NormalizedTopology> {

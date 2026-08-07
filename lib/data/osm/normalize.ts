@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import type { AccessState } from "@/lib/graph/types";
-import type { NormalizedAccessPoint, NormalizedNode, NormalizedTopology, NormalizedWay } from "../types";
+import type {
+  EdgeClass,
+  NormalizedNode,
+  NormalizedPortalEvidence,
+  NormalizedTopology,
+  NormalizedWay,
+} from "../types";
 
 const featureSchema = z.object({
   type: z.literal("Feature"),
@@ -14,17 +20,64 @@ const featureSchema = z.object({
   ]),
 }).passthrough();
 
-const PEDESTRIAN_HIGHWAYS = new Set([
-  "path", "footway", "track", "pedestrian", "steps", "bridleway",
+const TRAIL_HIGHWAYS = new Set(["path", "bridleway", "steps"]);
+const STREET_HIGHWAYS = new Set([
+  "motorway", "motorway_link",
+  "trunk", "trunk_link",
+  "primary", "primary_link",
+  "secondary", "secondary_link",
+  "tertiary", "tertiary_link",
+  "unclassified", "residential", "living_street", "road",
 ]);
-const ROAD_CONNECTORS = new Set(["service", "unclassified", "residential", "living_street"]);
+const SIDEWALK_SUBTAGS = new Set(["sidewalk", "crossing", "traffic_island", "access_aisle", "link"]);
+const AFFIRMATIVE_MOTOR_ACCESS = new Set([
+  "yes", "designated", "permissive", "public", "destination", "customers", "agricultural", "forestry",
+]);
+const TRAIL_SURFACES = new Set([
+  "dirt", "earth", "fine_gravel", "grass", "ground", "mud", "pebblestone", "rock", "sand", "unpaved", "wood",
+]);
+const INFORMATION_VALUES = new Set(["guidepost", "board", "map"]);
+
+function hasTrailContext(values: Record<string, string>): boolean {
+  return values.footway === "trail"
+    || values.trail_visibility !== undefined
+    || values.sac_scale !== undefined
+    || values.informal === "yes"
+    || TRAIL_SURFACES.has(values.surface ?? "")
+    || /(?:^|\s)(trail|path)(?:\s|$)/i.test(values.name ?? "");
+}
+
+function hasAffirmativeMotorVehicleEvidence(values: Record<string, string>): boolean {
+  const motorAccess = values.motor_vehicle ?? values.vehicle ?? values.access;
+  return AFFIRMATIVE_MOTOR_ACCESS.has(motorAccess ?? "");
+}
+
+/** Classify OSM ways once at the adapter boundary; null means no graph context is retained. */
+export function classifyOsmWay(values: Record<string, string>): EdgeClass | null {
+  const highway = values.highway ?? "";
+  if (SIDEWALK_SUBTAGS.has(values.footway ?? "") || SIDEWALK_SUBTAGS.has(values.service ?? "")) {
+    return "sidewalk";
+  }
+  if (TRAIL_HIGHWAYS.has(highway)) return "trail";
+  if (highway === "track") return hasAffirmativeMotorVehicleEvidence(values) ? "service-road" : "trail";
+  if (highway === "footway") return hasTrailContext(values) ? "trail" : "sidewalk";
+  if (highway === "pedestrian") return hasTrailContext(values) ? "trail" : "sidewalk";
+  if (highway === "service") return "service-road";
+  if (STREET_HIGHWAYS.has(highway)) return "street";
+  return null;
+}
 
 export function osmWayIsHikingRelevant(values: Record<string, string>): boolean {
-  const highway = values.highway ?? "";
-  if (PEDESTRIAN_HIGHWAYS.has(highway)) return true;
-  if (!ROAD_CONNECTORS.has(highway)) return false;
-  return ["yes", "designated", "permissive", "public"].includes(values.foot ?? "")
-    || /(?:^|\s)(trail|path|walk)(?:\s|$)/i.test(values.name ?? "");
+  return classifyOsmWay(values) !== null;
+}
+
+export function osmPortalEvidenceKinds(values: Record<string, string>): NormalizedPortalEvidence["kind"][] {
+  const kinds: NormalizedPortalEvidence["kind"][] = [];
+  if (values.amenity === "parking") kinds.push("parking");
+  if (values.highway === "trailhead" || values.information === "trailhead") kinds.push("trailhead");
+  if (INFORMATION_VALUES.has(values.information ?? "") || values.tourism === "information") kinds.push("information");
+  if (values.barrier === "gate") kinds.push("gate");
+  return kinds;
 }
 
 function tags(properties: Record<string, unknown>): Record<string, string> {
@@ -71,7 +124,7 @@ export function normalizeOsmFeatures(
 ): NormalizedTopology {
   const nodes = new Map<string, NormalizedNode>();
   const ways: NormalizedWay[] = [];
-  const accessPoints: NormalizedAccessPoint[] = [];
+  const portalEvidence: NormalizedPortalEvidence[] = [];
   let rejectedWayCount = 0;
 
   const ensureNode = (coordinate: readonly [number, number]): NormalizedNode => {
@@ -96,22 +149,39 @@ export function normalizeOsmFeatures(
     const values = tags(feature.properties);
     const featureExternalId = externalId(feature, `feature-${featureIndex}`);
     if (feature.geometry.type === "LineString") {
-      if (!osmWayIsHikingRelevant(values)) {
+      const coordinates = feature.geometry.coordinates.map((coordinate) => coordinate as readonly [number, number]);
+      const evidenceKinds = osmPortalEvidenceKinds(values);
+      const evidenceNodes = evidenceKinds.length > 0 ? coordinates.map(ensureNode) : [];
+      for (const kind of evidenceKinds) {
+        portalEvidence.push({
+          id: `osm-evidence-${kind}-${featureExternalId.replace("/", "-")}`,
+          externalId: featureExternalId,
+          kind,
+          name: values.name ?? null,
+          nodeIds: evidenceNodes.map(({ id }) => id),
+          coordinates,
+          accessState: osmAccessState(values),
+          sourceRefs: [sourceId],
+        });
+      }
+      const edgeClass = classifyOsmWay(values);
+      if (!edgeClass) {
         rejectedWayCount += 1;
         return;
       }
-      let coordinates = feature.geometry.coordinates.map((coordinate) => coordinate as readonly [number, number]);
+      let directedCoordinates = coordinates;
       const wayDirection = osmFootDirection(values);
-      if (wayDirection === "reverse") coordinates = [...coordinates].reverse();
-      const wayNodes = coordinates.map(ensureNode);
+      if (wayDirection === "reverse") directedCoordinates = [...coordinates].reverse();
+      const wayNodes = directedCoordinates.map(ensureNode);
       ways.push({
         id: `osm-${featureExternalId.replace("/", "-")}`,
         externalId: featureExternalId,
         nodeIds: wayNodes.map(({ id }) => id),
-        coordinates,
+        coordinates: directedCoordinates,
         name: values.name ?? null,
         accessState: osmAccessState(values),
         bidirectional: wayDirection === "both",
+        edgeClass,
         sourceRefs: [sourceId],
         flags: [
           `osm-highway:${values.highway}`,
@@ -123,24 +193,26 @@ export function normalizeOsmFeatures(
       return;
     }
 
-    const kind = values.highway === "trailhead" ? "trailhead" : values.amenity === "parking" ? "parking" : null;
-    if (!kind) return;
-    const node = ensureNode(feature.geometry.coordinates);
-    accessPoints.push({
-      id: `osm-access-${featureExternalId.replace("/", "-")}`,
-      externalId: featureExternalId,
-      nodeId: node.id,
-      name: values.name ?? `OSM ${kind}`,
-      kind,
-      accessState: osmAccessState(values),
-      confidence: values.foot || values.access ? "medium" : "low",
-      parkingEvidence: kind === "parking" ? "osm:amenity=parking" : null,
-      sourceRefs: [sourceId],
-    });
+    const coordinate = feature.geometry.coordinates as readonly [number, number];
+    const kinds = osmPortalEvidenceKinds(values);
+    if (kinds.length === 0) return;
+    const node = ensureNode(coordinate);
+    for (const kind of kinds) {
+      portalEvidence.push({
+        id: `osm-evidence-${kind}-${featureExternalId.replace("/", "-")}`,
+        externalId: featureExternalId,
+        kind,
+        name: values.name ?? null,
+        nodeIds: [node.id],
+        coordinates: [coordinate],
+        accessState: osmAccessState(values),
+        sourceRefs: [sourceId],
+      });
+    }
   });
 
-  if (ways.length === 0) throw new Error("OSM extraction produced no supported pedestrian ways");
-  return { nodes: [...nodes.values()], ways, accessPoints, rejectedWayCount };
+  if (ways.length === 0) throw new Error("OSM extraction produced no supported ways");
+  return { nodes: [...nodes.values()], ways, accessPoints: [], portalEvidence, rejectedWayCount };
 }
 
 export async function readOsmGeoJsonSequence(filePath: string): Promise<z.infer<typeof featureSchema>[]> {
