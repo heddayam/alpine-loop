@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "authority": "Bureau of Land Management / Monterey Peninsula Regional Park District / California State Parks",
+  "dataset": "Human-reviewed Monterey-Carmel official access overlay",
+  "reviewedAt": "2026-08-07T17:28:17Z",
+  "sourcePages": [
+    {
+      "authority": "Bureau of Land Management",
+      "url": "https://www.blm.gov/sites/default/files/docs/2022-05/Fort_Ord_Trail_Map_2022_508.pdf",
+      "upstreamDate": "2022-01",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:ade19d28b803800d718869c1005c01dda3e6b2617972a18f5d5f77b7f1166854",
+      "byteLength": 7693516,
+      "license": "U.S. Government work; attribution retained",
+      "redistribution": "allowed",
+      "reviewedFacts": [
+        "Creekside Terrace and Badger Hills are named trailheads",
+        "visitors must use only signed trails"
+      ]
+    },
+    {
+      "authority": "Monterey Peninsula Regional Park District",
+      "url": "https://www.mprpd.org/palo-corona-park-rules",
+      "upstreamDate": "page-copyright-2026",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:2bdf92c8eefb62e101295fd1f4377ac795fe703270c3ece27563df0a8fb45b4a",
+      "byteLength": 100656,
+      "license": "Copyright 2026 MPRPD; no affirmative data-reuse grant",
+      "redistribution": "requires-review",
+      "reviewedFacts": [
+        "Rancho Canada entrance needs no permit",
+        "Highway 1 west entrance requires a permit",
+        "South Bank east entrance is permit-free on foot or bicycle but parking requires a permit",
+        "Palo Corona use is limited to designated hiking trails"
+      ]
+    },
+    {
+      "authority": "Monterey Peninsula Regional Park District",
+      "url": "https://www.mprpd.org/garland-ranch-regional-park",
+      "upstreamDate": "page-copyright-2026",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:de62631f9f4b9b1a60c7cff02ea133b49d793ec846f8253e809777b6c091b679",
+      "byteLength": 105628,
+      "license": "Copyright 2026 MPRPD; no affirmative data-reuse grant",
+      "redistribution": "requires-review",
+      "reviewedFacts": [
+        "Garland Ranch is open without an access permit",
+        "Kahn Ranch requires an access permit when entered from Hitchcock Canyon Road"
+      ]
+    },
+    {
+      "authority": "Monterey Peninsula Regional Park District",
+      "url": "https://www.mprpd.org/access-permits",
+      "upstreamDate": "page-copyright-2026",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:a1f6f089ea4b73c3c4482e21caebff4db2a55e61c0e3bbcfe853203a290c3d76",
+      "byteLength": 102459,
+      "license": "Copyright 2026 MPRPD; no affirmative data-reuse grant",
+      "redistribution": "requires-review",
+      "reviewedFacts": [
+        "Kahn Ranch via Hitchcock Canyon Road and permit-limited Palo Corona entrances require access permits"
+      ]
+    },
+    {
+      "authority": "California State Parks",
+      "url": "https://www.parks.ca.gov/?page_id=571",
+      "upstreamDate": "restrictions-checked-2026-07-28T04:43:00-local",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:fbbeb441cf309f6eccea6111e8a5e0b9fa406165d43a2d9d0e185008e39b44a5",
+      "byteLength": 90280,
+      "license": "California State Parks website conditions; extracted access facts only",
+      "redistribution": "requires-review",
+      "transport": "tls-chain-unavailable-in-review-environment",
+      "reviewedFacts": [
+        "Point Lobos is a day-use reserve open to pedestrians during posted hours"
+      ]
+    },
+    {
+      "authority": "California State Parks",
+      "url": "https://www.parks.ca.gov/?page_id=579",
+      "upstreamDate": "restrictions-checked-2026-08-07T00:58:00-local",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:ae4651ed53cfc17386bb803fbdcef9164667fd5c2b4ec7788400e6df233cd6e2",
+      "byteLength": 83533,
+      "license": "California State Parks website conditions; extracted access facts only",
+      "redistribution": "requires-review",
+      "transport": "tls-chain-unavailable-in-review-environment",
+      "reviewedFacts": [
+        "Soberanes Canyon Trail is open from the gate 8 trailhead",
+        "Rocky Ridge Trail is closed due to hazardous conditions"
+      ]
+    },
+    {
+      "authority": "California State Parks",
+      "url": "https://www.parks.ca.gov/pages/579/files/Garrapata.pdf",
+      "upstreamDate": "map-copyright-2002",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:ff8a8257ea6bbac7ba31a9ed18d83d123e0276fcbb26439d3413c606372a61f5",
+      "byteLength": 768833,
+      "license": "Copyright 2002 California State Parks; unmodified map not redistributed",
+      "redistribution": "requires-review",
+      "transport": "tls-chain-unavailable-in-review-environment",
+      "reviewedFacts": [
+        "Garrapata uses numbered Highway 1 access gates",
+        "gate 8 serves Soberanes Canyon and gates 8, 9, or 10 serve Soberanes Point"
+      ]
+    },
+    {
+      "authority": "Bureau of Land Management",
+      "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/14/query?where=FET_NAME%20IN%20(%27Badger%20Hills%20Trailhead%27%2C%27Creekside%20Terrace%20Trailhead%27)&outFields=OBJECTID%2CFET_NAME%2CFET_TYPE%2CFET_SUBTYPE%2CADM_UNIT_CD%2CADMIN_ST%2CLAT%2CLONG%2CWEB_DISPLAY%2CUNIT_NAME&returnGeometry=true&outSR=4326&f=json",
+      "upstreamDate": "service-current-2026-08-07",
+      "retrievedAt": "2026-08-07T17:28:17Z",
+      "contentHash": "sha256:432166ec232fb0f7fbcd8b73f9ae0a979ad4e3cc011e7eb723d958400f51f955",
+      "byteLength": 1870,
+      "license": "U.S. Government work; credit Bureau of Land Management, Network Operations Center",
+      "redistribution": "allowed",
+      "metadata": {
+        "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/14?f=pjson",
+        "contentHash": "sha256:b06b2a2213c1ff3418a2d00727cc240ddf5c06d660a7f8509dd8f86fab5d5568",
+        "byteLength": 56176
+      },
+      "reviewedFacts": [
+        "the query returns exactly Creekside Terrace and Badger Hills trailheads in Fort Ord National Monument",
+        "geometry and published LAT/LONG fields agree within two metres"
+      ]
+    }
+  ],
+  "records": [
+    {
+      "kind": "entrance",
+      "id": "fort-ord-creekside-terrace",
+      "authority": "Bureau of Land Management",
+      "system": "Fort Ord National Monument",
+      "name": "Creekside Terrace Trailhead (signed trails only)",
+      "coordinates": [-121.691299623, 36.6267347865],
+      "accessState": "public",
+      "conditions": ["day-use", "signed-trails-only"],
+      "sourcePageIndex": 7
+    },
+    {
+      "kind": "entrance",
+      "id": "fort-ord-badger-hills",
+      "authority": "Bureau of Land Management",
+      "system": "Fort Ord National Monument",
+      "name": "Badger Hills Trailhead (signed trails only)",
+      "coordinates": [-121.7135240602, 36.5858781503],
+      "accessState": "public",
+      "conditions": ["day-use", "signed-trails-only"],
+      "sourcePageIndex": 7
+    },
+    {
+      "kind": "entrance",
+      "id": "garland-ranch-main",
+      "authority": "Monterey Peninsula Regional Park District",
+      "system": "Garland Ranch Regional Park",
+      "name": "Garland Ranch main entrance",
+      "coordinates": [-121.767713, 36.509276],
+      "accessState": "public",
+      "conditions": ["day-use", "permit-free"],
+      "sourcePageIndex": 2
+    },
+    {
+      "kind": "entrance",
+      "id": "kahn-ranch-hitchcock-canyon",
+      "authority": "Monterey Peninsula Regional Park District",
+      "system": "Kahn Ranch",
+      "name": "Kahn Ranch via Hitchcock Canyon Road (permit required)",
+      "coordinates": [-121.7352, 36.4568],
+      "accessState": "public",
+      "conditions": ["day-use", "permit-required"],
+      "sourcePageIndex": 2
+    },
+    {
+      "kind": "entrance",
+      "id": "palo-corona-rancho-canada",
+      "authority": "Monterey Peninsula Regional Park District",
+      "system": "Palo Corona Regional Park",
+      "name": "Palo Corona Rancho Canada entrance",
+      "coordinates": [-121.888643, 36.538635],
+      "accessState": "public",
+      "conditions": ["day-use", "permit-free", "designated-trails-only"],
+      "sourcePageIndex": 1
+    },
+    {
+      "kind": "entrance",
+      "id": "palo-corona-west-gate",
+      "authority": "Monterey Peninsula Regional Park District",
+      "system": "Palo Corona Regional Park",
+      "name": "Palo Corona Highway 1 west gate (permit required)",
+      "coordinates": [-121.9136, 36.5312],
+      "accessState": "public",
+      "conditions": ["day-use", "permit-required", "designated-trails-only"],
+      "sourcePageIndex": 1
+    },
+    {
+      "kind": "entrance",
+      "id": "palo-corona-south-bank-east-gate",
+      "authority": "Monterey Peninsula Regional Park District",
+      "system": "Palo Corona Regional Park",
+      "name": "Palo Corona South Bank east gate (walk/bike permit-free; parking permit required)",
+      "coordinates": [-121.8694, 36.5381],
+      "accessState": "public",
+      "conditions": ["day-use", "walk-bike-permit-free", "parking-permit-required", "designated-trails-only"],
+      "sourcePageIndex": 1
+    },
+    {
+      "kind": "entrance",
+      "id": "point-lobos-main",
+      "authority": "California State Parks",
+      "system": "Point Lobos State Natural Reserve",
+      "name": "Point Lobos main entrance",
+      "coordinates": [-121.937059, 36.515632],
+      "accessState": "public",
+      "conditions": ["day-use"],
+      "sourcePageIndex": 4
+    },
+    {
+      "kind": "entrance",
+      "id": "garrapata-gate-8",
+      "authority": "California State Parks",
+      "system": "Garrapata State Park",
+      "name": "Garrapata gate 8 (Soberanes Canyon and Soberanes Point)",
+      "coordinates": [-121.9241845, 36.454479],
+      "accessState": "public",
+      "conditions": ["day-use"],
+      "sourcePageIndex": 5
+    },
+    {
+      "kind": "entrance",
+      "id": "garrapata-gate-9",
+      "authority": "California State Parks",
+      "system": "Garrapata State Park",
+      "name": "Garrapata gate 9 (Soberanes Point)",
+      "coordinates": [-121.9256823, 36.4520623],
+      "accessState": "public",
+      "conditions": ["day-use"],
+      "sourcePageIndex": 6
+    },
+    {
+      "kind": "trail-closure",
+      "id": "garrapata-rocky-ridge-hazard-closure",
+      "authority": "California State Parks",
+      "system": "Garrapata State Park",
+      "name": "Rocky Ridge Trail closure (hazardous conditions)",
+      "coordinates": [-121.9184, 36.4595],
+      "accessState": "closed",
+      "conditions": ["hazard-closure"],
+      "targetExternalIds": ["way/55856070", "way/55856129"],
+      "sourcePageIndex": 5
+    }
+  ]
+}
