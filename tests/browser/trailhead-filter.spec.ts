@@ -11,12 +11,12 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
   await expect(page.getByLabel("Broad region")).toBeVisible();
   await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Batch search" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
   await enterDrawnArea(page);
   expect(harness.generationRequests).toHaveLength(0);
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.155, -122.155, 37.17] } });
+  expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.183, 37.155, -122.14, 37.178] } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
@@ -54,7 +54,7 @@ test("Batch launches a persistent job and reopens its saved result page", async 
   await selectTypedOrigin(page);
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
   await page.getByLabel("Broad region").selectOption(SEARCH_REGION.id);
-  await page.getByRole("button", { name: "Batch search" }).click();
+  await page.getByRole("button", { name: "Full search" }).click();
 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
@@ -66,7 +66,6 @@ test("Batch launches a persistent job and reopens its saved result page", async 
   await jobs.getByRole("button", { name: "View results" }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
-  await expect(page.getByLabel("Map status")).toContainText("Drive-time search");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

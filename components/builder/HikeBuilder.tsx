@@ -22,7 +22,6 @@ import {
 import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
-import { BoundaryEditor } from "./BoundaryEditor";
 import { JobsModal, type JobsLoadState } from "./JobsModal";
 import { RangeInput } from "./RangeInput";
 import { SettingsModal } from "./SettingsModal";
@@ -141,6 +140,8 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
   const [jobsOpen, setJobsOpen] = useState(false);
   const [batchLaunching, setBatchLaunching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hoveredRouteId, setHoveredRouteId] = useState<string>();
+  const [nearMissesOpen, setNearMissesOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
   const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
   const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
@@ -295,13 +296,6 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
       if (sequence !== originRequestSequenceRef.current) return;
       setDriveDraft((current) => ({ ...current, originText: origin.label, origin, state: "idle", error: undefined }));
     } catch (error) { if (sequence === originRequestSequenceRef.current) setDriveDraft((current) => ({ ...current, state: "error", error: error instanceof Error ? error.message : "That origin could not be resolved." })); }
-  };
-
-  const useTypedCoordinates = () => {
-    originRequestSequenceRef.current += 1;
-    const parsed = parseCoordinateOrigin(driveDraft.originText);
-    if (!parsed?.success) { setDriveDraft((current) => ({ ...current, state: "error", error: "Enter coordinates as latitude, longitude." })); return; }
-    setDriveDraft((current) => ({ ...current, origin: parsed.data, originText: parsed.data.label, originSuggestions: [], state: "idle", error: undefined }));
   };
 
   const useCurrentLocation = () => {
@@ -500,24 +494,44 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
     jobsRefreshControllerRef.current?.abort();
   }, []);
 
+  // Near misses open themselves only when there is nothing exact to read.
+  useEffect(() => { setNearMissesOpen((generationResponse?.exact.length ?? 0) === 0); }, [generationResponse]);
+
   const generatedRoutes = useMemo(() => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [], [generationResponse]);
+  // Collapsing the near-miss list also takes those traces off the map, so the
+  // map never shows more than the list claims to. Exact matches come first,
+  // so trimming the tail keeps every remaining result number correct.
+  const mappedRoutes = useMemo(() => {
+    if (!generationResponse) return [];
+    return nearMissesOpen ? generatedRoutes : generationResponse.exact;
+  }, [generatedRoutes, generationResponse, nearMissesOpen]);
+
+  const toggleNearMisses = useCallback((open: boolean) => {
+    setNearMissesOpen(open);
+    if (open) return;
+    setSelectedRouteId((current) => {
+      const exact = generationResponse?.exact ?? [];
+      return current && exact.some(({ id }) => id === current) ? current : exact[0]?.id;
+    });
+  }, [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
   const selectedRegion = driveDraft.searchRegions.find(({ id }) => id === driveDraft.searchRegionId);
 
   return (
     <main className="app-frame">
       <header className="topbar">
-        <div><span className="eyebrow">Trail graph route builder</span><h1>Alpine Search</h1></div>
-        <div className="pack-status" aria-label="Installed region pack"><span className="status-dot" aria-hidden="true" /><span><strong>{pack.name}</strong><small>{pack.subtitle}</small></span></div>
+        <h1>Alpine Search</h1>
+        <span className="pack-chip" aria-label="Installed region pack" title={`${pack.name} — ${pack.subtitle}`}>
+          <span className="status-dot" aria-hidden="true" />
+          <span>{pack.name}</span>
+        </span>
         <div className="topbar-actions">
-          <button type="button" className="jobs-button" aria-haspopup="dialog" aria-expanded={jobsOpen} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>Jobs{activeJobCount ? ` (${activeJobCount})` : ""}</button>
-          <button type="button" className="settings-button" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(true)}>Settings</button>
+          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
+            Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
+          </button>
+          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
         <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
-        <nav className="desktop-panel-controls" aria-label="Desktop panels">
-          <button type="button" aria-label="Toggle plan panel" aria-pressed={desktopBuilderVisible} onClick={() => setDesktopBuilderVisible((value) => !value)}>Plan</button>
-          <button type="button" aria-label="Toggle results panel" aria-pressed={desktopResultsVisible && hasResultsPanel} disabled={!hasResultsPanel} onClick={() => setDesktopResultsVisible((value) => !value)}>Results</button>
-        </nav>
       </header>
 
       <SettingsModal open={settingsOpen} includeUncertainAccess={values.includeUncertainAccess} accessPointRemoteness={values.accessPointRemoteness} limit={values.limit} onChange={updateSettings} onClose={closeSettings} />
@@ -528,43 +542,114 @@ export function HikeBuilder({ pack = FIXTURE_BUILDER_PACK }: { pack?: BuilderPac
           <button type="button" aria-pressed={mobilePanel === "builder"} onClick={() => setMobilePanel("builder")}>Plan</button>
           <button type="button" aria-pressed={mobilePanel === "results"} disabled={!hasResultsPanel} onClick={() => setMobilePanel("results")}>Results{generationResponse ? ` (${generatedRoutes.length})` : ""}</button>
         </nav>
+
+        <button type="button" className="panel-tab panel-tab-left" aria-expanded={desktopBuilderVisible} aria-label={desktopBuilderVisible ? "Collapse plan panel" : "Expand plan panel"} onClick={() => setDesktopBuilderVisible((value) => !value)}>
+          <span aria-hidden="true">{desktopBuilderVisible ? "‹" : "›"}</span>
+        </button>
+
         <aside className={["builder-panel", mobilePanel === "builder" ? "" : "mobile-panel-hidden", desktopBuilderVisible ? "" : "desktop-panel-hidden"].filter(Boolean).join(" ")} aria-labelledby="builder-title">
-          <div className="panel-heading builder-console-heading"><div className="builder-console-title"><h2 id="builder-title">Build your route</h2></div></div>
+          <div className="builder-scroll">
+            <div className="panel-bar"><h2 id="builder-title">Plan</h2></div>
 
-          <section className="builder-section filter-section" aria-labelledby="search-area-title">
-            <div className="section-title"><h3 id="search-area-title">Where to search</h3><span>Shared</span></div>
-            <div className="drive-filter-editor">
-              <p>Quick and Batch use the same location, drive time, region, and route filters.</p>
-              <label htmlFor="drive-origin">Driving origin</label>
-              <div className="input-with-action"><input id="drive-origin" type="search" value={driveDraft.originText} autoComplete="off" placeholder="Address, place, or latitude, longitude" onChange={(event) => { const originText = event.currentTarget.value; originRequestSequenceRef.current += 1; reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, originText, origin: current.origin?.label === originText ? current.origin : undefined, originSuggestions: [], state: "suggesting", error: undefined })); invalidateResults(); }} /><button type="button" onClick={useTypedCoordinates}>Use coordinates</button></div>
-              {driveDraft.originSuggestions.length ? <ul className="suggestion-list" role="listbox" aria-label="Origin suggestions">{driveDraft.originSuggestions.map((suggestion) => <li key={suggestion.id}><button type="button" role="option" aria-selected="false" onClick={() => void selectOriginSuggestion(suggestion)}><strong>{suggestion.label}</strong></button></li>)}</ul> : null}
-              <button className="location-button" type="button" onClick={useCurrentLocation}>Use my current location</button>
-              {driveDraft.origin ? <p className="selection-chip"><span aria-hidden="true">✓</span><strong>{driveDraft.origin.label}</strong><small>{driveDraft.origin.lat.toFixed(5)}, {driveDraft.origin.lon.toFixed(5)}</small></p> : null}
-              <label className="select-field" htmlFor="drive-duration">Typical drive time<select id="drive-duration" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, durationMinutes })); invalidateResults(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select></label>
-              <label className="select-field" htmlFor="search-region">Broad region<select id="search-region" value={driveDraft.searchRegionId} disabled={driveDraft.regionsState === "loading"} onChange={(event) => { const searchRegionId = event.currentTarget.value; const region = driveDraft.searchRegions.find(({ id }) => id === searchRegionId); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, searchRegionId })); if (!drawnBounds) setFilterGeometry(region ? boundsGeometry(region.bbox) : undefined); invalidateResults(); }}><option value="">Choose a region</option>{driveDraft.searchRegions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select></label>
-              {driveDraft.regionsState === "loading" ? <p className="inline-status" role="status">Loading curated regions…</p> : null}
-              {selectedRegion ? <p className="selection-chip"><span aria-hidden="true">✓</span><strong>{selectedRegion.name}</strong><small>{selectedRegion.kind.replaceAll("-", " ")}</small></p> : null}
-              {driveDraft.error ? <p className="error-state" role="alert">{driveDraft.error}</p> : null}
-              <p className="provider-note">Typical/static drive time; live traffic is not used. Batch jobs retain their origin until deletion.</p>
+            <section className="panel-section" aria-labelledby="search-area-title">
+              <div className="section-head"><h3 id="search-area-title">Search area</h3></div>
+
+              <div className="field-row">
+                <label htmlFor="drive-origin">Origin</label>
+                <div className="input-with-action">
+                  <input id="drive-origin" className="control" type="search" aria-label="Driving origin" value={driveDraft.originText} autoComplete="off" placeholder="Address, place, or lat, lon" onChange={(event) => { const originText = event.currentTarget.value; originRequestSequenceRef.current += 1; reachabilityControllerRef.current?.abort(); const coordinates = parseCoordinateOrigin(originText); setDriveDraft((current) => coordinates?.success
+                    ? { ...current, originText, origin: coordinates.data, originSuggestions: [], state: "idle", error: undefined }
+                    : { ...current, originText, origin: current.origin?.label === originText ? current.origin : undefined, originSuggestions: [], state: "suggesting", error: undefined }); invalidateResults(); }} />
+                </div>
+              </div>
+              {driveDraft.originSuggestions.length ? <ul className="suggestion-list" role="listbox" aria-label="Origin suggestions">{driveDraft.originSuggestions.map((suggestion) => <li key={suggestion.id}><button type="button" role="option" aria-selected="false" onClick={() => void selectOriginSuggestion(suggestion)}>{suggestion.label}</button></li>)}</ul> : null}
+              <div className="field-extra">
+                <button className="btn-link" type="button" onClick={useCurrentLocation}>Use my current location</button>
+                {driveDraft.origin ? <span className="resolved-value"><code>{driveDraft.origin.lat.toFixed(4)}, {driveDraft.origin.lon.toFixed(4)}</code></span> : null}
+              </div>
+
+              <div className="field-row">
+                <label htmlFor="drive-duration">Drive time</label>
+                <select id="drive-duration" className="control" aria-label="Typical drive time" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, durationMinutes })); invalidateResults(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
+              </div>
+
+              <div className="field-row">
+                <label htmlFor="search-region">Region</label>
+                <select id="search-region" className="control" aria-label="Broad region" value={driveDraft.searchRegionId} disabled={driveDraft.regionsState === "loading"} onChange={(event) => { const searchRegionId = event.currentTarget.value; const region = driveDraft.searchRegions.find(({ id }) => id === searchRegionId); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, searchRegionId })); if (!drawnBounds) setFilterGeometry(region ? boundsGeometry(region.bbox) : undefined); invalidateResults(); }}><option value="">Choose a region</option>{driveDraft.searchRegions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select>
+              </div>
+              {driveDraft.regionsState === "loading" ? <p className="loading-state" role="status">Loading regions…</p> : null}
+              {driveDraft.error ? <p className="note-error" role="alert">{driveDraft.error}</p> : null}
+
+              <section className="boundary-block" aria-labelledby="boundary-title">
+                <div className="boundary-row">
+                  <h3 className="field-label" id="boundary-title">Drawn boundary</h3>
+                  {drawnBounds
+                    ? <output>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output>
+                    : <output className="empty">None — Quick uses drive time</output>}
+                  {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); setFilterGeometry(selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }}>Clear</button> : null}
+                </div>
+                <p className="hint">Draw on the map to override drive time for Quick search.</p>
+              </section>
+            </section>
+
+            <section className="panel-section constraints" aria-labelledby="constraints-title">
+              <div className="section-head"><h3 id="constraints-title">Route</h3></div>
+              <div className="range-table">
+                <div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Min</span><span>Max</span><span>Unit</span></div>
+                <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} />
+                <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} />
+                <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} />
+                <RangeInput id="grade" label="Grade" unit="%" title="Steepest sustained grade over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => { patchRange(setValues, "steepestSustainedGradePct", next); invalidateResults(); }} />
+              </div>
+            </section>
+
+            <details className="advanced" aria-labelledby="closed-route-title">
+              <summary id="closed-route-title">Loop options</summary>
+              <div className="advanced-content">
+                <div className="slider-field">
+                  <label htmlFor="maximum-repeated-trail">Maximum repeated trail</label>
+                  <output htmlFor="maximum-repeated-trail">{values.maximumRepeatedTrailPct}%</output>
+                  <input id="maximum-repeated-trail" type="range" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} aria-valuetext={`${values.maximumRepeatedTrailPct}%`} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} />
+                  <small>0% allows no repeated trail.</small>
+                </div>
+                <label className="switch-row">
+                  <span>Limit the shared access stem</span>
+                  <input type="checkbox" role="switch" checked={values.maximumSharedStemEnabled} onChange={(event) => { const maximumSharedStemEnabled = event.currentTarget.checked; setValues((current) => ({ ...current, maximumSharedStemEnabled })); invalidateResults(); }} />
+                </label>
+                {values.maximumSharedStemEnabled ? (
+                  <div className="field-row">
+                    <label htmlFor="maximum-shared-stem">Max stem</label>
+                    <input id="maximum-shared-stem" className="control" aria-label="Maximum shared stem" type="number" min="0" max="30" step="0.1" value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} />
+                  </div>
+                ) : null}
+                <label className="switch-row">
+                  <span>Allow figure-eights and chained loops</span>
+                  <input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => { const allowMultiCycle = event.currentTarget.checked; setValues((current) => ({ ...current, allowMultiCycle })); invalidateResults(); }} />
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <footer className="builder-action-footer">
+            {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
+            <div className="builder-action-buttons">
+              <button className="btn btn-primary" type="button" disabled={generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button>
+              <button className="btn btn-primary" type="button" disabled={batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
-          </section>
-
-          <section className="builder-section optional-boundary" aria-labelledby="boundary-title">
-            <div className="section-title"><h3 id="boundary-title">Drawn boundary</h3><span>Optional Quick override</span></div>
-            <p>Draw on the map or enter coordinates to make Quick search use that area instead of drive time. Batch always uses the origin, drive time, and region above.</p>
-            <BoundaryEditor key={drawnBounds?.join(",") ?? "empty"} bounds={drawnBounds} onChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} />
-            {drawnBounds ? <output className="boundary-summary complete"><span aria-hidden="true">✓</span>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output> : <p className="empty-state">No Quick-search boundary drawn.</p>}
-          </section>
-
-          <section className="builder-section" aria-labelledby="closed-route-title"><div className="section-title"><h3 id="closed-route-title">Closed route</h3><span>Start and finish together</span></div><p className="filter-explainer">Closed routes start and finish at the same trailhead. The repetition control limits how much trail is walked twice.</p><div className="count-field"><label htmlFor="maximum-repeated-trail">Maximum repeated trail</label><input id="maximum-repeated-trail" type="range" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} aria-valuetext={`${values.maximumRepeatedTrailPct}%`} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} /><output htmlFor="maximum-repeated-trail">{values.maximumRepeatedTrailPct}%</output><small>0% allows only routes with no repeated trail.</small></div><label className="switch-row"><span><strong>Limit the shared access stem</strong><small>Optional one-way distance before the loop begins.</small></span><input type="checkbox" role="switch" checked={values.maximumSharedStemEnabled} onChange={(event) => { const maximumSharedStemEnabled = event.currentTarget.checked; setValues((current) => ({ ...current, maximumSharedStemEnabled })); invalidateResults(); }} /></label>{values.maximumSharedStemEnabled ? <div className="count-field"><label htmlFor="maximum-shared-stem">Maximum shared stem</label><input id="maximum-shared-stem" type="number" min="0" max="30" step="0.1" value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} /><small>Miles, one way (0 to 30)</small></div> : null}<label className="switch-row"><span><strong>Allow figure-eights and chained loops</strong><small>On by default. Turn off to require exactly one cycle.</small></span><input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => { const allowMultiCycle = event.currentTarget.checked; setValues((current) => ({ ...current, allowMultiCycle })); invalidateResults(); }} /></label></section>
-
-          <section className="builder-section constraints" aria-labelledby="constraints-title"><div className="section-title"><h3 id="constraints-title">Physical constraints</h3><span>Min – max</span></div><div className="range-table"><div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Minimum</span><span>Maximum</span><span>Unit</span></div><RangeInput id="distance" label="Distance" unit="miles (max 30)" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} /><RangeInput id="gain" label="Elevation gain" unit="feet" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} /><RangeInput id="altitude" label="Maximum elevation" unit="feet" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} /><RangeInput id="grade" label="Steepest sustained grade" unit="% over 100 m" value={values.steepestSustainedGradePct} onChange={(next) => { patchRange(setValues, "steepestSustainedGradePct", next); invalidateResults(); }} /></div></section>
-
-          <footer className="builder-action-footer">{validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}<div className="builder-action-buttons unified-actions"><button className="quick-button" type="button" disabled={generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button><button className="generate-button" type="button" disabled={batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting batch…" : "Batch search"}</button></div>{generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}</footer>
+            <div className="action-legend" aria-hidden="true"><span>Fast · partial</span><span>Thorough · background</span></div>
+            {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}
+          </footer>
         </aside>
 
-        <HikeMap drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={generatedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={setSelectedRouteId} />
-        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+        <HikeMap drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={setSelectedRouteId} onRouteHover={setHoveredRouteId} />
+
+        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={setSelectedRouteId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+
+        {hasResultsPanel ? (
+          <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>
+            <span aria-hidden="true">{desktopResultsVisible ? "›" : "‹"}</span>
+          </button>
+        ) : null}
       </div>
     </main>
   );

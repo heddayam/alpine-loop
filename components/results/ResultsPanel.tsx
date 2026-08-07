@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import type {
   GeneratedClosedRouteV3,
   GenerateClosedRoutesResponseV3,
@@ -17,6 +17,9 @@ type ResultsPanelProps = {
   onSelectRoute: (routeId: string) => void;
   mobileVisible?: boolean;
   desktopVisible?: boolean;
+  hoveredRouteId?: string;
+  nearMissesOpen?: boolean;
+  onToggleNearMisses?: (open: boolean) => void;
   pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
 };
 
@@ -31,12 +34,20 @@ const TOPOLOGY_LABELS: Record<GeneratedClosedRouteV3["topology"]["kind"], string
   "complex-closed": "Complex closed route",
 };
 
+function miles(meters: number) {
+  return (meters / METERS_PER_MILE).toFixed(1);
+}
+
+function feet(meters: number) {
+  return Math.round(meters * FEET_PER_METER).toLocaleString("en-US");
+}
+
 function formatMiles(meters: number) {
-  return `${(meters / METERS_PER_MILE).toFixed(1)} mi`;
+  return `${miles(meters)} mi`;
 }
 
 function formatFeet(meters: number) {
-  return `${Math.round(meters * FEET_PER_METER).toLocaleString("en-US")} ft`;
+  return `${feet(meters)} ft`;
 }
 
 function formatFreshness(value: string) {
@@ -51,9 +62,9 @@ function formatFreshness(value: string) {
 function topologySummary(route: GeneratedClosedRouteV3) {
   const topology = route.topology;
   return [
-    `${TOPOLOGY_LABELS[topology.kind]} · ${topology.cycleCount} ${topology.cycleCount === 1 ? "cycle" : "cycles"}`,
-    `${Math.round(topology.repeatedTrailFraction * 100)}% repeated`,
-    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} shared stem`] : []),
+    TOPOLOGY_LABELS[topology.kind],
+    ...(topology.repeatedTrailFraction > 0 ? [`${Math.round(topology.repeatedTrailFraction * 100)}% repeated`] : []),
+    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} stem`] : []),
   ].join(" · ");
 }
 
@@ -104,12 +115,14 @@ function RouteCard({
   route,
   routeNumber,
   selected,
+  hovered,
   buttonRef,
   onSelect,
 }: {
   route: GeneratedClosedRouteV3 & { violations?: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"] };
   routeNumber: number;
   selected: boolean;
+  hovered: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
   onSelect: () => void;
 }) {
@@ -120,7 +133,7 @@ function RouteCard({
   };
   return (
     <article
-      className={selected ? "route-card selected" : "route-card"}
+      className={["route-card", selected ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
       aria-labelledby={`route-trails-${route.id} route-${route.id}`}
       onMouseEnter={() => announceRoutePreview(route.id)}
       onMouseLeave={() => announceRoutePreview()}
@@ -144,9 +157,9 @@ function RouteCard({
           <small id={`route-${route.id}`}>{topologySummary(route)}</small>
         </span>
         <span className="route-summary-metrics">
-          <span className="route-summary-stat"><small>Distance</small><strong>{formatMiles(route.distanceMeters)}</strong></span>
-          <span className="route-summary-stat"><small>Gain</small><strong>{formatFeet(route.elevationGainMeters)}</strong></span>
-          <span className="route-summary-stat"><small>Max grade</small><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong></span>
+          <span title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
+          <span title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
+          <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>
         </span>
       </button>
 
@@ -167,7 +180,7 @@ function RouteCard({
           <details className="route-secondary">
             <summary>
               <span>Route details</span>
-              <small>Terrain, access & data</small>
+              <small>Terrain, access &amp; data</small>
             </summary>
             <div className="route-secondary-content">
               <p className="route-endpoints"><span>{route.startAccessPoint.name}</span><span aria-hidden="true">↻</span><span>same trailhead</span></p>
@@ -209,6 +222,9 @@ export function ResultsPanel({
   onSelectRoute,
   mobileVisible = true,
   desktopVisible = true,
+  hoveredRouteId,
+  nearMissesOpen = false,
+  onToggleNearMisses,
   pagination,
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -221,6 +237,15 @@ export function ResultsPanel({
     () => response ? [...response.exact, ...response.nearMisses] : [],
     [response],
   );
+
+  // Hovering a route on the map brings its card into view, so the two halves
+  // of the workspace always agree on what is being pointed at.
+  useEffect(() => {
+    if (!hoveredRouteId) return;
+    const index = routes.findIndex((route) => route.id === hoveredRouteId);
+    if (index < 0) return;
+    cardRefs.current[index]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [hoveredRouteId, routes]);
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || routes.length === 0) return;
@@ -250,7 +275,7 @@ export function ResultsPanel({
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><h2 id="results-title">Results</h2></div>
-        <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different trailhead filter or constraints."}</span></div>
+        <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different area or looser constraints."}</span></div>
       </aside>
     );
   }
@@ -259,7 +284,7 @@ export function ResultsPanel({
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
         <div className="results-heading"><h2 id="results-title">Results</h2></div>
-        <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings or generate again when you’re ready.</span></div>
+        <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings and search again.</span></div>
       </aside>
     );
   }
@@ -278,23 +303,24 @@ export function ResultsPanel({
     <aside className={panelClassName} aria-labelledby="results-title">
       <div className="results-heading">
         <h2 id="results-title">Results</h2>
+        <span className="count">{total} route{total === 1 ? "" : "s"}</span>
       </div>
 
       {exactShortfall ? (
         <div className="results-state" role="status" aria-live="polite">
           <strong>{response.exact.length} of {response.requested} requested exact routes found.</strong>
           <span>{budgetLimited
-            ? "The selected effort limit stopped this search before every promising option could be explored. Near misses remain labeled separately."
+            ? "The effort limit stopped the search early."
             : response.diagnostics.exhausted
-              ? "The available search was exhausted without enough exact matches. Near misses remain labeled separately."
-              : "The search returned fewer exact matches than requested. Near misses remain labeled separately."}</span>
+              ? "The search was exhausted before finding enough exact matches."
+              : "Fewer exact matches than requested."} Near misses are listed separately.</span>
         </div>
       ) : null}
 
       {total === 0 ? (
         <div className="no-results" role="status">
-          <strong>No routes found from eligible trailheads.</strong>
-          <span>Try a broader trailhead filter, a wider distance range, or include uncertain access.</span>
+          <strong>No routes found.</strong>
+          <span>Widen the distance range, choose a broader area, or include uncertain access in Settings.</span>
         </div>
       ) : (
         <div className="route-lists" onKeyDown={handleKeyboardNavigation} aria-label="Generated routes">
@@ -309,6 +335,7 @@ export function ResultsPanel({
                 route={route}
                 routeNumber={index + 1}
                 selected={route.id === selectedRouteId}
+                hovered={route.id === hoveredRouteId}
                 buttonRef={(node) => { cardRefs.current[index] = node; }}
                 onSelect={() => onSelectRoute(route.id)}
               />
@@ -316,27 +343,30 @@ export function ResultsPanel({
           </section>
 
           {response.nearMisses.length > 0 ? (
-            <section className="result-section near-misses" aria-labelledby="near-results-title">
-              <div className="result-section-heading"><h3 id="near-results-title">Near misses</h3><span>{response.nearMisses.length}</span></div>
+            /* Near misses stay folded away while there are exact matches to
+               read; with none, they are the only thing left to look at. */
+            <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => onToggleNearMisses?.(event.currentTarget.open)}>
+              <summary className="result-section-heading"><h3 id="near-results-title">Near misses</h3><span>{response.nearMisses.length}</span></summary>
               {response.nearMisses.map((route, index) => (
                 <RouteCard
                   key={route.id}
                   route={route}
                   routeNumber={response.exact.length + index + 1}
                   selected={route.id === selectedRouteId}
+                  hovered={route.id === hoveredRouteId}
                   buttonRef={(node) => { cardRefs.current[response.exact.length + index] = node; }}
                   onSelect={() => onSelectRoute(route.id)}
                 />
               ))}
-            </section>
+            </details>
           ) : null}
         </div>
       )}
 
       {pagination ? (
         <nav className="results-pagination" aria-label="Batch result pages">
-          <span>Showing this 50-route page</span>
-          <button type="button" disabled={!pagination.hasNext || pagination.loading} onClick={pagination.onNext}>
+          <span>50 per page</span>
+          <button type="button" className="btn" disabled={!pagination.hasNext || pagination.loading} onClick={pagination.onNext}>
             {pagination.loading ? "Loading…" : pagination.hasNext ? "Next 50 routes" : "Last page"}
           </button>
         </nav>
