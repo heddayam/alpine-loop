@@ -102,7 +102,7 @@ function ElevationProfile({ route }: { route: GeneratedClosedRouteV3 }) {
   return (
     <figure className="elevation-profile">
       <figcaption>Elevation profile</figcaption>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Elevation profile from ${formatFeet(minElevation)} to ${formatFeet(maxElevation)}`}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`Elevation profile from ${formatFeet(minElevation)} to ${formatFeet(maxElevation)}`}>
         <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} />
         <polyline points={points} />
       </svg>
