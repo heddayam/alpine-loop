@@ -27,7 +27,7 @@ import {
   UvRasterioPopulationSampler,
   validateUvRasterioPopulationPrerequisites,
 } from "./population";
-import { deriveTrailheadPortals, stripPortalBuildContext } from "./portals";
+import { deriveTrailheadPortals, PORTAL_DERIVATION_VERSION, stripPortalBuildContext } from "./portals";
 import { POPULATION_RADIUS_M } from "./remoteness";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
@@ -217,7 +217,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       boundaryContents,
       searchRegionContents,
       snapshots.map((snapshot) => `${snapshot.id}\0${snapshot.version}\0${snapshot.contentHash}\0${snapshot.license}`),
-      `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}`,
+      `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}+${PORTAL_DERIVATION_VERSION}`,
       `${elevationSampler.algorithmVersion}+${populationSampler.algorithmVersion}`,
     ),
     compilerVersion: COMPILER_VERSION,

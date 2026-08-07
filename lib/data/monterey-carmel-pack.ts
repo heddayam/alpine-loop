@@ -36,6 +36,7 @@ import {
 import {
   applyOfficialEntranceOverlay,
   deriveTrailheadPortals,
+  PORTAL_DERIVATION_VERSION,
   stripPortalBuildContext,
 } from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
@@ -352,6 +353,7 @@ export async function buildMontereyCarmelPack(
     sourceTopologyAdapter.adapterVersion,
     namedAreaAdapter.adapterVersion,
     reviewedAdapter.adapterVersion,
+    PORTAL_DERIVATION_VERSION,
   ];
   const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
   const seed: PackSeed = {

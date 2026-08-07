@@ -4,6 +4,7 @@ import {
   applyOfficialEntranceOverlay,
   deriveTrailheadPortals,
   PORTAL_CLUSTER_DISTANCE_M,
+  PORTAL_DERIVATION_VERSION,
   PORTAL_EVIDENCE_DISTANCE_M,
   stripPortalBuildContext,
 } from "./portals";
@@ -159,6 +160,29 @@ describe("trailhead portal derivation", () => {
     expect(derived.accessPoints[0]!.sourceRefs).toEqual(["osm", "osm-gate", "osm-information", "osm-parking"]);
   });
 
+  it("accepts a non-restrictive service road as parking access without minting a direct service-road portal", () => {
+    const nodes = [
+      node("trail-a", 200), node("trail-b", 500),
+      node("parking-road-node", 0), node("road-end", 0, 100),
+    ];
+    const ways = [
+      way("trail", ["trail-a", "trail-b"], nodes, "trail"),
+      way("service", ["parking-road-node", "road-end"], nodes, "service-road"),
+    ];
+    const portalEvidence = [
+      evidence("connected", "parking", [[nodes[2]!.lon, nodes[2]!.lat]], ["parking-road-node"]),
+    ];
+
+    const derived = deriveTrailheadPortals(topology(nodes, ways, portalEvidence));
+
+    expect(PORTAL_DERIVATION_VERSION).toBe("portal-derivation-v2");
+    expect(derived.accessPoints).toHaveLength(1);
+    expect(derived.accessPoints[0]).toMatchObject({
+      nodeId: "trail-a",
+      parkingEvidence: "portal-evidence:parking/connected",
+    });
+  });
+
   it("clusters deterministically and selects the strongest-evidence representative", () => {
     expect(PORTAL_CLUSTER_DISTANCE_M).toBe(150);
     expect(PORTAL_EVIDENCE_DISTANCE_M).toBe(250);
@@ -199,6 +223,27 @@ describe("trailhead portal derivation", () => {
     expect(derived.accessPoints[0]!.reachableTrailKm).toBeCloseTo(0.5, 2);
   });
 
+  it("prefers the useful trail component over stronger evidence on a short disconnected stub", () => {
+    const nodes = [
+      node("long-start", 0), node("long-end", -1_000),
+      node("stub-start", 100), node("stub-end", 100, 20), node("road", 50, 100),
+    ];
+    const ways = [
+      way("long", ["long-start", "long-end"], nodes, "trail"),
+      way("stub", ["stub-start", "stub-end"], nodes, "trail"),
+      way("street", ["long-start", "stub-start", "road"], nodes, "street"),
+    ];
+    const portalEvidence = [
+      evidence("stub-marker", "trailhead", [[nodes[2]!.lon, nodes[2]!.lat]], [], "Stub marker"),
+    ];
+
+    const derived = deriveTrailheadPortals(topology(nodes, ways, portalEvidence));
+
+    expect(derived.accessPoints).toHaveLength(1);
+    expect(derived.accessPoints[0]).toMatchObject({ nodeId: "long-start" });
+    expect(derived.accessPoints[0]!.reachableTrailKm).toBeCloseTo(1, 2);
+  });
+
   it("derives conservative access from incident trail edges and rejects unclassified input", () => {
     const nodes = [node("start", 0), node("public-end", -300), node("private-end", 300), node("road", 0, 100)];
     const ways = [
@@ -209,7 +254,7 @@ describe("trailhead portal derivation", () => {
     expect(deriveTrailheadPortals(topology(nodes, ways)).accessPoints[0]!.accessState).toBe("private");
 
     const legacyWays = ways.map((item) => ({ ...item, edgeClass: undefined }));
-    expect(() => deriveTrailheadPortals(topology(nodes, legacyWays))).toThrow(/classified trail and street/);
+    expect(() => deriveTrailheadPortals(topology(nodes, legacyWays))).toThrow(/classified trail and road/);
   });
 
   it("removes build-only roads and their nodes while preserving walking connectors and portals", () => {
