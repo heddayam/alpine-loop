@@ -268,7 +268,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   await populationSampler.verify(population.collection);
   const snapshots = [osmSnapshot, ...authorities.map(({ snapshot }) => snapshot), dem.snapshot, population.snapshot];
   const seed: PackSeed = {
-    schemaVersion: "4",
+    schemaVersion: "5",
     id: PACK_ID,
     name: "Santa Cruz Mountains",
     dataVersion: dataVersion(
@@ -288,6 +288,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       namedAreas: true,
       closedRouteTopology: true,
       batchSearchRegions: true,
+      elevationProfiles: true,
     },
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",

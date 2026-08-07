@@ -133,7 +133,8 @@ function reconstructTraversals(
     const physicalEdgeKey = edgePhysicalKey(traversal.edge);
     const edgeKey = directedEdgeKey(traversal.edge);
     if (physicalEdgeKey === null || edgeKey === null) return null;
-    const endpointElevations = [traversal.from.elevationMeters, traversal.to.elevationMeters];
+    const profileElevations = traversal.edge.elevationProfile?.map(({ elevationMeters }) => elevationMeters);
+    const endpointElevations = profileElevations ?? [traversal.from.elevationMeters, traversal.to.elevationMeters];
     const minimumElevationMeters = endpointElevations.every((value): value is number => value !== null)
       ? Math.min(...endpointElevations)
       : null;
@@ -192,6 +193,14 @@ function rankRoute(value: ValidatedClosedRoute, request: GenerateClosedRoutesReq
     min: request.steepestSustainedGradePct.min,
     max: request.steepestSustainedGradePct.max,
   });
+  if (request.gradeExperience && route.gradeExperience) {
+    ranges.push(
+      { constraint: "climb-p90-grade", value: route.gradeExperience.climbP90Pct, min: 0, max: request.gradeExperience.maximumClimbP90Pct },
+      { constraint: "steep-climbing-share", value: route.gradeExperience.steepClimbingSharePct, min: 0, max: request.gradeExperience.maximumSteepClimbingSharePct },
+      { constraint: "longest-steep-climb", value: route.gradeExperience.longestSteepClimbMeters, min: 0, max: request.gradeExperience.maximumSteepRunMiles * METERS_PER_MILE },
+      { constraint: "descent-p90-grade", value: route.gradeExperience.descentP90Pct, min: 0, max: request.gradeExperience.maximumDescentP90Pct },
+    );
+  }
   ranges.push({
     constraint: "repeated-trail",
     value: route.topology.repeatedTrailFraction * 100,
@@ -487,6 +496,11 @@ export class ReachableGraphClosedRouteSolver {
           if (!validated.valid) {
             directedValidationRejectionCount += 1;
             this.options.onValidationRejection?.(validated.reason);
+            continue;
+          }
+          if (request.gradeExperience && !validated.value.route.gradeExperience) {
+            directedValidationRejectionCount += 1;
+            this.options.onValidationRejection?.("missing-grade-experience-profile");
             continue;
           }
           if (!request.closedRoute.allowMultiCycle && validated.value.route.topology.cycleCount > 1) continue;

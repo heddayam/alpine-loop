@@ -8,6 +8,7 @@ import {
   type PackManifestV2,
   type PackManifestV3,
   type PackManifestV4,
+  type PackManifestV5,
 } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import { edgeInsideCoverage } from "../area-geometry";
@@ -24,7 +25,7 @@ import { topologySha256 } from "../topology-compiler";
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
 type Metadata = Record<string, string>;
-type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4;
+type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4 | PackManifestV5;
 type BuildMetrics = {
   rejectedEdgeCount: number;
   conflictRecordIds: string[];
@@ -229,7 +230,7 @@ function auditSearchRegions(
   database: DatabaseSync,
   manifest: AuditablePackManifest,
 ): { count: number; errors: string[] } {
-  if (manifest.schemaVersion !== "4") return { count: 0, errors: [] };
+  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5") return { count: 0, errors: [] };
   const rows = database.prepare(`
     SELECT r.named_area_id, r.display_order, a.name, a.kind
     FROM search_regions r
@@ -255,6 +256,37 @@ function auditSearchRegions(
     if (/\bclosed areas?\b/i.test(name)) errors.push(`Search region ${id} refers to a closed-area variant`);
   });
   return { count: rows.length, errors };
+}
+
+function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
+  if (manifest.schemaVersion !== "5") return [];
+  const errors: string[] = [];
+  const edges = database.prepare("SELECT edge_key, id, length_m, elevation_profile FROM edges ORDER BY edge_key")
+    .all() as Array<Record<string, unknown>>;
+  for (const edge of edges) {
+    requiredNumber(edge.edge_key, "edges.edge_key");
+    const id = requiredString(edge.id, "edges.id");
+    const length = requiredNumber(edge.length_m, `edge ${id}.length_m`);
+    let samples: unknown[][] = [];
+    try {
+      const parsed: unknown = JSON.parse(requiredString(edge.elevation_profile, `edge ${id}.elevation_profile`));
+      if (Array.isArray(parsed) && parsed.every(Array.isArray)) samples = parsed;
+    } catch { /* Report the invalid profile below. */ }
+    if (samples.length < 2) { errors.push(`Edge ${id} has no complete elevation profile`); continue; }
+    let previous = -1;
+    samples.forEach((sample, index) => {
+      if (sample.length !== 2) { errors.push(`Edge ${id} has a malformed elevation profile sample`); return; }
+      const distance = requiredNumber(sample[0], `edge ${id} profile distance`);
+      requiredNumber(sample[1], `edge ${id} profile elevation`);
+      if (index === 0 && Math.abs(distance) > 1e-6) errors.push(`Edge ${id} elevation profile does not start at zero`);
+      if (previous >= 0 && (distance <= previous || distance - previous > 25.001)) {
+        errors.push(`Edge ${id} elevation profile spacing exceeds 25 meters or is not increasing`);
+      }
+      previous = distance;
+    });
+    if (Math.abs(previous - length) > 0.01) errors.push(`Edge ${id} elevation profile does not end at edge length`);
+  }
+  return errors;
 }
 
 function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNode[] {
@@ -393,7 +425,9 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     accessPoints = accessPointsFromDatabase(database);
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
     searchRegions = auditSearchRegions(database, manifest);
-    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4") {
+    const elevationProfileErrors = auditElevationProfiles(database, manifest);
+    if (elevationProfileErrors.length) throw new Error(elevationProfileErrors.join("; "));
+    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5") {
       const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
         decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
       if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
@@ -481,7 +515,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
       audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
     }
   }
-  if (manifest.schemaVersion === "4") {
+  if (manifest.schemaVersion === "4" || manifest.schemaVersion === "5") {
     audit.counts.searchRegions = searchRegions.count;
     audit.errors.push(...searchRegions.errors);
   }

@@ -18,6 +18,7 @@ export type EdgeMetrics = {
   maxElevationM: number | null;
   maxSustainedGradePct: number | null;
   samples: Array<number | null>;
+  elevationProfile: ElevationProfileSample[] | null;
 };
 
 export function distanceMeters([lon1, lat1]: Coordinate, [lon2, lat2]: Coordinate): number {
@@ -128,7 +129,7 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
   const lengthM = distances.at(-1) ?? 0;
   const complete = samples.every((sample): sample is number => sample !== null);
   if (!complete) {
-    return { lengthM, gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, samples };
+    return { lengthM, gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, samples, elevationProfile: null };
   }
 
   let gainM = 0;
@@ -152,6 +153,91 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
     maxElevationM: Math.max(...samples),
     maxSustainedGradePct,
     samples,
+    elevationProfile: distances.map((distanceMeters, index) => ({ distanceMeters, elevationMeters: samples[index]! })),
+  };
+}
+
+function elevationAt(samples: readonly ElevationProfileSample[], distanceMeters: number): number {
+  if (distanceMeters <= samples[0]!.distanceMeters) return samples[0]!.elevationMeters;
+  let low = 1;
+  let high = samples.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (samples[middle]!.distanceMeters < distanceMeters) low = middle + 1;
+    else high = middle;
+  }
+  return interpolatedElevation(samples[low - 1]!, samples[low]!, distanceMeters);
+}
+
+export type GradeExperience = {
+  climbP90Pct: number;
+  steepClimbingSharePct: number;
+  longestSteepClimbMeters: number;
+  descentP90Pct: number;
+  windowMeters: 100;
+  steepThresholdPct: 10;
+};
+
+/** Signed rolling-window experience metrics sampled every <=25 m with exact endpoint interpolation. */
+export function gradeExperienceMetrics(
+  samples: readonly ElevationProfileSample[],
+  strideMeters = MAX_SAMPLE_SPACING_M,
+): GradeExperience | null {
+  if (samples.length < 2 || samples.at(-1)!.distanceMeters - samples[0]!.distanceMeters < SUSTAINED_GRADE_WINDOW_M) return null;
+  if (!Number.isFinite(strideMeters) || strideMeters <= 0 || strideMeters > MAX_SAMPLE_SPACING_M) {
+    throw new Error(`Grade-experience stride must be between 0 and ${MAX_SAMPLE_SPACING_M} meters`);
+  }
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index]!;
+    if (!Number.isFinite(sample.distanceMeters) || !Number.isFinite(sample.elevationMeters)
+      || (index > 0 && sample.distanceMeters <= samples[index - 1]!.distanceMeters)) {
+      throw new Error("Elevation profile samples must be finite and strictly increasing by distance");
+    }
+  }
+  const first = samples[0]!.distanceMeters;
+  const lastStart = samples.at(-1)!.distanceMeters - SUSTAINED_GRADE_WINDOW_M;
+  const starts: number[] = [];
+  for (let start = first; start < lastStart; start += strideMeters) starts.push(start);
+  starts.push(lastStart);
+  const windows = starts.map((start, index) => ({
+    start,
+    grade: (elevationAt(samples, start + SUSTAINED_GRADE_WINDOW_M) - elevationAt(samples, start))
+      / SUSTAINED_GRADE_WINDOW_M * 100,
+    weight: index + 1 < starts.length ? starts[index + 1]! - start : (starts.length === 1 ? 1 : 0),
+  }));
+  const weightedPercentile = (values: Array<{ value: number; weight: number }>, percentile: number): number => {
+    if (values.length === 0) return 0;
+    values.sort((left, right) => left.value - right.value);
+    const target = values.reduce((sum, item) => sum + item.weight, 0) * percentile;
+    let cumulative = 0;
+    for (const item of values) {
+      cumulative += item.weight;
+      if (cumulative >= target) return item.value;
+    }
+    return values.at(-1)!.value;
+  };
+  const uphill = windows.filter(({ grade }) => grade > 0);
+  const downhill = windows.filter(({ grade }) => grade < 0);
+  const uphillWeight = uphill.reduce((sum, item) => sum + item.weight, 0);
+  let longestSteepClimbMeters = 0;
+  let runStart: number | null = null;
+  for (const window of windows) {
+    if (window.grade >= 10) {
+      runStart ??= window.start;
+      longestSteepClimbMeters = Math.max(
+        longestSteepClimbMeters,
+        Math.min(samples.at(-1)!.distanceMeters, window.start + SUSTAINED_GRADE_WINDOW_M) - runStart,
+      );
+    } else runStart = null;
+  }
+  return {
+    climbP90Pct: weightedPercentile(uphill.map(({ grade: value, weight }) => ({ value, weight })), 0.9),
+    steepClimbingSharePct: uphillWeight === 0 ? 0 : uphill.filter(({ grade }) => grade >= 10)
+      .reduce((sum, item) => sum + item.weight, 0) / uphillWeight * 100,
+    longestSteepClimbMeters,
+    descentP90Pct: weightedPercentile(downhill.map(({ grade, weight }) => ({ value: -grade, weight })), 0.9),
+    windowMeters: 100,
+    steepThresholdPct: 10,
   };
 }
 
