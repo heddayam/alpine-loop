@@ -27,7 +27,7 @@ import type {
   TopologySourceAdapter,
 } from "./adapters";
 import { reconcileAccess } from "./access";
-import { calculateEdgeMetricsBatch } from "./metrics";
+import { calculateEdgeMetricsBatch, distanceMeters } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
 import { validateSearchRegions, type SearchRegionInput } from "./search-regions";
@@ -103,6 +103,7 @@ async function compileGraph(
   evidence: NormalizedAccessEvidence[],
   sampler: ElevationSampler,
   coverage?: AreaGeometry,
+  trailOnlyElevation = false,
 ): Promise<{
   nodes: NormalizedTopology["nodes"];
   edges: CompiledEdge[];
@@ -119,8 +120,13 @@ async function compileGraph(
     if (!knownExternalIds.has(externalId)) throw new Error(`Official access record targets unknown feature ${externalId}`);
   }
 
-  const nodeElevations = await sampler.sample(topology.nodes.map(({ lon, lat }) => [lon, lat]));
-  const nodes = topology.nodes.map((node, index) => ({ ...node, elevationM: nodeElevations[index] }));
+  const elevationNodeIds = trailOnlyElevation
+    ? new Set(topology.ways.filter(({ edgeClass }) => edgeClass === undefined || edgeClass === "trail").flatMap(({ nodeIds }) => nodeIds))
+    : new Set(topology.nodes.map(({ id }) => id));
+  const elevationNodes = topology.nodes.filter(({ id }) => elevationNodeIds.has(id));
+  const sampledElevations = await sampler.sample(elevationNodes.map(({ lon, lat }) => [lon, lat]));
+  const elevationByNodeId = new Map(elevationNodes.map((node, index) => [node.id, sampledElevations[index] ?? null]));
+  const nodes = topology.nodes.map((node) => ({ ...node, elevationM: elevationByNodeId.get(node.id) ?? null }));
   let conflicts = 0;
   const edges: CompiledEdge[] = [];
   const segmentPlans = topology.ways.flatMap((way) => {
@@ -142,10 +148,20 @@ async function compileGraph(
     if (!accepted) rejectedCoverageEdgeCount += way.bidirectional ? 2 : 1;
     return accepted;
   }) : segmentPlans;
-  const segmentMetrics = await calculateEdgeMetricsBatch(retainedSegmentPlans.map(({ geometry }) => geometry), sampler);
+  const trailSegmentPlans = retainedSegmentPlans.filter(({ way }) => way.edgeClass === undefined || way.edgeClass === "trail");
+  const trailSegmentMetrics = await calculateEdgeMetricsBatch(trailSegmentPlans.map(({ geometry }) => geometry), sampler);
+  let trailMetricIndex = 0;
 
-  retainedSegmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }, planIndex) => {
-      const metrics = segmentMetrics[planIndex]!;
+  retainedSegmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }) => {
+      const trail = way.edgeClass === undefined || way.edgeClass === "trail";
+      const metrics = trail ? trailSegmentMetrics[trailMetricIndex++]! : {
+        lengthM: distanceMeters(geometry[0], geometry[1]),
+        gainM: null,
+        lossM: null,
+        maxElevationM: null,
+        maxSustainedGradePct: null,
+        elevationProfile: null,
+      };
       const common = {
         lengthM: metrics.lengthM,
         maxElevationM: metrics.maxElevationM,
@@ -310,6 +326,12 @@ function createAudit(
 ): PackAudit {
   const accessStateCounts = { ...EMPTY_ACCESS_COUNTS };
   for (const edge of graph.edges) accessStateCounts[edge.accessState] += 1;
+  const elevationEdges = seed.schemaVersion === "6"
+    ? graph.edges.filter(({ edgeClass }) => edgeClass === "trail")
+    : graph.edges;
+  const elevationNodeIds = seed.schemaVersion === "6"
+    ? new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]))
+    : new Set(graph.nodes.map(({ id }) => id));
   return {
     schemaVersion: seed.schemaVersion,
     packId: seed.id,
@@ -320,8 +342,8 @@ function createAudit(
     sourceCount,
     rejectedWayCount: topology.rejectedWayCount,
     conflictCount: graph.conflicts,
-    missingElevationNodeCount: graph.nodes.filter(({ elevationM }) => elevationM === null).length,
-    missingElevationEdgeCount: graph.edges.filter(({ maxElevationM }) => maxElevationM === null).length,
+    missingElevationNodeCount: graph.nodes.filter(({ id, elevationM }) => elevationNodeIds.has(id) && elevationM === null).length,
+    missingElevationEdgeCount: elevationEdges.filter(({ maxElevationM }) => maxElevationM === null).length,
     accessStateCounts,
     ...(seed.schemaVersion !== "1" ? {
       namedAreaCount: graph.namedAreas.length,
@@ -459,6 +481,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       evidence,
       options.elevation.sampler,
       manifest.schemaVersion !== "1" ? manifest.coverage.boundary : undefined,
+      manifest.schemaVersion === "6",
     );
     let namedAreas: NormalizedNamedArea[] = [];
     if (manifest.schemaVersion !== "1") {
