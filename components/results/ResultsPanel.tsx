@@ -159,7 +159,11 @@ function RouteCard({
         <span className="route-summary-metrics">
           <span title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
           <span title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
-          <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>
+          {route.gradeExperience ? (
+            <span title={`Climb p90 · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of climbing above ${route.gradeExperience.steepThresholdPct}% · longest ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · descent p90 ${route.gradeExperience.descentP90Pct.toFixed(1)}%`}>
+              <strong>{route.gradeExperience.climbP90Pct.toFixed(1)}%</strong> climb · {route.gradeExperience.steepClimbingSharePct.toFixed(0)}% steep · {(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi run
+            </span>
+          ) : <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
         </span>
       </button>
 
