@@ -21,9 +21,10 @@ const request: CreateBatchRouteJobV1 = {
 const geometry = { type: "Polygon" as const, coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };
 
 function route(id: string): GeneratedClosedRouteV3 {
+  const offset = id === "second" ? 0.01 : 0;
   return {
-    id, geometry: { type: "LineString", coordinates: [[-122.1, 37.3], [-122.11, 37.31], [-122.1, 37.3]] },
-    startAccessPoint: { id: "access", name: "Access", lon: -122.1, lat: 37.3, accessState: "public", confidence: "high" },
+    id, geometry: { type: "LineString", coordinates: [[-122.1 + offset, 37.3], [-122.11 + offset, 37.31], [-122.1 + offset, 37.3]] },
+    startAccessPoint: { id: "access", name: "Access", lon: -122.1 + offset, lat: 37.3, accessState: "public", confidence: "high" },
     distanceMeters: 6_000, elevationGainMeters: 200, elevationLossMeters: 200, minimumElevationMeters: 100, maximumElevationMeters: 300, steepestSustainedGradePct: 8,
     topology: { kind: "simple-loop", cycleCount: 1, cycleBlockCount: 1, repeatedTrailDistanceMeters: 0, repeatedTrailFraction: 0, sharedStemDistanceMeters: 0, connectorCount: 0 },
     trailNames: ["Fixture"], warnings: [], source: { freshness: "2026-01-01T00:00:00.000Z", confidence: "high", sourceIds: ["fixture"] },

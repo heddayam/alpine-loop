@@ -66,4 +66,17 @@ describe("access-point snapping", () => {
       { id: "named", name: "Ridge Lot" },
     ]);
   });
+
+  it("drops generic parking when a named trailhead uses the same snapped node", () => {
+    const input = topology();
+    input.accessPoints = [
+      { ...input.accessPoints[0], id: "parking", name: "OSM parking", kind: "parking" },
+      { ...input.accessPoints[0], id: "trailhead", name: "Hoffman Creek Trailhead", kind: "trailhead" },
+    ];
+    const result = snapAccessPointsToTopology(input, 100);
+    expect(result.deduplicatedCount).toBe(1);
+    expect(result.topology.accessPoints.map(({ id, name, kind }) => ({ id, name, kind }))).toEqual([
+      { id: "trailhead", name: "Hoffman Creek Trailhead", kind: "trailhead" },
+    ]);
+  });
 });

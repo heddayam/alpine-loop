@@ -74,6 +74,19 @@ the evidence line.
   passes 334 tests across 62 files plus the production build, and two consecutive
   `npm run test:browser` runs pass all five Chromium flows.
 
+- 2026-08-06 — made Loop options use the compact constraint-table UI and persist
+  as builder defaults in the shared settings JSON. Full-search results now
+  deduplicate identical route geometry across access points, preferring an exact
+  match over a near miss, and the pack compiler removes generic OSM access records
+  when a named access point uses the same snapped node. Rebuilt schema-5 pack
+  `scm-da6546354d045858` contains 3,203 access points, passes audit with zero
+  errors, and passes the five-start real-pack checkpoint with zero directed
+  validation rejections. Existing saved jobs were migrated; the latest duplicate
+  exact pair was reduced to one route. Grade cards use whole-number percentages
+  and plain-language labels. `npm run verify` passes 337 tests across 62 files
+  plus the production build; two consecutive browser runs pass all five Chromium
+  flows.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

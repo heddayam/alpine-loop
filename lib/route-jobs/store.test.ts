@@ -123,7 +123,7 @@ describe("SQLiteRouteJobStore", () => {
     store.initializeAccessPoints(id, ["first", "second"]);
     const near: RouteJobResult = {
       matchType: "near-miss", accessPointId: "first",
-      route: { ...route("near"), violations: [{ constraint: "distance", value: 3, min: 4, max: 8, delta: 1, normalizedDelta: 0.125 }] },
+      route: { ...route("near"), geometry: { type: "LineString", coordinates: [[-122.1, 37.3], [-122.12, 37.32], [-122.1, 37.3]] }, violations: [{ constraint: "distance", value: 3, min: 4, max: 8, delta: 1, normalizedDelta: 0.125 }] },
     };
     const exact: RouteJobResult = { matchType: "exact", accessPointId: "second", route: route("exact") };
     store.completeAccessPoint(id, 0, [near], true);
@@ -137,6 +137,23 @@ describe("SQLiteRouteJobStore", () => {
       stale: true,
       progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 1, nearMissRouteCount: 1, truncatedAccessPointCount: 1 },
     });
+    store.close();
+  });
+
+  it("retains one result for identical geometry across access points and prefers exact", () => {
+    const { store } = setup();
+    const id = "00000000-0000-4000-8000-000000000012";
+    store.create(id, request, resolved);
+    store.initializeAccessPoints(id, ["first", "second", "third"]);
+    const duplicateNear: RouteJobResult = {
+      matchType: "near-miss", accessPointId: "first",
+      route: { ...route("near-duplicate"), violations: [{ constraint: "distance", value: 3, min: 4, max: 8, delta: 1, normalizedDelta: 0.125 }] },
+    };
+    store.completeAccessPoint(id, 0, [duplicateNear], false);
+    store.completeAccessPoint(id, 1, [{ matchType: "exact", accessPointId: "second", route: route("exact-duplicate") }], false);
+    store.completeAccessPoint(id, 2, [{ matchType: "exact", accessPointId: "third", route: route("later-duplicate") }], false);
+    expect(store.pageResults(id, undefined, 50).results.map(({ matchType, route: result }) => [matchType, result.id]))
+      .toEqual([["exact", "exact-duplicate"]]);
     store.close();
   });
 

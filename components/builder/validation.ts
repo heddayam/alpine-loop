@@ -55,7 +55,7 @@ export function buildGenerateRoutesRequest(
   }
   const maximumSharedStemMiles = Number(values.maximumSharedStemMiles);
   if (values.maximumSharedStemEnabled && (!Number.isFinite(maximumSharedStemMiles) || maximumSharedStemMiles < 0 || maximumSharedStemMiles > 30)) {
-    errors.push("Maximum shared stem must be from 0 through 30 miles.");
+    errors.push("Maximum shared approach must be from 0 through 30 miles.");
   }
   if (errors.length || !accessFilter || !distance.value) return { success: false, errors };
 

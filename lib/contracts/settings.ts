@@ -9,6 +9,13 @@ export const gradePresetsSchema = z.object({
   steep: gradeExperienceConstraintsSchema,
 }).strict();
 
+export const loopOptionDefaultsSchema = z.object({
+  maximumRepeatedTrailPct: z.number().int().min(0).max(100),
+  sharedApproachEnabled: z.boolean(),
+  maximumSharedApproachMiles: z.number().min(0).max(30),
+  allowMultiCycle: z.boolean(),
+}).strict();
+
 export const appSettingsV1Schema = z.object({
   schemaVersion: z.literal(1),
   includeUncertainAccess: z.boolean(),
@@ -17,6 +24,7 @@ export const appSettingsV1Schema = z.object({
   gradeConstraintEnabled: z.boolean(),
   selectedGradePreset: gradePresetIdSchema,
   gradePresets: gradePresetsSchema,
+  loopOptions: loopOptionDefaultsSchema,
 }).strict();
 
 export type GradePresetId = z.infer<typeof gradePresetIdSchema>;

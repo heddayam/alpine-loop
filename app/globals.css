@@ -342,6 +342,8 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .grade-info-popover th, .grade-info-popover td { padding: 2px var(--s1); text-align: right; white-space: nowrap; }
 .grade-info-popover th:first-child { text-align: left; }
 .grade-info-popover thead { color: var(--ink-3); border-bottom: 1px solid var(--line); }
+.loop-constraint-table { margin: 0 calc(var(--s3) * -1) var(--s2); }
+.loop-constraint-table .range-row:last-child { border-bottom: 1px solid var(--line); }
 
 /* ------------------------------------------------- disclosure & toggles */
 .advanced { padding: 0; border-bottom: 1px solid var(--line); }

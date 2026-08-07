@@ -136,7 +136,7 @@ describe("ResultsPanel V3", () => {
     fireEvent.click(within(detail).getByText("Route details"));
     expect(within(detail).getByText("Repeated trail")).toBeVisible();
     expect(within(detail).getByText("25%")).toBeVisible();
-    expect(within(detail).getByText("Shared stem")).toBeVisible();
+    expect(within(detail).getByText("Shared approach")).toBeVisible();
     expect(within(detail).getByText("0.2 mi")).toBeVisible();
     expect(within(detail).getByText(/distance: 2.0 mi/)).toBeVisible();
     expect(within(detail).getByText("same trailhead")).toBeVisible();
@@ -159,6 +159,16 @@ describe("ResultsPanel V3", () => {
     render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
+  });
+
+  it("explains grade experience with whole-number percentages", () => {
+    render(<ResultsPanel status="done" response={response({
+      exact: [route({ gradeExperience: { climbP90Pct: 11.34, steepClimbingSharePct: 18.73, longestSteepClimbMeters: 275, descentP90Pct: 14.13, windowMeters: 100, steepThresholdPct: 10 } })],
+      nearMisses: [],
+    })} onSelectRoute={() => undefined} />);
+    const summary = screen.getByRole("button", { name: /Simple loop/ });
+    expect(summary).toHaveTextContent("90% climb ≤ 11% · 19% uphill ≥10% · 0.2 mi run");
+    expect(within(summary).getByTitle(/90% of uphill 100 m sections are 11% grade or less/)).toBeVisible();
   });
 
   it("previews a route trace without changing selection", () => {
