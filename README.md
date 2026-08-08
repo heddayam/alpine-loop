@@ -1,6 +1,6 @@
 # Alpine Loop
 
-Alpine Loop is a local-first **hike builder**. A user filters eligible
+Alpine Loop is a **loop hike builder**. A user filters eligible
 trailheads by a drawn area, an installed named region, or a typical drive-time
 area, optionally chooses one of those trailheads, sets physical constraints and
 acceptable repeated trail, and receives closed routes from a versioned local
