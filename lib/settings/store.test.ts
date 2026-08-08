@@ -47,7 +47,6 @@ describe("SettingsStore", () => {
     await writeFile(filePath, JSON.stringify({
       schemaVersion: 1,
       includeUncertainAccess: false,
-      accessPointRemoteness: ["rural"],
       quickSearchRouteCount: 4,
       loopOptions: { maximumRepeatedTrailPct: 20 },
       gradePresets: { moderate: { maximumClimbP90Pct: 13 } },

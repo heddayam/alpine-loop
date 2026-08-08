@@ -268,8 +268,9 @@ expensive now and nearly free later.
   promotions perturb which starts are searched first when route count caps the
   search. Moving ranking onto reachable trail-network size removes the
   coupling; until then, steps 3 and 5 are coupled.
-- Remoteness thresholds in `lib/data/remoteness.ts` are tuned against the
-  current candidate set and will need retuning once portals change its shape.
+- Resolved: the population-based remoteness taxonomy was replaced by a single
+  building-count rule in `lib/data/wilderness.ts`, which needs no per-region
+  tuning. See "Buildings" in [data sources](data-sources.md).
 - Not all 1,456 Santa Cruz portals are useful. Some are a path crossing a road
   mid-block. Trail-component thresholds and evidence scoring, not the portal
   rule alone, are what make the set usable.

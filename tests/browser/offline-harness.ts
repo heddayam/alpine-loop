@@ -13,7 +13,7 @@ export type OfflineHarness = {
   reachabilityRequests: unknown[];
   batchRequests: CreateBatchRouteJobV1[];
   settingsRequests: AppSettingsV1[];
-  previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess" | "accessPointRemoteness">>;
+  previewRequests: Array<Pick<GenerateClosedRoutesRequestV3, "accessFilter" | "includeUncertainAccess">>;
   releaseGeneration(): void;
   blockedExternalRequests: string[];
 };
@@ -47,7 +47,6 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
   let settings: AppSettingsV1 = {
     schemaVersion: 1,
     includeUncertainAccess: true,
-    accessPointRemoteness: ["remote", "unknown"],
     quickSearchRouteCount: 10,
     gradeConstraintEnabled: false,
     selectedGradePreset: "moderate",
@@ -80,7 +79,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     if (request.method() === "POST" && url.pathname.endsWith("/access-points/preview")) {
       const preview = requestBody as OfflineHarness["previewRequests"][number];
       previewRequests.push(preview);
-      await route.fulfill({ json: { accessPoints: ACCESS_POINTS.filter((point) => preview.accessPointRemoteness.includes(point.remoteness) && (preview.includeUncertainAccess || point.accessState !== "unknown")), filterGeometry: FILTER_GEOMETRY, trailNetwork: TRAIL_NETWORK } });
+      await route.fulfill({ json: { accessPoints: ACCESS_POINTS.filter((point) => preview.includeUncertainAccess || point.accessState !== "unknown"), filterGeometry: FILTER_GEOMETRY, trailNetwork: TRAIL_NETWORK } });
       return;
     }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/suggest") { await route.fulfill({ json: { suggestions: [{ id: "arcgis-castle-rock", label: "Castle Rock, California", magicKey: "fixture-magic-key" }] } }); return; }
@@ -109,7 +108,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     }
     if (request.method() === "GET" && url.pathname === "/api/route-jobs") { await route.fulfill({ json: { version: 1, jobs: batchRequests.map(completedJob) } }); return; }
     if (request.method() === "GET" && url.pathname === `/api/route-jobs/${JOB_ID}/results`) {
-      const requestFixture = routeResponse({ version: 3, packId: "fixture-pack", accessFilter: { mode: "drawn-area", bbox: FILTER_GEOMETRY.coordinates[0]!.reduce<[number, number, number, number]>((bbox, [lon, lat]) => [Math.min(bbox[0], lon), Math.min(bbox[1], lat), Math.max(bbox[2], lon), Math.max(bbox[3], lat)], [180, 90, -180, -90]) }, routeFamily: "closed", closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "rural", "populated", "unknown"], searchEffort: "quick", limit: 10 }, 2);
+      const requestFixture = routeResponse({ version: 3, packId: "fixture-pack", accessFilter: { mode: "drawn-area", bbox: FILTER_GEOMETRY.coordinates[0]!.reduce<[number, number, number, number]>((bbox, [lon, lat]) => [Math.min(bbox[0], lon), Math.min(bbox[1], lat), Math.max(bbox[2], lon), Math.max(bbox[3], lat)], [180, 90, -180, -90]) }, routeFamily: "closed", closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, searchEffort: "quick", limit: 10 }, 2);
       await route.fulfill({ json: { version: 1, job: completedJob(batchRequests[0]!), results: requestFixture.exact.map((result) => ({ matchType: "exact", accessPointId: result.startAccessPoint.id, route: result })) } });
       return;
     }

@@ -34,7 +34,7 @@ catalog-linked, valid installed pack is selectable.
   button with active-job state.
 - The left panel has no product-mode switch. Drive-time inputs and shared
   closed-route/physical constraints are visible together.
-- Settings controls access-point remoteness, uncertain access, and the number of
+- Settings controls uncertain access and the number of
   Quick-search results. The chosen action determines effort; there is no effort
   selector.
 - The map shows pack coverage, active filter geometry, eligible access points,
@@ -103,8 +103,9 @@ failures remain visible in job diagnostics.
 - Drive-time service areas use ArcGIS typical/static time, not live traffic.
 - Exact pack coverage is the only hard route-geometry boundary.
 - Unknown access is included by default and can be explicitly disabled.
-- Remote/rural/populated/unknown settings control map visibility, previews, and
-  automatic solver starts. Remote and unknown are enabled by default.
+- Starts that sit among buildings, or that cannot reach a cycle, are excluded
+  from map visibility, previews, and automatic solver starts. Both are product
+  behaviour, not user settings: this app only offers wilderness loops.
 - Automated tests use committed fixtures and never require network access.
 - Generated packs, runtime databases, source downloads, caches, and secrets stay
   out of Git.

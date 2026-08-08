@@ -84,7 +84,6 @@ async function enumerate(): Promise<readonly string[]> {
     repository: session.repository,
     accessFilter: session.accessFilter,
     includeUncertainAccess: session.input.request.criteria.includeUncertainAccess,
-    accessPointRemoteness: session.input.request.criteria.accessPointRemoteness,
     signal: new AbortController().signal,
   });
   return eligible.map(({ id }) => id);

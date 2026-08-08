@@ -115,6 +115,8 @@ export async function fixtureCompileOptions(
     builtAt: overrides.builtAt ?? RETRIEVED_AT,
     topology: { adapter: new FixtureTopologyAdapter(), snapshot: topology },
     officialAccess: { adapter: new FixtureOfficialAccessAdapter(), snapshot: officialAccess },
+    // The fixture region is synthetic and has no buildings.
+    buildings: [],
     elevation: { sampler: await FixtureElevationSampler.create(elevation), snapshot: elevation },
     beforePublish: overrides.beforePublish,
   };

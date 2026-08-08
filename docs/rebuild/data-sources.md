@@ -74,32 +74,39 @@ region without such a source gets generic portal names, not missing routes.
 - Never calculate route elevation by calling a remote elevation API at request
   time.
 
-### Population (access-point remoteness)
+### Buildings (is this start in a neighbourhood)
 
-- Primary source: [GHSL GHS-POP
-  R2023A](https://data.jrc.ec.europa.eu/dataset/2ff68a52-5b5b-4a22-8f40-c41da8332cfe),
-  3 arc-second (nominal 90 m) product in EPSG:4326. Use only the `4326_3ss`
-  variant; the 100 m and 1 km products are Mollweide (ESRI:54009) and would need
-  reprojection.
-- Purpose: decide whether an access point sits in a populated area. GHS-POP
-  disaggregates census counts using satellite-detected built-up area, which is a
-  far better signal in the rural US than OSM `landuse=residential`, whose
-  coverage is patchy exactly where it matters.
-- Query the raster as a **sum over a 2 km radius**, not an interpolated point
-  sample. Values are people-per-cell, and a trailhead at the edge of a
-  subdivision sits in a near-zero cell while thousands may live nearby. The
-  wider context prevents developed urban-edge access points from appearing
-  remote merely because their immediate raster cells are sparse.
-- Tiles are 10 deg x 10 deg on a grid whose origin is offset from (-180, 90);
-  `lib/data/population/tiles.ts` documents the verified constants. GHSL omits
-  all-zero tiles, so an absent tile means zero people, not unknown. Every
-  downloaded raster is checked against the predicted bounds at build time so a
-  future region landing on a grid irregularity fails loudly instead of sampling
-  the wrong part of the world.
-- Persist only the raw measurement. Thresholds live in `lib/data/remoteness.ts`
-  so they can be retuned without recompiling packs.
-- Attribution: European Commission, Joint Research Centre. Reuse is authorised
-  provided the source is acknowledged.
+- Source: the **same pinned OSM extract** as the trail topology. `wa/building`
+  is filtered out of the prepared region, exported, and reduced to centroids by
+  `lib/data/osm/buildings.ts`. No second dataset, no raster, no Python.
+- Purpose: the product only ever wants wilderness starts, so this is one
+  measurement and one rule, not a taxonomy the user picks from. An access point
+  is rejected when **50 or more buildings** sit within **500 m** of its snapped
+  node (`lib/data/wilderness.ts`).
+- Only centroids are retained, rounded to five decimal places (about a metre,
+  against a 500 m counting radius). The filtered `.pbf` and the export are
+  deleted before the staging directory is committed: it is renamed into place,
+  so anything left behind is kept forever. Santa Cruz retains 3.9 MB for
+  189,826 buildings.
+- This **replaces GHS-POP**, which was previously used for the same decision.
+  The reasoning for the swap, and why the earlier argument against OSM
+  built-up signals did not survive measurement:
+  - The old concern was that OSM built-up coverage is patchy in the rural US.
+    That is true of `landuse=residential`; it is not true of building
+    footprints, which have national import coverage. 1,444 of 1,549 Santa Cruz
+    portals have at least one building within 500 m.
+  - A population figure summed over kilometres describes the wrong thing. Fall
+    Creek Fire Road and the Henry Cowell nature centre sat in near-identical
+    population fields (380 and 368 people/km², both "populated") because Felton
+    is inside the radius. Buildings separate them 9 against 28, and both are
+    correctly kept.
+  - Every start GHS-POP flagged as urban is also flagged by the building rule,
+    so nothing is lost at the top end.
+- Deleting the raster path removed the pinned GHSL download, the tile-grid
+  arithmetic, the uv/rasterio sampler, and `tools/dem/sample_population.py`, and
+  cut about 35 MB per region from the source cache.
+- No fallback: a region whose extract yields no buildings fails the build rather
+  than silently treating every start as wild.
 
 ### Basemap
 

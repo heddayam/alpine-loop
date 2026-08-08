@@ -66,10 +66,8 @@ export type NormalizedAccessPoint = {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
-  /** People living within POPULATION_RADIUS_M, from GHS-POP. Null when unmeasured. */
-  populationWithinRadius?: number | null;
-  /** Elevation range of network nodes within RELIEF_RADIUS_M. Null when unmeasured. */
-  localReliefM?: number | null;
+  /** OSM buildings within BUILDING_RADIUS_M of the snapped node. */
+  nearbyBuildingCount?: number;
 };
 
 export type NormalizedNamedArea = NamedArea & {
@@ -222,7 +220,7 @@ export type PackAudit = {
   namedAreaCount?: number;
   searchRegionCount?: number;
   rejectedCoverageEdgeCount?: number;
-  missingPopulationAccessPointCount?: number;
+  builtUpAccessPointCount?: number;
   topologyContentHash?: string;
   topologyProfiles?: Array<{
     profile: TopologyProfile;

@@ -19,6 +19,8 @@ import {
   validateUvRasterioPrerequisites,
 } from "./elevation";
 import {
+  BUILDINGS_ADAPTER_VERSION,
+  prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
   OsmPbfTopologyAdapter,
   readOsmSourceConfig,
@@ -27,20 +29,12 @@ import {
   validateOsmPrerequisites,
 } from "./osm";
 import {
-  readPinnedPopulationCollection,
-  readPopulationSourceConfig,
-  refreshPinnedPopulationCollection,
-  UvRasterioPopulationSampler,
-  validateUvRasterioPopulationPrerequisites,
-} from "./population";
-import {
   applyOfficialEntranceOverlay,
   deriveTrailheadPortals,
   PORTAL_DERIVATION_VERSION,
   stripPortalBuildContext,
 } from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
-import { POPULATION_RADIUS_M } from "./remoteness";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from "./types";
 
@@ -283,29 +277,24 @@ export async function buildMontereyCarmelPack(
     throw new Error(`Reviewed access snapshot has unexpected source ID ${reviewedSnapshot.id}`);
   }
   const reviewedAdapter = new MontereyReviewedAccessAdapter();
-  const [searchRegions, osmConfig, elevationConfig, populationConfig] = await Promise.all([
+  const [searchRegions, osmConfig, elevationConfig] = await Promise.all([
     readSearchRegionInput(searchRegionPath),
     readOsmSourceConfig(path.join(regionRoot, "osm-source.json")),
     readElevationSourceConfig(path.join(regionRoot, "elevation-source.json")),
-    readPopulationSourceConfig(path.join(regionRoot, "population-source.json")),
   ]);
 
   await Promise.all([
     validateOsmPrerequisites(),
     validateUvRasterioPrerequisites(),
-    validateUvRasterioPopulationPrerequisites(),
     reviewedAdapter.validate(reviewedSnapshot),
   ]);
-  const [osmSnapshot, dem, population] = await Promise.all([
+  const [osmSnapshot, dem] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
     options.refresh
       ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
-    options.refresh
-      ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
-      : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
   ]);
 
   const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
@@ -341,14 +330,15 @@ export async function buildMontereyCarmelPack(
   };
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-  const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
-  await populationSampler.verify(population.collection);
+  const buildings = await prepareOsmBuildings(osmSnapshot, {
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+  });
   const snapshots = [
     osmSnapshot,
     curatedAccess.snapshot,
     reviewedSnapshot,
     dem.snapshot,
-    population.snapshot,
   ];
   const adapterVersions = [
     sourceTopologyAdapter.adapterVersion,
@@ -356,7 +346,7 @@ export async function buildMontereyCarmelPack(
     reviewedAdapter.adapterVersion,
     PORTAL_DERIVATION_VERSION,
   ];
-  const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
+  const metricVersions = [elevationSampler.algorithmVersion, BUILDINGS_ADAPTER_VERSION];
   const seed: PackSeed = {
     schemaVersion: MONTEREY_CARMEL_PACK_SCHEMA_VERSION,
     id: PACK_ID,
@@ -398,7 +388,7 @@ export async function buildMontereyCarmelPack(
     },
     additionalSources: [curatedAccess.snapshot, reviewedSnapshot],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
-    population: { sampler: populationSampler, snapshot: population.snapshot },
+    buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
   });

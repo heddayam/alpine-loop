@@ -70,8 +70,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         inclusive_connectivity INTEGER NOT NULL CHECK(inclusive_connectivity >= 0),
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
         inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
-        population_within_radius REAL CHECK(population_within_radius IS NULL OR population_within_radius >= 0),
-        local_relief_m REAL CHECK(local_relief_m IS NULL OR local_relief_m >= 0)
+        nearby_building_count INTEGER NOT NULL CHECK(nearby_building_count >= 0)
         ${schemaVersion === "6" ? `,
         reachable_trail_km REAL NOT NULL CHECK(reachable_trail_km >= 0),
         trail_component_id TEXT NOT NULL,
@@ -203,9 +202,9 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
     const insertAccess = database.prepare(`
       INSERT INTO access_points(
         id, node_id, name, kind, access_state, confidence, parking_evidence, source_refs
-        ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, population_within_radius, local_relief_m" : ""}
+        ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, nearby_building_count" : ""}
         ${schemaVersion === "6" ? ", reachable_trail_km, trail_component_id, portal_road_class, parking_distance_m" : ""}
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?, ?" : ""}${schemaVersion === "6" ? ", ?, ?, ?, ?" : ""})
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?" : ""}${schemaVersion === "6" ? ", ?, ?, ?, ?" : ""})
     `);
     const insertNamedArea = schemaVersion !== "1" ? database.prepare(`
       INSERT INTO named_areas(
@@ -263,11 +262,11 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
           throw new Error(`Access point ${point.id} is missing schema ${schemaVersion} ranking fields`);
         }
         const ranking = rankingValues.map((value) => value!);
-        // Remoteness is optional: a pack built without a population source stores
-        // nulls, which classify as "unknown" rather than as remote.
-        const remoteness = schemaVersion !== "1"
-          ? [point.populationWithinRadius ?? null, point.localReliefM ?? null]
-          : [];
+        // Not optional: a missing count would make an urban start look wild.
+        if (schemaVersion !== "1" && typeof point.nearbyBuildingCount !== "number") {
+          throw new Error(`Access point ${point.id} is missing its nearby building count`);
+        }
+        const buildings = schemaVersion !== "1" ? [point.nearbyBuildingCount!] : [];
         if (schemaVersion === "6" && (typeof point.reachableTrailKm !== "number" || !point.trailComponentId || !point.portalRoadClass)) {
           throw new Error(`Access point ${point.id} is missing schema 6 portal fields`);
         }
@@ -279,7 +278,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         ] : [];
         insertAccess.run(
           point.id, point.nodeId, point.name, point.kind, point.accessState,
-          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...remoteness, ...portal,
+          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...buildings, ...portal,
         );
       }
       contents.namedAreas?.forEach((area, index) => {

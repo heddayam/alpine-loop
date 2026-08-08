@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { accessFilterV2Schema, accessPointRemotenessSelectionSchema } from "@/lib/contracts";
+import { accessFilterV2Schema } from "@/lib/contracts";
 import {
   accessPointIsEligible,
   areaBounds,
   type AccessPointCandidate,
   type GraphRepository,
 } from "@/lib/graph";
-import { accessPointMatchesResolvedFilter } from "@/lib/solver";
-import { classifyRemoteness } from "@/lib/data/remoteness";
+import { accessPointCanStartClosedRoute, accessPointMatchesResolvedFilter } from "@/lib/solver";
+import { accessPointIsWildEnough } from "@/lib/data/wilderness";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 import { resolveAccessFilter, type ReachabilityResolver } from "./access-filter";
 import type { RoutePack } from "./route-pack";
@@ -15,7 +15,6 @@ import type { RoutePack } from "./route-pack";
 const accessPreviewRequestSchema = z.object({
   accessFilter: accessFilterV2Schema,
   includeUncertainAccess: z.boolean(),
-  accessPointRemoteness: accessPointRemotenessSelectionSchema,
 }).strict();
 
 export type AccessPreviewDependencies = {
@@ -62,15 +61,18 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
         includeUncertainAccess: true,
         signal: request.signal,
       });
-      const eligible = candidates
+      const matchedFilters = candidates
         .filter((candidate) => accessPointMatchesResolvedFilter(candidate, resolved))
         .filter((candidate) => accessPointIsEligible(candidate, parsed.data.includeUncertainAccess))
-        .filter((candidate) => parsed.data.accessPointRemoteness.includes(classifyRemoteness(candidate)))
+        .filter(accessPointIsWildEnough)
         .sort((left, right) => candidateRank(left, right, parsed.data.includeUncertainAccess));
+      const eligible = matchedFilters.filter(accessPointCanStartClosedRoute);
       return Response.json({
         resolvedAccessFilter: resolved.summary,
         filterGeometry: resolved.filterGeometry,
         ...(resolved.refinementGeometry ? { refinementGeometry: resolved.refinementGeometry } : {}),
+        // Kept visible so an empty map explains itself rather than looking broken.
+        noCycleAccessPointCount: matchedFilters.length - eligible.length,
         accessPoints: eligible.map((point) => ({
           id: point.id,
           name: point.name,
@@ -80,9 +82,6 @@ export function createAccessPreviewHandler(dependencies: AccessPreviewDependenci
           accessState: point.accessState,
           confidence: point.confidence,
           parkingEvidence: point.parkingEvidence,
-          populationWithinRadius: point.populationWithinRadius,
-          localReliefM: point.localReliefM,
-          remoteness: classifyRemoteness(point),
         })),
       });
     } catch (error) {

@@ -2,7 +2,6 @@ import { z } from "zod";
 import { finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
 import { originSchema } from "./discovery";
 import {
-  accessPointRemotenessSelectionSchema,
   areaGeometrySchema,
   closedRouteTopologyPreferenceV3Schema,
   constraintViolationV3Schema,
@@ -21,7 +20,6 @@ export const batchRouteCriteriaV1Schema = z.object({
   steepestSustainedGradePct: orderedRangeSchema.optional(),
   gradeExperience: gradeExperienceConstraintsSchema.optional(),
   includeUncertainAccess: z.boolean(),
-  accessPointRemoteness: accessPointRemotenessSelectionSchema,
 }).strict();
 
 export const createBatchRouteJobV1Schema = z.object({

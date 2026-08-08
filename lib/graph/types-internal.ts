@@ -42,12 +42,8 @@ export type GraphAccessPoint = {
   confidence: "high" | "medium" | "low";
   parkingEvidence: string | null;
   sourceIds: string[];
-  /**
-   * Measured remoteness inputs. Null on packs built before the population
-   * source existed, or built without one, which classify as "unknown".
-   */
-  populationWithinRadius: number | null;
-  localReliefM: number | null;
+  /** OSM buildings within BUILDING_RADIUS_M of the snapped node. */
+  nearbyBuildingCount: number;
   reachableTrailKm?: number;
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import type { FeatureCollection, LineString } from "geojson";
 import { bboxSchema } from "@/lib/contracts";
-import { classifyRemoteness } from "@/lib/data/remoteness";
 import { FIXTURE_PACK_TRAIL_NETWORK } from "@/lib/packs/fixture-pack";
 import { loadRoutePacks } from "@/lib/server/pack-registry";
+import { accessPointCanStartClosedRoute } from "@/lib/solver";
+import { accessPointIsWildEnough } from "@/lib/data/wilderness";
 
 const MAXIMUM_TRAIL_FEATURES = 10_000;
 
@@ -39,7 +40,9 @@ export async function GET(
         signal: controller.signal,
       });
       return NextResponse.json({
-        accessPoints: accessPoints.map((point) => ({
+        // Starts with no reachable cycle can never yield a loop, so drawing them
+        // only offers the user routes that cannot exist.
+        accessPoints: accessPoints.filter(accessPointCanStartClosedRoute).filter(accessPointIsWildEnough).map((point) => ({
           id: point.id,
           name: point.name,
           lon: point.lon,
@@ -47,9 +50,6 @@ export async function GET(
           kind: point.kind,
           accessState: point.accessState,
           confidence: point.confidence,
-          populationWithinRadius: point.populationWithinRadius,
-          localReliefM: point.localReliefM,
-          remoteness: classifyRemoteness(point),
         })),
         trailNetwork: { type: "FeatureCollection", features: [] },
       });
@@ -103,9 +103,6 @@ export async function GET(
           kind: point.kind,
           accessState: point.accessState,
           confidence: point.confidence,
-          populationWithinRadius: point.populationWithinRadius,
-          localReliefM: point.localReliefM,
-          remoteness: classifyRemoteness(point),
         }];
       }),
       trailNetwork: pack.kind === "fixture"

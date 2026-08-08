@@ -15,7 +15,7 @@ const request: CreateBatchRouteJobV1 = {
   version: 1, packId: "fixture-pack",
   origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30,
   searchRegionId: "pack:fixture-pack",
-  criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true, accessPointRemoteness: ["remote"] },
+  criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true },
   routesPerAccessPoint: 10,
 };
 const geometry = { type: "Polygon" as const, coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };

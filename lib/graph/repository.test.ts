@@ -93,7 +93,7 @@ describe("SQLiteGraphRepository", () => {
       CREATE VIRTUAL TABLE edge_spatial USING rtree(row_id, min_lon, max_lon, min_lat, max_lat);
       CREATE TABLE access_points (
         id TEXT PRIMARY KEY, node_id TEXT, name TEXT, kind TEXT, access_state TEXT,
-        confidence TEXT, parking_evidence TEXT, source_refs TEXT
+        confidence TEXT, parking_evidence TEXT, source_refs TEXT, nearby_building_count INTEGER NOT NULL
       );
       INSERT INTO nodes VALUES ('a', 0, 0, 10, '[]'), ('b', 0.01, 0, 20, '[]'), ('c', -0.01, 0, 5, '[]');
       INSERT INTO node_spatial VALUES (1, 0, 0, 0, 0), (2, 0.01, 0.01, 0, 0), (3, -0.01, -0.01, 0, 0);
@@ -104,8 +104,8 @@ describe("SQLiteGraphRepository", () => {
       INSERT INTO edge_spatial VALUES
         (1, 0, 0.01, 0, 0), (2, 0, 0.01, 0, 0), (3, -0.2, 0, 0, 0);
       INSERT INTO access_points VALUES
-        ('known', 'a', 'Known', 'trailhead', 'public', 'high', 'lot', '["source"]'),
-        ('uncertain', 'b', 'Uncertain', 'trailhead', 'unknown', 'low', NULL, '["source"]');
+        ('known', 'a', 'Known', 'trailhead', 'public', 'high', 'lot', '["source"]', 0),
+        ('uncertain', 'b', 'Uncertain', 'trailhead', 'unknown', 'low', NULL, '["source"]', 0);
     `);
     database.close();
 

@@ -75,7 +75,6 @@ export function buildGenerateRoutesRequest(
     ...(maximumElevation.value ? { maximumElevationFeet: maximumElevation.value } : {}),
     ...(values.gradeConstraintEnabled ? { gradeExperience: values.gradePresets[values.selectedGradePreset] } : {}),
     includeUncertainAccess: values.includeUncertainAccess,
-    accessPointRemoteness: values.accessPointRemoteness,
     searchEffort: "quick",
     limit,
   };

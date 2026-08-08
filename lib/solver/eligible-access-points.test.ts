@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AccessPointCandidate, GraphRepository } from "@/lib/graph";
 import {
+  accessPointCanStartClosedRoute,
   accessPointMatchesResolvedFilter,
   listEligibleAccessPointCandidates,
   PORTAL_NAMED_REGION_TOLERANCE_M,
@@ -21,8 +22,7 @@ function point(id: string, patch: Partial<AccessPointCandidate> = {}): AccessPoi
     accessState: "public",
     confidence: "high",
     parkingEvidence: null,
-    populationWithinRadius: 0,
-    localReliefM: 100,
+    nearbyBuildingCount: 0,
     sourceIds: ["fixture"],
     lon: 0,
     lat: 0,
@@ -54,13 +54,13 @@ describe("eligible access-point enumeration", () => {
     expect(rankAccessPointCandidates(smallerPublicGraph, largerUnknownGraph, true)).toBeGreaterThan(0);
   });
 
-  it("applies geometry, access policy, remoteness, and stable ranking once", async () => {
+  it("applies geometry, access policy, buildings, and stable ranking once", async () => {
     const points = [
       point("lower-rank"),
       point("higher-rank", { knownConnectivity: 5 }),
       point("outside", { lon: 2 }),
       point("uncertain", { accessState: "unknown" }),
-      point("populated", { populationWithinRadius: 100_000 }),
+      point("built-up", { nearbyBuildingCount: 500 }),
     ];
     const repository = {
       packId: "fixture",
@@ -70,10 +70,38 @@ describe("eligible access-point enumeration", () => {
       repository,
       accessFilter: { predicates: [AREA], coverage: AREA, summary: { mode: "drawn-area", label: "Drawn" } },
       includeUncertainAccess: false,
-      accessPointRemoteness: ["remote"],
     });
     expect(result.all).toHaveLength(5);
     expect(result.eligible.map(({ id }) => id)).toEqual(["higher-rank", "lower-rank"]);
+  });
+
+  it("keeps starts whose closed-route reachability was never measured", () => {
+    expect(accessPointCanStartClosedRoute({ canReachCycle: true })).toBe(true);
+    expect(accessPointCanStartClosedRoute({ canReachCycle: null })).toBe(true);
+    expect(accessPointCanStartClosedRoute({})).toBe(true);
+    expect(accessPointCanStartClosedRoute({ canReachCycle: false })).toBe(false);
+  });
+
+  it("excludes starts that cannot close a loop and reports how many were dropped", async () => {
+    const points = [
+      point("loops", { canReachCycle: true }),
+      point("dead-end", { canReachCycle: false }),
+      point("unmeasured", { canReachCycle: null }),
+      // Dropped for buildings, so it must not be counted as a no-cycle exclusion.
+      point("built-up-dead-end", { nearbyBuildingCount: 500, canReachCycle: false }),
+    ];
+    const repository = {
+      packId: "fixture",
+      getAccessPointCandidates: async () => points,
+    } as unknown as GraphRepository;
+    const result = await listEligibleAccessPointCandidates({
+      repository,
+      accessFilter: { predicates: [AREA], coverage: AREA, summary: { mode: "drawn-area", label: "Drawn" } },
+      includeUncertainAccess: false,
+    });
+    expect(result.eligible.map(({ id }) => id).sort()).toEqual(["loops", "unmeasured"]);
+    expect(result.matchedFilters.map(({ id }) => id).sort()).toEqual(["dead-end", "loops", "unmeasured"]);
+    expect(result.noCycleExcluded).toBe(1);
   });
 
   it("includes portal nodes just outside a named boundary without relaxing drawn or drive-time geometry", () => {

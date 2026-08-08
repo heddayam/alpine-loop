@@ -24,7 +24,6 @@ import {
 
 const PACK_ID = "southern-east-bay";
 const DEFAULT_SCENARIOS_PATH = "data/regions/southern-east-bay/scenarios.json";
-const ALL_REMOTENESS = ["remote", "rural", "populated", "unknown"] as const;
 
 const expectationSchema = z.object({
   distanceMiles: z.object({ min: z.number().nonnegative(), max: z.number().positive() }).strict()
@@ -103,7 +102,6 @@ function buildRequest(
     distanceMiles: expectation.distanceMiles,
     elevationGainFeet: expectation.elevationGainFeet,
     includeUncertainAccess: true,
-    accessPointRemoteness: [...ALL_REMOTENESS],
     searchEffort: effort,
     limit: 10,
   };
@@ -219,7 +217,6 @@ try {
         repository: graphRepository,
         accessFilter,
         includeUncertainAccess: true,
-        accessPointRemoteness: ALL_REMOTENESS,
       });
       const selected = nearestCandidate(eligible, scenario.referencePoint.coordinates);
       if (!selected) throw new Error(`No eligible access point exists in ${scenario.searchRegionId}`);
@@ -269,8 +266,6 @@ try {
           accessState: selected.candidate.accessState,
           confidence: selected.candidate.confidence,
           remotenessFields: {
-            populationWithinRadius: selected.candidate.populationWithinRadius,
-            localReliefM: selected.candidate.localReliefM,
           },
         },
         expectations: [exact, impossible],

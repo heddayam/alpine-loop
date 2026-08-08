@@ -22,7 +22,6 @@ const job: RouteJob = {
       closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
       distanceMiles: { min: 3, max: 8 },
       includeUncertainAccess: true,
-      accessPointRemoteness: ["remote"],
     },
     routesPerAccessPoint: 10,
   },

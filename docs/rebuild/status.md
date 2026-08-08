@@ -175,6 +175,28 @@ the evidence line.
   population samples or audit errors. `npm run verify` passes 377 tests across
   74 files plus the production build.
 
+- 2026-08-07 — replaced the remote/rural/populated/unknown taxonomy with two
+  rules and deleted the GHS-POP subsystem. An access point is now excluded when
+  it cannot reach a cycle (it can never yield a loop, and the solver already
+  discarded it) or when 50 or more OSM buildings sit within 500 m. Buildings
+  come from the pinned OSM extract already used for topology, so
+  `lib/data/population/`, `tools/dem/sample_population.py`, the uv/rasterio
+  population dependency, the pinned GHSL download, and the per-region
+  `population-source.json` files are gone, along with the `accessPointRemoteness`
+  contract, its settings UI, and the map colour ramp. Measured on the published
+  Santa Cruz pack: the cycle rule removes 1,074 of 1,848 portals (56% and 40% in
+  the other two regions), and the building rule keeps 962 of 1,848. Face
+  validity on real portals — Big Basin 0 buildings, Castle Rock 2, Old Big Basin
+  Road 9, Fall Creek Fire Road 9, Henry Cowell 28 all kept; Rancho San Antonio
+  67 and 83 dropped. Fall Creek is the case that motivated the swap: GHS-POP
+  called it `populated` at 380 people/km² because Felton is inside the 2 km
+  radius. Extraction takes 6.8 s for 189,826 buildings and counting 1,848
+  portals takes 44 ms; the retained centroid file is 3.9 MB against roughly
+  39 MB of GHS-POP tiles removed. `npm run verify` passes 354 tests across 71
+  files plus the production build. **Packs must be rebuilt**: schema 6 now
+  carries `nearby_building_count` in place of `population_within_radius` and
+  `local_relief_m`.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

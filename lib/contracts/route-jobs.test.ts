@@ -11,7 +11,6 @@ const validRequest = {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
-    accessPointRemoteness: ["remote"],
   },
   routesPerAccessPoint: 10,
 } as const;
@@ -34,12 +33,8 @@ describe("CreateBatchRouteJobV1", () => {
     }).success).toBe(false);
   });
 
-  it("requires a reviewed region and at least one remoteness class", () => {
+  it("requires a reviewed region", () => {
     expect(createBatchRouteJobV1Schema.safeParse({ ...validRequest, searchRegionId: "" }).success).toBe(false);
-    expect(createBatchRouteJobV1Schema.safeParse({
-      ...validRequest,
-      criteria: { ...validRequest.criteria, accessPointRemoteness: [] },
-    }).success).toBe(false);
   });
 });
 

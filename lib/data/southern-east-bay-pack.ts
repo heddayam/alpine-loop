@@ -20,6 +20,8 @@ import {
   validateUvRasterioPrerequisites,
 } from "./elevation";
 import {
+  BUILDINGS_ADAPTER_VERSION,
+  prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
   OsmPbfTopologyAdapter,
   readOsmSourceConfig,
@@ -28,20 +30,12 @@ import {
   validateOsmPrerequisites,
 } from "./osm";
 import {
-  readPinnedPopulationCollection,
-  readPopulationSourceConfig,
-  refreshPinnedPopulationCollection,
-  UvRasterioPopulationSampler,
-  validateUvRasterioPopulationPrerequisites,
-} from "./population";
-import {
   applyOfficialEntranceOverlay,
   deriveTrailheadPortals,
   PORTAL_DERIVATION_VERSION,
   stripPortalBuildContext,
 } from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
-import { POPULATION_RADIUS_M } from "./remoteness";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
@@ -293,28 +287,23 @@ export async function buildSouthernEastBayPack(
     readCuratedAccessFile(accessRestrictionsPath, CURATED_ACCESS_HASH),
   ]);
   const boundary = parseBoundary(boundaryContents);
-  const [searchRegions, osmConfig, elevationConfig, populationConfig] = await Promise.all([
+  const [searchRegions, osmConfig, elevationConfig] = await Promise.all([
     readSearchRegionInput(searchRegionPath),
     readOsmSourceConfig(path.join(regionRoot, "osm-source.json")),
     readElevationSourceConfig(path.join(regionRoot, "elevation-source.json")),
-    readPopulationSourceConfig(path.join(regionRoot, "population-source.json")),
   ]);
 
   await Promise.all([
     validateOsmPrerequisites(),
     validateUvRasterioPrerequisites(),
-    validateUvRasterioPopulationPrerequisites(),
   ]);
-  const [osmSnapshot, dem, population, officialSnapshots] = await Promise.all([
+  const [osmSnapshot, dem, officialSnapshots] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
     options.refresh
       ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
-    options.refresh
-      ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
-      : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
     options.refresh
       ? refreshOfficialSourceSnapshots(options.sourceCacheRoot, SOUTHERN_EAST_BAY_ENTRANCE_SOURCE_SET)
       : readOfficialSourceSnapshots(options.sourceCacheRoot, SOUTHERN_EAST_BAY_ENTRANCE_SOURCE_SET),
@@ -343,14 +332,15 @@ export async function buildSouthernEastBayPack(
   const inventory = portalInventory(prepared.topology, boundary.geometry);
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-  const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
-  await populationSampler.verify(population.collection);
+  const buildings = await prepareOsmBuildings(osmSnapshot, {
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+  });
   const snapshots = [
     osmSnapshot,
     entrancesSnapshot,
     curatedAccess.snapshot,
     dem.snapshot,
-    population.snapshot,
   ];
   const adapterVersions = [
     sourceTopologyAdapter.adapterVersion,
@@ -358,7 +348,7 @@ export async function buildSouthernEastBayPack(
     entrancesAdapter.adapterVersion,
     PORTAL_DERIVATION_VERSION,
   ];
-  const metricVersions = [elevationSampler.algorithmVersion, populationSampler.algorithmVersion];
+  const metricVersions = [elevationSampler.algorithmVersion, BUILDINGS_ADAPTER_VERSION];
   const seed = createSouthernEastBayPackSeed({
     boundary: boundary.geometry,
     boundaryContents,
@@ -377,7 +367,7 @@ export async function buildSouthernEastBayPack(
     },
     additionalSources: [entrancesSnapshot, curatedAccess.snapshot],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
-    population: { sampler: populationSampler, snapshot: population.snapshot },
+    buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
   });

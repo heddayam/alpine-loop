@@ -21,7 +21,6 @@ describe("builder V3 request validation", () => {
       searchEffort: "quick",
       limit: 10,
       includeUncertainAccess: true,
-      accessPointRemoteness: ["remote", "unknown"],
     });
   });
 

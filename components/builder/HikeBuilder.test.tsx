@@ -18,7 +18,7 @@ vi.mock("../map/HikeMap", () => ({
   }) => <div aria-label="Mock map"><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output></div>,
 }));
 
-const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high", remoteness: "remote" };
+const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high" };
 const preview = { filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.18, 37.18], [-122.18, 37.15]]] }, accessPoints: [accessPoint] };
 const generatedRoute = {
   id: "exact-route", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
@@ -34,7 +34,7 @@ const routeResponse = {
 };
 const searchRegion = { id: "osm-relation-1", name: "Santa Cruz Mountains", kind: "protected-area", context: "California", bbox: [-122.3, 37, -121.8, 37.5], sourceIds: ["osm"], displayOrder: 0 };
 const appSettings = {
-  schemaVersion: 1, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"], quickSearchRouteCount: 10,
+  schemaVersion: 1, includeUncertainAccess: true, quickSearchRouteCount: 10,
   gradeConstraintEnabled: false, selectedGradePreset: "moderate",
   loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },
   gradePresets: {
@@ -44,7 +44,7 @@ const appSettings = {
   },
 };
 const job = {
-  version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "rural", "populated", "unknown"] }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
+  version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
 };
 const catalogRegions = packCatalogResponseV1Schema.parse({ version: 1, regions: [
   {
@@ -179,10 +179,7 @@ describe("HikeBuilder unified route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
     expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /Remote/ })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Unknown/ })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Rural/ })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Populated/ })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Include uncertain trail access" })).toBeChecked();
   });
 
   it("updates drive-time and closed-route controls without retaining synthetic events", async () => {
@@ -229,7 +226,7 @@ describe("HikeBuilder unified route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
     const saves = fetchMock.mock.calls.filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT");
-    expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"], quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
+    expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
   });
 
   it("runs Quick explicitly and uses a drawn boundary as its override", async () => {
@@ -257,7 +254,6 @@ describe("HikeBuilder unified route search", () => {
     expect(JSON.parse(String(generationCall?.[1]?.body))).toMatchObject({
       searchEffort: "quick",
       accessFilter: { mode: "drive-time", reachabilityId: "3d594650-3436-4f8b-a0e8-38d13fc148ca", regionId: searchRegion.id },
-      accessPointRemoteness: ["remote", "unknown"],
     });
   });
 
@@ -292,7 +288,7 @@ describe("HikeBuilder unified route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
-    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true, accessPointRemoteness: ["remote", "unknown"] } });
+    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } });
     expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Calculate drive-time/ })).not.toBeInTheDocument();
   });

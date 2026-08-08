@@ -44,8 +44,8 @@ export const NAMED_AREA_SUMMARY: NamedAreaSummary = {
 export const NAMED_AREA: NamedArea = { ...NAMED_AREA_SUMMARY, geometry: FILTER_GEOMETRY };
 
 export const ACCESS_POINTS = [
-  { id: "trailhead-a", name: "Stevens Creek Trailhead", lon: -122.17, lat: 37.16, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const, remoteness: "remote" as const },
-  { id: "trailhead-b", name: "Canyon Trail Access", lon: -122.16, lat: 37.165, kind: "parking" as const, accessState: "unknown" as const, confidence: "medium" as const, remoteness: "populated" as const },
+  { id: "trailhead-a", name: "Stevens Creek Trailhead", lon: -122.17, lat: 37.16, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const },
+  { id: "trailhead-b", name: "Canyon Trail Access", lon: -122.16, lat: 37.165, kind: "parking" as const, accessState: "unknown" as const, confidence: "medium" as const },
 ];
 
 export const TRAIL_NETWORK = {

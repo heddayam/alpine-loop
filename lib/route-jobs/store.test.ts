@@ -18,7 +18,6 @@ const request: CreateBatchRouteJobV1 = {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
-    accessPointRemoteness: ["remote"],
   },
   routesPerAccessPoint: 10,
 };

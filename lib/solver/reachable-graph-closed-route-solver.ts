@@ -303,11 +303,10 @@ export class ReachableGraphClosedRouteSolver {
     const deadlineAt = startedAt + budget.deadlineMs;
     const hardTruncationReasons = new Set<string>();
     const nonBudgetShortfallReasons = new Set<string>();
-    const { all: allCandidates, eligible } = await listEligibleAccessPointCandidates({
+    const { all: allCandidates, eligible, matchedFilters, noCycleExcluded } = await listEligibleAccessPointCandidates({
       repository: context.repository,
       accessFilter: context.accessFilter,
       includeUncertainAccess: request.includeUncertainAccess,
-      accessPointRemoteness: request.accessPointRemoteness,
       signal: context.signal,
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
@@ -318,7 +317,10 @@ export class ReachableGraphClosedRouteSolver {
       if (!accessPointMatchesResolvedFilter(selected, context.accessFilter)) {
         throw new AccessFilterResolutionError("START_OUTSIDE_FILTER", "The selected access point is outside the trailhead filter");
       }
-      if (!eligible.some(({ id }) => id === selected.id)) {
+      // Checked before the closed-route filter: a chosen start that simply
+      // cannot form a loop is reported as `no-cycle-access-points` below, not
+      // misattributed to the area settings.
+      if (!matchedFilters.some(({ id }) => id === selected.id)) {
         throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point is excluded by the access-point area settings");
       }
       starts = [selected];
@@ -332,7 +334,11 @@ export class ReachableGraphClosedRouteSolver {
     const topologies = await context.topologyRepository.getAccessTopology(profile, starts.map(({ id }) => id));
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const topologyByStart = new Map(topologies.map((topology) => [topology.accessPointId, topology]));
-    const noCycleAccessPointCount = starts.filter(({ id }) => !topologyByStart.get(id)?.canReachCycle).length;
+    // Starts that cannot close a loop are normally removed before this point,
+    // so the count has two sources: those excluded by the candidate filter, and
+    // an explicitly chosen start, which bypasses that filter.
+    const noCycleStartCount = starts.filter(({ id }) => !topologyByStart.get(id)?.canReachCycle).length;
+    const noCycleAccessPointCount = (request.startAccessPointId ? 0 : noCycleExcluded) + noCycleStartCount;
     const maximumDistanceMeters = request.distanceMiles.max * METERS_PER_MILE;
     const maximumRepeatedFraction = request.closedRoute.maximumRepeatedTrailPct / 100;
     const maximumSharedStemMeters = request.closedRoute.maximumSharedStemMiles === undefined
@@ -515,11 +521,13 @@ export class ReachableGraphClosedRouteSolver {
       }
     }
 
-    if (eligible.length === 0) nonBudgetShortfallReasons.add("no-eligible-start-access-points");
-    if (starts.length > 0 && noCycleAccessPointCount === starts.length) {
+    if (eligible.length === 0 && noCycleAccessPointCount === 0) {
+      nonBudgetShortfallReasons.add("no-eligible-start-access-points");
+    }
+    if (noCycleAccessPointCount > 0 && starts.length === noCycleStartCount) {
       nonBudgetShortfallReasons.add("no-cycle-access-points");
     }
-    if (feasible.length === 0 && starts.length > noCycleAccessPointCount) {
+    if (feasible.length === 0 && starts.length > noCycleStartCount) {
       nonBudgetShortfallReasons.add("topology-constraints-infeasible");
     }
     if (request.searchEffort === "quick" && probedGroups.size > 0) {

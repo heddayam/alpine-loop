@@ -2,9 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
-import type { AccessPointOption } from "@/components/builder/types";
 import {
-  accessPointFeatures,
   HikeMap,
   routeFeaturePartitions,
   routeFeatures,
@@ -138,7 +136,6 @@ describe("generated route map features", () => {
         kind: "trailhead",
         accessState: "public",
         confidence: "high",
-        remoteness: "remote",
       }],
       routes: [route("first", -122.18)],
       onBoundsChange: () => undefined,
@@ -157,7 +154,7 @@ describe("generated route map features", () => {
     expect(markup).toContain('<summary class="map-key-toggle">Map key</summary>');
     expect(markup).toContain('Installed coverage');
     expect(markup).toContain('Trailhead filter');
-    expect(markup).toContain('Remote access');
+    expect(markup).toContain('Trailhead');
     expect(markup).toContain('Mapped trail');
     expect(markup).toContain('Suggested route');
     expect(markup).toContain('Route start');
@@ -165,32 +162,3 @@ describe("generated route map features", () => {
   });
 });
 
-describe("access point remoteness rendering", () => {
-  function accessPoint(id: string, remoteness?: AccessPointOption["remoteness"]): AccessPointOption {
-    return {
-      id, name: id, lon: -122.1, lat: 37.2, kind: "trailhead",
-      accessState: "public", confidence: "high",
-      ...(remoteness ? { remoteness } : {}),
-    };
-  }
-
-  it("carries the classification onto each feature so the layer can colour it", () => {
-    const collection = accessPointFeatures([
-      accessPoint("wild", "remote"),
-      accessPoint("village", "rural"),
-      accessPoint("suburb", "populated"),
-    ]);
-    expect(collection.features.map((feature) => feature.properties?.remoteness))
-      .toEqual(["remote", "rural", "populated"]);
-  });
-
-  it("falls back to unknown for packs built without a population source", () => {
-    const collection = accessPointFeatures([accessPoint("legacy")]);
-    expect(collection.features[0].properties?.remoteness).toBe("unknown");
-  });
-
-  it("keeps feature conversion independent from the caller's category filter", () => {
-    const collection = accessPointFeatures([accessPoint("suburb", "populated")]);
-    expect(collection.features).toHaveLength(1);
-  });
-});
