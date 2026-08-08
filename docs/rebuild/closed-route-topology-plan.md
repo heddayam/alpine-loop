@@ -35,7 +35,7 @@ validation, ranking, and diversity selection over original directed edges.
 
 Filter geometry selects eligible access points and never clips hiking routes.
 Exact installed-pack coverage remains the hard geometry boundary. Unknown
-access and access-point remoteness follow the explicit request snapshot.
+access follows the explicit request snapshot.
 
 ## Validation invariants
 

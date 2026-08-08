@@ -7,7 +7,6 @@ import { areaGeometryBounds, assertValidAreaGeometry } from "./area-geometry";
 import { readCuratedAccessFile, type CuratedAccessRestriction } from "./curated-access";
 import { readElevationSourceConfig } from "./elevation";
 import { readOsmSourceConfig } from "./osm";
-import { readPopulationSourceConfig } from "./population";
 import { readSearchRegionInput } from "./search-regions";
 import {
   SOUTHERN_EAST_BAY_ENTRANCE_SOURCE_SET,
@@ -119,15 +118,13 @@ describe("Southern East Bay pack wiring", () => {
       -122.08, 37.365, -121.515, 37.75,
     ]);
 
-    const [osm, elevation, population, searchRegions] = await Promise.all([
+    const [osm, elevation, searchRegions] = await Promise.all([
       readOsmSourceConfig(path.join(SOUTHERN_EAST_BAY_REGION_ROOT, "osm-source.json")),
       readElevationSourceConfig(path.join(SOUTHERN_EAST_BAY_REGION_ROOT, "elevation-source.json")),
-      readPopulationSourceConfig(path.join(SOUTHERN_EAST_BAY_REGION_ROOT, "population-source.json")),
       readSearchRegionInput(path.join(SOUTHERN_EAST_BAY_REGION_ROOT, "search-regions.json")),
     ]);
     expect(osm.version).toBe("norcal-260801");
     expect(elevation.cacheNamespace).toBe("southern-east-bay-elevation");
-    expect(population.cacheNamespace).toBe("southern-east-bay-population");
     expect(searchRegions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual([
       "pack:southern-east-bay",
       "osm:relation/11518106",

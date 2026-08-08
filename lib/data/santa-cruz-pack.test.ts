@@ -32,6 +32,8 @@ const snapshot = (id: string, retrievedAt = "2026-08-01T00:00:00.000Z"): SourceS
 });
 
 vi.mock("./osm", () => ({
+  BUILDINGS_ADAPTER_VERSION: "buildings-v1",
+  prepareOsmBuildings: vi.fn(async () => [] as Array<readonly [number, number]>),
   readOsmSourceConfig: vi.fn(async () => ({ id: "osm-config" })),
   readPinnedOsmSnapshot: vi.fn(async () => snapshot("osm", "2026-08-02T00:00:00.000Z")),
   refreshPinnedOsmSnapshot: vi.fn(async () => ({ snapshot: snapshot("osm") })),
@@ -58,21 +60,6 @@ vi.mock("./elevation", () => ({
   validateUvRasterioPrerequisites: vi.fn(async () => undefined),
   UvRasterioThreeDepElevationSampler: class {
     readonly algorithmVersion = "elevation-v1";
-  },
-}));
-
-vi.mock("./population", () => ({
-  readPopulationSourceConfig: vi.fn(async () => ({ id: "population-config" })),
-  readPinnedPopulationCollection: vi.fn(async () => ({
-    collectionPath: "/fixture/population.json",
-    collection: {},
-    snapshot: snapshot("population", "2026-08-04T00:00:00.000Z"),
-  })),
-  refreshPinnedPopulationCollection: vi.fn(),
-  validateUvRasterioPopulationPrerequisites: vi.fn(async () => undefined),
-  UvRasterioPopulationSampler: class {
-    readonly algorithmVersion = "population-v1";
-    async verify() {}
   },
 }));
 

@@ -13,7 +13,6 @@ describe("AppSettingsV1", () => {
     expect(appSettingsV1Schema.safeParse({
       schemaVersion: 1,
       includeUncertainAccess: true,
-      accessPointRemoteness: ["remote", "unknown"],
       quickSearchRouteCount: 10,
       gradeConstraintEnabled: false,
       selectedGradePreset: "moderate",

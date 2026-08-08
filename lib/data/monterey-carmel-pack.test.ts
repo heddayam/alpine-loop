@@ -27,7 +27,6 @@ import {
   montereyReviewedEntranceEvidence,
 } from "./monterey-carmel-pack";
 import { readOsmSourceConfig } from "./osm";
-import { readPopulationSourceConfig } from "./population";
 import { applyOfficialEntranceOverlay } from "./portals";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology, NormalizedWay } from "./types";
@@ -82,15 +81,13 @@ describe("Monterey–Carmel pack wiring", () => {
       -121.985, 36.32, -121.66, 36.715,
     ]);
 
-    const [osm, elevation, population, searchRegions] = await Promise.all([
+    const [osm, elevation, searchRegions] = await Promise.all([
       readOsmSourceConfig(path.join(MONTEREY_CARMEL_REGION_ROOT, "osm-source.json")),
       readElevationSourceConfig(path.join(MONTEREY_CARMEL_REGION_ROOT, "elevation-source.json")),
-      readPopulationSourceConfig(path.join(MONTEREY_CARMEL_REGION_ROOT, "population-source.json")),
       readSearchRegionInput(path.join(MONTEREY_CARMEL_REGION_ROOT, "search-regions.json")),
     ]);
     expect(osm.version).toBe("norcal-260801");
     expect(elevation.cacheNamespace).toBe("monterey-carmel-elevation");
-    expect(population.cacheNamespace).toBe("monterey-carmel-population");
     expect(searchRegions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual([
       "pack:monterey-carmel",
       "osm:relation/15100521",

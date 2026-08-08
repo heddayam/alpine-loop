@@ -31,8 +31,8 @@ import { calculateEdgeMetricsBatch, distanceMeters } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
 import { validateSearchRegions, type SearchRegionInput } from "./search-regions";
-import type { PopulationSampler } from "./population";
-import { computeLocalRelief, RELIEF_RADIUS_M } from "./remoteness";
+import type { BuildingCentroid } from "./osm/buildings";
+import { accessPointIsWildEnough, countNearbyBuildings } from "./wilderness";
 import { writePackDatabase } from "./sqlite-writer";
 import { buildClosedRouteTopology, topologySha256 } from "./topology-compiler";
 import type {
@@ -65,11 +65,11 @@ export type CompilePackOptions = {
   additionalSources?: SourceSnapshot[];
   elevation: { sampler: ElevationSampler; snapshot: SourceSnapshot };
   /**
-   * Optional so existing packs and fixtures keep compiling. When absent,
-   * access points carry null population and classify as "unknown" rather than
-   * being silently treated as remote.
+   * Building centroids for the pack region, from the same OSM snapshot as the
+   * topology. Required: a pack with no building evidence cannot tell a
+   * trailhead from a street corner, and must fail rather than guess.
    */
-  population?: { sampler: PopulationSampler; snapshot: SourceSnapshot };
+  buildings: readonly BuildingCentroid[];
   namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
   searchRegions?: SearchRegionInput;
   beforePublish?: () => void | Promise<void>;
@@ -296,24 +296,18 @@ function addAccessRankingFields(
 }
 
 /**
- * Attaches the measured remoteness inputs. Population is sampled at the access
- * point's snapped network node so it lines up with what the map draws.
+ * Attaches the nearby building count, measured at the access point's snapped
+ * network node so it describes the same place the map draws.
  */
-async function addRemotenessFields(
+function addNearbyBuildingCounts(
   nodes: readonly NormalizedTopology["nodes"][number][],
   accessPoints: readonly NormalizedAccessPoint[],
-  sampler: PopulationSampler,
-): Promise<NormalizedAccessPoint[]> {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const located = accessPoints.map((point) => ({ point, node: nodeById.get(point.nodeId) }));
-  const samples = await sampler.sample(
-    located.map(({ node }) => (node ? [node.lon, node.lat] as const : [0, 0] as const)),
-  );
-  const relief = computeLocalRelief(nodes, accessPoints, RELIEF_RADIUS_M);
-  return located.map(({ point, node }, index) => ({
+  buildings: readonly BuildingCentroid[],
+): NormalizedAccessPoint[] {
+  const counts = countNearbyBuildings(buildings, accessPoints, nodes);
+  return accessPoints.map((point) => ({
     ...point,
-    populationWithinRadius: node ? samples[index] : null,
-    localReliefM: relief.get(point.id) ?? null,
+    nearbyBuildingCount: counts.get(point.id) ?? 0,
   }));
 }
 
@@ -352,10 +346,10 @@ function createAudit(
       rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
     } : {}),
     ...(seed.schemaVersion === "4" || seed.schemaVersion === "5" || seed.schemaVersion === "6" ? { searchRegionCount: graph.searchRegions.length } : {}),
-    // Surfaced so a pack built without population data is obvious in the audit
-    // rather than quietly classifying every access point as unknown.
-    missingPopulationAccessPointCount: graph.accessPoints.filter(
-      ({ populationWithinRadius }) => populationWithinRadius === null || populationWithinRadius === undefined,
+    // Surfaced so an implausible building join is obvious in the audit rather
+    // than quietly filtering every access point out at query time.
+    builtUpAccessPointCount: graph.accessPoints.filter(
+      ({ nearbyBuildingCount }) => !accessPointIsWildEnough({ nearbyBuildingCount: nearbyBuildingCount ?? 0 }),
     ).length,
   };
 }
@@ -447,7 +441,6 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     ...(options.additionalSources ?? []),
     ...officialAccess.map(({ snapshot }) => snapshot),
     options.elevation.snapshot,
-    ...(options.population ? [options.population.snapshot] : []),
     ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
@@ -508,9 +501,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       : compiledGraph.accessPoints;
     const graph = {
       ...compiledGraph,
-      accessPoints: options.population
-        ? await addRemotenessFields(compiledGraph.nodes, rankedAccessPoints, options.population.sampler)
-        : rankedAccessPoints,
+      accessPoints: addNearbyBuildingCounts(compiledGraph.nodes, rankedAccessPoints, options.buildings),
       namedAreas,
       searchRegions,
     };

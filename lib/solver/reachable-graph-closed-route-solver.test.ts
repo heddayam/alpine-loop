@@ -42,9 +42,8 @@ function accessPoint(index = 0): AccessPointCandidate {
     accessState: "public",
     confidence: "high",
     parkingEvidence: "fixture",
-    populationWithinRadius: null,
-    localReliefM: null,
     sourceIds: ["fixture"],
+    nearbyBuildingCount: 0,
     lon: 0,
     lat: 0,
     knownConnectivity: 10,
@@ -170,7 +169,6 @@ function request(overrides: Partial<GenerateClosedRoutesRequestV3> = {}): Genera
     closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
     distanceMiles: { min: 0.92, max: 0.94 },
     includeUncertainAccess: false,
-    accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
     searchEffort: "thorough",
     limit: 10,
     ...overrides,
@@ -305,13 +303,13 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(generateClosedRoutesResponseV3Schema.safeParse(result).success).toBe(true);
   });
 
-  test("filters automatic and explicit starts by access-point area type", async () => {
-    const populated = accessPoint();
-    populated.populationWithinRadius = 5_000;
-    const topology = new FixtureFeasibilityRepository([populated], 0);
+  test("filters automatic and explicit starts that sit among buildings", async () => {
+    const builtUp = accessPoint();
+    builtUp.nearbyBuildingCount = 500;
+    const topology = new FixtureFeasibilityRepository([builtUp], 0);
     const result = await solver.generate(
-      request({ accessPointRemoteness: ["remote"] }),
-      context([populated], fixtureGraph("loop"), topology),
+      request(),
+      context([builtUp], fixtureGraph("loop"), topology),
     );
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 0,
@@ -321,8 +319,8 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(topology.requestedIds).toEqual([[]]);
 
     await expect(solver.generate(
-      request({ startAccessPointId: populated.id, accessPointRemoteness: ["remote"] }),
-      context([populated], fixtureGraph("loop"), new FixtureFeasibilityRepository([populated], 0)),
+      request({ startAccessPointId: builtUp.id }),
+      context([builtUp], fixtureGraph("loop"), new FixtureFeasibilityRepository([builtUp], 0)),
     )).rejects.toThrow("excluded by the access-point area settings");
   });
 

@@ -82,7 +82,6 @@ export function accessPointFeatures(accessPoints: AccessPointOption[], selectedA
         id: point.id,
         name: point.name,
         selected: point.id === selectedAccessPointId,
-        remoteness: point.remoteness ?? "unknown",
       },
       geometry: { type: "Point", coordinates: [point.lon, point.lat] },
     })),
@@ -416,17 +415,9 @@ export function HikeMap({
             "circle-color": [
               "case",
               ["==", ["get", "selected"], true], ROUTE_SELECTED,
-              ["==", ["get", "remoteness"], "populated"], "#9a9a9a",
-              ["==", ["get", "remoteness"], "rural"], "#6f8f7d",
-              ["==", ["get", "remoteness"], "unknown"], "#fffaf0",
               "#173f35",
             ],
-            "circle-opacity": ["case", ["==", ["get", "remoteness"], "populated"], 0.55, 1],
-            "circle-stroke-color": [
-              "case",
-              ["==", ["get", "remoteness"], "unknown"], "#756a59",
-              CASING,
-            ],
+            "circle-stroke-color": CASING,
             "circle-stroke-width": 1.5,
           },
         });
@@ -735,10 +726,7 @@ export function HikeMap({
           <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
           {filterGeometry ? <span><i className="key-filter" aria-hidden="true" />Trailhead filter</span> : null}
           {refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Named refinement</span> : null}
-          {accessPoints.some((point) => point.remoteness === "remote") ? <span><i className="key-access" aria-hidden="true" />Remote access</span> : null}
-          {accessPoints.some((point) => point.remoteness === "rural") ? <span><i className="key-access-rural" aria-hidden="true" />Rural access</span> : null}
-          {accessPoints.some((point) => point.remoteness === "populated") ? <span><i className="key-access-populated" aria-hidden="true" />Populated area</span> : null}
-          {accessPoints.some((point) => (point.remoteness ?? "unknown") === "unknown") ? <span><i className="key-access-unknown" aria-hidden="true" />Unknown area type</span> : null}
+          <span><i className="key-access" aria-hidden="true" />Trailhead</span>
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
           {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}

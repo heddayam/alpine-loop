@@ -3,7 +3,6 @@ import type { AppSettingsV1 } from "@/lib/contracts";
 export const DEFAULT_APP_SETTINGS: AppSettingsV1 = {
   schemaVersion: 1,
   includeUncertainAccess: true,
-  accessPointRemoteness: ["remote", "unknown"],
   quickSearchRouteCount: 10,
   gradeConstraintEnabled: false,
   selectedGradePreset: "moderate",

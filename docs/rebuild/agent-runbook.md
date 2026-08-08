@@ -36,7 +36,7 @@ single commit. Subagents inspect freely but edit only their ownership set.
 Never have parallel agents edit the same boundary or redesign an accepted API.
 Automated tests remain deterministic and network-free. Runtime filter geometry
 selects access points and never clips route geometry; exact pack coverage remains
-the hard boundary. Unknown access and remoteness follow the explicit request
+the hard boundary. Unknown access follows the explicit request
 snapshot. Constraint relaxation is never silent.
 
 ## Integration gate

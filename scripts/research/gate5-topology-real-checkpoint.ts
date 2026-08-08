@@ -60,7 +60,6 @@ try {
         ? { elevationGainFeet: { min: 1_500, max: 2_600 } }
         : {}),
       includeUncertainAccess: true,
-      accessPointRemoteness: ["remote", "rural", "populated", "unknown"],
       searchEffort: effort,
       limit: 10,
     };

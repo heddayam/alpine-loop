@@ -24,7 +24,6 @@ const validV3Request = {
   },
   distanceMiles: { min: 2, max: 5 },
   includeUncertainAccess: true,
-  accessPointRemoteness: ["remote", "rural", "populated", "unknown"] as const,
   searchEffort: "thorough" as const,
   limit: 10,
 };
@@ -72,20 +71,6 @@ describe("GenerateClosedRoutesRequestV3", () => {
     }).success).toBe(true);
   });
 
-  it("accepts any non-empty unique access-point area selection", () => {
-    expect(generateClosedRoutesRequestV3Schema.safeParse({
-      ...validV3Request,
-      accessPointRemoteness: ["remote"],
-    }).success).toBe(true);
-    expect(generateClosedRoutesRequestV3Schema.safeParse({
-      ...validV3Request,
-      accessPointRemoteness: [],
-    }).success).toBe(false);
-    expect(generateClosedRoutesRequestV3Schema.safeParse({
-      ...validV3Request,
-      accessPointRemoteness: ["remote", "remote"],
-    }).success).toBe(false);
-  });
 
   it("rejects a zero-cycle route response", () => {
     const response = {

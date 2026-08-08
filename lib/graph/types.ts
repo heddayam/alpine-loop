@@ -25,6 +25,12 @@ export type AccessPointCandidate = GraphAccessPoint & {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
+  /**
+   * Whether a closed route is topologically possible from this start, read from
+   * the `inclusive` topology profile. `null` on packs built before closed-route
+   * topology, which must keep every candidate rather than hiding all of them.
+   */
+  canReachCycle?: boolean | null;
 };
 
 export type AccessPointCandidateQuery = {

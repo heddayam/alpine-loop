@@ -1,18 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { appSettingsV1Schema, type AccessPointRemoteness, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
-
-const ACCESS_POINT_OPTIONS: Array<{
-  id: AccessPointRemoteness;
-  label: string;
-  description: string;
-}> = [
-  { id: "remote", label: "Remote", description: "Very low population near the access point." },
-  { id: "rural", label: "Rural", description: "Low-density settlements and countryside." },
-  { id: "populated", label: "Populated", description: "Town, neighborhood, and urban access." },
-  { id: "unknown", label: "Unknown", description: "Population coverage is unavailable." },
-];
+import { appSettingsV1Schema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
 
 type SettingsModalProps = {
   open: boolean;
@@ -70,14 +59,6 @@ export function SettingsModal({
 
   if (!open) return null;
 
-  const toggleRemoteness = (id: AccessPointRemoteness, checked: boolean) => {
-    const next = checked
-      ? ACCESS_POINT_OPTIONS.map(({ id: option }) => option).filter((option) =>
-        option === id || draft.accessPointRemoteness.includes(option))
-      : draft.accessPointRemoteness.filter((option) => option !== id);
-    if (next.length > 0) setDraft((current) => ({ ...current, accessPointRemoteness: next }));
-  };
-
   const updatePreset = (id: GradePresetId, field: keyof AppSettingsV1["gradePresets"][GradePresetId], value: number) => {
     setDraft((current) => ({ ...current, gradePresets: { ...current.gradePresets, [id]: { ...current.gradePresets[id], [field]: value } } }));
   };
@@ -112,30 +93,6 @@ export function SettingsModal({
           <p id="settings-description" className="visually-hidden">
             Preferences controlling which trailheads appear and how broadly each route search runs.
           </p>
-
-          <section className="settings-group" aria-labelledby="access-point-settings-title">
-            <div className="settings-group-heading">
-              <h3 id="access-point-settings-title">Access point areas</h3>
-              <span>{draft.accessPointRemoteness.length} of {ACCESS_POINT_OPTIONS.length} shown</span>
-            </div>
-            <p>Only these area types appear on the map and start routes. &ldquo;Unknown&rdquo; means population data is missing, not uncertain trail access.</p>
-            <div className="access-point-setting-grid">
-              {ACCESS_POINT_OPTIONS.map((option) => {
-                const checked = draft.accessPointRemoteness.includes(option.id);
-                return (
-                  <label key={option.id} className={checked ? "selected" : ""}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={checked && draft.accessPointRemoteness.length === 1}
-                      onChange={(event) => toggleRemoteness(option.id, event.currentTarget.checked)}
-                    />
-                    <span><strong>{option.label}</strong><small>{option.description}</small></span>
-                  </label>
-                );
-              })}
-            </div>
-          </section>
 
           <section className="settings-group" aria-labelledby="search-settings-title">
             <div className="settings-group-heading"><h3 id="search-settings-title">Search &amp; results</h3></div>

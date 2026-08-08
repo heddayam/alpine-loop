@@ -279,13 +279,11 @@ export function HikeBuilder({
   const closeJobs = useCallback(() => setJobsOpen(false), []);
 
   const displayedAccessPoints = useMemo(() => visibleAccessPoints.filter((point) =>
-    values.accessPointRemoteness.includes(point.remoteness ?? "unknown")
-    && (values.includeUncertainAccess || point.accessState !== "unknown")), [values.accessPointRemoteness, values.includeUncertainAccess, visibleAccessPoints]);
+    values.includeUncertainAccess || point.accessState !== "unknown"), [values.includeUncertainAccess, visibleAccessPoints]);
 
   const appSettings = useMemo<AppSettingsV1>(() => ({
     schemaVersion: 1,
     includeUncertainAccess: values.includeUncertainAccess,
-    accessPointRemoteness: values.accessPointRemoteness,
     quickSearchRouteCount: Number(values.limit),
     gradeConstraintEnabled: values.gradeConstraintEnabled,
     selectedGradePreset: values.selectedGradePreset,
@@ -296,13 +294,12 @@ export function HikeBuilder({
       maximumSharedApproachMiles: Number(values.maximumSharedStemMiles),
       allowMultiCycle: values.allowMultiCycle,
     },
-  }), [values.accessPointRemoteness, values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
+  }), [values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
 
   const applySettings = useCallback((settings: AppSettingsV1) => {
     setValues((current) => ({
       ...current,
       includeUncertainAccess: settings.includeUncertainAccess,
-      accessPointRemoteness: settings.accessPointRemoteness,
       limit: String(settings.quickSearchRouteCount),
       gradeConstraintEnabled: settings.gradeConstraintEnabled,
       selectedGradePreset: settings.selectedGradePreset,
@@ -529,7 +526,6 @@ export function HikeBuilder({
         ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
         ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}),
         includeUncertainAccess: request.includeUncertainAccess,
-        accessPointRemoteness: request.accessPointRemoteness,
       },
       routesPerAccessPoint: 10,
     };

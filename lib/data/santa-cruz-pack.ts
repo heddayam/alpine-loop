@@ -13,6 +13,8 @@ import {
   validateUvRasterioPrerequisites,
 } from "./elevation";
 import {
+  BUILDINGS_ADAPTER_VERSION,
+  prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
   OsmPbfTopologyAdapter,
   readOsmSourceConfig,
@@ -20,15 +22,7 @@ import {
   refreshPinnedOsmSnapshot,
   validateOsmPrerequisites,
 } from "./osm";
-import {
-  readPinnedPopulationCollection,
-  readPopulationSourceConfig,
-  refreshPinnedPopulationCollection,
-  UvRasterioPopulationSampler,
-  validateUvRasterioPopulationPrerequisites,
-} from "./population";
 import { deriveTrailheadPortals, PORTAL_DERIVATION_VERSION, stripPortalBuildContext } from "./portals";
-import { POPULATION_RADIUS_M } from "./remoteness";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
 import type { AccessState } from "@/lib/graph/types";
@@ -157,10 +151,9 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   const searchRegionContents = await readFile(searchRegionPath, "utf8");
   const searchRegions = await readSearchRegionInput(searchRegionPath);
   const boundary = JSON.parse(boundaryContents) as BoundaryFeature;
-  const [osmConfig, elevationConfig, populationConfig, curatedAccess] = await Promise.all([
+  const [osmConfig, elevationConfig, curatedAccess] = await Promise.all([
     readOsmSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "osm-source.json")),
     readElevationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "elevation-source.json")),
-    readPopulationSourceConfig(path.join(SANTA_CRUZ_REGION_ROOT, "population-source.json")),
     readCuratedAccessFile(SANTA_CRUZ_CURATED_ACCESS_PATH, SANTA_CRUZ_CURATED_ACCESS_HASH),
   ]);
 
@@ -168,18 +161,14 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   await Promise.all([
     validateOsmPrerequisites(),
     validateUvRasterioPrerequisites(),
-    validateUvRasterioPopulationPrerequisites(),
   ]);
-  const [osmSnapshot, dem, population] = await Promise.all([
+  const [osmSnapshot, dem] = await Promise.all([
     options.refresh
       ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
       : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
     options.refresh
       ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
-    options.refresh
-      ? refreshPinnedPopulationCollection(options.sourceCacheRoot, populationConfig)
-      : readPinnedPopulationCollection(options.sourceCacheRoot, populationConfig),
   ]);
 
   const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
@@ -207,9 +196,11 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
   );
 
   const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-  const populationSampler = new UvRasterioPopulationSampler(population.collectionPath, POPULATION_RADIUS_M);
-  await populationSampler.verify(population.collection);
-  const snapshots = [osmSnapshot, curatedAccess.snapshot, dem.snapshot, population.snapshot];
+  const buildings = await prepareOsmBuildings(osmSnapshot, {
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+  });
+  const snapshots = [osmSnapshot, curatedAccess.snapshot, dem.snapshot];
   const seed: PackSeed = {
     schemaVersion: "6",
     id: PACK_ID,
@@ -219,7 +210,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       searchRegionContents,
       snapshots.map((snapshot) => `${snapshot.id}\0${snapshot.version}\0${snapshot.contentHash}\0${snapshot.license}`),
       `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}+${PORTAL_DERIVATION_VERSION}`,
-      `${elevationSampler.algorithmVersion}+${populationSampler.algorithmVersion}`,
+      `${elevationSampler.algorithmVersion}+${BUILDINGS_ADAPTER_VERSION}`,
     ),
     compilerVersion: COMPILER_VERSION,
     coverage: { bbox: areaGeometryBounds(boundary.geometry), boundary: boundary.geometry },
@@ -251,7 +242,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     },
     additionalSources: [curatedAccess.snapshot],
     elevation: { sampler: elevationSampler, snapshot: dem.snapshot },
-    population: { sampler: populationSampler, snapshot: population.snapshot },
+    buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
   });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { accessPointRemotenessSelectionSchema, gradeExperienceConstraintsSchema } from "./routes";
+import { gradeExperienceConstraintsSchema } from "./routes";
 
 export const gradePresetIdSchema = z.enum(["gentle", "moderate", "steep"]);
 
@@ -19,7 +19,6 @@ export const loopOptionDefaultsSchema = z.object({
 export const appSettingsV1Schema = z.object({
   schemaVersion: z.literal(1),
   includeUncertainAccess: z.boolean(),
-  accessPointRemoteness: accessPointRemotenessSelectionSchema,
   quickSearchRouteCount: z.number().int().min(1).max(20),
   gradeConstraintEnabled: z.boolean(),
   selectedGradePreset: gradePresetIdSchema,

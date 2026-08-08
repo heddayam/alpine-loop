@@ -162,7 +162,7 @@ change.
 
 ### 3. Sources and licensing
 
-- Pin topology, elevation, and population sources with retrieval and upstream
+- Pin topology and elevation sources with retrieval and upstream
   dates, URLs, hashes, license terms, redistribution decisions, and adapter
   versions. Pin every optional entrance overlay the same way.
 - Derive access portals from OSM topology. Record reviewed managing-authority
@@ -188,7 +188,7 @@ change.
 - Build twice offline from identical cached inputs. Require identical data
   version, manifest, database hash, and audit results.
 - Require zero audit errors, unattributed records, missing elevation, profile,
-  or population values, integrity failures, and unintended out-of-coverage
+  values, integrity failures, and unintended out-of-coverage
   persisted edges.
 - Review restriction conflicts, portal access-state distribution, reachable
   trail kilometres, disconnected components, viable cycle-bearing portals, and

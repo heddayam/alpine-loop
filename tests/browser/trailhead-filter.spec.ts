@@ -41,7 +41,6 @@ test("drive-time Quick search resolves reachability and applies the curated regi
     version: 3,
     searchEffort: "quick",
     accessFilter: { mode: "drive-time", reachabilityId: REACHABILITY_ID, regionId: SEARCH_REGION.id },
-    accessPointRemoteness: ["remote", "unknown"],
   });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
@@ -59,7 +58,7 @@ test("Batch launches a persistent job and reopens its saved result page", async 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
   await expect(jobs.getByText("Completed", { exact: true })).toBeVisible();
-  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { accessPointRemoteness: ["remote", "unknown"], includeUncertainAccess: true } });
+  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { includeUncertainAccess: true } });
   expect(harness.batchRequests[0]).not.toHaveProperty("startAccessPointId");
   expect(harness.batchRequests[0]).not.toHaveProperty("searchEffort");
 

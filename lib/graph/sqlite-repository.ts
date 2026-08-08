@@ -143,10 +143,7 @@ function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     confidence: confidence as GraphAccessPoint["confidence"],
     parkingEvidence: typeof row.parking_evidence === "string" ? row.parking_evidence : null,
     sourceIds: jsonArray<string>(row.source_refs, "access point source_refs"),
-    // Absent on packs predating the population source; nullableNumber maps the
-    // missing column to null so those packs keep loading.
-    populationWithinRadius: nullableNumber(row, "population_within_radius"),
-    localReliefM: nullableNumber(row, "local_relief_m"),
+    nearbyBuildingCount: requiredNumber(row, "nearby_building_count"),
     reachableTrailKm: numberOrZero(row, "reachable_trail_km"),
     trailComponentId: typeof row.trail_component_id === "string" ? row.trail_component_id : null,
     portalRoadClass: row.portal_road_class === "street" || row.portal_road_class === "service-road"
@@ -227,6 +224,7 @@ export class SQLiteGraphRepository implements GraphRepository {
     return rows.some((row) => row.name === column);
   }
 
+
   async getInducedGraph(query: GraphQuery): Promise<InducedGraph> {
     assertNotAborted(query.signal);
     const [west, south, east, north] = query.bbox;
@@ -277,7 +275,7 @@ export class SQLiteGraphRepository implements GraphRepository {
 
     const accessRows = this.#database.prepare("SELECT * FROM access_points ORDER BY id").all() as SqliteRow[];
     const accessPoints = accessRows
-      .map(parseAccessPoint)
+      .map((row) => parseAccessPoint(row))
       .filter(
         (accessPoint) =>
           nodes.has(accessPoint.nodeId) && accessPointIsEligible(accessPoint, query.includeUncertainAccess),
@@ -309,7 +307,7 @@ export class SQLiteGraphRepository implements GraphRepository {
              ORDER BY access_points.id`,
           )
           .all(west, east, south, north)) as SqliteRow[];
-    return rows.map(parseAccessPoint).filter((accessPoint) => accessPointIsEligible(accessPoint, includeUncertainAccess));
+    return rows.map((row) => parseAccessPoint(row)).filter((accessPoint) => accessPointIsEligible(accessPoint, includeUncertainAccess));
   }
 
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
@@ -321,11 +319,23 @@ export class SQLiteGraphRepository implements GraphRepository {
       ? `access_points.known_connectivity, access_points.inclusive_connectivity, access_points.known_out_degree, access_points.inclusive_out_degree,
          ${hasPortalRanking ? "access_points.reachable_trail_km, access_points.trail_component_id, access_points.portal_road_class, access_points.parking_distance_m" : "0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m"}`
       : "0 AS known_connectivity, 0 AS inclusive_connectivity, 0 AS known_out_degree, 0 AS inclusive_out_degree, 0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m";
+    // The `inclusive` profile is the permissive superset of `known`, so a start
+    // that cannot reach a cycle here cannot reach one under any access setting.
+    // Left-joined and nullable so packs predating closed-route topology keep
+    // every candidate instead of losing all of them.
+    const hasTopology = this.#hasTable("access_topology");
+    const topologyColumns = hasTopology
+      ? "access_topology.can_reach_cycle AS can_reach_cycle"
+      : "NULL AS can_reach_cycle";
+    const topologyJoin = hasTopology
+      ? "LEFT JOIN access_topology ON access_topology.access_point_id = access_points.id AND access_topology.profile = 'inclusive'"
+      : "";
     const rows = this.#database.prepare(
-      `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, ${rankingColumns}
+      `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, ${rankingColumns}, ${topologyColumns}
        FROM access_points
        JOIN nodes ON nodes.id = access_points.node_id
        JOIN node_spatial ON node_spatial.row_id = nodes.rowid
+       ${topologyJoin}
        WHERE node_spatial.min_lon <= ? AND node_spatial.max_lon >= ?
          AND node_spatial.min_lat <= ? AND node_spatial.max_lat >= ?
        ORDER BY access_points.id`,
@@ -348,6 +358,9 @@ export class SQLiteGraphRepository implements GraphRepository {
           ? row.portal_road_class
           : null,
         parkingDistanceM: nullableNumber(row, "parking_distance_m"),
+        canReachCycle: row.can_reach_cycle === null || row.can_reach_cycle === undefined
+          ? null
+          : requiredNumber(row, "can_reach_cycle") === 1,
       }];
     });
   }
@@ -404,7 +417,7 @@ export class SQLiteGraphRepository implements GraphRepository {
       if (truncated) break;
     }
     const accessRows = this.#database.prepare("SELECT * FROM access_points ORDER BY id").all() as SqliteRow[];
-    const accessPoints = accessRows.map(parseAccessPoint).filter(
+    const accessPoints = accessRows.map((row) => parseAccessPoint(row)).filter(
       (point) => nodes.has(point.nodeId) && accessPointIsEligible(point, query.includeUncertainAccess),
     );
     return { graph: { nodes, edges, accessPoints }, truncated };
