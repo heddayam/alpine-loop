@@ -104,6 +104,7 @@ coverage, topology, repetition, shared stem, and exact-versus-near-miss status.
 - [Closed-route engine reference](docs/rebuild/closed-route-topology-plan.md)
 - [Data-source and licensing policy](docs/rebuild/data-sources.md)
 - [Regional expansion roadmap and pack-onboarding protocol](docs/rebuild/regional-expansion-plan.md)
+- [Access-point derivation plan](docs/rebuild/access-point-derivation-plan.md)
 
 The removed pre-rebuild app remains recoverable from the
 `archive/pre-redo-main-2026-08-04`, `archive/pre-redo-trails-2026-08-04`, and
