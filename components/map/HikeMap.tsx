@@ -41,6 +41,8 @@ const CASING = "#ffffff";
 export const TRAIL_NETWORK_MIN_ZOOM = 11;
 export const TRAIL_COPY_FEEDBACK_MS = 1_500;
 const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "trailGroupId"], "__none__"];
+const EMPTY_ACCESS_POINT_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
+const EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER: FilterSpecification = ["==", ["get", "cluster_id"], -1];
 
 type HoveredTrail = {
   id: string;
@@ -53,6 +55,12 @@ type TrailCopyFeedback = {
   status: "copied" | "failed";
 };
 
+type HoveredAccessPoint = {
+  id: string | number;
+  kindLabel: string;
+  name: string;
+};
+
 const TRAIL_CLICK_PRIORITY_LAYERS = [
   "generated-route-segment-hit-target",
   "generated-route-hit-target",
@@ -62,6 +70,29 @@ const TRAIL_CLICK_PRIORITY_LAYERS = [
 
 export function trailNetworkHoverFilter(id?: string): FilterSpecification {
   return id ? ["==", ["get", "trailGroupId"], id] : EMPTY_TRAIL_HOVER_FILTER;
+}
+
+export function accessPointHoverFilter(id?: string): FilterSpecification {
+  return id ? ["==", ["get", "id"], id] : EMPTY_ACCESS_POINT_HOVER_FILTER;
+}
+
+export function accessPointClusterHoverFilter(id?: number): FilterSpecification {
+  return id === undefined ? EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER : ["==", ["get", "cluster_id"], id];
+}
+
+export function accessPointFeatureDetails(properties?: Record<string, unknown> | null): {
+  id?: string;
+  kindLabel: string;
+  name: string;
+} {
+  const id = properties?.id;
+  const name = properties?.name;
+  const kind = properties?.kind;
+  return {
+    id: typeof id === "string" ? id : undefined,
+    kindLabel: kind === "parking" ? "Parking" : kind === "transit" ? "Transit" : "Trailhead",
+    name: typeof name === "string" && name.trim() ? name.trim() : "Unnamed access point",
+  };
 }
 
 export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: number): string | undefined {
@@ -156,6 +187,7 @@ export function accessPointFeatures(accessPoints: AccessPointOption[], selectedA
       properties: {
         id: point.id,
         name: point.name,
+        kind: point.kind,
         selected: point.id === selectedAccessPointId,
       },
       geometry: { type: "Point", coordinates: [point.lon, point.lat] },
@@ -330,6 +362,7 @@ export function HikeMap({
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
+  const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
   const [trailCopyFeedback, setTrailCopyFeedback] = useState<TrailCopyFeedback>();
   const [mapReady, setMapReady] = useState(false);
 
@@ -552,6 +585,18 @@ export function HikeMap({
           },
         });
         map?.addLayer({
+          id: "access-point-cluster-hover",
+          type: "circle",
+          source: "access-points",
+          filter: EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER,
+          paint: {
+            "circle-radius": ["step", ["get", "point_count"], 10, 10, 12.5, 30, 15, 100, 18],
+            "circle-color": "#173f35",
+            "circle-stroke-color": CASING,
+            "circle-stroke-width": 3,
+          },
+        });
+        map?.addLayer({
           id: "access-points",
           type: "circle",
           source: "access-points",
@@ -565,6 +610,22 @@ export function HikeMap({
             ],
             "circle-stroke-color": CASING,
             "circle-stroke-width": 1.5,
+          },
+        });
+        map?.addLayer({
+          id: "access-point-hover",
+          type: "circle",
+          source: "access-points",
+          filter: EMPTY_ACCESS_POINT_HOVER_FILTER,
+          paint: {
+            "circle-radius": zoomWidth(7.5),
+            "circle-color": [
+              "case",
+              ["==", ["get", "selected"], true], ROUTE_SELECTED,
+              "#173f35",
+            ],
+            "circle-stroke-color": CASING,
+            "circle-stroke-width": 3,
           },
         });
         map?.addSource("generated-routes-hit", {
@@ -698,7 +759,24 @@ export function HikeMap({
           map?.getCanvas().style.removeProperty("cursor");
           onSegmentHoverRef.current?.(undefined);
         });
+        const clearTrailHover = () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          map?.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
+          map?.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
+          setHoveredTrail(undefined);
+        };
+        const clearAccessPointHover = () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          map?.setFilter("access-point-hover", EMPTY_ACCESS_POINT_HOVER_FILTER);
+          map?.setFilter("access-point-cluster-hover", EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER);
+          setHoveredAccessPoint(undefined);
+        };
         map?.on("mousemove", "trail-network-hit-target", (event) => {
+          const priorityLayers = TRAIL_CLICK_PRIORITY_LAYERS.filter((layerId) => map?.getLayer(layerId));
+          if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) {
+            clearTrailHover();
+            return;
+          }
           const feature = event.features?.[0];
           if (!feature) return;
           const id = feature.properties?.trailGroupId;
@@ -727,12 +805,7 @@ export function HikeMap({
             }, TRAIL_COPY_FEEDBACK_MS);
           });
         });
-        map?.on("mouseleave", "trail-network-hit-target", () => {
-          map?.getCanvas().style.removeProperty("cursor");
-          map?.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
-          map?.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
-          setHoveredTrail(undefined);
-        });
+        map?.on("mouseleave", "trail-network-hit-target", clearTrailHover);
         // Clicking a cluster zooms to the level where it breaks apart.
         map?.on("click", "access-point-clusters", (event) => {
           const clusterId = event.features?.[0]?.properties?.cluster_id;
@@ -742,11 +815,40 @@ export function HikeMap({
             map?.easeTo({ center: event.lngLat, zoom, duration: 350 });
           }).catch(() => undefined);
         });
-        map?.on("mouseenter", "access-point-clusters", () => map?.getCanvas().style.setProperty("cursor", "pointer"));
-        map?.on("mouseleave", "access-point-clusters", () => map?.getCanvas().style.removeProperty("cursor"));
+        map?.on("mouseenter", "access-point-clusters", (event) => {
+          const clusterId = event.features?.[0]?.properties?.cluster_id;
+          const pointCount = event.features?.[0]?.properties?.point_count;
+          if (typeof clusterId !== "number") return;
+          clearTrailHover();
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          map?.setFilter("access-point-cluster-hover", accessPointClusterHoverFilter(clusterId));
+          setHoveredAccessPoint({
+            id: clusterId,
+            kindLabel: "Trailheads",
+            name: `${typeof pointCount === "number" ? pointCount : "Multiple"} access points`,
+          });
+        });
+        map?.on("mouseleave", "access-point-clusters", () => {
+          clearAccessPointHover();
+        });
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelectRef.current(id);
+        });
+        map?.on("mouseenter", "access-points", (event) => {
+          const details = accessPointFeatureDetails(event.features?.[0]?.properties);
+          if (!details.id) return;
+          clearTrailHover();
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          map?.setFilter("access-point-hover", accessPointHoverFilter(details.id));
+          setHoveredAccessPoint({ id: details.id, kindLabel: details.kindLabel, name: details.name });
+        });
+        map?.on("mouseleave", "access-points", () => {
+          clearAccessPointHover();
+        });
+        map?.on("movestart", () => {
+          clearTrailHover();
+          clearAccessPointHover();
         });
 
         const refreshTrailNetwork = () => {
@@ -973,6 +1075,7 @@ export function HikeMap({
   const activeTrailCopyFeedback = hoveredTrail && trailCopyFeedback?.id === hoveredTrail.id
     ? trailCopyFeedback
     : undefined;
+  const hoveredMapFeature = hoveredAccessPoint ?? hoveredTrail;
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
@@ -1013,14 +1116,19 @@ export function HikeMap({
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
-      {drawing || hoveredTrail ? <p className={`map-hint${hoveredTrail && !drawing ? " map-trail-label" : ""}${activeTrailCopyFeedback ? ` ${activeTrailCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
+      {drawing || hoveredMapFeature ? <p className={`map-hint${hoveredMapFeature && !drawing ? " map-trail-label" : ""}${activeTrailCopyFeedback && !hoveredAccessPoint ? ` ${activeTrailCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
         {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
-          {activeTrailCopyFeedback ? (
-            <span className={`map-trail-distance map-trail-copy-feedback ${activeTrailCopyFeedback.status}`}>
-              {activeTrailCopyFeedback.status === "copied" ? "Copied" : "Couldn’t copy"}
-            </span>
-          ) : hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
-          <span>{hoveredTrail?.name}</span>
+          {hoveredAccessPoint ? <>
+            <span className="map-trail-distance">{hoveredAccessPoint.kindLabel}</span>
+            <span>{hoveredAccessPoint.name}</span>
+          </> : <>
+            {activeTrailCopyFeedback ? (
+              <span className={`map-trail-distance map-trail-copy-feedback ${activeTrailCopyFeedback.status}`}>
+                {activeTrailCopyFeedback.status === "copied" ? "Copied" : "Couldn’t copy"}
+              </span>
+            ) : hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
+            <span>{hoveredTrail?.name}</span>
+          </>}
         </>}
       </p> : null}
     </section>
