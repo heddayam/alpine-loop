@@ -74,6 +74,16 @@ the network.
 
 ### Verify an installed closed-route pack
 
+Every new schema-6 region uses the shared checkpoint runner. For Henry Coe:
+
+```sh
+node --import tsx scripts/research/regional-pack-checkpoint.ts \
+  --pack=henry-coe \
+  --database=.local-data/packs/henry-coe/<data-version>/pack.sqlite \
+  --manifest=.local-data/packs/henry-coe/<data-version>/manifest.json \
+  --effort=thorough
+```
+
 The retained real-pack checkpoints exercise the active V3 closed-route runtime
 against representative starts. For Monterey–Carmel:
 
