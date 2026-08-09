@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import type { FeatureCollection, LineString } from "geojson";
 import { bboxSchema } from "@/lib/contracts";
 import { FIXTURE_PACK_TRAIL_NETWORK } from "@/lib/packs/fixture-pack";
+import { groupContiguousTrailFeatures } from "@/lib/packs/trail-network";
 import { loadRoutePacks } from "@/lib/server/pack-registry";
 import { accessPointCanStartClosedRoute } from "@/lib/solver";
 import { accessPointIsWildEnough } from "@/lib/data/wilderness";
 
-const MAXIMUM_TRAIL_FEATURES = 30_000;
+const MAXIMUM_TRAIL_FEATURES = 75_000;
 
 function canonicalGeometry(coordinates: ReadonlyArray<readonly [number, number]>): string {
   const forward = JSON.stringify(coordinates);
@@ -109,7 +110,7 @@ export async function GET(
       }),
       trailNetwork: pack.kind === "fixture"
         ? FIXTURE_PACK_TRAIL_NETWORK
-        : { type: "FeatureCollection", features },
+        : groupContiguousTrailFeatures({ type: "FeatureCollection", features }),
     });
   } finally {
     await repository.close();

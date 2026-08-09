@@ -269,6 +269,20 @@ the evidence line.
   reveal, resting/hover line hierarchy, distance/name badge, and zero browser
   console errors.
 
+- 2026-08-09 — corrected mapped-trail hover to operate on contiguous trail
+  runs rather than individual graph edges. Endpoint-connected edges with the
+  same normalized name now share one combined distance and hover group;
+  unnamed degree-two chains also join, while ambiguous unnamed branches remain
+  separate. Group geometry is merged into maximal chains so both resting and
+  emphasized strokes remain visibly dashed instead of restarting into an
+  apparent solid line at every source edge. Trails now reveal at zoom 11, and
+  the viewport ceiling is 75,000 physical edges. Existing packs remain
+  compatible. `npm run verify` passes 377 tests across 75 files plus the
+  production build, and two consecutive `npm run test:browser` runs pass all
+  five Chromium flows. Live Henry Coe inspection confirmed the network after
+  one zoom step from the pack overview, a 1.8-mile contiguous named hover run,
+  clearly dashed emphasis, and zero browser console errors.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

@@ -38,11 +38,11 @@ type HikeMapProps = {
 const ROUTE_SELECTED = "#c9552a";
 const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
-export const TRAIL_NETWORK_MIN_ZOOM = 13;
-const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
+export const TRAIL_NETWORK_MIN_ZOOM = 11;
+const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "trailGroupId"], "__none__"];
 
 export function trailNetworkHoverFilter(id?: string): FilterSpecification {
-  return id ? ["==", ["get", "id"], id] : EMPTY_TRAIL_HOVER_FILTER;
+  return id ? ["==", ["get", "trailGroupId"], id] : EMPTY_TRAIL_HOVER_FILTER;
 }
 
 export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: number): string | undefined {
@@ -475,8 +475,8 @@ export function HikeMap({
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
           filter: EMPTY_TRAIL_HOVER_FILTER,
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#244c3d", "line-width": zoomWidth(5), "line-opacity": 0.96 },
+          layout: { "line-join": "round", "line-cap": "butt" },
+          paint: { "line-color": "#244c3d", "line-width": zoomWidth(5), "line-opacity": 0.96, "line-dasharray": [1.2, 1.8] },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
@@ -660,7 +660,7 @@ export function HikeMap({
         map?.on("mousemove", "trail-network-hit-target", (event) => {
           const feature = event.features?.[0];
           if (!feature) return;
-          const id = feature.properties?.id;
+          const id = feature.properties?.trailGroupId;
           if (typeof id !== "string") return;
           map?.getCanvas().style.setProperty("cursor", "pointer");
           map?.setFilter("trail-network-hover-casing", trailNetworkHoverFilter(id));

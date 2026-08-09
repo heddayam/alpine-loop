@@ -19,13 +19,14 @@ describe("pack map-context endpoint", () => {
     expect(response.status).toBe(200);
     const payload = await response.json() as {
       accessPoints: Array<{ id: string; lon: number; lat: number }>;
-      trailNetwork: { type: string; features: Array<{ geometry: { type: string }; properties: { distanceMeters: number } }> };
+      trailNetwork: { type: string; features: Array<{ geometry: { type: string }; properties: { distanceMeters: number; trailGroupId: string } }> };
     };
     expect(payload.accessPoints.map(({ id }) => id)).toContain("trailhead-a");
     expect(payload.trailNetwork.type).toBe("FeatureCollection");
     expect(payload.trailNetwork.features).toHaveLength(3);
     expect(payload.trailNetwork.features.every(({ geometry }) => geometry.type === "LineString")).toBe(true);
     expect(payload.trailNetwork.features.every(({ properties }) => properties.distanceMeters > 0)).toBe(true);
+    expect(payload.trailNetwork.features.every(({ properties }) => properties.trailGroupId.startsWith("trail-group:"))).toBe(true);
   });
 
   it("can return trail geometry without repeating access-point work", async () => {
