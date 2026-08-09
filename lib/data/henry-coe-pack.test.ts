@@ -27,7 +27,8 @@ describe("Henry Coe pack wiring", () => {
   it("validates the coherent Henry Coe and Coyote Lake boundary and reviewed regions", async () => {
     const boundaryContents = await readFile(path.join(HENRY_COE_REGION_ROOT, "boundary.geojson"), "utf8");
     const boundary = parseBasicRegionalBoundary(HENRY_COE_PACK_CONFIG, boundaryContents);
-    expect(areaGeometryBounds(boundary.geometry)).toEqual([-121.62, 37.01, -121.275, 37.335]);
+    expect(boundary.geometry.type).toBe("MultiPolygon");
+    expect(areaGeometryBounds(boundary.geometry)).toEqual([-121.596281, 37.0324441, -121.3058921, 37.3111329]);
 
     const [osm, elevation, searchRegions] = await Promise.all([
       readOsmSourceConfig(path.join(HENRY_COE_REGION_ROOT, "osm-source.json")),
@@ -100,6 +101,7 @@ describe("Henry Coe pack wiring", () => {
       "hunting-hollow",
       "dowdy-ranch",
       "mendoza-ranch",
+      "harvey-bear-ranch",
     ]);
     expect(new Set(input.scenarios.map(({ cluster }) => cluster)).size).toBe(input.scenarios.length);
     expect(input.scenarios.every(({ searchRegionId }) => searchRegionId.startsWith("osm:relation/"))).toBe(true);

@@ -7,7 +7,7 @@
   "catalogId": "USGS:3a81321b-c153-416f-98b7-cc8e5f0e17c3",
   "version": "henry-coe-3dep-pinned-2026-08-08-v1",
   "endpoint": "https://tnmaccess.nationalmap.gov/api/v1/products",
-  "bbox": [-121.62, 37.01, -121.275, 37.335],
+  "bbox": [-121.596281, 37.0324441, -121.3058921, 37.3111329],
   "productExtent": "1 x 1 degree",
   "expectedProductIds": [
     "68afba8fd4be02645f9b293f"

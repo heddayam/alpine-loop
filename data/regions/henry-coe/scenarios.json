@@ -7,7 +7,7 @@
       "cluster": "Henry Coe western high country",
       "referencePoint": {
         "name": "Coe Ranch Entrance",
-        "coordinates": [-121.545496, 37.186331]
+        "coordinates": [-121.5458297, 37.1878465]
       },
       "searchRegionId": "osm:relation/11341366",
       "exactExpectation": {
@@ -26,7 +26,7 @@
       "cluster": "Henry Coe southern ridges",
       "referencePoint": {
         "name": "Hunting Hollow Trailhead",
-        "coordinates": [-121.4660046, 37.0761072]
+        "coordinates": [-121.467091, 37.076211]
       },
       "searchRegionId": "osm:relation/11341366",
       "exactExpectation": {
@@ -45,16 +45,17 @@
       "cluster": "Henry Coe eastern backcountry",
       "referencePoint": {
         "name": "Dowdy Ranch Entrance",
-        "coordinates": [-121.3572257, 37.1126215]
+        "coordinates": [-121.356932, 37.112289]
       },
       "searchRegionId": "osm:relation/11341366",
+      "maximumRepeatedTrailPct": 50,
       "exactExpectation": {
         "distanceMiles": { "min": 5, "max": 15 },
         "elevationGainFeet": { "min": 700, "max": 4500 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 1, "max": 2 },
+        "distanceMiles": { "min": 5, "max": 15 },
         "elevationGainFeet": { "min": 8000, "max": 9000 },
         "result": "near-miss-only"
       }
@@ -64,7 +65,26 @@
       "cluster": "Coyote Lake–Harvey Bear Ranch",
       "referencePoint": {
         "name": "Mendoza Ranch Entrance",
-        "coordinates": [-121.5201793, 37.0700048]
+        "coordinates": [-121.520235, 37.069972]
+      },
+      "searchRegionId": "osm:relation/16859470",
+      "exactExpectation": {
+        "distanceMiles": { "min": 3, "max": 10 },
+        "elevationGainFeet": { "min": 300, "max": 2500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "harvey-bear-ranch",
+      "cluster": "Coyote Lake–Harvey Bear Ranch north",
+      "referencePoint": {
+        "name": "Harvey Bear Entrance",
+        "coordinates": [-121.577518, 37.096626]
       },
       "searchRegionId": "osm:relation/16859470",
       "exactExpectation": {
