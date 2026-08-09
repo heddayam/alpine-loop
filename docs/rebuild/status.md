@@ -256,6 +256,19 @@ the evidence line.
   discovery remains a later stage documented in
   `trail-segment-condition-plan.md`.
 
+- 2026-08-08 — added viewport-loaded mapped trails at zoom 13 and above. The
+  network uses a lifted green dashed treatment beneath generated routes; hover
+  gives one segment a restrained solid emphasis and shows its mapped name plus
+  adaptive mile/foot distance in the former map-hint visual language. The
+  persistent trailhead-filter geometry notice was removed. Viewport requests
+  omit redundant access-point work and allow up to 30,000 physical trail
+  features for dense regional views. Existing packs remain compatible. `npm
+  run verify` passes 374 tests across 74 files plus the production build, and
+  two consecutive `npm run test:browser` runs pass all five Chromium flows.
+  Live Henry Coe inspection at desktop and 390 px confirmed the earlier zoom
+  reveal, resting/hover line hierarchy, distance/name badge, and zero browser
+  console errors.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { DataDrivenPropertyValueSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
+  packId: string;
   drawBounds: Bounds | null;
   drawEnabled: boolean;
   filterGeometry?: Polygon | MultiPolygon;
@@ -37,6 +38,41 @@ type HikeMapProps = {
 const ROUTE_SELECTED = "#c9552a";
 const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
+export const TRAIL_NETWORK_MIN_ZOOM = 13;
+const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
+
+export function trailNetworkHoverFilter(id?: string): FilterSpecification {
+  return id ? ["==", ["get", "id"], id] : EMPTY_TRAIL_HOVER_FILTER;
+}
+
+export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: number): string | undefined {
+  if (zoom < TRAIL_NETWORK_MIN_ZOOM) return undefined;
+  const query = new URLSearchParams({
+    bbox: bounds.join(","),
+    includeUncertainAccess: "true",
+    includeAccessPoints: "false",
+  });
+  return `/api/packs/${encodeURIComponent(packId)}/access-points?${query}`;
+}
+
+export function trailNetworkFeatureDetails(properties?: Record<string, unknown> | null): {
+  name: string;
+  distance?: string;
+} {
+  const name = properties?.name;
+  const rawDistanceMeters = properties?.distanceMeters;
+  const distanceMeters = typeof rawDistanceMeters === "number" && Number.isFinite(rawDistanceMeters)
+    ? rawDistanceMeters
+    : undefined;
+  return {
+    name: typeof name === "string" && name.trim() ? name.trim() : "Unnamed trail",
+    distance: distanceMeters === undefined
+      ? undefined
+      : distanceMeters < 160.9344
+        ? `${Math.round(distanceMeters * 3.28084)} ft`
+        : `${(distanceMeters / 1609.344).toFixed(1)} mi`,
+  };
+}
 
 /* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
 function zoomWidth(wide: number): DataDrivenPropertyValueSpecification<number> {
@@ -210,6 +246,7 @@ export function routeTrailheadPinFeatures(
 }
 
 export function HikeMap({
+  packId,
   drawBounds: bounds,
   drawEnabled,
   filterGeometry,
@@ -256,6 +293,7 @@ export function HikeMap({
   const refinementGeometryRef = useRef(refinementGeometry);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
+  const [hoveredTrail, setHoveredTrail] = useState<{ name: string; distance?: string }>();
   const [mapReady, setMapReady] = useState(false);
 
   // Map-originated hover drives the results list as well as the map itself.
@@ -306,6 +344,7 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
+    let trailNetworkController: AbortController | null = null;
     void import("maplibre-gl").then(({ Map, Marker: MarkerClass, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
       setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
@@ -404,13 +443,40 @@ export function HikeMap({
           id: "trail-network-casing",
           type: "line",
           source: "trail-network",
-          paint: { "line-color": CASING, "line-width": zoomWidth(4), "line-opacity": 0.75 },
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          paint: { "line-color": CASING, "line-width": zoomWidth(5.5), "line-opacity": 0.88 },
         });
         map?.addLayer({
           id: "trail-network-lines",
           type: "line",
           source: "trail-network",
-          paint: { "line-color": "#4a6559", "line-width": zoomWidth(1.5), "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          paint: { "line-color": "#3f5f52", "line-width": zoomWidth(2.4), "line-opacity": 0.92, "line-dasharray": [2.5, 3] },
+        });
+        map?.addLayer({
+          id: "trail-network-hit-target",
+          type: "line",
+          source: "trail-network",
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0.01 },
+        });
+        map?.addLayer({
+          id: "trail-network-hover-casing",
+          type: "line",
+          source: "trail-network",
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          filter: EMPTY_TRAIL_HOVER_FILTER,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": CASING, "line-width": zoomWidth(9), "line-opacity": 0.94 },
+        });
+        map?.addLayer({
+          id: "trail-network-hover",
+          type: "line",
+          source: "trail-network",
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          filter: EMPTY_TRAIL_HOVER_FILTER,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": "#244c3d", "line-width": zoomWidth(5), "line-opacity": 0.96 },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
@@ -591,6 +657,22 @@ export function HikeMap({
           map?.getCanvas().style.removeProperty("cursor");
           onSegmentHoverRef.current?.(undefined);
         });
+        map?.on("mousemove", "trail-network-hit-target", (event) => {
+          const feature = event.features?.[0];
+          if (!feature) return;
+          const id = feature.properties?.id;
+          if (typeof id !== "string") return;
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          map?.setFilter("trail-network-hover-casing", trailNetworkHoverFilter(id));
+          map?.setFilter("trail-network-hover", trailNetworkHoverFilter(id));
+          setHoveredTrail(trailNetworkFeatureDetails(feature.properties));
+        });
+        map?.on("mouseleave", "trail-network-hit-target", () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          map?.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
+          map?.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
+          setHoveredTrail(undefined);
+        });
         // Clicking a cluster zooms to the level where it breaks apart.
         map?.on("click", "access-point-clusters", (event) => {
           const clusterId = event.features?.[0]?.properties?.cluster_id;
@@ -606,18 +688,53 @@ export function HikeMap({
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelectRef.current(id);
         });
+
+        const refreshTrailNetwork = () => {
+          if (!map) return;
+          const visibleBounds = map.getBounds();
+          const requestUrl = trailNetworkRequestUrl(packId, [
+            visibleBounds.getWest(),
+            visibleBounds.getSouth(),
+            visibleBounds.getEast(),
+            visibleBounds.getNorth(),
+          ], map.getZoom());
+          trailNetworkController?.abort();
+          trailNetworkController = null;
+          map.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
+          map.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
+          setHoveredTrail(undefined);
+          const source = map.getSource("trail-network") as GeoJSONSource | undefined;
+          if (!requestUrl) {
+            source?.setData(EMPTY_LINES);
+            return;
+          }
+          const controller = new AbortController();
+          trailNetworkController = controller;
+          void fetch(requestUrl, { signal: controller.signal })
+            .then(async (response) => {
+              const payload: unknown = await response.json().catch(() => null);
+              if (!response.ok || !payload || typeof payload !== "object" || !("trailNetwork" in payload)) return;
+              const trailNetwork = payload.trailNetwork;
+              if (controller.signal.aborted || !trailNetwork || typeof trailNetwork !== "object" || !("type" in trailNetwork) || trailNetwork.type !== "FeatureCollection") return;
+              source?.setData(trailNetwork as FeatureCollection<LineString>);
+            })
+            .catch(() => undefined);
+        };
+        map?.on("moveend", refreshTrailNetwork);
+        refreshTrailNetwork();
         setMapReady(true);
       });
     });
     return () => {
       alive = false;
+      trailNetworkController?.abort();
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [display.center, display.zoom, packCoverage, packCoverageBbox, previewRoute]);
+  }, [display.center, display.zoom, packCoverage, packCoverageBbox, packId, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -832,13 +949,12 @@ export function HikeMap({
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
-      <p className="map-hint">
-        {drawing
-          ? "Draw a trailhead filter. It may extend beyond installed coverage."
-          : filterGeometry
-            ? "Highlighted areas filter trailheads, not route geometry. Routes remain inside installed coverage."
-          : "Choose an origin and region, or optionally draw a Quick-search boundary."}
-      </p>
+      {drawing || hoveredTrail ? <p className={`map-hint${hoveredTrail && !drawing ? " map-trail-label" : ""}`} role="status" aria-live="polite">
+        {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
+          {hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
+          <span>{hoveredTrail?.name}</span>
+        </>}
+      </p> : null}
     </section>
   );
 }

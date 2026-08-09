@@ -6,7 +6,7 @@ import { loadRoutePacks } from "@/lib/server/pack-registry";
 import { accessPointCanStartClosedRoute } from "@/lib/solver";
 import { accessPointIsWildEnough } from "@/lib/data/wilderness";
 
-const MAXIMUM_TRAIL_FEATURES = 10_000;
+const MAXIMUM_TRAIL_FEATURES = 30_000;
 
 function canonicalGeometry(coordinates: ReadonlyArray<readonly [number, number]>): string {
   const forward = JSON.stringify(coordinates);
@@ -30,6 +30,7 @@ export async function GET(
   }
   const includeUncertainAccess = url.searchParams.get("includeUncertainAccess") === "true";
   const includeTrails = url.searchParams.get("includeTrails") !== "false";
+  const includeAccessPoints = url.searchParams.get("includeAccessPoints") !== "false";
   const controller = new AbortController();
   const repository = await pack.loadRepository(controller.signal);
   try {
@@ -55,7 +56,7 @@ export async function GET(
       });
     }
     const [accessPoints, graph] = await Promise.all([
-      repository.getAccessPoints(parsedBounds.data, includeUncertainAccess),
+      includeAccessPoints ? repository.getAccessPoints(parsedBounds.data, includeUncertainAccess) : Promise.resolve([]),
       repository.getInducedGraph({
         bbox: parsedBounds.data,
         includeUncertainAccess: true,
@@ -75,6 +76,7 @@ export async function GET(
           properties: {
             id: edge.id,
             name: edge.trailName,
+            distanceMeters: edge.lengthMeters,
             role: "available-trail",
             accessState: edge.accessState,
             sourceIds: edge.sourceIds,
