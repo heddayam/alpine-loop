@@ -6,6 +6,7 @@ import {
   osmAccessState,
   osmFootDirection,
   osmPortalEvidenceKinds,
+  osmWayFlags,
 } from "./normalize";
 
 type OplNode = { id: string; lon: number; lat: number; tags: Record<string, string> };
@@ -143,12 +144,7 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
       bidirectional: direction === "both",
       edgeClass,
       sourceRefs: [sourceId],
-      flags: [
-        `osm-highway:${way.tags.highway}`,
-        ...(direction === "both" ? [] : [direction === "reverse" ? "oneway-reversed" : "oneway"]),
-        ...(way.tags.surface ? [`surface:${way.tags.surface}`] : []),
-        ...(way.tags.sac_scale ? [`sac-scale:${way.tags.sac_scale}`] : []),
-      ],
+      flags: osmWayFlags(way.tags, `way/${way.id}`, direction),
     });
   }
   if (ways.length === 0) throw new Error("OSM extraction produced no supported ways");

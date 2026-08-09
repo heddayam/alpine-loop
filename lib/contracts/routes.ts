@@ -117,6 +117,32 @@ export const elevationSampleSchema = z.object({
   elevationMeters: finiteNumberSchema,
 }).strict();
 
+export const trailSegmentConditionSchema = z.object({
+  highway: z.string().trim().min(1).optional(),
+  surface: z.string().trim().min(1).optional(),
+  smoothness: z.string().trim().min(1).optional(),
+  trailVisibility: z.string().trim().min(1).optional(),
+  sacScale: z.string().trim().min(1).optional(),
+  informal: z.boolean().optional(),
+  lifecycle: z.enum(["disused", "abandoned"]).optional(),
+}).strict();
+
+export const generatedTrailSegmentSchema = z.object({
+  id: z.string().min(1),
+  geometry: lineStringSchema,
+  name: z.string().trim().min(1).nullable(),
+  distanceMeters: finiteNumberSchema.positive(),
+  startDistanceMeters: finiteNumberSchema.nonnegative(),
+  endDistanceMeters: finiteNumberSchema.positive(),
+  accessState: accessStateSchema,
+  condition: trailSegmentConditionSchema,
+  sourceFeatureId: z.string().trim().min(1).optional(),
+  sourceIds: z.array(z.string().trim().min(1)).min(1),
+}).strict().refine(
+  ({ startDistanceMeters, endDistanceMeters }) => endDistanceMeters > startDistanceMeters,
+  { message: "Trail segment end distance must follow its start distance" },
+);
+
 const generatedClosedRouteBaseSchema = z.object({
   id: z.string().min(1),
   geometry: lineStringSchema,
@@ -129,6 +155,8 @@ const generatedClosedRouteBaseSchema = z.object({
   steepestSustainedGradePct: finiteNumberSchema.nonnegative(),
   gradeExperience: gradeExperienceMetricsSchema.optional(),
   trailNames: z.array(z.string().min(1)),
+  /** Optional while persisted jobs created before segment inspection remain readable. */
+  trailSegments: z.array(generatedTrailSegmentSchema).min(1).optional(),
   warnings: z.array(z.string()),
   source: z.object({
     freshness: isoDateSchema,
@@ -242,6 +270,8 @@ export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopology
 export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
 export type GradeExperienceConstraints = z.infer<typeof gradeExperienceConstraintsSchema>;
 export type GradeExperienceMetrics = z.infer<typeof gradeExperienceMetricsSchema>;
+export type TrailSegmentCondition = z.infer<typeof trailSegmentConditionSchema>;
+export type GeneratedTrailSegment = z.infer<typeof generatedTrailSegmentSchema>;
 export type GenerateClosedRoutesRequestV3 = z.infer<typeof generateClosedRoutesRequestV3Schema>;
 export type ClosedRouteTopologyV3 = z.infer<typeof closedRouteTopologyV3Schema>;
 export type GeneratedClosedRouteV3 = z.infer<typeof generatedClosedRouteV3Schema>;

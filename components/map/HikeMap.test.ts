@@ -6,6 +6,7 @@ import {
   HikeMap,
   routeFeaturePartitions,
   routeFeatures,
+  routeSegmentFeatures,
   routeTrailheadPins,
   showCoverageHatching,
 } from "./HikeMap";
@@ -31,6 +32,18 @@ function route(id: string, longitude: number): GeneratedClosedRouteV3 {
       connectorCount: 0,
     },
     trailNames: ["Fixture Trail"],
+    trailSegments: [{
+      id: `${id}:segment:1`,
+      geometry: { type: "LineString", coordinates: [[longitude, 37.15], [longitude + 0.01, 37.16]] },
+      name: "Fixture Trail",
+      distanceMeters: 500,
+      startDistanceMeters: 0,
+      endDistanceMeters: 500,
+      accessState: "public",
+      condition: { highway: "path", surface: "dirt" },
+      sourceFeatureId: "way/1",
+      sourceIds: ["fixture"],
+    }],
     warnings: [],
     source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] },
   };
@@ -66,6 +79,17 @@ describe("generated route map features", () => {
     expect(partitions.hovered.features.map(({ properties }) => properties?.id)).toEqual(["second"]);
     expect(partitions.selected.features[0]?.geometry).toEqual(routes[0]?.geometry);
     expect(partitions.hovered.features[0]?.geometry).toEqual(routes[1]?.geometry);
+  });
+
+  it("exposes only the selected route segments and isolates the focused segment", () => {
+    const routes = [route("first", -122.18), route("second", -122.16)];
+    const all = routeSegmentFeatures(routes, "second");
+    const focused = routeSegmentFeatures(routes, "second", "second:segment:1");
+
+    expect(all.features.map(({ properties }) => properties?.id)).toEqual(["second:segment:1"]);
+    expect(all.features[0]?.properties).toMatchObject({ routeId: "second", segmentNumber: 1, name: "Fixture Trail" });
+    expect(focused.features[0]?.geometry).toEqual(routes[1]?.trailSegments?.[0]?.geometry);
+    expect(routeSegmentFeatures(routes, "second", "missing").features).toEqual([]);
   });
 
   it("creates numbered trailhead pins and emphasizes the selected route pin", () => {
@@ -161,4 +185,3 @@ describe("generated route map features", () => {
     expect(markup).toContain('aria-label="OpenStreetMap attribution"');
   });
 });
-

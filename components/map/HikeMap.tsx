@@ -22,10 +22,14 @@ type HikeMapProps = {
   selectedAccessPointId?: string;
   routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
+  selectedSegmentId?: string;
+  hoveredSegmentId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
   onAccessPointSelect: (id: string) => void;
   onRouteSelect: (id: string) => void;
   onRouteHover?: (id?: string) => void;
+  onSegmentSelect?: (id: string) => void;
+  onSegmentHover?: (id?: string) => void;
 };
 
 /* One hue per meaning: orange is the selection and nothing else, green is
@@ -101,6 +105,29 @@ export function routeFeatures(routes: GeneratedClosedRouteV3[], selectedRouteId?
       },
       geometry: route.geometry,
     })),
+  };
+}
+
+export function routeSegmentFeatures(
+  routes: GeneratedClosedRouteV3[],
+  selectedRouteId?: string,
+  segmentId?: string,
+): FeatureCollection<LineString> {
+  const selectedRoute = routes.find((route) => route.id === selectedRouteId);
+  if (!selectedRoute) return EMPTY_LINES;
+  return {
+    type: "FeatureCollection",
+    features: (selectedRoute?.trailSegments ?? []).flatMap((segment, index) =>
+      segmentId && segment.id !== segmentId ? [] : [{
+        type: "Feature" as const,
+        properties: {
+          id: segment.id,
+          routeId: selectedRoute.id,
+          segmentNumber: index + 1,
+          name: segment.name ?? "Unnamed trail segment",
+        },
+        geometry: segment.geometry,
+      }]),
   };
 }
 
@@ -196,10 +223,14 @@ export function HikeMap({
   selectedAccessPointId,
   routes,
   selectedRouteId,
+  selectedSegmentId,
+  hoveredSegmentId,
   onBoundsChange,
   onAccessPointSelect,
   onRouteSelect,
   onRouteHover,
+  onSegmentSelect,
+  onSegmentHover,
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -208,6 +239,8 @@ export function HikeMap({
   const fittedRouteSetRef = useRef<string>(undefined);
   const onRouteHoverRef = useRef(onRouteHover);
   const onRouteSelectRef = useRef(onRouteSelect);
+  const onSegmentSelectRef = useRef(onSegmentSelect);
+  const onSegmentHoverRef = useRef(onSegmentHover);
   const onAccessPointSelectRef = useRef(onAccessPointSelect);
   const startRef = useRef<[number, number] | null>(null);
   const draftBoundsRef = useRef<Bounds | null>(null);
@@ -217,6 +250,8 @@ export function HikeMap({
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
+  const selectedSegmentIdRef = useRef(selectedSegmentId);
+  const hoveredSegmentIdRef = useRef(hoveredSegmentId);
   const filterGeometryRef = useRef(filterGeometry);
   const refinementGeometryRef = useRef(refinementGeometry);
   const [drawing, setDrawing] = useState(false);
@@ -236,7 +271,9 @@ export function HikeMap({
     onRouteHoverRef.current = onRouteHover;
     onRouteSelectRef.current = onRouteSelect;
     onAccessPointSelectRef.current = onAccessPointSelect;
-  }, [onAccessPointSelect, onRouteHover, onRouteSelect]);
+    onSegmentSelectRef.current = onSegmentSelect;
+    onSegmentHoverRef.current = onSegmentHover;
+  }, [onAccessPointSelect, onRouteHover, onRouteSelect, onSegmentHover, onSegmentSelect]);
 
   useEffect(() => {
     boundsRef.current = bounds;
@@ -256,7 +293,9 @@ export function HikeMap({
   useEffect(() => {
     routesRef.current = routes;
     selectedRouteIdRef.current = selectedRouteId;
-  }, [routes, selectedRouteId]);
+    selectedSegmentIdRef.current = selectedSegmentId;
+    hoveredSegmentIdRef.current = hoveredSegmentId;
+  }, [hoveredSegmentId, routes, selectedRouteId, selectedSegmentId]);
 
   useEffect(() => {
     filterGeometryRef.current = filterGeometry;
@@ -437,6 +476,18 @@ export function HikeMap({
           type: "geojson",
           data: EMPTY_LINES,
         });
+        map?.addSource("generated-route-segments-hit", {
+          type: "geojson",
+          data: routeSegmentFeatures(routesRef.current, selectedRouteIdRef.current),
+        });
+        map?.addSource("generated-route-segment-focus", {
+          type: "geojson",
+          data: routeSegmentFeatures(
+            routesRef.current,
+            selectedRouteIdRef.current,
+            hoveredSegmentIdRef.current ?? selectedSegmentIdRef.current ?? "__none__",
+          ),
+        });
         // Three states, one visual language: unselected routes are thin green,
         // the hovered route is the same green but heavier, and the selected
         // route is orange. Every state shares a white casing, so the only thing
@@ -484,10 +535,32 @@ export function HikeMap({
           paint: { "line-color": ROUTE_SELECTED, "line-width": zoomWidth(5) },
         });
         map?.addLayer({
+          id: "generated-route-segment-focus-casing",
+          type: "line",
+          source: "generated-route-segment-focus",
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": CASING, "line-width": zoomWidth(13), "line-opacity": 0.95 },
+        });
+        map?.addLayer({
+          id: "generated-route-segment-focus",
+          type: "line",
+          source: "generated-route-segment-focus",
+          layout: { "line-join": "round", "line-cap": "round" },
+          // Zero transition: hovering a segment is a pointer response, and
+          // MapLibre's default 300 ms colour cross-fade reads as lag.
+          paint: { "line-color": ROUTE_SELECTED, "line-color-transition": { duration: 0, delay: 0 }, "line-width": zoomWidth(8) },
+        });
+        map?.addLayer({
           id: "generated-route-hit-target",
           type: "line",
           source: "generated-routes-hit",
           paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
+        });
+        map?.addLayer({
+          id: "generated-route-segment-hit-target",
+          type: "line",
+          source: "generated-route-segments-hit",
+          paint: { "line-color": "#000000", "line-width": 18, "line-opacity": 0.01 },
         });
         const selectRoute = (event: MapLayerMouseEvent) => {
           const id = event.features?.[0]?.properties?.id;
@@ -503,6 +576,20 @@ export function HikeMap({
         map?.on("mouseleave", "generated-route-hit-target", () => {
           map?.getCanvas().style.removeProperty("cursor");
           previewRoute(undefined);
+        });
+        map?.on("click", "generated-route-segment-hit-target", (event) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (typeof id === "string") onSegmentSelectRef.current?.(id);
+        });
+        map?.on("mousemove", "generated-route-segment-hit-target", (event) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (typeof id !== "string") return;
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          onSegmentHoverRef.current?.(id);
+        });
+        map?.on("mouseleave", "generated-route-segment-hit-target", () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          onSegmentHoverRef.current?.(undefined);
         });
         // Clicking a cluster zooms to the level where it breaks apart.
         map?.on("click", "access-point-clusters", (event) => {
@@ -558,7 +645,19 @@ export function HikeMap({
     (map.getSource("generated-route-alternates") as GeoJSONSource | undefined)?.setData(partitions.alternates);
     (map.getSource("generated-route-selected") as GeoJSONSource | undefined)?.setData(partitions.selected);
     (map.getSource("generated-route-hover") as GeoJSONSource | undefined)?.setData(partitions.hovered);
-  }, [hoveredRouteId, mapReady, routes, selectedRouteId]);
+    (map.getSource("generated-route-segments-hit") as GeoJSONSource | undefined)?.setData(
+      routeSegmentFeatures(routes, selectedRouteId),
+    );
+    (map.getSource("generated-route-segment-focus") as GeoJSONSource | undefined)?.setData(
+      routeSegmentFeatures(routes, selectedRouteId, hoveredSegmentId ?? selectedSegmentId ?? "__none__"),
+    );
+    // The selected route is already orange, so an orange focus would only read
+    // as slightly fatter. Hover borrows the green the map gives every hovered
+    // route, which is also the colour the panel row picks up.
+    if (map.getLayer("generated-route-segment-focus")) {
+      map.setPaintProperty("generated-route-segment-focus", "line-color", hoveredSegmentId ? ROUTE_ALTERNATE : ROUTE_SELECTED);
+    }
+  }, [hoveredRouteId, hoveredSegmentId, mapReady, routes, selectedRouteId, selectedSegmentId]);
 
   // Numbered start pins are DOM markers rather than a symbol layer: the style
   // ships no glyph endpoint, so map-rendered text would never appear at all.

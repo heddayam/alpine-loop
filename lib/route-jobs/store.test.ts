@@ -115,7 +115,7 @@ describe("SQLiteRouteJobStore", () => {
     store.close();
   });
 
-  it("checkpoints results atomically and paginates exact matches before near misses", () => {
+  it("checkpoints results atomically and paginates exact matches before close matches", () => {
     const { store } = setup();
     const id = "00000000-0000-4000-8000-000000000002";
     store.create(id, request, resolved);

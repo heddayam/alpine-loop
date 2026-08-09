@@ -18,6 +18,10 @@ type ResultsPanelProps = {
   mobileVisible?: boolean;
   desktopVisible?: boolean;
   hoveredRouteId?: string;
+  selectedSegmentId?: string;
+  hoveredSegmentId?: string;
+  onSelectSegment?: (segmentId: string) => void;
+  onHoverSegment?: (segmentId?: string) => void;
   nearMissesOpen?: boolean;
   onToggleNearMisses?: (open: boolean) => void;
   pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
@@ -68,14 +72,32 @@ function topologySummary(route: GeneratedClosedRouteV3) {
   ].join(" · ");
 }
 
-function formatViolationValue(constraint: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"][number]["constraint"], value: number) {
-  if (constraint === "distance" || constraint === "shared-stem") return formatMiles(value);
-  if (constraint === "elevation-gain" || constraint === "maximum-elevation") return formatFeet(value);
-  return `${value.toFixed(1)}%`;
+function routeHeading(route: GeneratedClosedRouteV3) {
+  const longestNamedSegment = [...(route.trailSegments ?? [])]
+    .filter((segment): segment is typeof segment & { name: string } => Boolean(segment.name))
+    .sort((left, right) => right.distanceMeters - left.distanceMeters || left.name.localeCompare(right.name))[0];
+  return [route.startAccessPoint.name, longestNamedSegment?.name].filter(Boolean).join(" · ");
 }
 
 function trailheadCoordinates(route: GeneratedClosedRouteV3) {
   return `${route.startAccessPoint.lat.toFixed(5)}, ${route.startAccessPoint.lon.toFixed(5)}`;
+}
+
+function segmentConditionSearch(
+  segment: NonNullable<GeneratedClosedRouteV3["trailSegments"]>[number],
+) {
+  const [lon, lat] = segment.geometry.coordinates[0] ?? [];
+  const query = segment.name
+    ? `${segment.name} conditions`
+    : typeof lon === "number" && typeof lat === "number"
+      ? `trail conditions near ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+      : "trail conditions";
+  return {
+    href: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    label: segment.name
+      ? `Search Google for ${segment.name} conditions`
+      : "Search Google for conditions near this unnamed trail segment",
+  };
 }
 
 function ElevationProfile({ route }: { route: GeneratedClosedRouteV3 }) {
@@ -117,24 +139,44 @@ function RouteCard({
   selected,
   hovered,
   buttonRef,
+  segmentButtonRef,
   onSelect,
+  selectedSegmentId,
+  hoveredSegmentId,
+  onSelectSegment,
+  onHoverSegment,
 }: {
   route: GeneratedClosedRouteV3 & { violations?: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"] };
   routeNumber: number;
   selected: boolean;
   hovered: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
+  segmentButtonRef: (segmentId: string, node: HTMLButtonElement | null) => void;
   onSelect: () => void;
+  selectedSegmentId?: string;
+  hoveredSegmentId?: string;
+  onSelectSegment?: (segmentId: string) => void;
+  onHoverSegment?: (segmentId?: string) => void;
 }) {
   const detailId = `route-detail-${route.id}`;
   const coordinates = trailheadCoordinates(route);
+  const heading = routeHeading(route);
+  const violated = new Set(route.violations?.map(({ constraint }) => constraint) ?? []);
+  const gradeViolated = [
+    "steepest-sustained-grade",
+    "climb-p90-grade",
+    "steep-climbing-share",
+    "longest-steep-climb",
+    "descent-p90-grade",
+  ].some((constraint) => violated.has(constraint as GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"][number]["constraint"]));
+  const warningClass = (active: boolean) => active ? "near-match-stat" : undefined;
   const copyCoordinates = () => {
     void navigator.clipboard?.writeText(coordinates).catch(() => undefined);
   };
   return (
     <article
       className={["route-card", selected ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
-      aria-labelledby={`route-trails-${route.id} route-${route.id}`}
+      aria-labelledby={`route-heading-${route.id} route-${route.id}`}
       onMouseEnter={() => announceRoutePreview(route.id)}
       onMouseLeave={() => announceRoutePreview()}
       onFocusCapture={() => announceRoutePreview(route.id)}
@@ -153,23 +195,23 @@ function RouteCard({
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
         <span className="route-summary-main">
-          <strong id={`route-trails-${route.id}`}>{route.trailNames.length > 0 ? route.trailNames.join(" · ") : "Unnamed trail route"}</strong>
+          <strong id={`route-heading-${route.id}`}>{heading}</strong>
           <small id={`route-${route.id}`}>{topologySummary(route)}</small>
         </span>
         <span className="route-summary-metrics">
-          <span title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
-          <span title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
+          <span className={warningClass(violated.has("distance"))} title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
+          <span className={warningClass(violated.has("elevation-gain"))} title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
           {route.gradeExperience ? (
-            <span className="route-grade-metrics" title={`90% of uphill 100 m sections are ${route.gradeExperience.climbP90Pct.toFixed(0)}% grade or less · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of uphill distance is at least ${route.gradeExperience.steepThresholdPct}% grade · longest uninterrupted steep section ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · downhill p90 ${route.gradeExperience.descentP90Pct.toFixed(0)}%`}>
+            <span className={["route-grade-metrics", warningClass(gradeViolated)].filter(Boolean).join(" ")} title={`90% of uphill 100 m sections are ${route.gradeExperience.climbP90Pct.toFixed(0)}% grade or less · ${route.gradeExperience.steepClimbingSharePct.toFixed(0)}% of uphill distance is at least ${route.gradeExperience.steepThresholdPct}% grade · longest uninterrupted steep section ${(route.gradeExperience.longestSteepClimbMeters / 1609.344).toFixed(1)} mi · downhill p90 ${route.gradeExperience.descentP90Pct.toFixed(0)}%`}>
               <span>↑P90 <strong>{route.gradeExperience.climbP90Pct.toFixed(0)}%</strong></span>
               <span>≥{route.gradeExperience.steepThresholdPct}% <strong>{route.gradeExperience.steepClimbingSharePct.toFixed(0)}%</strong></span>
             </span>
-          ) : <span title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
+          ) : <span className={warningClass(gradeViolated)} title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
         </span>
       </button>
 
       {selected ? (
-        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-trails-${route.id} route-${route.id}`}>
+        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-heading-${route.id} route-${route.id}`}>
           <ElevationProfile route={route} />
           <button
             type="button"
@@ -182,27 +224,74 @@ function RouteCard({
             <code>{coordinates}</code>
           </button>
 
+          {route.trailSegments?.length ? (
+            <section className="trail-segment-inspector" aria-labelledby={`trail-segments-${route.id}`}>
+              <p className="trail-segment-heading">
+                <strong id={`trail-segments-${route.id}`}>Trail segments</strong>
+                <span aria-hidden="true">{route.trailSegments.length}</span>
+              </p>
+              <ol className="trail-segment-list">
+                {route.trailSegments.map((segment) => {
+                  const search = segmentConditionSearch(segment);
+                  const active = segment.id === selectedSegmentId;
+                  const hovered = segment.id === hoveredSegmentId;
+                  return (
+                    <li key={segment.id}>
+                      <button
+                        ref={(node) => segmentButtonRef(segment.id, node)}
+                        type="button"
+                        className={["trail-segment-row", active ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
+                        aria-pressed={active}
+                        onClick={() => onSelectSegment?.(segment.id)}
+                        onMouseEnter={() => onHoverSegment?.(segment.id)}
+                        onMouseLeave={() => onHoverSegment?.(undefined)}
+                        onFocus={() => onHoverSegment?.(segment.id)}
+                        onBlur={() => onHoverSegment?.(undefined)}
+                      >
+                        {/* Length leads the row: it is the only number that
+                            distinguishes one segment from the next, and the
+                            list order already carries the sequence. */}
+                        <span className="trail-segment-distance">{formatMiles(segment.distanceMeters)}</span>
+                        <span className={["trail-segment-name", segment.name ? "" : "unnamed"].filter(Boolean).join(" ")}>
+                          {segment.name ?? "Unnamed trail"}
+                        </span>
+                      </button>
+                      <a
+                        className="trail-segment-search"
+                        href={search.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={search.label}
+                        title="Search trail conditions"
+                        onMouseEnter={() => onHoverSegment?.(segment.id)}
+                        onMouseLeave={() => onHoverSegment?.(undefined)}
+                        onFocus={() => onHoverSegment?.(segment.id)}
+                        onBlur={() => onHoverSegment?.(undefined)}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <circle cx="6.75" cy="6.75" r="4.25" />
+                          <path d="m10 10 3.5 3.5" />
+                        </svg>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ) : null}
+
           <details className="route-secondary">
             <summary>
               <span>Route details</span>
               <small>Terrain, access &amp; data</small>
             </summary>
             <div className="route-secondary-content">
-              <p className="route-endpoints"><span>{route.startAccessPoint.name}</span><span aria-hidden="true">↻</span><span>same trailhead</span></p>
-
-              {route.violations?.length ? (
-                <div className="violation-list" aria-label="Near-miss constraints">
-                  <strong>Outside requested constraints</strong>
-                  <ul>{route.violations.map((violation) => <li key={violation.constraint}>{violation.constraint.replaceAll("-", " ")}: {formatViolationValue(violation.constraint, violation.value)} (requested {formatViolationValue(violation.constraint, violation.min)}–{formatViolationValue(violation.constraint, violation.max)})</li>)}</ul>
-                </div>
-              ) : null}
-
               <dl className="route-secondary-metrics">
                 <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
                 <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
-                <div><dt>High point</dt><dd>{formatFeet(route.maximumElevationMeters)}</dd></div>
-                <div><dt>Repeated trail</dt><dd>{Math.round(route.topology.repeatedTrailFraction * 100)}%</dd></div>
-                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared approach</dt><dd>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
+                <div><dt>High point</dt><dd className={warningClass(violated.has("maximum-elevation"))}>{formatFeet(route.maximumElevationMeters)}</dd></div>
+                <div><dt>Repeated trail</dt><dd className={warningClass(violated.has("repeated-trail"))}>{Math.round(route.topology.repeatedTrailFraction * 100)}%</dd></div>
+                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared approach</dt><dd className={warningClass(violated.has("shared-stem"))}>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
                 <div><dt>Cycle blocks</dt><dd>{route.topology.cycleBlockCount.toLocaleString("en-US")}</dd></div>
               </dl>
 
@@ -228,11 +317,16 @@ export function ResultsPanel({
   mobileVisible = true,
   desktopVisible = true,
   hoveredRouteId,
+  selectedSegmentId,
+  hoveredSegmentId,
+  onSelectSegment,
+  onHoverSegment,
   nearMissesOpen = false,
   onToggleNearMisses,
   pagination,
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const segmentRefs = useRef(new Map<string, HTMLButtonElement>());
   const panelClassName = [
     "results-panel",
     mobileVisible ? "" : "mobile-panel-hidden",
@@ -251,6 +345,14 @@ export function ResultsPanel({
     if (index < 0) return;
     cardRefs.current[index]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [hoveredRouteId, routes]);
+
+  useEffect(() => {
+    if (!hoveredSegmentId) return;
+    const segment = segmentRefs.current.get(hoveredSegmentId);
+    if (typeof segment?.scrollIntoView === "function") {
+      segment.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [hoveredSegmentId]);
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || routes.length === 0) return;
@@ -318,7 +420,7 @@ export function ResultsPanel({
             ? "The effort limit stopped the search early."
             : response.diagnostics.exhausted
               ? "The search was exhausted before finding enough exact matches."
-              : "Fewer exact matches than requested."} Near misses are listed separately.</span>
+              : "Fewer exact matches than requested."} Close matches are listed separately.</span>
         </div>
       ) : null}
 
@@ -342,16 +444,24 @@ export function ResultsPanel({
                 selected={route.id === selectedRouteId}
                 hovered={route.id === hoveredRouteId}
                 buttonRef={(node) => { cardRefs.current[index] = node; }}
+                segmentButtonRef={(segmentId, node) => {
+                  if (node) segmentRefs.current.set(segmentId, node);
+                  else segmentRefs.current.delete(segmentId);
+                }}
                 onSelect={() => onSelectRoute(route.id)}
+                selectedSegmentId={selectedSegmentId}
+                hoveredSegmentId={hoveredSegmentId}
+                onSelectSegment={onSelectSegment}
+                onHoverSegment={onHoverSegment}
               />
             ))}
           </section>
 
           {response.nearMisses.length > 0 ? (
-            /* Near misses stay folded away while there are exact matches to
+            /* Close matches stay folded away while there are exact matches to
                read; with none, they are the only thing left to look at. */
             <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => onToggleNearMisses?.(event.currentTarget.open)}>
-              <summary className="result-section-heading"><h3 id="near-results-title">Near misses</h3><span>{response.nearMisses.length}</span></summary>
+              <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{response.nearMisses.length}</span></summary>
               {response.nearMisses.map((route, index) => (
                 <RouteCard
                   key={route.id}
@@ -360,7 +470,15 @@ export function ResultsPanel({
                   selected={route.id === selectedRouteId}
                   hovered={route.id === hoveredRouteId}
                   buttonRef={(node) => { cardRefs.current[response.exact.length + index] = node; }}
+                  segmentButtonRef={(segmentId, node) => {
+                    if (node) segmentRefs.current.set(segmentId, node);
+                    else segmentRefs.current.delete(segmentId);
+                  }}
                   onSelect={() => onSelectRoute(route.id)}
+                  selectedSegmentId={selectedSegmentId}
+                  hoveredSegmentId={hoveredSegmentId}
+                  onSelectSegment={onSelectSegment}
+                  onHoverSegment={onHoverSegment}
                 />
               ))}
             </details>

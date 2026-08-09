@@ -199,7 +199,7 @@ export function JobsModal({
                 <dl>
                   <div><dt>Trailheads</dt><dd>{progress.processedAccessPointCount}/{progress.eligibleAccessPointCount || "—"}</dd></div>
                   <div><dt>Exact</dt><dd>{progress.exactRouteCount}</dd></div>
-                  <div><dt>Near miss</dt><dd>{progress.nearMissRouteCount}</dd></div>
+                  <div><dt>Close matches</dt><dd>{progress.nearMissRouteCount}</dd></div>
                   <div><dt>Truncated</dt><dd>{progress.truncatedAccessPointCount}</dd></div>
                   <div><dt>Elapsed</dt><dd>{elapsed(displayedElapsed(job, now, refreshedAt))}</dd></div>
                 </dl>

@@ -30,6 +30,29 @@ function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosed
       connectorCount: 0,
     },
     trailNames: ["Ridge Trail", "Charcoal Road"],
+    trailSegments: [{
+      id: "exact-loop:segment:1",
+      geometry: { type: "LineString", coordinates: [[-122.18, 37.15], [-122.16, 37.17]] },
+      name: "Ridge Trail",
+      distanceMeters: 965.6064,
+      startDistanceMeters: 0,
+      endDistanceMeters: 965.6064,
+      accessState: "public",
+      condition: { highway: "path", surface: "dirt", trailVisibility: "good" },
+      sourceFeatureId: "way/101",
+      sourceIds: ["osm"],
+    }, {
+      id: "exact-loop:segment:2",
+      geometry: { type: "LineString", coordinates: [[-122.16, 37.17], [-122.18, 37.15]] },
+      name: null,
+      distanceMeters: 7081.1136,
+      startDistanceMeters: 965.6064,
+      endDistanceMeters: 8046.72,
+      accessState: "unknown",
+      condition: { highway: "path" },
+      sourceFeatureId: "way/102",
+      sourceIds: ["osm"],
+    }],
     warnings: [],
     source: { freshness: "2026-07-15T00:00:00Z", confidence: "high", sourceIds: ["osm", "midpen"] },
     elevationSamples: [
@@ -118,11 +141,11 @@ function ControlledResultsPanel() {
 describe("ResultsPanel V3", () => {
   afterEach(cleanup);
 
-  it("separates exact matches from labeled near misses and renders closed topology", () => {
+  it("separates exact matches from labeled close matches and renders closed topology", () => {
     const { rerender } = render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
 
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Near misses" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
     const exactSummary = screen.getByRole("button", { name: /Simple loop/ });
     const nearSummary = screen.getByRole("button", { name: /Lollipop/ });
     expect(exactSummary).toHaveAttribute("aria-expanded", "true");
@@ -132,15 +155,16 @@ describe("ResultsPanel V3", () => {
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
     rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
-    (screen.getByText("Near misses").closest("details") as HTMLDetailsElement).open = true;
-    const detail = screen.getByRole("region", { name: /Skyline Trail.*Lollipop/ });
+    (screen.getByText("Close matches").closest("details") as HTMLDetailsElement).open = true;
+    const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail.*Lollipop/ });
     fireEvent.click(within(detail).getByText("Route details"));
     expect(within(detail).getByText("Repeated trail")).toBeVisible();
     expect(within(detail).getByText("25%")).toBeVisible();
     expect(within(detail).getByText("Shared approach")).toBeVisible();
     expect(within(detail).getByText("0.2 mi")).toBeVisible();
-    expect(within(detail).getByText(/distance: 2.0 mi/)).toBeVisible();
-    expect(within(detail).getByText("same trailhead")).toBeVisible();
+    expect(within(nearSummary).getByTitle("Distance")).toHaveClass("near-match-stat");
+    expect(within(detail).queryByText(/Outside requested constraints/)).not.toBeInTheDocument();
+    expect(within(detail).queryByText("same trailhead")).not.toBeInTheDocument();
   });
 
   it("synchronizes expanded selection and keyboard focus", () => {
@@ -154,12 +178,94 @@ describe("ResultsPanel V3", () => {
     expect(screen.getByRole("button", { name: /Simple loop/ })).toHaveFocus();
   });
 
+  it("marks only violated close-match metrics in orange without a warning block", () => {
+    const closeMatch = {
+      ...route({
+        id: "close-metrics",
+        gradeExperience: { climbP90Pct: 16, steepClimbingSharePct: 30, longestSteepClimbMeters: 400, descentP90Pct: 17, windowMeters: 100 as const, steepThresholdPct: 10 as const },
+        topology: {
+          kind: "lollipop" as const,
+          cycleCount: 1,
+          cycleBlockCount: 1,
+          repeatedTrailDistanceMeters: 1600,
+          repeatedTrailFraction: 0.2,
+          sharedStemDistanceMeters: 800,
+          connectorCount: 1,
+        },
+      }),
+      violations: [
+        { constraint: "elevation-gain" as const, value: 365, min: 0, max: 300, delta: 65, normalizedDelta: 0.2 },
+        { constraint: "maximum-elevation" as const, value: 792, min: 0, max: 700, delta: 92, normalizedDelta: 0.1 },
+        { constraint: "climb-p90-grade" as const, value: 16, min: 0, max: 12, delta: 4, normalizedDelta: 0.3 },
+        { constraint: "repeated-trail" as const, value: 20, min: 0, max: 15, delta: 5, normalizedDelta: 0.3 },
+        { constraint: "shared-stem" as const, value: 800, min: 0, max: 400, delta: 400, normalizedDelta: 1 },
+      ],
+    };
+    render(<ResultsPanel
+      status="done"
+      response={response({ exact: [], nearMisses: [closeMatch] })}
+      selectedRouteId="close-metrics"
+      nearMissesOpen
+      onSelectRoute={() => undefined}
+    />);
+
+    const summary = screen.getByRole("button", { name: /Lollipop/ });
+    expect(within(summary).getByTitle("Elevation gain")).toHaveClass("near-match-stat");
+    expect(within(summary).getByTitle("Distance")).not.toHaveClass("near-match-stat");
+    expect(within(summary).getByTitle(/90% of uphill/)).toHaveClass("near-match-stat");
+    fireEvent.click(screen.getByText("Route details"));
+    expect(screen.getByText("High point").nextElementSibling).toHaveClass("near-match-stat");
+    expect(screen.getByText("Repeated trail").nextElementSibling).toHaveClass("near-match-stat");
+    expect(screen.getByText("Shared approach").nextElementSibling).toHaveClass("near-match-stat");
+    expect(screen.queryByText(/Outside requested constraints/)).not.toBeInTheDocument();
+  });
+
   it("shows and copies trailhead coordinates", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
+  });
+
+  it("synchronizes segment hover and selection with the map-facing callbacks", async () => {
+    const onHoverSegment = vi.fn();
+    const onSelectSegment = vi.fn();
+    const { rerender } = render(<ResultsPanel
+      status="done"
+      response={response()}
+      selectedRouteId="exact-loop"
+      onSelectRoute={() => undefined}
+      onHoverSegment={onHoverSegment}
+      onSelectSegment={onSelectSegment}
+    />);
+    const ridge = screen.getByRole("button", { name: /0.6 mi.*Ridge Trail/i });
+    const namedSearch = screen.getByRole("link", { name: "Search Google for Ridge Trail conditions" });
+    const unnamedSearch = screen.getByRole("link", { name: "Search Google for conditions near this unnamed trail segment" });
+    expect(screen.queryByText("dirt")).not.toBeInTheDocument();
+    expect(screen.queryByText("Untagged")).not.toBeInTheDocument();
+    expect(namedSearch).toHaveAttribute("href", "https://www.google.com/search?q=Ridge%20Trail%20conditions");
+    expect(namedSearch).toHaveAttribute("target", "_blank");
+    expect(namedSearch).toHaveAttribute("rel", "noopener noreferrer");
+    expect(unnamedSearch).toHaveAttribute("href", "https://www.google.com/search?q=trail%20conditions%20near%2037.17000%2C%20-122.16000");
+
+    await userEvent.hover(ridge);
+    expect(onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:1");
+    await userEvent.click(ridge);
+    expect(onSelectSegment).toHaveBeenCalledWith("exact-loop:segment:1");
+    namedSearch.focus();
+    expect(onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:1");
+
+    rerender(<ResultsPanel
+      status="done"
+      response={response()}
+      selectedRouteId="exact-loop"
+      hoveredSegmentId="exact-loop:segment:1"
+      onSelectRoute={() => undefined}
+      onHoverSegment={onHoverSegment}
+      onSelectSegment={onSelectSegment}
+    />);
+    expect(screen.getByRole("button", { name: /0.6 mi.*Ridge Trail/i })).toHaveClass("hovered");
   });
 
   it("explains grade experience with whole-number percentages", () => {
@@ -204,6 +310,7 @@ describe("ResultsPanel V3", () => {
     />);
     expect(screen.getByText("0 of 10 requested exact routes found.")).toBeVisible();
     expect(screen.getByText(/effort limit stopped the search early/)).toBeVisible();
+    expect(screen.getByText(/Close matches are listed separately/)).toBeVisible();
     await userEvent.click(screen.getByText("Search diagnostics"));
     const diagnostics = screen.getByText("Search diagnostics").closest("details") as HTMLElement;
     expect(within(diagnostics).getByText(/Hard search limits:/).closest("p")).toHaveTextContent("deadline");

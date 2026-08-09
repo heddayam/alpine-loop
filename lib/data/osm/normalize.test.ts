@@ -16,8 +16,38 @@ describe("OSM hiking topology normalization", () => {
     expect(topology.ways[1]).toMatchObject({ accessState: "private", bidirectional: false });
     expect(topology.ways[1].coordinates[0]).toEqual([-122.17, 37.19]);
     expect(topology.ways.map(({ edgeClass }) => edgeClass)).toEqual(["trail", "trail", "street"]);
+    expect(topology.ways[0].flags).toEqual(expect.arrayContaining([
+      "osm-feature:way/101", "osm-highway:path", "surface:dirt",
+    ]));
     expect(topology.portalEvidence?.map(({ accessState }) => accessState)).toEqual(["public", "unknown"]);
     expect(new Set(topology.nodes.map(({ id }) => id)).size).toBe(topology.nodes.length);
+  });
+
+  it("preserves observed condition tags without interpreting maintenance", () => {
+    const topology = normalizeOsmFeatures([{
+      type: "Feature",
+      id: "way/condition",
+      properties: {
+        "@id": "way/condition",
+        highway: "path",
+        smoothness: "very_bad",
+        trail_visibility: "bad",
+        sac_scale: "mountain_hiking",
+        informal: "yes",
+        disused: "yes",
+      },
+      geometry: { type: "LineString", coordinates: [[-122.2, 37.2], [-122.19, 37.2]] },
+    }], "osm-fixture");
+
+    expect(topology.ways[0].flags).toEqual([
+      "osm-feature:way/condition",
+      "osm-highway:path",
+      "smoothness:very_bad",
+      "trail-visibility:bad",
+      "sac-scale:mountain_hiking",
+      "informal:yes",
+      "disused:yes",
+    ]);
   });
 
   it("defaults ambiguous access to unknown and retains explicit restrictions", () => {

@@ -14,7 +14,7 @@
 
 The pack is a route generator, not a catalog of established hikes. Unknown
 access remains included by default and may be disabled explicitly. Exact
-matches and clearly labeled near misses stay separate.
+matches and clearly labeled close matches stay separate.
 
 ## Included and excluded systems
 
@@ -112,9 +112,9 @@ the permit-dependent Hitchcock Canyon entrance at Kahn Ranch, Piney Woods at
 Point Lobos, and official gate 8 at Garrapata.
 Each scenario contains a plausible distance/elevation request intended to
 produce at least one exact closed route and a deliberately impossible 1–2 mile
-/ 8,000–9,000 foot request that must remain near-miss-only. The final Thorough
+/ 8,000–9,000 foot request that must return close matches only. The final Thorough
 checkpoint passed all six scenarios with 28 exact routes, an explicitly labeled
-near miss for every impossible request, and zero directed-validation
+close match for every impossible request, and zero directed-validation
 rejections. Garrapata's honest exact range is 1–3 miles because the current
 Rocky Ridge closure removes the longer ridge loop from eligible topology.
 

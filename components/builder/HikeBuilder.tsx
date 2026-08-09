@@ -163,6 +163,8 @@ export function HikeBuilder({
   const [generationMessage, setGenerationMessage] = useState("");
   const [generationResponse, setGenerationResponse] = useState<GenerateClosedRoutesResponseV3 | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string>();
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string>();
   const [batchPage, setBatchPage] = useState<RouteJobResultsPage>();
   const [batchPageLoading, setBatchPageLoading] = useState(false);
   const [jobs, setJobs] = useState<RouteJob[]>([]);
@@ -273,6 +275,14 @@ export function HikeBuilder({
     setGenerationResponse(null);
     setBatchPage(undefined);
     setSelectedRouteId(undefined);
+    setSelectedSegmentId(undefined);
+    setHoveredSegmentId(undefined);
+  }, []);
+
+  const selectRoute = useCallback((routeId: string) => {
+    setSelectedRouteId(routeId);
+    setSelectedSegmentId(undefined);
+    setHoveredSegmentId(undefined);
   }, []);
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
@@ -454,6 +464,8 @@ export function HikeBuilder({
     setGenerationMessage(drawnBounds ? "Running Quick search inside the drawn boundary…" : "Resolving the drive-time area for Quick search…");
     setGenerationResponse(null);
     setSelectedRouteId(undefined);
+    setSelectedSegmentId(undefined);
+    setHoveredSegmentId(undefined);
     try {
       let accessFilter: AccessFilterV2;
       if (drawnBounds) {
@@ -492,7 +504,9 @@ export function HikeBuilder({
       if (generationControllerRef.current !== controller) return;
       setGenerationResponse(parsed);
       setSelectedRouteId((parsed.exact[0] ?? parsed.nearMisses[0])?.id);
-      setGenerationMessage(parsed.exact.length ? `${parsed.exact.length} exact ${parsed.exact.length === 1 ? "route" : "routes"} ready.` : `No exact matches. ${parsed.nearMisses.length} near ${parsed.nearMisses.length === 1 ? "match" : "matches"} available.`);
+      setSelectedSegmentId(undefined);
+      setHoveredSegmentId(undefined);
+      setGenerationMessage(parsed.exact.length ? `${parsed.exact.length} exact ${parsed.exact.length === 1 ? "route" : "routes"} ready.` : `No exact matches. ${parsed.nearMisses.length} close ${parsed.nearMisses.length === 1 ? "match" : "matches"} available.`);
       setGenerationState("done");
       setMobilePanel("results");
     } catch (error) {
@@ -558,6 +572,8 @@ export function HikeBuilder({
     setGenerationState("done");
     setGenerationMessage(`${page.results.length} saved routes loaded${page.nextCursor ? "; more are available" : ""}.`);
     setSelectedRouteId((response.exact[0] ?? response.nearMisses[0])?.id);
+    setSelectedSegmentId(undefined);
+    setHoveredSegmentId(undefined);
     setJobsOpen(false);
     setMobilePanel("results");
     if (page.job.filterGeometry) {
@@ -661,11 +677,11 @@ export function HikeBuilder({
     jobsRefreshControllerRef.current?.abort();
   }, []);
 
-  // Near misses open themselves only when there is nothing exact to read.
+  // Close matches open themselves only when there is nothing exact to read.
   useEffect(() => { setNearMissesOpen((generationResponse?.exact.length ?? 0) === 0); }, [generationResponse]);
 
   const generatedRoutes = useMemo(() => generationResponse ? [...generationResponse.exact, ...generationResponse.nearMisses] : [], [generationResponse]);
-  // Collapsing the near-miss list also takes those traces off the map, so the
+  // Collapsing the close-match list also takes those traces off the map, so the
   // map never shows more than the list claims to. Exact matches come first,
   // so trimming the tail keeps every remaining result number correct.
   const mappedRoutes = useMemo(() => {
@@ -680,6 +696,8 @@ export function HikeBuilder({
       const exact = generationResponse?.exact ?? [];
       return current && exact.some(({ id }) => id === current) ? current : exact[0]?.id;
     });
+    setSelectedSegmentId(undefined);
+    setHoveredSegmentId(undefined);
   }, [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
   const selectedRegion = driveDraft.searchRegions.find(({ id }) => id === driveDraft.searchRegionId);
@@ -844,9 +862,9 @@ export function HikeBuilder({
           </footer>
         </aside>
 
-        <HikeMap drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={setSelectedRouteId} onRouteHover={setHoveredRouteId} />
+        <HikeMap drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
 
-        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={setSelectedRouteId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
 
         {hasResultsPanel ? (
           <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>

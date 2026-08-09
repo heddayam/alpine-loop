@@ -3,6 +3,7 @@ import {
   DRIVE_TIME_DURATIONS_MINUTES,
   generateClosedRoutesRequestV3Schema,
   generateClosedRoutesResponseV3Schema,
+  generatedTrailSegmentSchema,
 } from "./routes";
 
 describe("drive-time durations", () => {
@@ -84,5 +85,24 @@ describe("GenerateClosedRoutesRequestV3", () => {
       diagnostics: {},
     };
     expect(generateClosedRoutesResponseV3Schema.safeParse(response).success).toBe(false);
+  });
+});
+
+describe("generated trail segments", () => {
+  it("accepts explicit observations and rejects reversed distance ranges", () => {
+    const segment = {
+      id: "route:segment:1",
+      geometry: { type: "LineString" as const, coordinates: [[-122.2, 37.2], [-122.19, 37.2]] },
+      name: null,
+      distanceMeters: 100,
+      startDistanceMeters: 0,
+      endDistanceMeters: 100,
+      accessState: "unknown" as const,
+      condition: { highway: "path", trailVisibility: "bad", informal: true },
+      sourceFeatureId: "way/10",
+      sourceIds: ["osm"],
+    };
+    expect(generatedTrailSegmentSchema.parse(segment)).toEqual(segment);
+    expect(generatedTrailSegmentSchema.safeParse({ ...segment, endDistanceMeters: 0 }).success).toBe(false);
   });
 });

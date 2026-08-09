@@ -18,6 +18,17 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await expect.poll(() => harness.generationRequests.length).toBe(1);
   expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.183, 37.155, -122.14, 37.178] } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  const firstCard = page.locator(".route-card").first();
+  await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1.*Simple loop/ })).toBeVisible();
+  await expect(firstCard.getByText("Trail segments", { exact: true })).toBeVisible();
+  const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
+  await firstSegment.hover();
+  await expect(firstSegment).toHaveClass(/hovered/);
+  await firstSegment.click();
+  await expect(firstSegment).toHaveAttribute("aria-pressed", "true");
+  const conditionSearch = firstCard.getByRole("link", { name: "Search Google for Canyon Trail 1 conditions" });
+  await expect(conditionSearch).toHaveAttribute("href", "https://www.google.com/search?q=Canyon%20Trail%201%20conditions");
+  await expect(conditionSearch).toHaveAttribute("target", "_blank");
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Quick-search routes")).toHaveValue("10");

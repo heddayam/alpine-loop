@@ -21,7 +21,8 @@ configured once. Two buttons at the bottom choose execution only:
 
 Generated routes start and finish at one trailhead and contain a physical-trail
 cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
-result labels. Exact matches and explicitly labeled near misses remain separate.
+result labels. Exact matches and explicitly labeled close matches remain separate
+(`nearMisses` remains the compatibility name in stored/API contracts).
 
 Regional growth follows the catalog, activation rules, boundaries, and
 repeatable approval process in the [regional expansion roadmap](regional-expansion-plan.md).
@@ -39,7 +40,7 @@ catalog-linked, valid installed pack is selectable.
   selector.
 - The map shows pack coverage, active filter geometry, eligible access points,
   and only the currently loaded result page.
-- The results panel compares exact routes first, then near misses, with topology,
+- The results panel compares exact routes first, then close matches, with topology,
   metrics, warnings, source confidence, and elevation profiles.
 - The Jobs modal lists queued, resolving, running, completed, cancelled, failed,
   and deleting jobs. Users can cancel, retain/view partial results, and delete
@@ -48,7 +49,7 @@ catalog-linked, valid installed pack is selectable.
 
 Quick search is explicit, cancellable, and always uses the Quick server budget.
 Batch search has no explicit-start control. It retains up to ten diverse exact
-routes per trailhead, or the single best labeled near miss when that trailhead
+routes per trailhead, or the single best labeled close match when that trailhead
 has no exact result.
 
 ## Active contracts and storage
@@ -122,7 +123,7 @@ failures remain visible in job diagnostics.
   responses, duplicate launches are blocked, and interruption during a pending
   cancellation recovers as a terminal cancellation rather than a stranded job.
 - Every eligible batch trailhead is attempted once, with at most ten exact routes
-  or one otherwise-empty near miss retained.
+  or one otherwise-empty close match retained.
 - Pagination, stale pack labeling, map restoration, responsive layout, keyboard
   focus, and screen-reader progress announcements pass browser coverage.
 - A real schema-5 Santa Cruz pack rebuild/audit and the complete verify/browser

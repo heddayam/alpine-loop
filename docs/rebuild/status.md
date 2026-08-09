@@ -9,7 +9,7 @@ the evidence line.
 - [x] Gate 1 — map shell, pack pipeline skeleton, solver foundation
   - Evidence: `npm run verify` passes with 57 offline tests across 11 files and a successful Next.js production build; focused compiler/solver/UI suites pass; live local browser check loaded USGS MapLibre, drew/edited/cleared a hard rectangle, and loaded the in-bound fixture access point. Fixture bootstrap smoke build publishes 7 nodes, 17 directed edges, 2 access points, manifest, audit, and SQLite pack atomically.
 - [x] Gate 2 — end-to-end route generation on committed fixtures
-  - Evidence: `npm run verify` passes with 95 deterministic offline tests across 15 files and a successful production build; `npm run test:browser` passes 2 Chromium flows (draw/configure/generate/inspect and impossible constraints with labeled near misses) using an in-memory tile fixture; direct local API smoke returned 3 exact routes in 31 ms with validated geometry, metrics, warnings, provenance, and diagnostics.
+  - Evidence: `npm run verify` passes with 95 deterministic offline tests across 15 files and a successful production build; `npm run test:browser` passes 2 Chromium flows (draw/configure/generate/inspect and impossible constraints with labeled close matches) using an in-memory tile fixture; direct local API smoke returned 3 exact routes in 31 ms with validated geometry, metrics, warnings, provenance, and diagnostics.
 - [x] Gate 3 — Santa Cruz Mountains pack and full local UX
   - Evidence: the reproducible schema-1 pack `scm-561dc87c0f4a6bed`
     contained 430,766 nodes, 875,166 directed edges, 3,215 access points,
@@ -114,7 +114,7 @@ the evidence line.
     and SQLite SHA-256
     `d814b48b3d841ceb124bca70e9fab47799381801cc7752dd0e258e3a3bc843f8`,
     with matching core, regional, and access-join audits. The Thorough checkpoint
-    passed all six clusters with 28 exact routes, a labeled near miss for every
+    passed all six clusters with 28 exact routes, a labeled close match for every
     deliberately impossible request, and zero directed-validation rejections.
     Catalog/API inspection exposes Monterey as available and selected and
     returns all five reviewed regions. Two consecutive `npm run verify` runs
@@ -147,7 +147,7 @@ the evidence line.
 - 2026-08-06 — made Loop options use the compact constraint-table UI and persist
   as builder defaults in the shared settings JSON. Full-search results now
   deduplicate identical route geometry across access points, preferring an exact
-  match over a near miss, and the pack compiler removes generic OSM access records
+  match over a close match, and the pack compiler removes generic OSM access records
   when a named access point uses the same snapped node. Rebuilt schema-5 pack
   `scm-da6546354d045858` contains 3,203 access points, passes audit with zero
   errors, and passes the five-start real-pack checkpoint with zero directed
@@ -196,6 +196,27 @@ the evidence line.
   files plus the production build. **Packs must be rebuilt**: schema 6 now
   carries `nearby_building_count` in place of `population_within_radius` and
   `local_relief_m`.
+
+- 2026-08-08 — added deterministic route-segment condition inspection without
+  inferring maintenance. Newly generated routes group consecutive reconstructed
+  edges by trail identity, access, and mapped OSM observations; preserve
+  surface, smoothness, trail visibility, hiking difficulty, informal, and
+  lifecycle tags; and synchronize list hover/focus/selection with a heavier
+  orange map segment. Result headers now use the trailhead plus longest named
+  segment. Existing saved jobs remain readable but omit the inspector because
+  their stored geometry lacks ordered edge identities. User-facing “near miss”
+  language is now “Close matches”; violated visible metrics turn orange instead
+  of consuming space in a warning block. The redundant same-trailhead row was
+  removed. Segment rows were later simplified to name and distance only, with
+  an adjacent Google condition-search icon that opens in a new tab. Two
+  consecutive `npm run verify` runs each pass 368 tests across 73 files plus the
+  production build. Two earlier `npm run test:browser` runs each passed all five
+  Chromium flows, including segment inspection; the final browser rerun after
+  compact-row and search-link follow-ups was omitted at the user's request for
+  manual UI review. Existing packs remain compatible; rebuilding publishes the
+  newly preserved OSM condition/source-feature flags. Automated maintainability
+  discovery remains a later stage documented in
+  `trail-segment-condition-plan.md`.
 
 ## Local data and risks
 
