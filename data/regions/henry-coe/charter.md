@@ -17,9 +17,9 @@ This is a route-generator pack, not a catalog of established hikes. Unknown
 access remains included by default and can be disabled explicitly. Exact
 matches and clearly labeled close matches stay separate.
 
-This charter records the onboarding decisions reviewed on 2026-08-08. It does
-not approve a boundary, pin a final source snapshot, build a pack, or activate
-the catalog entry.
+This charter records the onboarding decisions reviewed on 2026-08-08 and the
+measured implementation evidence accepted on 2026-08-09. The catalog link is
+added only after the build and route evidence recorded below passes.
 
 ## Included trail systems
 
@@ -148,18 +148,21 @@ portal before it is committed.
 
 | Cluster | Review anchor | Authority location | Condition to preserve |
 | --- | --- | --- | --- |
-| Henry W. Coe / west | Coe Ranch Entrance and Visitor Center | `37.2110, -121.5141` | Regular entrance; paid parking/self-registration conditions |
+| Henry W. Coe / west | Coe Ranch Visitor Center | `37.1878465, -121.5458297` | Regular entrance; paid parking/self-registration conditions |
 | Henry W. Coe / southwest | Hunting Hollow Entrance | `37.076211, -121.467091` | Regular unstaffed entrance; self-registration |
 | Henry W. Coe / southeast | Dowdy Ranch Entrance | `37.112289, -121.356932` | Seasonal; verify same-day rain, heat, staffing, gate, and road conditions |
 | Coyote Lake–Harvey Bear / north | Harvey Bear entrance | `37.096626, -121.577518` | Free parking |
 | Coyote Lake–Harvey Bear / south | Mendoza Ranch entrance | `37.069972, -121.520235` | Free parking |
-| Coyote Lake–Harvey Bear / east | Coyote Lake main entrance | `37.075092, -121.515376` | Paid parking and park hours |
+| Coyote Lake–Harvey Bear / east | Coyote Lake main entrance | `37.075092, -121.515376` | Reviewed but deferred as a route start: nearest eligible derived portal is 830 m away |
 
-The eventual `scenarios.json` should cover at least Coe Ranch, Hunting Hollow,
-Dowdy, Harvey Bear, Mendoza Ranch, and Coyote Lake. Each entrance cluster needs
-a broad, plausible exact request and a deliberately impossible request that
-remains an honestly labeled close match. Dowdy's availability is an access
-condition, not a reason to omit its topology or pretend that it is always open.
+The committed `scenarios.json` covers Coe Ranch, Hunting Hollow, Dowdy, Harvey
+Bear, and Mendoza Ranch. Each entrance cluster has a broad, plausible exact
+request and a deliberately impossible request that remains an honestly labeled
+close match. Coyote Lake main remains a reviewed anchor but is not a scenario:
+the portal pipeline found no eligible derived start within the shared 500 m QA
+limit, and onboarding must not invent or silently snap a trailhead. Dowdy's
+availability is an access condition, not a reason to omit its topology or
+pretend that it is always open.
 
 ## Neighboring-pack overlap
 
@@ -203,9 +206,8 @@ extraction spike:
 The roughly 0.05-degree padding supplies reference-complete road, parking,
 building, named-area, and relation context around the exact lobes without
 changing runtime coverage. It remains wholly within the `w122` one-degree
-longitude band and crosses latitude 37, so the expected USGS 3DEP inputs are
-`n37w122` and `n38w122`. Recompute the tile set from the final polygon instead
-of hard-coding this observation.
+longitude band. The final elevation query uses the exact boundary bbox rather
+than this padded extraction bbox, so only `n38w122` is required.
 
 ## Source and licensing decisions
 
@@ -222,20 +224,18 @@ Charter inspection used the already-pinned `norcal-260801` snapshot, retrieved
 `2026-08-06T20:35:30.702Z`, upstream `2026-08-02T01:02:04Z`, 648,017,783 bytes,
 SHA-256
 `215f18449e6cd190200a7dc1188a63dba2bec1f20fb3d1637c4f11c1f9134342`.
-This establishes the candidate IDs and bboxes above but is not automatically
-the Henry Coe pack's final topology pin. A refresh must record its own URL,
-times, size, hash, adapter versions, and license decision.
+This is the final Henry Coe topology pin. The build reuses its immutable shared
+receipt and records the URL, times, size, hash, adapter versions, and license
+decision in the pack provenance.
 
 ### Elevation
 
 Use [USGS 3DEP 1/3 arc-second
 DEM](https://data.usgs.gov/datacatalog/data/USGS%3A3a81321b-c153-416f-98b7-cc8e5f0e17c3),
-nominally 10 m, NAD83/NAVD88, a U.S. public-domain source. The tentative extent
-is covered by the two 2025-08-26 products already present in the shared
+nominally 10 m, NAD83/NAVD88, a U.S. public-domain source. The exact final
+extent is covered by one 2025-08-26 product already present in the shared
 immutable cache:
 
-- `n37w122`, product `68afba90d4be02645f9b2943`, SHA-256
-  `786ad73dc03e5c7cde26b285631ef04198e386ac83d3e91ac8c1e577e7fdcd80`;
 - `n38w122`, product `68afba8fd4be02645f9b293f`, SHA-256
   `d6dd52bd01ef81d8af06a336d881ca73083e15139f22c2e84262e77aa138ffb4`.
 
@@ -284,10 +284,10 @@ catalogs. Pine Ridge Association material may help a human spot-check names,
 but California State Parks remains the authority and OSM remains the build
 topology.
 
-## Exact onboarding ledger after this charter
+## Exact onboarding ledger used for this region
 
-The next operator should complete these items in order and record measured
-evidence rather than copying assumptions from this charter:
+Henry Coe followed these items in order. Future operators should record
+measured evidence rather than copying this region's assumptions:
 
 1. **Boundary input** — commit `boundary.geojson` as a valid versioned Polygon
    or MultiPolygon; document the current official Coe and Coyote Lake–Harvey
@@ -313,8 +313,8 @@ evidence rather than copying assumptions from this charter:
    portals and changes zero access states.
 6. **Reviewed regions and scenarios** — commit `search-regions.json` only after
    the OSM IDs, in-polygon portals, and cycle-bearing components pass; commit
-   `scenarios.json` covering all six representative entrance clusters and both
-   plausible exact and impossible close-match requests.
+   `scenarios.json` covering every representative entrance with a valid portal
+   within 500 m and both plausible exact and impossible close-match requests.
 7. **Generic pack wiring** — add the region builder and focused schema-6 tests
    without changing solver, request, UI, or database contracts. Assert the
    order restrictions → portal derivation → optional naming → build-context
@@ -332,3 +332,49 @@ evidence rather than copying assumptions from this charter:
 
 Generated packs, source downloads, caches, databases, and audit outputs remain
 ignored and out of Git throughout.
+
+## Completed implementation record
+
+The final hard boundary is the unsimplified `MultiPolygon` union of pinned OSM
+relations `11341366` and `16859470`, bbox `[-121.596281, 37.0324441,
+-121.3058921, 37.3111329]`. Its committed bytes are 122,046 bytes with SHA-256
+`7d410a95a6598585b8cc7e603bd880869be5edb84cd4aa0159f6ba254d6438e4`.
+The three-entry reviewed search-region file has SHA-256
+`5e88ba35edf7d89729d70e4cebe96d46d54101fc43f02efed8c54c3495745fcb`.
+
+No exact-way restriction file was committed: the current 2026-08-08 authority
+review found no restriction that could be represented as a confirmed durable
+OSM-way removal. No official entrance overlay was needed. Those are explicit
+review outcomes, not missing inputs; the manifest correctly reports
+`officialAccess: false`.
+
+Schema-6 pack `hc-fb46538de42e5919` uses the pinned OSM receipt above and the
+single 3DEP product above. Two independent offline builds both reported
+`reusedExisting: false` and produced byte-identical outputs:
+
+| Output | SHA-256 in both builds |
+| --- | --- |
+| `manifest.json` | `075c9a5cdd786a83f7c673c09f73352cf21749edaa0f7d5fdeef41408756185a` |
+| `pack.sqlite` | `924ec8f8ab47690c1c0717431e3f3c0f9aa0bd3aaea24dbc3010f78c4877cbed` |
+| `audit.json` | `bdadb6570e8f2f7e0fa2017e735cdb417f02008fbc58301fead67af8d919bce5` |
+| `regional-audit.json` | `576dfb851d80a0d25192fb05d4a386629129d5cc7d077a7b445c3c841cbb8438` |
+| `portal-audit.json` | `ee424e7bcf96ce2a00425d7b349ef936ccbd309076417ad1ca6b9195dc1a5dca` |
+
+The installed result contains 28,801 nodes, 57,830 directed trail edges, 44
+persisted portals, seven named areas, and three reviewed search regions. It has
+zero built-up portals; inclusive cycle reachability keeps 39 and rejects five,
+while known-only reachability keeps 30 and rejects 14. The derivation pass found
+54 portals before coverage filtering (44 inside and 10 outside), with 17 having
+parking evidence. It stripped 99 road/sidewalk/service-road context ways before
+publication. The audit has zero errors, conflicts, missing elevation/profile
+values, unattributed or unknown-source records, outside-coverage persisted
+edges, integrity errors, foreign-key errors, or published non-trail edges.
+
+The shared Thorough checkpoint passes all five committed clusters. Their
+selected portal distances are 0 m (Coe Ranch), 144 m (Hunting Hollow), 84 m
+(Dowdy), 226 m (Mendoza), and 350 m (Harvey Bear). Plausible requests return 25
+exact routes in total; every impossible request returns only clearly labeled
+close matches, with zero directed-validation rejections. Dowdy explicitly uses
+a 50% repeated-trail ceiling because its valid long-stem loops exceed the
+shared 35% default; this scenario relaxation is visible and is not applied to
+runtime defaults.

@@ -120,6 +120,44 @@ the evidence line.
     returns all five reviewed regions. Two consecutive `npm run verify` runs
     each pass 386 tests across 77 files plus the production build, and two
     consecutive `npm run test:browser` runs each pass all five Chromium flows.
+- [x] Gate 10 — Henry Coe regional pack and schema-6 onboarding optimization
+  - Evidence: the exact `MultiPolygon` union of Henry W. Coe State Park and
+    adjoining Coyote Lake–Harvey Bear Ranch has bbox `[-121.596281,
+    37.0324441, -121.3058921, 37.3111329]`; Grant, Pacheco, Coyote Ridge,
+    Cñada de los Osos, Palassou, private ranches, and other disconnected South
+    Diablo systems remain excluded. Schema-6 pack `hc-fb46538de42e5919` pins
+    the ODbL Geofabrik `norcal-260801` extract and public-domain USGS 3DEP
+    product `68afba8fd4be02645f9b293f`. Current authority review produced no
+    confirmed durable exact-way removal and generic OSM portal labels were
+    sufficient, so no empty restriction file or official-name overlay was
+    invented and `officialAccess` remains false.
+  - Two independent offline builds both executed rather than reusing an output
+    and were byte-identical: manifest SHA-256
+    `075c9a5cdd786a83f7c673c09f73352cf21749edaa0f7d5fdeef41408756185a`
+    and SQLite SHA-256
+    `924ec8f8ab47690c1c0717431e3f3c0f9aa0bd3aaea24dbc3010f78c4877cbed`,
+    with matching core, regional, and portal audits. The pack contains 28,801
+    nodes, 57,830 directed trail edges, 44 persisted portals, seven named
+    areas, and three reviewed search regions. It has zero audit errors,
+    conflicts, built-up portals, missing elevation/profile values,
+    unattributed/unknown-source/outside-coverage records, non-trail published
+    edges, integrity errors, or foreign-key errors. Inclusive cycle checks keep
+    39 portals and reject five; build context stripped 99 road/sidewalk/service
+    ways.
+  - The shared schema-6 Thorough checkpoint enforces a 500 m reference-to-
+    portal limit and passed Coe Ranch, Hunting Hollow, Dowdy, Mendoza, and
+    Harvey Bear with 25 exact routes, honestly labeled close matches for every
+    deliberately impossible request, and zero directed-validation rejections.
+    Coyote Lake main is explicitly deferred rather than snapped to a portal 830
+    m away. The new generic builder/checkpoint, immutable DEM reuse, and
+    [region checklist](region-onboarding-checklist.md) capture the reusable
+    workflow and friction ledger. Catalog/API discovery exposes Henry Coe as
+    available. Two consecutive `npm run verify` runs each passed 372 tests
+    across 74 files plus the production build, and two consecutive `npm run
+    test:browser` runs each passed all five Chromium flows. Live desktop and
+    390 px inspection confirmed the selected Henry Coe pill, exact map coverage,
+    all three region choices, horizontally scrolling region controls, and zero
+    browser console errors.
 
 ## Post-gate fixes
 
