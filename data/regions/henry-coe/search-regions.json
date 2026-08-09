@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:henry-coe",
+      "expectedName": "Henry Coe"
+    },
+    {
+      "namedAreaId": "osm:relation/11341366",
+      "expectedName": "Henry W. Coe State Park"
+    },
+    {
+      "namedAreaId": "osm:relation/16859470",
+      "expectedName": "Coyote Lake - Harvey Bear Ranch County Park"
+    }
+  ]
+}
