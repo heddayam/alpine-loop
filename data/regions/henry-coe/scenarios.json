@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "packId": "henry-coe",
+  "scenarios": [
+    {
+      "id": "coe-ranch-headquarters",
+      "cluster": "Henry Coe western high country",
+      "referencePoint": {
+        "name": "Coe Ranch Entrance",
+        "coordinates": [-121.545496, 37.186331]
+      },
+      "searchRegionId": "osm:relation/11341366",
+      "exactExpectation": {
+        "distanceMiles": { "min": 4, "max": 12 },
+        "elevationGainFeet": { "min": 600, "max": 3500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "hunting-hollow",
+      "cluster": "Henry Coe southern ridges",
+      "referencePoint": {
+        "name": "Hunting Hollow Trailhead",
+        "coordinates": [-121.4660046, 37.0761072]
+      },
+      "searchRegionId": "osm:relation/11341366",
+      "exactExpectation": {
+        "distanceMiles": { "min": 5, "max": 14 },
+        "elevationGainFeet": { "min": 800, "max": 4500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "dowdy-ranch",
+      "cluster": "Henry Coe eastern backcountry",
+      "referencePoint": {
+        "name": "Dowdy Ranch Entrance",
+        "coordinates": [-121.3572257, 37.1126215]
+      },
+      "searchRegionId": "osm:relation/11341366",
+      "exactExpectation": {
+        "distanceMiles": { "min": 5, "max": 15 },
+        "elevationGainFeet": { "min": 700, "max": 4500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "mendoza-ranch",
+      "cluster": "Coyote Lake–Harvey Bear Ranch",
+      "referencePoint": {
+        "name": "Mendoza Ranch Entrance",
+        "coordinates": [-121.5201793, 37.0700048]
+      },
+      "searchRegionId": "osm:relation/16859470",
+      "exactExpectation": {
+        "distanceMiles": { "min": 3, "max": 10 },
+        "elevationGainFeet": { "min": 300, "max": 2500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 1, "max": 2 },
+        "elevationGainFeet": { "min": 8000, "max": 9000 },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}

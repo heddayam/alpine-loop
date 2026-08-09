@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "geofabrik-norcal-osm",
+  "authority": "Geofabrik GmbH / OpenStreetMap contributors",
+  "dataset": "Geofabrik Northern California OpenStreetMap extract",
+  "version": "norcal-260801",
+  "upstreamTimestamp": "2026-08-02T01:02:04.000Z",
+  "url": "https://download.geofabrik.de/north-america/us/california/norcal-260801.osm.pbf",
+  "expectedByteLength": 648017783,
+  "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright",
+  "attribution": "© OpenStreetMap contributors; extract provided by Geofabrik GmbH"
+}
