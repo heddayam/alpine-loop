@@ -9,6 +9,7 @@ import {
   accessPointFeatures,
   accessPointHoverFilter,
   copyTrailName,
+  copyTrailNameWithDocument,
   TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
@@ -110,13 +111,39 @@ describe("generated route map features", () => {
 
   it("copies the displayed mapped-trail name and reports clipboard failures", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
+    const fallbackCopy = vi.fn().mockReturnValue(true);
 
     await expect(copyTrailName("Bloom Grade", { writeText })).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith("Bloom Grade");
+    await expect(copyTrailName("Bloom Grade", { writeText }, fallbackCopy)).resolves.toBe(true);
+    expect(fallbackCopy).toHaveBeenCalledWith("Bloom Grade");
+    expect(writeText).toHaveBeenCalledTimes(2);
     await expect(copyTrailName("Bloom Grade", { writeText: vi.fn().mockRejectedValue(new Error("denied")) })).resolves.toBe(false);
     await expect(copyTrailName("Bloom Grade", undefined)).resolves.toBe(false);
     await expect(copyTrailName(undefined, { writeText })).resolves.toBe(false);
-    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledTimes(2);
+  });
+
+  it("copies synchronously while the map click still has browser activation", () => {
+    const textarea = {
+      value: "",
+      setAttribute: vi.fn(),
+      style: {},
+      select: vi.fn(),
+      remove: vi.fn(),
+    };
+    const copyDocument = {
+      activeElement: null,
+      body: { appendChild: vi.fn() },
+      createElement: vi.fn().mockReturnValue(textarea),
+      execCommand: vi.fn().mockReturnValue(true),
+    } as unknown as Document;
+
+    expect(copyTrailNameWithDocument("Bloom Grade", copyDocument)).toBe(true);
+    expect(textarea.value).toBe("Bloom Grade");
+    expect(textarea.select).toHaveBeenCalledOnce();
+    expect(copyDocument.execCommand).toHaveBeenCalledWith("copy");
+    expect(textarea.remove).toHaveBeenCalledOnce();
   });
 
   it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {

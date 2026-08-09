@@ -130,13 +130,49 @@ export function trailNetworkFeatureDetails(properties?: Record<string, unknown> 
 export async function copyTrailName(
   name: string | undefined,
   clipboard: Pick<Clipboard, "writeText"> | undefined,
+  fallbackCopy?: (value: string) => boolean,
 ): Promise<boolean> {
-  if (!name || !clipboard) return false;
+  if (!name) return false;
+  let clipboardCopy: Promise<boolean> | undefined;
+  if (clipboard) {
+    try {
+      // Start the preferred API while the click's browser activation is live.
+      clipboardCopy = clipboard.writeText(name).then(() => true, () => false);
+    } catch {
+      clipboardCopy = undefined;
+    }
+  }
   try {
-    await clipboard.writeText(name);
-    return true;
+    // Run the compatibility path before this synchronous click stack unwinds.
+    if (fallbackCopy?.(name)) {
+      void clipboardCopy;
+      return true;
+    }
+  } catch {
+    // The preferred API may still succeed when the compatibility path cannot.
+  }
+  return clipboardCopy ? await clipboardCopy : false;
+}
+
+export function copyTrailNameWithDocument(name: string, copyDocument: Document | undefined): boolean {
+  if (!copyDocument?.body || typeof copyDocument.execCommand !== "function") return false;
+  const activeElement = copyDocument.activeElement;
+  const textarea = copyDocument.createElement("textarea");
+  textarea.value = name;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.inset = "-9999px auto auto -9999px";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  copyDocument.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return copyDocument.execCommand("copy");
   } catch {
     return false;
+  } finally {
+    textarea.remove();
+    if (activeElement && "focus" in activeElement) (activeElement as HTMLElement).focus({ preventScroll: true });
   }
 }
 
@@ -794,7 +830,11 @@ export function HikeMap({
           if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) return;
           const details = trailNetworkFeatureDetails(feature.properties);
           if (!details.copyName) return;
-          void copyTrailName(details.copyName, navigator.clipboard).then((copied) => {
+          void copyTrailName(
+            details.copyName,
+            navigator.clipboard,
+            (value) => copyTrailNameWithDocument(value, document),
+          ).then((copied) => {
             if (!alive) return;
             setHoveredTrail({ id, ...details });
             setTrailCopyFeedback({ id, status: copied ? "copied" : "failed" });

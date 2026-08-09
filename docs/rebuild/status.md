@@ -298,7 +298,11 @@ the evidence line.
   wider-zoom clusters show their access-point count and grow slightly. Hover
   state clears as soon as the map moves, and access points take precedence over
   underlying trail hover. The shared badge now sits on the same top row as the
-  drawing controls. `npm run verify` passes 379 tests across 75 files plus the
+  drawing controls. Trail-name copying now starts the standards-based Clipboard
+  API directly from the click and immediately attempts a synchronous document
+  fallback during that same browser activation, avoiding intermittent
+  permission failures after activation expires.
+  `npm run verify` passes 380 tests across 75 files plus the
   production build, and two consecutive `npm run test:browser` runs pass all
   five Chromium flows; the final positioning review is intentionally left for
   manual UI inspection.
