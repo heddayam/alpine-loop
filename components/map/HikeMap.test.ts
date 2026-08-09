@@ -4,11 +4,15 @@ import { describe, expect, it } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
+  TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
   routeSegmentFeatures,
   routeTrailheadPins,
   showCoverageHatching,
+  trailNetworkFeatureDetails,
+  trailNetworkHoverFilter,
+  trailNetworkRequestUrl,
 } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedClosedRouteV3 {
@@ -50,6 +54,25 @@ function route(id: string, longitude: number): GeneratedClosedRouteV3 {
 }
 
 describe("generated route map features", () => {
+  it("loads mapped trails only at detailed zoom and keeps hover names useful", () => {
+    const bounds = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
+
+    expect(trailNetworkRequestUrl("fixture-pack", bounds, TRAIL_NETWORK_MIN_ZOOM - 0.01)).toBeUndefined();
+    expect(trailNetworkRequestUrl("fixture-pack", bounds, TRAIL_NETWORK_MIN_ZOOM)).toBe(
+      "/api/packs/fixture-pack/access-points?bbox=-122.18%2C37.155%2C-122.14%2C37.178&includeUncertainAccess=true&includeAccessPoints=false",
+    );
+    expect(trailNetworkFeatureDetails({ name: "  Skyline Trail  ", distanceMeters: 965.6064 })).toEqual({
+      name: "Skyline Trail",
+      distance: "0.6 mi",
+    });
+    expect(trailNetworkFeatureDetails({ name: null, distanceMeters: 30 })).toEqual({
+      name: "Unnamed trail",
+      distance: "98 ft",
+    });
+    expect(trailNetworkHoverFilter("edge-12")).toEqual(["==", ["get", "id"], "edge-12"]);
+    expect(trailNetworkHoverFilter()).toEqual(["==", ["get", "id"], "__none__"]);
+  });
+
   it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {
     const bounds = [-122.18, 37.155, -122.14, 37.178] as const;
 
@@ -144,6 +167,7 @@ describe("generated route map features", () => {
   it("renders compact accessible map controls and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
+      packId: "fixture-pack",
       drawBounds: boundary,
       drawEnabled: true,
       filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.155], [-122.14, 37.155], [-122.14, 37.178], [-122.18, 37.178], [-122.18, 37.155]]] },
@@ -173,6 +197,8 @@ describe("generated route map features", () => {
     expect(markup).toContain('aria-label="Use demo trailhead filter"');
     expect(markup).toContain('aria-label="Clear trailhead filter"');
     expect(markup).not.toContain('map-status');
+    expect(markup).not.toContain('Highlighted areas filter trailheads');
+    expect(markup).not.toContain('<p class="map-hint"');
     expect(markup).toContain('<details class="map-key map-key-collapsible">');
     expect(markup).not.toContain('<details open=""');
     expect(markup).toContain('<summary class="map-key-toggle">Map key</summary>');

@@ -528,7 +528,7 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .map-key span { display: flex; gap: var(--s2); align-items: center; color: var(--ink-2); white-space: nowrap; }
 .map-key i { display: inline-block; flex: 0 0 auto; }
 .map-key a { color: var(--ink-3); font-size: 10px; }
-.key-trail { width: 1.2rem; border-top: 2px dotted #40594f; }
+.key-trail { width: 1.2rem; border-top: 3px dashed #3f5f52; }
 .key-coverage { width: .8rem; height: .55rem; border: 1px dashed #5c7f72; }
 .key-filter { width: .8rem; height: .55rem; border: 2px dotted #24587f; }
 .key-refinement { width: .8rem; height: .55rem; background: rgb(142 79 143 / 16%); border: 2px double #713e78; }
@@ -576,6 +576,20 @@ select.control { padding-right: var(--s1); cursor: pointer; }
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
   font-size: var(--fs-xs);
+}
+.map-trail-label { display: flex; gap: var(--s2); align-items: center; }
+.map-trail-distance {
+  display: grid;
+  place-items: center;
+  height: 1.15rem;
+  padding: 0 .35rem;
+  color: var(--ink-2);
+  background: var(--surface-3);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------- results */
