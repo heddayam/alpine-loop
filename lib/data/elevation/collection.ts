@@ -68,6 +68,8 @@ export async function refreshThreeDepCollection(options: RefreshThreeDepOptions)
       url: product.downloadUrl,
       fileName: tifFileName(product.productId, product.downloadUrl),
       retrievedAt,
+      reuseExistingUrl: true,
+      ...(product.byteLength ? { expectedByteLength: product.byteLength } : {}),
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });
     cached.push({

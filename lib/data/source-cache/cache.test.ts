@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { cacheLocalFixture } from "./cache";
+import { cacheLocalFixture, downloadToSourceCache } from "./cache";
 
 const temporaryDirectories: string[] = [];
 
@@ -46,5 +46,32 @@ describe("immutable source cache", () => {
       fileName: "source.bin",
       expectedSha256: `sha256:${"0".repeat(64)}`,
     })).rejects.toThrow("SHA-256 mismatch");
+  });
+
+  it("can reuse a verified immutable object by its stable upstream URL", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "alpine-source-cache-"));
+    temporaryDirectories.push(directory);
+    const fetchImpl = async () => new Response("immutable product", { status: 200 });
+    const first = await downloadToSourceCache({
+      cacheRoot: path.join(directory, "cache"),
+      sourceId: "usgs-product-1",
+      url: "https://fixtures.invalid/historical/product.tif",
+      fileName: "product.tif",
+      fetchImpl,
+    });
+    const second = await downloadToSourceCache({
+      cacheRoot: path.join(directory, "cache"),
+      sourceId: "usgs-product-1",
+      url: "https://fixtures.invalid/historical/product.tif",
+      fileName: "product.tif",
+      reuseExistingUrl: true,
+      fetchImpl: async () => {
+        throw new Error("immutable product should not be downloaded twice");
+      },
+    });
+
+    expect(first.reused).toBe(false);
+    expect(second.reused).toBe(true);
+    expect(second.receipt.sha256).toBe(first.receipt.sha256);
   });
 });
