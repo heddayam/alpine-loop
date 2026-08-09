@@ -69,8 +69,8 @@ describe("generated route map features", () => {
       name: "Unnamed trail",
       distance: "98 ft",
     });
-    expect(trailNetworkHoverFilter("edge-12")).toEqual(["==", ["get", "id"], "edge-12"]);
-    expect(trailNetworkHoverFilter()).toEqual(["==", ["get", "id"], "__none__"]);
+    expect(trailNetworkHoverFilter("trail-group:edge-12")).toEqual(["==", ["get", "trailGroupId"], "trail-group:edge-12"]);
+    expect(trailNetworkHoverFilter()).toEqual(["==", ["get", "trailGroupId"], "__none__"]);
   });
 
   it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {
