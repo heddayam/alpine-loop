@@ -86,7 +86,7 @@ inputs from conditional material.
 | Path | Requirement | Exact content or decision |
 | --- | --- | --- |
 | `charter.md` | Always | ID/name; intended users; included and excluded systems; managing authorities; neighboring-pack overlap; boundary rationale; candidate/retained/deferred search regions; representative starts; source/license/redistribution decisions; reviewed restrictions; preflight measurements; activation blockers. Date every external review. |
-| `boundary.geojson` | Always | A GeoJSON `Feature` whose `properties.id` equals the pack ID and whose versioned `properties.boundaryVersion` is asserted by the region builder. Although the roadmap permits `Polygon` or `MultiPolygon`, the current OSM preparation schema accepts **Polygon only**. The ring must be closed and valid. This is exact runtime coverage, not merely a download box. |
+| `boundary.geojson` | Always | A GeoJSON `Feature` whose `properties.id` equals the pack ID and whose versioned `properties.boundaryVersion` is asserted by the region builder. The shared OSM preparation path accepts `Polygon` and `MultiPolygon`; every ring must be closed and valid. This is exact runtime coverage, not merely a download box. |
 | `osm-source.json` | Always | The strict fields listed below. Use the broad pinned provider extract needed to cover the region; exact coverage is still the boundary polygon. |
 | `elevation-source.json` | Always | The strict fields listed below, with a region-unique `cacheNamespace`, reviewed query bbox, and exact expected 3DEP product IDs. |
 | `search-regions.json` | Always | Version 1 ordered list. Entry zero should normally be `pack:<pack-id>`. Add only stable named areas actually present in the pinned OSM named-area export and useful for eligible loop starts. |
@@ -182,7 +182,7 @@ Create these implementation and verification files:
 | `lib/data/<pack-id>-pack.test.ts` | Assert the exact config, boundary identity/bbox, source namespaces and versions, reviewed search-region order, schema 6/capabilities, and deterministic seed/data-version behavior. For a custom builder, also assert restriction behavior/hash and that optional overlays cannot create starts. |
 | `lib/data/regional-pack.ts` | Import and register the builder. This is necessary before `pack:bootstrap` recognizes the catalog ID. |
 | `lib/data/regional-pack.test.ts` | Add the ID to stable sorted builder expectations and remove its planned-without-builder expectation. |
-| `scripts/research/gate<gate>-<pack-id>-checkpoint.ts` | Region-specific real-pack checkpoint using `scenarios.json`; require schema 6 for a new pack, run exact and impossible expectations, and emit per-scenario timing, selected start, counts, violations, diagnostics, and validation rejections. |
+| `scripts/research/regional-pack-checkpoint.ts` | Shared schema-6 real-pack checkpoint using the region's `scenarios.json`; run exact and impossible expectations and emit per-scenario timing, selected start, portal distance, counts, violations, diagnostics, and validation rejections. The runner rejects a reference anchor whose nearest eligible portal is more than 500 m away. |
 
 The basic builder is the optimized default. It reads `boundary.geojson`,
 `search-regions.json`, `osm-source.json`, and `elevation-source.json`; refreshes
@@ -424,14 +424,16 @@ Run the new region checkpoint against the installed schema-6 candidate using
 Thorough effort, and save its JSON under the ignored build evidence directory:
 
 ```sh
-node --import tsx scripts/research/gate<gate>-<pack-id>-checkpoint.ts \
+npm run --silent pack:checkpoint -- \
+  --pack=<pack-id> \
   --database=.local-data/packs/<pack-id>/<data-version>/pack.sqlite \
   --manifest=.local-data/packs/<pack-id>/<data-version>/manifest.json \
   --scenarios=data/regions/<pack-id>/scenarios.json \
   --effort=thorough
 ```
 
-Every major cluster must choose a sensible nearby **eligible** portal, return
+Every major cluster must choose a sensible nearby **eligible** portal within
+500 m of its reviewed reference point, return
 at least one exact route for the plausible request, return no exact route and at
 least one explicitly violated close match for the impossible request, and have
 zero directed-validation rejections. Record wall time, eligible-start count,
@@ -584,15 +586,13 @@ largest costs.
   source-only case, but restrictions and optional entrance overlays still need
   a custom builder (or a future generic extension), and older packs use three
   different portal-audit filenames.
-- Gate 8 and Gate 9 checkpoint scripts duplicate the same runner with hard-coded
-  pack IDs. There is no generic `pack:checkpoint` package script.
+- The generic `pack:checkpoint` runner removes per-region script duplication,
+  but the older Gate 8 and Gate 9 scripts have not yet migrated to it.
 - There is no package command that creates two isolated offline builds, hashes
   every output, compares them, and emits the evidence ledger automatically.
 - First-time OSM refresh pins expected length in Git but not expected SHA-256;
   the authoritative hash lives in an ignored receipt/pointer and must be copied
   into review evidence manually.
-- The roadmap says `MultiPolygon` is allowed, but `lib/data/osm/pipeline.ts`
-  currently validates only `Polygon`.
 - Missing elevation is a regional-audit warning rather than a fatal error, and
   the regional audit does not run `PRAGMA foreign_key_check`; the onboarding
   gate therefore needs explicit checks above.

@@ -77,7 +77,7 @@ the network.
 Every new schema-6 region uses the shared checkpoint runner. For Henry Coe:
 
 ```sh
-node --import tsx scripts/research/regional-pack-checkpoint.ts \
+npm run --silent pack:checkpoint -- \
   --pack=henry-coe \
   --database=.local-data/packs/henry-coe/<data-version>/pack.sqlite \
   --manifest=.local-data/packs/henry-coe/<data-version>/manifest.json \
@@ -114,6 +114,7 @@ coverage, topology, repetition, shared stem, and exact-versus-close-match status
 - [Closed-route engine reference](docs/rebuild/closed-route-topology-plan.md)
 - [Data-source and licensing policy](docs/rebuild/data-sources.md)
 - [Regional expansion roadmap and pack-onboarding protocol](docs/rebuild/regional-expansion-plan.md)
+- [Exact schema-6 region onboarding checklist and friction ledger](docs/rebuild/region-onboarding-checklist.md)
 - [Access-point derivation plan](docs/rebuild/access-point-derivation-plan.md)
 
 The removed pre-rebuild app remains recoverable from the
