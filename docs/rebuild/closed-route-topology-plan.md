@@ -18,7 +18,7 @@ Every returned route:
 - respects directed legality, access policy, exact pack coverage, budgets, and
   every requested physical constraint;
 - reports repeated physical trail independently of its topology label;
-- is either an exact match or an explicitly labeled near miss.
+- is either an exact match or an explicitly labeled close match.
 
 `POST /api/routes/generate` accepts the V3 closed-route request. Schema-3,
 schema-4, and schema-5 packs are supported. Quick foreground searches use a three-second
@@ -43,7 +43,7 @@ access follows the explicit request snapshot.
 2. Verify continuity, closure at the exact start, access legality, pack
    coverage, metrics, cycle presence, repetition, and shared stem.
 3. Preserve the 80% physical-trail diversity rule.
-4. Return exact results separately from at most three labeled near misses.
+4. Return exact results separately from at most three labeled close matches.
 5. Report budget truncation separately from non-budget shortfall.
 6. Keep automated tests deterministic and network-free.
 

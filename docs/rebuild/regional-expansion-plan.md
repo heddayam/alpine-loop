@@ -196,7 +196,7 @@ change.
   remain in the published trail graph and that build-only road context does not.
 - Run representative Quick and Batch searches across every major included
   trail cluster. Include exact routes and deliberately impossible requests that
-  remain honestly labeled near misses.
+  remain honestly labeled close matches.
 
 ### 6. Activation
 

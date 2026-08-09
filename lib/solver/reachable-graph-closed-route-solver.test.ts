@@ -247,7 +247,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(stemCapped.diagnostics.feasibleAccessPointCount).toBe(0);
   });
 
-  test("uses the multi-cycle toggle and labels a distance near miss", async () => {
+  test("uses the multi-cycle toggle and labels a distance close match", async () => {
     const point = accessPoint();
     const figureEight = fixtureGraph("figure-eight");
     const topology = new FixtureFeasibilityRepository([point], 0);

@@ -32,7 +32,7 @@ application.
   points; they do not clip hiking routes. Exact installed-pack coverage is the
   hard geometry boundary.
 - Unknown access is included by default and can be explicitly disabled.
-- Return exact matches separately from clearly labeled near misses; never relax
+- Return exact matches separately from clearly labeled close matches; never relax
   constraints silently.
 - Route count is chosen by the user from 1 through 20 and defaults to 10.
 - The active app is standard local Next.js plus MapLibre. Do not restore Sites,

@@ -14,7 +14,7 @@
 
 The pack remains a route generator, not a catalog of known hikes. Unknown
 access is included by default and can be explicitly disabled. Exact matches and
-clearly labeled near misses remain separate.
+clearly labeled close matches remain separate.
 
 ## Included and excluded systems
 

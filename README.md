@@ -95,7 +95,7 @@ node --import tsx scripts/research/gate5-topology-real-checkpoint.ts \
 Closed-route search uses bounded penalized forward/return searches, strict
 disjoint-return refinement, core-aware lollipop search, below-range assembly,
 and local repair. The production validator remains authoritative for closure,
-coverage, topology, repetition, shared stem, and exact-versus-near-miss status.
+coverage, topology, repetition, shared stem, and exact-versus-close-match status.
 
 ## Project references
 

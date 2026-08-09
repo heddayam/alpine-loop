@@ -10,6 +10,7 @@ import {
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
 import { gradeExperienceMetrics, maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
+import { trailSegmentsForRoute } from "./trail-segments";
 
 export type ClosedRouteValidationFailure =
   | "empty"
@@ -357,6 +358,7 @@ export function validateReconstructedClosedRoute(
         steepestSustainedGradePct,
         ...(gradeExperience ? { gradeExperience } : {}),
         trailNames,
+        trailSegments: trailSegmentsForRoute(options.routeId, edges),
         warnings,
         ...(elevationSamples ? { elevationSamples } : {}),
         source: {

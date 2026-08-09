@@ -13,8 +13,30 @@ describe("OSM OPL normalization", () => {
     expect(topology.ways[0].nodeIds).toEqual(["osm-node-1", "osm-node-2", "osm-node-3"]);
     expect(topology.ways[1].nodeIds).toEqual(["osm-node-4", "osm-node-3"]);
     expect(topology.ways.map(({ edgeClass }) => edgeClass)).toEqual(["trail", "trail", "street"]);
+    expect(topology.ways[0].flags).toEqual(expect.arrayContaining([
+      "osm-feature:way/101", "osm-highway:path", "surface:dirt",
+    ]));
     expect(topology.accessPoints).toEqual([]);
     expect(topology.portalEvidence?.map(({ externalId }) => externalId).sort()).toEqual(["node/1", "node/4"]);
+  });
+
+  it("preserves condition tags identically to GeoJSON normalization", () => {
+    const topology = normalizeOsmOpl([
+      "n1 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.2 y37.2",
+      "n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2",
+      "w9 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,surface=rock,smoothness=bad,trail_visibility=intermediate,sac_scale=hiking,informal=no,abandoned=yes Nn1,n2",
+    ].join("\n"), "osm-fixture");
+
+    expect(topology.ways[0].flags).toEqual([
+      "osm-feature:way/9",
+      "osm-highway:path",
+      "surface:rock",
+      "smoothness:bad",
+      "trail-visibility:intermediate",
+      "sac-scale:hiking",
+      "informal:no",
+      "abandoned:yes",
+    ]);
   });
 
   it("decodes hexadecimal, UTF-8, and single-character OPL escapes", () => {

@@ -193,6 +193,25 @@ export function osmFootDirection(values: Record<string, string>): "forward" | "r
   return "both";
 }
 
+export function osmWayFlags(
+  values: Record<string, string>,
+  featureId: string,
+  direction: ReturnType<typeof osmFootDirection>,
+): string[] {
+  return [
+    `osm-feature:${featureId}`,
+    `osm-highway:${values.highway}`,
+    ...(direction === "both" ? [] : [direction === "reverse" ? "oneway-reversed" : "oneway"]),
+    ...(values.surface ? [`surface:${values.surface}`] : []),
+    ...(values.smoothness ? [`smoothness:${values.smoothness}`] : []),
+    ...(values.trail_visibility ? [`trail-visibility:${values.trail_visibility}`] : []),
+    ...(values.sac_scale ? [`sac-scale:${values.sac_scale}`] : []),
+    ...(values.informal ? [`informal:${values.informal}`] : []),
+    ...(values.disused === "yes" ? ["disused:yes"] : []),
+    ...(values.abandoned === "yes" ? ["abandoned:yes"] : []),
+  ];
+}
+
 export function normalizeOsmFeatures(
   features: ReadonlyArray<z.infer<typeof featureSchema>>,
   sourceId: string,
@@ -266,12 +285,7 @@ export function normalizeOsmFeatures(
         bidirectional: wayDirection === "both",
         edgeClass,
         sourceRefs: [sourceId],
-        flags: [
-          `osm-highway:${values.highway}`,
-          ...(wayDirection === "both" ? [] : [wayDirection === "reverse" ? "oneway-reversed" : "oneway"]),
-          ...(values.surface ? [`surface:${values.surface}`] : []),
-          ...(values.sac_scale ? [`sac-scale:${values.sac_scale}`] : []),
-        ],
+        flags: osmWayFlags(values, featureExternalId, wayDirection),
       });
       return;
     }
