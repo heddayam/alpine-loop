@@ -39,7 +39,26 @@ const ROUTE_SELECTED = "#c9552a";
 const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
 export const TRAIL_NETWORK_MIN_ZOOM = 11;
+export const TRAIL_COPY_FEEDBACK_MS = 1_500;
 const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "trailGroupId"], "__none__"];
+
+type HoveredTrail = {
+  id: string;
+  name: string;
+  distance?: string;
+};
+
+type TrailCopyFeedback = {
+  id: string;
+  status: "copied" | "failed";
+};
+
+const TRAIL_CLICK_PRIORITY_LAYERS = [
+  "generated-route-segment-hit-target",
+  "generated-route-hit-target",
+  "access-points",
+  "access-point-clusters",
+];
 
 export function trailNetworkHoverFilter(id?: string): FilterSpecification {
   return id ? ["==", ["get", "trailGroupId"], id] : EMPTY_TRAIL_HOVER_FILTER;
@@ -57,21 +76,37 @@ export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: num
 
 export function trailNetworkFeatureDetails(properties?: Record<string, unknown> | null): {
   name: string;
+  copyName?: string;
   distance?: string;
 } {
   const name = properties?.name;
+  const copyName = typeof name === "string" && name.trim() ? name.trim() : undefined;
   const rawDistanceMeters = properties?.distanceMeters;
   const distanceMeters = typeof rawDistanceMeters === "number" && Number.isFinite(rawDistanceMeters)
     ? rawDistanceMeters
     : undefined;
   return {
-    name: typeof name === "string" && name.trim() ? name.trim() : "Unnamed trail",
+    name: copyName ?? "Unnamed trail",
+    copyName,
     distance: distanceMeters === undefined
       ? undefined
       : distanceMeters < 160.9344
         ? `${Math.round(distanceMeters * 3.28084)} ft`
         : `${(distanceMeters / 1609.344).toFixed(1)} mi`,
   };
+}
+
+export async function copyTrailName(
+  name: string | undefined,
+  clipboard: Pick<Clipboard, "writeText"> | undefined,
+): Promise<boolean> {
+  if (!name || !clipboard) return false;
+  try {
+    await clipboard.writeText(name);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
@@ -291,10 +326,16 @@ export function HikeMap({
   const hoveredSegmentIdRef = useRef(hoveredSegmentId);
   const filterGeometryRef = useRef(filterGeometry);
   const refinementGeometryRef = useRef(refinementGeometry);
+  const trailCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
-  const [hoveredTrail, setHoveredTrail] = useState<{ name: string; distance?: string }>();
+  const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
+  const [trailCopyFeedback, setTrailCopyFeedback] = useState<TrailCopyFeedback>();
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => () => {
+    if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+  }, []);
 
   // Map-originated hover drives the results list as well as the map itself.
   const previewRoute = useCallback((id?: string) => {
@@ -665,7 +706,26 @@ export function HikeMap({
           map?.getCanvas().style.setProperty("cursor", "pointer");
           map?.setFilter("trail-network-hover-casing", trailNetworkHoverFilter(id));
           map?.setFilter("trail-network-hover", trailNetworkHoverFilter(id));
-          setHoveredTrail(trailNetworkFeatureDetails(feature.properties));
+          setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
+        });
+        map?.on("click", "trail-network-hit-target", (event) => {
+          const feature = event.features?.[0];
+          const id = feature?.properties?.trailGroupId;
+          if (!feature || typeof id !== "string") return;
+          const priorityLayers = TRAIL_CLICK_PRIORITY_LAYERS.filter((layerId) => map?.getLayer(layerId));
+          if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) return;
+          const details = trailNetworkFeatureDetails(feature.properties);
+          if (!details.copyName) return;
+          void copyTrailName(details.copyName, navigator.clipboard).then((copied) => {
+            if (!alive) return;
+            setHoveredTrail({ id, ...details });
+            setTrailCopyFeedback({ id, status: copied ? "copied" : "failed" });
+            if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+            trailCopyTimerRef.current = setTimeout(() => {
+              setTrailCopyFeedback((current) => current?.id === id ? undefined : current);
+              trailCopyTimerRef.current = null;
+            }, TRAIL_COPY_FEEDBACK_MS);
+          });
         });
         map?.on("mouseleave", "trail-network-hit-target", () => {
           map?.getCanvas().style.removeProperty("cursor");
@@ -910,6 +970,10 @@ export function HikeMap({
     };
   }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
+  const activeTrailCopyFeedback = hoveredTrail && trailCopyFeedback?.id === hoveredTrail.id
+    ? trailCopyFeedback
+    : undefined;
+
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
       {drawEnabled ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
@@ -949,9 +1013,13 @@ export function HikeMap({
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
-      {drawing || hoveredTrail ? <p className={`map-hint${hoveredTrail && !drawing ? " map-trail-label" : ""}`} role="status" aria-live="polite">
+      {drawing || hoveredTrail ? <p className={`map-hint${hoveredTrail && !drawing ? " map-trail-label" : ""}${activeTrailCopyFeedback ? ` ${activeTrailCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
         {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
-          {hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
+          {activeTrailCopyFeedback ? (
+            <span className={`map-trail-distance map-trail-copy-feedback ${activeTrailCopyFeedback.status}`}>
+              {activeTrailCopyFeedback.status === "copied" ? "Copied" : "Couldn’t copy"}
+            </span>
+          ) : hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
           <span>{hoveredTrail?.name}</span>
         </>}
       </p> : null}

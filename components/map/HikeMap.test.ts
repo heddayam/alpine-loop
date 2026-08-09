@@ -1,9 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
+  copyTrailName,
   TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
@@ -63,14 +64,27 @@ describe("generated route map features", () => {
     );
     expect(trailNetworkFeatureDetails({ name: "  Skyline Trail  ", distanceMeters: 965.6064 })).toEqual({
       name: "Skyline Trail",
+      copyName: "Skyline Trail",
       distance: "0.6 mi",
     });
     expect(trailNetworkFeatureDetails({ name: null, distanceMeters: 30 })).toEqual({
       name: "Unnamed trail",
+      copyName: undefined,
       distance: "98 ft",
     });
     expect(trailNetworkHoverFilter("trail-group:edge-12")).toEqual(["==", ["get", "trailGroupId"], "trail-group:edge-12"]);
     expect(trailNetworkHoverFilter()).toEqual(["==", ["get", "trailGroupId"], "__none__"]);
+  });
+
+  it("copies the displayed mapped-trail name and reports clipboard failures", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    await expect(copyTrailName("Bloom Grade", { writeText })).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledWith("Bloom Grade");
+    await expect(copyTrailName("Bloom Grade", { writeText: vi.fn().mockRejectedValue(new Error("denied")) })).resolves.toBe(false);
+    await expect(copyTrailName("Bloom Grade", undefined)).resolves.toBe(false);
+    await expect(copyTrailName(undefined, { writeText })).resolves.toBe(false);
+    expect(writeText).toHaveBeenCalledTimes(1);
   });
 
   it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {

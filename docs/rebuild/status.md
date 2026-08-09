@@ -284,7 +284,15 @@ the evidence line.
   clearly dashed emphasis, and zero browser console errors. The hover badge
   was subsequently moved to the top-center map inset; desktop and 390 px live
   inspection confirmed it clears the map controls while the drawing guidance
-  remains at the bottom.
+  remains at the bottom. Named trail runs can now be clicked to copy their
+  mapped name. The distance chip briefly becomes a restrained green `Copied`
+  chip while the trail name stays visible, then returns after 1.5 seconds;
+  clipboard failures receive equally brief inline feedback. Unnamed runs do
+  not copy the display placeholder, and route or trailhead interactions take
+  priority when hit areas overlap. `npm run verify` passes 378 tests across 75
+  files plus the production build, and two consecutive `npm run test:browser`
+  runs pass all five Chromium flows. Live Henry Coe inspection confirmed the
+  click feedback and timed distance restoration on White Tank Spring Road.
 
 ## Local data and risks
 
