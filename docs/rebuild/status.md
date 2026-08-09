@@ -293,6 +293,15 @@ the evidence line.
   files plus the production build, and two consecutive `npm run test:browser`
   runs pass all five Chromium flows. Live Henry Coe inspection confirmed the
   click feedback and timed distance restoration on White Tank Spring Road.
+  Access-point markers now use the same hover language: individual markers
+  receive a modest size and white-casing lift with a type-and-name badge, while
+  wider-zoom clusters show their access-point count and grow slightly. Hover
+  state clears as soon as the map moves, and access points take precedence over
+  underlying trail hover. The shared badge now sits on the same top row as the
+  drawing controls. `npm run verify` passes 379 tests across 75 files plus the
+  production build, and two consecutive `npm run test:browser` runs pass all
+  five Chromium flows; the final positioning review is intentionally left for
+  manual UI inspection.
 
 ## Local data and risks
 

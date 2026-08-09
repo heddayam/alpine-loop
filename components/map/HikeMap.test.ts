@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
+  accessPointClusterHoverFilter,
+  accessPointFeatureDetails,
+  accessPointFeatures,
+  accessPointHoverFilter,
   copyTrailName,
   TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
@@ -55,6 +59,34 @@ function route(id: string, longitude: number): GeneratedClosedRouteV3 {
 }
 
 describe("generated route map features", () => {
+  it("keeps access-point names and types available for restrained map hover UI", () => {
+    const [feature] = accessPointFeatures([{
+      id: "coe-hq",
+      name: "  Henry Coe Headquarters  ",
+      lon: -121.55,
+      lat: 37.19,
+      kind: "parking",
+      accessState: "public",
+      confidence: "high",
+    }]).features;
+
+    expect(feature?.properties).toMatchObject({ id: "coe-hq", name: "  Henry Coe Headquarters  ", kind: "parking" });
+    expect(accessPointFeatureDetails(feature?.properties)).toEqual({
+      id: "coe-hq",
+      kindLabel: "Parking",
+      name: "Henry Coe Headquarters",
+    });
+    expect(accessPointFeatureDetails({ id: "unnamed", kind: "trailhead", name: " " })).toEqual({
+      id: "unnamed",
+      kindLabel: "Trailhead",
+      name: "Unnamed access point",
+    });
+    expect(accessPointHoverFilter("coe-hq")).toEqual(["==", ["get", "id"], "coe-hq"]);
+    expect(accessPointHoverFilter()).toEqual(["==", ["get", "id"], "__none__"]);
+    expect(accessPointClusterHoverFilter(42)).toEqual(["==", ["get", "cluster_id"], 42]);
+    expect(accessPointClusterHoverFilter()).toEqual(["==", ["get", "cluster_id"], -1]);
+  });
+
   it("loads mapped trails only at detailed zoom and keeps hover names useful", () => {
     const bounds = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
 
