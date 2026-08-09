@@ -597,6 +597,9 @@ select.control { padding-right: var(--s1); cursor: pointer; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.map-trail-copy-feedback { font-weight: 700; }
+.map-trail-copy-feedback.copied { color: #fff; background: var(--accent); border-color: var(--accent); }
+.map-trail-copy-feedback.failed { color: var(--danger); background: var(--danger-soft); border-color: var(--danger); }
 
 /* ------------------------------------------------------------- results */
 .results-panel { z-index: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; background: var(--surface-2); border-left: 1px solid var(--line-2); scrollbar-width: thin; }
