@@ -281,7 +281,10 @@ the evidence line.
   production build, and two consecutive `npm run test:browser` runs pass all
   five Chromium flows. Live Henry Coe inspection confirmed the network after
   one zoom step from the pack overview, a 1.8-mile contiguous named hover run,
-  clearly dashed emphasis, and zero browser console errors.
+  clearly dashed emphasis, and zero browser console errors. The hover badge
+  was subsequently moved to the top-center map inset; desktop and 390 px live
+  inspection confirmed it clears the map controls while the drawing guidance
+  remains at the bottom.
 
 ## Local data and risks
 

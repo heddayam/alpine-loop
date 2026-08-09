@@ -577,7 +577,13 @@ select.control { padding-right: var(--s1); cursor: pointer; }
   border-radius: var(--radius);
   font-size: var(--fs-xs);
 }
-.map-trail-label { display: flex; gap: var(--s2); align-items: center; }
+.map-trail-label {
+  top: calc(var(--s3) + 2.25rem);
+  bottom: auto;
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
 .map-trail-distance {
   display: grid;
   place-items: center;
