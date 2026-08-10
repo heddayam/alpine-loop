@@ -20,6 +20,18 @@ describe("CreateBatchRouteJobV1", () => {
     expect(createBatchRouteJobV1Schema.parse(validRequest)).toEqual(validRequest);
   });
 
+  it("accepts a reviewed-region-wide launch without drive-time inputs", () => {
+    const { origin: _origin, durationMinutes: _durationMinutes, ...regionWide } = validRequest;
+    expect(createBatchRouteJobV1Schema.parse(regionWide)).toEqual(regionWide);
+  });
+
+  it("requires origin and drive time to be provided together", () => {
+    const { origin: _origin, ...withoutOrigin } = validRequest;
+    const { durationMinutes: _durationMinutes, ...withoutDuration } = validRequest;
+    expect(createBatchRouteJobV1Schema.safeParse(withoutOrigin).success).toBe(false);
+    expect(createBatchRouteJobV1Schema.safeParse(withoutDuration).success).toBe(false);
+  });
+
   it("fixes the per-access-point result cap at ten", () => {
     expect(createBatchRouteJobV1Schema.safeParse({ ...validRequest, routesPerAccessPoint: 3 }).success).toBe(false);
   });
