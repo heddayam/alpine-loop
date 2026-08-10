@@ -23,8 +23,8 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.183, 37.155, -122.14, 37.178] } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const firstCard = page.locator(".route-card").first();
-  await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1.*Simple loop/ })).toBeVisible();
-  await expect(firstCard.getByText("Trail segments", { exact: true })).toBeVisible();
+  await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ })).toBeVisible();
+  await expect(firstCard.getByRole("region", { name: "Trail segments" })).toBeVisible();
   const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
   await firstSegment.hover();
   await expect(firstSegment).toHaveClass(/hovered/);
@@ -36,7 +36,10 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Quick-search routes")).toHaveValue("10");
-  await expect(page.getByRole("switch", { name: "Show region boundaries" })).not.toBeChecked();
+  const regionBoundarySwitch = page.getByRole("switch", { name: "Show region boundaries" });
+  await expect(regionBoundarySwitch).not.toBeChecked();
+  await regionBoundarySwitch.click();
+  await expect(regionBoundarySwitch).toBeChecked();
   await expect(page.getByLabel("Search effort")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Clear results" }).click();
@@ -87,6 +90,38 @@ test("Full search launches a persistent region-wide job without an origin and re
   await jobs.getByRole("button", { name: "View results" }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
+  expect(harness.blockedExternalRequests).toEqual([]);
+});
+
+test("shared result starts anchor precisely and reveal route numbers at trail zoom", async ({ page }) => {
+  const harness = await installOfflineHarness(page, { routeCount: 10 });
+  await page.goto("/");
+
+  await enterDrawnArea(page);
+  await page.getByRole("button", { name: "Quick search" }).click();
+  await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+
+  const expandedPins = page.locator(".route-pin-expanded");
+  await expect(expandedPins).toHaveCount(2);
+  const numberedPins = expandedPins.locator(".route-pin");
+  await expect(numberedPins).toHaveCount(10);
+  await expect(numberedPins).toHaveText(["1", "3", "5", "7", "9", "2", "4", "6", "8", "10"]);
+  const anchors = await expandedPins.evaluateAll((groups) => groups.map((group) => {
+    const anchor = group.getBoundingClientRect();
+    const tip = group.querySelector<HTMLElement>(".route-pin-tip")!.getBoundingClientRect();
+    return Math.abs((tip.left + tip.width / 2) - (anchor.left + anchor.width / 2)) < 0.5
+      && Math.abs(tip.bottom - anchor.bottom) < 0.5;
+  }));
+  expect(anchors).toEqual([true, true]);
+  const visuals = await numberedPins.evaluateAll((pins) => pins.map((pin) => {
+    const marker = pin.getBoundingClientRect();
+    const style = getComputedStyle(pin);
+    return {
+      contained: marker.width >= marker.height,
+      whiteSpace: style.whiteSpace,
+    };
+  }));
+  expect(visuals.every(({ contained, whiteSpace }) => contained && whiteSpace === "nowrap")).toBe(true);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

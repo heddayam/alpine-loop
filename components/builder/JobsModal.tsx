@@ -124,12 +124,9 @@ export function JobsModal({
   const mutate = async (job: RouteJob, action: "cancel" | "delete") => {
     const pending: PendingAction = action === "cancel" ? "cancelling" : "deleting";
     setPendingByJob((current) => ({ ...current, [job.id]: pending }));
-    setFeedback({
-      kind: "status",
-      text: action === "cancel"
-        ? "Cancellation requested. Completed routes will be kept."
-        : "Deletion requested. The job will disappear when removal finishes.",
-    });
+    setFeedback(action === "cancel"
+      ? { kind: "status", text: "Cancellation requested. Completed routes will be kept." }
+      : undefined);
     try {
       const response = await fetch(`/api/route-jobs/${job.id}${action === "cancel" ? "/cancel" : ""}`, {
         method: action === "cancel" ? "POST" : "DELETE",

@@ -102,7 +102,10 @@ export function SettingsModal({
                 type="checkbox"
                 role="switch"
                 checked={draft.includeUncertainAccess}
-                onChange={(event) => setDraft((current) => ({ ...current, includeUncertainAccess: event.currentTarget.checked }))}
+                onChange={(event) => {
+                  const includeUncertainAccess = event.currentTarget.checked;
+                  setDraft((current) => ({ ...current, includeUncertainAccess }));
+                }}
               />
             </label>
             <label className="switch-row" title="Shows the exact installed-pack coverage outlines on the map.">
@@ -111,7 +114,10 @@ export function SettingsModal({
                 type="checkbox"
                 role="switch"
                 checked={draft.showRegionBoundaries}
-                onChange={(event) => setDraft((current) => ({ ...current, showRegionBoundaries: event.currentTarget.checked }))}
+                onChange={(event) => {
+                  const showRegionBoundaries = event.currentTarget.checked;
+                  setDraft((current) => ({ ...current, showRegionBoundaries }));
+                }}
               />
             </label>
             <div className="count-field">
@@ -122,7 +128,10 @@ export function SettingsModal({
                 min="1"
                 max="20"
                 value={draft.quickSearchRouteCount}
-                onChange={(event) => setDraft((current) => ({ ...current, quickSearchRouteCount: Number(event.currentTarget.value) }))}
+                onChange={(event) => {
+                  const quickSearchRouteCount = Number(event.currentTarget.value);
+                  setDraft((current) => ({ ...current, quickSearchRouteCount }));
+                }}
               />
               <small>1 to 20 alternatives</small>
             </div>
