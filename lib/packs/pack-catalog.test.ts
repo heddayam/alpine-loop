@@ -61,9 +61,10 @@ describe("catalog-linked pack discovery", () => {
       "henry-coe",
       "marin-mount-tam",
       "tahoe-eldorado",
+      "central-cascades",
     ]);
     expect(catalog.regions.map(({ state }) => state)).toEqual([
-      "unavailable", "unavailable", "unavailable", "unavailable", "planned", "planned",
+      "unavailable", "unavailable", "unavailable", "unavailable", "planned", "planned", "planned",
     ]);
   });
 
