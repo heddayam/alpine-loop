@@ -125,6 +125,38 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.nearCandidates.length).toBeGreaterThan(0);
   });
 
+  it("retains maximum-elevation failures as labeled near candidates", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      maximumElevationFeet: { min: 0, max: 500 },
+    }), { budget });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.length).toBeGreaterThan(0);
+    expect(result.nearCandidates[0]!.violatedConstraints).toContain("maximum-elevation-outside-range");
+  });
+
+  it("retains shared-stem failures as labeled near candidates", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "p", length: 500 },
+      { id: 2, from: "p", to: "a", length: 800 },
+      { id: 3, from: "a", to: "b", length: 800 },
+      { id: 4, from: "b", to: "p", length: 800 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 35, maximumSharedStemMiles: 0.2, allowMultiCycle: false },
+      distanceMiles: { min: 2.05, max: 2.2 },
+    }), { budget });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.length).toBeGreaterThan(0);
+    expect(result.nearCandidates[0]!.violatedConstraints).toContain("shared-stem-above-maximum");
+  });
+
   it("constructs a bridge-stem lollipop when repetition is allowed", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "p", length: 500 },
