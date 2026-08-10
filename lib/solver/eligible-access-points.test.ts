@@ -104,9 +104,9 @@ describe("eligible access-point enumeration", () => {
     expect(result.noCycleExcluded).toBe(1);
   });
 
-  it("includes portal nodes just outside a named boundary without relaxing drawn or drive-time geometry", () => {
+  it("includes trail portals in the named-region approach band without relaxing drawn or drive-time geometry", () => {
     const nearBoundaryPortal = point("portal", {
-      lon: 1 + 10 / 111_195,
+      lon: 1 + 499 / 111_195,
       trailComponentId: "trail:portal",
       reachableTrailKm: 10,
     });
@@ -115,10 +115,14 @@ describe("eligible access-point enumeration", () => {
       coverage: AREA,
       summary: { mode: "named-region" as const, label: "Park", region: { id: "park", name: "Park" } },
     };
-    expect(PORTAL_NAMED_REGION_TOLERANCE_M).toBe(25);
+    expect(PORTAL_NAMED_REGION_TOLERANCE_M).toBe(500);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, namedFilter)).toBe(true);
     expect(accessPointMatchesResolvedFilter(
-      { ...nearBoundaryPortal, lon: 1 + 30 / 111_195 },
+      { ...nearBoundaryPortal, lon: 1 + 501 / 111_195 },
+      namedFilter,
+    )).toBe(false);
+    expect(accessPointMatchesResolvedFilter(
+      { ...nearBoundaryPortal, trailComponentId: undefined },
       namedFilter,
     )).toBe(false);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {

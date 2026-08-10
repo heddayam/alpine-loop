@@ -70,28 +70,48 @@ inspection show that an included loop-capable network would otherwise be cut.
 The following relations were verified against live OSM metadata on 2026-08-10
 and predate the pinned 2026-08-06 Washington extract:
 
-| Search region | OSM object | Verified object version and timestamp |
-| --- | --- | --- |
-| Glacier Peak Wilderness | `relation/6115914` | version 14, `2025-02-03T23:34:11Z` |
-| Alpine Lakes Wilderness | `relation/6112652` | version 19, `2025-02-03T23:34:11Z` |
-| Teanaway Community Forest | `relation/6437099` | version 17, `2023-08-04T01:35:02Z` |
+| Candidate | OSM object | Verified metadata | v1 decision |
+| --- | --- | --- | --- |
+| Glacier Peak Wilderness | `relation/6115914` | version 14, `2025-02-03T23:34:11Z` | Retain with the shared 500 m named-region approach band. Nearest default-eligible portals measured 49 m, 51 m, 85 m, and 219 m outside the legal boundary. |
+| Alpine Lakes Wilderness | `relation/6112652` | version 19, `2025-02-03T23:34:11Z` | Retain with the same shared rule. Numerous default-eligible portals measured 91–489 m outside the legal boundary. |
+| Teanaway Community Forest | `relation/6437099` | version 17, `2023-08-04T01:35:02Z` | Retain: 22 default-eligible derived portals fall inside the polygon. |
 
-The whole pack is also required. Publication of each selector still requires
-at least one in-coverage derived portal that reaches cycle-bearing topology.
-Napeequa/Chiwawa, Icicle/Enchantments, Snoqualmie, and Cle Elum remain scenario
-clusters only: do not publish selectors for them until a stable named OSM
-polygon is verified in a future pinned snapshot and passes portal/cycle checks.
+The v1 selectors are therefore the whole pack, Glacier Peak Wilderness, Alpine
+Lakes Wilderness, and Teanaway Community Forest. The approach band is shared
+runtime behavior for every reviewed named region; it is not custom geometry or
+a Central Cascades exception. It applies only to derived trail portals and does
+not relax drawn-area or drive-time geometry.
+
+This remains a measured limitation: straight-line proximity to a legal boundary
+does not prove that a portal's trail enters the named area, and a legitimate
+approach farther than 500 m remains excluded. Every selector is therefore
+reviewed against its portal distribution. A future topology-aware association
+should replace proximity with evidence that the portal's trail network reaches
+the named area. Napeequa/Chiwawa, Icicle/Enchantments, Snoqualmie, and Cle Elum
+remain scenario clusters; do not publish narrower selectors until a stable
+named polygon passes the same access and cycle checks.
 
 ## Representative scenario anchors
 
-`scenarios.json` covers eight required clusters: Little Giant/High Pass,
+`scenarios.json` covers eight required clusters: east Glacier Peak/White River,
 Chiwawa/Spider Meadow, west Glacier Peak, Stevens Pass, Icicle/Enchantments,
-Snoqualmie/Alpine Lakes, Cle Elum, and Teanaway. Coordinates are OSM trailhead
+Snoqualmie/Alpine Lakes, Cle Elum/Salmon la Sac, and Teanaway. Coordinates are OSM trailhead
 or trail-system review anchors, not independently created starts. Each must
 resolve to a generic derived portal within 500 m before activation. Every
-cluster has a broad plausible exact request and a deliberately impossible
-gain request that must remain a labeled close match rather than silently
-relaxing constraints.
+cluster has a broad plausible exact request and a deliberately impossible gain
+request over the same plausible distance range; it must remain a labeled close match rather than silently
+relaxing constraints. The remote scenarios allow up to 55 percent repeated
+trail, except for North Fork Sauk whose measured minimum stem is 14.0 km; that
+backpacking-scale lollipop allows 80 percent.
+These scenario-specific limits do not change the product default or relax
+constraints silently.
+
+Little Giant Trailhead remains a default-eligible Glacier Peak selector portal
+39.6 m from its scenario review coordinate and 85 m outside the legal wilderness
+boundary. It reaches a cycle in the compiled topology, but the current solver
+returned no closed-route candidate before exhausting the Thorough 40,000-edge
+and 500,000-state limits. It remains available to users and is retained in
+portal review, but it is not misrepresented as a passing exact-route scenario.
 
 ## Sources, dates, and licensing
 
