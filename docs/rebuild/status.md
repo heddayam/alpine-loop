@@ -326,6 +326,29 @@ the evidence line.
   build, and two consecutive `npm run test:browser` runs pass all five Chromium
   flows. Existing packs remain compatible.
 
+- 2026-08-09 — completed a full post-gate correctness, lifecycle,
+  maintainability, performance, memory, and deletion audit. Solver candidates
+  that miss only maximum elevation or shared approach constraints now survive
+  as explicitly labeled close matches. Detailed geometry bounds and fragmented
+  topology audits use allocation-free iterative extrema rather than unbounded
+  argument spreads. Persistent jobs now terminate disconnected or unresponsive
+  solver children, stream-limit request bodies, label unavailable pinned packs
+  stale, remove polling listeners, and query queued work directly. UI result
+  restoration, pagination, Quick transitions, multi-pack fanout, location
+  changes, and result clearing reject stale asynchronous work; GitHub issue #13
+  is complete with an accessible Clear results control. Pack discovery uses one
+  page snapshot, viewport trail deduplication uses physical-edge identities,
+  large graph reads inherit client cancellation, reachability tombstones are
+  bounded, and Turbopack no longer traces the whole project into server output.
+  More than 600 lines of superseded checkpoint runners and dead adapters,
+  helpers, styles, and types were removed; the complete change is net-negative
+  in source lines. Two consecutive `npm run verify` runs each pass 414 tests
+  across 78 files plus a production build without whole-project tracing
+  warnings, and two consecutive
+  `npm run test:browser` runs each pass all five Chromium flows. No contract or
+  pack schema changed, so installed schema-6 packs remain compatible and no
+  rebuild was required.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are
