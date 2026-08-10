@@ -32,14 +32,13 @@ export async function GET(
   const includeUncertainAccess = url.searchParams.get("includeUncertainAccess") === "true";
   const includeTrails = url.searchParams.get("includeTrails") !== "false";
   const includeAccessPoints = url.searchParams.get("includeAccessPoints") !== "false";
-  const controller = new AbortController();
-  const repository = await pack.loadRepository(controller.signal);
+  const repository = await pack.loadRepository(request.signal);
   try {
     if (!includeTrails) {
       const accessPoints = await repository.getAccessPointCandidates({
         bbox: parsedBounds.data,
         includeUncertainAccess,
-        signal: controller.signal,
+        signal: request.signal,
       });
       return NextResponse.json({
         // Starts with no reachable cycle can never yield a loop, so drawing them
@@ -61,17 +60,23 @@ export async function GET(
       repository.getInducedGraph({
         bbox: parsedBounds.data,
         includeUncertainAccess: true,
-        signal: controller.signal,
+        signal: request.signal,
       }),
     ]);
     const nodes = graph.nodes;
-    const seen = new Set<string>();
+    const seen = new Set<string | number>();
     const features: FeatureCollection<LineString>["features"] = [];
     if (pack.kind === "installed") {
       for (const edge of graph.edges) {
-        const key = canonicalGeometry(edge.coordinates);
+        const key = edge.physicalEdgeKey ?? canonicalGeometry(edge.coordinates);
         if (seen.has(key)) continue;
         seen.add(key);
+        if (features.length === MAXIMUM_TRAIL_FEATURES) {
+          return NextResponse.json(
+            { error: "Boundary contains too many mapped trail segments; draw a smaller rectangle" },
+            { status: 422 },
+          );
+        }
         features.push({
           type: "Feature",
           properties: {
@@ -84,12 +89,6 @@ export async function GET(
           },
           geometry: { type: "LineString", coordinates: edge.coordinates.map((coordinate) => [...coordinate]) },
         });
-        if (features.length > MAXIMUM_TRAIL_FEATURES) {
-          return NextResponse.json(
-            { error: "Boundary contains too many mapped trail segments; draw a smaller rectangle" },
-            { status: 422 },
-          );
-        }
       }
     }
     return NextResponse.json({

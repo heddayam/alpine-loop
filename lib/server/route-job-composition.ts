@@ -19,11 +19,16 @@ declare global {
 function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolveDelay, reject) => {
     if (signal.aborted) return reject(signal.reason);
-    const timer = setTimeout(resolveDelay, milliseconds);
-    signal.addEventListener("abort", () => {
+    const abort = () => {
       clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
       reject(signal.reason);
-    }, { once: true });
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolveDelay();
+    }, milliseconds);
+    signal.addEventListener("abort", abort, { once: true });
   });
 }
 

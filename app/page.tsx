@@ -1,6 +1,6 @@
 import { HikeBuilder } from "@/components/builder/HikeBuilder";
-import { loadBuilderPack } from "@/lib/packs/builder-pack";
-import { loadPackCatalog } from "@/lib/packs/pack-catalog";
+import { builderPackFromInstalledPacks } from "@/lib/packs/builder-pack";
+import { discoverCatalogPacks } from "@/lib/packs/pack-catalog";
 
 type HomeProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -17,10 +17,13 @@ function selectedPackIds(params: Record<string, string | string[] | undefined>):
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
-  const catalog = await loadPackCatalog();
+  const { catalog, installedPacks } = await discoverCatalogPacks();
   const selected = selectedPackIds(params);
   const explicitlyEmpty = first(params.packs) === "none";
-  const pack = await loadBuilderPack(first(params.pack) ?? (explicitlyEmpty ? undefined : selected[0]));
+  const pack = builderPackFromInstalledPacks(
+    installedPacks,
+    first(params.pack) ?? (explicitlyEmpty ? undefined : selected[0]),
+  );
 
   return (
     <HikeBuilder

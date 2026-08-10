@@ -19,7 +19,7 @@ export type InstalledPack = {
 };
 
 export function localPackRoot(): string {
-  return path.resolve(process.env.ALPINE_PACK_ROOT ?? ".local-data/packs");
+  return path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_PACK_ROOT ?? ".local-data/packs");
 }
 
 function parseCurrentPointer(value: unknown): CurrentPointer {
@@ -101,8 +101,4 @@ export async function loadInstalledPackVersion(
   const resolvedDirectory = await realpath(directory);
   assertInside(resolvedRoot, resolvedDirectory);
   return { root: resolvedRoot, directory: resolvedDirectory, manifestPath, databasePath, manifest };
-}
-
-export async function loadSantaCruzPack(root = localPackRoot()): Promise<InstalledPack | null> {
-  return loadInstalledPack("santa-cruz-mountains", root);
 }

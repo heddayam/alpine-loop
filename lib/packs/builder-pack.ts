@@ -1,6 +1,6 @@
 import type { BuilderPackConfig } from "./fixture-pack";
 import { FIXTURE_BUILDER_PACK } from "./fixture-pack";
-import { localPackRoot } from "./installed-pack";
+import { localPackRoot, type InstalledPack } from "./installed-pack";
 import { discoverCatalogPacks } from "./pack-catalog";
 
 function insetBounds(
@@ -17,11 +17,10 @@ function insetBounds(
   ];
 }
 
-export async function loadBuilderPack(
+export function builderPackFromInstalledPacks(
+  installedPacks: ReadonlyMap<string, InstalledPack>,
   packId?: string,
-  root = localPackRoot(),
-): Promise<BuilderPackConfig> {
-  const { installedPacks } = await discoverCatalogPacks(root);
+): BuilderPackConfig {
   const installed = (packId ? installedPacks.get(packId) : undefined)
     ?? installedPacks.values().next().value;
   if (!installed) return FIXTURE_BUILDER_PACK;
@@ -38,4 +37,12 @@ export async function loadBuilderPack(
     display: manifest.display,
     trailNetwork: { type: "FeatureCollection", features: [] },
   };
+}
+
+export async function loadBuilderPack(
+  packId?: string,
+  root = localPackRoot(),
+): Promise<BuilderPackConfig> {
+  const { installedPacks } = await discoverCatalogPacks(root);
+  return builderPackFromInstalledPacks(installedPacks, packId);
 }

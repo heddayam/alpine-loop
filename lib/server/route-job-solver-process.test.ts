@@ -59,4 +59,26 @@ describe("RouteJobSolverProcess", () => {
     await session.close();
     expect(performance.now() - startedAt).toBeLessThan(2_000);
   });
+
+  it("rejects pending work when the child disconnects unexpectedly", async () => {
+    const session = await RouteJobSolverProcess.open(input, new AbortController().signal, {
+      modulePath: resolve(process.cwd(), "lib/server/__fixtures__/route-job-solver-fixture-child.ts"),
+      env: { ALPINE_TEST_DISCONNECT: "1" },
+    });
+
+    await expect(session.searchAccessPoint("slow-access", new AbortController().signal))
+      .rejects.toThrow("disconnected unexpectedly");
+    await session.close();
+  });
+
+  it("terminates a child that does not acknowledge graceful close", async () => {
+    const session = await RouteJobSolverProcess.open(input, new AbortController().signal, {
+      modulePath: resolve(process.cwd(), "lib/server/__fixtures__/route-job-solver-fixture-child.ts"),
+      env: { ALPINE_TEST_CLOSE_HANG: "1" },
+      closeTimeoutMs: 25,
+    });
+
+    await expect(session.close()).rejects.toThrow("did not close within 25 ms");
+    await session.close();
+  });
 });

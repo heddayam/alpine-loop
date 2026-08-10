@@ -1,6 +1,7 @@
 import type { MultiPolygon, Polygon } from "geojson";
 import { describe, expect, it } from "vitest";
 import {
+  areaBounds,
   coordinateIsInsideArea,
   lineIsInsideArea,
   segmentIsInsideArea,
@@ -45,5 +46,16 @@ describe("area geometry", () => {
     expect(coordinateIsInsideArea([5, 5], concave)).toBe(true);
     expect(segmentIsInsideArea([1, 5], [5, 5], concave)).toBe(false);
     expect(lineIsInsideArea([[1, 1], [1, 5]], concave)).toBe(true);
+  });
+
+  it("computes bounds for detailed areas without spreading every coordinate onto the stack", () => {
+    const coordinates = Array.from({ length: 150_000 }, (_, index) => [
+      -123 + index / 150_000,
+      36 + (index % 10) / 10,
+    ]);
+    coordinates.push(coordinates[0]!);
+    const detailed: Polygon = { type: "Polygon", coordinates: [coordinates] };
+
+    expect(areaBounds(detailed)).toEqual([-123, 36, -122.00000666666666, 36.9]);
   });
 });

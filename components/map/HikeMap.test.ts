@@ -21,7 +21,6 @@ import {
   routeFeatures,
   routeSegmentFeatures,
   routeTrailheadPins,
-  showCoverageHatching,
   trailNetworkFeatureDetails,
   trailNetworkLineColor,
   trailNetworkLineWidth,
@@ -223,14 +222,6 @@ describe("generated route map features", () => {
     expect(textarea.remove).toHaveBeenCalledOnce();
   });
 
-  it("removes the coverage hatch after committing a boundary and restores it for redraw", () => {
-    const bounds = [-122.18, 37.155, -122.14, 37.178] as const;
-
-    expect(showCoverageHatching(null, false)).toBe(true);
-    expect(showCoverageHatching([...bounds], false)).toBe(false);
-    expect(showCoverageHatching([...bounds], true)).toBe(true);
-  });
-
   it("renders every selected pack coverage and maps the setting to layer visibility", () => {
     const coverages = [
       { type: "Polygon" as const, coordinates: [[[-122.2, 37.1], [-122.1, 37.1], [-122.1, 37.2], [-122.2, 37.2], [-122.2, 37.1]]] },
@@ -360,6 +351,8 @@ describe("generated route map features", () => {
     }));
 
     expect(markup).toContain('aria-label="Hike search map"');
+    expect(markup).toContain('<div class="map-canvas"></div>');
+    expect(markup).not.toContain('class="map-canvas" aria-hidden="true"');
     expect(markup).toContain('role="toolbar" aria-label="Draw-area tools"');
     expect(markup).toContain('aria-label="Redraw trailhead filter"');
     expect(markup).toContain('aria-label="Use demo trailhead filter"');

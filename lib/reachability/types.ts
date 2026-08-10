@@ -18,11 +18,6 @@ export type GeocodingSuggestion = {
   magicKey: string;
 };
 
-export type GeocodingResult = {
-  origin: Origin;
-  attribution: typeof ESRI_ATTRIBUTION;
-};
-
 export type Clock = {
   now(): Date;
   sleep(milliseconds: number, signal?: AbortSignal): Promise<void>;

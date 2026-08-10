@@ -5,7 +5,7 @@ import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HikeBuilder } from "./HikeBuilder";
+import { HikeBuilder, waitForPoll } from "./HikeBuilder";
 import { FIXTURE_BUILDER_PACK } from "@/lib/packs/fixture-pack";
 import { packCatalogResponseV1Schema } from "@/lib/contracts";
 
@@ -13,10 +13,11 @@ const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 vi.mock("../map/HikeMap", () => ({
-  HikeMap: ({ onBoundsChange, routes = [] }: {
+  HikeMap: ({ onBoundsChange, routes = [], accessPoints = [] }: {
     onBoundsChange: (bounds: [number, number, number, number] | null) => void;
     routes?: Array<{ id: string }>;
-  }) => <div aria-label="Mock map"><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output></div>,
+    accessPoints?: Array<{ id: string }>;
+  }) => <div aria-label="Mock map"><button type="button" onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button type="button" onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map access points">{accessPoints.map(({ id }) => id).join(",")}</output></div>,
 }));
 
 const accessPoint = { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, kind: "trailhead", accessState: "public", confidence: "high" };
@@ -113,6 +114,24 @@ describe("HikeBuilder unified route search", () => {
     expect(router.replace).toHaveBeenLastCalledWith("/?packs=southern-east-bay");
   });
 
+  it("keeps successful pack access points when another selected pack request fails", async () => {
+    vi.restoreAllMocks();
+    mockBaseFetch((url) => {
+      if (url.startsWith("/api/packs/fixture-pack/access-points?")) {
+        return new Response(JSON.stringify({ accessPoints: [accessPoint] }), { status: 200 });
+      }
+      if (url.startsWith("/api/packs/southern-east-bay/access-points?")) {
+        return Promise.reject(new TypeError("offline"));
+      }
+      return undefined;
+    });
+
+    render(<HikeBuilder regions={catalogRegions} />);
+    await userEvent.click(screen.getByRole("button", { name: /Southern East Bay.*Available/ }));
+
+    await waitFor(() => expect(screen.getByLabelText("Map access points")).toHaveTextContent("fixture-pack::trailhead-a"));
+  });
+
   it("adds a saved job's pack and restores cross-pack results without losing the workspace", async () => {
     vi.restoreAllMocks();
     const otherJob = {
@@ -203,6 +222,83 @@ describe("HikeBuilder unified route search", () => {
     expect(restoreRequests).toBe(2);
   });
 
+  it("does not apply a linked job restore after the workspace changes", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    const restore = deferred<Response>();
+    let restoreSignal: AbortSignal | undefined;
+    mockBaseFetch((url, init) => {
+      if (url !== `/api/route-jobs/${completed.id}/results?limit=50`) return undefined;
+      restoreSignal = init?.signal ?? undefined;
+      return restore.promise;
+    });
+
+    render(<HikeBuilder restoreJobId={completed.id} />);
+    await waitFor(() => expect(restoreSignal).toBeDefined());
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    expect(restoreSignal?.aborted).toBe(true);
+
+    restore.resolve(new Response(JSON.stringify({
+      version: 1,
+      job: completed,
+      results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+    }), { status: 200 }));
+    await act(async () => { await restore.promise; });
+
+    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("");
+  });
+
+  it("finishes pagination loading after advancing a saved result page", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 2 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    const firstPage = {
+      version: 1,
+      job: completed,
+      results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      nextCursor: "cursor-1",
+    };
+    const secondPage = {
+      version: 1,
+      job: completed,
+      results: [{
+        matchType: "exact",
+        accessPointId: "trailhead-b",
+        route: { ...generatedRoute, id: "second-route" },
+      }],
+    };
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && !init?.method) {
+        return new Response(JSON.stringify({ version: 1, jobs: [completed] }), { status: 200 });
+      }
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50`) {
+        return new Response(JSON.stringify(firstPage), { status: 200 });
+      }
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50&cursor=cursor-1`) {
+        return new Response(JSON.stringify(secondPage), { status: 200 });
+      }
+      return undefined;
+    });
+
+    render(<HikeBuilder />);
+    await userEvent.click(await screen.findByRole("button", { name: "Jobs" }));
+    await userEvent.click(await screen.findByRole("button", { name: `View results for ${searchRegion.name}` }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next 50 routes" }));
+
+    expect(await screen.findByRole("button", { name: "Last page" })).toBeDisabled();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("second-route");
+  });
+
   it("remounts the workspace for a new pack so pack-specific draft and results state reset", async () => {
     const view = render(<HikeBuilder key="fixture-pack" />);
     await userEvent.selectOptions(screen.getByLabelText("Typical drive time"), "45");
@@ -290,6 +386,30 @@ describe("HikeBuilder unified route search", () => {
     const request = JSON.parse(String(generationCall?.[1]?.body));
     expect(request).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.18, 37.15, -122.13, 37.18] }, limit: 10 });
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+  });
+
+  it("clears current results and their map traces from the results header", async () => {
+    render(<HikeBuilder />);
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear results" }));
+
+    expect(screen.queryByRole("heading", { name: "Results" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("");
+  });
+
+  it("removes the abort listener after a reachability poll delay completes", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+    const pending = waitForPoll(250, controller.signal);
+
+    vi.advanceTimersByTime(250);
+    await pending;
+
+    expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
   });
 
   it("resolves drive time before Quick when no boundary is drawn", async () => {
