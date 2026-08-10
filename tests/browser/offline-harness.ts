@@ -47,6 +47,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
   let settings: AppSettingsV1 = {
     schemaVersion: 1,
     includeUncertainAccess: true,
+    showRegionBoundaries: false,
     quickSearchRouteCount: 10,
     gradeConstraintEnabled: false,
     selectedGradePreset: "moderate",
