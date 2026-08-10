@@ -2,6 +2,7 @@ import type { Origin, ReachabilityRequest } from "@/lib/contracts";
 import type { AreaGeometry, Clock } from "./types";
 
 export const REACHABILITY_JOB_TTL_MS = 30 * 60 * 1_000;
+export const REACHABILITY_TOMBSTONE_TTL_MS = REACHABILITY_JOB_TTL_MS;
 
 export type ReachabilityJob = {
   id: string;
@@ -40,22 +41,26 @@ export function reachabilityRequestKey(request: ReachabilityRequest): string {
 export class MemoryReachabilityJobStore {
   private readonly jobs = new Map<string, ReachabilityJob>();
   private readonly byRequest = new Map<string, string>();
-  private readonly expiredIds = new Set<string>();
+  private readonly expiredIds = new Map<string, number>();
 
   constructor(private readonly clock: Clock) {}
 
   private expire(): void {
     const now = this.clock.now().getTime();
+    for (const [id, expiresAt] of this.expiredIds) {
+      if (expiresAt <= now) this.expiredIds.delete(id);
+    }
     for (const [id, job] of this.jobs) {
       if (job.expiresAt.getTime() > now) continue;
       this.jobs.delete(id);
       if (this.byRequest.get(job.requestKey) === id) this.byRequest.delete(job.requestKey);
-      this.expiredIds.add(id);
+      this.expiredIds.set(id, now + REACHABILITY_TOMBSTONE_TTL_MS);
     }
   }
 
   create(id: string, request: ReachabilityRequest): ReachabilityJob {
     this.expire();
+    this.expiredIds.delete(id);
     const now = this.clock.now();
     const job: ReachabilityJob = {
       id,
