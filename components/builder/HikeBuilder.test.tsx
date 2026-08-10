@@ -222,6 +222,83 @@ describe("HikeBuilder unified route search", () => {
     expect(restoreRequests).toBe(2);
   });
 
+  it("does not apply a linked job restore after the workspace changes", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    const restore = deferred<Response>();
+    let restoreSignal: AbortSignal | undefined;
+    mockBaseFetch((url, init) => {
+      if (url !== `/api/route-jobs/${completed.id}/results?limit=50`) return undefined;
+      restoreSignal = init?.signal ?? undefined;
+      return restore.promise;
+    });
+
+    render(<HikeBuilder restoreJobId={completed.id} />);
+    await waitFor(() => expect(restoreSignal).toBeDefined());
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    expect(restoreSignal?.aborted).toBe(true);
+
+    restore.resolve(new Response(JSON.stringify({
+      version: 1,
+      job: completed,
+      results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+    }), { status: 200 }));
+    await act(async () => { await restore.promise; });
+
+    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("");
+  });
+
+  it("finishes pagination loading after advancing a saved result page", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 2 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    const firstPage = {
+      version: 1,
+      job: completed,
+      results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      nextCursor: "cursor-1",
+    };
+    const secondPage = {
+      version: 1,
+      job: completed,
+      results: [{
+        matchType: "exact",
+        accessPointId: "trailhead-b",
+        route: { ...generatedRoute, id: "second-route" },
+      }],
+    };
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs" && !init?.method) {
+        return new Response(JSON.stringify({ version: 1, jobs: [completed] }), { status: 200 });
+      }
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50`) {
+        return new Response(JSON.stringify(firstPage), { status: 200 });
+      }
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50&cursor=cursor-1`) {
+        return new Response(JSON.stringify(secondPage), { status: 200 });
+      }
+      return undefined;
+    });
+
+    render(<HikeBuilder />);
+    await userEvent.click(await screen.findByRole("button", { name: "Jobs" }));
+    await userEvent.click(await screen.findByRole("button", { name: `View results for ${searchRegion.name}` }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next 50 routes" }));
+
+    expect(await screen.findByRole("button", { name: "Last page" })).toBeDisabled();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("second-route");
+  });
+
   it("remounts the workspace for a new pack so pack-specific draft and results state reset", async () => {
     const view = render(<HikeBuilder key="fixture-pack" />);
     await userEvent.selectOptions(screen.getByLabelText("Typical drive time"), "45");

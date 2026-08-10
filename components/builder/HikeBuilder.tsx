@@ -232,6 +232,7 @@ export function HikeBuilder({
   const reachabilityControllerRef = useRef<AbortController | null>(null);
   const batchPageControllerRef = useRef<AbortController | null>(null);
   const batchResultGeometryControllerRef = useRef<AbortController | null>(null);
+  const restoredJobControllerRef = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
   const jobsRef = useRef<RouteJob[]>([]);
   const jobsLoadedRef = useRef(false);
@@ -368,6 +369,8 @@ export function HikeBuilder({
     batchPageControllerRef.current = null;
     batchResultGeometryControllerRef.current?.abort();
     batchResultGeometryControllerRef.current = null;
+    restoredJobControllerRef.current?.abort();
+    restoredJobControllerRef.current = null;
     setGenerationState("idle");
     setGenerationMessage("");
     setGenerationResponse(null);
@@ -764,6 +767,7 @@ export function HikeBuilder({
     batchPageControllerRef.current?.abort();
     batchPageControllerRef.current = null;
     batchResultGeometryControllerRef.current?.abort();
+    setBatchPageLoading(false);
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
@@ -813,7 +817,9 @@ export function HikeBuilder({
   useEffect(() => {
     if (!restoreJobId || restoredJobRef.current === restoreJobId) return;
     restoredJobRef.current = restoreJobId;
+    restoredJobControllerRef.current?.abort();
     const controller = new AbortController();
+    restoredJobControllerRef.current = controller;
     let settled = false;
     void fetch(`/api/route-jobs/${encodeURIComponent(restoreJobId)}/results?limit=50`, {
       cache: "no-store",
@@ -822,6 +828,7 @@ export function HikeBuilder({
       const raw: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error("Job results could not be loaded.");
       const page = routeJobResultsPageSchema.parse(raw);
+      if (controller.signal.aborted || restoredJobControllerRef.current !== controller) return;
       if (!availablePackConfigs.has(page.job.pack.id)) {
         setGenerationState("error");
         setGenerationMessage("The region pack for this saved job is not installed.");
@@ -839,9 +846,12 @@ export function HikeBuilder({
         setGenerationState("error");
         setGenerationMessage(error instanceof Error ? error.message : "Job results could not be loaded.");
       }
+    }).finally(() => {
+      if (restoredJobControllerRef.current === controller) restoredJobControllerRef.current = null;
     });
     return () => {
       controller.abort();
+      if (restoredJobControllerRef.current === controller) restoredJobControllerRef.current = null;
       // React Strict Mode immediately replays effects in development. Let the
       // replay retry an aborted restore instead of treating it as completed.
       if (!settled && restoredJobRef.current === restoreJobId) restoredJobRef.current = undefined;
@@ -897,6 +907,7 @@ export function HikeBuilder({
     reachabilityControllerRef.current?.abort();
     batchPageControllerRef.current?.abort();
     batchResultGeometryControllerRef.current?.abort();
+    restoredJobControllerRef.current?.abort();
     jobsRefreshGenerationRef.current += 1;
     jobsRefreshControllerRef.current?.abort();
   }, []);
