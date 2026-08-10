@@ -18,6 +18,12 @@ const request: CreateBatchRouteJobV1 = {
   criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true },
   routesPerAccessPoint: 10,
 };
+const regionWideRequest: CreateBatchRouteJobV1 = {
+  version: 1, packId: "fixture-pack",
+  searchRegionId: "pack:fixture-pack",
+  criteria: request.criteria,
+  routesPerAccessPoint: 10,
+};
 const geometry = { type: "Polygon" as const, coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };
 
 function route(id: string): GeneratedClosedRouteV3 {
@@ -52,6 +58,28 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
 }
 
 describe("RouteJobService", () => {
+  it("runs a region-wide job without drive-time resolution or geometry", async () => {
+    const { service, dependencies, store } = harness();
+
+    const job = await service.create(regionWideRequest);
+    await service.waitUntilIdle();
+
+    expect(await service.get(job.id)).toMatchObject({
+      status: "completed",
+      request: regionWideRequest,
+      progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2 },
+    });
+    expect(await service.get(job.id)).not.toHaveProperty("filterGeometry");
+    expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
+    expect(dependencies.openSearchSession).toHaveBeenCalledWith({
+      request: regionWideRequest,
+      pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
+      searchRegionId: "pack:fixture-pack",
+      signal: expect.any(AbortSignal),
+    });
+    store.close();
+  });
+
   it("runs jobs FIFO, attempts each eligible access point, and persists deterministic results", async () => {
     const { service, dependencies, store } = harness();
     const first = await service.create(request);
@@ -59,6 +87,7 @@ describe("RouteJobService", () => {
     await service.waitUntilIdle();
     expect((await service.get(first.id))?.status).toBe("completed");
     expect((await service.get(second.id))?.status).toBe("completed");
+    expect(await service.get(first.id)).toMatchObject({ filterGeometry: geometry });
     const sessions = await Promise.all(vi.mocked(dependencies.openSearchSession).mock.results.map(({ value }) => value));
     expect(sessions.flatMap((session) => vi.mocked(session.searchAccessPoint).mock.calls.map((call: unknown[]) => call[0])))
       .toEqual(["first", "second", "first", "second"]);

@@ -21,6 +21,13 @@ const request: CreateBatchRouteJobV1 = {
   },
   routesPerAccessPoint: 10,
 };
+const regionWideRequest: CreateBatchRouteJobV1 = {
+  version: 1,
+  packId: "fixture-pack",
+  searchRegionId: "pack:fixture-pack",
+  criteria: request.criteria,
+  routesPerAccessPoint: 10,
+};
 
 function route(id: string) {
   return {
@@ -53,6 +60,16 @@ const resolved = {
 };
 
 describe("SQLiteRouteJobStore", () => {
+  it("claims region-wide jobs directly as running and omits filter geometry", () => {
+    const { store } = setup();
+    const id = "00000000-0000-4000-8000-000000000013";
+    store.create(id, regionWideRequest, resolved);
+
+    expect(store.claimNext()).toMatchObject({ status: "running", request: regionWideRequest });
+    expect(store.toPublic(id, false)).not.toHaveProperty("filterGeometry");
+    store.close();
+  });
+
   it("recovers active jobs and running checkpoints for deterministic resume", () => {
     const { path, store } = setup();
     store.create("00000000-0000-4000-8000-000000000001", request, resolved);
@@ -61,6 +78,8 @@ describe("SQLiteRouteJobStore", () => {
       geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
       resolvedAt: "2026-01-01T00:00:01.000Z",
     });
+    expect(store.toPublic("00000000-0000-4000-8000-000000000001", false))
+      .toMatchObject({ filterGeometry: { type: "Polygon" } });
     const id = "00000000-0000-4000-8000-000000000001";
     store.initializeAccessPoints(id, ["b", "a"]);
     expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "b" });
