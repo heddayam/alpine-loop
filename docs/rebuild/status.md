@@ -349,6 +349,20 @@ the evidence line.
   pack schema changed, so installed schema-6 packs remain compatible and no
   rebuild was required.
 
+- 2026-08-09 — made the driving origin optional for Full search. Requests that
+  include an origin still require the paired drive-time duration and retain the
+  existing reachability intersection. Requests that omit both skip reachability
+  entirely and attempt every eligible access point in each selected reviewed
+  region. Region-wide jobs move directly from queued to running, resume without
+  synthetic geometry, use the named-region access predicate in the solver, and
+  are labeled `Entire reviewed region` in Jobs. Non-empty unresolved origin text
+  must be selected or cleared so it cannot silently broaden the search. Existing
+  version-1 saved jobs remain compatible. `npm run verify` passes 423 tests
+  across 79 files plus the production build, and two consecutive `npm run
+  test:browser` runs pass all five Chromium flows, including blank-origin Full
+  launch and result restoration. No pack schema changed, so installed schema-6
+  packs remain compatible.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

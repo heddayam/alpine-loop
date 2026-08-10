@@ -48,6 +48,13 @@ const appSettings = {
 const job = {
   version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
 };
+const regionWideJobRequest = {
+  version: job.request.version,
+  packId: job.request.packId,
+  searchRegionId: job.request.searchRegionId,
+  criteria: job.request.criteria,
+  routesPerAccessPoint: job.request.routesPerAccessPoint,
+};
 const catalogRegions = packCatalogResponseV1Schema.parse({ version: 1, regions: [
   {
     id: "santa-cruz-mountains", label: "Santa Cruz Mountains", displayOrder: 1, state: "available", packId: "fixture-pack",
@@ -197,11 +204,10 @@ describe("HikeBuilder unified route search", () => {
 
   it("restores region-wide job results as a named-region search", async () => {
     vi.restoreAllMocks();
-    const { origin: _origin, durationMinutes: _durationMinutes, ...regionWideRequest } = job.request;
     const completed = {
       ...job,
       status: "completed" as const,
-      request: regionWideRequest,
+      request: regionWideJobRequest,
       progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
       completedAt: "2026-08-06T00:00:05Z",
     };
@@ -525,11 +531,10 @@ describe("HikeBuilder unified route search", () => {
 
   it("launches a region-wide Full search without an origin or reachability request", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
-    const { origin: _origin, durationMinutes: _durationMinutes, ...regionWideRequest } = job.request;
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/api/route-jobs" && init?.method === "POST") {
-        return new Response(JSON.stringify({ job: { ...job, request: regionWideRequest } }), { status: 202 });
+        return new Response(JSON.stringify({ job: { ...job, request: regionWideJobRequest } }), { status: 202 });
       }
       if (url === "/api/route-jobs") return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
       if (url.includes("/search-regions")) return new Response(JSON.stringify({ searchRegions: [searchRegion] }), { status: 200 });

@@ -55,12 +55,27 @@ describe("JobsModal", () => {
   it("shows a human stage and attempted-count progress", () => {
     render(<JobsModal {...baseProps} jobs={[job]} />);
     expect(screen.getByText("Searching trailheads — 4 of 10 attempted.")).toBeVisible();
+    expect(screen.getByText("30 min from Castle Rock")).toBeVisible();
     expect(screen.getByRole("progressbar", { name: "4 of 10 trailheads attempted" })).toHaveAttribute("value", "40");
 
     const queued = { ...job, status: "queued" as const, progress: { ...job.progress, eligibleAccessPointCount: 0, processedAccessPointCount: 0 } };
     cleanup();
     render(<JobsModal {...baseProps} jobs={[queued]} />);
     expect(screen.getByRole("progressbar", { name: "Preparing trailhead search" })).not.toHaveAttribute("value");
+  });
+
+  it("labels jobs without an origin as covering the entire reviewed region", () => {
+    const request = {
+      version: job.request.version,
+      packId: job.request.packId,
+      searchRegionId: job.request.searchRegionId,
+      criteria: job.request.criteria,
+      routesPerAccessPoint: job.request.routesPerAccessPoint,
+    };
+    const regionWide = { ...job, request };
+    render(<JobsModal {...baseProps} jobs={[regionWide]} />);
+    expect(screen.getByText("Entire reviewed region")).toBeVisible();
+    expect(screen.queryByText(/min from/)).not.toBeInTheDocument();
   });
 
   it("advances elapsed presentation time locally and freezes terminal jobs", () => {

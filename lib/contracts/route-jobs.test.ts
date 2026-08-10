@@ -14,6 +14,13 @@ const validRequest = {
   },
   routesPerAccessPoint: 10,
 } as const;
+const regionWideRequest = {
+  version: validRequest.version,
+  packId: validRequest.packId,
+  searchRegionId: validRequest.searchRegionId,
+  criteria: validRequest.criteria,
+  routesPerAccessPoint: validRequest.routesPerAccessPoint,
+} as const;
 
 describe("CreateBatchRouteJobV1", () => {
   it("accepts a complete immutable launch snapshot", () => {
@@ -21,15 +28,12 @@ describe("CreateBatchRouteJobV1", () => {
   });
 
   it("accepts a reviewed-region-wide launch without drive-time inputs", () => {
-    const { origin: _origin, durationMinutes: _durationMinutes, ...regionWide } = validRequest;
-    expect(createBatchRouteJobV1Schema.parse(regionWide)).toEqual(regionWide);
+    expect(createBatchRouteJobV1Schema.parse(regionWideRequest)).toEqual(regionWideRequest);
   });
 
   it("requires origin and drive time to be provided together", () => {
-    const { origin: _origin, ...withoutOrigin } = validRequest;
-    const { durationMinutes: _durationMinutes, ...withoutDuration } = validRequest;
-    expect(createBatchRouteJobV1Schema.safeParse(withoutOrigin).success).toBe(false);
-    expect(createBatchRouteJobV1Schema.safeParse(withoutDuration).success).toBe(false);
+    expect(createBatchRouteJobV1Schema.safeParse({ ...regionWideRequest, durationMinutes: validRequest.durationMinutes }).success).toBe(false);
+    expect(createBatchRouteJobV1Schema.safeParse({ ...regionWideRequest, origin: validRequest.origin }).success).toBe(false);
   });
 
   it("fixes the per-access-point result cap at ten", () => {

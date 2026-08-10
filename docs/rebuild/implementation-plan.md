@@ -15,9 +15,11 @@ configured once. Two buttons at the bottom choose execution only:
    foreground search. A user may instead draw a boundary on the map as an
    optional Quick-search area override. Filter geometry selects eligible access
    points; it never clips route geometry.
-2. **Batch search** — launch a persistent background job that attempts every
-   eligible trailhead in the drive-time and reviewed-region intersection under
-   the same snapshotted route/access criteria.
+2. **Batch search** — launch a persistent background job under the same
+   snapshotted route/access criteria. With an origin, it attempts every eligible
+   trailhead in the drive-time and reviewed-region intersection. Without an
+   origin, it skips drive-time resolution and attempts the entire reviewed
+   region.
 
 Generated routes start and finish at one trailhead and contain a physical-trail
 cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
@@ -115,8 +117,9 @@ failures remain visible in job diagnostics.
 
 - Quick search resolves drive time without a separate calculation step, is
   cancellable, deterministic, accessible, and suppresses stale responses.
-- Batch launch validates origin, drive time, reviewed region, and all snapshotted
-  criteria before enqueueing.
+- Batch launch validates the reviewed region and all snapshotted criteria before
+  enqueueing. Origin and drive time are an optional pair; omitting both selects
+  the entire reviewed region.
 - Persistent jobs recover across server restarts; cancellation retains partial
   results; deletion cascades through checkpoints and routes.
 - Job polling never overlaps, elapsed progress remains visibly live between
