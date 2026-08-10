@@ -138,6 +138,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
     "Henry Coe",
     "Marin & Mount Tam",
     "Tahoe–Eldorado",
+    "Central Cascades",
   ]);
   const plannedRegion = regionStrip.locator(".region-pill").filter({ hasText: "Southern East Bay" });
   await expect(plannedRegion).toBeDisabled();
