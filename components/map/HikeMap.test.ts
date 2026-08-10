@@ -19,7 +19,8 @@ import {
   routeTrailheadPins,
   showCoverageHatching,
   trailNetworkFeatureDetails,
-  trailNetworkHoverFilter,
+  trailNetworkLineColor,
+  trailNetworkLineWidth,
   trailNetworkRequestUrl,
 } from "./HikeMap";
 
@@ -107,8 +108,25 @@ describe("generated route map features", () => {
       copyName: undefined,
       distance: "98 ft",
     });
-    expect(trailNetworkHoverFilter("trail-group:edge-12")).toEqual(["==", ["get", "trailGroupId"], "trail-group:edge-12"]);
-    expect(trailNetworkHoverFilter()).toEqual(["==", ["get", "trailGroupId"], "__none__"]);
+    expect(trailNetworkLineColor()).toBe("#3f5f52");
+    expect(trailNetworkLineColor("trail-group:edge-12")).toEqual([
+      "case",
+      ["==", ["get", "trailGroupId"], "trail-group:edge-12"],
+      "#244c3d",
+      "#3f5f52",
+    ]);
+    expect(trailNetworkLineWidth()).toEqual([
+      "interpolate", ["linear"], ["zoom"],
+      8, 2.4 * 0.45,
+      12, 2.4 * 0.8,
+      15, 2.4,
+    ]);
+    expect(trailNetworkLineWidth("trail-group:edge-12")).toEqual([
+      "interpolate", ["linear"], ["zoom"],
+      8, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5 * 0.45, 2.4 * 0.45],
+      12, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5 * 0.8, 2.4 * 0.8],
+      15, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5, 2.4],
+    ]);
   });
 
   it("copies the displayed mapped-trail name and reports clipboard failures", async () => {

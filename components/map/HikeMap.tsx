@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { DataDrivenPropertyValueSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, ExpressionSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
@@ -38,6 +38,10 @@ type HikeMapProps = {
 const ROUTE_SELECTED = "#c9552a";
 const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
+const TRAIL_NETWORK_COLOR = "#3f5f52";
+const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
+const TRAIL_NETWORK_WIDTH = 2.4;
+const TRAIL_NETWORK_HOVER_WIDTH = 3.5;
 export const TRAIL_NETWORK_MIN_ZOOM = 11;
 export const TRAIL_COPY_FEEDBACK_MS = 1_500;
 export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
@@ -46,7 +50,6 @@ export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
    The width covers the single line at its widest: coordinates plus the copy
    label, which the stylesheet never wraps. */
 const CONTEXT_MENU_SIZE = { width: 200, height: 34 };
-const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "trailGroupId"], "__none__"];
 const EMPTY_ACCESS_POINT_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
 const EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER: FilterSpecification = ["==", ["get", "cluster_id"], -1];
 
@@ -79,10 +82,6 @@ const TRAIL_CLICK_PRIORITY_LAYERS = [
   "access-points",
   "access-point-clusters",
 ];
-
-export function trailNetworkHoverFilter(id?: string): FilterSpecification {
-  return id ? ["==", ["get", "trailGroupId"], id] : EMPTY_TRAIL_HOVER_FILTER;
-}
 
 export function accessPointHoverFilter(id?: string): FilterSpecification {
   return id ? ["==", ["get", "id"], id] : EMPTY_ACCESS_POINT_HOVER_FILTER;
@@ -209,6 +208,23 @@ export function copyTextWithDocument(text: string, copyDocument: Document | unde
 /* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
 function zoomWidth(wide: number): DataDrivenPropertyValueSpecification<number> {
   return ["interpolate", ["linear"], ["zoom"], 8, wide * 0.45, 12, wide * 0.8, 15, wide];
+}
+
+export function trailNetworkLineColor(hoveredId?: string): DataDrivenPropertyValueSpecification<string> {
+  return hoveredId
+    ? ["case", ["==", ["get", "trailGroupId"], hoveredId], TRAIL_NETWORK_HOVER_COLOR, TRAIL_NETWORK_COLOR]
+    : TRAIL_NETWORK_COLOR;
+}
+
+export function trailNetworkLineWidth(hoveredId?: string): DataDrivenPropertyValueSpecification<number> {
+  if (!hoveredId) return zoomWidth(TRAIL_NETWORK_WIDTH);
+  const isHovered: ExpressionSpecification = ["==", ["get", "trailGroupId"], hoveredId];
+  return [
+    "interpolate", ["linear"], ["zoom"],
+    8, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH * 0.45, TRAIL_NETWORK_WIDTH * 0.45],
+    12, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH * 0.8, TRAIL_NETWORK_WIDTH * 0.8],
+    15, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH, TRAIL_NETWORK_WIDTH],
+  ];
 }
 
 export function lineBounds(geometry: LineString): Bounds | null {
@@ -598,7 +614,12 @@ export function HikeMap({
           type: "line",
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
-          paint: { "line-color": "#3f5f52", "line-width": zoomWidth(2.4), "line-opacity": 0.92, "line-dasharray": [2.5, 3] },
+          paint: {
+            "line-color": trailNetworkLineColor(),
+            "line-width": trailNetworkLineWidth(),
+            "line-opacity": 0.92,
+            "line-dasharray": [2.5, 3],
+          },
         });
         map?.addLayer({
           id: "trail-network-hit-target",
@@ -606,15 +627,6 @@ export function HikeMap({
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
           paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0.01 },
-        });
-        map?.addLayer({
-          id: "trail-network-hover",
-          type: "line",
-          source: "trail-network",
-          minzoom: TRAIL_NETWORK_MIN_ZOOM,
-          filter: EMPTY_TRAIL_HOVER_FILTER,
-          layout: { "line-join": "round", "line-cap": "butt" },
-          paint: { "line-color": "#244c3d", "line-width": zoomWidth(3.5), "line-opacity": 0.96, "line-dasharray": [2.5, 3] },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
@@ -823,9 +835,16 @@ export function HikeMap({
           map?.getCanvas().style.removeProperty("cursor");
           onSegmentHoverRef.current?.(undefined);
         });
+        let styledTrailId: string | undefined;
+        const styleTrailHover = (id?: string) => {
+          if (styledTrailId === id) return;
+          styledTrailId = id;
+          map?.setPaintProperty("trail-network-lines", "line-color", trailNetworkLineColor(id));
+          map?.setPaintProperty("trail-network-lines", "line-width", trailNetworkLineWidth(id));
+        };
         const clearTrailHover = () => {
           map?.getCanvas().style.removeProperty("cursor");
-          map?.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
+          styleTrailHover();
           setHoveredTrail(undefined);
         };
         const clearAccessPointHover = () => {
@@ -845,7 +864,7 @@ export function HikeMap({
           const id = feature.properties?.trailGroupId;
           if (typeof id !== "string") return;
           map?.getCanvas().style.setProperty("cursor", "pointer");
-          map?.setFilter("trail-network-hover", trailNetworkHoverFilter(id));
+          styleTrailHover(id);
           setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
         });
         map?.on("click", "trail-network-hit-target", (event) => {
@@ -942,7 +961,7 @@ export function HikeMap({
           ], map.getZoom());
           trailNetworkController?.abort();
           trailNetworkController = null;
-          map.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
+          styleTrailHover();
           setHoveredTrail(undefined);
           const source = map.getSource("trail-network") as GeoJSONSource | undefined;
           if (!requestUrl) {
