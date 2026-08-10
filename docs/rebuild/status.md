@@ -210,6 +210,20 @@ the evidence line.
 
 ## Post-gate fixes
 
+- 2026-08-10 — added the reversible Central Cascades official-trail conflation
+  experiment on `codex/central-cascades-official-trail-conflation`. A pinned
+  July 2026 USGS National Digital Trails extract supplements OSM only through a
+  generic, audited matcher: explicit hiking/terrestrial eligibility, 100 m
+  represented-geometry removal, 500 m minimum gaps, component attachment,
+  duplicate rejection, exact provenance, unknown access, and alignment-aware
+  junctions. Experimental schema-6 pack `cc-f1cb28a4ceb6e896` publishes 107.809
+  km across 6,075 physical USGS-derived edges with zero audit, provenance,
+  coverage, integrity, conflict, or elevation errors. Spider Gap adds a 3.31 km
+  segment attached to OSM at both ends, including the reviewed southern
+  junction at `[-120.8826971, 48.1701963]`. The quick eight-cluster checkpoint
+  passed every exact and impossible expectation with zero directed-validation
+  rejections; the original installed pack remains untouched in the experiment.
+
 - 2026-08-06 — corrected steepest sustained grade to use exact rolling 100 m
   windows across reconstructed edge boundaries, with a conditional linear-time
   search prefilter and authoritative post-reconstruction classification. The

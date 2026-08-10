@@ -163,7 +163,7 @@ describe("basic regional pack build progress", () => {
   it("labels source refresh explicitly and remains optional", async () => {
     const progress: RegionalPackBuildProgress[] = [];
     await createBasicRegionalPackBuilder(config)({ ...baseOptions, refresh: true, onProgress: (update) => progress.push(update) });
-    expect(progress[1]).toEqual({ phase: 2, phaseCount: 9, label: "Refresh pinned source snapshots" });
+    expect(progress[1]).toEqual({ phase: 2, phaseCount: 10, label: "Refresh pinned source snapshots" });
     expect(mocks.refreshOsm).toHaveBeenCalledOnce();
     expect(mocks.refreshElevation).toHaveBeenCalledOnce();
 

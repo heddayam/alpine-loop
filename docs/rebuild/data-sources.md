@@ -35,6 +35,18 @@ input so it can be adjusted without changing app or solver code.
   explicitly directs large/frequent readers to bulk downloads and geographic
   extracts.
 
+OSM remains the baseline, but a region may opt into a pinned, licensed official
+trail supplement through the versioned conflation pipeline. The supplement must
+be terrestrial and explicitly hiking-enabled, must remove geometry already
+represented within the reviewed tolerance, and may publish only components that
+attach to the baseline graph. Exact and near junctions may meet at any angle;
+larger displacement is accepted only when trail bearings align. Ambiguous ends
+remain visibly truncated instead of receiving an invented connector. Added
+edges keep `unknown` access, exact source/feature provenance, and a build audit;
+an official trail line never grants legal access or creates an authority
+restriction. Disconnected islands, short noise, duplicate official records, and
+unlicensed inputs fail or remain rejected evidence.
+
 ### Access portals and reviewed restrictions
 
 Derive route starts from the same pinned OSM extract as the hiking graph. During
@@ -52,8 +64,8 @@ must never be resolved toward permissive access.
 Keep safety-critical authority removals in a small, committed per-region file
 keyed by exact OSM way ID. Every entry must be restrictive, reviewed, attributed,
 and covered by a pinned content hash; a missing, duplicate, or conflicting target
-fails the build. Do not call a live authority line service or spatially match its
-features during a pack build.
+fails the build. Do not call a live authority restriction service or spatially
+infer a restriction during a pack build.
 
 Official entrance points are optional cosmetic evidence. A validated, pinned
 entrance snapshot may rename or raise confidence on a nearby derived portal, but
@@ -156,8 +168,8 @@ roadmap](regional-expansion-plan.md). At the data layer, adding a region should
 require only:
 
 1. a new versioned coverage polygon and manifest seed;
-2. a pinned OSM extract plus any reviewed exact-way removals and optional
-   entrance-name overlay;
+2. a pinned OSM extract plus any reviewed exact-way removals, optional
+   entrance-name overlay, and optional pinned official-trail supplement;
 3. the same topology, elevation, metric, validation, and publish pipeline;
 4. curated scenario tests for that region.
 

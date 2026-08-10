@@ -11,6 +11,7 @@ import {
 } from "./central-cascades-pack";
 import { readElevationSourceConfig } from "./elevation";
 import { readOsmSourceConfig } from "./osm";
+import { readOfficialTrailConflationPolicy, readOfficialTrailSourceConfig } from "./official-trails";
 import { readSearchRegionInput } from "./search-regions";
 
 function snapshot(id: string, marker: string): SourceSnapshot {
@@ -37,6 +38,10 @@ describe("Central Cascades pack wiring", () => {
       boundaryVersion: "central-cascades-boundary-v1",
       regionRoot: CENTRAL_CASCADES_REGION_ROOT,
       display: { center: [-121.2, 47.75], zoom: 7.5 },
+      officialTrails: {
+        sourceConfigPath: path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-source.json"),
+        conflationPolicyPath: path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-conflation.json"),
+      },
     });
     expect(CENTRAL_CASCADES_REGION_ROOT).toMatch(/data\/regions\/central-cascades$/);
 
@@ -50,10 +55,12 @@ describe("Central Cascades pack wiring", () => {
       48.4758823,
     ]);
 
-    const [osm, elevation, searchRegions] = await Promise.all([
+    const [osm, elevation, searchRegions, officialTrails, conflationPolicy] = await Promise.all([
       readOsmSourceConfig(path.join(CENTRAL_CASCADES_REGION_ROOT, "osm-source.json")),
       readElevationSourceConfig(path.join(CENTRAL_CASCADES_REGION_ROOT, "elevation-source.json")),
       readSearchRegionInput(path.join(CENTRAL_CASCADES_REGION_ROOT, "search-regions.json")),
+      readOfficialTrailSourceConfig(path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-source.json")),
+      readOfficialTrailConflationPolicy(path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-conflation.json")),
     ]);
     expect(osm).toMatchObject({ id: "geofabrik-washington-osm", version: "washington-260806" });
     expect(elevation).toMatchObject({
@@ -71,6 +78,17 @@ describe("Central Cascades pack wiring", () => {
       "osm:relation/6112652",
       "osm:relation/6437099",
     ]);
+    expect(officialTrails).toMatchObject({
+      kind: "usgs-national-digital-trails",
+      version: "2026-07-central-cascades",
+      expectedSha256: "sha256:4e52617e13761a7512f143d3e818719391655a68e00d9a1b2291abb7e8bf215a",
+    });
+    expect(conflationPolicy).toMatchObject({
+      representedDistanceM: 100,
+      internalConnectionDistanceM: 50,
+      maximumConnectionAngleDegrees: 45,
+      minimumGapLengthM: 500,
+    });
     expect(buildCentralCascadesPack).toEqual(expect.any(Function));
   });
 

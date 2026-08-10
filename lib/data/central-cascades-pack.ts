@@ -11,6 +11,10 @@ export const CENTRAL_CASCADES_PACK_CONFIG: BasicRegionalPackConfig = {
   boundaryVersion: "central-cascades-boundary-v1",
   regionRoot: CENTRAL_CASCADES_REGION_ROOT,
   display: { center: [-121.2, 47.75], zoom: 7.5 },
+  officialTrails: {
+    sourceConfigPath: path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-source.json"),
+    conflationPolicyPath: path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-conflation.json"),
+  },
 };
 
 export const buildCentralCascadesPack = createBasicRegionalPackBuilder(CENTRAL_CASCADES_PACK_CONFIG);

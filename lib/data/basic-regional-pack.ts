@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
 import { assertPackAuditPassed, auditSqlitePack } from "./audit";
@@ -22,6 +23,17 @@ import {
   refreshPinnedOsmSnapshot,
   validateOsmPrerequisites,
 } from "./osm";
+import {
+  conflateOfficialTrails,
+  OFFICIAL_TRAIL_CONFLATION_VERSION,
+  readOfficialTrailConflationPolicy,
+  readOfficialTrailSourceConfig,
+  readPinnedOfficialTrailSnapshot,
+  readUsgsNationalDigitalTrails,
+  refreshPinnedOfficialTrailSnapshot,
+  USGS_NATIONAL_DIGITAL_TRAILS_ADAPTER_VERSION,
+  type OfficialTrailConflationAudit,
+} from "./official-trails";
 import { deriveTrailheadPortals, PORTAL_DERIVATION_VERSION, stripPortalBuildContext } from "./portals";
 import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { RegionalPackBuildOptions, RegionalPackBuildResult } from "./regional-pack";
@@ -32,6 +44,7 @@ export const BASIC_REGIONAL_PACK_BUILD_PHASES = [
   "Validate regional inputs and prerequisites",
   "Read pinned source snapshots",
   "Extract and normalize OSM topology",
+  "Conflate reviewed official trail gaps",
   "Derive trailhead portals and strip build context",
   "Prepare building context",
   "Set up elevation sampling",
@@ -56,6 +69,10 @@ export type BasicRegionalPackConfig = {
   boundaryVersion: string;
   regionRoot: string;
   display: { center: [number, number]; zoom: number };
+  officialTrails?: {
+    sourceConfigPath: string;
+    conflationPolicyPath: string;
+  };
 };
 
 type BoundaryFeature = {
@@ -199,10 +216,33 @@ function newestRetrieval(snapshots: readonly SourceSnapshot[]): string {
   return snapshots.map(({ retrievedAt }) => retrievedAt).sort().at(-1)!;
 }
 
+function addOfficialTrailPublicationCounts(
+  audit: OfficialTrailConflationAudit,
+  databasePath: string,
+  sourceId: string,
+): void {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const row = database.prepare(`
+      SELECT COUNT(*) AS physical_edge_count, COALESCE(SUM(length_m), 0) AS length_m
+      FROM (
+        SELECT physical_edge_key, MAX(length_m) AS length_m
+        FROM edges
+        WHERE source_refs LIKE ?
+        GROUP BY physical_edge_key
+      )
+    `).get(`%"${sourceId}"%`) as { physical_edge_count: number; length_m: number };
+    audit.publishedPhysicalEdgeCount = row.physical_edge_count;
+    audit.publishedLengthM = row.length_m;
+  } finally {
+    database.close();
+  }
+}
+
 /**
- * Builds a schema-6 region whose starts and building context come entirely
- * from the pinned OSM snapshot. Optional official names or exact-way removals
- * can be added later without changing the generic trailhead pipeline.
+ * Builds a schema-6 region whose starts and building context come from the
+ * pinned OSM snapshot. A configured official trail source may add only
+ * deterministically conflated, connected gaps; it never supplies access truth.
  */
 export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) {
   return async function buildBasicRegionalPack(
@@ -211,24 +251,31 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
     reportBuildProgress(options, 1);
     const boundaryPath = path.join(config.regionRoot, "boundary.geojson");
     const searchRegionPath = path.join(config.regionRoot, "search-regions.json");
-    const [boundaryContents, searchRegionContents, searchRegions, osmConfig, elevationConfig] = await Promise.all([
+    const [boundaryContents, searchRegionContents, searchRegions, osmConfig, elevationConfig, officialTrailConfig, officialTrailPolicy] = await Promise.all([
       readFile(boundaryPath, "utf8"),
       readFile(searchRegionPath, "utf8"),
       readSearchRegionInput(searchRegionPath),
       readOsmSourceConfig(path.join(config.regionRoot, "osm-source.json")),
       readElevationSourceConfig(path.join(config.regionRoot, "elevation-source.json")),
+      config.officialTrails ? readOfficialTrailSourceConfig(config.officialTrails.sourceConfigPath) : Promise.resolve(null),
+      config.officialTrails ? readOfficialTrailConflationPolicy(config.officialTrails.conflationPolicyPath) : Promise.resolve(null),
     ]);
     const boundary = parseBasicRegionalBoundary(config, boundaryContents);
 
     await Promise.all([validateOsmPrerequisites(), validateUvRasterioPrerequisites()]);
     reportBuildProgress(options, 2, options.refresh ? "Refresh pinned source snapshots" : undefined);
-    const [osmSnapshot, dem] = await Promise.all([
+    const [osmSnapshot, dem, officialTrailSnapshot] = await Promise.all([
       options.refresh
         ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
         : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
       options.refresh
         ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
         : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
+      officialTrailConfig
+        ? options.refresh
+          ? refreshPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig).then(({ snapshot }) => snapshot)
+          : readPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig)
+        : Promise.resolve(null),
     ]);
 
     const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
@@ -241,23 +288,41 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
     });
     reportBuildProgress(options, 3);
-    const inputTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
+    const sourceTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
     reportBuildProgress(options, 4);
+    let inputTopology = sourceTopology;
+    let officialTrailConflationAudit: OfficialTrailConflationAudit | null = null;
+    if (officialTrailSnapshot && officialTrailPolicy) {
+      const features = await readUsgsNationalDigitalTrails(officialTrailSnapshot);
+      const conflated = conflateOfficialTrails({
+        topology: sourceTopology,
+        features,
+        sourceId: officialTrailSnapshot.id,
+        policy: officialTrailPolicy,
+      });
+      inputTopology = conflated.topology;
+      officialTrailConflationAudit = conflated.audit;
+    }
+    reportBuildProgress(options, 5);
     const portals = deriveTrailheadPortals(inputTopology);
     const publishedTopology = stripPortalBuildContext(portals);
     const portalAudit = portalReport(inputTopology, portals, publishedTopology, boundary.geometry);
-    reportBuildProgress(options, 5);
+    reportBuildProgress(options, 6);
     const buildings = await prepareOsmBuildings(osmSnapshot, {
       boundaryPath,
       preparationRoot: path.join(options.preparationRoot, "osm"),
     });
-    reportBuildProgress(options, 6);
+    reportBuildProgress(options, 7);
     const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-    const snapshots = [osmSnapshot, dem.snapshot];
+    const snapshots = [osmSnapshot, dem.snapshot, ...(officialTrailSnapshot ? [officialTrailSnapshot] : [])];
     const adapterVersions = [
       sourceTopologyAdapter.adapterVersion,
       namedAreaAdapter.adapterVersion,
       PORTAL_DERIVATION_VERSION,
+      ...(officialTrailSnapshot ? [OFFICIAL_TRAIL_CONFLATION_VERSION, USGS_NATIONAL_DIGITAL_TRAILS_ADAPTER_VERSION] : []),
+      ...(officialTrailPolicy ? [
+        `official-trail-policy:${createHash("sha256").update(JSON.stringify(officialTrailPolicy)).digest("hex")}`,
+      ] : []),
     ];
     const metricVersions = [elevationSampler.algorithmVersion, BUILDINGS_ADAPTER_VERSION];
     const seed = createBasicRegionalPackSeed({
@@ -269,7 +334,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       adapterVersions,
       metricVersions,
     });
-    reportBuildProgress(options, 7);
+    reportBuildProgress(options, 8);
     const pack = await compilePack({
       outputRoot: options.outputRoot,
       seed,
@@ -282,19 +347,26 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       buildings,
       namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
       searchRegions,
+      ...(officialTrailSnapshot ? { additionalSources: [officialTrailSnapshot] } : {}),
     });
-    reportBuildProgress(options, 8);
+    reportBuildProgress(options, 9);
     const regionalAudit = await auditSqlitePack({
       databasePath: pack.databasePath,
       manifestPath: pack.manifestPath,
       auditPath: pack.auditPath,
     });
     assertPackAuditPassed(regionalAudit);
+    if (officialTrailConflationAudit && officialTrailSnapshot) {
+      addOfficialTrailPublicationCounts(officialTrailConflationAudit, pack.databasePath, officialTrailSnapshot.id);
+    }
     await Promise.all([
       writeFile(path.join(pack.packDirectory, "regional-audit.json"), `${JSON.stringify(regionalAudit, null, 2)}\n`),
       writeFile(path.join(pack.packDirectory, "portal-audit.json"), `${JSON.stringify(portalAudit, null, 2)}\n`),
+      ...(officialTrailConflationAudit ? [
+        writeFile(path.join(pack.packDirectory, "official-trail-conflation-audit.json"), `${JSON.stringify(officialTrailConflationAudit, null, 2)}\n`),
+      ] : []),
     ]);
-    reportBuildProgress(options, 9);
-    return { pack, portalAudit, regionalAudit };
+    reportBuildProgress(options, 10);
+    return { pack, portalAudit, regionalAudit, ...(officialTrailConflationAudit ? { officialTrailConflationAudit } : {}) };
   };
 }
