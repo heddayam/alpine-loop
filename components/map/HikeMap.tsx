@@ -614,11 +614,12 @@ export function HikeMap({
           type: "line",
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          layout: { "line-cap": "round", "line-join": "round" },
           paint: {
             "line-color": trailNetworkLineColor(),
             "line-width": trailNetworkLineWidth(),
             "line-opacity": 0.92,
-            "line-dasharray": [2.5, 3],
+            "line-dasharray": [2.5, 2.5],
           },
         });
         map?.addLayer({
