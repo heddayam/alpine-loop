@@ -55,6 +55,22 @@ const ACTIVE_JOB_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-dr
 const JOB_POLL_OPEN_MS = 2_000;
 const JOB_POLL_CLOSED_MS = 5_000;
 
+export function waitForPoll(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 const FIXTURE_REGION: PackCatalogRegionV1 = packCatalogRegionV1Schema.parse({
   id: "santa-cruz-mountains",
   label: "Santa Cruz Mountains",
@@ -214,6 +230,8 @@ export function HikeBuilder({
   const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
   const generationControllerRef = useRef<AbortController | null>(null);
   const reachabilityControllerRef = useRef<AbortController | null>(null);
+  const batchPageControllerRef = useRef<AbortController | null>(null);
+  const batchResultGeometryControllerRef = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
   const jobsRef = useRef<RouteJob[]>([]);
   const jobsLoadedRef = useRef(false);
@@ -346,12 +364,18 @@ export function HikeBuilder({
   const invalidateResults = useCallback(() => {
     generationControllerRef.current?.abort();
     generationControllerRef.current = null;
+    batchPageControllerRef.current?.abort();
+    batchPageControllerRef.current = null;
+    batchResultGeometryControllerRef.current?.abort();
+    batchResultGeometryControllerRef.current = null;
     setGenerationState("idle");
     setGenerationMessage("");
     setGenerationResponse(null);
     setResultRegionLabels({});
     setBatchPage(undefined);
+    setBatchPageLoading(false);
     setSelectedRouteId(undefined);
+    setHoveredRouteId(undefined);
     setSelectedSegmentId(undefined);
     setHoveredSegmentId(undefined);
   }, []);
@@ -472,16 +496,16 @@ export function HikeBuilder({
 
   useEffect(() => {
     const controller = new AbortController();
-    void Promise.all(selectedPacks.map(async (selectedPack) => {
+    void Promise.allSettled(selectedPacks.map(async (selectedPack) => {
       const query = new URLSearchParams({ bbox: selectedPack.coverageBbox.join(","), includeUncertainAccess: "true", includeTrails: "false" });
       const response = await fetch(`/api/packs/${selectedPack.id}/access-points?${query}`, { signal: controller.signal });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok || !payload || typeof payload !== "object" || !("accessPoints" in payload) || !Array.isArray(payload.accessPoints)) return [];
       return (payload.accessPoints as AccessPointOption[]).map((point) => ({ ...point, id: `${selectedPack.id}::${point.id}` }));
     })).then((groups) => {
-      if (!controller.signal.aborted) setVisibleAccessPoints(groups.flat());
-    }).catch(() => {
-      if (!controller.signal.aborted) setVisibleAccessPoints([]);
+      if (!controller.signal.aborted) {
+        setVisibleAccessPoints(groups.flatMap((group) => group.status === "fulfilled" ? group.value : []));
+      }
     });
     return () => controller.abort();
   }, [selectedPackKey, selectedPacks]);
@@ -521,15 +545,18 @@ export function HikeBuilder({
       setRefinementGeometry(undefined);
       return;
     }
+    setRefinementGeometry(undefined);
     const controller = new AbortController();
-    void Promise.all(selectedRegionTargets.map(async ({ pack: selectedPack, region }) => {
+    void Promise.allSettled(selectedRegionTargets.map(async ({ pack: selectedPack, region }) => {
       const response = await fetch(`/api/packs/${selectedPack.id}/named-areas/${encodeURIComponent(region.id)}`, { signal: controller.signal });
       const raw: unknown = await response.json().catch(() => null);
       const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
       return response.ok && parsed.success ? parsed.data.geometry : undefined;
     })).then((geometries) => {
-      if (!controller.signal.aborted) setRefinementGeometry(combineAreaGeometries(geometries.filter((geometry) => geometry !== undefined)));
-    }).catch(() => undefined);
+      if (controller.signal.aborted) return;
+      const available = geometries.flatMap((geometry) => geometry.status === "fulfilled" && geometry.value !== undefined ? [geometry.value] : []);
+      setRefinementGeometry(combineAreaGeometries(available));
+    });
     return () => controller.abort();
   }, [drawnBounds, selectedRegionKey, selectedRegionTargets]);
 
@@ -564,6 +591,7 @@ export function HikeBuilder({
   const useCurrentLocation = () => {
     if (!navigator.geolocation) { setDriveDraft((current) => ({ ...current, state: "error", error: "Location is not available in this browser." })); return; }
     const sequence = ++originRequestSequenceRef.current;
+    invalidateResults();
     setDriveDraft((current) => ({ ...current, state: "resolving", error: undefined }));
     navigator.geolocation.getCurrentPosition(({ coords }) => {
       if (sequence !== originRequestSequenceRef.current) return;
@@ -587,6 +615,10 @@ export function HikeBuilder({
     if (errors.length) { setValidationErrors(errors); return; }
     generationControllerRef.current?.abort();
     reachabilityControllerRef.current?.abort();
+    batchPageControllerRef.current?.abort();
+    batchPageControllerRef.current = null;
+    batchResultGeometryControllerRef.current?.abort();
+    batchResultGeometryControllerRef.current = null;
     const controller = new AbortController();
     generationControllerRef.current = controller;
     reachabilityControllerRef.current = controller;
@@ -595,6 +627,8 @@ export function HikeBuilder({
     setGenerationMessage(drawnBounds ? "Running Quick search inside the drawn boundary…" : "Resolving the drive-time area for Quick search…");
     setGenerationResponse(null);
     setResultRegionLabels({});
+    setBatchPage(undefined);
+    setBatchPageLoading(false);
     setSelectedRouteId(undefined);
     setSelectedSegmentId(undefined);
     setHoveredSegmentId(undefined);
@@ -609,10 +643,7 @@ export function HikeBuilder({
         let parsed = reachabilityResponseSchema.parse(payload);
         while (parsed.status === "pending") {
           const { requestId, pollAfterMs } = parsed;
-          await new Promise<void>((resolve, reject) => {
-            const timer = window.setTimeout(resolve, pollAfterMs);
-            controller.signal.addEventListener("abort", () => { window.clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
-          });
+          await waitForPoll(pollAfterMs, controller.signal);
           response = await fetch(`/api/reachability/${requestId}`, { signal: controller.signal });
           payload = await response.json().catch(() => null);
           if (!response.ok) throw new Error(parseError(payload, "The drive-time area could not be calculated."));
@@ -726,6 +757,13 @@ export function HikeBuilder({
   };
 
   const applyBatchResults = useCallback((page: RouteJobResultsPage) => {
+    generationControllerRef.current?.abort();
+    generationControllerRef.current = null;
+    reachabilityControllerRef.current?.abort();
+    reachabilityControllerRef.current = null;
+    batchPageControllerRef.current?.abort();
+    batchPageControllerRef.current = null;
+    batchResultGeometryControllerRef.current?.abort();
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
@@ -741,12 +779,18 @@ export function HikeBuilder({
     if (page.job.filterGeometry) {
       setFilterGeometry(page.job.filterGeometry);
     } else setFilterGeometry(undefined);
-    void fetch(`/api/packs/${page.job.pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`)
+    const controller = new AbortController();
+    batchResultGeometryControllerRef.current = controller;
+    void fetch(`/api/packs/${page.job.pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`, { signal: controller.signal })
       .then(async (response) => response.ok ? response.json() : null)
       .then((raw: unknown) => {
         const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
-        if (parsed.success) setRefinementGeometry(parsed.data.geometry);
-      }).catch(() => undefined);
+        if (!controller.signal.aborted && batchResultGeometryControllerRef.current === controller && parsed.success) {
+          setRefinementGeometry(parsed.data.geometry);
+        }
+      }).catch(() => undefined).finally(() => {
+        if (batchResultGeometryControllerRef.current === controller) batchResultGeometryControllerRef.current = null;
+      });
   }, [selectedPackLabels]);
 
   useEffect(() => {
@@ -805,16 +849,24 @@ export function HikeBuilder({
   }, [availablePackConfigs, restoreJobId, router, selectedPacks]);
 
   const loadNextBatchPage = async () => {
-    if (!batchPage?.nextCursor) return;
+    if (!batchPage?.nextCursor || batchPageControllerRef.current) return;
+    const controller = new AbortController();
+    batchPageControllerRef.current = controller;
     setBatchPageLoading(true);
     try {
       const query = new URLSearchParams({ limit: "50", cursor: batchPage.nextCursor });
-      const response = await fetch(`/api/route-jobs/${batchPage.job.id}/results?${query}`, { cache: "no-store" });
+      const response = await fetch(`/api/route-jobs/${batchPage.job.id}/results?${query}`, { cache: "no-store", signal: controller.signal });
       const raw: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error("The next result page could not be loaded.");
-      openBatchResults(routeJobResultsPageSchema.parse(raw));
-    } catch (error) { setGenerationMessage(error instanceof Error ? error.message : "The next result page could not be loaded."); }
-    finally { setBatchPageLoading(false); }
+      if (!controller.signal.aborted && batchPageControllerRef.current === controller) openBatchResults(routeJobResultsPageSchema.parse(raw));
+    } catch (error) {
+      if (!controller.signal.aborted) setGenerationMessage(error instanceof Error ? error.message : "The next result page could not be loaded.");
+    } finally {
+      if (batchPageControllerRef.current === controller) {
+        batchPageControllerRef.current = null;
+        setBatchPageLoading(false);
+      }
+    }
   };
 
   const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
@@ -843,6 +895,8 @@ export function HikeBuilder({
   useEffect(() => () => {
     generationControllerRef.current?.abort();
     reachabilityControllerRef.current?.abort();
+    batchPageControllerRef.current?.abort();
+    batchResultGeometryControllerRef.current?.abort();
     jobsRefreshGenerationRef.current += 1;
     jobsRefreshControllerRef.current?.abort();
   }, []);
@@ -870,6 +924,10 @@ export function HikeBuilder({
     setHoveredSegmentId(undefined);
   }, [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
+  const clearResults = useCallback(() => {
+    invalidateResults();
+    setMobilePanel("builder");
+  }, [invalidateResults]);
 
   return (
     <main className="app-frame">
@@ -1038,7 +1096,7 @@ export function HikeBuilder({
 
         <HikeMap packIds={selectedPacks.map(({ id }) => id)} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={selectedCoverageBbox} packCoverages={selectedPacks.map(({ coverage }) => coverage)} showRegionBoundaries={showRegionBoundaries} suggestedBounds={primaryPack.suggestedBounds} display={primaryPack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : undefined); if (bounds) setRefinementGeometry(undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
 
-        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} routeRegionLabels={resultRegionLabels} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} routeRegionLabels={resultRegionLabels} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
 
         {hasResultsPanel ? (
           <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>
