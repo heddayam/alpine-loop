@@ -79,11 +79,13 @@ describe("generated route map features", () => {
       id: "coe-hq",
       kindLabel: "Parking",
       name: "Henry Coe Headquarters",
+      copyName: "Henry Coe Headquarters",
     });
     expect(accessPointFeatureDetails({ id: "unnamed", kind: "trailhead", name: " " })).toEqual({
       id: "unnamed",
       kindLabel: "Trailhead",
       name: "Unnamed access point",
+      copyName: undefined,
     });
     expect(accessPointHoverFilter("coe-hq")).toEqual(["==", ["get", "id"], "coe-hq"]);
     expect(accessPointHoverFilter()).toEqual(["==", ["get", "id"], "__none__"]);
