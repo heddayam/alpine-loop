@@ -38,7 +38,8 @@
     {
       "id": "central-cascades",
       "label": "Central Cascades",
-      "displayOrder": 7
+      "displayOrder": 7,
+      "packId": "central-cascades"
     }
   ]
 }

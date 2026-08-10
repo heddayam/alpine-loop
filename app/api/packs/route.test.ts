@@ -43,7 +43,11 @@ describe("GET /api/packs", () => {
       state: "unavailable",
       packId: "henry-coe",
     });
-    expect(payload.regions.slice(4).every(({ state }) => state === "planned")).toBe(true);
-    expect(payload.regions[6]).toMatchObject({ id: "central-cascades", state: "planned" });
+    expect(payload.regions.slice(4, 6).every(({ state }) => state === "planned")).toBe(true);
+    expect(payload.regions[6]).toMatchObject({
+      id: "central-cascades",
+      state: "unavailable",
+      packId: "central-cascades",
+    });
   });
 });
