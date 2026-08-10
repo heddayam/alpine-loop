@@ -124,12 +124,9 @@ export function JobsModal({
   const mutate = async (job: RouteJob, action: "cancel" | "delete") => {
     const pending: PendingAction = action === "cancel" ? "cancelling" : "deleting";
     setPendingByJob((current) => ({ ...current, [job.id]: pending }));
-    setFeedback({
-      kind: "status",
-      text: action === "cancel"
-        ? "Cancellation requested. Completed routes will be kept."
-        : "Deletion requested. The job will disappear when removal finishes.",
-    });
+    setFeedback(action === "cancel"
+      ? { kind: "status", text: "Cancellation requested. Completed routes will be kept." }
+      : undefined);
     try {
       const response = await fetch(`/api/route-jobs/${job.id}${action === "cancel" ? "/cancel" : ""}`, {
         method: action === "cancel" ? "POST" : "DELETE",
@@ -191,7 +188,9 @@ export function JobsModal({
             const busy = Boolean(pending);
             return (
               <article className="job-card" key={job.id} aria-labelledby={titleId} aria-describedby={stageId} aria-busy={busy || undefined}>
-                <header><div><strong id={titleId}>{job.searchRegion.name}</strong><small>{job.request.durationMinutes} min from {job.request.origin.label}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
+                <header><div><strong id={titleId}>{job.searchRegion.name}</strong><small>{job.request.origin && job.request.durationMinutes
+                  ? `${job.request.durationMinutes} min from ${job.request.origin.label}`
+                  : "Entire reviewed region"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
                 <p className="job-stage" id={stageId}>{stage(job, pending)}</p>
                 {determinate
                   ? <progress max="100" value={percent} aria-label={`${progress.processedAccessPointCount} of ${progress.eligibleAccessPointCount} trailheads attempted`} />

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type {
   GeneratedClosedRouteV3,
   GenerateClosedRoutesResponseV3,
 } from "@/lib/contracts";
+import { COORDINATE_COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../map/HikeMap";
 import { announceRoutePreview } from "../map/routeTraceOverlay";
 
 export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
@@ -65,20 +66,17 @@ function formatFreshness(value: string) {
   }).format(new Date(value));
 }
 
-function topologySummary(route: GeneratedClosedRouteV3) {
-  const topology = route.topology;
-  return [
-    TOPOLOGY_LABELS[topology.kind],
-    ...(topology.repeatedTrailFraction > 0 ? [`${Math.round(topology.repeatedTrailFraction * 100)}% repeated`] : []),
-    ...(topology.sharedStemDistanceMeters > 0 ? [`${formatMiles(topology.sharedStemDistanceMeters)} shared approach`] : []),
-  ].join(" · ");
-}
-
 function routeHeading(route: GeneratedClosedRouteV3) {
   const longestNamedSegment = [...(route.trailSegments ?? [])]
     .filter((segment): segment is typeof segment & { name: string } => Boolean(segment.name))
     .sort((left, right) => right.distanceMeters - left.distanceMeters || left.name.localeCompare(right.name))[0];
-  return [route.startAccessPoint.name, longestNamedSegment?.name].filter(Boolean).join(" · ");
+  const parts = [route.startAccessPoint.name, longestNamedSegment?.name]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  const key = (part: string) => part.toLowerCase();
+  return parts
+    .filter((part, index) => parts.findIndex((other) => key(other) === key(part)) === index)
+    .join(" · ");
 }
 
 function trailheadCoordinates(route: GeneratedClosedRouteV3) {
@@ -137,7 +135,6 @@ function ElevationProfile({ route }: { route: GeneratedClosedRouteV3 }) {
 
   return (
     <figure className="elevation-profile">
-      <figcaption>Elevation profile</figcaption>
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`Elevation profile from ${formatFeet(minElevation)} to ${formatFeet(maxElevation)}`}>
         <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} />
         <polyline points={points} />
@@ -177,6 +174,15 @@ function RouteCard({
   const detailId = `route-detail-${route.id}`;
   const coordinates = trailheadCoordinates(route);
   const heading = routeHeading(route);
+  const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coordinateCopyAttemptRef = useRef(0);
+  useEffect(() => () => {
+    coordinateCopyAttemptRef.current += 1;
+    if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+  }, []);
+  // A region label that just restates the heading is noise, not context.
+  const showRegionLabel = Boolean(regionLabel) && regionLabel?.trim().toLowerCase() !== heading.trim().toLowerCase();
   const violated = new Set(route.violations?.map(({ constraint }) => constraint) ?? []);
   const gradeViolated = [
     "steepest-sustained-grade",
@@ -187,12 +193,25 @@ function RouteCard({
   ].some((constraint) => violated.has(constraint as GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"][number]["constraint"]));
   const warningClass = (active: boolean) => active ? "near-match-stat" : undefined;
   const copyCoordinates = () => {
-    void navigator.clipboard?.writeText(coordinates).catch(() => undefined);
+    const attempt = ++coordinateCopyAttemptRef.current;
+    void copyTextToClipboard(
+      coordinates,
+      navigator.clipboard,
+      (value) => copyTextWithDocument(value, document),
+    ).then((copied) => {
+      if (attempt !== coordinateCopyAttemptRef.current) return;
+      setCoordinateCopyStatus(copied ? "copied" : "failed");
+      if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+      coordinateCopyTimerRef.current = setTimeout(() => {
+        coordinateCopyTimerRef.current = null;
+        setCoordinateCopyStatus("idle");
+      }, COORDINATE_COPY_FEEDBACK_MS);
+    });
   };
   return (
     <article
       className={["route-card", selected ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
-      aria-labelledby={`route-heading-${route.id} route-${route.id}`}
+      aria-labelledby={`route-heading-${route.id}`}
       onMouseEnter={() => announceRoutePreview(route.id)}
       onMouseLeave={() => announceRoutePreview()}
       onFocusCapture={() => announceRoutePreview(route.id)}
@@ -210,11 +229,8 @@ function RouteCard({
         onClick={onSelect}
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
-        <span className="route-summary-main">
-          {regionLabel ? <span className="route-region-label">{regionLabel}</span> : null}
-          <strong id={`route-heading-${route.id}`}>{heading}</strong>
-          <small id={`route-${route.id}`}>{topologySummary(route)}</small>
-        </span>
+        {/* Metrics lead the card: distance, climb, and grade are what an
+            expert scans down the list, so names read as the caption. */}
         <span className="route-summary-metrics">
           <span className={warningClass(violated.has("distance"))} title="Distance"><strong>{miles(route.distanceMeters)}</strong> mi</span>
           <span className={warningClass(violated.has("elevation-gain"))} title="Elevation gain"><span aria-hidden="true">↑</span> <strong>{feet(route.elevationGainMeters)}</strong> ft</span>
@@ -225,10 +241,14 @@ function RouteCard({
             </span>
           ) : <span className={warningClass(gradeViolated)} title="Steepest sustained grade"><strong>{route.steepestSustainedGradePct.toFixed(1)}%</strong> grade</span>}
         </span>
+        <span className="route-summary-main">
+          {showRegionLabel ? <span className="route-region-label">{regionLabel}</span> : null}
+          <strong id={`route-heading-${route.id}`}>{heading}</strong>
+        </span>
       </button>
 
       {selected ? (
-        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-heading-${route.id} route-${route.id}`}>
+        <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-heading-${route.id}`}>
           <ElevationProfile route={route} />
           <button
             type="button"
@@ -237,16 +257,23 @@ function RouteCard({
             title="Copy trailhead coordinates"
             onClick={copyCoordinates}
           >
-            <span>Trailhead</span>
-            <code>{coordinates}</code>
+            <span className="trailhead-coordinate-label">
+              <svg className="trailhead-coordinate-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                <path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1" />
+              </svg>
+              <span>Trailhead</span>
+            </span>
+            {coordinateCopyStatus === "idle"
+              ? <code>{coordinates}</code>
+              : <span className={`trailhead-coordinate-feedback ${coordinateCopyStatus}`}>{coordinateCopyStatus === "copied" ? "Copied" : "Couldn’t copy"}</span>}
+            <span className="visually-hidden" aria-live="polite">
+              {coordinateCopyStatus === "copied" ? "Trailhead coordinates copied" : coordinateCopyStatus === "failed" ? "Trailhead coordinates could not be copied" : ""}
+            </span>
           </button>
 
           {route.trailSegments?.length ? (
-            <section className="trail-segment-inspector" aria-labelledby={`trail-segments-${route.id}`}>
-              <p className="trail-segment-heading">
-                <strong id={`trail-segments-${route.id}`}>Trail segments</strong>
-                <span aria-hidden="true">{route.trailSegments.length}</span>
-              </p>
+            <section className="trail-segment-inspector" aria-label="Trail segments">
               <ol className="trail-segment-list">
                 {route.trailSegments.map((segment) => {
                   const search = segmentConditionSearch(segment);
@@ -298,24 +325,22 @@ function RouteCard({
           ) : null}
 
           <details className="route-secondary">
-            <summary>
-              <span>Route details</span>
-              <small>Terrain, access &amp; data</small>
-            </summary>
+            <summary>Details</summary>
             <div className="route-secondary-content">
               <dl className="route-secondary-metrics">
+                <div><dt>Route shape</dt><dd>{TOPOLOGY_LABELS[route.topology.kind]}</dd></div>
                 <div><dt>Elevation loss</dt><dd>{formatFeet(route.elevationLossMeters)}</dd></div>
                 <div><dt>Low point</dt><dd>{formatFeet(route.minimumElevationMeters)}</dd></div>
                 <div><dt>High point</dt><dd className={warningClass(violated.has("maximum-elevation"))}>{formatFeet(route.maximumElevationMeters)}</dd></div>
                 <div><dt>Repeated trail</dt><dd className={warningClass(violated.has("repeated-trail"))}>{Math.round(route.topology.repeatedTrailFraction * 100)}%</dd></div>
-                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared approach</dt><dd className={warningClass(violated.has("shared-stem"))}>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
+                {route.topology.sharedStemDistanceMeters > 0 ? <div><dt>Shared stem</dt><dd className={warningClass(violated.has("shared-stem"))}>{formatMiles(route.topology.sharedStemDistanceMeters)}</dd></div> : null}
                 <div><dt>Cycle blocks</dt><dd>{route.topology.cycleBlockCount.toLocaleString("en-US")}</dd></div>
               </dl>
 
               <footer className="route-source">
-                <span>Source confidence: <strong>{route.source.confidence}</strong></span>
-                <span>Data current {formatFreshness(route.source.freshness)}</span>
-                <span>Sources: {route.source.sourceIds.join(", ")}</span>
+                <span><strong>{route.source.confidence}</strong> confidence</span>
+                <span>{route.source.sourceIds.join(", ")}</span>
+                <span>{formatFreshness(route.source.freshness)}</span>
               </footer>
             </div>
           </details>
@@ -356,21 +381,40 @@ export function ResultsPanel({
     [response],
   );
 
-  // Hovering a route on the map brings its card into view, so the two halves
-  // of the workspace always agree on what is being pointed at.
+  // Selecting a route or segment on the map snaps its card into view.
+  // Selection only — hover must never move the list under the cursor.
   useEffect(() => {
-    if (!hoveredRouteId) return;
-    const index = routes.findIndex((route) => route.id === hoveredRouteId);
+    if (!selectedRouteId) return;
+    const index = routes.findIndex((route) => route.id === selectedRouteId);
     if (index < 0) return;
-    cardRefs.current[index]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [hoveredRouteId, routes]);
+    const button = cardRefs.current[index];
+    // Scroll the whole card, not just its summary button, so neither the
+    // card's edges nor its expanded detail land outside the viewport.
+    const card = button?.closest(".route-card") ?? button;
+    if (typeof card?.scrollIntoView === "function") {
+      card.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedRouteId, routes]);
 
   useEffect(() => {
-    if (!hoveredSegmentId) return;
-    const segment = segmentRefs.current.get(hoveredSegmentId);
+    if (!selectedSegmentId) return;
+    const segment = segmentRefs.current.get(selectedSegmentId);
     if (typeof segment?.scrollIntoView === "function") {
-      segment.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      segment.scrollIntoView({ block: "nearest" });
     }
+  }, [selectedSegmentId]);
+
+  // Hovering a segment on the map scrolls it into view, but only within the
+  // segment list's own scrollbox — the results panel must not move on hover.
+  useEffect(() => {
+    if (!hoveredSegmentId) return;
+    const row = segmentRefs.current.get(hoveredSegmentId);
+    const list = row?.closest(".trail-segment-list");
+    if (!row || !(list instanceof HTMLElement)) return;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    if (rowRect.top < listRect.top) list.scrollTop += rowRect.top - listRect.top;
+    else if (rowRect.bottom > listRect.bottom) list.scrollTop += rowRect.bottom - listRect.bottom;
   }, [hoveredSegmentId]);
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -506,7 +550,6 @@ export function ResultsPanel({
 
       {pagination ? (
         <nav className="results-pagination" aria-label="Batch result pages">
-          <span>50 per page</span>
           <button type="button" className="btn" disabled={!pagination.hasNext || pagination.loading} onClick={pagination.onNext}>
             {pagination.loading ? "Loading…" : pagination.hasNext ? "Next 50 routes" : "Last page"}
           </button>
@@ -514,7 +557,7 @@ export function ResultsPanel({
       ) : null}
 
       <details className="diagnostics">
-        <summary>Search diagnostics</summary>
+        <summary>Diagnostics</summary>
         <p>{response.resolvedAccessFilter.label}</p>
         <dl>
           <div><dt>Elapsed</dt><dd>{Math.round(response.diagnostics.elapsedMs).toLocaleString("en-US")} ms</dd></div>

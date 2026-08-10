@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
+  ROUTE_PIN_CLUSTER_RADIUS_PX,
   accessPointClusterHoverFilter,
   accessPointFeatureDetails,
   accessPointFeatures,
+  clusterRouteTrailheadPins,
   accessPointHoverFilter,
   copyTextToClipboard,
   copyTextWithDocument,
@@ -19,6 +21,7 @@ import {
   TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
+  resultAccessPointIds,
   routeSegmentFeatures,
   routeTrailheadPins,
   trailNetworkFeatureDetails,
@@ -140,7 +143,7 @@ describe("generated route map features", () => {
     expect(trailNetworkLineWidth("trail-group:edge-12")).toEqual([
       "case",
       ["==", ["get", "trailGroupId"], "trail-group:edge-12"],
-      3.5,
+      2.7,
       2.4,
     ]);
   });
@@ -296,6 +299,17 @@ describe("generated route map features", () => {
     });
   });
 
+  it("omits generic access-point dots while a result marker represents that trailhead", () => {
+    const accessPoints = [
+      { id: "start", name: "Result start", lon: -122.18, lat: 37.15, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const },
+      { id: "other", name: "Other start", lon: -122.16, lat: 37.15, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const },
+    ];
+
+    expect(accessPointFeatures(accessPoints, undefined, resultAccessPointIds([route("first", -122.18)]))
+      .features.map(({ properties }) => properties?.id)).toEqual(["other"]);
+    expect(accessPointFeatures(accessPoints).features).toHaveLength(2);
+  });
+
   it("anchors each pin to the exact first segment coordinate, not separate metadata", () => {
     const mismatched = route("first", -122.18);
     mismatched.startAccessPoint = { ...mismatched.startAccessPoint, lon: -120, lat: 35 };
@@ -320,6 +334,39 @@ describe("generated route map features", () => {
     const routes = Array.from({ length: 6 }, (_, index) => route(`route-${index + 1}`, -122.18));
 
     expect(routeTrailheadPins(routes)[0]?.numberLabel).toBe("1–6");
+  });
+
+  it("groups nearby result starts at low zoom and separates them as the map zooms in", () => {
+    const pins = routeTrailheadPins([
+      route("first", -122.18),
+      route("second", -122.179),
+    ], "second");
+    const projectAtScale = (scale: number) => (coordinates: [number, number]) => ({
+      x: coordinates[0] * scale,
+      y: coordinates[1] * scale,
+    });
+    const lowZoom = clusterRouteTrailheadPins(
+      pins,
+      "second",
+      projectAtScale(21_000),
+    );
+    const highZoom = clusterRouteTrailheadPins(
+      pins,
+      "second",
+      projectAtScale(23_000),
+      ROUTE_PIN_CLUSTER_RADIUS_PX,
+    );
+
+    expect(lowZoom).toHaveLength(1);
+    expect(lowZoom[0]).toMatchObject({
+      coordinates: [-122.179, 37.15],
+      routeIds: ["first", "second"],
+      routeNumbers: [1, 2],
+      numberLabel: "1·2",
+      selected: true,
+      nextRouteId: "first",
+    });
+    expect(highZoom.map(({ numberLabel }) => numberLabel)).toEqual(["1", "2"]);
   });
 
   it("renders compact accessible map controls and a collapsed complete key", () => {

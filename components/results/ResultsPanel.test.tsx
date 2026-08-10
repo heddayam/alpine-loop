@@ -146,21 +146,26 @@ describe("ResultsPanel V3", () => {
 
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
-    const exactSummary = screen.getByRole("button", { name: /Simple loop/ });
-    const nearSummary = screen.getByRole("button", { name: /Lollipop/ });
+    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
+    const nearSection = screen.getByRole("heading", { name: "Close matches" }).closest("details") as HTMLElement;
+    const exactSummary = within(exactSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
+    const nearSummary = within(nearSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
     expect(exactSummary).toHaveAttribute("aria-expanded", "true");
     expect(nearSummary).toHaveAttribute("aria-expanded", "false");
     expect(exactSummary).toHaveTextContent("5.0 mi");
+    expect(exactSummary).not.toHaveTextContent("Simple loop");
     expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
     rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
     (screen.getByText("Close matches").closest("details") as HTMLDetailsElement).open = true;
-    const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail.*Lollipop/ });
-    fireEvent.click(within(detail).getByText("Route details"));
+    const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail/ });
+    fireEvent.click(within(detail).getByText("Details"));
+    expect(within(detail).getByText("Route shape")).toBeVisible();
+    expect(within(detail).getByText("Lollipop")).toBeVisible();
     expect(within(detail).getByText("Repeated trail")).toBeVisible();
     expect(within(detail).getByText("25%")).toBeVisible();
-    expect(within(detail).getByText("Shared approach")).toBeVisible();
+    expect(within(detail).getByText("Shared stem")).toBeVisible();
     expect(within(detail).getByText("0.2 mi")).toBeVisible();
     expect(within(nearSummary).getByTitle("Distance")).toHaveClass("near-match-stat");
     expect(within(detail).queryByText(/Outside requested constraints/)).not.toBeInTheDocument();
@@ -171,11 +176,13 @@ describe("ResultsPanel V3", () => {
     render(<ControlledResultsPanel />);
     const list = screen.getByLabelText("Generated routes");
     fireEvent.keyDown(list, { key: "ArrowDown" });
-    const nearSummary = screen.getByRole("button", { name: /Lollipop/ });
+    const nearSection = screen.getByRole("heading", { name: "Close matches" }).closest("details") as HTMLElement;
+    const nearSummary = within(nearSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
     expect(nearSummary).toHaveFocus();
     expect(nearSummary).toHaveAttribute("aria-expanded", "true");
     fireEvent.keyDown(list, { key: "Home" });
-    expect(screen.getByRole("button", { name: /Simple loop/ })).toHaveFocus();
+    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
+    expect(within(exactSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ })).toHaveFocus();
   });
 
   it("marks only violated close-match metrics in orange without a warning block", () => {
@@ -209,14 +216,14 @@ describe("ResultsPanel V3", () => {
       onSelectRoute={() => undefined}
     />);
 
-    const summary = screen.getByRole("button", { name: /Lollipop/ });
+    const summary = screen.getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
     expect(within(summary).getByTitle("Elevation gain")).toHaveClass("near-match-stat");
     expect(within(summary).getByTitle("Distance")).not.toHaveClass("near-match-stat");
     expect(within(summary).getByTitle(/90% of uphill/)).toHaveClass("near-match-stat");
-    fireEvent.click(screen.getByText("Route details"));
+    fireEvent.click(screen.getByText("Details"));
     expect(screen.getByText("High point").nextElementSibling).toHaveClass("near-match-stat");
     expect(screen.getByText("Repeated trail").nextElementSibling).toHaveClass("near-match-stat");
-    expect(screen.getByText("Shared approach").nextElementSibling).toHaveClass("near-match-stat");
+    expect(screen.getByText("Shared stem").nextElementSibling).toHaveClass("near-match-stat");
     expect(screen.queryByText(/Outside requested constraints/)).not.toBeInTheDocument();
   });
 
@@ -226,6 +233,21 @@ describe("ResultsPanel V3", () => {
     render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
+    expect(screen.getByText("Trailhead")).toBeVisible();
+    expect(await screen.findByText("Copied")).toBeVisible();
+    expect(screen.queryByText("37.15000, -122.18000", { selector: "code" })).not.toBeInTheDocument();
+    expect(screen.getByText("Trailhead coordinates copied")).toHaveClass("visually-hidden");
+  });
+
+  it("reports when trailhead coordinates could not be copied", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard denied"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
+    expect(screen.getByText("Trailhead")).toBeVisible();
+    expect(await screen.findByText("Couldn’t copy")).toBeVisible();
+    expect(screen.queryByText("37.15000, -122.18000", { selector: "code" })).not.toBeInTheDocument();
+    expect(screen.getByText("Trailhead coordinates could not be copied")).toHaveClass("visually-hidden");
   });
 
   it("synchronizes segment hover and selection with the map-facing callbacks", async () => {
@@ -273,7 +295,7 @@ describe("ResultsPanel V3", () => {
       exact: [route({ gradeExperience: { climbP90Pct: 11.34, steepClimbingSharePct: 18.73, longestSteepClimbMeters: 275, descentP90Pct: 14.13, windowMeters: 100, steepThresholdPct: 10 } })],
       nearMisses: [],
     })} onSelectRoute={() => undefined} />);
-    const summary = screen.getByRole("button", { name: /Simple loop/ });
+    const summary = screen.getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
     expect(summary).toHaveTextContent(/↑P90 11%≥10% 19%/);
     expect(summary).not.toHaveTextContent("mi run");
     expect(within(summary).getByTitle(/90% of uphill 100 m sections are 11% grade or less/)).toBeVisible();
@@ -284,7 +306,8 @@ describe("ResultsPanel V3", () => {
     const handlePreview = (event: Event) => previews.push((event as CustomEvent<{ routeId?: string }>).detail.routeId);
     window.addEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
     render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
-    const card = screen.getByRole("article", { name: /Ridge Trail.*Simple loop/ });
+    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
+    const card = within(exactSection).getByRole("article", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.mouseEnter(card);
     fireEvent.mouseLeave(card);
     expect(previews).toEqual(["exact-loop", undefined]);
@@ -311,8 +334,8 @@ describe("ResultsPanel V3", () => {
     expect(screen.getByText("0 of 10 requested exact routes found.")).toBeVisible();
     expect(screen.getByText(/effort limit stopped the search early/)).toBeVisible();
     expect(screen.getByText(/Close matches are listed separately/)).toBeVisible();
-    await userEvent.click(screen.getByText("Search diagnostics"));
-    const diagnostics = screen.getByText("Search diagnostics").closest("details") as HTMLElement;
+    await userEvent.click(screen.getByText("Diagnostics"));
+    const diagnostics = screen.getByText("Diagnostics").closest("details") as HTMLElement;
     expect(within(diagnostics).getByText(/Hard search limits:/).closest("p")).toHaveTextContent("deadline");
     expect(within(diagnostics).getByText(/Shortfall:/).closest("p")).toHaveTextContent("no-feasible-cycle-access-points");
   });

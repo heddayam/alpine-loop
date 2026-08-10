@@ -208,7 +208,8 @@ export class SQLiteRouteJobStore {
         this.#database.exec("COMMIT");
         return null;
       }
-      const status = row.drive_time_geometry_json === null ? "resolving-drive-time" : "running";
+      const request = createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json")));
+      const status = request.origin && row.drive_time_geometry_json === null ? "resolving-drive-time" : "running";
       const timestamp = nowIso(this.#now);
       this.#database.prepare(`UPDATE route_jobs SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ?
         WHERE id = ?`).run(status, timestamp, timestamp, requiredString(row, "id"));
@@ -398,6 +399,9 @@ export class SQLiteRouteJobStore {
       request: createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json"))),
       pack: { id: requiredString(row, "pack_id"), dataVersion: requiredString(row, "pack_data_version"), builtAt: requiredString(row, "pack_built_at") },
       searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
+      ...(typeof row.drive_time_geometry_json === "string"
+        ? { filterGeometry: areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json)) }
+        : {}),
       progress: {
         eligibleAccessPointCount: integer(row, "eligible_count"),
         processedAccessPointCount: integer(row, "processed_count"),

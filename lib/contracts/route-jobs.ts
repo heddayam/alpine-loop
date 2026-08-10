@@ -25,12 +25,19 @@ export const batchRouteCriteriaV1Schema = z.object({
 export const createBatchRouteJobV1Schema = z.object({
   version: z.literal(1),
   packId: z.string().trim().min(1),
-  origin: originSchema,
-  durationMinutes: driveTimeDurationSchema,
+  origin: originSchema.optional(),
+  durationMinutes: driveTimeDurationSchema.optional(),
   searchRegionId: z.string().trim().min(1),
   criteria: batchRouteCriteriaV1Schema,
   routesPerAccessPoint: z.literal(10),
-}).strict();
+}).strict().superRefine((request, context) => {
+  if (Boolean(request.origin) === Boolean(request.durationMinutes)) return;
+  context.addIssue({
+    code: "custom",
+    path: request.origin ? ["durationMinutes"] : ["origin"],
+    message: "Origin and drive time must be provided together",
+  });
+});
 
 export const routeJobStatusSchema = z.enum([
   "queued",

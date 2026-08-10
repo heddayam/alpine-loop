@@ -65,14 +65,15 @@ export const REACHABILITY_ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
 function route(index: number): GeneratedClosedRouteV3 {
   const accessPoint = ACCESS_POINTS[index % ACCESS_POINTS.length]!;
   const repeated = index % 2 === 1;
+  const routeVariation = index * 0.00001;
   return {
     id: `fixture-closed-route-${index}`,
     geometry: {
       type: "LineString",
       coordinates: [
         [accessPoint.lon, accessPoint.lat],
-        [-122.145, 37.172],
-        [-122.135, 37.175],
+        [-122.145 + routeVariation, 37.172],
+        [-122.135 + routeVariation, 37.175],
         [accessPoint.lon, accessPoint.lat],
       ],
     },
@@ -104,7 +105,7 @@ function route(index: number): GeneratedClosedRouteV3 {
       id: `fixture-closed-route-${index}:segment:1`,
       geometry: {
         type: "LineString",
-        coordinates: [[accessPoint.lon, accessPoint.lat], [-122.145, 37.172]],
+        coordinates: [[accessPoint.lon, accessPoint.lat], [-122.145 + routeVariation, 37.172]],
       },
       name: `Canyon Trail ${index + 1}`,
       distanceMeters: 2_800,
@@ -118,7 +119,7 @@ function route(index: number): GeneratedClosedRouteV3 {
       id: `fixture-closed-route-${index}:segment:2`,
       geometry: {
         type: "LineString",
-        coordinates: [[-122.145, 37.172], [-122.135, 37.175], [accessPoint.lon, accessPoint.lat]],
+        coordinates: [[-122.145 + routeVariation, 37.172], [-122.135 + routeVariation, 37.175], [accessPoint.lon, accessPoint.lat]],
       },
       name: null,
       distanceMeters: 1_400 + index * 100,
