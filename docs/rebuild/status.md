@@ -159,7 +159,7 @@ the evidence line.
     all three region choices, horizontally scrolling region controls, and zero
     browser console errors.
 
-- [ ] Gate 11 — Central Cascades regional pack
+- [x] Gate 11 — Central Cascades regional pack
   - Acceptance: the approved concave, cross-crest boundary keeps the complete
     Glacier Peak–Alpine Lakes corridor, Napeequa/Chiwawa, Lake Wenatchee,
     Stevens/Leavenworth/Icicle, Snoqualmie/Cle Elum, and Teanaway whole while
@@ -169,6 +169,44 @@ the evidence line.
     schema-6 builds, clean audits, representative exact and honest close-match
     searches, activation checks, and two consecutive verify/browser runs must
     pass the regional onboarding protocol before the catalog link is added.
+  - Evidence: the reviewed concave cross-crest boundary has bbox
+    `[-121.73319523634241, 47.19654585917808, -120.5276988, 48.4758823]`
+    and keeps the complete Glacier Peak–Alpine Lakes corridor, public
+    approaches, and Teanaway inside the hard coverage boundary. Schema-6 pack
+    `cc-08431d5c52dd80f2` pins the dated Geofabrik Washington
+    `washington-260806` OSM extract plus the four exact USGS 3DEP products
+    `689d4591d4be027ac1589940`, `689d4591d4be027ac158993e`,
+    `689d4591d4be027ac158993a`, and `689d4590d4be027ac1589938`.
+  - Two independent offline builds both executed and were byte-identical:
+    manifest SHA-256
+    `35f1456b33b26749c2c0f9d67f1804aeda8745efa5a137b040fc7648f1a9f919`
+    and SQLite SHA-256
+    `d97e75b94ef9ba1055f9e5cebceed6863ea742ae361cff0a0e2c788840d9776b`,
+    with matching core, regional, and portal audits. The pack contains 265,331
+    nodes, 527,755 directed trail edges, 566 persisted portals, 29 named areas,
+    and four reviewed search regions. It has zero audit errors, conflicts,
+    missing elevation/profile values, unattributed/unknown-source records,
+    outside-coverage persisted edges, published road-context edges, integrity
+    errors, or foreign-key errors. Inclusive topology keeps 258 cycle-bearing
+    portals and rejects 308 no-cycle starts; the build strips 4,967 road,
+    sidewalk, and service-road context ways.
+  - Glacier Peak and Alpine Lakes use the shared 500 m named-region portal
+    approach band rather than pack-specific geometry. Measured default-eligible
+    portals sit 49–219 m and 91–489 m outside their legal wilderness boundaries,
+    respectively. Drawn and drive-time filters remain exact. The remaining
+    distance-only limitation and a topology-aware replacement are tracked in
+    GitHub issue #24; Little Giant remains an eligible selector portal but is
+    not misrepresented as an exact-route checkpoint after the Thorough solver
+    exhausted its large-component search budget there.
+  - The final Thorough checkpoint passed all eight representative clusters with
+    an exact route and honestly labeled close match for every scenario and zero
+    directed-validation rejections. Catalog/API discovery exposes Central
+    Cascades as available. Two consecutive `npm run verify` runs each passed
+    431 tests across 81 files plus the production build, and two consecutive
+    corrected `npm run test:browser` runs each passed all six Chromium flows.
+    Live desktop and 390 px checks confirmed selection, all four region choices,
+    horizontal mobile overflow (`846 px` content in a `374 px` strip), and zero
+    browser console errors.
 
 ## Post-gate fixes
 
