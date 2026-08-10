@@ -79,14 +79,20 @@ export function coordinateIsInsideArea(coordinate: Position, geometry: AreaGeome
 }
 
 export function areaBounds(geometry: AreaGeometry): BoundingBox {
-  const coordinates = boundaryRings(geometry).flat();
-  if (coordinates.length === 0) throw new Error("Area geometry has no coordinates");
-  return [
-    Math.min(...coordinates.map(([lon]) => lon)),
-    Math.min(...coordinates.map(([, lat]) => lat)),
-    Math.max(...coordinates.map(([lon]) => lon)),
-    Math.max(...coordinates.map(([, lat]) => lat)),
-  ];
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+  for (const ring of boundaryRings(geometry)) {
+    for (const [lon, lat] of ring) {
+      west = Math.min(west, lon);
+      south = Math.min(south, lat);
+      east = Math.max(east, lon);
+      north = Math.max(north, lat);
+    }
+  }
+  if (!Number.isFinite(west)) throw new Error("Area geometry has no coordinates");
+  return [west, south, east, north];
 }
 
 function boundaryRings(geometry: AreaGeometry): ReadonlyArray<ReadonlyArray<Position>> {
