@@ -93,6 +93,9 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
     },
 
     async resolveDriveTime(request, signal) {
+      if (!request.origin || request.durationMinutes === undefined) {
+        throw new Error("Drive-time resolution requires an origin and duration.");
+      }
       return resolveBatchDriveTime(defaultReachabilityService(), {
         version: 1,
         packId: request.packId,
