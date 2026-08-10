@@ -283,6 +283,15 @@ describe("ReachableGraphClosedRouteSolver", () => {
       steepestSustainedGradePct: 2,
       violations: [expect.objectContaining({ constraint: "steepest-sustained-grade", value: 2 })],
     });
+
+    const elevation = await solver.generate(
+      request({ maximumElevationFeet: { min: 0, max: 250 }, limit: 1 }),
+      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+    );
+    expect(elevation.exact).toEqual([]);
+    expect(elevation.nearMisses[0]?.violations).toEqual([
+      expect.objectContaining({ constraint: "maximum-elevation" }),
+    ]);
   });
 
   test("cheaply evaluates and fairly probes every eligible start without a top-N cutoff", async () => {

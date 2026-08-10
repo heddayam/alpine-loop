@@ -26,7 +26,7 @@ function topology(input: RegionalPackAuditInput): RegionalPackAudit["topology"] 
     }
     sizes.push(size);
   }
-  const largest = Math.max(0, ...sizes);
+  const largest = sizes.reduce((maximum, size) => Math.max(maximum, size), 0);
   return {
     componentCount: sizes.length,
     isolatedNodeCount: [...neighbours.values()].filter((items) => items.size === 0).length,

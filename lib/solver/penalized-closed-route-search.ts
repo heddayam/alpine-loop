@@ -500,8 +500,10 @@ export function searchPenalizedClosedRoutes(
     "distance-above-maximum",
     "gain-below-minimum",
     "gain-above-maximum",
+    "maximum-elevation-outside-range",
     "sustained-grade-outside-range",
     "repeated-trail-above-maximum",
+    "shared-stem-above-maximum",
   ]);
 
   const offer = (edges: number[]): "accepted" | "reserved" | "duplicate" | "invalid" => {

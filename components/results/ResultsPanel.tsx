@@ -26,6 +26,7 @@ type ResultsPanelProps = {
   onToggleNearMisses?: (open: boolean) => void;
   pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
   routeRegionLabels?: Readonly<Record<string, string>>;
+  onClose?: () => void;
 };
 
 const METERS_PER_MILE = 1609.344;
@@ -99,6 +100,18 @@ function segmentConditionSearch(
       ? `Search Google for ${segment.name} conditions`
       : "Search Google for conditions near this unnamed trail segment",
   };
+}
+
+function ResultsHeading({ total, onClose }: { total?: number; onClose?: () => void }) {
+  return (
+    <div className="results-heading">
+      <h2 id="results-title">Results</h2>
+      <div className="results-heading-actions">
+        {total !== undefined ? <span className="count">{total} route{total === 1 ? "" : "s"}</span> : null}
+        {onClose ? <button type="button" className="settings-close" aria-label="Clear results" onClick={onClose}>×</button> : null}
+      </div>
+    </div>
+  );
 }
 
 function ElevationProfile({ route }: { route: GeneratedClosedRouteV3 }) {
@@ -329,6 +342,7 @@ export function ResultsPanel({
   onToggleNearMisses,
   pagination,
   routeRegionLabels = {},
+  onClose,
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const segmentRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -377,7 +391,7 @@ export function ResultsPanel({
   if (status === "loading") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><h2 id="results-title">Results</h2></div>
+        <ResultsHeading onClose={onClose} />
         <p className="results-state loading-state" role="status" aria-live="polite">Searching eligible trailheads and generating routes…</p>
       </aside>
     );
@@ -386,7 +400,7 @@ export function ResultsPanel({
   if (status === "error") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><h2 id="results-title">Results</h2></div>
+        <ResultsHeading onClose={onClose} />
         <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different area or looser constraints."}</span></div>
       </aside>
     );
@@ -395,7 +409,7 @@ export function ResultsPanel({
   if (status === "cancelled") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
-        <div className="results-heading"><h2 id="results-title">Results</h2></div>
+        <ResultsHeading onClose={onClose} />
         <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings and search again.</span></div>
       </aside>
     );
@@ -413,10 +427,7 @@ export function ResultsPanel({
 
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
-      <div className="results-heading">
-        <h2 id="results-title">Results</h2>
-        <span className="count">{total} route{total === 1 ? "" : "s"}</span>
-      </div>
+      <ResultsHeading total={total} onClose={onClose} />
 
       {exactShortfall ? (
         <div className="results-state" role="status" aria-live="polite">

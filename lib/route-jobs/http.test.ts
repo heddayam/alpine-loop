@@ -30,6 +30,29 @@ describe("route-job HTTP handlers", () => {
     expect(await listed.json()).toEqual({ version: 1, jobs: [] });
   });
 
+  it("rejects oversized request bodies before buffering them", async () => {
+    const runtime = service();
+    const request = new Request("http://local/api/route-jobs", {
+      method: "POST",
+      headers: { "content-length": "32769" },
+      body: "{}",
+    });
+
+    const response = await createRouteJobCollectionHandlers(runtime).POST(request);
+
+    expect(response.status).toBe(413);
+    expect(runtime.create).not.toHaveBeenCalled();
+  });
+
+  it("stops reading chunked request bodies at the size limit", async () => {
+    const response = await createRouteJobCollectionHandlers(service()).POST(new Request(
+      "http://local/api/route-jobs",
+      { method: "POST", body: "x".repeat(32_769) },
+    ));
+
+    expect(response.status).toBe(413);
+  });
+
   it("routes detail, cancel, delete, and cursor requests to the service", async () => {
     const runtime = service({
       get: vi.fn(async () => ({ id })),

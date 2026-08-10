@@ -1,3 +1,4 @@
+import { getEventListeners } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReachabilityRequest, ReachabilityResponse } from "@/lib/contracts";
 import { resolveBatchDriveTime } from "./route-job-composition";
@@ -40,6 +41,34 @@ describe("resolveBatchDriveTime", () => {
     expect(delay).toHaveBeenCalledTimes(2);
     expect(delay).toHaveBeenNthCalledWith(1, 500, expect.any(AbortSignal));
     expect(service.poll).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes completed polling-delay abort listeners", async () => {
+    vi.useFakeTimers();
+    const pending: ReachabilityResponse = { status: "pending", requestId, pollAfterMs: 1 };
+    const complete = {
+      status: "complete",
+      requestId,
+      provider: "arcgis",
+      durationMinutes: 30,
+      resolvedAt: "2026-08-06T12:00:00.000Z",
+      geometry,
+    } satisfies ReachabilityResponse;
+    let pollingSignal: AbortSignal | undefined;
+    const service = {
+      submit: vi.fn(async () => pending),
+      poll: vi.fn(async (_requestId: string, signal: AbortSignal) => {
+        pollingSignal = signal;
+        return service.poll.mock.calls.length < 3 ? pending : complete;
+      }),
+    };
+
+    const resolution = resolveBatchDriveTime(service, request, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(3);
+    await resolution;
+
+    expect(pollingSignal).toBeDefined();
+    expect(getEventListeners(pollingSignal!, "abort")).toHaveLength(0);
   });
 
   it("bounds total resolution time without cancelling a shared provider job", async () => {

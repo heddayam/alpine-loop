@@ -292,10 +292,6 @@ export type RouteTrailheadPin = {
   nextRouteId: string;
 };
 
-export function showCoverageHatching(bounds: Bounds | null, drawing: boolean) {
-  return !bounds || drawing;
-}
-
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
 
@@ -437,26 +433,6 @@ export function routeTrailheadPins(routes: GeneratedClosedRouteV3[], selectedRou
         : group.routeIds[0]!,
     };
   });
-}
-
-export function routeTrailheadPinFeatures(
-  routes: GeneratedClosedRouteV3[],
-  selectedRouteId?: string,
-): FeatureCollection<Point> {
-  return {
-    type: "FeatureCollection",
-    features: routeTrailheadPins(routes, selectedRouteId).map((pin) => ({
-      type: "Feature",
-      properties: {
-        id: pin.nextRouteId,
-        name: pin.name,
-        numberLabel: pin.numberLabel,
-        selected: pin.selected,
-        dense: pin.numberLabel.length > 4,
-      },
-      geometry: { type: "Point", coordinates: pin.coordinates },
-    })),
-  };
 }
 
 export function HikeMap({
@@ -1349,7 +1325,7 @@ export function HikeMap({
           Clear
         </button>
       </div> : null}
-      <div ref={containerRef} className="map-canvas" aria-hidden="true" />
+      <div ref={containerRef} className="map-canvas" />
       {contextMenu ? (
         <div
           ref={contextMenuRef}
