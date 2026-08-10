@@ -19,12 +19,25 @@ describe("pack map-context endpoint", () => {
     expect(response.status).toBe(200);
     const payload = await response.json() as {
       accessPoints: Array<{ id: string; lon: number; lat: number }>;
-      trailNetwork: { type: string; features: Array<{ geometry: { type: string } }> };
+      trailNetwork: { type: string; features: Array<{ geometry: { type: string }; properties: { distanceMeters: number; trailGroupId: string } }> };
     };
     expect(payload.accessPoints.map(({ id }) => id)).toContain("trailhead-a");
     expect(payload.trailNetwork.type).toBe("FeatureCollection");
     expect(payload.trailNetwork.features).toHaveLength(3);
     expect(payload.trailNetwork.features.every(({ geometry }) => geometry.type === "LineString")).toBe(true);
+    expect(payload.trailNetwork.features.every(({ properties }) => properties.distanceMeters > 0)).toBe(true);
+    expect(payload.trailNetwork.features.every(({ properties }) => properties.trailGroupId.startsWith("trail-group:"))).toBe(true);
+  });
+
+  it("can return trail geometry without repeating access-point work", async () => {
+    const response = await GET(request("bbox=-122.183,37.155,-122.14,37.178&includeAccessPoints=false"), {
+      params: Promise.resolve({ packId: "fixture-pack" }),
+    });
+    const payload = await response.json() as { accessPoints: unknown[]; trailNetwork: { features: unknown[] } };
+
+    expect(response.status).toBe(200);
+    expect(payload.accessPoints).toEqual([]);
+    expect(payload.trailNetwork.features).toHaveLength(3);
   });
 
   it("honors the unknown-access policy and rejects invalid packs or bounds", async () => {

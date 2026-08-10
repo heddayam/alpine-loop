@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { areaGeometrySchema } from "@/lib/contracts";
 import { z } from "zod";
 import type { SourceSnapshot, TopologySourceAdapter } from "../adapters";
 import { sha256File } from "../file-source";
@@ -12,10 +13,7 @@ import { readAndNormalizeOsmOpl } from "./opl";
 const boundarySchema = z.object({
   type: z.literal("Feature"),
   properties: z.record(z.string(), z.unknown()).optional(),
-  geometry: z.object({
-    type: z.literal("Polygon"),
-    coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()])).min(4)).min(1),
-  }).strict(),
+  geometry: areaGeometrySchema,
 }).strict();
 
 export type OsmPipelineOptions = {

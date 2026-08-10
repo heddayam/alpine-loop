@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -28,6 +28,8 @@ export type CacheDownloadOptions = {
   retrievedAt?: string;
   expectedSha256?: `sha256:${string}`;
   expectedByteLength?: number;
+  /** Reuse a verified immutable object with the same original URL. */
+  reuseExistingUrl?: boolean;
   fetchImpl?: typeof fetch;
 };
 
@@ -65,6 +67,17 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
     const expectedDirectory = path.join(sourceRoot, options.expectedSha256.slice("sha256:".length));
     const reusable = await reusableSnapshot(expectedDirectory, options.expectedSha256);
     if (reusable) return reusable;
+  }
+
+  if (options.reuseExistingUrl) {
+    const entries = await readdir(sourceRoot, { withFileTypes: true });
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name));
+      if (reusable?.receipt.originalUrl !== options.url) continue;
+      if (options.expectedByteLength !== undefined && reusable.receipt.byteLength !== options.expectedByteLength) continue;
+      return reusable;
+    }
   }
 
   const temporaryPath = path.join(sourceRoot, `.download-${randomUUID()}`);

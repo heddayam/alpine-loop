@@ -1,5 +1,7 @@
 import type { FeatureCollection, LineString } from "geojson";
 import type { AreaGeometry } from "@/lib/graph";
+import { lineLengthMeters } from "@/lib/graph/geometry";
+import { groupContiguousTrailFeatures } from "./trail-network";
 import fixtureGraph from "@/data/fixtures/graph/tiny.json";
 
 type Bounds = [west: number, south: number, east: number, north: number];
@@ -52,7 +54,7 @@ type FixtureTrailTuple = [string, string, string, Array<[number, number]>?, stri
 const fixtureTrails = fixtureGraph.undirectedTrails as unknown as FixtureTrailTuple[];
 const mappedTrails = fixtureTrails.filter((trail) => trail[4]?.startsWith("openstreetmap:"));
 
-export const FIXTURE_PACK_TRAIL_NETWORK: FeatureCollection<LineString> = {
+export const FIXTURE_PACK_TRAIL_NETWORK: FeatureCollection<LineString> = groupContiguousTrailFeatures({
   type: "FeatureCollection",
   features: mappedTrails.map((trail, index) => {
     const [fromNodeId, toNodeId, trailName, segmentCoordinates, sourceId] = trail;
@@ -62,14 +64,20 @@ export const FIXTURE_PACK_TRAIL_NETWORK: FeatureCollection<LineString> = {
     const coordinates = segmentCoordinates ?? [[from.lon, from.lat], [to.lon, to.lat]];
     return {
       type: "Feature",
-      properties: { id: `mapped-trail-${index}`, name: trailName, role: "available-trail", sourceId },
+      properties: {
+        id: `mapped-trail-${index}`,
+        name: trailName,
+        distanceMeters: lineLengthMeters(coordinates),
+        role: "available-trail",
+        sourceId,
+      },
       geometry: {
         type: "LineString",
         coordinates: coordinates.map(([lon, lat]) => [lon, lat]),
       },
     };
   }),
-};
+});
 
 export const FIXTURE_BUILDER_PACK: BuilderPackConfig = {
   id: FIXTURE_PACK_METADATA.id,

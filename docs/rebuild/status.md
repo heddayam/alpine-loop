@@ -120,6 +120,44 @@ the evidence line.
     returns all five reviewed regions. Two consecutive `npm run verify` runs
     each pass 386 tests across 77 files plus the production build, and two
     consecutive `npm run test:browser` runs each pass all five Chromium flows.
+- [x] Gate 10 — Henry Coe regional pack and schema-6 onboarding optimization
+  - Evidence: the exact `MultiPolygon` union of Henry W. Coe State Park and
+    adjoining Coyote Lake–Harvey Bear Ranch has bbox `[-121.596281,
+    37.0324441, -121.3058921, 37.3111329]`; Grant, Pacheco, Coyote Ridge,
+    Cñada de los Osos, Palassou, private ranches, and other disconnected South
+    Diablo systems remain excluded. Schema-6 pack `hc-fb46538de42e5919` pins
+    the ODbL Geofabrik `norcal-260801` extract and public-domain USGS 3DEP
+    product `68afba8fd4be02645f9b293f`. Current authority review produced no
+    confirmed durable exact-way removal and generic OSM portal labels were
+    sufficient, so no empty restriction file or official-name overlay was
+    invented and `officialAccess` remains false.
+  - Two independent offline builds both executed rather than reusing an output
+    and were byte-identical: manifest SHA-256
+    `075c9a5cdd786a83f7c673c09f73352cf21749edaa0f7d5fdeef41408756185a`
+    and SQLite SHA-256
+    `924ec8f8ab47690c1c0717431e3f3c0f9aa0bd3aaea24dbc3010f78c4877cbed`,
+    with matching core, regional, and portal audits. The pack contains 28,801
+    nodes, 57,830 directed trail edges, 44 persisted portals, seven named
+    areas, and three reviewed search regions. It has zero audit errors,
+    conflicts, built-up portals, missing elevation/profile values,
+    unattributed/unknown-source/outside-coverage records, non-trail published
+    edges, integrity errors, or foreign-key errors. Inclusive cycle checks keep
+    39 portals and reject five; build context stripped 99 road/sidewalk/service
+    ways.
+  - The shared schema-6 Thorough checkpoint enforces a 500 m reference-to-
+    portal limit and passed Coe Ranch, Hunting Hollow, Dowdy, Mendoza, and
+    Harvey Bear with 25 exact routes, honestly labeled close matches for every
+    deliberately impossible request, and zero directed-validation rejections.
+    Coyote Lake main is explicitly deferred rather than snapped to a portal 830
+    m away. The new generic builder/checkpoint, immutable DEM reuse, and
+    [region checklist](region-onboarding-checklist.md) capture the reusable
+    workflow and friction ledger. Catalog/API discovery exposes Henry Coe as
+    available. Two consecutive `npm run verify` runs each passed 372 tests
+    across 74 files plus the production build, and two consecutive `npm run
+    test:browser` runs each passed all five Chromium flows. Live desktop and
+    390 px inspection confirmed the selected Henry Coe pill, exact map coverage,
+    all three region choices, horizontally scrolling region controls, and zero
+    browser console errors.
 
 ## Post-gate fixes
 
@@ -217,6 +255,57 @@ the evidence line.
   newly preserved OSM condition/source-feature flags. Automated maintainability
   discovery remains a later stage documented in
   `trail-segment-condition-plan.md`.
+
+- 2026-08-08 — added viewport-loaded mapped trails at zoom 13 and above. The
+  network uses a lifted green dashed treatment beneath generated routes; hover
+  gives one segment a restrained solid emphasis and shows its mapped name plus
+  adaptive mile/foot distance in the former map-hint visual language. The
+  persistent trailhead-filter geometry notice was removed. Viewport requests
+  omit redundant access-point work and allow up to 30,000 physical trail
+  features for dense regional views. Existing packs remain compatible. `npm
+  run verify` passes 374 tests across 74 files plus the production build, and
+  two consecutive `npm run test:browser` runs pass all five Chromium flows.
+  Live Henry Coe inspection at desktop and 390 px confirmed the earlier zoom
+  reveal, resting/hover line hierarchy, distance/name badge, and zero browser
+  console errors.
+
+- 2026-08-09 — corrected mapped-trail hover to operate on contiguous trail
+  runs rather than individual graph edges. Endpoint-connected edges with the
+  same normalized name now share one combined distance and hover group;
+  unnamed degree-two chains also join, while ambiguous unnamed branches remain
+  separate. Group geometry is merged into maximal chains so both resting and
+  emphasized strokes remain visibly dashed instead of restarting into an
+  apparent solid line at every source edge. Trails now reveal at zoom 12, and
+  the viewport ceiling is 75,000 physical edges. Existing packs remain
+  compatible. `npm run verify` passes 377 tests across 75 files plus the
+  production build, and two consecutive `npm run test:browser` runs pass all
+  five Chromium flows. Live Henry Coe inspection confirmed the network after
+  one zoom step from the pack overview, a 1.8-mile contiguous named hover run,
+  clearly dashed emphasis, and zero browser console errors. The hover badge
+  was subsequently moved to the top-center map inset; desktop and 390 px live
+  inspection confirmed it clears the map controls while the drawing guidance
+  remains at the bottom. Named trail runs can now be clicked to copy their
+  mapped name. The distance chip briefly becomes a restrained green `Copied`
+  chip while the trail name stays visible, then returns after 1.5 seconds;
+  clipboard failures receive equally brief inline feedback. Unnamed runs do
+  not copy the display placeholder, and route or trailhead interactions take
+  priority when hit areas overlap. `npm run verify` passes 378 tests across 75
+  files plus the production build, and two consecutive `npm run test:browser`
+  runs pass all five Chromium flows. Live Henry Coe inspection confirmed the
+  click feedback and timed distance restoration on White Tank Spring Road.
+  Access-point markers now use the same hover language: individual markers
+  receive a modest size and white-casing lift with a type-and-name badge, while
+  wider-zoom clusters show their access-point count and grow slightly. Hover
+  state clears as soon as the map moves, and access points take precedence over
+  underlying trail hover. The shared badge now sits on the same top row as the
+  drawing controls. Trail-name copying now starts the standards-based Clipboard
+  API directly from the click and immediately attempts a synchronous document
+  fallback during that same browser activation, avoiding intermittent
+  permission failures after activation expires.
+  `npm run verify` passes 380 tests across 75 files plus the
+  production build, and two consecutive `npm run test:browser` runs pass all
+  five Chromium flows; the final positioning review is intentionally left for
+  manual UI inspection.
 
 ## Local data and risks
 
