@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { DataDrivenPropertyValueSpecification, ExpressionSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
@@ -216,15 +216,12 @@ export function trailNetworkLineColor(hoveredId?: string): DataDrivenPropertyVal
     : TRAIL_NETWORK_COLOR;
 }
 
+/* Dash lengths are multiples of line width in MapLibre. Keep trail widths
+   fixed so their rhythm does not expand and contract while the map zooms. */
 export function trailNetworkLineWidth(hoveredId?: string): DataDrivenPropertyValueSpecification<number> {
-  if (!hoveredId) return zoomWidth(TRAIL_NETWORK_WIDTH);
-  const isHovered: ExpressionSpecification = ["==", ["get", "trailGroupId"], hoveredId];
-  return [
-    "interpolate", ["linear"], ["zoom"],
-    8, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH * 0.45, TRAIL_NETWORK_WIDTH * 0.45],
-    12, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH * 0.8, TRAIL_NETWORK_WIDTH * 0.8],
-    15, ["case", isHovered, TRAIL_NETWORK_HOVER_WIDTH, TRAIL_NETWORK_WIDTH],
-  ];
+  return hoveredId
+    ? ["case", ["==", ["get", "trailGroupId"], hoveredId], TRAIL_NETWORK_HOVER_WIDTH, TRAIL_NETWORK_WIDTH]
+    : TRAIL_NETWORK_WIDTH;
 }
 
 export function lineBounds(geometry: LineString): Bounds | null {
