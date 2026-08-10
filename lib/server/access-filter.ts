@@ -80,6 +80,18 @@ export function resolvedDriveTimeAccessFilter(
   };
 }
 
+export function resolvedNamedRegionAccessFilter(
+  pack: Pick<FilterablePack, "coverage">,
+  region: NamedArea,
+): ResolvedServerAccessFilter {
+  return {
+    summary: { mode: "named-region", label: region.name, region: { id: region.id, name: region.name } },
+    predicates: [region.geometry],
+    coverage: pack.coverage,
+    filterGeometry: region.geometry,
+  };
+}
+
 async function requireNamedArea(pack: FilterablePack, regionId: string): Promise<NamedArea> {
   if (!pack.getNamedArea) {
     throw new ServerApiError("NAMED_AREAS_UNAVAILABLE", "This installed pack does not provide named regions.", 422);
@@ -126,12 +138,7 @@ export async function resolveAccessFilter(
   }
   if (filter.mode === "named-region") {
     const area = await requireNamedArea(pack, filter.regionId);
-    return {
-      summary: { mode: "named-region", label: area.name, region: { id: area.id, name: area.name } },
-      predicates: [area.geometry],
-      coverage: pack.coverage,
-      filterGeometry: area.geometry,
-    };
+    return resolvedNamedRegionAccessFilter(pack, area);
   }
 
   let rawReachability: ResolvedReachability;

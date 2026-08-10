@@ -128,20 +128,38 @@ function parseCoordinateOrigin(text: string) {
   return originSchema.safeParse({ lat, lon, label: `${lat!.toFixed(5)}, ${lon!.toFixed(5)}` });
 }
 
+function resultRegionLabel(packLabel: string, regionName: string) {
+  const pack = packLabel.trim();
+  const region = regionName.trim();
+  return pack.toLowerCase() === region.toLowerCase() ? region : `${pack} · ${region}`;
+}
+
 function batchPageAsResponse(page: RouteJobResultsPage): GenerateClosedRoutesResponseV3 {
   const exact = page.results.filter((result) => result.matchType === "exact").map((result) => result.route);
   const nearMisses = page.results.filter((result) => result.matchType === "near-miss").map((result) => result.route);
   const progress = page.job.progress;
+  const driveTime = page.job.request.origin && page.job.request.durationMinutes
+    ? {
+        mode: "drive-time" as const,
+        label: `${page.job.request.durationMinutes} minutes · ${page.job.searchRegion.name}`,
+        region: page.job.searchRegion,
+        driveTime: {
+          minutes: page.job.request.durationMinutes,
+          provider: "arcgis" as const,
+          resolvedAt: page.job.updatedAt,
+          originLabel: page.job.request.origin.label,
+        },
+      }
+    : undefined;
   return {
     version: 3,
     requestId: page.job.id,
     pack: { id: page.job.pack.id, schemaVersion: "4", dataVersion: page.job.pack.dataVersion, builtAt: page.job.pack.builtAt },
     requested: Math.max(1, Math.min(20, exact.length || 1)),
-    resolvedAccessFilter: {
-      mode: "drive-time",
-      label: `${page.job.request.durationMinutes} minutes · ${page.job.searchRegion.name}`,
+    resolvedAccessFilter: driveTime ?? {
+      mode: "named-region",
+      label: page.job.searchRegion.name,
       region: page.job.searchRegion,
-      driveTime: { minutes: page.job.request.durationMinutes, provider: "arcgis", resolvedAt: page.job.updatedAt, originLabel: page.job.request.origin.label },
     },
     exact,
     nearMisses,
@@ -297,7 +315,7 @@ export function HikeBuilder({
     return (regionState?.regions ?? []).flatMap((region) => selected.has(region.id) ? [{
       pack: selectedPack,
       region,
-      label: `${selectedPackLabels.get(selectedPack.id) ?? selectedPack.name} · ${region.name}`,
+      label: resultRegionLabel(selectedPackLabels.get(selectedPack.id) ?? selectedPack.name, region.name),
     }] : []);
   }), [packRegionStates, selectedPackLabels, selectedPacks, selectedRegionIds]);
   const selectedRegionKey = selectedRegionTargets.map(({ pack, region }) => `${pack.id}:${region.id}`).join(",");
@@ -715,15 +733,17 @@ export function HikeBuilder({
     if (batchLaunchInFlightRef.current) return;
     const errors: string[] = [];
     if (!selectedPacks.length) errors.push("Choose at least one region pack.");
-    if (!driveDraft.origin) errors.push("Resolve a driving origin.");
+    if (driveDraft.originText.trim() && !driveDraft.origin) errors.push("Choose a suggested origin or clear the field to search the entire reviewed region.");
     if (!selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
     if (selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
     const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: selectedCoverageBbox }, undefined, primaryPack.id);
     if (!validated.success) errors.push(...validated.errors);
-    if (errors.length || !driveDraft.origin || !validated.success) { setValidationErrors(errors); return; }
+    if (errors.length || !validated.success) { setValidationErrors(errors); return; }
     const request = validated.request;
     const payloads: CreateBatchRouteJobV1[] = selectedRegionTargets.map(({ pack: selectedPack, region }) => ({
-      version: 1, packId: selectedPack.id, origin: driveDraft.origin!, durationMinutes: driveDraft.durationMinutes, searchRegionId: region.id,
+      version: 1, packId: selectedPack.id,
+      ...(driveDraft.origin ? { origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes } : {}),
+      searchRegionId: region.id,
       criteria: { closedRoute: request.closedRoute, distanceMiles: request.distanceMiles,
         ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
         ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
@@ -771,7 +791,7 @@ export function HikeBuilder({
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
-    const label = `${selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id} · ${page.job.searchRegion.name}`;
+    const label = resultRegionLabel(selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id, page.job.searchRegion.name);
     setResultRegionLabels(Object.fromEntries([...response.exact, ...response.nearMisses].map(({ id }) => [id, label])));
     setGenerationState("done");
     setGenerationMessage(`${page.results.length} saved routes loaded${page.nextCursor ? "; more are available" : ""}.`);

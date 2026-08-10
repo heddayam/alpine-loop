@@ -10,7 +10,7 @@ import {
   listEligibleAccessPointCandidates,
   ReachableGraphClosedRouteSolver,
 } from "@/lib/solver";
-import { resolvedDriveTimeAccessFilter } from "./access-filter";
+import { resolvedDriveTimeAccessFilter, resolvedNamedRegionAccessFilter } from "./access-filter";
 import type {
   RouteJobSolverRequest,
   RouteJobSolverResponse,
@@ -46,12 +46,14 @@ async function initialize(input: RouteJobSolverWorkerInput): Promise<void> {
   if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") throw new Error("The pinned pack does not support batch search.");
   const region = getSearchRegion(installed.databasePath, input.searchRegionId);
   if (!region) throw new Error("The job's reviewed search region is unavailable.");
-  const accessFilter = resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {
-    geometry: input.driveTimeGeometry,
-    durationMinutes: input.request.durationMinutes,
-    resolvedAt: new Date().toISOString(),
-    originLabel: input.request.origin.label,
-  }, region);
+  const accessFilter = input.driveTimeGeometry && input.request.origin && input.request.durationMinutes !== undefined
+    ? resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {
+      geometry: input.driveTimeGeometry,
+      durationMinutes: input.request.durationMinutes,
+      resolvedAt: new Date().toISOString(),
+      originLabel: input.request.origin.label,
+    }, region)
+    : resolvedNamedRegionAccessFilter({ coverage: manifest.coverage.boundary }, region);
   const repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
   const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({
     databasePath: installed.databasePath,
@@ -96,11 +98,11 @@ async function search(accessPointId: string): Promise<AccessPointSearchResult> {
   const run = (searchEffort: "quick" | "thorough") => solver.generate({
     version: 3,
     packId: manifest.id,
-    accessFilter: {
-      mode: "drive-time",
+    accessFilter: input.driveTimeGeometry ? {
+      mode: "drive-time" as const,
       reachabilityId: "00000000-0000-4000-8000-000000000000",
       regionId: region.id,
-    },
+    } : { mode: "named-region" as const, regionId: region.id },
     startAccessPointId: accessPointId,
     routeFamily: "closed",
     ...input.request.criteria,

@@ -21,6 +21,11 @@ export type ResolvedDriveTime = {
   resolvedAt: string;
 };
 
+export type DriveTimeBatchRouteJobRequest = CreateBatchRouteJobV1 & {
+  origin: NonNullable<CreateBatchRouteJobV1["origin"]>;
+  durationMinutes: NonNullable<CreateBatchRouteJobV1["durationMinutes"]>;
+};
+
 export type BatchNearMiss = GeneratedClosedRouteV3 & {
   violations: ConstraintViolationV3[];
 };
@@ -40,13 +45,13 @@ export type RouteJobSearchSession = {
 
 export type RouteJobRunnerDependencies = {
   resolveJob(request: CreateBatchRouteJobV1, signal: AbortSignal): Promise<ResolvedRouteJob>;
-  resolveDriveTime(request: CreateBatchRouteJobV1, signal: AbortSignal): Promise<ResolvedDriveTime>;
+  resolveDriveTime(request: DriveTimeBatchRouteJobRequest, signal: AbortSignal): Promise<ResolvedDriveTime>;
   currentDataVersion(packId: string): Promise<string | null>;
   openSearchSession(input: {
     request: CreateBatchRouteJobV1;
     pack: PinnedRouteJobPack;
     searchRegionId: string;
-    driveTimeGeometry: AreaGeometry;
+    driveTimeGeometry?: AreaGeometry;
     signal: AbortSignal;
   }): Promise<RouteJobSearchSession>;
 };

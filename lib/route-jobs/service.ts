@@ -2,13 +2,14 @@ import {
   createBatchRouteJobV1Schema,
   routeJobListSchema,
   routeJobResultsPageSchema,
+  type CreateBatchRouteJobV1,
   type RouteJob,
   type RouteJobResultsPage,
   type RouteJobResult,
 } from "@/lib/contracts";
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
 import { SQLiteRouteJobStore, type ResultCursor } from "./store";
-import type { RouteJobRunnerDependencies } from "./types";
+import type { DriveTimeBatchRouteJobRequest, RouteJobRunnerDependencies } from "./types";
 
 const RESULT_PAGE_SIZE = 50;
 const MAX_CURSOR_LENGTH = 2_048;
@@ -21,6 +22,10 @@ function yieldToEventLoop(signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve)).then(() => {
     if (signal?.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
   });
+}
+
+function hasDriveTime(request: CreateBatchRouteJobV1): request is DriveTimeBatchRouteJobRequest {
+  return request.origin !== undefined && request.durationMinutes !== undefined;
 }
 
 export function encodeResultCursor(cursor: ResultCursor): string {
@@ -175,19 +180,19 @@ export class RouteJobService {
   async #runJob(id: string, signal: AbortSignal): Promise<void> {
     let job = this.#store.getStored(id);
     if (!job) return;
-    if (!job.geometry) {
+    if (hasDriveTime(job.request) && !job.geometry) {
       const driveTime = await this.#dependencies.resolveDriveTime(job.request, signal);
       if (signal.aborted) throw signal.reason;
       this.#store.saveDriveTime(id, driveTime);
       job = this.#store.getStored(id)!;
     }
-    if (!job.geometry) throw new Error("Drive-time geometry was not persisted");
+    if (hasDriveTime(job.request) && !job.geometry) throw new Error("Drive-time geometry was not persisted");
 
     const sessionInput = {
       request: job.request,
       pack: job.pack,
       searchRegionId: job.searchRegion.id,
-      driveTimeGeometry: job.geometry,
+      ...(job.geometry ? { driveTimeGeometry: job.geometry } : {}),
       signal,
     };
     await yieldToEventLoop(signal);

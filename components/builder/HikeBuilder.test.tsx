@@ -48,6 +48,13 @@ const appSettings = {
 const job = {
   version: 1, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "queued", request: { version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, routesPerAccessPoint: 10 }, pack: { id: "fixture-pack", dataVersion: "fixture-4", builtAt: "2026-08-04T00:00:00Z" }, searchRegion: { id: searchRegion.id, name: searchRegion.name }, progress: { eligibleAccessPointCount: 0, processedAccessPointCount: 0, exactRouteCount: 0, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 0 }, partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:00Z",
 };
+const regionWideJobRequest = {
+  version: job.request.version,
+  packId: job.request.packId,
+  searchRegionId: job.request.searchRegionId,
+  criteria: job.request.criteria,
+  routesPerAccessPoint: job.request.routesPerAccessPoint,
+};
 const catalogRegions = packCatalogResponseV1Schema.parse({ version: 1, regions: [
   {
     id: "santa-cruz-mountains", label: "Santa Cruz Mountains", displayOrder: 1, state: "available", packId: "fixture-pack",
@@ -195,6 +202,33 @@ describe("HikeBuilder unified route search", () => {
     expect(router.replace).toHaveBeenCalledWith("/?packs=fixture-pack");
   });
 
+  it("restores region-wide job results as a named-region search", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      request: regionWideJobRequest,
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    mockBaseFetch((url) => {
+      if (url === `/api/route-jobs/${completed.id}/results?limit=50`) return new Response(JSON.stringify({
+        version: 1,
+        job: completed,
+        results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      }), { status: 200 });
+      return undefined;
+    });
+
+    render(<HikeBuilder restoreJobId={completed.id} />);
+
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.getByText(searchRegion.name, { selector: ".diagnostics p" })).toBeInTheDocument();
+    expect(screen.getByText(searchRegion.name, { selector: ".route-region-label" })).toBeVisible();
+    expect(screen.queryByText(`${searchRegion.name} · ${searchRegion.name}`)).not.toBeInTheDocument();
+    expect(screen.queryByText(`30 minutes · ${searchRegion.name}`)).not.toBeInTheDocument();
+  });
+
   it("restores a linked job when Strict Mode replays and aborts the first effect", async () => {
     vi.restoreAllMocks();
     const completed = {
@@ -326,6 +360,13 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
     expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Include uncertain trail access" })).toBeChecked();
+    await userEvent.click(screen.getByRole("switch", { name: "Show region boundaries" }));
+    expect(screen.getByRole("switch", { name: "Show region boundaries" })).toBeChecked();
+    await userEvent.click(screen.getByRole("switch", { name: "Include uncertain trail access" }));
+    expect(screen.getByRole("switch", { name: "Include uncertain trail access" })).not.toBeChecked();
+    await userEvent.clear(screen.getByLabelText("Quick-search routes"));
+    await userEvent.type(screen.getByLabelText("Quick-search routes"), "12");
+    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(12);
   });
 
   it("updates drive-time and closed-route controls without retaining synthetic events", async () => {
@@ -492,9 +533,45 @@ describe("HikeBuilder unified route search", () => {
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
-    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } });
+    expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", origin: { lon: -122.16, lat: 37.16, label: "37.16000, -122.16000" }, durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } });
     expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Calculate drive-time/ })).not.toBeInTheDocument();
+  });
+
+  it("launches a region-wide Full search without an origin or reachability request", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/route-jobs" && init?.method === "POST") {
+        return new Response(JSON.stringify({ job: { ...job, request: regionWideJobRequest } }), { status: 202 });
+      }
+      if (url === "/api/route-jobs") return new Response(JSON.stringify({ version: 1, jobs: [] }), { status: 200 });
+      if (url.includes("/search-regions")) return new Response(JSON.stringify({ searchRegions: [searchRegion] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+
+    render(<HikeBuilder />);
+    expect(await screen.findByRole("button", { name: "Regions: Santa Cruz Mountains" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+
+    expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
+    const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
+    const payload = JSON.parse(String(launch?.[1]?.body));
+    expect(payload).toMatchObject({ version: 1, packId: "fixture-pack", searchRegionId: searchRegion.id, routesPerAccessPoint: 10 });
+    expect(payload).not.toHaveProperty("origin");
+    expect(payload).not.toHaveProperty("durationMinutes");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/reachability"))).toBe(false);
+  });
+
+  it("does not silently launch region-wide when typed origin text is unresolved", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    render(<HikeBuilder />);
+    expect(await screen.findByRole("button", { name: "Regions: Santa Cruz Mountains" })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Driving origin"), "Unresolved place");
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a suggested origin or clear the field to search the entire reviewed region.");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST")).toBe(false);
   });
 
   it("launches one Full search for each selected reviewed region", async () => {
