@@ -42,7 +42,7 @@ const TRAIL_NETWORK_COLOR = "#3f5f52";
 const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
 const TRAIL_NETWORK_WIDTH = 2.4;
 const TRAIL_NETWORK_HOVER_WIDTH = 3.5;
-export const TRAIL_NETWORK_MIN_ZOOM = 11;
+export const TRAIL_NETWORK_MIN_ZOOM = 12;
 export const TRAIL_COPY_FEEDBACK_MS = 1_500;
 export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
 /* The menu is positioned from the click point, so it needs its own size to
