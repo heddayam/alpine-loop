@@ -360,6 +360,13 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
     expect(screen.queryByLabelText("Search effort")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Include uncertain trail access" })).toBeChecked();
+    await userEvent.click(screen.getByRole("switch", { name: "Show region boundaries" }));
+    expect(screen.getByRole("switch", { name: "Show region boundaries" })).toBeChecked();
+    await userEvent.click(screen.getByRole("switch", { name: "Include uncertain trail access" }));
+    expect(screen.getByRole("switch", { name: "Include uncertain trail access" })).not.toBeChecked();
+    await userEvent.clear(screen.getByLabelText("Quick-search routes"));
+    await userEvent.type(screen.getByLabelText("Quick-search routes"), "12");
+    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(12);
   });
 
   it("updates drive-time and closed-route controls without retaining synthetic events", async () => {

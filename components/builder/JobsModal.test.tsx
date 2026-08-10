@@ -115,6 +115,7 @@ describe("JobsModal", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     const view = render(<JobsModal {...baseProps} jobs={[job]} onRefresh={onRefresh} />);
     await userEvent.click(screen.getByRole("button", { name: "Delete Santa Cruz Mountains job and saved routes" }));
+    expect(screen.queryByText(/Deletion requested/)).not.toBeInTheDocument();
     expect(screen.getByText("Removing this job and its saved routes.")).toBeVisible();
     expect(screen.getByText("Santa Cruz Mountains")).toBeVisible();
 

@@ -363,6 +363,23 @@ the evidence line.
   launch and result restoration. No pack schema changed, so installed schema-6
   packs remain compatible.
 
+- 2026-08-09 — completed the remaining GitHub issue #11 result-marker work.
+  Generic access-point dots and clusters are now borderless and disappear while
+  a result marker represents the same trailhead, preventing duplicate map
+  symbols. Overview result groups use quiet text-free dots anchored to a real
+  member start rather than an invented midpoint. Single starts retain their
+  result number, and from zoom 11 onward routes sharing one exact start expand
+  into a compact numbered group whose tip marks the route coordinate. Result
+  labels cannot wrap, and DOM marker anchors retain their real dimensions so
+  MapLibre centers them correctly. Generated result routes now render as single
+  orange or green strokes in every state, without white casing or background
+  layers. Settings checkboxes and the Quick-search route count now snapshot
+  their DOM values before scheduling draft-state updates, preventing cleared
+  React events from causing runtime errors. `npm run verify` passes 426 tests across 79
+  files plus the production build, and two consecutive `npm run test:browser`
+  runs pass all six Chromium flows, including shared-start numbering and anchor
+  regression coverage. No contract or pack schema changed.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

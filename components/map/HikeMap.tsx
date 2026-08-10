@@ -34,15 +34,16 @@ type HikeMapProps = {
   onSegmentHover?: (id?: string) => void;
 };
 
-/* One hue per meaning: orange is the selection and nothing else, green is
-   every unselected route, white is the casing that lifts both off the topo. */
-const ROUTE_SELECTED = "#c9552a";
+/* One hue per meaning: orange is the selection and nothing else; green is
+   every unselected route. Weight distinguishes hover and segment focus. */
+const ROUTE_SELECTED = "#d83b20";
 const ROUTE_ALTERNATE = "#2f6a55";
-const CASING = "#ffffff";
+const ROUTE_WIDTH = 2.5;
+const ROUTE_EMPHASIS_WIDTH = 4;
 const TRAIL_NETWORK_COLOR = "#3f5f52";
 const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
 const TRAIL_NETWORK_WIDTH = 2.4;
-const TRAIL_NETWORK_HOVER_WIDTH = 3.5;
+const TRAIL_NETWORK_HOVER_WIDTH = 2.7;
 export const TRAIL_NETWORK_MIN_ZOOM = 12;
 export const TRAIL_COPY_FEEDBACK_MS = 1_500;
 export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
@@ -261,8 +262,8 @@ export function trailNetworkLineColor(hoveredId?: string): DataDrivenPropertyVal
     : TRAIL_NETWORK_COLOR;
 }
 
-/* Dash lengths are multiples of line width in MapLibre. Keep trail widths
-   fixed so their rhythm does not expand and contract while the map zooms. */
+/* Keep the hover lift small. The dash array itself never changes: changing it
+   causes MapLibre's dash texture to visibly crawl along the trail. */
 export function trailNetworkLineWidth(hoveredId?: string): DataDrivenPropertyValueSpecification<number> {
   return hoveredId
     ? ["case", ["==", ["get", "trailGroupId"], hoveredId], TRAIL_NETWORK_HOVER_WIDTH, TRAIL_NETWORK_WIDTH]
@@ -291,6 +292,13 @@ export type RouteTrailheadPin = {
   selected: boolean;
   nextRouteId: string;
 };
+
+// A selected numbered pin is about 22px wide. Split a cluster as soon as its
+// centers clear that footprint, so numbering returns before deep trail zooms.
+export const ROUTE_PIN_CLUSTER_RADIUS_PX = 22;
+export const ROUTE_PIN_NUMBER_MIN_ZOOM = 11;
+
+type RoutePinScreenPoint = { x: number; y: number };
 
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
@@ -322,10 +330,18 @@ export const REGION_BOUNDARY_PAINT = {
   "line-opacity": 0.58,
 } as const;
 
-export function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
+export function resultAccessPointIds(routes: GeneratedClosedRouteV3[]): Set<string> {
+  return new Set(routes.map((route) => route.startAccessPoint.id));
+}
+
+export function accessPointFeatures(
+  accessPoints: AccessPointOption[],
+  selectedAccessPointId?: string,
+  hiddenAccessPointIds: ReadonlySet<string> = new Set(),
+): FeatureCollection<Point> {
   return {
     type: "FeatureCollection",
-    features: accessPoints.map((point) => ({
+    features: accessPoints.filter((point) => !hiddenAccessPointIds.has(point.id)).map((point) => ({
       type: "Feature",
       properties: {
         id: point.id,
@@ -431,6 +447,89 @@ export function routeTrailheadPins(routes: GeneratedClosedRouteV3[], selectedRou
       nextRouteId: selectedIndex >= 0
         ? group.routeIds[(selectedIndex + 1) % group.routeIds.length]!
         : group.routeIds[0]!,
+    };
+  });
+}
+
+export function clusterRouteTrailheadPins(
+  pins: RouteTrailheadPin[],
+  selectedRouteId: string | undefined,
+  project: (coordinates: [number, number]) => RoutePinScreenPoint,
+  radiusPx = ROUTE_PIN_CLUSTER_RADIUS_PX,
+): RouteTrailheadPin[] {
+  if (pins.length < 2) return pins;
+
+  // Result sets contain at most 20 routes, so a small connected-components
+  // pass keeps grouping deterministic while allowing a chain of nearby starts
+  // to read as one cluster at low zoom.
+  const screenPoints = pins.map((pin) => project(pin.coordinates));
+  const parents = pins.map((_, index) => index);
+  const root = (index: number): number => {
+    let current = index;
+    while (parents[current] !== current) {
+      parents[current] = parents[parents[current]!]!;
+      current = parents[current]!;
+    }
+    return current;
+  };
+  const join = (left: number, right: number) => {
+    const leftRoot = root(left);
+    const rightRoot = root(right);
+    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
+  };
+
+  for (let left = 0; left < pins.length; left += 1) {
+    for (let right = left + 1; right < pins.length; right += 1) {
+      const dx = screenPoints[left]!.x - screenPoints[right]!.x;
+      const dy = screenPoints[left]!.y - screenPoints[right]!.y;
+      if ((dx * dx) + (dy * dy) <= radiusPx * radiusPx) join(left, right);
+    }
+  }
+
+  const groups = new Map<number, number[]>();
+  pins.forEach((_, index) => {
+    const groupRoot = root(index);
+    groups.set(groupRoot, [...(groups.get(groupRoot) ?? []), index]);
+  });
+
+  return [...groups.values()].map((indexes) => {
+    if (indexes.length === 1) return pins[indexes[0]!]!;
+
+    const members = indexes
+      .flatMap((index) => pins[index]!.routeNumbers.map((routeNumber, routeIndex) => ({
+        routeNumber,
+        routeId: pins[index]!.routeIds[routeIndex]!,
+      })))
+      .sort((left, right) => left.routeNumber - right.routeNumber);
+    const routeIds = members.map(({ routeId }) => routeId);
+    const routeNumbers = members.map(({ routeNumber }) => routeNumber);
+    const selectedIndex = selectedRouteId ? routeIds.indexOf(selectedRouteId) : -1;
+    const center = indexes.reduce<RoutePinScreenPoint>((total, index) => ({
+      x: total.x + screenPoints[index]!.x / indexes.length,
+      y: total.y + screenPoints[index]!.y / indexes.length,
+    }), { x: 0, y: 0 });
+    const selectedPinIndex = indexes.find((index) => pins[index]!.selected);
+    const anchorIndex = selectedPinIndex ?? indexes.reduce((closest, index) => {
+      const closestDistance = ((screenPoints[closest]!.x - center.x) ** 2) + ((screenPoints[closest]!.y - center.y) ** 2);
+      const distance = ((screenPoints[index]!.x - center.x) ** 2) + ((screenPoints[index]!.y - center.y) ** 2);
+      return distance < closestDistance ? index : closest;
+    });
+    const names = [...new Set(indexes.map((index) => pins[index]!.name))];
+
+    return {
+      key: `cluster:${indexes.map((index) => pins[index]!.key).sort().join("|")}`,
+      // A cluster is a summary, but its anchor must still be geographically
+      // honest. Prefer the selected start, otherwise the member closest to the
+      // group center; never invent a midpoint where no route starts.
+      coordinates: pins[anchorIndex]!.coordinates,
+      name: names.join(", "),
+      routeIds,
+      routeNumbers,
+      numberLabel: numberLabel(routeNumbers),
+      selected: selectedIndex >= 0,
+      nextRouteId: selectedIndex >= 0
+        ? routeIds[(selectedIndex + 1) % routeIds.length]!
+        : routeIds[0]!,
     };
   });
 }
@@ -698,12 +797,16 @@ export function HikeMap({
           type: "line",
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
-          paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0.01 },
+          paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0 },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
           type: "geojson",
-          data: accessPointFeatures(accessPointsRef.current, selectedAccessPointIdRef.current),
+          data: accessPointFeatures(
+            accessPointsRef.current,
+            selectedAccessPointIdRef.current,
+            resultAccessPointIds(routesRef.current),
+          ),
           cluster: true,
           clusterRadius: 42,
           clusterMaxZoom: 13,
@@ -728,8 +831,6 @@ export function HikeMap({
             // Cluster size reads as "how many trailheads are hiding here".
             "circle-radius": ["step", ["get", "point_count"], 7, 10, 9.5, 30, 12, 100, 15],
             "circle-color": "#1f4a3d",
-            "circle-stroke-color": CASING,
-            "circle-stroke-width": 2,
           },
         });
         map?.addLayer({
@@ -740,8 +841,6 @@ export function HikeMap({
           paint: {
             "circle-radius": ["step", ["get", "point_count"], 10, 10, 12.5, 30, 15, 100, 18],
             "circle-color": "#173f35",
-            "circle-stroke-color": CASING,
-            "circle-stroke-width": 3,
           },
         });
         map?.addLayer({
@@ -756,8 +855,6 @@ export function HikeMap({
               ["==", ["get", "selected"], true], ROUTE_SELECTED,
               "#173f35",
             ],
-            "circle-stroke-color": CASING,
-            "circle-stroke-width": 1.5,
           },
         });
         map?.addLayer({
@@ -772,8 +869,6 @@ export function HikeMap({
               ["==", ["get", "selected"], true], ROUTE_SELECTED,
               "#173f35",
             ],
-            "circle-stroke-color": CASING,
-            "circle-stroke-width": 3,
           },
         });
         map?.addSource("generated-routes-hit", {
@@ -806,91 +901,81 @@ export function HikeMap({
         });
         // Three states, one visual language: unselected routes are thin green,
         // the hovered route is the same green but heavier, and the selected
-        // route is orange. Every state shares a white casing, so the only thing
-        // that changes between them is weight and hue — never line pattern.
-        map?.addLayer({
-          id: "generated-route-alternate-casing",
-          type: "line",
-          source: "generated-route-alternates",
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": CASING, "line-width": zoomWidth(5), "line-opacity": 0.85 },
-        });
+        // route is orange. Result routes have no casing or background stroke.
         map?.addLayer({
           id: "generated-route-alternates",
           type: "line",
           source: "generated-route-alternates",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(2.5), "line-opacity": 0.85 },
-        });
-        map?.addLayer({
-          id: "generated-route-hover-casing",
-          type: "line",
-          source: "generated-route-hover",
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": CASING, "line-width": zoomWidth(8) },
+          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(ROUTE_WIDTH), "line-opacity": 1 },
         });
         map?.addLayer({
           id: "generated-route-hover",
           type: "line",
           source: "generated-route-hover",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(4) },
-        });
-        map?.addLayer({
-          id: "generated-route-selected-casing",
-          type: "line",
-          source: "generated-route-selected",
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": CASING, "line-width": zoomWidth(9) },
+          paint: { "line-color": ROUTE_ALTERNATE, "line-width": zoomWidth(ROUTE_EMPHASIS_WIDTH) },
         });
         map?.addLayer({
           id: "generated-route-selected",
           type: "line",
           source: "generated-route-selected",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": ROUTE_SELECTED, "line-width": zoomWidth(5) },
-        });
-        map?.addLayer({
-          id: "generated-route-segment-focus-casing",
-          type: "line",
-          source: "generated-route-segment-focus",
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": CASING, "line-width": zoomWidth(13), "line-opacity": 0.95 },
+          paint: { "line-color": ROUTE_SELECTED, "line-width": zoomWidth(ROUTE_WIDTH), "line-opacity": 1 },
         });
         map?.addLayer({
           id: "generated-route-segment-focus",
           type: "line",
           source: "generated-route-segment-focus",
           layout: { "line-join": "round", "line-cap": "round" },
-          // Zero transition: hovering a segment is a pointer response, and
-          // MapLibre's default 300 ms colour cross-fade reads as lag.
-          paint: { "line-color": ROUTE_SELECTED, "line-color-transition": { duration: 0, delay: 0 }, "line-width": zoomWidth(8) },
+          paint: { "line-color": ROUTE_SELECTED, "line-width": zoomWidth(ROUTE_EMPHASIS_WIDTH) },
         });
         map?.addLayer({
           id: "generated-route-hit-target",
           type: "line",
           source: "generated-routes-hit",
-          paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0.01 },
+          // MapLibre hit testing uses line geometry and width, not opacity, so
+          // this can be truly invisible without shrinking its pointer target.
+          paint: { "line-color": "#000000", "line-width": 14, "line-opacity": 0 },
         });
         map?.addLayer({
           id: "generated-route-segment-hit-target",
           type: "line",
           source: "generated-route-segments-hit",
-          paint: { "line-color": "#000000", "line-width": 18, "line-opacity": 0.01 },
+          paint: { "line-color": "#000000", "line-width": 18, "line-opacity": 0 },
         });
+        const cursorTargets = { route: false, segment: false, trail: false, accessPoint: false };
+        const syncInteractiveCursor = () => {
+          const canvas = map?.getCanvas();
+          if (!canvas) return;
+          if (Object.values(cursorTargets).some(Boolean)) canvas.style.setProperty("cursor", "pointer");
+          else canvas.style.removeProperty("cursor");
+        };
+        const routeSegmentAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
+          map?.queryRenderedFeatures(point, { layers: ["generated-route-segment-hit-target"] }).length,
+        );
         const selectRoute = (event: MapLayerMouseEvent) => {
+          if (routeSegmentAtPoint(event.point)) return;
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onRouteSelectRef.current(id);
         };
         map?.on("click", "generated-route-hit-target", selectRoute);
         map?.on("mousemove", "generated-route-hit-target", (event) => {
+          if (routeSegmentAtPoint(event.point)) {
+            cursorTargets.route = false;
+            syncInteractiveCursor();
+            previewRoute(undefined);
+            return;
+          }
           const id = event.features?.[0]?.properties?.id;
           if (typeof id !== "string") return;
-          map?.getCanvas().style.setProperty("cursor", "pointer");
+          cursorTargets.route = true;
+          syncInteractiveCursor();
           previewRoute(id);
         });
         map?.on("mouseleave", "generated-route-hit-target", () => {
-          map?.getCanvas().style.removeProperty("cursor");
+          cursorTargets.route = false;
+          syncInteractiveCursor();
           previewRoute(undefined);
         });
         map?.on("click", "generated-route-segment-hit-target", (event) => {
@@ -900,11 +985,13 @@ export function HikeMap({
         map?.on("mousemove", "generated-route-segment-hit-target", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id !== "string") return;
-          map?.getCanvas().style.setProperty("cursor", "pointer");
+          cursorTargets.segment = true;
+          syncInteractiveCursor();
           onSegmentHoverRef.current?.(id);
         });
         map?.on("mouseleave", "generated-route-segment-hit-target", () => {
-          map?.getCanvas().style.removeProperty("cursor");
+          cursorTargets.segment = false;
+          syncInteractiveCursor();
           onSegmentHoverRef.current?.(undefined);
         });
         let styledTrailId: string | undefined;
@@ -915,12 +1002,14 @@ export function HikeMap({
           map?.setPaintProperty("trail-network-lines", "line-width", trailNetworkLineWidth(id));
         };
         const clearTrailHover = () => {
-          map?.getCanvas().style.removeProperty("cursor");
+          cursorTargets.trail = false;
+          syncInteractiveCursor();
           styleTrailHover();
           setHoveredTrail(undefined);
         };
         const clearAccessPointHover = () => {
-          map?.getCanvas().style.removeProperty("cursor");
+          cursorTargets.accessPoint = false;
+          syncInteractiveCursor();
           map?.setFilter("access-point-hover", EMPTY_ACCESS_POINT_HOVER_FILTER);
           map?.setFilter("access-point-cluster-hover", EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER);
           setHoveredAccessPoint(undefined);
@@ -935,7 +1024,8 @@ export function HikeMap({
           if (!feature) return;
           const id = feature.properties?.trailGroupId;
           if (typeof id !== "string") return;
-          map?.getCanvas().style.setProperty("cursor", "pointer");
+          cursorTargets.trail = true;
+          syncInteractiveCursor();
           styleTrailHover(id);
           setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
         });
@@ -977,7 +1067,8 @@ export function HikeMap({
           const pointCount = event.features?.[0]?.properties?.point_count;
           if (typeof clusterId !== "number") return;
           clearTrailHover();
-          map?.getCanvas().style.setProperty("cursor", "pointer");
+          cursorTargets.accessPoint = true;
+          syncInteractiveCursor();
           map?.setFilter("access-point-cluster-hover", accessPointClusterHoverFilter(clusterId));
           setHoveredAccessPoint({
             id: clusterId,
@@ -1012,7 +1103,8 @@ export function HikeMap({
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
           clearTrailHover();
-          map?.getCanvas().style.setProperty("cursor", "pointer");
+          cursorTargets.accessPoint = true;
+          syncInteractiveCursor();
           map?.setFilter("access-point-hover", accessPointHoverFilter(details.id));
           setHoveredAccessPoint({ id: details.id, kindLabel: details.kindLabel, name: details.name });
         });
@@ -1020,8 +1112,11 @@ export function HikeMap({
           clearAccessPointHover();
         });
         map?.on("movestart", () => {
+          cursorTargets.route = false;
+          cursorTargets.segment = false;
           clearTrailHover();
           clearAccessPointHover();
+          syncInteractiveCursor();
           closeContextMenu();
         });
         // MapLibre forwards the browser event untouched, so the native menu has
@@ -1095,8 +1190,8 @@ export function HikeMap({
 
   useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
-    source?.setData(accessPointFeatures(accessPoints, selectedAccessPointId));
-  }, [accessPoints, selectedAccessPointId]);
+    source?.setData(accessPointFeatures(accessPoints, selectedAccessPointId, resultAccessPointIds(routes)));
+  }, [accessPoints, routes, selectedAccessPointId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1112,12 +1207,6 @@ export function HikeMap({
     (map.getSource("generated-route-segment-focus") as GeoJSONSource | undefined)?.setData(
       routeSegmentFeatures(routes, selectedRouteId, hoveredSegmentId ?? selectedSegmentId ?? "__none__"),
     );
-    // The selected route is already orange, so an orange focus would only read
-    // as slightly fatter. Hover borrows the green the map gives every hovered
-    // route, which is also the colour the panel row picks up.
-    if (map.getLayer("generated-route-segment-focus")) {
-      map.setPaintProperty("generated-route-segment-focus", "line-color", hoveredSegmentId ? ROUTE_ALTERNATE : ROUTE_SELECTED);
-    }
   }, [hoveredRouteId, hoveredSegmentId, mapReady, routes, selectedRouteId, selectedSegmentId]);
 
   // Numbered start pins are DOM markers rather than a symbol layer: the style
@@ -1126,26 +1215,83 @@ export function HikeMap({
     const map = mapRef.current;
     const MarkerFactory = markerFactoryRef.current;
     if (!map || !mapReady || !MarkerFactory) return;
-    const markers = routeTrailheadPins(routes, selectedRouteId).map((pin) => {
-      // MapLibre writes its positioning transform onto the element it is given,
-      // so the anchor must be a bare wrapper. Any transform or transition on
-      // that element fights the map and makes the pin drift while zooming.
-      const anchor = document.createElement("div");
-      anchor.className = "route-pin-anchor";
-      const element = document.createElement("button");
-      element.type = "button";
-      element.className = ["route-pin", pin.selected ? "selected" : "", pin.numberLabel.length > 3 ? "wide" : ""].filter(Boolean).join(" ");
-      element.textContent = pin.numberLabel;
-      element.title = pin.name;
-      element.setAttribute("aria-label", `Route ${pin.numberLabel} start at ${pin.name}`);
-      element.addEventListener("click", (event) => { event.stopPropagation(); onRouteSelectRef.current(pin.nextRouteId); });
-      element.addEventListener("mouseenter", () => previewRoute(pin.selected ? selectedRouteId : pin.routeIds[0]));
-      element.addEventListener("mouseleave", () => previewRoute(undefined));
-      anchor.append(element);
-      return new MarkerFactory({ element: anchor, anchor: "center", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
-    });
-    markersRef.current = markers;
-    return () => { markers.forEach((marker) => marker.remove()); };
+    let markers: Marker[] = [];
+    const clearMarkers = () => {
+      markers.forEach((marker) => marker.remove());
+      markers = [];
+      markersRef.current = [];
+    };
+    const renderMarkers = () => {
+      clearMarkers();
+      const numbered = map.getZoom() >= ROUTE_PIN_NUMBER_MIN_ZOOM;
+      const exactPins = routeTrailheadPins(routes, selectedRouteId);
+      const pins = numbered
+        ? exactPins
+        : clusterRouteTrailheadPins(exactPins, selectedRouteId, (coordinates) => map.project(coordinates));
+      markers = pins.map((pin) => {
+        if (numbered && pin.routeIds.length > 1) {
+          const anchor = document.createElement("div");
+          anchor.className = "route-pin-expanded";
+          const grid = document.createElement("div");
+          grid.className = pin.routeIds.length > 4 ? "route-pin-expanded-grid many" : "route-pin-expanded-grid";
+          pin.routeIds.forEach((routeId, index) => {
+            const routeNumber = pin.routeNumbers[index]!;
+            const element = document.createElement("button");
+            element.type = "button";
+            element.className = ["route-pin", routeId === selectedRouteId ? "selected" : ""].filter(Boolean).join(" ");
+            element.textContent = String(routeNumber);
+            element.title = pin.name;
+            element.setAttribute("aria-label", `Route ${routeNumber} start at ${pin.name}`);
+            element.addEventListener("click", (event) => { event.stopPropagation(); onRouteSelectRef.current(routeId); });
+            element.addEventListener("mouseenter", () => previewRoute(routeId));
+            element.addEventListener("mouseleave", () => previewRoute(undefined));
+            grid.append(element);
+          });
+          const tip = document.createElement("span");
+          tip.className = pin.selected ? "route-pin-tip selected" : "route-pin-tip";
+          tip.setAttribute("aria-hidden", "true");
+          anchor.append(grid, tip);
+          return new MarkerFactory({ element: anchor, anchor: "bottom", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
+        }
+
+        // MapLibre writes its positioning transform onto the element it is
+        // given, so only the button inside the anchor may animate.
+        const anchor = document.createElement("div");
+        anchor.className = "route-pin-anchor";
+        const element = document.createElement("button");
+        const overview = !numbered;
+        const groupedOverview = overview && pin.routeIds.length > 1;
+        const groupSize = pin.routeIds.length > 9 ? "dense" : pin.routeIds.length > 4 ? "many" : "";
+        element.type = "button";
+        element.className = [
+          "route-pin",
+          pin.selected ? "selected" : "",
+          groupedOverview ? "overview" : "",
+          groupedOverview ? groupSize : pin.numberLabel.length > 3 ? "wide" : "",
+        ].filter(Boolean).join(" ");
+        element.textContent = groupedOverview ? "" : pin.numberLabel;
+        element.title = groupedOverview ? `${pin.routeIds.length} results near ${pin.name}` : pin.name;
+        element.setAttribute(
+          "aria-label",
+          groupedOverview
+            ? `${pin.routeIds.length} result starts near ${pin.name}`
+            : `Route ${pin.numberLabel} start at ${pin.name}`,
+        );
+        element.addEventListener("click", (event) => { event.stopPropagation(); onRouteSelectRef.current(pin.nextRouteId); });
+        element.addEventListener("mouseenter", () => previewRoute(pin.selected ? selectedRouteId : pin.routeIds[0]));
+        element.addEventListener("mouseleave", () => previewRoute(undefined));
+        anchor.append(element);
+        return new MarkerFactory({ element: anchor, anchor: "center", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
+      });
+      markersRef.current = markers;
+    };
+
+    renderMarkers();
+    map.on("zoomend", renderMarkers);
+    return () => {
+      map.off("zoomend", renderMarkers);
+      clearMarkers();
+    };
   }, [mapReady, previewRoute, routes, selectedRouteId]);
 
   // Framing rules, in priority order:
@@ -1340,17 +1486,15 @@ export function HikeMap({
             className={`map-context-item${coordinateCopyStatus === "idle" ? "" : ` ${coordinateCopyStatus}`}`}
             onClick={() => copyCoordinates(contextMenu.coordinates)}
           >
-            <span className="map-context-coordinates">{contextMenu.coordinates}</span>
             <span className="map-context-action">
-              {/* The icon carries the affordance; the word only appears as the
-                  transient confirmation, so the row stays one quiet line. */}
-              {coordinateCopyStatus === "copied" ? "Copied" : coordinateCopyStatus === "failed" ? "Couldn’t copy" : (
-                <svg className="map-context-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
-                  <path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1" />
-                </svg>
-              )}
+              <svg className="map-context-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                <path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1" />
+              </svg>
             </span>
+            {coordinateCopyStatus === "idle"
+              ? <span className="map-context-coordinates">{contextMenu.coordinates}</span>
+              : <span className={`map-context-copy-feedback ${coordinateCopyStatus}`}>{coordinateCopyStatus === "copied" ? "Copied" : "Couldn’t copy"}</span>}
             <span className="visually-hidden" aria-live="polite">
               {coordinateCopyStatus === "copied" ? "Coordinates copied" : "Copy coordinates"}
             </span>
