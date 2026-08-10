@@ -128,6 +128,12 @@ function parseCoordinateOrigin(text: string) {
   return originSchema.safeParse({ lat, lon, label: `${lat!.toFixed(5)}, ${lon!.toFixed(5)}` });
 }
 
+function resultRegionLabel(packLabel: string, regionName: string) {
+  const pack = packLabel.trim();
+  const region = regionName.trim();
+  return pack.toLowerCase() === region.toLowerCase() ? region : `${pack} · ${region}`;
+}
+
 function batchPageAsResponse(page: RouteJobResultsPage): GenerateClosedRoutesResponseV3 {
   const exact = page.results.filter((result) => result.matchType === "exact").map((result) => result.route);
   const nearMisses = page.results.filter((result) => result.matchType === "near-miss").map((result) => result.route);
@@ -309,7 +315,7 @@ export function HikeBuilder({
     return (regionState?.regions ?? []).flatMap((region) => selected.has(region.id) ? [{
       pack: selectedPack,
       region,
-      label: `${selectedPackLabels.get(selectedPack.id) ?? selectedPack.name} · ${region.name}`,
+      label: resultRegionLabel(selectedPackLabels.get(selectedPack.id) ?? selectedPack.name, region.name),
     }] : []);
   }), [packRegionStates, selectedPackLabels, selectedPacks, selectedRegionIds]);
   const selectedRegionKey = selectedRegionTargets.map(({ pack, region }) => `${pack.id}:${region.id}`).join(",");
@@ -785,7 +791,7 @@ export function HikeBuilder({
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
-    const label = `${selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id} · ${page.job.searchRegion.name}`;
+    const label = resultRegionLabel(selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id, page.job.searchRegion.name);
     setResultRegionLabels(Object.fromEntries([...response.exact, ...response.nearMisses].map(({ id }) => [id, label])));
     setGenerationState("done");
     setGenerationMessage(`${page.results.length} saved routes loaded${page.nextCursor ? "; more are available" : ""}.`);
