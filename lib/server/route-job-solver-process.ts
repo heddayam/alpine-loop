@@ -16,6 +16,7 @@ type PendingRequest = {
 type RouteJobSolverProcessOptions = {
   modulePath?: string;
   env?: Record<string, string | undefined>;
+  closeTimeoutMs?: number;
 };
 
 type RouteJobSolverRequestWithoutId = RouteJobSolverRequest extends infer Request
@@ -36,10 +37,12 @@ function remoteError(value: Extract<RouteJobSolverResponse, { ok: false }>["erro
 export class RouteJobSolverProcess implements RouteJobSearchSession {
   readonly #child: ChildProcess;
   readonly #pending = new Map<number, PendingRequest>();
+  readonly #closeTimeoutMs: number;
   #nextRequestId = 1;
   #ended = false;
 
   private constructor(options: RouteJobSolverProcessOptions) {
+    this.#closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
     const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-job-solver-child.ts");
     // A direct fork(modulePath) call is treated as a bundle-time module
     // reference by Turbopack. This child is intentionally a local Node runtime
@@ -52,7 +55,10 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
     this.#child.on("message", (message: RouteJobSolverResponse) => this.#handleResponse(message));
-    this.#child.on("error", (error) => this.#finish(error));
+    this.#child.on("error", (error) => this.#terminate(error));
+    this.#child.on("disconnect", () => {
+      if (!this.#ended) this.#terminate(new Error("Route solver process disconnected unexpectedly."));
+    });
     this.#child.on("exit", (code, signal) => {
       if (!this.#ended) this.#finish(new Error(`Route solver process exited unexpectedly (${signal ?? code ?? "unknown"}).`));
     });
@@ -83,9 +89,14 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
 
   async close(): Promise<void> {
     if (this.#ended) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort(new Error(`Route solver process did not close within ${this.#closeTimeoutMs} ms.`));
+    }, this.#closeTimeoutMs);
     try {
-      await this.#request({ type: "close" }, new AbortController().signal);
+      await this.#request({ type: "close" }, controller.signal);
     } finally {
+      clearTimeout(timer);
       this.#terminate();
     }
   }
@@ -111,7 +122,7 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
         removeAbortListener: () => signal.removeEventListener("abort", abort),
       });
       this.#child.send({ ...request, id } as RouteJobSolverRequest, (error) => {
-        if (error) this.#finish(error);
+        if (error) this.#terminate(error);
       });
     });
   }
