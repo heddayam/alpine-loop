@@ -224,6 +224,8 @@ describe("HikeBuilder unified route search", () => {
 
     expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByText(searchRegion.name, { selector: ".diagnostics p" })).toBeInTheDocument();
+    expect(screen.getByText(searchRegion.name, { selector: ".route-region-label" })).toBeVisible();
+    expect(screen.queryByText(`${searchRegion.name} · ${searchRegion.name}`)).not.toBeInTheDocument();
     expect(screen.queryByText(`30 minutes · ${searchRegion.name}`)).not.toBeInTheDocument();
   });
 
