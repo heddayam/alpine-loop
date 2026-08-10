@@ -12,7 +12,16 @@ export type RegionalPackBuildOptions = {
   sourceCacheRoot: string;
   preparationRoot: string;
   refresh: boolean;
+  onProgress?: RegionalPackBuildProgressCallback;
 };
+
+export type RegionalPackBuildProgress = {
+  phase: number;
+  phaseCount: number;
+  label: string;
+};
+
+export type RegionalPackBuildProgressCallback = (progress: RegionalPackBuildProgress) => void;
 
 export type RegionalPackBuildResult = {
   pack: PackBuildResult;
