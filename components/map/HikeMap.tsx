@@ -59,7 +59,8 @@ type HoveredTrail = {
   distance?: string;
 };
 
-type TrailCopyFeedback = {
+type MapCopyFeedback = {
+  kind: "trail" | "access-point";
   id: string;
   status: "copied" | "failed";
 };
@@ -95,14 +96,17 @@ export function accessPointFeatureDetails(properties?: Record<string, unknown> |
   id?: string;
   kindLabel: string;
   name: string;
+  copyName?: string;
 } {
   const id = properties?.id;
   const name = properties?.name;
   const kind = properties?.kind;
+  const copyName = typeof name === "string" && name.trim() ? name.trim() : undefined;
   return {
     id: typeof id === "string" ? id : undefined,
     kindLabel: kind === "parking" ? "Parking" : kind === "transit" ? "Transit" : "Trailhead",
-    name: typeof name === "string" && name.trim() ? name.trim() : "Unnamed access point",
+    name: copyName ?? "Unnamed access point",
+    copyName,
   };
 }
 
@@ -437,20 +441,20 @@ export function HikeMap({
   const hoveredSegmentIdRef = useRef(hoveredSegmentId);
   const filterGeometryRef = useRef(filterGeometry);
   const refinementGeometryRef = useRef(refinementGeometry);
-  const trailCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
   const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
-  const [trailCopyFeedback, setTrailCopyFeedback] = useState<TrailCopyFeedback>();
+  const [mapCopyFeedback, setMapCopyFeedback] = useState<MapCopyFeedback>();
   const [contextMenu, setContextMenu] = useState<MapContextMenu>();
   const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => () => {
-    if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+    if (mapCopyTimerRef.current) clearTimeout(mapCopyTimerRef.current);
     if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
   }, []);
 
@@ -880,11 +884,11 @@ export function HikeMap({
           ).then((copied) => {
             if (!alive) return;
             setHoveredTrail({ id, ...details });
-            setTrailCopyFeedback({ id, status: copied ? "copied" : "failed" });
-            if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
-            trailCopyTimerRef.current = setTimeout(() => {
-              setTrailCopyFeedback((current) => current?.id === id ? undefined : current);
-              trailCopyTimerRef.current = null;
+            setMapCopyFeedback({ kind: "trail", id, status: copied ? "copied" : "failed" });
+            if (mapCopyTimerRef.current) clearTimeout(mapCopyTimerRef.current);
+            mapCopyTimerRef.current = setTimeout(() => {
+              setMapCopyFeedback((current) => current?.kind === "trail" && current.id === id ? undefined : current);
+              mapCopyTimerRef.current = null;
             }, TRAIL_COPY_FEEDBACK_MS);
           });
         });
@@ -915,8 +919,24 @@ export function HikeMap({
           clearAccessPointHover();
         });
         map?.on("click", "access-points", (event) => {
-          const id = event.features?.[0]?.properties?.id;
-          if (typeof id === "string") onAccessPointSelectRef.current(id);
+          const details = accessPointFeatureDetails(event.features?.[0]?.properties);
+          if (!details.id) return;
+          onAccessPointSelectRef.current(details.id);
+          if (!details.copyName) return;
+          void copyTextToClipboard(
+            details.copyName,
+            navigator.clipboard,
+            (value) => copyTextWithDocument(value, document),
+          ).then((copied) => {
+            if (!alive || !details.id) return;
+            setHoveredAccessPoint({ id: details.id, kindLabel: details.kindLabel, name: details.name });
+            setMapCopyFeedback({ kind: "access-point", id: details.id, status: copied ? "copied" : "failed" });
+            if (mapCopyTimerRef.current) clearTimeout(mapCopyTimerRef.current);
+            mapCopyTimerRef.current = setTimeout(() => {
+              setMapCopyFeedback((current) => current?.kind === "access-point" && current.id === details.id ? undefined : current);
+              mapCopyTimerRef.current = null;
+            }, TRAIL_COPY_FEEDBACK_MS);
+          });
         });
         map?.on("mouseenter", "access-points", (event) => {
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
@@ -1203,9 +1223,15 @@ export function HikeMap({
     });
   }, []);
 
-  const activeTrailCopyFeedback = hoveredTrail && trailCopyFeedback?.id === hoveredTrail.id
-    ? trailCopyFeedback
+  const activeTrailCopyFeedback = hoveredTrail && mapCopyFeedback?.kind === "trail" && mapCopyFeedback.id === hoveredTrail.id
+    ? mapCopyFeedback
     : undefined;
+  const activeAccessPointCopyFeedback = hoveredAccessPoint
+    && mapCopyFeedback?.kind === "access-point"
+    && mapCopyFeedback.id === hoveredAccessPoint.id
+    ? mapCopyFeedback
+    : undefined;
+  const activeMapCopyFeedback = activeTrailCopyFeedback ?? activeAccessPointCopyFeedback;
   const hoveredMapFeature = hoveredAccessPoint ?? hoveredTrail;
 
   return (
@@ -1278,10 +1304,14 @@ export function HikeMap({
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
-      {drawing || hoveredMapFeature ? <p className={`map-hint${hoveredMapFeature && !drawing ? " map-trail-label" : ""}${activeTrailCopyFeedback && !hoveredAccessPoint ? ` ${activeTrailCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
+      {drawing || hoveredMapFeature ? <p className={`map-hint${hoveredMapFeature && !drawing ? " map-trail-label" : ""}${activeMapCopyFeedback ? ` ${activeMapCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
         {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
           {hoveredAccessPoint ? <>
-            <span className="map-trail-distance">{hoveredAccessPoint.kindLabel}</span>
+            {activeAccessPointCopyFeedback ? (
+              <span className={`map-trail-distance map-trail-copy-feedback ${activeAccessPointCopyFeedback.status}`}>
+                {activeAccessPointCopyFeedback.status === "copied" ? "Copied" : "Couldn’t copy"}
+              </span>
+            ) : <span className="map-trail-distance">{hoveredAccessPoint.kindLabel}</span>}
             <span>{hoveredAccessPoint.name}</span>
           </> : <>
             {activeTrailCopyFeedback ? (
