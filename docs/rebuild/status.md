@@ -159,6 +159,17 @@ the evidence line.
     all three region choices, horizontally scrolling region controls, and zero
     browser console errors.
 
+- [ ] Gate 11 — Central Cascades regional pack
+  - Acceptance: the approved concave, cross-crest boundary keeps the complete
+    Glacier Peak–Alpine Lakes corridor, Napeequa/Chiwawa, Lake Wenatchee,
+    Stevens/Leavenworth/Icicle, Snoqualmie/Cle Elum, and Teanaway whole while
+    excluding North Cascades/Pasayten, Rainier/Goat Rocks, disconnected Puget
+    lowland systems, and the Columbia Basin. A pinned Washington OSM snapshot,
+    exact USGS 3DEP products, source/license review, two byte-identical offline
+    schema-6 builds, clean audits, representative exact and honest close-match
+    searches, activation checks, and two consecutive verify/browser runs must
+    pass the regional onboarding protocol before the catalog link is added.
+
 ## Post-gate fixes
 
 - 2026-08-06 — corrected steepest sustained grade to use exact rolling 100 m
