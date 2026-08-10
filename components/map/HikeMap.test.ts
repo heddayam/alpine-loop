@@ -115,17 +115,12 @@ describe("generated route map features", () => {
       "#244c3d",
       "#3f5f52",
     ]);
-    expect(trailNetworkLineWidth()).toEqual([
-      "interpolate", ["linear"], ["zoom"],
-      8, 2.4 * 0.45,
-      12, 2.4 * 0.8,
-      15, 2.4,
-    ]);
+    expect(trailNetworkLineWidth()).toBe(2.4);
     expect(trailNetworkLineWidth("trail-group:edge-12")).toEqual([
-      "interpolate", ["linear"], ["zoom"],
-      8, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5 * 0.45, 2.4 * 0.45],
-      12, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5 * 0.8, 2.4 * 0.8],
-      15, ["case", ["==", ["get", "trailGroupId"], "trail-group:edge-12"], 3.5, 2.4],
+      "case",
+      ["==", ["get", "trailGroupId"], "trail-group:edge-12"],
+      3.5,
+      2.4,
     ]);
   });
 
