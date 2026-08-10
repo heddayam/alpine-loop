@@ -65,21 +65,24 @@ test("drive-time Quick search resolves reachability and applies the curated regi
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("Batch launches a persistent job and reopens its saved result page", async ({ page }) => {
+test("Full search launches a persistent region-wide job without an origin and reopens its results", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
-  await selectTypedOrigin(page);
-  await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
+  await expect(page.getByLabel("Driving origin", { exact: true })).toHaveValue("");
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Full search" }).click();
 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
   await expect(jobs.getByText("Completed", { exact: true })).toBeVisible();
-  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { includeUncertainAccess: true } });
+  await expect(jobs.getByText("Entire reviewed region")).toBeVisible();
+  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { includeUncertainAccess: true } });
+  expect(harness.batchRequests[0]).not.toHaveProperty("origin");
+  expect(harness.batchRequests[0]).not.toHaveProperty("durationMinutes");
   expect(harness.batchRequests[0]).not.toHaveProperty("startAccessPointId");
   expect(harness.batchRequests[0]).not.toHaveProperty("searchEffort");
+  expect(harness.reachabilityRequests).toHaveLength(0);
 
   await jobs.getByRole("button", { name: "View results" }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
