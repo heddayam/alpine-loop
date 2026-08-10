@@ -84,11 +84,12 @@ npm run --silent pack:checkpoint -- \
   --effort=thorough
 ```
 
-The retained real-pack checkpoints exercise the active V3 closed-route runtime
+The shared real-pack checkpoint exercises the active V3 closed-route runtime
 against representative starts. For Monterey–Carmel:
 
 ```sh
-node --import tsx scripts/research/gate9-monterey-carmel-checkpoint.ts \
+npm run --silent pack:checkpoint -- \
+  --pack=monterey-carmel \
   --database=.local-data/packs/monterey-carmel/<data-version>/pack.sqlite \
   --manifest=.local-data/packs/monterey-carmel/<data-version>/manifest.json \
   --effort=thorough
