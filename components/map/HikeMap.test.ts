@@ -8,8 +8,10 @@ import {
   accessPointFeatureDetails,
   accessPointFeatures,
   accessPointHoverFilter,
-  copyTrailName,
-  copyTrailNameWithDocument,
+  copyTextToClipboard,
+  copyTextWithDocument,
+  contextMenuPosition,
+  formatCoordinates,
   TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
@@ -113,15 +115,29 @@ describe("generated route map features", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const fallbackCopy = vi.fn().mockReturnValue(true);
 
-    await expect(copyTrailName("Bloom Grade", { writeText })).resolves.toBe(true);
+    await expect(copyTextToClipboard("Bloom Grade", { writeText })).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith("Bloom Grade");
-    await expect(copyTrailName("Bloom Grade", { writeText }, fallbackCopy)).resolves.toBe(true);
+    await expect(copyTextToClipboard("Bloom Grade", { writeText }, fallbackCopy)).resolves.toBe(true);
     expect(fallbackCopy).toHaveBeenCalledWith("Bloom Grade");
     expect(writeText).toHaveBeenCalledTimes(2);
-    await expect(copyTrailName("Bloom Grade", { writeText: vi.fn().mockRejectedValue(new Error("denied")) })).resolves.toBe(false);
-    await expect(copyTrailName("Bloom Grade", undefined)).resolves.toBe(false);
-    await expect(copyTrailName(undefined, { writeText })).resolves.toBe(false);
+    await expect(copyTextToClipboard("Bloom Grade", { writeText: vi.fn().mockRejectedValue(new Error("denied")) })).resolves.toBe(false);
+    await expect(copyTextToClipboard("Bloom Grade", undefined)).resolves.toBe(false);
+    await expect(copyTextToClipboard(undefined, { writeText })).resolves.toBe(false);
     expect(writeText).toHaveBeenCalledTimes(2);
+  });
+
+  it("labels a right-clicked location the way another map expects it pasted", () => {
+    expect(formatCoordinates(-122.1637283, 37.1552891)).toBe("37.15529, -122.16373");
+    // Panning east past the antimeridian keeps counting the longitude up.
+    expect(formatCoordinates(190.5, -33.25)).toBe("-33.25000, -169.50000");
+  });
+
+  it("keeps the right-click menu inside the map when the click lands near an edge", () => {
+    const container = { width: 400, height: 300 };
+
+    expect(contextMenuPosition({ x: 120, y: 90 }, container)).toEqual({ left: 120, top: 90 });
+    expect(contextMenuPosition({ x: 395, y: 298 }, container)).toEqual({ left: 200, top: 266 });
+    expect(contextMenuPosition({ x: 10, y: 10 }, { width: 100, height: 20 })).toEqual({ left: 0, top: 0 });
   });
 
   it("copies synchronously while the map click still has browser activation", () => {
@@ -139,7 +155,7 @@ describe("generated route map features", () => {
       execCommand: vi.fn().mockReturnValue(true),
     } as unknown as Document;
 
-    expect(copyTrailNameWithDocument("Bloom Grade", copyDocument)).toBe(true);
+    expect(copyTextWithDocument("Bloom Grade", copyDocument)).toBe(true);
     expect(textarea.value).toBe("Bloom Grade");
     expect(textarea.select).toHaveBeenCalledOnce();
     expect(copyDocument.execCommand).toHaveBeenCalledWith("copy");
