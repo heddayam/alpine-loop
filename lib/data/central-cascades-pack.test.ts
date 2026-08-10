@@ -138,13 +138,13 @@ describe("Central Cascades pack wiring", () => {
     };
     expect(input.packId).toBe("central-cascades");
     expect(input.scenarios.map(({ id }) => id)).toEqual([
-      "napeequa-little-giant-high-pass",
+      "east-glacier-peak-white-river",
       "chiwawa-spider-meadow",
       "west-glacier-peak-north-fork-sauk",
       "stevens-pass",
       "icicle-enchantments",
       "snoqualmie-alpine-lakes",
-      "cle-elum-tucquala",
+      "cle-elum-pete-lake",
       "teanaway-west-fork",
     ]);
     expect(new Set(input.scenarios.map(({ cluster }) => cluster)).size).toBe(input.scenarios.length);

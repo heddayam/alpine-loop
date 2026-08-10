@@ -3,20 +3,22 @@
   "packId": "central-cascades",
   "scenarios": [
     {
-      "id": "napeequa-little-giant-high-pass",
-      "cluster": "Napeequa Valley–Little Giant/High Pass",
+      "id": "east-glacier-peak-white-river",
+      "cluster": "East Glacier Peak–White River",
       "referencePoint": {
-        "name": "Little Giant Trailhead",
-        "coordinates": [-120.8286783, 48.0258723]
+        "name": "White River Trailhead",
+        "coordinates": [-120.9449109, 47.9629325]
       },
       "searchRegionId": "osm:relation/6115914",
+      "candidateNamedAreaId": "osm:relation/6115914",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
-        "distanceMiles": { "min": 12, "max": 32 },
-        "elevationGainFeet": { "min": 2500, "max": 10000 },
+        "distanceMiles": { "min": 8, "max": 30 },
+        "elevationGainFeet": { "min": 1200, "max": 10000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 8, "max": 30 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
@@ -28,14 +30,15 @@
         "name": "Phelps Creek Trailhead",
         "coordinates": [-120.83493, 48.0829138]
       },
-      "searchRegionId": "osm:relation/6115914",
+      "searchRegionId": "pack:central-cascades",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 10, "max": 30 },
         "elevationGainFeet": { "min": 1800, "max": 9000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 10, "max": 30 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
@@ -48,14 +51,15 @@
         "coordinates": [-121.28793, 48.0583431]
       },
       "searchRegionId": "osm:relation/6115914",
+      "maximumRepeatedTrailPct": 80,
       "exactExpectation": {
-        "distanceMiles": { "min": 10, "max": 30 },
-        "elevationGainFeet": { "min": 1800, "max": 9000 },
+        "distanceMiles": { "min": 20, "max": 60 },
+        "elevationGainFeet": { "min": 1800, "max": 20000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
-        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "distanceMiles": { "min": 20, "max": 60 },
+        "elevationGainFeet": { "min": 30000, "max": 35000 },
         "result": "near-miss-only"
       }
     },
@@ -67,13 +71,14 @@
         "coordinates": [-121.0895, 47.7465]
       },
       "searchRegionId": "pack:central-cascades",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 6, "max": 22 },
         "elevationGainFeet": { "min": 1200, "max": 7000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 6, "max": 22 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
@@ -83,16 +88,17 @@
       "cluster": "Icicle Creek–Enchantments",
       "referencePoint": {
         "name": "Stuart Lake Trailhead",
-        "coordinates": [-120.8639, 47.5434]
+        "coordinates": [-120.8207727, 47.5277884]
       },
       "searchRegionId": "osm:relation/6112652",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 8, "max": 24 },
         "elevationGainFeet": { "min": 1800, "max": 9000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 8, "max": 24 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
@@ -101,36 +107,38 @@
       "id": "snoqualmie-alpine-lakes",
       "cluster": "Snoqualmie–Alpine Lakes",
       "referencePoint": {
-        "name": "Snow Lake Trailhead at Alpental",
-        "coordinates": [-121.4162, 47.4454]
+        "name": "Snow Lake Trailhead",
+        "coordinates": [-121.4235243, 47.4455622]
       },
       "searchRegionId": "osm:relation/6112652",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 6, "max": 20 },
         "elevationGainFeet": { "min": 1000, "max": 6500 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 6, "max": 20 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
     },
     {
-      "id": "cle-elum-tucquala",
-      "cluster": "Cle Elum–Tucquala Meadows",
+      "id": "cle-elum-pete-lake",
+      "cluster": "Cle Elum–Salmon la Sac/Pete Lake",
       "referencePoint": {
-        "name": "Tucquala Meadows Trailhead",
-        "coordinates": [-121.284, 47.544]
+        "name": "Pete Lake Trail trailhead",
+        "coordinates": [-121.186917, 47.4341573]
       },
-      "searchRegionId": "osm:relation/6112652",
+      "searchRegionId": "pack:central-cascades",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 8, "max": 26 },
         "elevationGainFeet": { "min": 1400, "max": 8000 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 8, "max": 26 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
@@ -139,17 +147,18 @@
       "id": "teanaway-west-fork",
       "cluster": "Teanaway Community Forest",
       "referencePoint": {
-        "name": "West Fork Teanaway trail system",
-        "coordinates": [-120.959, 47.306]
+        "name": "Middle Fork Teanaway Trail trailhead",
+        "coordinates": [-120.960625, 47.2982778]
       },
       "searchRegionId": "osm:relation/6437099",
+      "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": { "min": 5, "max": 18 },
         "elevationGainFeet": { "min": 700, "max": 5500 },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
-        "distanceMiles": { "min": 2, "max": 4 },
+        "distanceMiles": { "min": 5, "max": 18 },
         "elevationGainFeet": { "min": 15000, "max": 16000 },
         "result": "near-miss-only"
       }
