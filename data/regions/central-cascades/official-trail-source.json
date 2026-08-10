@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "kind": "usgs-national-digital-trails",
+  "id": "usgs-national-digital-trails",
+  "authority": "U.S. Geological Survey",
+  "dataset": "National Transportation Dataset — Trails",
+  "version": "2026-07-central-cascades",
+  "url": "https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/37/query?where=1%3D1&geometry=-121.73319523634241%2C47.19654585917808%2C-120.5276988%2C48.4758823&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=4326&returnGeometry=true&f=geojson",
+  "expectedByteLength": 8489638,
+  "expectedSha256": "sha256:4e52617e13761a7512f143d3e818719391655a68e00d9a1b2291abb7e8bf215a",
+  "license": "Public domain; no use or redistribution restrictions stated by The National Map",
+  "attribution": "U.S. Geological Survey, National Digital Trails"
+}

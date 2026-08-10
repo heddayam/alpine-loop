@@ -1,0 +1,12 @@
+{
+  "sampleStepM": 20,
+  "representedDistanceM": 100,
+  "internalConnectionDistanceM": 50,
+  "maximumConnectionAngleDegrees": 45,
+  "endpointConnectionDistanceM": 30,
+  "candidateConnectionDistanceM": 20,
+  "maximumTransitionLengthM": 250,
+  "duplicateDistanceM": 25,
+  "duplicateCoverageRatio": 0.8,
+  "minimumGapLengthM": 500
+}

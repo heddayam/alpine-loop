@@ -138,7 +138,19 @@ revision returned for each intersecting tile:
 Use the region-unique `central-cascades-elevation` collection namespace while
 allowing the immutable raw-product cache to be shared.
 
-### Official review-only inputs
+### Official trail supplement and review-only inputs
+
+- The July 2026 USGS National Transportation Dataset Trails layer is a pinned,
+  public-domain topology supplement. The exact Central Cascades bbox query is
+  8,489,638 bytes with SHA-256
+  `4e52617e13761a7512f143d3e818719391655a68e00d9a1b2291abb7e8bf215a`.
+  Only terrestrial records explicitly marked for hikers enter the generic
+  conflation pipeline. Geometry within 100 m of OSM is treated as represented;
+  gaps must be at least 500 m and belong to a component attached to OSM.
+  Junctions within 30 m need no bearing inference; displaced junctions up to
+  50 m require agreement within 45 degrees. Ambiguous ends remain truncated.
+  Every published edge retains the USGS source and feature IDs and `unknown`
+  access. The source does not create portals or override OSM access.
 
 - USDA Forest Service National Wilderness Areas and administrative/ownership
   layers were reviewed on 2026-08-10 from
@@ -146,9 +158,9 @@ allowing the immutable raw-product cache to be shared.
   The clearinghouse reported a 2026-06-28 wilderness refresh. USFS data is a
   U.S. government work; retain source attribution and metadata. These layers
   review pack seams and completeness only and are not merged as topology.
-- USFS National Forest System Trails and Recreation Sites are completeness and
-  naming checks only. Attribute depth varies by forest; official linework must
-  not be merged automatically into the graph.
+- Standalone USFS National Forest System Trails and Recreation Sites remain
+  completeness and naming checks only. They are not a second import alongside
+  the USGS aggregate and cannot bypass the generic conflation rules.
 - Washington DNR's Teanaway Community Forest page, management plan, recreation
   plan, and map were reviewed on 2026-08-10 at
   `https://www.dnr.wa.gov/Teanaway`. DNR material validates scope and portal
