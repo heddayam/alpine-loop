@@ -19,6 +19,7 @@ export const loopOptionDefaultsSchema = z.object({
 export const appSettingsV1Schema = z.object({
   schemaVersion: z.literal(1),
   includeUncertainAccess: z.boolean(),
+  showRegionBoundaries: z.boolean(),
   quickSearchRouteCount: z.number().int().min(1).max(20),
   gradeConstraintEnabled: z.boolean(),
   selectedGradePreset: gradePresetIdSchema,

@@ -25,6 +25,7 @@ type ResultsPanelProps = {
   nearMissesOpen?: boolean;
   onToggleNearMisses?: (open: boolean) => void;
   pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
+  routeRegionLabels?: Readonly<Record<string, string>>;
 };
 
 const METERS_PER_MILE = 1609.344;
@@ -145,6 +146,7 @@ function RouteCard({
   hoveredSegmentId,
   onSelectSegment,
   onHoverSegment,
+  regionLabel,
 }: {
   route: GeneratedClosedRouteV3 & { violations?: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"] };
   routeNumber: number;
@@ -157,6 +159,7 @@ function RouteCard({
   hoveredSegmentId?: string;
   onSelectSegment?: (segmentId: string) => void;
   onHoverSegment?: (segmentId?: string) => void;
+  regionLabel?: string;
 }) {
   const detailId = `route-detail-${route.id}`;
   const coordinates = trailheadCoordinates(route);
@@ -195,6 +198,7 @@ function RouteCard({
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
         <span className="route-summary-main">
+          {regionLabel ? <span className="route-region-label">{regionLabel}</span> : null}
           <strong id={`route-heading-${route.id}`}>{heading}</strong>
           <small id={`route-${route.id}`}>{topologySummary(route)}</small>
         </span>
@@ -324,6 +328,7 @@ export function ResultsPanel({
   nearMissesOpen = false,
   onToggleNearMisses,
   pagination,
+  routeRegionLabels = {},
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const segmentRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -453,6 +458,7 @@ export function ResultsPanel({
                 hoveredSegmentId={hoveredSegmentId}
                 onSelectSegment={onSelectSegment}
                 onHoverSegment={onHoverSegment}
+                regionLabel={routeRegionLabels[route.id]}
               />
             ))}
           </section>
@@ -479,6 +485,7 @@ export function ResultsPanel({
                   hoveredSegmentId={hoveredSegmentId}
                   onSelectSegment={onSelectSegment}
                   onHoverSegment={onHoverSegment}
+                  regionLabel={routeRegionLabels[route.id]}
                 />
               ))}
             </details>

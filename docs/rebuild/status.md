@@ -309,6 +309,23 @@ the evidence line.
   five Chromium flows; the final positioning review is intentionally left for
   manual UI inspection.
 
+- 2026-08-09 — completed the multi-region selection follow-up for GitHub issues
+  #12 and #15. Installed pack pills now toggle independently, including an
+  explicit empty selection, and one grouped, indented checkbox dropdown controls
+  reviewed regions across the selected packs. Quick search fans out across every
+  selected target, combines results fairly, namespaces pack-local IDs, and
+  removes duplicate route geometry from overlapping packs; Full search creates
+  one persistent job per selected reviewed region. Saved cross-pack job results
+  now replace the active selection with their originating pack and reviewed
+  region, then open in the current workspace, including under React Strict Mode.
+  Primary-pack URL updates no longer remount the builder, so the restored region
+  selection and saved routes appear together instead of the results being reset.
+  Optional pack and reviewed-region boundaries are hidden by
+  default and render only as a 0.8 px solid black outline with no fill, casing,
+  or dash. `npm run verify` passes 399 tests across 77 files plus the production
+  build, and two consecutive `npm run test:browser` runs pass all five Chromium
+  flows. Existing packs remain compatible.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

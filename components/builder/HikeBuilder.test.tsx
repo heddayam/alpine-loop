@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +35,7 @@ const routeResponse = {
 };
 const searchRegion = { id: "osm-relation-1", name: "Santa Cruz Mountains", kind: "protected-area", context: "California", bbox: [-122.3, 37, -121.8, 37.5], sourceIds: ["osm"], displayOrder: 0 };
 const appSettings = {
-  schemaVersion: 1, includeUncertainAccess: true, quickSearchRouteCount: 10,
+  schemaVersion: 1, includeUncertainAccess: true, showRegionBoundaries: false, quickSearchRouteCount: 10,
   gradeConstraintEnabled: false, selectedGradePreset: "moderate",
   loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },
   gradePresets: {
@@ -86,11 +87,13 @@ describe("HikeBuilder unified route search", () => {
 
   it("shows every catalog region and only enables installed packs", async () => {
     render(<HikeBuilder regions={catalogRegions} />);
-    const selected = screen.getByRole("button", { name: /Santa Cruz Mountains.*Available; currently selected/ });
+    const selected = screen.getByRole("button", { name: /Santa Cruz Mountains.*Available; selected/ });
     const available = screen.getByRole("button", { name: /Southern East Bay.*Available/ });
     const planned = screen.getByRole("button", { name: /Monterey–Carmel.*Planned; pack not yet available/ });
     const unavailable = screen.getByRole("button", { name: /Henry Coe.*Pack unavailable on this device/ });
     expect(selected).toHaveAttribute("aria-pressed", "true");
+    expect(selected).toBeEnabled();
+    expect(selected).toHaveClass("region-pill-selected");
     expect(available).toHaveAttribute("aria-pressed", "false");
     expect(planned).toBeDisabled();
     expect(unavailable).toBeDisabled();
@@ -98,11 +101,19 @@ describe("HikeBuilder unified route search", () => {
     expect(unavailable.querySelector(".status-dot")).toBeNull();
     expect(screen.getByRole("navigation", { name: "Region packs" })).toBeVisible();
 
+    await userEvent.click(selected);
+    await waitFor(() => expect(selected).toHaveAttribute("aria-pressed", "false"));
+    expect(router.replace).toHaveBeenCalledWith("/?packs=none");
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one region pack.");
+
     await userEvent.click(available);
-    expect(router.push).toHaveBeenCalledWith("/?pack=southern-east-bay");
+    await waitFor(() => expect(available).toHaveAttribute("aria-pressed", "true"));
+    expect(available).toHaveClass("region-pill-selected");
+    expect(router.replace).toHaveBeenLastCalledWith("/?packs=southern-east-bay");
   });
 
-  it("navigates to a saved job's pack before restoring cross-pack results", async () => {
+  it("adds a saved job's pack and restores cross-pack results without losing the workspace", async () => {
     vi.restoreAllMocks();
     const otherJob = {
       ...job,
@@ -122,12 +133,24 @@ describe("HikeBuilder unified route search", () => {
       return undefined;
     });
 
-    render(<HikeBuilder regions={catalogRegions} />);
+    const view = render(<HikeBuilder regions={catalogRegions} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Jobs" })).toBeVisible());
     await userEvent.click(screen.getByRole("button", { name: "Jobs" }));
     await userEvent.click(await screen.findByRole("button", { name: `View results for ${searchRegion.name}` }));
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/?pack=southern-east-bay&job=${otherJob.id}`));
-    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.getByRole("button", { name: /Southern East Bay.*Available; selected/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Santa Cruz Mountains.*Available/ })).toHaveAttribute("aria-pressed", "false");
+    expect(router.replace).toHaveBeenCalledWith("/?packs=southern-east-bay");
+    expect(screen.getByRole("button", { name: `Regions: ${searchRegion.name}` })).toBeVisible();
+
+    // The URL update changes the server-provided primary pack. The builder must
+    // preserve the job results when those props stream back into the client.
+    const nextPack = { ...FIXTURE_BUILDER_PACK, id: "southern-east-bay", name: "Southern East Bay" };
+    view.rerender(<HikeBuilder pack={nextPack} regions={catalogRegions} initialSelectedPackIds={["southern-east-bay"]} />);
+    expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.getByRole("button", { name: `Regions: ${searchRegion.name}` })).toBeVisible();
   });
 
   it("restores a linked job after pack navigation and removes the one-time URL state", async () => {
@@ -150,7 +173,34 @@ describe("HikeBuilder unified route search", () => {
     render(<HikeBuilder restoreJobId={completed.id} />);
     expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
-    expect(router.replace).toHaveBeenCalledWith("/?pack=fixture-pack");
+    expect(router.replace).toHaveBeenCalledWith("/?packs=fixture-pack");
+  });
+
+  it("restores a linked job when Strict Mode replays and aborts the first effect", async () => {
+    vi.restoreAllMocks();
+    const completed = {
+      ...job,
+      status: "completed" as const,
+      progress: { ...job.progress, eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: 1 },
+      completedAt: "2026-08-06T00:00:05Z",
+    };
+    let restoreRequests = 0;
+    mockBaseFetch((url, init) => {
+      if (url !== `/api/route-jobs/${completed.id}/results?limit=50`) return undefined;
+      restoreRequests += 1;
+      if (restoreRequests === 1) return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+      return new Response(JSON.stringify({
+        version: 1,
+        job: completed,
+        results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }],
+      }), { status: 200 });
+    });
+
+    render(<StrictMode><HikeBuilder restoreJobId={completed.id} /></StrictMode>);
+    expect(await screen.findByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(restoreRequests).toBe(2);
   });
 
   it("remounts the workspace for a new pack so pack-specific draft and results state reset", async () => {
@@ -172,7 +222,7 @@ describe("HikeBuilder unified route search", () => {
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Driving origin")).toBeVisible();
     expect(screen.getByLabelText("Typical drive time")).toHaveValue("30");
-    expect(screen.getByLabelText("Broad region")).toBeVisible();
+    expect(await screen.findByRole("button", { name: /Regions: Santa Cruz Mountains/ })).toBeVisible();
     expect(screen.getByRole("button", { name: "Quick search" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Full search" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Drawn boundary" })).toBeVisible();
@@ -245,7 +295,7 @@ describe("HikeBuilder unified route search", () => {
   it("resolves drive time before Quick when no boundary is drawn", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     render(<HikeBuilder />);
-    expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Regions: Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
     await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
     expect(await screen.findByText("1 exact route ready.")).toBeVisible();
@@ -255,6 +305,41 @@ describe("HikeBuilder unified route search", () => {
       searchEffort: "quick",
       accessFilter: { mode: "drive-time", reachabilityId: "3d594650-3436-4f8b-a0e8-38d13fc148ca", regionId: searchRegion.id },
     });
+  });
+
+  it("runs Quick across every selected pack and labels the combined results", async () => {
+    vi.restoreAllMocks();
+    const generatedPackIds: string[] = [];
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/routes/generate") return undefined;
+      const request = JSON.parse(String(init?.body)) as { packId: string };
+      generatedPackIds.push(request.packId);
+      const eastBay = request.packId === "southern-east-bay";
+      return new Response(JSON.stringify({
+        ...routeResponse,
+        requestId: eastBay ? "request-east-bay" : "request-fixture",
+        pack: { ...routeResponse.pack, id: request.packId },
+        exact: [{
+          ...generatedRoute,
+          id: eastBay ? "east-bay-route" : "fixture-route",
+          geometry: eastBay
+            ? { type: "LineString", coordinates: [[-121.96, 37.46], [-121.9, 37.5], [-121.96, 37.46]] }
+            : generatedRoute.geometry,
+        }],
+      }), { status: 200 });
+    });
+
+    render(<HikeBuilder regions={catalogRegions} />);
+    await userEvent.click(screen.getByRole("button", { name: /Southern East Bay.*Available/ }));
+    expect(await screen.findByRole("button", { name: "Regions: 2 regions selected" })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+
+    expect(await screen.findByText("2 exact routes ready.")).toBeVisible();
+    expect(generatedPackIds).toEqual(["fixture-pack", "southern-east-bay"]);
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("fixture-pack::fixture-route");
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("southern-east-bay::east-bay-route");
+    expect(screen.getByText("Southern East Bay · Santa Cruz Mountains")).toBeVisible();
   });
 
   it("aborts a stale Quick request after a subsequent boundary change", async () => {
@@ -282,15 +367,41 @@ describe("HikeBuilder unified route search", () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     render(<HikeBuilder />);
-    expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Regions: Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
-    await userEvent.selectOptions(screen.getByLabelText("Broad region"), searchRegion.id);
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
     const launch = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
     expect(JSON.parse(String(launch?.[1]?.body))).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, searchRegionId: searchRegion.id, routesPerAccessPoint: 10, criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } });
     expect(screen.queryByLabelText("Access point")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Calculate drive-time/ })).not.toBeInTheDocument();
+  });
+
+  it("launches one Full search for each selected reviewed region", async () => {
+    vi.restoreAllMocks();
+    const launchedPackIds: string[] = [];
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/route-jobs" || init?.method !== "POST") return undefined;
+      const request = JSON.parse(String(init.body)) as { packId: string };
+      launchedPackIds.push(request.packId);
+      const eastBay = request.packId === "southern-east-bay";
+      return new Response(JSON.stringify({ job: {
+        ...job,
+        id: eastBay ? "4d594650-3436-4f8b-a0e8-38d13fc148ca" : job.id,
+        request: { ...job.request, packId: request.packId },
+        pack: { ...job.pack, id: request.packId },
+      } }), { status: 202 });
+    });
+
+    render(<HikeBuilder regions={catalogRegions} />);
+    await userEvent.click(screen.getByRole("button", { name: /Southern East Bay.*Available/ }));
+    expect(await screen.findByRole("button", { name: "Regions: 2 regions selected" })).toBeVisible();
+    await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+
+    expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
+    expect(launchedPackIds).toEqual(["fixture-pack", "southern-east-bay"]);
+    expect(screen.getByText(/2 full searches queued/)).toBeVisible();
   });
 
   it("serializes background polling and continues while Jobs is closed", async () => {
@@ -379,7 +490,7 @@ describe("HikeBuilder unified route search", () => {
       return undefined;
     });
     render(<HikeBuilder />);
-    expect(await screen.findByRole("option", { name: "Santa Cruz Mountains" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Regions: Santa Cruz Mountains" })).toBeVisible();
     await userEvent.type(screen.getByLabelText("Driving origin"), "37.16, -122.16");
     const launch = screen.getByRole("button", { name: "Full search" });
     fireEvent.click(launch);

@@ -53,6 +53,7 @@ describe("SettingsStore", () => {
     }));
 
     const settings = await new SettingsStore({ filePath }).get();
+    expect(settings.showRegionBoundaries).toBe(false);
     expect(settings.gradeConstraintEnabled).toBe(false);
     expect(settings.selectedGradePreset).toBe("moderate");
     expect(settings.loopOptions).toEqual({

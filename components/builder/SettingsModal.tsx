@@ -105,6 +105,15 @@ export function SettingsModal({
                 onChange={(event) => setDraft((current) => ({ ...current, includeUncertainAccess: event.currentTarget.checked }))}
               />
             </label>
+            <label className="switch-row" title="Shows the exact installed-pack coverage outlines on the map.">
+              <span>Show region boundaries</span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={draft.showRegionBoundaries}
+                onChange={(event) => setDraft((current) => ({ ...current, showRegionBoundaries: event.currentTarget.checked }))}
+              />
+            </label>
             <div className="count-field">
               <label htmlFor="settings-route-count">Quick-search routes</label>
               <input
