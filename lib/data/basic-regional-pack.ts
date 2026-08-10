@@ -28,6 +28,26 @@ import type { RegionalPackBuildOptions, RegionalPackBuildResult } from "./region
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology } from "./types";
 
+export const BASIC_REGIONAL_PACK_BUILD_PHASES = [
+  "Validate regional inputs and prerequisites",
+  "Read pinned source snapshots",
+  "Extract and normalize OSM topology",
+  "Derive trailhead portals and strip build context",
+  "Prepare building context",
+  "Set up elevation sampling",
+  "Collect named areas and compile the regional pack",
+  "Audit and publish regional reports",
+  "Regional pack build complete",
+] as const;
+
+function reportBuildProgress(options: RegionalPackBuildOptions, phase: number, label?: string): void {
+  options.onProgress?.({
+    phase,
+    phaseCount: BASIC_REGIONAL_PACK_BUILD_PHASES.length,
+    label: label ?? BASIC_REGIONAL_PACK_BUILD_PHASES[phase - 1]!,
+  });
+}
+
 export type BasicRegionalPackConfig = {
   id: string;
   name: string;
@@ -188,6 +208,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
   return async function buildBasicRegionalPack(
     options: RegionalPackBuildOptions,
   ): Promise<RegionalPackBuildResult> {
+    reportBuildProgress(options, 1);
     const boundaryPath = path.join(config.regionRoot, "boundary.geojson");
     const searchRegionPath = path.join(config.regionRoot, "search-regions.json");
     const [boundaryContents, searchRegionContents, searchRegions, osmConfig, elevationConfig] = await Promise.all([
@@ -200,6 +221,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
     const boundary = parseBasicRegionalBoundary(config, boundaryContents);
 
     await Promise.all([validateOsmPrerequisites(), validateUvRasterioPrerequisites()]);
+    reportBuildProgress(options, 2, options.refresh ? "Refresh pinned source snapshots" : undefined);
     const [osmSnapshot, dem] = await Promise.all([
       options.refresh
         ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
@@ -218,15 +240,19 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       preparationRoot: path.join(options.preparationRoot, "osm"),
       namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
     });
+    reportBuildProgress(options, 3);
     const inputTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
+    reportBuildProgress(options, 4);
     const portals = deriveTrailheadPortals(inputTopology);
     const publishedTopology = stripPortalBuildContext(portals);
     const portalAudit = portalReport(inputTopology, portals, publishedTopology, boundary.geometry);
-    const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
+    reportBuildProgress(options, 5);
     const buildings = await prepareOsmBuildings(osmSnapshot, {
       boundaryPath,
       preparationRoot: path.join(options.preparationRoot, "osm"),
     });
+    reportBuildProgress(options, 6);
+    const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
     const snapshots = [osmSnapshot, dem.snapshot];
     const adapterVersions = [
       sourceTopologyAdapter.adapterVersion,
@@ -243,6 +269,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       adapterVersions,
       metricVersions,
     });
+    reportBuildProgress(options, 7);
     const pack = await compilePack({
       outputRoot: options.outputRoot,
       seed,
@@ -256,6 +283,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
       searchRegions,
     });
+    reportBuildProgress(options, 8);
     const regionalAudit = await auditSqlitePack({
       databasePath: pack.databasePath,
       manifestPath: pack.manifestPath,
@@ -266,6 +294,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       writeFile(path.join(pack.packDirectory, "regional-audit.json"), `${JSON.stringify(regionalAudit, null, 2)}\n`),
       writeFile(path.join(pack.packDirectory, "portal-audit.json"), `${JSON.stringify(portalAudit, null, 2)}\n`),
     ]);
+    reportBuildProgress(options, 9);
     return { pack, portalAudit, regionalAudit };
   };
 }
