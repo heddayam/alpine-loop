@@ -40,6 +40,12 @@ const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
 export const TRAIL_NETWORK_MIN_ZOOM = 11;
 export const TRAIL_COPY_FEEDBACK_MS = 1_500;
+export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
+/* The menu is positioned from the click point, so it needs its own size to
+   stay inside the map instead of being clipped at the right or bottom edge.
+   The width covers the single line at its widest: coordinates plus the copy
+   label, which the stylesheet never wraps. */
+const CONTEXT_MENU_SIZE = { width: 200, height: 34 };
 const EMPTY_TRAIL_HOVER_FILTER: FilterSpecification = ["==", ["get", "trailGroupId"], "__none__"];
 const EMPTY_ACCESS_POINT_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
 const EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER: FilterSpecification = ["==", ["get", "cluster_id"], -1];
@@ -53,6 +59,12 @@ type HoveredTrail = {
 type TrailCopyFeedback = {
   id: string;
   status: "copied" | "failed";
+};
+
+type MapContextMenu = {
+  left: number;
+  top: number;
+  coordinates: string;
 };
 
 type HoveredAccessPoint = {
@@ -95,6 +107,24 @@ export function accessPointFeatureDetails(properties?: Record<string, unknown> |
   };
 }
 
+/* Latitude first, five decimals: the order and precision people paste into
+   another map. Longitude is wrapped so panning past the antimeridian cannot
+   report a coordinate no other tool accepts. */
+export function formatCoordinates(lng: number, lat: number): string {
+  const wrappedLng = ((((lng + 180) % 360) + 360) % 360) - 180;
+  return `${lat.toFixed(5)}, ${wrappedLng.toFixed(5)}`;
+}
+
+export function contextMenuPosition(
+  point: { x: number; y: number },
+  container: { width: number; height: number },
+): { left: number; top: number } {
+  return {
+    left: Math.max(0, Math.min(point.x, container.width - CONTEXT_MENU_SIZE.width)),
+    top: Math.max(0, Math.min(point.y, container.height - CONTEXT_MENU_SIZE.height)),
+  };
+}
+
 export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: number): string | undefined {
   if (zoom < TRAIL_NETWORK_MIN_ZOOM) return undefined;
   const query = new URLSearchParams({
@@ -127,24 +157,24 @@ export function trailNetworkFeatureDetails(properties?: Record<string, unknown> 
   };
 }
 
-export async function copyTrailName(
-  name: string | undefined,
+export async function copyTextToClipboard(
+  text: string | undefined,
   clipboard: Pick<Clipboard, "writeText"> | undefined,
   fallbackCopy?: (value: string) => boolean,
 ): Promise<boolean> {
-  if (!name) return false;
+  if (!text) return false;
   let clipboardCopy: Promise<boolean> | undefined;
   if (clipboard) {
     try {
       // Start the preferred API while the click's browser activation is live.
-      clipboardCopy = clipboard.writeText(name).then(() => true, () => false);
+      clipboardCopy = clipboard.writeText(text).then(() => true, () => false);
     } catch {
       clipboardCopy = undefined;
     }
   }
   try {
     // Run the compatibility path before this synchronous click stack unwinds.
-    if (fallbackCopy?.(name)) {
+    if (fallbackCopy?.(text)) {
       void clipboardCopy;
       return true;
     }
@@ -154,11 +184,11 @@ export async function copyTrailName(
   return clipboardCopy ? await clipboardCopy : false;
 }
 
-export function copyTrailNameWithDocument(name: string, copyDocument: Document | undefined): boolean {
+export function copyTextWithDocument(text: string, copyDocument: Document | undefined): boolean {
   if (!copyDocument?.body || typeof copyDocument.execCommand !== "function") return false;
   const activeElement = copyDocument.activeElement;
   const textarea = copyDocument.createElement("textarea");
-  textarea.value = name;
+  textarea.value = text;
   textarea.setAttribute("readonly", "");
   textarea.style.position = "fixed";
   textarea.style.inset = "-9999px auto auto -9999px";
@@ -395,15 +425,29 @@ export function HikeMap({
   const filterGeometryRef = useRef(filterGeometry);
   const refinementGeometryRef = useRef(refinementGeometry);
   const trailCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
   const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
   const [trailCopyFeedback, setTrailCopyFeedback] = useState<TrailCopyFeedback>();
+  const [contextMenu, setContextMenu] = useState<MapContextMenu>();
+  const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => () => {
     if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+    if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(undefined);
+    setCoordinateCopyStatus("idle");
+    if (coordinateCopyTimerRef.current) {
+      clearTimeout(coordinateCopyTimerRef.current);
+      coordinateCopyTimerRef.current = null;
+    }
   }, []);
 
   // Map-originated hover drives the results list as well as the map itself.
@@ -547,15 +591,8 @@ export function HikeMap({
           },
         });
         map?.addSource("trail-network", { type: "geojson", data: trailNetworkRef.current });
-        // The trail network is context, not content: keep it hairline so
-        // generated routes are the only prominent lines on the map.
-        map?.addLayer({
-          id: "trail-network-casing",
-          type: "line",
-          source: "trail-network",
-          minzoom: TRAIL_NETWORK_MIN_ZOOM,
-          paint: { "line-color": CASING, "line-width": zoomWidth(5.5), "line-opacity": 0.88 },
-        });
+        // The trail network is context, not content: use a single quiet dashed
+        // stroke without a casing so the basemap remains visible in the gaps.
         map?.addLayer({
           id: "trail-network-lines",
           type: "line",
@@ -571,22 +608,13 @@ export function HikeMap({
           paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0.01 },
         });
         map?.addLayer({
-          id: "trail-network-hover-casing",
-          type: "line",
-          source: "trail-network",
-          minzoom: TRAIL_NETWORK_MIN_ZOOM,
-          filter: EMPTY_TRAIL_HOVER_FILTER,
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": CASING, "line-width": zoomWidth(9), "line-opacity": 0.94 },
-        });
-        map?.addLayer({
           id: "trail-network-hover",
           type: "line",
           source: "trail-network",
           minzoom: TRAIL_NETWORK_MIN_ZOOM,
           filter: EMPTY_TRAIL_HOVER_FILTER,
           layout: { "line-join": "round", "line-cap": "butt" },
-          paint: { "line-color": "#244c3d", "line-width": zoomWidth(5), "line-opacity": 0.96, "line-dasharray": [1.2, 1.8] },
+          paint: { "line-color": "#244c3d", "line-width": zoomWidth(3.5), "line-opacity": 0.96, "line-dasharray": [2.5, 3] },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
@@ -797,7 +825,6 @@ export function HikeMap({
         });
         const clearTrailHover = () => {
           map?.getCanvas().style.removeProperty("cursor");
-          map?.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
           map?.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
           setHoveredTrail(undefined);
         };
@@ -818,7 +845,6 @@ export function HikeMap({
           const id = feature.properties?.trailGroupId;
           if (typeof id !== "string") return;
           map?.getCanvas().style.setProperty("cursor", "pointer");
-          map?.setFilter("trail-network-hover-casing", trailNetworkHoverFilter(id));
           map?.setFilter("trail-network-hover", trailNetworkHoverFilter(id));
           setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
         });
@@ -830,10 +856,10 @@ export function HikeMap({
           if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) return;
           const details = trailNetworkFeatureDetails(feature.properties);
           if (!details.copyName) return;
-          void copyTrailName(
+          void copyTextToClipboard(
             details.copyName,
             navigator.clipboard,
-            (value) => copyTrailNameWithDocument(value, document),
+            (value) => copyTextWithDocument(value, document),
           ).then((copied) => {
             if (!alive) return;
             setHoveredTrail({ id, ...details });
@@ -889,7 +915,21 @@ export function HikeMap({
         map?.on("movestart", () => {
           clearTrailHover();
           clearAccessPointHover();
+          closeContextMenu();
         });
+        // MapLibre forwards the browser event untouched, so the native menu has
+        // to be suppressed here or it would cover the one we render.
+        map?.on("contextmenu", (event) => {
+          event.originalEvent.preventDefault();
+          const canvas = map?.getCanvas();
+          const position = contextMenuPosition(event.point, {
+            width: canvas?.clientWidth ?? 0,
+            height: canvas?.clientHeight ?? 0,
+          });
+          setCoordinateCopyStatus("idle");
+          setContextMenu({ ...position, coordinates: formatCoordinates(event.lngLat.lng, event.lngLat.lat) });
+        });
+        map?.on("click", closeContextMenu);
 
         const refreshTrailNetwork = () => {
           if (!map) return;
@@ -902,7 +942,6 @@ export function HikeMap({
           ], map.getZoom());
           trailNetworkController?.abort();
           trailNetworkController = null;
-          map.setFilter("trail-network-hover-casing", EMPTY_TRAIL_HOVER_FILTER);
           map.setFilter("trail-network-hover", EMPTY_TRAIL_HOVER_FILTER);
           setHoveredTrail(undefined);
           const source = map.getSource("trail-network") as GeoJSONSource | undefined;
@@ -936,7 +975,7 @@ export function HikeMap({
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [display.center, display.zoom, packCoverage, packCoverageBbox, packId, previewRoute]);
+  }, [closeContextMenu, display.center, display.zoom, packCoverage, packCoverageBbox, packId, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -1112,6 +1151,41 @@ export function HikeMap({
     };
   }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
+  // Escape and any press outside the menu dismiss it; presses on the canvas are
+  // already covered by the map's own click handler.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeContextMenu();
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Node && contextMenuRef.current?.contains(event.target)) return;
+      closeContextMenu();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [closeContextMenu, contextMenu]);
+
+  const copyCoordinates = useCallback((coordinates: string) => {
+    void copyTextToClipboard(
+      coordinates,
+      navigator.clipboard,
+      (value) => copyTextWithDocument(value, document),
+    ).then((copied) => {
+      setCoordinateCopyStatus(copied ? "copied" : "failed");
+      if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+      coordinateCopyTimerRef.current = setTimeout(() => {
+        coordinateCopyTimerRef.current = null;
+        setContextMenu(undefined);
+        setCoordinateCopyStatus("idle");
+      }, COORDINATE_COPY_FEEDBACK_MS);
+    });
+  }, []);
+
   const activeTrailCopyFeedback = hoveredTrail && trailCopyFeedback?.id === hoveredTrail.id
     ? trailCopyFeedback
     : undefined;
@@ -1143,6 +1217,37 @@ export function HikeMap({
         </button>
       </div> : null}
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
+      {contextMenu ? (
+        <div
+          ref={contextMenuRef}
+          className="map-context-menu"
+          style={{ left: `${contextMenu.left}px`, top: `${contextMenu.top}px` }}
+          role="menu"
+          aria-label="Map location"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={`map-context-item${coordinateCopyStatus === "idle" ? "" : ` ${coordinateCopyStatus}`}`}
+            onClick={() => copyCoordinates(contextMenu.coordinates)}
+          >
+            <span className="map-context-coordinates">{contextMenu.coordinates}</span>
+            <span className="map-context-action">
+              {/* The icon carries the affordance; the word only appears as the
+                  transient confirmation, so the row stays one quiet line. */}
+              {coordinateCopyStatus === "copied" ? "Copied" : coordinateCopyStatus === "failed" ? "Couldn’t copy" : (
+                <svg className="map-context-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                  <path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1" />
+                </svg>
+              )}
+            </span>
+            <span className="visually-hidden" aria-live="polite">
+              {coordinateCopyStatus === "copied" ? "Coordinates copied" : "Copy coordinates"}
+            </span>
+          </button>
+        </div>
+      ) : null}
       <details className="map-key map-key-collapsible">
         <summary className="map-key-toggle">Map key</summary>
         <div className="map-key-content" aria-label="Map symbol explanations">
