@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:browser": "node scripts/run-browser-tests.mjs --config=tests/browser/playwright.config.ts",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
-    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts"
+    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
+    "pack:checkpoint": "node --import tsx scripts/research/regional-pack-checkpoint.ts"
   },
   "engines": {
     "node": ">=22.0.0"

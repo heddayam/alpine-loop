@@ -22,7 +22,8 @@
     {
       "id": "henry-coe",
       "label": "Henry Coe",
-      "displayOrder": 4
+      "displayOrder": 4,
+      "packId": "henry-coe"
     },
     {
       "id": "marin-mount-tam",

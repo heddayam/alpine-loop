@@ -38,6 +38,11 @@ describe("GET /api/packs", () => {
       state: "unavailable",
       packId: "monterey-carmel",
     });
-    expect(payload.regions.slice(3).every(({ state }) => state === "planned")).toBe(true);
+    expect(payload.regions[3]).toMatchObject({
+      id: "henry-coe",
+      state: "unavailable",
+      packId: "henry-coe",
+    });
+    expect(payload.regions.slice(4).every(({ state }) => state === "planned")).toBe(true);
   });
 });

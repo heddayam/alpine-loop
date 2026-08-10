@@ -26,17 +26,20 @@ files alone never make a region selectable. The initial catalog is:
     {
       "id": "southern-east-bay",
       "label": "Southern East Bay",
-      "displayOrder": 2
+      "displayOrder": 2,
+      "packId": "southern-east-bay"
     },
     {
       "id": "monterey-carmel",
       "label": "Monterey–Carmel",
-      "displayOrder": 3
+      "displayOrder": 3,
+      "packId": "monterey-carmel"
     },
     {
       "id": "henry-coe",
       "label": "Henry Coe",
-      "displayOrder": 4
+      "displayOrder": 4,
+      "packId": "henry-coe"
     },
     {
       "id": "marin-mount-tam",
@@ -126,13 +129,33 @@ Use pack ID `monterey-carmel`.
 - Review the whole pack plus Fort Ord, Palo Corona, Garland Ranch, Point Lobos,
   and Garrapata as candidate pack-provided search regions.
 
-### 4. Later catalog regions
+### 4. Henry Coe
 
-Keep Henry Coe and adjacent South Diablo trail systems, Marin and Mount Tam,
-and Tahoe–Eldorado visible as disabled roadmap pills. Do not create detailed
-pack-build gates for them until the first two new packs establish the protocol.
-Stanislaus and deep Big Sur/Ventana remain outside the catalog and current
-roadmap.
+Use pack ID `henry-coe` and the schema-6 workflow in the dedicated
+[region-onboarding checklist](region-onboarding-checklist.md).
+
+- Include the connected public hiking systems in Henry W. Coe State Park and
+  Coyote Lake–Harvey Bear Ranch County Park. Use their exact reviewed named-area
+  union as hard coverage; do not fill the concavity with surrounding ranches.
+- Exclude Grant, Pacheco, Coyote Ridge, Cañada de los Osos, Palassou, the Santa
+  Clara Valley network, and other disconnected South Diablo systems. They are
+  future charter decisions, not implied by the region label.
+- Derive starts entirely through the shared OSM portal pipeline. Authority
+  entrances are review anchors only; omit an entrance scenario when no eligible
+  derived portal lies within 500 m rather than creating or silently snapping a
+  start.
+- Review the whole pack, Henry W. Coe State Park, and Coyote Lake–Harvey Bear
+  Ranch as search regions. Exercise Coe Ranch, Hunting Hollow, Dowdy, Mendoza,
+  and Harvey Bear as route clusters.
+- The exact scope, source/license review, deferred entrance, hashes, and
+  measured acceptance evidence live in
+  `data/regions/henry-coe/charter.md`.
+
+### 5. Later catalog regions
+
+Keep Marin and Mount Tam and Tahoe–Eldorado visible as disabled roadmap pills.
+Stanislaus, Grant/Pacheco expansion, and deep Big Sur/Ventana remain outside the
+catalog and current detailed roadmap.
 
 ## Region-onboarding protocol
 
@@ -206,7 +229,8 @@ change.
 - Verify pack switching, map recentering, reviewed-region discovery, access
   previews, Quick search, Batch search, saved Jobs, stale-version behavior,
   keyboard use, and narrow-screen pill scrolling.
-- Run `npm run verify` and two consecutive `npm run test:browser` passes. Record
+- Run two consecutive `npm run verify` and two consecutive `npm run
+  test:browser` passes. Record
   the exact pack version and evidence in status.
 - Keep generated packs, downloads, caches, databases, and audit artifacts
   ignored and out of Git.

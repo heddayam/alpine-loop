@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { DataDrivenPropertyValueSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
+  packId: string;
   drawBounds: Bounds | null;
   drawEnabled: boolean;
   filterGeometry?: Polygon | MultiPolygon;
@@ -37,10 +38,190 @@ type HikeMapProps = {
 const ROUTE_SELECTED = "#c9552a";
 const ROUTE_ALTERNATE = "#2f6a55";
 const CASING = "#ffffff";
+const TRAIL_NETWORK_COLOR = "#3f5f52";
+const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
+const TRAIL_NETWORK_WIDTH = 2.4;
+const TRAIL_NETWORK_HOVER_WIDTH = 3.5;
+export const TRAIL_NETWORK_MIN_ZOOM = 12;
+export const TRAIL_COPY_FEEDBACK_MS = 1_500;
+export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
+/* The menu is positioned from the click point, so it needs its own size to
+   stay inside the map instead of being clipped at the right or bottom edge.
+   The width covers the single line at its widest: coordinates plus the copy
+   label, which the stylesheet never wraps. */
+const CONTEXT_MENU_SIZE = { width: 200, height: 34 };
+const EMPTY_ACCESS_POINT_HOVER_FILTER: FilterSpecification = ["==", ["get", "id"], "__none__"];
+const EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER: FilterSpecification = ["==", ["get", "cluster_id"], -1];
+
+type HoveredTrail = {
+  id: string;
+  name: string;
+  distance?: string;
+};
+
+type TrailCopyFeedback = {
+  id: string;
+  status: "copied" | "failed";
+};
+
+type MapContextMenu = {
+  left: number;
+  top: number;
+  coordinates: string;
+};
+
+type HoveredAccessPoint = {
+  id: string | number;
+  kindLabel: string;
+  name: string;
+};
+
+const TRAIL_CLICK_PRIORITY_LAYERS = [
+  "generated-route-segment-hit-target",
+  "generated-route-hit-target",
+  "access-points",
+  "access-point-clusters",
+];
+
+export function accessPointHoverFilter(id?: string): FilterSpecification {
+  return id ? ["==", ["get", "id"], id] : EMPTY_ACCESS_POINT_HOVER_FILTER;
+}
+
+export function accessPointClusterHoverFilter(id?: number): FilterSpecification {
+  return id === undefined ? EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER : ["==", ["get", "cluster_id"], id];
+}
+
+export function accessPointFeatureDetails(properties?: Record<string, unknown> | null): {
+  id?: string;
+  kindLabel: string;
+  name: string;
+} {
+  const id = properties?.id;
+  const name = properties?.name;
+  const kind = properties?.kind;
+  return {
+    id: typeof id === "string" ? id : undefined,
+    kindLabel: kind === "parking" ? "Parking" : kind === "transit" ? "Transit" : "Trailhead",
+    name: typeof name === "string" && name.trim() ? name.trim() : "Unnamed access point",
+  };
+}
+
+/* Latitude first, five decimals: the order and precision people paste into
+   another map. Longitude is wrapped so panning past the antimeridian cannot
+   report a coordinate no other tool accepts. */
+export function formatCoordinates(lng: number, lat: number): string {
+  const wrappedLng = ((((lng + 180) % 360) + 360) % 360) - 180;
+  return `${lat.toFixed(5)}, ${wrappedLng.toFixed(5)}`;
+}
+
+export function contextMenuPosition(
+  point: { x: number; y: number },
+  container: { width: number; height: number },
+): { left: number; top: number } {
+  return {
+    left: Math.max(0, Math.min(point.x, container.width - CONTEXT_MENU_SIZE.width)),
+    top: Math.max(0, Math.min(point.y, container.height - CONTEXT_MENU_SIZE.height)),
+  };
+}
+
+export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: number): string | undefined {
+  if (zoom < TRAIL_NETWORK_MIN_ZOOM) return undefined;
+  const query = new URLSearchParams({
+    bbox: bounds.join(","),
+    includeUncertainAccess: "true",
+    includeAccessPoints: "false",
+  });
+  return `/api/packs/${encodeURIComponent(packId)}/access-points?${query}`;
+}
+
+export function trailNetworkFeatureDetails(properties?: Record<string, unknown> | null): {
+  name: string;
+  copyName?: string;
+  distance?: string;
+} {
+  const name = properties?.name;
+  const copyName = typeof name === "string" && name.trim() ? name.trim() : undefined;
+  const rawDistanceMeters = properties?.distanceMeters;
+  const distanceMeters = typeof rawDistanceMeters === "number" && Number.isFinite(rawDistanceMeters)
+    ? rawDistanceMeters
+    : undefined;
+  return {
+    name: copyName ?? "Unnamed trail",
+    copyName,
+    distance: distanceMeters === undefined
+      ? undefined
+      : distanceMeters < 160.9344
+        ? `${Math.round(distanceMeters * 3.28084)} ft`
+        : `${(distanceMeters / 1609.344).toFixed(1)} mi`,
+  };
+}
+
+export async function copyTextToClipboard(
+  text: string | undefined,
+  clipboard: Pick<Clipboard, "writeText"> | undefined,
+  fallbackCopy?: (value: string) => boolean,
+): Promise<boolean> {
+  if (!text) return false;
+  let clipboardCopy: Promise<boolean> | undefined;
+  if (clipboard) {
+    try {
+      // Start the preferred API while the click's browser activation is live.
+      clipboardCopy = clipboard.writeText(text).then(() => true, () => false);
+    } catch {
+      clipboardCopy = undefined;
+    }
+  }
+  try {
+    // Run the compatibility path before this synchronous click stack unwinds.
+    if (fallbackCopy?.(text)) {
+      void clipboardCopy;
+      return true;
+    }
+  } catch {
+    // The preferred API may still succeed when the compatibility path cannot.
+  }
+  return clipboardCopy ? await clipboardCopy : false;
+}
+
+export function copyTextWithDocument(text: string, copyDocument: Document | undefined): boolean {
+  if (!copyDocument?.body || typeof copyDocument.execCommand !== "function") return false;
+  const activeElement = copyDocument.activeElement;
+  const textarea = copyDocument.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.inset = "-9999px auto auto -9999px";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  copyDocument.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return copyDocument.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+    if (activeElement && "focus" in activeElement) (activeElement as HTMLElement).focus({ preventScroll: true });
+  }
+}
 
 /* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
 function zoomWidth(wide: number): DataDrivenPropertyValueSpecification<number> {
   return ["interpolate", ["linear"], ["zoom"], 8, wide * 0.45, 12, wide * 0.8, 15, wide];
+}
+
+export function trailNetworkLineColor(hoveredId?: string): DataDrivenPropertyValueSpecification<string> {
+  return hoveredId
+    ? ["case", ["==", ["get", "trailGroupId"], hoveredId], TRAIL_NETWORK_HOVER_COLOR, TRAIL_NETWORK_COLOR]
+    : TRAIL_NETWORK_COLOR;
+}
+
+/* Dash lengths are multiples of line width in MapLibre. Keep trail widths
+   fixed so their rhythm does not expand and contract while the map zooms. */
+export function trailNetworkLineWidth(hoveredId?: string): DataDrivenPropertyValueSpecification<number> {
+  return hoveredId
+    ? ["case", ["==", ["get", "trailGroupId"], hoveredId], TRAIL_NETWORK_HOVER_WIDTH, TRAIL_NETWORK_WIDTH]
+    : TRAIL_NETWORK_WIDTH;
 }
 
 export function lineBounds(geometry: LineString): Bounds | null {
@@ -85,6 +266,7 @@ export function accessPointFeatures(accessPoints: AccessPointOption[], selectedA
       properties: {
         id: point.id,
         name: point.name,
+        kind: point.kind,
         selected: point.id === selectedAccessPointId,
       },
       geometry: { type: "Point", coordinates: [point.lon, point.lat] },
@@ -210,6 +392,7 @@ export function routeTrailheadPinFeatures(
 }
 
 export function HikeMap({
+  packId,
   drawBounds: bounds,
   drawEnabled,
   filterGeometry,
@@ -254,9 +437,31 @@ export function HikeMap({
   const hoveredSegmentIdRef = useRef(hoveredSegmentId);
   const filterGeometryRef = useRef(filterGeometry);
   const refinementGeometryRef = useRef(refinementGeometry);
+  const trailCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
+  const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
+  const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
+  const [trailCopyFeedback, setTrailCopyFeedback] = useState<TrailCopyFeedback>();
+  const [contextMenu, setContextMenu] = useState<MapContextMenu>();
+  const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => () => {
+    if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+    if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(undefined);
+    setCoordinateCopyStatus("idle");
+    if (coordinateCopyTimerRef.current) {
+      clearTimeout(coordinateCopyTimerRef.current);
+      coordinateCopyTimerRef.current = null;
+    }
+  }, []);
 
   // Map-originated hover drives the results list as well as the map itself.
   const previewRoute = useCallback((id?: string) => {
@@ -306,6 +511,7 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
+    let trailNetworkController: AbortController | null = null;
     void import("maplibre-gl").then(({ Map, Marker: MarkerClass, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
       setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
@@ -398,19 +604,27 @@ export function HikeMap({
           },
         });
         map?.addSource("trail-network", { type: "geojson", data: trailNetworkRef.current });
-        // The trail network is context, not content: keep it hairline so
-        // generated routes are the only prominent lines on the map.
-        map?.addLayer({
-          id: "trail-network-casing",
-          type: "line",
-          source: "trail-network",
-          paint: { "line-color": CASING, "line-width": zoomWidth(4), "line-opacity": 0.75 },
-        });
+        // The trail network is context, not content: use a single quiet dashed
+        // stroke without a casing so the basemap remains visible in the gaps.
         map?.addLayer({
           id: "trail-network-lines",
           type: "line",
           source: "trail-network",
-          paint: { "line-color": "#4a6559", "line-width": zoomWidth(1.5), "line-opacity": 0.8, "line-dasharray": [2, 1.5] },
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": trailNetworkLineColor(),
+            "line-width": trailNetworkLineWidth(),
+            "line-opacity": 0.92,
+            "line-dasharray": [2.5, 2.5],
+          },
+        });
+        map?.addLayer({
+          id: "trail-network-hit-target",
+          type: "line",
+          source: "trail-network",
+          minzoom: TRAIL_NETWORK_MIN_ZOOM,
+          paint: { "line-color": "#000000", "line-width": 12, "line-opacity": 0.01 },
         });
         // Access points cluster while zoomed out and split apart on zoom in.
         map?.addSource("access-points", {
@@ -445,6 +659,18 @@ export function HikeMap({
           },
         });
         map?.addLayer({
+          id: "access-point-cluster-hover",
+          type: "circle",
+          source: "access-points",
+          filter: EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER,
+          paint: {
+            "circle-radius": ["step", ["get", "point_count"], 10, 10, 12.5, 30, 15, 100, 18],
+            "circle-color": "#173f35",
+            "circle-stroke-color": CASING,
+            "circle-stroke-width": 3,
+          },
+        });
+        map?.addLayer({
           id: "access-points",
           type: "circle",
           source: "access-points",
@@ -458,6 +684,22 @@ export function HikeMap({
             ],
             "circle-stroke-color": CASING,
             "circle-stroke-width": 1.5,
+          },
+        });
+        map?.addLayer({
+          id: "access-point-hover",
+          type: "circle",
+          source: "access-points",
+          filter: EMPTY_ACCESS_POINT_HOVER_FILTER,
+          paint: {
+            "circle-radius": zoomWidth(7.5),
+            "circle-color": [
+              "case",
+              ["==", ["get", "selected"], true], ROUTE_SELECTED,
+              "#173f35",
+            ],
+            "circle-stroke-color": CASING,
+            "circle-stroke-width": 3,
           },
         });
         map?.addSource("generated-routes-hit", {
@@ -591,6 +833,62 @@ export function HikeMap({
           map?.getCanvas().style.removeProperty("cursor");
           onSegmentHoverRef.current?.(undefined);
         });
+        let styledTrailId: string | undefined;
+        const styleTrailHover = (id?: string) => {
+          if (styledTrailId === id) return;
+          styledTrailId = id;
+          map?.setPaintProperty("trail-network-lines", "line-color", trailNetworkLineColor(id));
+          map?.setPaintProperty("trail-network-lines", "line-width", trailNetworkLineWidth(id));
+        };
+        const clearTrailHover = () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          styleTrailHover();
+          setHoveredTrail(undefined);
+        };
+        const clearAccessPointHover = () => {
+          map?.getCanvas().style.removeProperty("cursor");
+          map?.setFilter("access-point-hover", EMPTY_ACCESS_POINT_HOVER_FILTER);
+          map?.setFilter("access-point-cluster-hover", EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER);
+          setHoveredAccessPoint(undefined);
+        };
+        map?.on("mousemove", "trail-network-hit-target", (event) => {
+          const priorityLayers = TRAIL_CLICK_PRIORITY_LAYERS.filter((layerId) => map?.getLayer(layerId));
+          if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) {
+            clearTrailHover();
+            return;
+          }
+          const feature = event.features?.[0];
+          if (!feature) return;
+          const id = feature.properties?.trailGroupId;
+          if (typeof id !== "string") return;
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          styleTrailHover(id);
+          setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
+        });
+        map?.on("click", "trail-network-hit-target", (event) => {
+          const feature = event.features?.[0];
+          const id = feature?.properties?.trailGroupId;
+          if (!feature || typeof id !== "string") return;
+          const priorityLayers = TRAIL_CLICK_PRIORITY_LAYERS.filter((layerId) => map?.getLayer(layerId));
+          if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) return;
+          const details = trailNetworkFeatureDetails(feature.properties);
+          if (!details.copyName) return;
+          void copyTextToClipboard(
+            details.copyName,
+            navigator.clipboard,
+            (value) => copyTextWithDocument(value, document),
+          ).then((copied) => {
+            if (!alive) return;
+            setHoveredTrail({ id, ...details });
+            setTrailCopyFeedback({ id, status: copied ? "copied" : "failed" });
+            if (trailCopyTimerRef.current) clearTimeout(trailCopyTimerRef.current);
+            trailCopyTimerRef.current = setTimeout(() => {
+              setTrailCopyFeedback((current) => current?.id === id ? undefined : current);
+              trailCopyTimerRef.current = null;
+            }, TRAIL_COPY_FEEDBACK_MS);
+          });
+        });
+        map?.on("mouseleave", "trail-network-hit-target", clearTrailHover);
         // Clicking a cluster zooms to the level where it breaks apart.
         map?.on("click", "access-point-clusters", (event) => {
           const clusterId = event.features?.[0]?.properties?.cluster_id;
@@ -600,24 +898,101 @@ export function HikeMap({
             map?.easeTo({ center: event.lngLat, zoom, duration: 350 });
           }).catch(() => undefined);
         });
-        map?.on("mouseenter", "access-point-clusters", () => map?.getCanvas().style.setProperty("cursor", "pointer"));
-        map?.on("mouseleave", "access-point-clusters", () => map?.getCanvas().style.removeProperty("cursor"));
+        map?.on("mouseenter", "access-point-clusters", (event) => {
+          const clusterId = event.features?.[0]?.properties?.cluster_id;
+          const pointCount = event.features?.[0]?.properties?.point_count;
+          if (typeof clusterId !== "number") return;
+          clearTrailHover();
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          map?.setFilter("access-point-cluster-hover", accessPointClusterHoverFilter(clusterId));
+          setHoveredAccessPoint({
+            id: clusterId,
+            kindLabel: "Trailheads",
+            name: `${typeof pointCount === "number" ? pointCount : "Multiple"} access points`,
+          });
+        });
+        map?.on("mouseleave", "access-point-clusters", () => {
+          clearAccessPointHover();
+        });
         map?.on("click", "access-points", (event) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onAccessPointSelectRef.current(id);
         });
+        map?.on("mouseenter", "access-points", (event) => {
+          const details = accessPointFeatureDetails(event.features?.[0]?.properties);
+          if (!details.id) return;
+          clearTrailHover();
+          map?.getCanvas().style.setProperty("cursor", "pointer");
+          map?.setFilter("access-point-hover", accessPointHoverFilter(details.id));
+          setHoveredAccessPoint({ id: details.id, kindLabel: details.kindLabel, name: details.name });
+        });
+        map?.on("mouseleave", "access-points", () => {
+          clearAccessPointHover();
+        });
+        map?.on("movestart", () => {
+          clearTrailHover();
+          clearAccessPointHover();
+          closeContextMenu();
+        });
+        // MapLibre forwards the browser event untouched, so the native menu has
+        // to be suppressed here or it would cover the one we render.
+        map?.on("contextmenu", (event) => {
+          event.originalEvent.preventDefault();
+          const canvas = map?.getCanvas();
+          const position = contextMenuPosition(event.point, {
+            width: canvas?.clientWidth ?? 0,
+            height: canvas?.clientHeight ?? 0,
+          });
+          setCoordinateCopyStatus("idle");
+          setContextMenu({ ...position, coordinates: formatCoordinates(event.lngLat.lng, event.lngLat.lat) });
+        });
+        map?.on("click", closeContextMenu);
+
+        const refreshTrailNetwork = () => {
+          if (!map) return;
+          const visibleBounds = map.getBounds();
+          const requestUrl = trailNetworkRequestUrl(packId, [
+            visibleBounds.getWest(),
+            visibleBounds.getSouth(),
+            visibleBounds.getEast(),
+            visibleBounds.getNorth(),
+          ], map.getZoom());
+          trailNetworkController?.abort();
+          trailNetworkController = null;
+          styleTrailHover();
+          setHoveredTrail(undefined);
+          const source = map.getSource("trail-network") as GeoJSONSource | undefined;
+          if (!requestUrl) {
+            source?.setData(EMPTY_LINES);
+            return;
+          }
+          const controller = new AbortController();
+          trailNetworkController = controller;
+          void fetch(requestUrl, { signal: controller.signal })
+            .then(async (response) => {
+              const payload: unknown = await response.json().catch(() => null);
+              if (!response.ok || !payload || typeof payload !== "object" || !("trailNetwork" in payload)) return;
+              const trailNetwork = payload.trailNetwork;
+              if (controller.signal.aborted || !trailNetwork || typeof trailNetwork !== "object" || !("type" in trailNetwork) || trailNetwork.type !== "FeatureCollection") return;
+              source?.setData(trailNetwork as FeatureCollection<LineString>);
+            })
+            .catch(() => undefined);
+        };
+        map?.on("moveend", refreshTrailNetwork);
+        refreshTrailNetwork();
         setMapReady(true);
       });
     });
     return () => {
       alive = false;
+      trailNetworkController?.abort();
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [display.center, display.zoom, packCoverage, packCoverageBbox, previewRoute]);
+  }, [closeContextMenu, display.center, display.zoom, packCoverage, packCoverageBbox, packId, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -793,6 +1168,46 @@ export function HikeMap({
     };
   }, [drawEnabled, drawing, mapReady, onBoundsChange]);
 
+  // Escape and any press outside the menu dismiss it; presses on the canvas are
+  // already covered by the map's own click handler.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeContextMenu();
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Node && contextMenuRef.current?.contains(event.target)) return;
+      closeContextMenu();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [closeContextMenu, contextMenu]);
+
+  const copyCoordinates = useCallback((coordinates: string) => {
+    void copyTextToClipboard(
+      coordinates,
+      navigator.clipboard,
+      (value) => copyTextWithDocument(value, document),
+    ).then((copied) => {
+      setCoordinateCopyStatus(copied ? "copied" : "failed");
+      if (coordinateCopyTimerRef.current) clearTimeout(coordinateCopyTimerRef.current);
+      coordinateCopyTimerRef.current = setTimeout(() => {
+        coordinateCopyTimerRef.current = null;
+        setContextMenu(undefined);
+        setCoordinateCopyStatus("idle");
+      }, COORDINATE_COPY_FEEDBACK_MS);
+    });
+  }, []);
+
+  const activeTrailCopyFeedback = hoveredTrail && trailCopyFeedback?.id === hoveredTrail.id
+    ? trailCopyFeedback
+    : undefined;
+  const hoveredMapFeature = hoveredAccessPoint ?? hoveredTrail;
+
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map">
       {drawEnabled ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
@@ -819,6 +1234,37 @@ export function HikeMap({
         </button>
       </div> : null}
       <div ref={containerRef} className="map-canvas" aria-hidden="true" />
+      {contextMenu ? (
+        <div
+          ref={contextMenuRef}
+          className="map-context-menu"
+          style={{ left: `${contextMenu.left}px`, top: `${contextMenu.top}px` }}
+          role="menu"
+          aria-label="Map location"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={`map-context-item${coordinateCopyStatus === "idle" ? "" : ` ${coordinateCopyStatus}`}`}
+            onClick={() => copyCoordinates(contextMenu.coordinates)}
+          >
+            <span className="map-context-coordinates">{contextMenu.coordinates}</span>
+            <span className="map-context-action">
+              {/* The icon carries the affordance; the word only appears as the
+                  transient confirmation, so the row stays one quiet line. */}
+              {coordinateCopyStatus === "copied" ? "Copied" : coordinateCopyStatus === "failed" ? "Couldn’t copy" : (
+                <svg className="map-context-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" />
+                  <path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h1" />
+                </svg>
+              )}
+            </span>
+            <span className="visually-hidden" aria-live="polite">
+              {coordinateCopyStatus === "copied" ? "Coordinates copied" : "Copy coordinates"}
+            </span>
+          </button>
+        </div>
+      ) : null}
       <details className="map-key map-key-collapsible">
         <summary className="map-key-toggle">Map key</summary>
         <div className="map-key-content" aria-label="Map symbol explanations">
@@ -832,13 +1278,21 @@ export function HikeMap({
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
-      <p className="map-hint">
-        {drawing
-          ? "Draw a trailhead filter. It may extend beyond installed coverage."
-          : filterGeometry
-            ? "Highlighted areas filter trailheads, not route geometry. Routes remain inside installed coverage."
-          : "Choose an origin and region, or optionally draw a Quick-search boundary."}
-      </p>
+      {drawing || hoveredMapFeature ? <p className={`map-hint${hoveredMapFeature && !drawing ? " map-trail-label" : ""}${activeTrailCopyFeedback && !hoveredAccessPoint ? ` ${activeTrailCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
+        {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
+          {hoveredAccessPoint ? <>
+            <span className="map-trail-distance">{hoveredAccessPoint.kindLabel}</span>
+            <span>{hoveredAccessPoint.name}</span>
+          </> : <>
+            {activeTrailCopyFeedback ? (
+              <span className={`map-trail-distance map-trail-copy-feedback ${activeTrailCopyFeedback.status}`}>
+                {activeTrailCopyFeedback.status === "copied" ? "Copied" : "Couldn’t copy"}
+              </span>
+            ) : hoveredTrail?.distance ? <span className="map-trail-distance">{hoveredTrail.distance}</span> : null}
+            <span>{hoveredTrail?.name}</span>
+          </>}
+        </>}
+      </p> : null}
     </section>
   );
 }
