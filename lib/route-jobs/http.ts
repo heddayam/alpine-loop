@@ -11,8 +11,33 @@ function handle(error: unknown): Response {
 }
 
 async function body(request: Request): Promise<unknown> {
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new ServerApiError("REQUEST_TOO_LARGE", "Request body is too large.", 413);
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_BODY_BYTES) {
+    throw new ServerApiError("REQUEST_TOO_LARGE", "Request body is too large.", 413);
+  }
+
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let bytes = 0;
+  if (reader) {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_BODY_BYTES) {
+          void reader.cancel().catch(() => undefined);
+          throw new ServerApiError("REQUEST_TOO_LARGE", "Request body is too large.", 413);
+        }
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+      chunks.push(decoder.decode());
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  const text = chunks.join("");
   try { return JSON.parse(text); } catch { throw new ServerApiError("MALFORMED_JSON", "Request body must be valid JSON.", 400); }
 }
 

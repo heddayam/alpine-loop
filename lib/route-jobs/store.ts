@@ -233,9 +233,6 @@ export class SQLiteRouteJobStore {
         builtAt: requiredString(row, "pack_built_at"),
       },
       searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
-      ...(typeof row.drive_time_geometry_json === "string"
-        ? { filterGeometry: areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json)) }
-        : {}),
       status: requiredString(row, "status") as RouteJobStatus,
       ...(typeof geometryText === "string" ? { geometry: areaGeometrySchema.parse(parseJson(geometryText)) } : {}),
       ...(typeof row.drive_time_resolved_at === "string" ? { resolvedAt: row.drive_time_resolved_at } : {}),
@@ -375,6 +372,11 @@ export class SQLiteRouteJobStore {
   listIds(): string[] {
     return (this.#database.prepare("SELECT id FROM route_jobs ORDER BY created_at DESC, id DESC").all() as Row[])
       .map((row) => requiredString(row, "id"));
+  }
+
+  hasQueued(): boolean {
+    return this.#database.prepare(`SELECT 1 FROM route_jobs
+      WHERE status = 'queued' AND cancel_requested = 0 AND delete_requested = 0 LIMIT 1`).get() !== undefined;
   }
 
   toPublic(id: string, stale: boolean): RouteJob | null {

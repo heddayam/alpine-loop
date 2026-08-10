@@ -157,9 +157,20 @@ describe("RouteJobService", () => {
     store.close();
   });
 
+  it("marks jobs stale when their pinned pack is no longer installed", async () => {
+    const { service, store } = harness({ currentDataVersion: vi.fn(async () => null) });
+    const job = await service.create(request);
+    await service.waitUntilIdle();
+
+    expect(await service.get(job.id)).toMatchObject({ stale: true });
+    expect(await service.list()).toMatchObject([{ id: job.id, stale: true }]);
+    store.close();
+  });
+
   it("rejects malformed cursors and round-trips tuple cursors", () => {
     const cursor = { matchRank: 1, accessOrdinal: 2, resultOrdinal: 3, routeId: "route" };
     expect(decodeResultCursor(encodeResultCursor(cursor))).toEqual(cursor);
     expect(() => decodeResultCursor("broken")).toThrow(/cursor is invalid/i);
+    expect(() => decodeResultCursor("x".repeat(2_049))).toThrow(/cursor is invalid/i);
   });
 });

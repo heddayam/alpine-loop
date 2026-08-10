@@ -11,6 +11,7 @@ import { SQLiteRouteJobStore, type ResultCursor } from "./store";
 import type { RouteJobRunnerDependencies } from "./types";
 
 const RESULT_PAGE_SIZE = 50;
+const MAX_CURSOR_LENGTH = 2_048;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim() ? error.message : "Batch route search failed unexpectedly.";
@@ -29,6 +30,7 @@ export function encodeResultCursor(cursor: ResultCursor): string {
 export function decodeResultCursor(value: string | undefined): ResultCursor | undefined {
   if (value === undefined) return undefined;
   try {
+    if (value.length > MAX_CURSOR_LENGTH) throw new Error();
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Record<string, unknown>;
     if ((parsed.matchRank !== 0 && parsed.matchRank !== 1)
       || !Number.isSafeInteger(parsed.accessOrdinal) || Number(parsed.accessOrdinal) < 0
@@ -67,7 +69,7 @@ export class RouteJobService {
     if (this.#pump) return;
     this.#pump = this.#runPump().finally(() => {
       this.#pump = undefined;
-      if (this.#store.listIds().some((id) => this.#store.getStored(id)?.status === "queued")) this.start();
+      if (this.#store.hasQueued()) this.start();
     });
   }
 
@@ -109,7 +111,7 @@ export class RouteJobService {
     ] as const)));
     const jobs = stored.map(({ id, pack }) => {
       const current = versions.get(pack.id) ?? null;
-      return this.#store.toPublic(id, current !== null && current !== pack.dataVersion);
+      return this.#store.toPublic(id, current !== pack.dataVersion);
     });
     return routeJobListSchema.parse({ version: 1, jobs: jobs.filter((job): job is RouteJob => job !== null) }).jobs;
   }
@@ -118,7 +120,7 @@ export class RouteJobService {
     const stored = this.#store.getStored(id);
     if (!stored) return null;
     const current = await this.#dependencies.currentDataVersion(stored.pack.id).catch(() => null);
-    return this.#store.toPublic(id, current !== null && current !== stored.pack.dataVersion);
+    return this.#store.toPublic(id, current !== stored.pack.dataVersion);
   }
 
   async cancel(id: string): Promise<RouteJob> {
