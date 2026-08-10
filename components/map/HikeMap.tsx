@@ -9,13 +9,14 @@ import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
 
 type HikeMapProps = {
-  packId: string;
+  packIds: string[];
   drawBounds: Bounds | null;
   drawEnabled: boolean;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
   packCoverageBbox: Bounds;
-  packCoverage: Polygon | MultiPolygon;
+  packCoverages: Array<Polygon | MultiPolygon>;
+  showRegionBoundaries: boolean;
   suggestedBounds: Bounds;
   display: { center: [number, number]; zoom: number };
   trailNetwork: FeatureCollection<LineString>;
@@ -136,6 +137,46 @@ export function trailNetworkRequestUrl(packId: string, bounds: Bounds, zoom: num
     includeAccessPoints: "false",
   });
   return `/api/packs/${encodeURIComponent(packId)}/access-points?${query}`;
+}
+
+export function trailNetworkRequestUrls(
+  packIds: string[],
+  bounds: Bounds,
+  zoom: number,
+): Array<{ packId: string; url: string }> {
+  if (zoom < TRAIL_NETWORK_MIN_ZOOM) return [];
+  return [...new Set(packIds)].flatMap((packId) => {
+    const url = trailNetworkRequestUrl(packId, bounds, zoom);
+    return url ? [{ packId, url }] : [];
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+export function mergeTrailNetworkPayloads(
+  responses: Array<{ packId: string; payload: unknown }>,
+): FeatureCollection<LineString> {
+  return {
+    type: "FeatureCollection",
+    features: responses.flatMap(({ packId, payload }) => {
+      if (!isRecord(payload) || !isRecord(payload.trailNetwork)) return [];
+      const trailNetwork = payload.trailNetwork;
+      if (trailNetwork.type !== "FeatureCollection" || !Array.isArray(trailNetwork.features)) return [];
+      return trailNetwork.features.flatMap((feature): Feature<LineString>[] => {
+        if (!isRecord(feature) || feature.type !== "Feature" || !isRecord(feature.geometry)) return [];
+        if (feature.geometry.type !== "LineString" || !Array.isArray(feature.geometry.coordinates)) return [];
+        const properties = isRecord(feature.properties) ? feature.properties : {};
+        const trailGroupId = properties.trailGroupId;
+        if (typeof trailGroupId !== "string") return [];
+        return [{
+          ...(feature as unknown as Feature<LineString>),
+          properties: { ...properties, trailGroupId: `${packId}:${trailGroupId}` },
+        }];
+      });
+    }),
+  };
 }
 
 export function trailNetworkFeatureDetails(properties?: Record<string, unknown> | null): {
@@ -261,6 +302,29 @@ const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", 
 function areaFeature(geometry?: Polygon | MultiPolygon): Feature<Polygon | MultiPolygon> | FeatureCollection<Point> {
   return geometry ? { type: "Feature", properties: { role: "trailhead-filter" }, geometry } : EMPTY_POINTS;
 }
+
+export function packCoverageFeatures(
+  packCoverages: Array<Polygon | MultiPolygon>,
+): FeatureCollection<Polygon | MultiPolygon> {
+  return {
+    type: "FeatureCollection",
+    features: packCoverages.map((geometry) => ({
+      type: "Feature",
+      properties: { role: "pack-coverage" },
+      geometry,
+    })),
+  };
+}
+
+export function regionBoundaryVisibility(showRegionBoundaries: boolean): "visible" | "none" {
+  return showRegionBoundaries ? "visible" : "none";
+}
+
+export const REGION_BOUNDARY_PAINT = {
+  "line-color": "#111111",
+  "line-width": 0.8,
+  "line-opacity": 0.58,
+} as const;
 
 export function accessPointFeatures(accessPoints: AccessPointOption[], selectedAccessPointId?: string): FeatureCollection<Point> {
   return {
@@ -396,13 +460,14 @@ export function routeTrailheadPinFeatures(
 }
 
 export function HikeMap({
-  packId,
+  packIds,
   drawBounds: bounds,
   drawEnabled,
   filterGeometry,
   refinementGeometry,
-  packCoverage,
+  packCoverages,
   packCoverageBbox,
+  showRegionBoundaries,
   suggestedBounds,
   display,
   trailNetwork,
@@ -434,6 +499,10 @@ export function HikeMap({
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
   const trailNetworkRef = useRef(trailNetwork);
+  const packIdsRef = useRef(packIds);
+  const packCoveragesRef = useRef(packCoverages);
+  const showRegionBoundariesRef = useRef(showRegionBoundaries);
+  const refreshTrailNetworkRef = useRef<(() => void) | null>(null);
   const selectedAccessPointIdRef = useRef(selectedAccessPointId);
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
@@ -452,6 +521,7 @@ export function HikeMap({
   const [contextMenu, setContextMenu] = useState<MapContextMenu>();
   const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [mapReady, setMapReady] = useState(false);
+  const packIdsKey = packIds.join("\u0000");
 
   useEffect(() => () => {
     if (mapCopyTimerRef.current) clearTimeout(mapCopyTimerRef.current);
@@ -498,6 +568,29 @@ export function HikeMap({
     const source = mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined;
     source?.setData(trailNetwork);
   }, [trailNetwork]);
+
+  useEffect(() => {
+    packIdsRef.current = packIds;
+  }, [packIds]);
+
+  useEffect(() => {
+    refreshTrailNetworkRef.current?.();
+  }, [packIdsKey]);
+
+  useEffect(() => {
+    packCoveragesRef.current = packCoverages;
+    const source = mapRef.current?.getSource("pack-coverage") as GeoJSONSource | undefined;
+    source?.setData(packCoverageFeatures(packCoverages));
+  }, [packCoverages]);
+
+  useEffect(() => {
+    showRegionBoundariesRef.current = showRegionBoundaries;
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const visibility = regionBoundaryVisibility(showRegionBoundaries);
+    if (map.getLayer("pack-coverage-line")) map.setLayoutProperty("pack-coverage-line", "visibility", visibility);
+    if (map.getLayer("region-refinement-line")) map.setLayoutProperty("region-refinement-line", "visibility", visibility);
+  }, [mapReady, showRegionBoundaries]);
 
   useEffect(() => {
     routesRef.current = routes;
@@ -550,20 +643,15 @@ export function HikeMap({
       map.addControl(new NavigationControl({ showCompass: false }), "top-right");
       map.on("load", () => {
         const initialBounds = boundsRef.current;
-        map?.addSource("pack-coverage", { type: "geojson", data: areaFeature(packCoverage) });
-        // Coverage is a reference outline, not a highlight: no fill, and a
-        // hairline edge that never competes with routes or the boundary box.
-        map?.addLayer({
-          id: "pack-coverage-casing",
-          type: "line",
-          source: "pack-coverage",
-          paint: { "line-color": CASING, "line-width": 3, "line-opacity": 0.7 },
-        });
+        map?.addSource("pack-coverage", { type: "geojson", data: packCoverageFeatures(packCoveragesRef.current) });
+        // Installed-pack coverage is optional reference geometry: one thin,
+        // solid black hairline with no fill or casing.
         map?.addLayer({
           id: "pack-coverage-line",
           type: "line",
           source: "pack-coverage",
-          paint: { "line-color": "#5c7f72", "line-width": 1.25, "line-opacity": 0.8, "line-dasharray": [4, 3] },
+          layout: { visibility: regionBoundaryVisibility(showRegionBoundariesRef.current) },
+          paint: REGION_BOUNDARY_PAINT,
         });
         map?.addSource("trailhead-filter", { type: "geojson", data: filterGeometryRef.current ? areaFeature(filterGeometryRef.current) : initialBounds ? boundsPolygon(initialBounds) : EMPTY_POINTS });
         map?.addLayer({
@@ -579,9 +667,15 @@ export function HikeMap({
           paint: { "line-color": "#24587f", "line-width": 4, "line-dasharray": [1, 1.5] },
         });
         map?.addSource("region-refinement", { type: "geojson", data: areaFeature(refinementGeometryRef.current) });
-        map?.addLayer({ id: "region-refinement-fill", type: "fill", source: "region-refinement", paint: { "fill-color": "#8e4f8f", "fill-opacity": 0.13 } });
-        map?.addLayer({ id: "region-refinement-casing", type: "line", source: "region-refinement", paint: { "line-color": "#fffaf0", "line-width": 7, "line-opacity": 0.95 } });
-        map?.addLayer({ id: "region-refinement-line", type: "line", source: "region-refinement", paint: { "line-color": "#713e78", "line-width": 3.5, "line-dasharray": [4, 1, 1, 1] } });
+        // Reviewed-region geometry uses the same optional, unobtrusive boundary
+        // treatment as installed-pack coverage: no fill, casing, or dash.
+        map?.addLayer({
+          id: "region-refinement-line",
+          type: "line",
+          source: "region-refinement",
+          layout: { visibility: regionBoundaryVisibility(showRegionBoundariesRef.current) },
+          paint: REGION_BOUNDARY_PAINT,
+        });
         map?.addSource("boundary-preview", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
           id: "boundary-preview-casing",
@@ -971,7 +1065,7 @@ export function HikeMap({
         const refreshTrailNetwork = () => {
           if (!map) return;
           const visibleBounds = map.getBounds();
-          const requestUrl = trailNetworkRequestUrl(packId, [
+          const requests = trailNetworkRequestUrls(packIdsRef.current, [
             visibleBounds.getWest(),
             visibleBounds.getSouth(),
             visibleBounds.getEast(),
@@ -982,22 +1076,23 @@ export function HikeMap({
           styleTrailHover();
           setHoveredTrail(undefined);
           const source = map.getSource("trail-network") as GeoJSONSource | undefined;
-          if (!requestUrl) {
+          if (requests.length === 0) {
             source?.setData(EMPTY_LINES);
             return;
           }
           const controller = new AbortController();
           trailNetworkController = controller;
-          void fetch(requestUrl, { signal: controller.signal })
-            .then(async (response) => {
-              const payload: unknown = await response.json().catch(() => null);
-              if (!response.ok || !payload || typeof payload !== "object" || !("trailNetwork" in payload)) return;
-              const trailNetwork = payload.trailNetwork;
-              if (controller.signal.aborted || !trailNetwork || typeof trailNetwork !== "object" || !("type" in trailNetwork) || trailNetwork.type !== "FeatureCollection") return;
-              source?.setData(trailNetwork as FeatureCollection<LineString>);
-            })
-            .catch(() => undefined);
+          void Promise.allSettled(requests.map(async ({ packId, url }) => {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`Trail network request failed: ${response.status}`);
+            return { packId, payload: await response.json() as unknown };
+          })).then((results) => {
+            if (controller.signal.aborted) return;
+            const successfulPayloads = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+            source?.setData(mergeTrailNetworkPayloads(successfulPayloads));
+          });
         };
+        refreshTrailNetworkRef.current = refreshTrailNetwork;
         map?.on("moveend", refreshTrailNetwork);
         refreshTrailNetwork();
         setMapReady(true);
@@ -1006,13 +1101,14 @@ export function HikeMap({
     return () => {
       alive = false;
       trailNetworkController?.abort();
+      refreshTrailNetworkRef.current = null;
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [closeContextMenu, display.center, display.zoom, packCoverage, packCoverageBbox, packId, previewRoute]);
+  }, [closeContextMenu, display.center, display.zoom, packCoverageBbox, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -1020,12 +1116,6 @@ export function HikeMap({
     const refinementSource = mapRef.current?.getSource("region-refinement") as GeoJSONSource | undefined;
     refinementSource?.setData(areaFeature(refinementGeometry));
   }, [filterGeometry, refinementGeometry]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady || !map.getLayer("pack-coverage-line")) return;
-    map.setPaintProperty("pack-coverage-line", "line-opacity", showCoverageHatching(filterGeometry ? bounds : null, drawing) ? 0.8 : 0.35);
-  }, [bounds, drawing, filterGeometry, mapReady]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
@@ -1294,9 +1384,9 @@ export function HikeMap({
       <details className="map-key map-key-collapsible">
         <summary className="map-key-toggle">Map key</summary>
         <div className="map-key-content" aria-label="Map symbol explanations">
-          <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span>
+          {showRegionBoundaries ? <span><i className="key-coverage" aria-hidden="true" />Installed coverage</span> : null}
           {filterGeometry ? <span><i className="key-filter" aria-hidden="true" />Trailhead filter</span> : null}
-          {refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Named refinement</span> : null}
+          {showRegionBoundaries && refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Reviewed-region boundary</span> : null}
           <span><i className="key-access" aria-hidden="true" />Trailhead</span>
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}

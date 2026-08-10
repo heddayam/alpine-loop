@@ -24,6 +24,7 @@ import {
   type GenerateClosedRoutesResponseV3,
   type RouteJob,
   type RouteJobResultsPage,
+  type SearchRegionSummary,
 } from "@/lib/contracts";
 import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixture-pack";
 import { HikeMap } from "../map/HikeMap";
@@ -31,7 +32,9 @@ import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
 import { JobsModal, type JobsLoadState } from "./JobsModal";
 import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
+import { RegionMultiSelect, type RegionOptionGroup } from "./RegionMultiSelect";
 import { SettingsModal } from "./SettingsModal";
+import { combineAreaGeometries, combineQuickResponses, reconcileSelectedPackIds, unionBounds } from "./multiPackSearch";
 import {
   DEFAULT_BUILDER_VALUES,
   type AccessPointOption,
@@ -43,6 +46,11 @@ import {
 import { buildGenerateRoutesRequest } from "./validation";
 
 type AreaGeometry = Polygon | MultiPolygon;
+type PackRegionState = {
+  state: "loading" | "ready" | "error";
+  regions: SearchRegionSummary[];
+  error?: string;
+};
 const ACTIVE_JOB_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-drive-time", "running"]);
 const JOB_POLL_OPEN_MS = 2_000;
 const JOB_POLL_CLOSED_MS = 5_000;
@@ -63,6 +71,22 @@ const FIXTURE_REGION: PackCatalogRegionV1 = packCatalogRegionV1Schema.parse({
     display: FIXTURE_BUILDER_PACK.display,
   },
 });
+const DEFAULT_REGIONS = [FIXTURE_REGION];
+
+function catalogPackConfig(region: Extract<PackCatalogRegionV1, { state: "available" }>): BuilderPackConfig {
+  return {
+    id: region.pack.id,
+    name: region.pack.name,
+    subtitle: `Data ${region.pack.dataVersion}`,
+    dataVersion: region.pack.dataVersion,
+    builtAt: region.pack.builtAt,
+    coverageBbox: region.pack.coverageBbox,
+    coverage: region.pack.coverage,
+    suggestedBounds: region.pack.coverageBbox,
+    display: region.pack.display,
+    trailNetwork: { type: "FeatureCollection", features: [] },
+  };
+}
 
 function boundsGeometry(bounds: Bounds): Polygon {
   const [west, south, east, north] = bounds;
@@ -136,11 +160,13 @@ function batchPageAsResponse(page: RouteJobResultsPage): GenerateClosedRoutesRes
 
 export function HikeBuilder({
   pack = FIXTURE_BUILDER_PACK,
-  regions = [FIXTURE_REGION],
+  regions = DEFAULT_REGIONS,
+  initialSelectedPackIds = [pack.id],
   restoreJobId,
 }: {
   pack?: BuilderPackConfig;
   regions?: PackCatalogRegionV1[];
+  initialSelectedPackIds?: string[];
   restoreJobId?: string;
 }) {
   const router = useRouter();
@@ -156,8 +182,12 @@ export function HikeBuilder({
   });
   const [values, setValues] = useState<BuilderValues>(DEFAULT_BUILDER_VALUES);
   const [filterGeometry, setFilterGeometry] = useState<AreaGeometry>();
+  const [refinementGeometry, setRefinementGeometry] = useState<AreaGeometry>();
   const [visibleAccessPoints, setVisibleAccessPoints] = useState<AccessPointOption[]>([]);
-  const trailNetwork = pack.trailNetwork;
+  const [selectedPackIds, setSelectedPackIds] = useState(initialSelectedPackIds);
+  const [packRegionStates, setPackRegionStates] = useState<Record<string, PackRegionState>>({});
+  const [selectedRegionIds, setSelectedRegionIds] = useState<Record<string, string[]>>({});
+  const [resultRegionLabels, setResultRegionLabels] = useState<Record<string, string>>({});
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [generationState, setGenerationState] = useState<"idle" | ResultsStatus>("idle");
   const [generationMessage, setGenerationMessage] = useState("");
@@ -176,6 +206,7 @@ export function HikeBuilder({
   const [batchLaunching, setBatchLaunching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState("");
+  const [showRegionBoundaries, setShowRegionBoundaries] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [nearMissesOpen, setNearMissesOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
@@ -191,21 +222,66 @@ export function HikeBuilder({
   const jobsRefreshGenerationRef = useRef(0);
   const batchLaunchInFlightRef = useRef(false);
   const restoredJobRef = useRef<string | undefined>(undefined);
+  const applyBatchResultsRef = useRef<(page: RouteJobResultsPage) => void>(() => undefined);
 
   const orderedRegions = useMemo(
     () => [...regions].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label)),
     [regions],
   );
-  const availablePackIds = useMemo(
-    () => new Set(orderedRegions.flatMap((region) => region.state === "available" ? [region.packId] : [])),
-    [orderedRegions],
-  );
+  const availablePackConfigs = useMemo(() => {
+    const configs = new Map<string, BuilderPackConfig>([[pack.id, pack]]);
+    for (const region of orderedRegions) {
+      if (region.state !== "available" || configs.has(region.packId)) continue;
+      configs.set(region.packId, catalogPackConfig(region));
+    }
+    return configs;
+  }, [orderedRegions, pack]);
 
-  const switchPack = useCallback((packId: string, jobId?: string) => {
-    const query = new URLSearchParams({ pack: packId });
-    if (jobId) query.set("job", jobId);
-    router.push(`/?${query}`);
-  }, [router]);
+  const availablePackOrder = useMemo(() => {
+    const catalogOrder = orderedRegions.flatMap((region) => region.state === "available" ? [region.packId] : []);
+    return [...new Set([...(catalogOrder.includes(pack.id) ? [] : [pack.id]), ...catalogOrder])];
+  }, [orderedRegions, pack.id]);
+
+  const selectedPacks = useMemo(() => reconcileSelectedPackIds(
+    selectedPackIds,
+    availablePackOrder,
+    pack.id,
+    true,
+  ).flatMap((packId) => {
+    const config = availablePackConfigs.get(packId);
+    return config ? [config] : [];
+  }), [availablePackConfigs, availablePackOrder, pack.id, selectedPackIds]);
+  const selectedPackKey = selectedPacks.map(({ id }) => id).join(",");
+  const primaryPack = selectedPacks[0] ?? pack;
+  const selectedCoverageBbox = useMemo(() => selectedPacks.length
+    ? unionBounds(selectedPacks.map(({ coverageBbox }) => coverageBbox))
+    : pack.coverageBbox, [pack.coverageBbox, selectedPacks]);
+  const trailNetwork = useMemo(() => ({
+    type: "FeatureCollection" as const,
+    features: selectedPacks.flatMap((selectedPack) => selectedPack.trailNetwork.features),
+  }), [selectedPacks]);
+  const selectedPackLabels = useMemo(() => new Map(orderedRegions.flatMap((region) =>
+    region.state === "available" ? [[region.packId, region.label] as const] : [])), [orderedRegions]);
+  const regionOptionGroups = useMemo<RegionOptionGroup[]>(() => selectedPacks.map((selectedPack) => {
+    const regionState = packRegionStates[selectedPack.id];
+    return {
+      packId: selectedPack.id,
+      label: selectedPackLabels.get(selectedPack.id) ?? selectedPack.name,
+      state: regionState?.state ?? "loading",
+      ...(regionState?.error ? { error: regionState.error } : {}),
+      options: (regionState?.regions ?? []).map(({ id, name }) => ({ id, name })),
+    };
+  }), [packRegionStates, selectedPackLabels, selectedPacks]);
+  const selectedRegionTargets = useMemo(() => selectedPacks.flatMap((selectedPack) => {
+    const regionState = packRegionStates[selectedPack.id];
+    const selected = new Set(selectedRegionIds[selectedPack.id] ?? []);
+    return (regionState?.regions ?? []).flatMap((region) => selected.has(region.id) ? [{
+      pack: selectedPack,
+      region,
+      label: `${selectedPackLabels.get(selectedPack.id) ?? selectedPack.name} · ${region.name}`,
+    }] : []);
+  }), [packRegionStates, selectedPackLabels, selectedPacks, selectedRegionIds]);
+  const selectedRegionKey = selectedRegionTargets.map(({ pack, region }) => `${pack.id}:${region.id}`).join(",");
 
   const acceptJobs = useCallback((next: RouteJob[], refreshedAt: number, announceTransitions = true) => {
     if (announceTransitions && jobsLoadedRef.current) {
@@ -273,11 +349,34 @@ export function HikeBuilder({
     setGenerationState("idle");
     setGenerationMessage("");
     setGenerationResponse(null);
+    setResultRegionLabels({});
     setBatchPage(undefined);
     setSelectedRouteId(undefined);
     setSelectedSegmentId(undefined);
     setHoveredSegmentId(undefined);
   }, []);
+
+  useEffect(() => {
+    const reconciled = reconcileSelectedPackIds(selectedPackIds, availablePackOrder, pack.id, true);
+    if (reconciled.join(",") !== selectedPackIds.join(",")) setSelectedPackIds(reconciled);
+  }, [availablePackOrder, pack.id, selectedPackIds]);
+
+  const updateSelectedPacks = useCallback((nextCandidates: string[]) => {
+    const next = reconcileSelectedPackIds(nextCandidates, availablePackOrder, pack.id, true);
+    setSelectedPackIds(next);
+    router.replace(`/?${new URLSearchParams({ packs: next.length ? next.join(",") : "none" })}`);
+    setDrawnBounds(null);
+    setFilterGeometry(undefined);
+    setRefinementGeometry(undefined);
+    invalidateResults();
+  }, [availablePackOrder, invalidateResults, pack.id, router]);
+
+  const togglePack = useCallback((packId: string) => {
+    const selected = selectedPacks.some((candidate) => candidate.id === packId);
+    updateSelectedPacks(selected
+      ? selectedPacks.filter((candidate) => candidate.id !== packId).map(({ id }) => id)
+      : [...selectedPacks.map(({ id }) => id), packId]);
+  }, [selectedPacks, updateSelectedPacks]);
 
   const selectRoute = useCallback((routeId: string) => {
     setSelectedRouteId(routeId);
@@ -294,6 +393,7 @@ export function HikeBuilder({
   const appSettings = useMemo<AppSettingsV1>(() => ({
     schemaVersion: 1,
     includeUncertainAccess: values.includeUncertainAccess,
+    showRegionBoundaries,
     quickSearchRouteCount: Number(values.limit),
     gradeConstraintEnabled: values.gradeConstraintEnabled,
     selectedGradePreset: values.selectedGradePreset,
@@ -304,9 +404,10 @@ export function HikeBuilder({
       maximumSharedApproachMiles: Number(values.maximumSharedStemMiles),
       allowMultiCycle: values.allowMultiCycle,
     },
-  }), [values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
+  }), [showRegionBoundaries, values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
 
   const applySettings = useCallback((settings: AppSettingsV1) => {
+    setShowRegionBoundaries(settings.showRegionBoundaries);
     setValues((current) => ({
       ...current,
       includeUncertainAccess: settings.includeUncertainAccess,
@@ -370,44 +471,73 @@ export function HikeBuilder({
   }, [applySettings]);
 
   useEffect(() => {
-    if (pack.id === FIXTURE_BUILDER_PACK.id) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ bbox: pack.coverageBbox.join(","), includeUncertainAccess: "true", includeTrails: "false" });
-    void fetch(`/api/packs/${pack.id}/access-points?${query}`, { signal: controller.signal })
-      .then(async (response) => {
-        const payload: unknown = await response.json().catch(() => null);
-        if (response.ok && payload && typeof payload === "object" && "accessPoints" in payload && Array.isArray(payload.accessPoints)) setVisibleAccessPoints(payload.accessPoints as AccessPointOption[]);
-      }).catch(() => undefined);
+    void Promise.all(selectedPacks.map(async (selectedPack) => {
+      const query = new URLSearchParams({ bbox: selectedPack.coverageBbox.join(","), includeUncertainAccess: "true", includeTrails: "false" });
+      const response = await fetch(`/api/packs/${selectedPack.id}/access-points?${query}`, { signal: controller.signal });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok || !payload || typeof payload !== "object" || !("accessPoints" in payload) || !Array.isArray(payload.accessPoints)) return [];
+      return (payload.accessPoints as AccessPointOption[]).map((point) => ({ ...point, id: `${selectedPack.id}::${point.id}` }));
+    })).then((groups) => {
+      if (!controller.signal.aborted) setVisibleAccessPoints(groups.flat());
+    }).catch(() => {
+      if (!controller.signal.aborted) setVisibleAccessPoints([]);
+    });
     return () => controller.abort();
-  }, [pack.coverageBbox, pack.id]);
+  }, [selectedPackKey, selectedPacks]);
 
   useEffect(() => {
-    if (driveDraft.regionsState !== "idle") return;
     const controller = new AbortController();
-    setDriveDraft((current) => ({ ...current, regionsState: "loading" }));
-    void fetch(`/api/packs/${pack.id}/search-regions`, { signal: controller.signal })
-      .then(async (response) => {
-        const payload: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(parseError(payload, "Search regions could not be loaded."));
-        const raw = Array.isArray(payload) ? payload : payload && typeof payload === "object" && "searchRegions" in payload ? payload.searchRegions : payload && typeof payload === "object" && "regions" in payload ? payload.regions : [];
-        const searchRegions = searchRegionSummarySchema.array().parse(raw).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
-        setDriveDraft((current) => ({ ...current, searchRegions, searchRegionId: current.searchRegionId || searchRegions[0]?.id || "", regionsState: "ready" }));
-        if (!drawnBounds && searchRegions[0]) setFilterGeometry(boundsGeometry(searchRegions[0].bbox));
-      }).catch((error: unknown) => {
-        if (!controller.signal.aborted) setDriveDraft((current) => ({ ...current, regionsState: "error", error: error instanceof Error ? error.message : "Search regions could not be loaded." }));
-      });
+    for (const selectedPack of selectedPacks) {
+      setPackRegionStates((current) => ({
+        ...current,
+        [selectedPack.id]: { state: "loading", regions: current[selectedPack.id]?.regions ?? [] },
+      }));
+      void fetch(`/api/packs/${selectedPack.id}/search-regions`, { signal: controller.signal })
+        .then(async (response) => {
+          const payload: unknown = await response.json().catch(() => null);
+          if (!response.ok) throw new Error(parseError(payload, "Search regions could not be loaded."));
+          const raw = Array.isArray(payload) ? payload : payload && typeof payload === "object" && "searchRegions" in payload ? payload.searchRegions : payload && typeof payload === "object" && "regions" in payload ? payload.regions : [];
+          const searchRegions = searchRegionSummarySchema.array().parse(raw).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+          if (controller.signal.aborted) return;
+          setPackRegionStates((current) => ({ ...current, [selectedPack.id]: { state: "ready", regions: searchRegions } }));
+          setSelectedRegionIds((current) => {
+            const valid = new Set(searchRegions.map(({ id }) => id));
+            const retained = (current[selectedPack.id] ?? []).filter((id) => valid.has(id));
+            return { ...current, [selectedPack.id]: retained.length ? retained : searchRegions[0] ? [searchRegions[0].id] : [] };
+          });
+        }).catch((error: unknown) => {
+          if (!controller.signal.aborted) setPackRegionStates((current) => ({
+            ...current,
+            [selectedPack.id]: { state: "error", regions: [], error: error instanceof Error ? error.message : "Search regions could not be loaded." },
+          }));
+        });
+    }
     return () => controller.abort();
-  // Region loading is keyed to the active pack. Keeping the transient loading
-  // state out of the dependency list prevents the request cleanup from aborting
-  // itself when it marks the selector as loading.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pack.id]);
+  }, [selectedPackKey, selectedPacks]);
+
+  useEffect(() => {
+    if (!selectedRegionTargets.length || drawnBounds) {
+      setRefinementGeometry(undefined);
+      return;
+    }
+    const controller = new AbortController();
+    void Promise.all(selectedRegionTargets.map(async ({ pack: selectedPack, region }) => {
+      const response = await fetch(`/api/packs/${selectedPack.id}/named-areas/${encodeURIComponent(region.id)}`, { signal: controller.signal });
+      const raw: unknown = await response.json().catch(() => null);
+      const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
+      return response.ok && parsed.success ? parsed.data.geometry : undefined;
+    })).then((geometries) => {
+      if (!controller.signal.aborted) setRefinementGeometry(combineAreaGeometries(geometries.filter((geometry) => geometry !== undefined)));
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [drawnBounds, selectedRegionKey, selectedRegionTargets]);
 
   useEffect(() => {
     if (driveDraft.state !== "suggesting" || driveDraft.origin || driveDraft.originText.trim().length < 2 || parseCoordinateOrigin(driveDraft.originText)?.success) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void fetch("/api/geocoding/suggest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: pack.id, text: driveDraft.originText.trim() }), signal: controller.signal })
+      void fetch("/api/geocoding/suggest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: primaryPack.id, text: driveDraft.originText.trim() }), signal: controller.signal })
         .then(async (response) => {
           const payload: unknown = await response.json().catch(() => null);
           if (!response.ok) throw new Error(parseError(payload, "Origin suggestions are unavailable."));
@@ -416,13 +546,13 @@ export function HikeBuilder({
         }).catch((error: unknown) => { if (!controller.signal.aborted) setDriveDraft((current) => ({ ...current, state: "error", error: error instanceof Error ? error.message : "Origin suggestions are unavailable." })); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [driveDraft.origin, driveDraft.originText, driveDraft.state, pack.id]);
+  }, [driveDraft.origin, driveDraft.originText, driveDraft.state, primaryPack.id]);
 
   const selectOriginSuggestion = async (suggestion: { label: string; magicKey: string }) => {
     const sequence = ++originRequestSequenceRef.current;
     setDriveDraft((current) => ({ ...current, state: "resolving", error: undefined, originSuggestions: [] }));
     try {
-      const response = await fetch("/api/geocoding/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: pack.id, text: suggestion.label, magicKey: suggestion.magicKey }) });
+      const response = await fetch("/api/geocoding/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: primaryPack.id, text: suggestion.label, magicKey: suggestion.magicKey }) });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(payload, "That origin could not be resolved."));
       const origin = originSchema.parse(payload && typeof payload === "object" && "origin" in payload ? payload.origin : payload);
@@ -444,13 +574,14 @@ export function HikeBuilder({
 
   const runQuick = async () => {
     const errors: string[] = [];
+    if (!selectedPacks.length) errors.push("Choose at least one region pack.");
     if (!drawnBounds && !driveDraft.origin) errors.push("Resolve a driving origin or draw an optional boundary.");
-    if (!drawnBounds && !driveDraft.searchRegionId) errors.push("Choose a search region or draw an optional boundary.");
+    if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
     const criteriaValidation = buildGenerateRoutesRequest(
       values,
-      drawnBounds ? { mode: "drawn-area", bbox: drawnBounds } : { mode: "drawn-area", bbox: pack.coverageBbox },
+      drawnBounds ? { mode: "drawn-area", bbox: drawnBounds } : { mode: "drawn-area", bbox: selectedCoverageBbox },
       undefined,
-      pack.id,
+      primaryPack.id,
     );
     if (!criteriaValidation.success) errors.push(...criteriaValidation.errors);
     if (errors.length) { setValidationErrors(errors); return; }
@@ -463,17 +594,15 @@ export function HikeBuilder({
     setGenerationState("loading");
     setGenerationMessage(drawnBounds ? "Running Quick search inside the drawn boundary…" : "Resolving the drive-time area for Quick search…");
     setGenerationResponse(null);
+    setResultRegionLabels({});
     setSelectedRouteId(undefined);
     setSelectedSegmentId(undefined);
     setHoveredSegmentId(undefined);
     try {
-      let accessFilter: AccessFilterV2;
-      if (drawnBounds) {
-        accessFilter = { mode: "drawn-area", bbox: drawnBounds };
-      } else {
+      const resolveReachability = async (selectedPack: BuilderPackConfig) => {
         let response = await fetch("/api/reachability", {
           method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
-          body: JSON.stringify({ version: 1, packId: pack.id, origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes }),
+          body: JSON.stringify({ version: 1, packId: selectedPack.id, origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes }),
         });
         let payload: unknown = await response.json().catch(() => null);
         if (!response.ok) throw new Error(parseError(payload, "The drive-time area could not be calculated."));
@@ -489,24 +618,55 @@ export function HikeBuilder({
           if (!response.ok) throw new Error(parseError(payload, "The drive-time area could not be calculated."));
           parsed = reachabilityResponseSchema.parse(payload);
         }
-        if (generationControllerRef.current !== controller) return;
-        setFilterGeometry(parsed.geometry);
-        accessFilter = { mode: "drive-time", reachabilityId: parsed.requestId, regionId: driveDraft.searchRegionId };
+        return parsed;
+      };
+
+      const reachabilityByPack = new Map<string, Extract<ReturnType<typeof reachabilityResponseSchema.parse>, { status: "complete" }>>();
+      const reachabilityFailures: string[] = [];
+      if (!drawnBounds) {
+        const settled = await Promise.allSettled(selectedPacks.map(async (selectedPack) => ({
+          pack: selectedPack,
+          reachability: await resolveReachability(selectedPack),
+        })));
+        settled.forEach((result, index) => {
+          const selectedPack = selectedPacks[index]!;
+          if (result.status === "fulfilled") reachabilityByPack.set(selectedPack.id, result.value.reachability);
+          else reachabilityFailures.push(selectedPackLabels.get(selectedPack.id) ?? selectedPack.name);
+        });
+        const firstGeometry = reachabilityByPack.values().next().value?.geometry;
+        if (firstGeometry) setFilterGeometry(firstGeometry);
       }
-      const validated = buildGenerateRoutesRequest(values, accessFilter, undefined, pack.id);
-      if (!validated.success) { setValidationErrors(validated.errors); setGenerationState("idle"); return; }
+      if (!drawnBounds && reachabilityByPack.size === 0) throw new Error("Drive-time areas could not be calculated for the selected regions.");
+
+      const targets = drawnBounds
+        ? selectedPacks.map((selectedPack) => ({ pack: selectedPack, label: selectedPackLabels.get(selectedPack.id) ?? selectedPack.name, regionId: undefined }))
+        : selectedRegionTargets.flatMap((target) => reachabilityByPack.has(target.pack.id) ? [{ ...target, regionId: target.region.id }] : []);
       setGenerationMessage("Running Quick search…");
       if (generationControllerRef.current !== controller) return;
-      const response = await fetch("/api/routes/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(validated.request satisfies GenerateClosedRoutesRequestV3), signal: controller.signal });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(parseError(payload, "Routes could not be generated."));
-      const parsed = generateClosedRoutesResponseV3Schema.parse(payload);
+      const settledSearches = await Promise.allSettled(targets.map(async (target) => {
+        const accessFilter: AccessFilterV2 = drawnBounds
+          ? { mode: "drawn-area", bbox: drawnBounds }
+          : { mode: "drive-time", reachabilityId: reachabilityByPack.get(target.pack.id)!.requestId, regionId: target.regionId };
+        const validated = buildGenerateRoutesRequest(values, accessFilter, undefined, target.pack.id);
+        if (!validated.success) throw new Error(validated.errors.join(" "));
+        const response = await fetch("/api/routes/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(validated.request satisfies GenerateClosedRoutesRequestV3), signal: controller.signal });
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(parseError(payload, `Routes could not be generated for ${target.label}.`));
+        return { target, response: generateClosedRoutesResponseV3Schema.parse(payload) };
+      }));
       if (generationControllerRef.current !== controller) return;
-      setGenerationResponse(parsed);
-      setSelectedRouteId((parsed.exact[0] ?? parsed.nearMisses[0])?.id);
+      const successful = settledSearches.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      const failedSearchCount = settledSearches.length - successful.length + reachabilityFailures.length;
+      if (!successful.length) throw new Error("Routes could not be generated for any selected region.");
+      const combined = combineQuickResponses(successful.map(({ target, response }) => ({ packLabel: target.label, response })), Number(values.limit));
+      const labels = Object.fromEntries(successful.flatMap(({ target, response }) => [...response.exact, ...response.nearMisses].map((route) => [`${response.pack.id}::${route.id}`, target.label])));
+      setGenerationResponse(combined);
+      setResultRegionLabels(labels);
+      setSelectedRouteId((combined.exact[0] ?? combined.nearMisses[0])?.id);
       setSelectedSegmentId(undefined);
       setHoveredSegmentId(undefined);
-      setGenerationMessage(parsed.exact.length ? `${parsed.exact.length} exact ${parsed.exact.length === 1 ? "route" : "routes"} ready.` : `No exact matches. ${parsed.nearMisses.length} close ${parsed.nearMisses.length === 1 ? "match" : "matches"} available.`);
+      const resultMessage = combined.exact.length ? `${combined.exact.length} exact ${combined.exact.length === 1 ? "route" : "routes"} ready.` : `No exact matches. ${combined.nearMisses.length} close ${combined.nearMisses.length === 1 ? "match" : "matches"} available.`;
+      setGenerationMessage(failedSearchCount ? `${resultMessage} ${failedSearchCount} selected ${failedSearchCount === 1 ? "region was" : "regions were"} unavailable.` : resultMessage);
       setGenerationState("done");
       setMobilePanel("results");
     } catch (error) {
@@ -520,42 +680,42 @@ export function HikeBuilder({
   const launchBatch = async () => {
     if (batchLaunchInFlightRef.current) return;
     const errors: string[] = [];
+    if (!selectedPacks.length) errors.push("Choose at least one region pack.");
     if (!driveDraft.origin) errors.push("Resolve a driving origin.");
-    if (!driveDraft.searchRegionId) errors.push("Choose a search region.");
-    const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: pack.coverageBbox }, undefined, pack.id);
+    if (!selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
+    if (selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
+    const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: selectedCoverageBbox }, undefined, primaryPack.id);
     if (!validated.success) errors.push(...validated.errors);
-    if (errors.length || !driveDraft.origin || !driveDraft.searchRegionId || !validated.success) { setValidationErrors(errors); return; }
+    if (errors.length || !driveDraft.origin || !validated.success) { setValidationErrors(errors); return; }
     const request = validated.request;
-    const payload: CreateBatchRouteJobV1 = {
-      version: 1,
-      packId: pack.id,
-      origin: driveDraft.origin,
-      durationMinutes: driveDraft.durationMinutes,
-      searchRegionId: driveDraft.searchRegionId,
-      criteria: {
-        closedRoute: request.closedRoute,
-        distanceMiles: request.distanceMiles,
+    const payloads: CreateBatchRouteJobV1[] = selectedRegionTargets.map(({ pack: selectedPack, region }) => ({
+      version: 1, packId: selectedPack.id, origin: driveDraft.origin!, durationMinutes: driveDraft.durationMinutes, searchRegionId: region.id,
+      criteria: { closedRoute: request.closedRoute, distanceMiles: request.distanceMiles,
         ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
         ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
         ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
-        ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}),
-        includeUncertainAccess: request.includeUncertainAccess,
-      },
+        ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}), includeUncertainAccess: request.includeUncertainAccess },
       routesPerAccessPoint: 10,
-    };
+    }));
     batchLaunchInFlightRef.current = true;
     setBatchLaunching(true);
     setValidationErrors([]);
-    setGenerationMessage("Launching batch search…");
+    setGenerationMessage(`Launching ${payloads.length} full ${payloads.length === 1 ? "search" : "searches"}…`);
     try {
-      const response = await fetch("/api/route-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const raw: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(parseError(raw, "Batch search could not be launched."));
-      const job = routeJobSchema.parse(raw && typeof raw === "object" && "job" in raw ? raw.job : raw);
+      const settled = await Promise.allSettled(payloads.map(async (payload) => {
+        const response = await fetch("/api/route-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+        const raw: unknown = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(parseError(raw, "A full search could not be launched."));
+        return routeJobSchema.parse(raw && typeof raw === "object" && "job" in raw ? raw.job : raw);
+      }));
+      const launched = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      const failed = settled.length - launched.length;
+      if (!launched.length) throw new Error("Full searches could not be launched for any selected region.");
       jobsRefreshGenerationRef.current += 1;
       jobsRefreshControllerRef.current?.abort();
-      acceptJobs([job, ...jobsRef.current.filter(({ id }) => id !== job.id)], Date.now(), false);
-      setGenerationMessage("Batch search queued. Track it in Jobs.");
+      const launchedIds = new Set(launched.map(({ id }) => id));
+      acceptJobs([...launched, ...jobsRef.current.filter(({ id }) => !launchedIds.has(id))], Date.now(), false);
+      setGenerationMessage(`${launched.length} full ${launched.length === 1 ? "search" : "searches"} queued${failed ? `; ${failed} failed to launch` : ""}. Track progress in Jobs.`);
       setJobsOpen(true);
       void refreshJobs(true);
     } catch (error) { setGenerationMessage(error instanceof Error ? error.message : "Batch search could not be launched."); }
@@ -569,6 +729,8 @@ export function HikeBuilder({
     setBatchPage(page);
     const response = batchPageAsResponse(page);
     setGenerationResponse(response);
+    const label = `${selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id} · ${page.job.searchRegion.name}`;
+    setResultRegionLabels(Object.fromEntries([...response.exact, ...response.nearMisses].map(({ id }) => [id, label])));
     setGenerationState("done");
     setGenerationMessage(`${page.results.length} saved routes loaded${page.nextCursor ? "; more are available" : ""}.`);
     setSelectedRouteId((response.exact[0] ?? response.nearMisses[0])?.id);
@@ -578,35 +740,37 @@ export function HikeBuilder({
     setMobilePanel("results");
     if (page.job.filterGeometry) {
       setFilterGeometry(page.job.filterGeometry);
-      return;
-    }
-    const region = driveDraft.searchRegions.find(({ id }) => id === page.job.searchRegion.id);
-    if (region) setFilterGeometry(boundsGeometry(region.bbox));
-    void fetch(`/api/packs/${pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`)
+    } else setFilterGeometry(undefined);
+    void fetch(`/api/packs/${page.job.pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`)
       .then(async (response) => response.ok ? response.json() : null)
       .then((raw: unknown) => {
         const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
-        if (parsed.success) setFilterGeometry(parsed.data.geometry);
+        if (parsed.success) setRefinementGeometry(parsed.data.geometry);
       }).catch(() => undefined);
-  }, [driveDraft.searchRegions, pack.id]);
+  }, [selectedPackLabels]);
+
+  useEffect(() => {
+    applyBatchResultsRef.current = applyBatchResults;
+  }, [applyBatchResults]);
 
   const openBatchResults = useCallback((page: RouteJobResultsPage) => {
-    if (page.job.pack.id !== pack.id) {
-      setJobsOpen(false);
-      if (availablePackIds.has(page.job.pack.id)) switchPack(page.job.pack.id, page.job.id);
-      else {
-        setGenerationState("error");
-        setGenerationMessage("The region pack for this saved job is not installed.");
-      }
+    if (!availablePackConfigs.has(page.job.pack.id)) {
+      setGenerationState("error");
+      setGenerationMessage("The region pack for this saved job is not installed.");
       return;
     }
+    const next = [page.job.pack.id];
+    setSelectedPackIds(next);
+    setSelectedRegionIds({ [page.job.pack.id]: [page.job.searchRegion.id] });
+    router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
     applyBatchResults(page);
-  }, [applyBatchResults, availablePackIds, pack.id, switchPack]);
+  }, [applyBatchResults, availablePackConfigs, router]);
 
   useEffect(() => {
     if (!restoreJobId || restoredJobRef.current === restoreJobId) return;
     restoredJobRef.current = restoreJobId;
     const controller = new AbortController();
+    let settled = false;
     void fetch(`/api/route-jobs/${encodeURIComponent(restoreJobId)}/results?limit=50`, {
       cache: "no-store",
       signal: controller.signal,
@@ -614,25 +778,31 @@ export function HikeBuilder({
       const raw: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error("Job results could not be loaded.");
       const page = routeJobResultsPageSchema.parse(raw);
-      if (page.job.pack.id !== pack.id) {
-        if (availablePackIds.has(page.job.pack.id)) switchPack(page.job.pack.id, page.job.id);
-        else {
-          setGenerationState("error");
-          setGenerationMessage("The region pack for this saved job is not installed.");
-          router.replace(`/?${new URLSearchParams({ pack: pack.id })}`);
-        }
+      if (!availablePackConfigs.has(page.job.pack.id)) {
+        setGenerationState("error");
+        setGenerationMessage("The region pack for this saved job is not installed.");
+        router.replace(`/?${new URLSearchParams({ packs: selectedPacks.map(({ id }) => id).join(",") })}`);
         return;
       }
-      applyBatchResults(page);
-      router.replace(`/?${new URLSearchParams({ pack: pack.id })}`);
+      const next = [page.job.pack.id];
+      setSelectedPackIds(next);
+      setSelectedRegionIds({ [page.job.pack.id]: [page.job.searchRegion.id] });
+      applyBatchResultsRef.current(page);
+      settled = true;
+      router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setGenerationState("error");
         setGenerationMessage(error instanceof Error ? error.message : "Job results could not be loaded.");
       }
     });
-    return () => controller.abort();
-  }, [applyBatchResults, availablePackIds, pack.id, restoreJobId, router, switchPack]);
+    return () => {
+      controller.abort();
+      // React Strict Mode immediately replays effects in development. Let the
+      // replay retry an aborted restore instead of treating it as completed.
+      if (!settled && restoredJobRef.current === restoreJobId) restoredJobRef.current = undefined;
+    };
+  }, [availablePackConfigs, restoreJobId, router, selectedPacks]);
 
   const loadNextBatchPage = async () => {
     if (!batchPage?.nextCursor) return;
@@ -700,7 +870,6 @@ export function HikeBuilder({
     setHoveredSegmentId(undefined);
   }, [generationResponse]);
   const hasResultsPanel = generationState !== "idle";
-  const selectedRegion = driveDraft.searchRegions.find(({ id }) => id === driveDraft.searchRegionId);
 
   return (
     <main className="app-frame">
@@ -710,13 +879,13 @@ export function HikeBuilder({
           <div className="region-list">
             {orderedRegions.map((region) => {
               const available = region.state === "available";
-              const selected = available && region.packId === pack.id;
+              const selected = available && selectedPacks.some(({ id }) => id === region.packId);
               const status = region.state === "planned"
                 ? "Planned; pack not yet available."
                 : region.state === "unavailable"
                   ? "Pack unavailable on this device."
                   : selected
-                    ? "Available; currently selected."
+                    ? "Available; selected."
                     : "Available.";
               return (
                 <button
@@ -727,7 +896,7 @@ export function HikeBuilder({
                   aria-pressed={available ? selected : undefined}
                   aria-label={`${region.label}. ${status}`}
                   title={available ? `${region.pack.name} — Data ${region.pack.dataVersion}` : status}
-                  onClick={() => { if (available && !selected) switchPack(region.packId); }}
+                  onClick={() => { if (available) togglePack(region.packId); }}
                 >
                   {available ? <span className="status-dot" aria-hidden="true" /> : null}
                   <span>{region.label}</span>
@@ -786,11 +955,16 @@ export function HikeBuilder({
                 <select id="drive-duration" className="control" aria-label="Typical drive time" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, durationMinutes })); invalidateResults(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
               </div>
 
-              <div className="field-row">
-                <label htmlFor="search-region">Region</label>
-                <select id="search-region" className="control" aria-label="Broad region" value={driveDraft.searchRegionId} disabled={driveDraft.regionsState === "loading"} onChange={(event) => { const searchRegionId = event.currentTarget.value; const region = driveDraft.searchRegions.find(({ id }) => id === searchRegionId); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, searchRegionId })); if (!drawnBounds) setFilterGeometry(region ? boundsGeometry(region.bbox) : undefined); invalidateResults(); }}><option value="">Choose a region</option>{driveDraft.searchRegions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</select>
-              </div>
-              {driveDraft.regionsState === "loading" ? <p className="loading-state" role="status">Loading regions…</p> : null}
+              <RegionMultiSelect
+                groups={regionOptionGroups}
+                selected={selectedRegionIds}
+                onChange={(packId, regionIds) => {
+                  reachabilityControllerRef.current?.abort();
+                  setSelectedRegionIds((current) => ({ ...current, [packId]: regionIds }));
+                  setFilterGeometry(undefined);
+                  invalidateResults();
+                }}
+              />
               {driveDraft.error ? <p className="note-error" role="alert">{driveDraft.error}</p> : null}
 
               <section className="boundary-block" aria-labelledby="boundary-title">
@@ -799,7 +973,7 @@ export function HikeBuilder({
                   {drawnBounds
                     ? <output>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output>
                     : <output className="empty">None — Quick uses drive time</output>}
-                  {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); setFilterGeometry(selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }}>Clear</button> : null}
+                  {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); setFilterGeometry(undefined); invalidateResults(); }}>Clear</button> : null}
                 </div>
                 <p className="hint">Draw on the map to override drive time for Quick search.</p>
               </section>
@@ -862,9 +1036,9 @@ export function HikeBuilder({
           </footer>
         </aside>
 
-        <HikeMap packId={pack.id} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} packCoverageBbox={pack.coverageBbox} packCoverage={pack.coverage} suggestedBounds={pack.suggestedBounds} display={pack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : selectedRegion ? boundsGeometry(selectedRegion.bbox) : undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
+        <HikeMap packIds={selectedPacks.map(({ id }) => id)} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={selectedCoverageBbox} packCoverages={selectedPacks.map(({ coverage }) => coverage)} showRegionBoundaries={showRegionBoundaries} suggestedBounds={primaryPack.suggestedBounds} display={primaryPack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : undefined); if (bounds) setRefinementGeometry(undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
 
-        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} response={generationResponse} message={generationMessage} routeRegionLabels={resultRegionLabels} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={batchPage ? { hasNext: Boolean(batchPage.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
 
         {hasResultsPanel ? (
           <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>

@@ -9,7 +9,11 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await expect(page.getByRole("radio")).toHaveCount(0);
   await expect(page.getByLabel("Driving origin", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
-  await expect(page.getByLabel("Broad region")).toBeVisible();
+  const regions = page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` });
+  await expect(regions).toBeVisible();
+  await regions.click();
+  await expect(page.getByRole("group", { name: "Fixture pack" }).getByRole("checkbox", { name: SEARCH_REGION.name })).toBeChecked();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
   await enterDrawnArea(page);
@@ -32,6 +36,7 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Quick-search routes")).toHaveValue("10");
+  await expect(page.getByRole("switch", { name: "Show region boundaries" })).not.toBeChecked();
   await expect(page.getByLabel("Search effort")).toHaveCount(0);
   await page.keyboard.press("Escape");
   expect(harness.blockedExternalRequests).toEqual([]);
@@ -42,7 +47,7 @@ test("drive-time Quick search resolves reachability and applies the curated regi
   await page.goto("/");
 
   await selectTypedOrigin(page);
-  await page.getByLabel("Broad region").selectOption(SEARCH_REGION.id);
+  await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Quick search" }).click();
 
   await expect.poll(() => harness.generationRequests.length).toBe(1);
@@ -63,7 +68,7 @@ test("Batch launches a persistent job and reopens its saved result page", async 
 
   await selectTypedOrigin(page);
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
-  await page.getByLabel("Broad region").selectOption(SEARCH_REGION.id);
+  await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Full search" }).click();
 
   const jobs = page.getByRole("dialog", { name: "Jobs" });
