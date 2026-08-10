@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "packId": "central-cascades",
+  "scenarios": [
+    {
+      "id": "napeequa-little-giant-high-pass",
+      "cluster": "Napeequa Valley–Little Giant/High Pass",
+      "referencePoint": {
+        "name": "Little Giant Trailhead",
+        "coordinates": [-120.8286783, 48.0258723]
+      },
+      "searchRegionId": "osm:relation/6115914",
+      "exactExpectation": {
+        "distanceMiles": { "min": 12, "max": 32 },
+        "elevationGainFeet": { "min": 2500, "max": 10000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "chiwawa-spider-meadow",
+      "cluster": "Chiwawa–Spider Meadow",
+      "referencePoint": {
+        "name": "Phelps Creek Trailhead",
+        "coordinates": [-120.83493, 48.0829138]
+      },
+      "searchRegionId": "osm:relation/6115914",
+      "exactExpectation": {
+        "distanceMiles": { "min": 10, "max": 30 },
+        "elevationGainFeet": { "min": 1800, "max": 9000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "west-glacier-peak-north-fork-sauk",
+      "cluster": "West Glacier Peak",
+      "referencePoint": {
+        "name": "North Fork Sauk Trailhead",
+        "coordinates": [-121.28793, 48.0583431]
+      },
+      "searchRegionId": "osm:relation/6115914",
+      "exactExpectation": {
+        "distanceMiles": { "min": 10, "max": 30 },
+        "elevationGainFeet": { "min": 1800, "max": 9000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "stevens-pass",
+      "cluster": "Stevens Pass",
+      "referencePoint": {
+        "name": "Stevens Pass Pacific Crest Trail access",
+        "coordinates": [-121.0895, 47.7465]
+      },
+      "searchRegionId": "pack:central-cascades",
+      "exactExpectation": {
+        "distanceMiles": { "min": 6, "max": 22 },
+        "elevationGainFeet": { "min": 1200, "max": 7000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "icicle-enchantments",
+      "cluster": "Icicle Creek–Enchantments",
+      "referencePoint": {
+        "name": "Stuart Lake Trailhead",
+        "coordinates": [-120.8639, 47.5434]
+      },
+      "searchRegionId": "osm:relation/6112652",
+      "exactExpectation": {
+        "distanceMiles": { "min": 8, "max": 24 },
+        "elevationGainFeet": { "min": 1800, "max": 9000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "snoqualmie-alpine-lakes",
+      "cluster": "Snoqualmie–Alpine Lakes",
+      "referencePoint": {
+        "name": "Snow Lake Trailhead at Alpental",
+        "coordinates": [-121.4162, 47.4454]
+      },
+      "searchRegionId": "osm:relation/6112652",
+      "exactExpectation": {
+        "distanceMiles": { "min": 6, "max": 20 },
+        "elevationGainFeet": { "min": 1000, "max": 6500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "cle-elum-tucquala",
+      "cluster": "Cle Elum–Tucquala Meadows",
+      "referencePoint": {
+        "name": "Tucquala Meadows Trailhead",
+        "coordinates": [-121.284, 47.544]
+      },
+      "searchRegionId": "osm:relation/6112652",
+      "exactExpectation": {
+        "distanceMiles": { "min": 8, "max": 26 },
+        "elevationGainFeet": { "min": 1400, "max": 8000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "teanaway-west-fork",
+      "cluster": "Teanaway Community Forest",
+      "referencePoint": {
+        "name": "West Fork Teanaway trail system",
+        "coordinates": [-120.959, 47.306]
+      },
+      "searchRegionId": "osm:relation/6437099",
+      "exactExpectation": {
+        "distanceMiles": { "min": 5, "max": 18 },
+        "elevationGainFeet": { "min": 700, "max": 5500 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 2, "max": 4 },
+        "elevationGainFeet": { "min": 15000, "max": 16000 },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}
