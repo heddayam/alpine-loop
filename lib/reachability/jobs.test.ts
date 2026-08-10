@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ReachabilityRequest } from "@/lib/contracts";
-import { MemoryReachabilityJobStore, REACHABILITY_JOB_TTL_MS } from "./jobs";
+import {
+  MemoryReachabilityJobStore,
+  REACHABILITY_JOB_TTL_MS,
+  REACHABILITY_TOMBSTONE_TTL_MS,
+} from "./jobs";
 import { TestClock } from "./test-helpers";
 
 const REQUEST: ReachabilityRequest = {
@@ -29,5 +33,18 @@ describe("memory-only reachability jobs", () => {
     expect(store.findReusable(REQUEST)).toBeUndefined();
     expect(store.delete("db52ceda-c6ef-47f1-9153-dba294a9eccc")).toBeDefined();
     expect(store.lookup("db52ceda-c6ef-47f1-9153-dba294a9eccc")).toEqual({ state: "missing" });
+  });
+
+  it("bounds identifier-only expiry tombstones", () => {
+    const clock = new TestClock();
+    const store = new MemoryReachabilityJobStore(clock);
+    const id = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
+    store.create(id, REQUEST);
+
+    clock.advance(REACHABILITY_JOB_TTL_MS);
+    expect(store.lookup(id)).toEqual({ state: "expired" });
+
+    clock.advance(REACHABILITY_TOMBSTONE_TTL_MS);
+    expect(store.lookup(id)).toEqual({ state: "missing" });
   });
 });
