@@ -39,6 +39,9 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await expect(page.getByRole("switch", { name: "Show region boundaries" })).not.toBeChecked();
   await expect(page.getByLabel("Search effort")).toHaveCount(0);
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Clear results" }).click();
+  await expect(page.getByRole("heading", { name: "Results" })).toHaveCount(0);
+  await expect(page.locator(".route-pin")).toHaveCount(0);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
