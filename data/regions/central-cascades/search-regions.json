@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:central-cascades",
+      "expectedName": "Central Cascades"
+    },
+    {
+      "namedAreaId": "osm:relation/6115914",
+      "expectedName": "Glacier Peak Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/6112652",
+      "expectedName": "Alpine Lakes Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/6437099",
+      "expectedName": "Teanaway Community Forest"
+    }
+  ]
+}

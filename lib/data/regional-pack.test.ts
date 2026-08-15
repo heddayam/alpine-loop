@@ -4,11 +4,13 @@ import { listRegionalPackBuilderIds, requireRegionalPackBuilder } from "./region
 describe("regional pack builder registry", () => {
   it("registers active builders in stable pack-ID order", () => {
     expect(listRegionalPackBuilderIds()).toEqual([
+      "central-cascades",
       "henry-coe",
       "monterey-carmel",
       "santa-cruz-mountains",
       "southern-east-bay",
     ]);
+    expect(requireRegionalPackBuilder("central-cascades")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("henry-coe")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("monterey-carmel")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("santa-cruz-mountains")).toEqual(expect.any(Function));

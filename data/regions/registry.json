@@ -34,6 +34,12 @@
       "id": "tahoe-eldorado",
       "label": "Tahoe–Eldorado",
       "displayOrder": 6
+    },
+    {
+      "id": "central-cascades",
+      "label": "Central Cascades",
+      "displayOrder": 7,
+      "packId": "central-cascades"
     }
   ]
 }

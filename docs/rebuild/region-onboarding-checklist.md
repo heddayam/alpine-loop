@@ -262,10 +262,14 @@ This is the sequence the region builder must preserve:
 9. Closed-route topology persists `can_reach_cycle` for both known and
    inclusive access profiles. Runtime uses the inclusive value as the superset:
    `false` means the start is hidden and never automatically searched.
-10. Runtime eligibility then applies exact filter geometry (with the existing
-    25 m named-region tolerance for a portal on the boundary), access policy,
-    building threshold, and cycle reachability. Unknown access remains included
-    by default.
+10. Runtime eligibility then applies exact filter geometry. Reviewed named
+    regions admit trail portals in a 500 m approach band because usable
+    trailheads commonly sit just outside legal park, preserve, and wilderness
+    boundaries; drawn areas and drive-time contours remain exact. Access policy,
+    building threshold, and cycle reachability still apply. Unknown access
+    remains included by default. Straight-line proximity does not prove that a
+    portal's trail enters the named area, so every published search region still
+    requires portal review until a topology-aware association is available.
 
 Building and no-cycle rules do **not** delete rows from `access_points` during
 compilation. Therefore the pack's raw `accessPointCount` is not the visible or

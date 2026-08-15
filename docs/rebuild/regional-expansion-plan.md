@@ -50,6 +50,11 @@ files alone never make a region selectable. The initial catalog is:
       "id": "tahoe-eldorado",
       "label": "Tahoe–Eldorado",
       "displayOrder": 6
+    },
+    {
+      "id": "central-cascades",
+      "label": "Central Cascades",
+      "displayOrder": 7
     }
   ]
 }
@@ -156,6 +161,48 @@ Use pack ID `henry-coe` and the schema-6 workflow in the dedicated
 Keep Marin and Mount Tam and Tahoe–Eldorado visible as disabled roadmap pills.
 Stanislaus, Grant/Pacheco expansion, and deep Big Sur/Ventana remain outside the
 catalog and current detailed roadmap.
+
+### 6. Washington Cascades family
+
+Use four overlapping hiking-network packs rather than one statewide Cascades
+pack or packs clipped to agency boundaries:
+
+1. **North Cascades** — Mount Baker, the Highway 20 corridor, the North
+   Cascades complex, and Pasayten/Methow.
+2. **Central Cascades** — Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee,
+   Stevens Pass and Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, and
+   Teanaway. Use pack ID `central-cascades`; this is the first Washington pack.
+3. **Rainier–Goat Rocks** — Mount Rainier, Naches/White Pass, and Goat Rocks.
+4. **Southwest Cascades** — Mount St. Helens, Mount Adams, and the southern
+   Gifford Pinchot systems.
+
+Central Cascades must include Napeequa Valley and the complete Glacier
+Peak–Alpine Lakes corridor even though that crosses the historic Wenatchee
+National Forest boundary. Begin its exact concave boundary with the complete
+Glacier Peak and Alpine Lakes wilderness networks, their public cross-crest
+approaches, and Teanaway. Exclude North Cascades National Park and Pasayten to
+the north, Mount Rainier and Goat Rocks to the south, disconnected Puget
+lowland systems, and the Columbia Basin. Deliberate overlap at future pack
+seams is preferable to cutting a loop-capable hiking network.
+
+Pin one dated Geofabrik Washington OSM snapshot for topology, named areas,
+portal evidence, and buildings, and reuse that immutable snapshot across the
+Washington family. Pin the USGS 3DEP 1/3-arc-second products intersecting each
+exact pack boundary. USFS and Washington DNR boundaries, trails, ownership,
+and recreation sites are review inputs only: they may support the committed
+boundary, restriction review, or cosmetic portal names, but must not replace
+OSM topology, create starts, or become live runtime dependencies. Do not scrape
+live alerts; only durable reviewed restrictions may enter a hash-pinned exact
+OSM-way removal file.
+
+Candidate Central Cascades search regions are the whole pack, Glacier Peak
+Wilderness, Alpine Lakes Wilderness, Teanaway Community Forest, and stable
+useful polygons for Napeequa/Chiwawa, Icicle/Enchantments, or Snoqualmie.
+Retain only candidates present in the pinned named-area inventory with useful
+eligible cycle-bearing portals. Exercise Napeequa–Little Giant/High Pass,
+Chiwawa/Spider Meadow, a west-side Glacier Peak access, Stevens Pass,
+Icicle/Enchantments, Snoqualmie/Alpine Lakes, Cle Elum, and Teanaway in the
+schema-6 checkpoint.
 
 ## Region-onboarding protocol
 
