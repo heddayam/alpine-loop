@@ -22,7 +22,7 @@ describe("GET /api/packs", () => {
     const response = await GET();
     expect(response.status).toBe(200);
     const payload = packCatalogResponseV1Schema.parse(await response.json());
-    expect(payload.regions).toHaveLength(6);
+    expect(payload.regions).toHaveLength(7);
     expect(payload.regions[0]).toMatchObject({
       id: "santa-cruz-mountains",
       state: "unavailable",
@@ -43,6 +43,11 @@ describe("GET /api/packs", () => {
       state: "unavailable",
       packId: "henry-coe",
     });
-    expect(payload.regions.slice(4).every(({ state }) => state === "planned")).toBe(true);
+    expect(payload.regions.slice(4, 6).every(({ state }) => state === "planned")).toBe(true);
+    expect(payload.regions[6]).toMatchObject({
+      id: "central-cascades",
+      state: "unavailable",
+      packId: "central-cascades",
+    });
   });
 });

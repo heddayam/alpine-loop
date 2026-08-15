@@ -25,12 +25,14 @@ describe("regional pack catalog contracts", () => {
       "henry-coe",
       "marin-mount-tam",
       "tahoe-eldorado",
+      "central-cascades",
     ]);
     expect(parsed.regions.filter(({ packId }) => packId)).toEqual([
       expect.objectContaining({ id: "santa-cruz-mountains", packId: "santa-cruz-mountains" }),
       expect.objectContaining({ id: "southern-east-bay", packId: "southern-east-bay" }),
       expect.objectContaining({ id: "monterey-carmel", packId: "monterey-carmel" }),
       expect.objectContaining({ id: "henry-coe", packId: "henry-coe" }),
+      expect.objectContaining({ id: "central-cascades", packId: "central-cascades" }),
     ]);
   });
 

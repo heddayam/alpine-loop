@@ -1,5 +1,6 @@
 import registryInput from "@/data/regions/registry.json";
 import { regionRegistryV1Schema } from "@/lib/contracts";
+import { buildCentralCascadesPack } from "./central-cascades-pack";
 import { buildHenryCoePack } from "./henry-coe-pack";
 import { buildMontereyCarmelPack } from "./monterey-carmel-pack";
 import { buildSantaCruzPack } from "./santa-cruz-pack";
@@ -11,7 +12,16 @@ export type RegionalPackBuildOptions = {
   sourceCacheRoot: string;
   preparationRoot: string;
   refresh: boolean;
+  onProgress?: RegionalPackBuildProgressCallback;
 };
+
+export type RegionalPackBuildProgress = {
+  phase: number;
+  phaseCount: number;
+  label: string;
+};
+
+export type RegionalPackBuildProgressCallback = (progress: RegionalPackBuildProgress) => void;
 
 export type RegionalPackBuildResult = {
   pack: PackBuildResult;
@@ -22,6 +32,7 @@ export type RegionalPackBuilder = (options: RegionalPackBuildOptions) => Promise
 
 const registry = regionRegistryV1Schema.parse(registryInput);
 const builders = new Map<string, RegionalPackBuilder>([
+  ["central-cascades", buildCentralCascadesPack],
   ["henry-coe", buildHenryCoePack],
   ["monterey-carmel", buildMontereyCarmelPack],
   ["santa-cruz-mountains", buildSantaCruzPack],

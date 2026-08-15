@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "objectid": 1,
+        "permanentidentifier": "trail-one",
+        "sourcefeatureid": "source-1",
+        "name": "Fixture Trail",
+        "trailnumber": "42",
+        "trailtype": "Terra Trail",
+        "hikerpedestrian": "Y",
+        "sourceoriginator": "U.S. Forest Service"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[-121, 48], [-120.99, 48.01]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "objectid": 2,
+        "name": "Snow Route",
+        "trailtype": "Snow Trail",
+        "hikerpedestrian": "Y"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[-121, 48], [-121.01, 48.01]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "objectid": 3,
+        "name": "Unclassified Foot Use",
+        "trailtype": "Terra Trail",
+        "hikerpedestrian": null
+      },
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [[-121, 48], [-121, 48.01]],
+          [[-121, 48.01], [-121, 48.02]]
+        ]
+      }
+    }
+  ]
+}

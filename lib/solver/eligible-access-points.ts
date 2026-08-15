@@ -16,7 +16,13 @@ export type EligibleAccessPointQuery = {
   signal?: AbortSignal;
 };
 
-export const PORTAL_NAMED_REGION_TOLERANCE_M = 25;
+/**
+ * Reviewed named regions represent destinations such as parks, preserves, and
+ * wilderness areas. Their usable trailheads commonly sit just outside the
+ * legal boundary, so named-region searches admit trail portals in a bounded
+ * approach band. Drawn areas and drive-time contours remain exact.
+ */
+export const PORTAL_NAMED_REGION_TOLERANCE_M = 500;
 
 /**
  * A start with no reachable cycle can never produce a closed route, so the
