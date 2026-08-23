@@ -459,12 +459,19 @@ the evidence line.
   only the documented server credentials, mounts the ignored installed-pack
   catalog read-only, and persists jobs, settings, and provider counters in a
   named volume; `.dockerignore` excludes secrets, generated packs, caches, and
-  local databases. The verification host had no Docker engine, so the exact
-  runtime copy set was exercised from an isolated production directory instead:
-  it started successfully, returned a healthy response, and discovered all five
-  installed packs. `compose.yaml` parses, two consecutive `npm run verify` runs
-  each pass 439 tests across 84 files plus the production build, and two
-  consecutive `npm run test:browser` runs each pass all six Chromium flows.
+  local databases. Host binding is localhost-only by default, while `.env` can
+  select another host port or explicitly opt into LAN access. A fresh native
+  ARM64 OrbStack 2.2.3 / Docker 29.4.0 / Compose 5.1.2 build produced a healthy
+  327,019,198-byte image with zero npm advisories after the compatible transitive
+  Nano ID patch. Both the `3200` override and default `3000` bindings passed;
+  the main page returned 200, all five installed packs were discovered through
+  the read-only mount, the job database was writable on the named volume, and
+  the production TypeScript solver child loaded successfully. Live ArcGIS place
+  suggestions and a five-minute service-area request also completed from the
+  container using the shared-key fallback when scoped keys were blank.
+  `compose.yaml` parses, two consecutive `npm run verify` runs each pass 440
+  tests across 84 files plus the production build, and two consecutive
+  `npm run test:browser` runs each pass all six Chromium flows.
 
 ## Local data and risks
 

@@ -13,10 +13,11 @@ export function arcGisKeys(environment: Readonly<Record<string, string | undefin
   geocodingApiKey?: string;
   routingApiKey?: string;
 } {
-  const fallbackKey = environment.ARCGIS_API_KEY;
+  const configuredKey = (value: string | undefined) => value?.trim() || undefined;
+  const fallbackKey = configuredKey(environment.ARCGIS_API_KEY);
   return {
-    geocodingApiKey: environment.ARCGIS_GEOCODING_API_KEY ?? fallbackKey,
-    routingApiKey: environment.ARCGIS_ROUTING_API_KEY ?? fallbackKey,
+    geocodingApiKey: configuredKey(environment.ARCGIS_GEOCODING_API_KEY) ?? fallbackKey,
+    routingApiKey: configuredKey(environment.ARCGIS_ROUTING_API_KEY) ?? fallbackKey,
   };
 }
 
