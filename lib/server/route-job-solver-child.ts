@@ -10,18 +10,24 @@ import {
   listEligibleAccessPointCandidates,
   ReachableGraphClosedRouteSolver,
 } from "@/lib/solver";
-import { resolvedDriveTimeAccessFilter, resolvedNamedRegionAccessFilter } from "./access-filter";
+import {
+  resolvedDrawnAreaAccessFilter,
+  resolvedDriveTimeAccessFilter,
+  resolvedNamedRegionAccessFilter,
+  type ResolvedServerAccessFilter,
+} from "./access-filter";
 import type {
   RouteJobSolverRequest,
   RouteJobSolverResponse,
   RouteJobSolverWorkerInput,
 } from "./route-job-solver-protocol";
+import { routeJobSolverRequestAccessFilter } from "./route-job-solver-protocol";
 
 type Session = {
   input: RouteJobSolverWorkerInput;
   manifest: NonNullable<Awaited<ReturnType<typeof loadInstalledPackVersion>>>["manifest"];
-  region: NonNullable<ReturnType<typeof getSearchRegion>>;
-  accessFilter: ReturnType<typeof resolvedDriveTimeAccessFilter>;
+  region?: NonNullable<ReturnType<typeof getSearchRegion>>;
+  accessFilter: ResolvedServerAccessFilter;
   repository: SQLiteGraphRepository;
   topologyRepository: SQLiteClosedRouteFeasibilityRepository;
   solver: ReachableGraphClosedRouteSolver;
@@ -43,17 +49,26 @@ async function initialize(input: RouteJobSolverWorkerInput): Promise<void> {
   const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
   if (!installed) throw new Error("The pinned pack version is no longer installed.");
   const { manifest } = installed;
-  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") throw new Error("The pinned pack does not support batch search.");
-  const region = getSearchRegion(installed.databasePath, input.searchRegionId);
-  if (!region) throw new Error("The job's reviewed search region is unavailable.");
-  const accessFilter = input.driveTimeGeometry && input.request.origin && input.request.durationMinutes !== undefined
-    ? resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {
-      geometry: input.driveTimeGeometry,
-      durationMinutes: input.request.durationMinutes,
-      resolvedAt: new Date().toISOString(),
-      originLabel: input.request.origin.label,
-    }, region)
-    : resolvedNamedRegionAccessFilter({ coverage: manifest.coverage.boundary }, region);
+  if (manifest.schemaVersion !== "3" && manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") {
+    throw new Error("The pinned pack does not support batch search.");
+  }
+  const region = input.request.searchRegionId
+    ? getSearchRegion(installed.databasePath, input.request.searchRegionId) ?? undefined
+    : undefined;
+  if (input.request.searchRegionId && !region) throw new Error("The job's reviewed search region is unavailable.");
+  const accessFilter = input.request.drawnAreaBbox
+    ? resolvedDrawnAreaAccessFilter({ coverage: manifest.coverage.boundary }, input.request.drawnAreaBbox)
+    : input.driveTimeGeometry && input.request.origin && input.request.durationMinutes !== undefined && region
+      ? resolvedDriveTimeAccessFilter({ coverage: manifest.coverage.boundary }, {
+        geometry: input.driveTimeGeometry,
+        durationMinutes: input.request.durationMinutes,
+        resolvedAt: new Date().toISOString(),
+        originLabel: input.request.origin.label,
+      }, region)
+      : region
+        ? resolvedNamedRegionAccessFilter({ coverage: manifest.coverage.boundary }, region)
+        : undefined;
+  if (!accessFilter) throw new Error("The job's access filter is unavailable.");
   const repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
   const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({
     databasePath: installed.databasePath,
@@ -95,14 +110,11 @@ async function search(accessPointId: string): Promise<AccessPointSearchResult> {
   if (!session) throw new Error("Route solver process was not initialized.");
   const { input, manifest, region, repository, topologyRepository, accessFilter, solver } = session;
   const signal = new AbortController().signal;
+  const requestAccessFilter = routeJobSolverRequestAccessFilter(input, region?.id);
   const run = (searchEffort: "quick" | "thorough") => solver.generate({
     version: 3,
     packId: manifest.id,
-    accessFilter: input.driveTimeGeometry ? {
-      mode: "drive-time" as const,
-      reachabilityId: "00000000-0000-4000-8000-000000000000",
-      regionId: region.id,
-    } : { mode: "named-region" as const, regionId: region.id },
+    accessFilter: requestAccessFilter,
     startAccessPointId: accessPointId,
     routeFamily: "closed",
     ...input.request.criteria,

@@ -97,7 +97,8 @@ export class RouteJobService {
       if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
       throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
     }
-    if (resolved.pack.id !== parsed.data.packId || resolved.searchRegion.id !== parsed.data.searchRegionId) {
+    const expectedSearchRegionId = parsed.data.searchRegionId ?? "drawn-area";
+    if (resolved.pack.id !== parsed.data.packId || resolved.searchRegion.id !== expectedSearchRegionId) {
       throw new ServerApiError("INVALID_BATCH_RESOLUTION", "The resolved pack or search region does not match the request.", 500);
     }
     const id = this.#id();

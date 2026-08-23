@@ -1,14 +1,16 @@
 import { resolve } from "node:path";
+import type { CreateBatchRouteJobV1 } from "@/lib/contracts";
 import { loadInstalledPack } from "@/lib/packs/installed-pack";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import type { ReachabilityService } from "@/lib/reachability/service";
 import {
   RouteJobService,
   SQLiteRouteJobStore,
+  type ResolvedRouteJob,
   type RouteJobRunnerDependencies,
 } from "@/lib/route-jobs";
 import { ServerApiError } from "./api-error";
-import { loadRoutePacks } from "./pack-registry";
+import { loadRoutePacks, type RegisteredRoutePack } from "./pack-registry";
 import { RouteJobSolverProcess } from "./route-job-solver-process";
 
 declare global {
@@ -35,6 +37,33 @@ function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void
 const DRIVE_TIME_RESOLUTION_DEADLINE_MS = 2 * 60 * 1_000;
 
 type DriveTimeService = Pick<ReachabilityService, "submit" | "poll">;
+
+export async function resolveBatchRouteJob(
+  pack: RegisteredRoutePack,
+  request: CreateBatchRouteJobV1,
+): Promise<ResolvedRouteJob> {
+  const pinnedPack = { id: pack.id, dataVersion: pack.dataVersion, builtAt: pack.builtAt };
+  if (request.drawnAreaBbox) {
+    if (!(pack.schemaVersion === "3" || pack.schemaVersion === "4" || pack.schemaVersion === "5" || pack.schemaVersion === "6")) {
+      throw new ServerApiError("BATCH_SEARCH_UNAVAILABLE", "Rebuild this pack with closed-route search support.", 422);
+    }
+    return {
+      pack: pinnedPack,
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+    };
+  }
+  if ((pack.schemaVersion !== "4" && pack.schemaVersion !== "5" && pack.schemaVersion !== "6") || !pack.getSearchRegion) {
+    throw new ServerApiError("BATCH_SEARCH_UNAVAILABLE", "Rebuild this pack with reviewed batch-search regions.", 422);
+  }
+  const searchRegion = await pack.getSearchRegion(request.searchRegionId!);
+  if (!searchRegion) {
+    throw new ServerApiError("SEARCH_REGION_NOT_FOUND", "That reviewed batch-search region was not found.", 404);
+  }
+  return {
+    pack: pinnedPack,
+    searchRegion: { id: searchRegion.id, name: searchRegion.name },
+  };
+}
 
 export async function resolveBatchDriveTime(
   service: DriveTimeService,
@@ -79,17 +108,7 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
       if (signal.aborted) throw signal.reason;
       const pack = (await loadRoutePacks()).get(request.packId);
       if (!pack) throw new ServerApiError("PACK_NOT_FOUND", `Pack '${request.packId}' is not installed.`, 404);
-      if ((pack.schemaVersion !== "4" && pack.schemaVersion !== "5" && pack.schemaVersion !== "6") || !pack.getSearchRegion) {
-        throw new ServerApiError("BATCH_SEARCH_UNAVAILABLE", "Rebuild this pack with reviewed batch-search regions.", 422);
-      }
-      const searchRegion = await pack.getSearchRegion(request.searchRegionId);
-      if (!searchRegion) {
-        throw new ServerApiError("SEARCH_REGION_NOT_FOUND", "That reviewed batch-search region was not found.", 404);
-      }
-      return {
-        pack: { id: pack.id, dataVersion: pack.dataVersion, builtAt: pack.builtAt },
-        searchRegion: { id: searchRegion.id, name: searchRegion.name },
-      };
+      return resolveBatchRouteJob(pack, request);
     },
 
     async resolveDriveTime(request, signal) {

@@ -55,6 +55,19 @@ function drawnGeometry([west, south, east, north]: Extract<AccessFilterV2, { mod
   };
 }
 
+export function resolvedDrawnAreaAccessFilter(
+  pack: Pick<FilterablePack, "coverage">,
+  bbox: Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"],
+): ResolvedServerAccessFilter {
+  const geometry = drawnGeometry(bbox);
+  return {
+    summary: { mode: "drawn-area", label: "Drawn area" },
+    predicates: [geometry],
+    coverage: pack.coverage,
+    filterGeometry: geometry,
+  };
+}
+
 export function resolvedDriveTimeAccessFilter(
   pack: Pick<FilterablePack, "coverage">,
   reachability: ResolvedReachability,
@@ -128,13 +141,7 @@ export async function resolveAccessFilter(
   signal?: AbortSignal,
 ): Promise<ResolvedServerAccessFilter> {
   if (filter.mode === "drawn-area") {
-    const geometry = drawnGeometry(filter.bbox);
-    return {
-      summary: { mode: "drawn-area", label: "Drawn area" },
-      predicates: [geometry],
-      coverage: pack.coverage,
-      filterGeometry: geometry,
-    };
+    return resolvedDrawnAreaAccessFilter(pack, filter.bbox);
   }
   if (filter.mode === "named-region") {
     const area = await requireNamedArea(pack, filter.regionId);
