@@ -452,6 +452,20 @@ the evidence line.
   runs pass all six Chromium flows, including shared-start numbering and anchor
   regression coverage. No contract or pack schema changed.
 
+- 2026-08-23 — added a production Docker workflow for fresh clones. The pinned
+  Node 24 multi-stage image builds the ordinary Next.js app, runs as the
+  unprivileged `node` user, retains the TypeScript solver-child runtime required
+  by Full search, and exposes an uncached `/api/health` check. Compose passes
+  only the documented server credentials, mounts the ignored installed-pack
+  catalog read-only, and persists jobs, settings, and provider counters in a
+  named volume; `.dockerignore` excludes secrets, generated packs, caches, and
+  local databases. The verification host had no Docker engine, so the exact
+  runtime copy set was exercised from an isolated production directory instead:
+  it started successfully, returned a healthy response, and discovered all five
+  installed packs. `compose.yaml` parses, two consecutive `npm run verify` runs
+  each pass 439 tests across 84 files plus the production build, and two
+  consecutive `npm run test:browser` runs each pass all six Chromium flows.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

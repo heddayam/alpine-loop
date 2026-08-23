@@ -1,0 +1,23 @@
+name: alpine-loop
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    init: true
+    ports:
+      - "${ALPINE_PORT:-3000}:3000"
+    environment:
+      ARCGIS_API_KEY: "${ARCGIS_API_KEY:-}"
+      ARCGIS_GEOCODING_API_KEY: "${ARCGIS_GEOCODING_API_KEY:-}"
+      ARCGIS_ROUTING_API_KEY: "${ARCGIS_ROUTING_API_KEY:-}"
+      ALPINE_PACK_ROOT: /app/.local-data/packs
+      ALPINE_PROVIDER_USAGE_DB: /app/.local-data/runtime/provider-usage.sqlite
+      ALPINE_ROUTE_JOBS_DB: /app/.local-data/runtime/route-jobs.sqlite
+    volumes:
+      - ./.local-data/packs:/app/.local-data/packs:ro
+      - alpine-runtime:/app/.local-data/runtime
+
+volumes:
+  alpine-runtime:
