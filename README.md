@@ -42,10 +42,11 @@ needed, or configure them as described below.
 
 The fresh container starts with the committed fixture, so the interface remains
 usable without generated data. Generating routes requires an installed regional
-pack. Packs and runtime state live in the host's ignored `.local-data` directory,
-which Compose mounts at `/app/.local-data`; they persist across container
-rebuilds and restarts. Secrets, generated packs, and runtime databases are not
-copied into the image or committed to Git.
+pack under the host's ignored `.local-data/packs` directory; Compose mounts that
+catalog read-only. Job, settings, and provider state use the persistent
+`alpine-runtime` Docker volume. Both survive image rebuilds and container
+restarts. Secrets, generated packs, and runtime databases are not copied into
+the image or committed to Git.
 
 Stop the app with:
 
