@@ -21,6 +21,13 @@ const regionWideRequest = {
   criteria: validRequest.criteria,
   routesPerAccessPoint: validRequest.routesPerAccessPoint,
 } as const;
+const drawnAreaRequest = {
+  version: validRequest.version,
+  packId: validRequest.packId,
+  drawnAreaBbox: [-122.2, 37.1, -122.1, 37.2],
+  criteria: validRequest.criteria,
+  routesPerAccessPoint: validRequest.routesPerAccessPoint,
+} as const;
 
 describe("CreateBatchRouteJobV1", () => {
   it("accepts a complete immutable launch snapshot", () => {
@@ -29,6 +36,10 @@ describe("CreateBatchRouteJobV1", () => {
 
   it("accepts a reviewed-region-wide launch without drive-time inputs", () => {
     expect(createBatchRouteJobV1Schema.parse(regionWideRequest)).toEqual(regionWideRequest);
+  });
+
+  it("accepts a drawn-area launch without a reviewed region or drive-time inputs", () => {
+    expect(createBatchRouteJobV1Schema.parse(drawnAreaRequest)).toEqual(drawnAreaRequest);
   });
 
   it("requires origin and drive time to be provided together", () => {
@@ -51,6 +62,19 @@ describe("CreateBatchRouteJobV1", () => {
 
   it("requires a reviewed region", () => {
     expect(createBatchRouteJobV1Schema.safeParse({ ...validRequest, searchRegionId: "" }).success).toBe(false);
+  });
+
+  it("requires exactly one reviewed region or drawn area", () => {
+    expect(createBatchRouteJobV1Schema.safeParse({ ...regionWideRequest, searchRegionId: undefined }).success).toBe(false);
+    expect(createBatchRouteJobV1Schema.safeParse({ ...regionWideRequest, drawnAreaBbox: drawnAreaRequest.drawnAreaBbox }).success).toBe(false);
+  });
+
+  it("does not combine a drawn area with origin or drive time", () => {
+    expect(createBatchRouteJobV1Schema.safeParse({
+      ...drawnAreaRequest,
+      origin: validRequest.origin,
+      durationMinutes: validRequest.durationMinutes,
+    }).success).toBe(false);
   });
 });
 
