@@ -210,8 +210,9 @@ the evidence line.
 
 ## Post-gate fixes
 
-- 2026-08-10 — added the reversible Central Cascades official-trail conflation
-  experiment on `codex/central-cascades-official-trail-conflation`. A pinned
+- 2026-08-10 — added the Central Cascades official-trail conflation pipeline,
+  initially validated in an isolated pack root on
+  `codex/central-cascades-official-trail-conflation`. A pinned
   July 2026 USGS National Digital Trails extract supplements OSM only through a
   generic, audited matcher: explicit hiking/terrestrial eligibility, 100 m
   represented-geometry removal, 500 m minimum gaps, component attachment,
@@ -222,7 +223,15 @@ the evidence line.
   segment attached to OSM at both ends, including the reviewed southern
   junction at `[-120.8826971, 48.1701963]`. The quick eight-cluster checkpoint
   passed every exact and impossible expectation with zero directed-validation
-  rejections; the original installed pack remains untouched in the experiment.
+  rejections. On 2026-08-23, the validated build was promoted into the normal
+  local five-region pack root, with the prior Central Cascades build retained
+  locally for rollback. The copied manifest and SQLite hashes match the
+  isolated artifact exactly; Node SQLite reports `quick_check: ok` and zero
+  foreign-key violations; catalog discovery returns all five installed packs
+  with Central Cascades on `cc-f1cb28a4ceb6e896`. Two consecutive `npm run
+  verify` runs each passed 438 tests across 83 files plus the production build,
+  and two consecutive `npm run test:browser` runs each passed all six Chromium
+  flows.
 
 - 2026-08-06 — corrected steepest sustained grade to use exact rolling 100 m
   windows across reconstructed edge boundaries, with a conditional linear-time
