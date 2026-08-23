@@ -46,6 +46,18 @@ reachability results stay in process memory for 30 minutes. A launched Batch
 job snapshots its origin and contour in ignored local SQLite until that job is
 deleted; aggregate monthly provider counters are stored separately.
 
+### Override the installed-pack catalog
+
+The app loads all installed regional packs from `.local-data/packs` by default.
+`ALPINE_PACK_ROOT` replaces that entire catalog; it does not select an
+alternative build for one region. Leave it unset during normal development.
+For isolated pack testing, scope the override to that one process and expect
+only packs installed beneath the alternate root to be available:
+
+```sh
+ALPINE_PACK_ROOT=.local-data/packs-experiment npm run dev
+```
+
 ## Build a regional pack
 
 Real-pack builds additionally require `osmium-tool` and
