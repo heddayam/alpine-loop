@@ -473,6 +473,20 @@ the evidence line.
   tests across 84 files plus the production build, and two consecutive
   `npm run test:browser` runs each pass all six Chromium flows.
 
+- 2026-08-23 — extended drawn boundaries to Full search. A drawn boundary now
+  overrides drive time and reviewed regions for both actions: Quick retains its
+  short foreground solve, while Full launches one persistent job per selected
+  installed pack and attempts every eligible access point inside the box. Drawn
+  jobs reject origin/drive-time and reviewed-region combinations, retain the
+  immutable bounding box, restore it when saved results are opened, and use it
+  only to select access points; route geometry remains constrained by exact pack
+  coverage. Existing drive-time, reviewed-region-wide, and saved version-1 jobs
+  remain compatible. Two consecutive `npm run verify` runs each passed 450
+  tests across 84 files plus the production build, and two consecutive `npm run
+  test:browser` runs each passed all six Chromium flows, including the combined
+  drawn-boundary Quick/Full flow. No pack schema changed, so installed packs do
+  not require rebuilding.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are
