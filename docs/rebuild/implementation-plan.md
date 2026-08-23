@@ -12,14 +12,15 @@ a reviewed pack-provided region, route constraints, and access policy are
 configured once. Two buttons at the bottom choose execution only:
 
 1. **Quick search** — resolve the selected drive-time area and run a short
-   foreground search. A user may instead draw a boundary on the map as an
-   optional Quick-search area override. Filter geometry selects eligible access
-   points; it never clips route geometry.
-2. **Batch search** — launch a persistent background job under the same
-   snapshotted route/access criteria. With an origin, it attempts every eligible
-   trailhead in the drive-time and reviewed-region intersection. Without an
-   origin, it skips drive-time resolution and attempts the entire reviewed
-   region.
+   foreground search. A user may instead draw a boundary on the map as the
+   search-area override. Filter geometry selects eligible access points; it
+   never clips route geometry.
+2. **Full search** — launch a persistent background job under the same
+   snapshotted route/access criteria. A drawn boundary overrides drive time and
+   reviewed regions and attempts every eligible trailhead inside that boundary
+   for each selected pack. Otherwise, an origin searches the drive-time and
+   reviewed-region intersection; without an origin, it attempts the entire
+   reviewed region.
 
 Generated routes start and finish at one trailhead and contain a physical-trail
 cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
@@ -117,9 +118,10 @@ failures remain visible in job diagnostics.
 
 - Quick search resolves drive time without a separate calculation step, is
   cancellable, deterministic, accessible, and suppresses stale responses.
-- Batch launch validates the reviewed region and all snapshotted criteria before
-  enqueueing. Origin and drive time are an optional pair; omitting both selects
-  the entire reviewed region.
+- Full-search launch validates the drawn boundary or reviewed region and all
+  snapshotted criteria before enqueueing. A drawn boundary cannot be combined
+  with origin or drive time. Otherwise, origin and drive time are an optional
+  pair; omitting both selects the entire reviewed region.
 - Persistent jobs recover across server restarts; cancellation retains partial
   results; deletion cascades through checkpoints and routes.
 - Job polling never overlaps, elapsed progress remains visibly live between
