@@ -40,6 +40,10 @@ the ArcGIS variables from `.env` into the container. The ArcGIS keys are
 optional: leave them blank if place suggestions and drive-time filters are not
 needed, or configure them as described below.
 
+The service binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to
+use <http://localhost:8080> instead. Set `ALPINE_BIND_ADDRESS=0.0.0.0` only when
+access from other devices on the local network is intentional.
+
 The fresh container starts with the committed fixture, so the interface remains
 usable without generated data. Generating routes requires an installed regional
 pack under the host's ignored `.local-data/packs` directory; Compose mounts that

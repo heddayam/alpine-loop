@@ -7,7 +7,7 @@ services:
       target: runtime
     init: true
     ports:
-      - "${ALPINE_PORT:-3000}:3000"
+      - "${ALPINE_BIND_ADDRESS:-127.0.0.1}:${ALPINE_PORT:-3000}:3000"
     environment:
       ARCGIS_API_KEY: "${ARCGIS_API_KEY:-}"
       ARCGIS_GEOCODING_API_KEY: "${ARCGIS_GEOCODING_API_KEY:-}"
