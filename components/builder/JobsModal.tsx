@@ -190,7 +190,9 @@ export function JobsModal({
               <article className="job-card" key={job.id} aria-labelledby={titleId} aria-describedby={stageId} aria-busy={busy || undefined}>
                 <header><div><strong id={titleId}>{job.searchRegion.name}</strong><small>{job.request.origin && job.request.durationMinutes
                   ? `${job.request.durationMinutes} min from ${job.request.origin.label}`
-                  : "Entire reviewed region"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
+                  : job.request.drawnAreaBbox
+                    ? "Drawn boundary"
+                    : "Entire reviewed region"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
                 <p className="job-stage" id={stageId}>{stage(job, pending)}</p>
                 {determinate
                   ? <progress max="100" value={percent} aria-label={`${progress.processedAccessPointCount} of ${progress.eligibleAccessPointCount} trailheads attempted`} />
