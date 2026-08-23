@@ -1,7 +1,8 @@
 import { getEventListeners } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReachabilityRequest, ReachabilityResponse } from "@/lib/contracts";
-import { resolveBatchDriveTime } from "./route-job-composition";
+import type { CreateBatchRouteJobV1, ReachabilityRequest, ReachabilityResponse } from "@/lib/contracts";
+import type { RegisteredRoutePack } from "./pack-registry";
+import { resolveBatchDriveTime, resolveBatchRouteJob } from "./route-job-composition";
 
 const requestId = "00000000-0000-4000-8000-000000000099";
 const request: ReachabilityRequest = {
@@ -14,10 +15,49 @@ const geometry: Extract<ReachabilityResponse, { status: "complete" }>["geometry"
   type: "Polygon" as const,
   coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]],
 };
+const drawnRequest: CreateBatchRouteJobV1 = {
+  version: 1,
+  packId: "fixture-pack",
+  drawnAreaBbox: [-122.4, 37.1, -122.2, 37.3],
+  criteria: {
+    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    distanceMiles: { min: 4, max: 8 },
+    includeUncertainAccess: true,
+  },
+  routesPerAccessPoint: 10,
+};
+
+function batchPack(overrides: Partial<RegisteredRoutePack> = {}): RegisteredRoutePack {
+  return {
+    id: "fixture-pack",
+    schemaVersion: "3",
+    dataVersion: "fixture-v3",
+    builtAt: "2026-01-01T00:00:00.000Z",
+    kind: "installed",
+    sourceFreshness: "2026-01-01T00:00:00.000Z",
+    sourceConfidence: "high",
+    fallbackSourceIds: ["fixture"],
+    coverageBbox: [-123, 37, -122, 38],
+    coverage: geometry,
+    maximumAreaSquareKilometers: 100,
+    loadRepository: vi.fn(),
+    ...overrides,
+  };
+}
 
 afterEach(() => vi.useRealTimers());
 
 describe("resolveBatchDriveTime", () => {
+  it("resolves a drawn-area job without consulting a reviewed-region catalog", async () => {
+    const getSearchRegion = vi.fn();
+
+    await expect(resolveBatchRouteJob(batchPack({ getSearchRegion }), drawnRequest)).resolves.toEqual({
+      pack: { id: "fixture-pack", dataVersion: "fixture-v3", builtAt: "2026-01-01T00:00:00.000Z" },
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+    });
+    expect(getSearchRegion).not.toHaveBeenCalled();
+  });
+
   it("polls through pending responses with injectable delays", async () => {
     const pending: ReachabilityResponse = { status: "pending", requestId, pollAfterMs: 500 };
     const complete = {

@@ -28,6 +28,13 @@ const regionWideRequest: CreateBatchRouteJobV1 = {
   criteria: request.criteria,
   routesPerAccessPoint: 10,
 };
+const drawnAreaRequest: CreateBatchRouteJobV1 = {
+  version: 1,
+  packId: "fixture-pack",
+  drawnAreaBbox: [-122.4, 37.1, -122.2, 37.3],
+  criteria: request.criteria,
+  routesPerAccessPoint: 10,
+};
 
 function route(id: string) {
   return {
@@ -60,6 +67,36 @@ const resolved = {
 };
 
 describe("SQLiteRouteJobStore", () => {
+  it("persists a drawn-area job and derives its public filter polygon from the immutable bbox", () => {
+    const { path, store } = setup();
+    const id = "00000000-0000-4000-8000-000000000014";
+    const drawnResolved = {
+      ...resolved,
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+    };
+    store.create(id, drawnAreaRequest, drawnResolved);
+
+    expect(store.claimNext()).toMatchObject({ status: "running", request: drawnAreaRequest });
+    expect(store.toPublic(id, false)).toMatchObject({
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+      filterGeometry: {
+        type: "Polygon",
+        coordinates: [[
+          [-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1],
+        ]],
+      },
+    });
+    store.close();
+
+    const reopened = new SQLiteRouteJobStore(path);
+    expect(reopened.toPublic(id, false)).toMatchObject({
+      request: drawnAreaRequest,
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+      filterGeometry: { type: "Polygon" },
+    });
+    reopened.close();
+  });
+
   it("claims region-wide jobs directly as running and omits filter geometry", () => {
     const { store } = setup();
     const id = "00000000-0000-4000-8000-000000000013";

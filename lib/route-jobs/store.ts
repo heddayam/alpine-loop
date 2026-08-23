@@ -61,6 +61,17 @@ function routeGeometryHash(result: RouteJobResult): string {
   return createHash("sha256").update(JSON.stringify(result.route.geometry.coordinates)).digest("hex");
 }
 
+function drawnAreaGeometry(request: CreateBatchRouteJobV1): AreaGeometry | undefined {
+  if (!request.drawnAreaBbox) return undefined;
+  const [west, south, east, north] = request.drawnAreaBbox;
+  return {
+    type: "Polygon",
+    coordinates: [[
+      [west, south], [east, south], [east, north], [west, north], [west, south],
+    ]],
+  };
+}
+
 export class SQLiteRouteJobStore {
   readonly #database: DatabaseSync;
   readonly #now: () => Date;
@@ -390,18 +401,20 @@ export class SQLiteRouteJobStore {
       FROM route_jobs j WHERE j.id = ?`).get(id) as Row | undefined;
     if (!row) return null;
     const status = requiredString(row, "status") as RouteJobStatus;
+    const request = createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json")));
+    const filterGeometry = typeof row.drive_time_geometry_json === "string"
+      ? areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json))
+      : drawnAreaGeometry(request);
     const started = typeof row.started_at === "string" ? Date.parse(row.started_at) : Date.parse(requiredString(row, "created_at"));
     const ended = typeof row.completed_at === "string" ? Date.parse(row.completed_at) : this.#now().getTime();
     return routeJobSchema.parse({
       version: 1,
       id,
       status,
-      request: createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json"))),
+      request,
       pack: { id: requiredString(row, "pack_id"), dataVersion: requiredString(row, "pack_data_version"), builtAt: requiredString(row, "pack_built_at") },
       searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
-      ...(typeof row.drive_time_geometry_json === "string"
-        ? { filterGeometry: areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json)) }
-        : {}),
+      ...(filterGeometry ? { filterGeometry } : {}),
       progress: {
         eligibleAccessPointCount: integer(row, "eligible_count"),
         processedAccessPointCount: integer(row, "processed_count"),
