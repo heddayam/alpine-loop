@@ -18,7 +18,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `npm run dev -- --port ${browserPort}`,
+    command: `npm run dev -- --hostname 127.0.0.1 --port ${browserPort}`,
     cwd: appRoot,
     url: `http://127.0.0.1:${browserPort}`,
     reuseExistingServer: false,
