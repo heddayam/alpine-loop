@@ -78,6 +78,23 @@ describe("JobsModal", () => {
     expect(screen.queryByText(/min from/)).not.toBeInTheDocument();
   });
 
+  it("labels drawn-area jobs as using the drawn boundary", () => {
+    const drawnArea: RouteJob = {
+      ...job,
+      request: {
+        version: 1,
+        packId: job.request.packId,
+        drawnAreaBbox: [-122.2, 37.1, -122.1, 37.2],
+        criteria: job.request.criteria,
+        routesPerAccessPoint: 10,
+      },
+      searchRegion: { id: "drawn-area", name: "Drawn boundary" },
+    };
+    render(<JobsModal {...baseProps} jobs={[drawnArea]} />);
+    expect(screen.getAllByText("Drawn boundary")).toHaveLength(2);
+    expect(screen.queryByText("Entire reviewed region")).not.toBeInTheDocument();
+  });
+
   it("advances elapsed presentation time locally and freezes terminal jobs", () => {
     vi.useFakeTimers();
     const refreshedAt = Date.parse("2026-08-06T00:00:12Z");

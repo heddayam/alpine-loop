@@ -563,6 +563,51 @@ describe("HikeBuilder unified route search", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/reachability"))).toBe(false);
   });
 
+  it("launches exactly one drawn-area Full search per pack without region or drive-time inputs", async () => {
+    vi.restoreAllMocks();
+    const requests: Array<Record<string, unknown>> = [];
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/route-jobs" || init?.method !== "POST") return undefined;
+      const request = JSON.parse(String(init.body)) as typeof requests[number];
+      requests.push(request);
+      return new Response(JSON.stringify({ job: {
+        ...job,
+        id: request.packId === "southern-east-bay" ? "4d594650-3436-4f8b-a0e8-38d13fc148ca" : job.id,
+        request,
+        pack: { ...job.pack, id: request.packId },
+        searchRegion: { id: "drawn-area", name: "Drawn boundary" },
+      } }), { status: 202 });
+    });
+
+    render(<HikeBuilder regions={catalogRegions} />);
+    await userEvent.click(screen.getByRole("button", { name: /Southern East Bay.*Available/ }));
+    const regions = await screen.findByRole("button", { name: "Regions: 2 regions selected" });
+    await userEvent.click(regions);
+    for (const checkbox of await screen.findAllByRole("checkbox", { name: searchRegion.name })) {
+      await userEvent.click(checkbox);
+    }
+    await userEvent.keyboard("{Escape}");
+    await userEvent.type(screen.getByLabelText("Driving origin"), "Unresolved place");
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+
+    expect(screen.getByText("Draw on the map to override drive time and reviewed regions for both Quick and Full search.")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+
+    expect(await screen.findByRole("dialog", { name: "Jobs" })).toBeVisible();
+    expect(requests.map(({ packId }) => packId)).toEqual(["fixture-pack", "southern-east-bay"]);
+    for (const request of requests) {
+      expect(request).toMatchObject({
+        version: 1,
+        drawnAreaBbox: [-122.18, 37.15, -122.13, 37.18],
+        routesPerAccessPoint: 10,
+        criteria: { distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true },
+      });
+      expect(request).not.toHaveProperty("searchRegionId");
+      expect(request).not.toHaveProperty("origin");
+      expect(request).not.toHaveProperty("durationMinutes");
+    }
+  });
+
   it("does not silently launch region-wide when typed origin text is unresolved", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     render(<HikeBuilder />);

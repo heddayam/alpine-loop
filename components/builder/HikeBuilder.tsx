@@ -156,11 +156,13 @@ function batchPageAsResponse(page: RouteJobResultsPage): GenerateClosedRoutesRes
     requestId: page.job.id,
     pack: { id: page.job.pack.id, schemaVersion: "4", dataVersion: page.job.pack.dataVersion, builtAt: page.job.pack.builtAt },
     requested: Math.max(1, Math.min(20, exact.length || 1)),
-    resolvedAccessFilter: driveTime ?? {
-      mode: "named-region",
-      label: page.job.searchRegion.name,
-      region: page.job.searchRegion,
-    },
+    resolvedAccessFilter: driveTime ?? (page.job.request.drawnAreaBbox
+      ? { mode: "drawn-area", label: "Drawn boundary" }
+      : {
+          mode: "named-region",
+          label: page.job.searchRegion.name,
+          region: page.job.searchRegion,
+        }),
     exact,
     nearMisses,
     diagnostics: {
@@ -733,22 +735,31 @@ export function HikeBuilder({
     if (batchLaunchInFlightRef.current) return;
     const errors: string[] = [];
     if (!selectedPacks.length) errors.push("Choose at least one region pack.");
-    if (driveDraft.originText.trim() && !driveDraft.origin) errors.push("Choose a suggested origin or clear the field to search the entire reviewed region.");
-    if (!selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
-    if (selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
-    const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: selectedCoverageBbox }, undefined, primaryPack.id);
+    if (!drawnBounds && driveDraft.originText.trim() && !driveDraft.origin) errors.push("Choose a suggested origin or clear the field to search the entire reviewed region.");
+    if (!drawnBounds && !selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
+    if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
+    const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: drawnBounds ?? selectedCoverageBbox }, undefined, primaryPack.id);
     if (!validated.success) errors.push(...validated.errors);
     if (errors.length || !validated.success) { setValidationErrors(errors); return; }
     const request = validated.request;
-    const payloads: CreateBatchRouteJobV1[] = selectedRegionTargets.map(({ pack: selectedPack, region }) => ({
+    const criteria: CreateBatchRouteJobV1["criteria"] = { closedRoute: request.closedRoute, distanceMiles: request.distanceMiles,
+      ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
+      ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
+      ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
+      ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}), includeUncertainAccess: request.includeUncertainAccess };
+    const payloads: CreateBatchRouteJobV1[] = drawnBounds
+      ? selectedPacks.map((selectedPack) => ({
+          version: 1,
+          packId: selectedPack.id,
+          drawnAreaBbox: drawnBounds,
+          criteria,
+          routesPerAccessPoint: 10,
+        }))
+      : selectedRegionTargets.map(({ pack: selectedPack, region }) => ({
       version: 1, packId: selectedPack.id,
       ...(driveDraft.origin ? { origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes } : {}),
       searchRegionId: region.id,
-      criteria: { closedRoute: request.closedRoute, distanceMiles: request.distanceMiles,
-        ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
-        ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
-        ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
-        ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}), includeUncertainAccess: request.includeUncertainAccess },
+      criteria,
       routesPerAccessPoint: 10,
     }));
     batchLaunchInFlightRef.current = true;
@@ -764,7 +775,7 @@ export function HikeBuilder({
       }));
       const launched = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       const failed = settled.length - launched.length;
-      if (!launched.length) throw new Error("Full searches could not be launched for any selected region.");
+      if (!launched.length) throw new Error("Full searches could not be launched for any selected area.");
       jobsRefreshGenerationRef.current += 1;
       jobsRefreshControllerRef.current?.abort();
       const launchedIds = new Set(launched.map(({ id }) => id));
@@ -803,6 +814,13 @@ export function HikeBuilder({
     if (page.job.filterGeometry) {
       setFilterGeometry(page.job.filterGeometry);
     } else setFilterGeometry(undefined);
+    if (page.job.request.drawnAreaBbox) {
+      batchResultGeometryControllerRef.current = null;
+      setDrawnBounds(page.job.request.drawnAreaBbox);
+      setRefinementGeometry(undefined);
+      return;
+    }
+    setDrawnBounds(null);
     const controller = new AbortController();
     batchResultGeometryControllerRef.current = controller;
     void fetch(`/api/packs/${page.job.pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`, { signal: controller.signal })
@@ -829,7 +847,7 @@ export function HikeBuilder({
     }
     const next = [page.job.pack.id];
     setSelectedPackIds(next);
-    setSelectedRegionIds({ [page.job.pack.id]: [page.job.searchRegion.id] });
+    setSelectedRegionIds(page.job.request.searchRegionId ? { [page.job.pack.id]: [page.job.request.searchRegionId] } : {});
     router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
     applyBatchResults(page);
   }, [applyBatchResults, availablePackConfigs, router]);
@@ -857,7 +875,7 @@ export function HikeBuilder({
       }
       const next = [page.job.pack.id];
       setSelectedPackIds(next);
-      setSelectedRegionIds({ [page.job.pack.id]: [page.job.searchRegion.id] });
+      setSelectedRegionIds(page.job.request.searchRegionId ? { [page.job.pack.id]: [page.job.request.searchRegionId] } : {});
       applyBatchResultsRef.current(page);
       settled = true;
       router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
@@ -1061,10 +1079,10 @@ export function HikeBuilder({
                   <h3 className="field-label" id="boundary-title">Drawn boundary</h3>
                   {drawnBounds
                     ? <output>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output>
-                    : <output className="empty">None — Quick uses drive time</output>}
+                    : <output className="empty">None — using applicable drive time and reviewed regions</output>}
                   {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); setFilterGeometry(undefined); invalidateResults(); }}>Clear</button> : null}
                 </div>
-                <p className="hint">Draw on the map to override drive time for Quick search.</p>
+                <p className="hint">Draw on the map to override drive time and reviewed regions for both Quick and Full search.</p>
               </section>
             </section>
 
