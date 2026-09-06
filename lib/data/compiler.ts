@@ -71,7 +71,7 @@ export type CompilePackOptions = {
   buildings: readonly BuildingCentroid[];
   namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
   searchRegions?: SearchRegionInput;
-  beforePublish?: () => void | Promise<void>;
+  beforePublish?: (artifact: PackBuildResult) => void | Promise<void>;
 };
 
 const EMPTY_ACCESS_COUNTS: Record<AccessState, number> = {
@@ -447,6 +447,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   await mkdir(packRoot, { recursive: true });
   const existing = await existingBuild(finalDirectory, manifest.schemaVersion);
   if (existing) {
+    await options.beforePublish?.(existing);
     await writeCurrentPointer(packRoot, manifest.dataVersion);
     return existing;
   }
@@ -547,7 +548,14 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     } finally {
       verificationDatabase.close();
     }
-    await options.beforePublish?.();
+    await options.beforePublish?.({
+      packDirectory: stagingDirectory,
+      databasePath,
+      manifestPath: path.join(stagingDirectory, "manifest.json"),
+      auditPath: path.join(stagingDirectory, "audit.json"),
+      audit,
+      reusedExisting: false,
+    });
     await rename(stagingDirectory, finalDirectory);
     await writeCurrentPointer(packRoot, manifest.dataVersion);
     await pruneOldPackVersions(packRoot, manifest.id, manifest.dataVersion);

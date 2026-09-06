@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   MONTEREY_REVIEWED_ACCESS_SOURCE_ID,
@@ -8,8 +8,9 @@ import {
 } from "./authorities";
 import type { NormalizedAccessEvidence, SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
-import { assertPackAuditPassed, auditSqlitePack } from "./audit";
-import { compilePack, type PackSeed } from "./compiler";
+import type { auditSqlitePack } from "./audit";
+import { compileAuditedPack } from "./audited-pack";
+import type { PackSeed } from "./compiler";
 import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import {
   readElevationSourceConfig,
@@ -377,7 +378,7 @@ export async function buildMontereyCarmelPack(
     },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   };
-  const pack = await compilePack({
+  const { pack, regionalAudit } = await compileAuditedPack({
     outputRoot: options.outputRoot,
     seed,
     builtAt: newestRetrieval(snapshots),
@@ -390,22 +391,7 @@ export async function buildMontereyCarmelPack(
     buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
-  });
-
-  const regionalAudit = await auditSqlitePack({
-    databasePath: pack.databasePath,
-    manifestPath: pack.manifestPath,
-    auditPath: pack.auditPath,
-  });
-  assertPackAuditPassed(regionalAudit);
-  await writeFile(
-    path.join(pack.packDirectory, "regional-audit.json"),
-    `${JSON.stringify(regionalAudit, null, 2)}\n`,
-  );
-  await writeFile(
-    path.join(pack.packDirectory, "portal-access-audit.json"),
-    `${JSON.stringify({ schemaVersion: "1", ...portalAccess }, null, 2)}\n`,
-  );
+  }, () => ({ "portal-access-audit.json": { schemaVersion: "1", ...portalAccess } }));
 
   return { pack, portalAccess, regionalAudit };
 }

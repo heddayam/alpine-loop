@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CompilePackOptions } from "./compiler";
+import type { PackBuildResult } from "./types";
 
 const mocks = vi.hoisted(() => {
   const topology = {
@@ -60,16 +62,17 @@ const mocks = vi.hoisted(() => {
         })
       : "{}"),
     writeFile: vi.fn(async () => undefined),
-    compilePack: vi.fn(async (options: unknown) => {
-      void options;
-      return {
+    compilePack: vi.fn(async (options: CompilePackOptions) => {
+      const pack = {
         packDirectory: "/output/test-region/version",
         databasePath: "/output/test-region/version/pack.sqlite",
         manifestPath: "/output/test-region/version/manifest.json",
         auditPath: "/output/test-region/version/audit.json",
         audit: {},
         reusedExisting: false,
-      };
+      } as PackBuildResult;
+      await options.beforePublish?.(pack);
+      return pack;
     }),
     auditSqlitePack: vi.fn(async () => ({ passed: true, errors: [] })),
     refreshOsm: vi.fn(async () => ({ snapshot: osmSnapshot })),

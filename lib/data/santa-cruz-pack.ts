@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { assertPackAuditPassed, auditSqlitePack } from "./audit";
+import type { auditSqlitePack } from "./audit";
+import { compileAuditedPack } from "./audited-pack";
 import { areaGeometryBounds, type AreaGeometry } from "./area-geometry";
-import { compilePack, type PackSeed } from "./compiler";
+import type { PackSeed } from "./compiler";
 import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import {
   readElevationSourceConfig,
@@ -231,7 +232,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     },
     fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   };
-  const pack = await compilePack({
+  const { pack, regionalAudit } = await compileAuditedPack({
     outputRoot: options.outputRoot,
     seed,
     builtAt: newestRetrieval(snapshots.map(({ retrievedAt }) => retrievedAt)),
@@ -244,20 +245,13 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
-  });
-
-  const regionalAudit = await auditSqlitePack({
-    databasePath: pack.databasePath,
-    manifestPath: pack.manifestPath,
-    auditPath: pack.auditPath,
-  });
-  assertPackAuditPassed(regionalAudit);
-  await writeFile(path.join(pack.packDirectory, "regional-audit.json"), `${JSON.stringify(regionalAudit, null, 2)}\n`);
-  await writeFile(path.join(pack.packDirectory, "portal-derivation-audit.json"), `${JSON.stringify({
-    schemaVersion: "1",
-    curatedAccessSourceId: curatedAccess.snapshot.id,
-    ...portalDerivation,
-  }, null, 2)}\n`);
+  }, () => ({
+    "portal-derivation-audit.json": {
+      schemaVersion: "1",
+      curatedAccessSourceId: curatedAccess.snapshot.id,
+      ...portalDerivation,
+    },
+  }));
 
   return { pack, portalDerivation, regionalAudit };
 }

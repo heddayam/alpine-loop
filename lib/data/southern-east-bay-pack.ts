@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   EastBayRegionalParkDistrictEntranceAdapter,
@@ -7,10 +7,11 @@ import {
   refreshOfficialSourceSnapshots,
   type OfficialSourceSet,
 } from "./authorities";
-import { assertPackAuditPassed, auditSqlitePack } from "./audit";
+import type { auditSqlitePack } from "./audit";
+import { compileAuditedPack } from "./audited-pack";
 import type { NormalizedAccessEvidence, SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
-import { compilePack, type PackSeed } from "./compiler";
+import type { PackSeed } from "./compiler";
 import { applyCuratedAccessRestrictions, readCuratedAccessFile, type CuratedAccessRestriction } from "./curated-access";
 import {
   readElevationSourceConfig,
@@ -356,7 +357,7 @@ export async function buildSouthernEastBayPack(
     adapterVersions,
     metricVersions,
   });
-  const pack = await compilePack({
+  const { pack, regionalAudit } = await compileAuditedPack({
     outputRoot: options.outputRoot,
     seed,
     builtAt: newestRetrieval(snapshots),
@@ -369,23 +370,13 @@ export async function buildSouthernEastBayPack(
     buildings,
     namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
     searchRegions,
-  });
-
-  const regionalAudit = await auditSqlitePack({
-    databasePath: pack.databasePath,
-    manifestPath: pack.manifestPath,
-    auditPath: pack.auditPath,
-  });
-  assertPackAuditPassed(regionalAudit);
-  await writeFile(
-    path.join(pack.packDirectory, "regional-audit.json"),
-    `${JSON.stringify(regionalAudit, null, 2)}\n`,
-  );
-  await writeFile(path.join(pack.packDirectory, "portal-audit.json"), `${JSON.stringify({
-    schemaVersion: "1",
-    portalDerivation: prepared.report,
-    portalInventory: inventory,
-  }, null, 2)}\n`);
+  }, () => ({
+    "portal-audit.json": {
+      schemaVersion: "1",
+      portalDerivation: prepared.report,
+      portalInventory: inventory,
+    },
+  }));
 
   return { pack, portalDerivation: prepared.report, regionalAudit };
 }

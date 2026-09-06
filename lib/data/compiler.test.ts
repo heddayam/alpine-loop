@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV6Schema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
+import { compileAuditedPack } from "./audited-pack";
 import type { AreaGeometry } from "./area-geometry";
 import { getNamedArea, listSearchRegions, searchNamedAreas } from "./named-area-catalog";
 import {
@@ -119,6 +120,36 @@ describe("fixture pack compiler", () => {
     expect(await readFile(pointerPath, "utf8")).toBe(originalPointer);
     await expect(readFile(path.join(outputRoot, "fixture-pack", "fixture-v2", "manifest.json"), "utf8"))
       .rejects.toThrow();
+  });
+
+  it("rejects a semantically invalid regional artifact before activation or pruning", async () => {
+    const outputRoot = await temporaryOutput();
+    const first = await compileAuditedPack(await fixtureCompileOptionsV6(outputRoot), () => ({}));
+    const pointerPath = path.join(outputRoot, "fixture-pack", "current.json");
+    const originalPointer = await readFile(pointerPath, "utf8");
+    const originalManifest = await readFile(first.pack.manifestPath, "utf8");
+    const options = await fixtureCompileOptionsV6(outputRoot);
+    const invalid = {
+      ...options,
+      seed: { ...options.seed, dataVersion: "fixture-invalid" },
+      beforePublish: (artifact: typeof first.pack) => {
+        const database = new DatabaseSync(artifact.databasePath);
+        try {
+          // The file is structurally valid, but schema-6 starts must be trailhead portals.
+          database.prepare("UPDATE access_points SET kind = 'parking'").run();
+        } finally {
+          database.close();
+        }
+      },
+    };
+
+    await expect(compileAuditedPack(invalid, () => ({}))).rejects.toThrow("not a trailhead portal");
+    expect(await readFile(pointerPath, "utf8")).toBe(originalPointer);
+    expect(await readFile(first.pack.manifestPath, "utf8")).toBe(originalManifest);
+    await expect(readFile(path.join(outputRoot, "fixture-pack", "fixture-invalid", "manifest.json"), "utf8"))
+      .rejects.toThrow();
+    expect(JSON.parse(await readFile(path.join(first.pack.packDirectory, "regional-audit.json"), "utf8")))
+      .toMatchObject({ errors: [] });
   });
 
   it("prunes the previous validated version only after publishing its replacement", async () => {

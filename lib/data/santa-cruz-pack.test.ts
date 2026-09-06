@@ -67,7 +67,7 @@ vi.mock("./search-regions", () => ({
   readSearchRegionInput: vi.fn(async () => ({ regions: [] })),
 }));
 
-import { compilePack } from "./compiler";
+import { compilePack, type CompilePackOptions } from "./compiler";
 import { readCuratedAccessFile } from "./curated-access";
 import {
   SANTA_CRUZ_CURATED_ACCESS_PATH,
@@ -175,7 +175,10 @@ describe("Santa Cruz schema-6 portal pack", () => {
       },
       reusedExisting: false,
     };
-    mocks.compilePack.mockResolvedValue(pack);
+    mocks.compilePack.mockImplementation(async (options: CompilePackOptions) => {
+      await options.beforePublish?.(pack);
+      return pack;
+    });
     mocks.auditSqlitePack.mockResolvedValue({ errors: [], warnings: [] });
   });
 

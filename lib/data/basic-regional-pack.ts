@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
-import { assertPackAuditPassed, auditSqlitePack } from "./audit";
-import { compilePack, type PackSeed } from "./compiler";
+import { compileAuditedPack } from "./audited-pack";
+import type { PackSeed } from "./compiler";
 import {
   readElevationSourceConfig,
   readPinnedThreeDepCollection,
@@ -334,7 +334,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       metricVersions,
     });
     reportBuildProgress(options, 8);
-    const pack = await compilePack({
+    const { pack, regionalAudit } = await compileAuditedPack({
       outputRoot: options.outputRoot,
       seed,
       builtAt: newestRetrieval(snapshots),
@@ -347,24 +347,16 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       namedAreas: { adapter: namedAreaAdapter, snapshot: osmSnapshot },
       searchRegions,
       ...(officialTrailSnapshot ? { additionalSources: [officialTrailSnapshot] } : {}),
+      beforePublish: () => reportBuildProgress(options, 9),
+    }, (artifact) => {
+      if (officialTrailConflationAudit && officialTrailSnapshot) {
+        addOfficialTrailPublicationCounts(officialTrailConflationAudit, artifact.databasePath, officialTrailSnapshot.id);
+      }
+      return {
+        "portal-audit.json": portalAudit,
+        ...(officialTrailConflationAudit ? { "official-trail-conflation-audit.json": officialTrailConflationAudit } : {}),
+      };
     });
-    reportBuildProgress(options, 9);
-    const regionalAudit = await auditSqlitePack({
-      databasePath: pack.databasePath,
-      manifestPath: pack.manifestPath,
-      auditPath: pack.auditPath,
-    });
-    assertPackAuditPassed(regionalAudit);
-    if (officialTrailConflationAudit && officialTrailSnapshot) {
-      addOfficialTrailPublicationCounts(officialTrailConflationAudit, pack.databasePath, officialTrailSnapshot.id);
-    }
-    await Promise.all([
-      writeFile(path.join(pack.packDirectory, "regional-audit.json"), `${JSON.stringify(regionalAudit, null, 2)}\n`),
-      writeFile(path.join(pack.packDirectory, "portal-audit.json"), `${JSON.stringify(portalAudit, null, 2)}\n`),
-      ...(officialTrailConflationAudit ? [
-        writeFile(path.join(pack.packDirectory, "official-trail-conflation-audit.json"), `${JSON.stringify(officialTrailConflationAudit, null, 2)}\n`),
-      ] : []),
-    ]);
     reportBuildProgress(options, 10);
     return { pack, portalAudit, regionalAudit, ...(officialTrailConflationAudit ? { officialTrailConflationAudit } : {}) };
   };
