@@ -13,8 +13,8 @@ describe("search criteria validation", () => {
     if (result.success) expect(result).toMatchObject({
       limit: 10,
       criteria: {
-      closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
-      includeUncertainAccess: true,
+        closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+        includeUncertainAccess: true,
       },
     });
   });
@@ -46,5 +46,4 @@ describe("search criteria validation", () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.errors).toContain("Route distance may not exceed 30 miles.");
   });
-
 });

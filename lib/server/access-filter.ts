@@ -3,7 +3,6 @@ import {
   areaGeometrySchema,
   driveTimeDurationSchema,
   type AccessFilterV2,
-  type GenerateClosedRoutesResponseV3,
   type NamedArea,
   type NamedAreaSummary,
 } from "@/lib/contracts";
@@ -71,14 +70,16 @@ export function resolvedDrawnAreaAccessFilter(
 export function resolvedDriveTimeAccessFilter(
   pack: Pick<FilterablePack, "coverage">,
   reachability: ResolvedReachability,
-  region: NamedArea,
+  region?: NamedArea,
 ): ResolvedServerAccessFilter {
-  const parsed = resolvedReachabilitySchema.parse(reachability);
+  const result = resolvedReachabilitySchema.safeParse(reachability);
+  if (!result.success) throw new ServerApiError("INVALID_REACHABILITY", "The resolved drive-time area is malformed.", 502);
+  const parsed = result.data;
   return {
     summary: {
       mode: "drive-time",
       label: `${parsed.durationMinutes} min from ${parsed.originLabel}`,
-      region: { id: region.id, name: region.name },
+      ...(region ? { region: { id: region.id, name: region.name } } : {}),
       driveTime: {
         minutes: parsed.durationMinutes,
         provider: "arcgis",
@@ -86,10 +87,10 @@ export function resolvedDriveTimeAccessFilter(
         originLabel: parsed.originLabel,
       },
     },
-    predicates: [parsed.geometry, region.geometry],
+    predicates: [parsed.geometry, ...(region ? [region.geometry] : [])],
     coverage: pack.coverage,
     filterGeometry: parsed.geometry,
-    refinementGeometry: region.geometry,
+    ...(region ? { refinementGeometry: region.geometry } : {}),
   };
 }
 
@@ -156,28 +157,6 @@ export async function resolveAccessFilter(
       || (error instanceof Error && error.name === "AbortError")) throw error;
     throw reachabilityError(error);
   }
-  const parsed = resolvedReachabilitySchema.safeParse(rawReachability);
-  if (!parsed.success) {
-    throw new ServerApiError("INVALID_REACHABILITY", "The resolved drive-time area is malformed.", 502);
-  }
-  const reachability = parsed.data;
   const region = filter.regionId ? await requireNamedArea(pack, filter.regionId) : undefined;
-  const summary: GenerateClosedRoutesResponseV3["resolvedAccessFilter"] = {
-    mode: "drive-time",
-    label: `${reachability.durationMinutes} min from ${reachability.originLabel}`,
-    ...(region ? { region: { id: region.id, name: region.name } } : {}),
-    driveTime: {
-      minutes: reachability.durationMinutes,
-      provider: "arcgis",
-      resolvedAt: reachability.resolvedAt,
-      originLabel: reachability.originLabel,
-    },
-  };
-  return {
-    summary,
-    predicates: [reachability.geometry, ...(region ? [region.geometry] : [])],
-    coverage: pack.coverage,
-    filterGeometry: reachability.geometry,
-    ...(region ? { refinementGeometry: region.geometry } : {}),
-  };
+  return resolvedDriveTimeAccessFilter(pack, rawReachability, region);
 }
