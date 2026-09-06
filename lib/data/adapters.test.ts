@@ -1,20 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { reconcileAccess } from "./access";
 import { fixtureCompileOptions } from "./fixture-pack";
+import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
 
 describe("fixture source adapters", () => {
   it("normalizes OSM-like topology and rejects non-pedestrian ways", async () => {
     const options = await fixtureCompileOptions("/unused");
-    await options.topology.adapter.validate(options.topology.snapshot);
-    const results = [];
-    for await (const result of options.topology.adapter.normalize(options.topology.snapshot)) results.push(result);
-
-    expect(results).toHaveLength(1);
-    expect(results[0].rejectedWayCount).toBe(1);
-    expect(results[0].ways).toHaveLength(4);
-    expect(results[0].ways.find(({ id }) => id === "w-oneway")?.bidirectional).toBe(false);
-    expect(results[0].ways.find(({ id }) => id === "w-ridge")?.accessState).toBe("private");
-    expect(results[0].accessPoints.map(({ externalId }) => externalId).sort()).toEqual(["n-a", "n-g"]);
+    const topology = options.topology.data;
+    expect(topology.rejectedWayCount).toBe(1);
+    expect(topology.ways).toHaveLength(4);
+    expect(topology.ways.find(({ id }) => id === "w-oneway")?.bidirectional).toBe(false);
+    expect(topology.ways.find(({ id }) => id === "w-ridge")?.accessState).toBe("private");
+    expect(topology.accessPoints.map(({ externalId }) => externalId).sort()).toEqual(["n-a", "n-g"]);
   });
 
   it("normalizes official access evidence with provenance", async () => {
@@ -36,7 +33,7 @@ describe("fixture source adapters", () => {
   it("fails validation when a pinned source hash changes", async () => {
     const options = await fixtureCompileOptions("/unused");
     const snapshot = { ...options.topology.snapshot, contentHash: `sha256:${"0".repeat(64)}` as const };
-    await expect(options.topology.adapter.validate(snapshot)).rejects.toThrow("Content hash mismatch");
+    await expect(new FixtureTopologyAdapter().validate(snapshot)).rejects.toThrow("Content hash mismatch");
   });
 });
 

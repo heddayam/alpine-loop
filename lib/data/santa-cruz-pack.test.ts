@@ -218,11 +218,10 @@ describe("Santa Cruz schema-6 portal pack", () => {
     expect(options).not.toHaveProperty("additionalOfficialAccess");
     expect(options.additionalSources?.map(({ id }) => id)).toEqual(["santa-cruz-reviewed-access-restrictions"]);
 
-    const published: NormalizedTopology[] = [];
-    for await (const topology of options.topology.adapter.normalize(options.topology.snapshot)) published.push(topology);
-    expect(published[0]!.ways).toHaveLength(31);
-    expect(published[0]!.ways.every(({ edgeClass }) => edgeClass === "trail")).toBe(true);
-    expect(published[0]!.accessPoints).toEqual([
+    const published = options.topology.data;
+    expect(published.ways).toHaveLength(31);
+    expect(published.ways.every(({ edgeClass }) => edgeClass === "trail")).toBe(true);
+    expect(published.accessPoints).toEqual([
       expect.objectContaining({
         id: "portal:n0",
         kind: "trailhead",
@@ -230,7 +229,7 @@ describe("Santa Cruz schema-6 portal pack", () => {
         portalRoadClass: "street",
       }),
     ]);
-    expect(published[0]!.portalEvidence).toEqual([]);
+    expect(published.portalEvidence).toEqual([]);
     expect(result.portalDerivation).toMatchObject({
       curatedRestrictionCount: 31,
       portalCount: 1,

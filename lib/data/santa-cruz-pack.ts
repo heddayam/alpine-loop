@@ -23,7 +23,6 @@ import {
   validateOsmPrerequisites,
 } from "./osm";
 import { deriveTrailheadPortals, PORTAL_DERIVATION_VERSION, stripPortalBuildContext } from "./portals";
-import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
 import type { AccessState } from "@/lib/graph/types";
 import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from "./types";
@@ -237,7 +236,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
     seed,
     builtAt: newestRetrieval(snapshots.map(({ retrievedAt }) => retrievedAt)),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, publishedTopology),
+      data: publishedTopology,
       snapshot: osmSnapshot,
     },
     additionalSources: [curatedAccess.snapshot],

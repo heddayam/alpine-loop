@@ -35,7 +35,6 @@ import {
   type OfficialTrailConflationAudit,
 } from "./official-trails";
 import { deriveTrailheadPortals, PORTAL_DERIVATION_VERSION, stripPortalBuildContext } from "./portals";
-import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import type { RegionalPackBuildOptions, RegionalPackBuildResult } from "./regional-pack";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology } from "./types";
@@ -340,7 +339,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
       seed,
       builtAt: newestRetrieval(snapshots),
       topology: {
-        adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, publishedTopology),
+        data: publishedTopology,
         snapshot: osmSnapshot,
       },
       elevation: { sampler: elevationSampler, snapshot: dem.snapshot },

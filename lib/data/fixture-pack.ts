@@ -5,7 +5,6 @@ import { FixtureElevationSampler } from "./fixture-elevation-sampler";
 import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";
 import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
-import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { sha256File } from "./file-source";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology } from "./types";
@@ -109,11 +108,14 @@ export async function fixtureCompileOptions(
     url: "https://example.invalid/alpine-loop/fixture-elevation",
     license: "CC0-1.0",
   });
+  const normalized: NormalizedTopology[] = [];
+  for await (const data of new FixtureTopologyAdapter().normalize(topology)) normalized.push(data);
+  if (normalized.length !== 1) throw new Error("Fixture topology adapter must produce exactly one graph");
   return {
     outputRoot,
     seed: overrides.seed ?? fixturePackSeed,
     builtAt: overrides.builtAt ?? RETRIEVED_AT,
-    topology: { adapter: new FixtureTopologyAdapter(), snapshot: topology },
+    topology: { data: normalized[0]!, snapshot: topology },
     officialAccess: { adapter: new FixtureOfficialAccessAdapter(), snapshot: officialAccess },
     // The fixture region is synthetic and has no buildings.
     buildings: [],
@@ -189,13 +191,10 @@ export async function fixtureCompileOptionsV6(
     searchRegionPath,
     { ...overrides, seed: overrides.seed ?? fixturePackSeedV6 },
   );
-  const normalized: NormalizedTopology[] = [];
-  for await (const topology of base.topology.adapter.normalize(base.topology.snapshot)) normalized.push(topology);
-  if (normalized.length !== 1) throw new Error("Fixture topology adapter must produce exactly one graph");
   const portalTopology = {
-    ...normalized[0]!,
-    ways: normalized[0]!.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
-    accessPoints: normalized[0]!.accessPoints.map((point, index) => ({
+    ...base.topology.data,
+    ways: base.topology.data.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
+    accessPoints: base.topology.data.accessPoints.map((point, index) => ({
       ...point,
       kind: "trailhead" as const,
       reachableTrailKm: 5 + index,
@@ -207,7 +206,7 @@ export async function fixtureCompileOptionsV6(
   return {
     ...base,
     topology: {
-      adapter: new PreparedTopologyAdapter(base.topology.adapter, portalTopology),
+      data: portalTopology,
       snapshot: base.topology.snapshot,
     },
   };

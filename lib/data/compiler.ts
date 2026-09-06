@@ -24,7 +24,6 @@ import type {
   NormalizedAccessEvidence,
   OfficialAccessAdapter,
   SourceSnapshot,
-  TopologySourceAdapter,
 } from "./adapters";
 import { reconcileAccess } from "./access";
 import { calculateEdgeMetricsBatch, distanceMeters } from "./metrics";
@@ -58,7 +57,7 @@ export type CompilePackOptions = {
   outputRoot: string;
   seed: PackSeed;
   builtAt: string;
-  topology: { adapter: TopologySourceAdapter<NormalizedTopology>; snapshot: SourceSnapshot };
+  topology: { data: NormalizedTopology; snapshot: SourceSnapshot };
   officialAccess?: { adapter: OfficialAccessAdapter; snapshot: SourceSnapshot };
   additionalOfficialAccess?: Array<{ adapter: OfficialAccessAdapter; snapshot: SourceSnapshot }>;
   /** Sources already applied to a prepared topology, such as curated way removals. */
@@ -82,17 +81,6 @@ const EMPTY_ACCESS_COUNTS: Record<AccessState, number> = {
   closed: 0,
   prohibited: 0,
 };
-
-async function collectTopology(
-  adapter: TopologySourceAdapter<NormalizedTopology>,
-  snapshot: SourceSnapshot,
-): Promise<NormalizedTopology> {
-  await adapter.validate(snapshot);
-  const normalized: NormalizedTopology[] = [];
-  for await (const result of adapter.normalize(snapshot)) normalized.push(result);
-  if (normalized.length !== 1) throw new Error(`Topology adapter must produce exactly one graph, got ${normalized.length}`);
-  return normalized[0];
-}
 
 function evidenceByExternalId(evidence: NormalizedAccessEvidence[]): Map<string, NormalizedAccessEvidence[]> {
   const result = new Map<string, NormalizedAccessEvidence[]>();
@@ -466,7 +454,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   const stagingDirectory = path.join(packRoot, `.staging-${manifest.dataVersion}-${randomUUID()}`);
   await mkdir(stagingDirectory);
   try {
-    const topology = await collectTopology(options.topology.adapter, options.topology.snapshot);
+    const topology = options.topology.data;
     const evidence = [] as NormalizedAccessEvidence[];
     for (const official of officialAccess) {
       await official.adapter.validate(official.snapshot);

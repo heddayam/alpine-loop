@@ -34,7 +34,6 @@ import {
   PORTAL_DERIVATION_VERSION,
   stripPortalBuildContext,
 } from "./portals";
-import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedAccessPoint, NormalizedTopology, PackBuildResult } from "./types";
 
@@ -383,7 +382,7 @@ export async function buildMontereyCarmelPack(
     seed,
     builtAt: newestRetrieval(snapshots),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, publishedTopology),
+      data: publishedTopology,
       snapshot: osmSnapshot,
     },
     additionalSources: [curatedAccess.snapshot, reviewedSnapshot],

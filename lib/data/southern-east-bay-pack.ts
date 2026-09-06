@@ -35,7 +35,6 @@ import {
   PORTAL_DERIVATION_VERSION,
   stripPortalBuildContext,
 } from "./portals";
-import { PreparedTopologyAdapter } from "./prepared-topology-adapter";
 import { readSearchRegionInput } from "./search-regions";
 import type { NormalizedTopology, PackBuildResult } from "./types";
 
@@ -362,7 +361,7 @@ export async function buildSouthernEastBayPack(
     seed,
     builtAt: newestRetrieval(snapshots),
     topology: {
-      adapter: new PreparedTopologyAdapter(sourceTopologyAdapter, prepared.topology),
+      data: prepared.topology,
       snapshot: osmSnapshot,
     },
     additionalSources: [entrancesSnapshot, curatedAccess.snapshot],
