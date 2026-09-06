@@ -1,8 +1,8 @@
-import { describe, expect, test } from "vitest";
+import type { RouteSearchRequest } from "./types";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   generateClosedRoutesResponseV3Schema,
-  type GenerateClosedRoutesRequestV3,
 } from "@/lib/contracts";
 import type {
   AccessPointCandidate,
@@ -160,12 +160,8 @@ class FixtureFeasibilityRepository implements ClosedRouteFeasibilityRepository {
   }
 }
 
-function request(overrides: Partial<GenerateClosedRoutesRequestV3> = {}): GenerateClosedRoutesRequestV3 {
+function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
-    version: 3,
-    packId: PACK.id,
-    accessFilter: { mode: "drawn-area", bbox: [-1, -1, 1, 1] },
-    routeFamily: "closed",
     closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
     distanceMiles: { min: 0.92, max: 0.94 },
     includeUncertainAccess: false,
@@ -310,6 +306,36 @@ describe("ReachableGraphClosedRouteSolver", () => {
       loadedTopologyNetworkCount: 0,
     });
     expect(generateClosedRoutesResponseV3Schema.safeParse(result).success).toBe(true);
+  });
+
+  test("prepares eligible starts once for repeated Quick and Thorough searches", async () => {
+    const points = [accessPoint(0), accessPoint(1), accessPoint(2)];
+    const outside = { ...accessPoint(3), lon: 2 };
+    const allPoints = [...points, outside];
+    const graph = fixtureGraph("loop");
+    const topology = new FixtureFeasibilityRepository(allPoints, 0);
+    const preparedContext = context(allPoints, graph, topology);
+    const enumerate = vi.spyOn(preparedContext.repository, "getAccessPointCandidates");
+    const target = request();
+    const prepared = await solver.prepare(target, preparedContext);
+
+    expect(prepared.eligibleAccessPointIds).toEqual(points.map(({ id }) => id));
+    for (const startAccessPointId of prepared.eligibleAccessPointIds) {
+      for (const searchEffort of ["quick", "thorough"] as const) {
+        const policy = { startAccessPointId, searchEffort, limit: target.limit };
+        const result = await prepared.generate(policy, preparedContext.budget);
+        const ordinary = await solver.generate({ ...target, ...policy }, context(
+          allPoints, graph, new FixtureFeasibilityRepository(allPoints, 0),
+        ));
+        expect(result).toEqual(ordinary);
+        expect(result.exact.length).toBeGreaterThan(0);
+        expect(result.exact.every(({ startAccessPoint }) => startAccessPoint.id === startAccessPointId)).toBe(true);
+      }
+    }
+    expect(enumerate).toHaveBeenCalledTimes(1);
+    expect(topology.requestedIds).toEqual([points.map(({ id }) => id)]);
+    await expect(prepared.generate({ searchEffort: "quick", limit: 1, startAccessPointId: outside.id }, preparedContext.budget))
+      .rejects.toThrow("not prepared for this search");
   });
 
   test("filters automatic and explicit starts that sit among buildings", async () => {

@@ -1,6 +1,6 @@
 import type {
   ConstraintViolationV3,
-  GenerateClosedRoutesRequestV3,
+  RouteCriteria,
   GenerateClosedRoutesResponseV3,
   TopologyProfile,
 } from "@/lib/contracts";
@@ -25,7 +25,7 @@ import {
   accessPointMatchesResolvedFilter,
   listEligibleAccessPointCandidates,
 } from "./eligible-access-points";
-import type { ResolvedAccessFilterContext } from "./types";
+import type { ResolvedAccessFilterContext, RouteSearchPolicy, RouteSearchRequest } from "./types";
 
 const METERS_PER_MILE = 1_609.344;
 const METERS_PER_FOOT = 0.3048;
@@ -50,9 +50,25 @@ export type ReachableGraphClosedRouteContext = {
   now?: () => number;
 };
 
+export type RouteGraphContext = Omit<ReachableGraphClosedRouteContext, "budget">;
+
+export type PreparedRouteSearch = {
+  readonly eligibleAccessPointIds: readonly string[];
+  generate(policy: RouteSearchPolicy, budget: SolverBudget): Promise<GenerateClosedRoutesResponseV3>;
+};
+
+type PreparedStarts = {
+  contextKey: string;
+  eligible: AccessPointCandidate[];
+  starts: AccessPointCandidate[];
+  feasible: FeasibleStart[];
+  noCycleStartIds: ReadonlySet<string>;
+  noCycleExcluded: number;
+};
+
 export type ReachableGraphClosedRouteSolverOptions = {
   pack: GenerateClosedRoutesResponseV3["pack"];
-  requestIdFactory?: (request: GenerateClosedRoutesRequestV3) => string;
+  requestIdFactory?: (request: RouteSearchRequest) => string;
   sourceFreshness?: string;
   sourceConfidence?: "high" | "medium" | "low";
   fallbackSourceIds?: readonly string[];
@@ -85,7 +101,7 @@ function stableHash(value: string): string {
   return hash.toString(36).padStart(13, "0");
 }
 
-function effectiveBudget(request: GenerateClosedRoutesRequestV3, supplied: SolverBudget): SolverBudget {
+function effectiveBudget(request: RouteSearchRequest, supplied: SolverBudget): SolverBudget {
   const effort = CLOSED_ROUTE_EFFORT_BUDGETS[request.searchEffort];
   return {
     maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, effort.maximumDirectedEdges),
@@ -167,7 +183,7 @@ function centerDistance(value: number, min: number, max: number): number {
   return Math.abs(value - (min + max) / 2) / Math.max(Math.abs(max - min), Math.abs(min), Math.abs(max), 1);
 }
 
-function rankRoute(value: ValidatedClosedRoute, request: GenerateClosedRoutesRequestV3): RankedClosedRoute {
+function rankRoute(value: ValidatedClosedRoute, request: RouteSearchRequest): RankedClosedRoute {
   const route = value.route;
   const ranges: Array<{ constraint: ConstraintViolationV3["constraint"]; value: number; min: number; max: number }> = [{
     constraint: "distance",
@@ -284,25 +300,51 @@ export class ReachableGraphClosedRouteSolver {
   constructor(private readonly options: ReachableGraphClosedRouteSolverOptions) {}
 
   async generate(
-    request: GenerateClosedRoutesRequestV3,
+    request: RouteSearchRequest,
     context: ReachableGraphClosedRouteContext,
   ): Promise<GenerateClosedRoutesResponseV3> {
-    if (request.packId !== this.options.pack.id
-      || context.repository.packId !== request.packId
-      || context.topologyRepository.packId !== request.packId) {
-      throw new Error(`Closed-route solver pack mismatch for ${request.packId}`);
+    const startedAt = (context.now ?? Date.now)();
+    const prepared = await this.#prepare(request, context, request.startAccessPointId);
+    return this.#generate(request, context, prepared, startedAt);
+  }
+
+  /** Prepare one criteria/filter snapshot for repeated per-start searches. */
+  async prepare(criteria: RouteCriteria, context: RouteGraphContext): Promise<PreparedRouteSearch> {
+    const snapshot = structuredClone(criteria);
+    const prepared = await this.#prepare(snapshot, context);
+    return {
+      eligibleAccessPointIds: prepared.eligible.map(({ id }) => id),
+      generate: async (policy, budget) => {
+        const starts = policy.startAccessPointId === undefined
+          ? prepared.starts
+          : prepared.starts.filter(({ id }) => id === policy.startAccessPointId);
+        if (policy.startAccessPointId !== undefined && starts.length === 0) {
+          throw new AccessFilterResolutionError("START_INELIGIBLE", "The selected access point was not prepared for this search");
+        }
+        const selected = policy.startAccessPointId === undefined ? prepared : {
+          ...prepared,
+          starts,
+          feasible: prepared.feasible.filter(({ start }) => start.id === policy.startAccessPointId),
+          noCycleExcluded: 0,
+        };
+        return this.#generate({ ...snapshot, ...policy }, { ...context, budget }, selected);
+      },
+    };
+  }
+
+  async #prepare(
+    request: RouteCriteria,
+    context: RouteGraphContext,
+    startAccessPointId?: string,
+  ): Promise<PreparedStarts> {
+    if (context.repository.packId !== this.options.pack.id
+      || context.topologyRepository.packId !== this.options.pack.id) {
+      throw new Error(`Closed-route solver pack mismatch for ${this.options.pack.id}`);
     }
     if (context.topologyRepository.dataVersion !== this.options.pack.dataVersion) {
-      throw new Error(`Closed-route topology data version mismatch for ${request.packId}`);
+      throw new Error(`Closed-route topology data version mismatch for ${this.options.pack.id}`);
     }
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
-
-    const now = context.now ?? Date.now;
-    const startedAt = now();
-    const budget = effectiveBudget(request, context.budget);
-    const deadlineAt = startedAt + budget.deadlineMs;
-    const hardTruncationReasons = new Set<string>();
-    const nonBudgetShortfallReasons = new Set<string>();
     const { all: allCandidates, eligible, matchedFilters, noCycleExcluded } = await listEligibleAccessPointCandidates({
       repository: context.repository,
       accessFilter: context.accessFilter,
@@ -311,8 +353,8 @@ export class ReachableGraphClosedRouteSolver {
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     let starts: AccessPointCandidate[];
-    if (request.startAccessPointId) {
-      const selected = allCandidates.find(({ id }) => id === request.startAccessPointId);
+    if (startAccessPointId) {
+      const selected = allCandidates.find(({ id }) => id === startAccessPointId);
       if (!selected) throw new AccessFilterResolutionError("START_NOT_FOUND", "The selected access point was not found");
       if (!accessPointMatchesResolvedFilter(selected, context.accessFilter)) {
         throw new AccessFilterResolutionError("START_OUTSIDE_FILTER", "The selected access point is outside the trailhead filter");
@@ -337,8 +379,7 @@ export class ReachableGraphClosedRouteSolver {
     // Starts that cannot close a loop are normally removed before this point,
     // so the count has two sources: those excluded by the candidate filter, and
     // an explicitly chosen start, which bypasses that filter.
-    const noCycleStartCount = starts.filter(({ id }) => !topologyByStart.get(id)?.canReachCycle).length;
-    const noCycleAccessPointCount = (request.startAccessPointId ? 0 : noCycleExcluded) + noCycleStartCount;
+    const noCycleStartIds = new Set(starts.filter(({ id }) => !topologyByStart.get(id)?.canReachCycle).map(({ id }) => id));
     const maximumDistanceMeters = request.distanceMiles.max * METERS_PER_MILE;
     const maximumRepeatedFraction = request.closedRoute.maximumRepeatedTrailPct / 100;
     const maximumSharedStemMeters = request.closedRoute.maximumSharedStemMiles === undefined
@@ -356,6 +397,28 @@ export class ReachableGraphClosedRouteSolver {
       feasible.push({ start, topology, groupKey: groupKey(topology) });
     }
 
+    return {
+      contextKey: stableHash(JSON.stringify({ pack: this.options.pack, filter: context.accessFilter })),
+      eligible, starts, feasible, noCycleStartIds, noCycleExcluded: startAccessPointId ? 0 : noCycleExcluded,
+    };
+  }
+
+  async #generate(
+    request: RouteSearchRequest,
+    context: ReachableGraphClosedRouteContext,
+    prepared: PreparedStarts,
+    startedAt = (context.now ?? Date.now)(),
+  ): Promise<GenerateClosedRoutesResponseV3> {
+    if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
+    const now = context.now ?? Date.now;
+    const budget = effectiveBudget(request, context.budget);
+    const deadlineAt = startedAt + budget.deadlineMs;
+    const hardTruncationReasons = new Set<string>();
+    const nonBudgetShortfallReasons = new Set<string>();
+    const { eligible, starts, feasible, noCycleStartIds, noCycleExcluded } = prepared;
+    const noCycleStartCount = starts.filter(({ id }) => noCycleStartIds.has(id)).length;
+    const noCycleAccessPointCount = noCycleExcluded + noCycleStartCount;
+    const maximumDistanceMeters = request.distanceMiles.max * METERS_PER_MILE;
     let graphQueryCount = 0;
     let maximumLoadedDirectedEdges = 0;
     let expandedStates = 0;
@@ -541,7 +604,7 @@ export class ReachableGraphClosedRouteSolver {
     const shortfallReasons = [...nonBudgetShortfallReasons].sort();
     return {
       version: 3,
-      requestId: this.options.requestIdFactory?.(request) ?? `closed-route-request-${stableHash(JSON.stringify(request))}`,
+      requestId: this.options.requestIdFactory?.(request) ?? `closed-route-request-${stableHash(`${prepared.contextKey}:${JSON.stringify(request)}`)}`,
       pack: this.options.pack,
       requested: request.limit,
       resolvedAccessFilter: context.accessFilter.summary,

@@ -1,6 +1,6 @@
+import type { RouteSearchRequest } from "./types";
 import { describe, expect, it } from "vitest";
 
-import type { GenerateClosedRoutesRequestV3 } from "@/lib/contracts";
 import type { GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "@/lib/graph";
 
 import { RouteSearchCancelledError } from "./control";
@@ -66,12 +66,8 @@ function graph(specs: readonly PhysicalEdge[]): InducedGraph {
   return { nodes, edges, accessPoints: [start] };
 }
 
-function request(overrides: Partial<GenerateClosedRoutesRequestV3> = {}): GenerateClosedRoutesRequestV3 {
+function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
-    version: 3,
-    packId: "fixture",
-    accessFilter: { mode: "drawn-area", bbox: [-123, 36, -121, 38] },
-    routeFamily: "closed",
     closedRoute: {
       maximumRepeatedTrailPct: 0,
       allowMultiCycle: false,

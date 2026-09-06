@@ -1,4 +1,4 @@
-import type { GenerateClosedRoutesRequestV3 } from "@/lib/contracts";
+import type { RouteSearchRequest } from "./types";
 import { maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
 import {
   edgeIsTraversable,
@@ -275,7 +275,7 @@ function physicalOverlap(left: Metrics, right: Metrics): number {
 export function searchPenalizedClosedRoutes(
   sourceGraph: InducedGraph,
   start: GraphAccessPoint | string,
-  request: GenerateClosedRoutesRequestV3,
+  request: RouteSearchRequest,
   options: PenalizedClosedRouteSearchOptions,
 ): PenalizedClosedRouteSearchResult {
   const now = options.now ?? Date.now;

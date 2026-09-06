@@ -7,30 +7,25 @@ import { loadInstalledPackVersion } from "@/lib/packs/installed-pack";
 import type { AccessPointSearchResult } from "@/lib/route-jobs";
 import {
   CLOSED_ROUTE_EFFORT_BUDGETS,
-  listEligibleAccessPointCandidates,
+  type PreparedRouteSearch,
   ReachableGraphClosedRouteSolver,
 } from "@/lib/solver";
 import {
   resolvedDrawnAreaAccessFilter,
   resolvedDriveTimeAccessFilter,
   resolvedNamedRegionAccessFilter,
-  type ResolvedServerAccessFilter,
 } from "./access-filter";
 import type {
   RouteJobSolverRequest,
   RouteJobSolverResponse,
   RouteJobSolverWorkerInput,
 } from "./route-job-solver-protocol";
-import { routeJobSolverRequestAccessFilter } from "./route-job-solver-protocol";
 
 type Session = {
-  input: RouteJobSolverWorkerInput;
-  manifest: NonNullable<Awaited<ReturnType<typeof loadInstalledPackVersion>>>["manifest"];
-  region?: NonNullable<ReturnType<typeof getSearchRegion>>;
-  accessFilter: ResolvedServerAccessFilter;
+  routesPerAccessPoint: number;
   repository: SQLiteGraphRepository;
   topologyRepository: SQLiteClosedRouteFeasibilityRepository;
-  solver: ReachableGraphClosedRouteSolver;
+  search: PreparedRouteSearch;
 };
 
 let session: Session | undefined;
@@ -74,59 +69,44 @@ async function initialize(input: RouteJobSolverWorkerInput): Promise<void> {
     databasePath: installed.databasePath,
     manifest,
   });
-  session = {
-    input,
-    manifest,
-    region,
-    accessFilter,
-    repository,
-    topologyRepository,
-    solver: new ReachableGraphClosedRouteSolver({
-      pack: {
-        id: manifest.id,
-        schemaVersion: manifest.schemaVersion,
-        dataVersion: manifest.dataVersion,
-        builtAt: manifest.builtAt,
-      },
-      sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
-      sourceConfidence: manifest.fieldConfidence.access ?? "low",
-      fallbackSourceIds: manifest.sources.map(({ id }) => id),
-    }),
-  };
+  const solver = new ReachableGraphClosedRouteSolver({
+    pack: {
+      id: manifest.id,
+      schemaVersion: manifest.schemaVersion,
+      dataVersion: manifest.dataVersion,
+      builtAt: manifest.builtAt,
+    },
+    sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
+    sourceConfidence: manifest.fieldConfidence.access ?? "low",
+    fallbackSourceIds: manifest.sources.map(({ id }) => id),
+  });
+  try {
+    session = {
+      routesPerAccessPoint: input.request.routesPerAccessPoint,
+      repository,
+      topologyRepository,
+      search: await solver.prepare(input.request.criteria, { repository, topologyRepository, accessFilter }),
+    };
+  } catch (error) {
+    await topologyRepository.close();
+    await repository.close();
+    throw error;
+  }
 }
 
-async function enumerate(): Promise<readonly string[]> {
+function enumerate(): readonly string[] {
   if (!session) throw new Error("Route solver process was not initialized.");
-  const { eligible } = await listEligibleAccessPointCandidates({
-    repository: session.repository,
-    accessFilter: session.accessFilter,
-    includeUncertainAccess: session.input.request.criteria.includeUncertainAccess,
-    signal: new AbortController().signal,
-  });
-  return eligible.map(({ id }) => id);
+  return session.search.eligibleAccessPointIds;
 }
 
 async function search(accessPointId: string): Promise<AccessPointSearchResult> {
   if (!session) throw new Error("Route solver process was not initialized.");
-  const { input, manifest, region, repository, topologyRepository, accessFilter, solver } = session;
-  const signal = new AbortController().signal;
-  const requestAccessFilter = routeJobSolverRequestAccessFilter(input, region?.id);
-  const run = (searchEffort: "quick" | "thorough") => solver.generate({
-    version: 3,
-    packId: manifest.id,
-    accessFilter: requestAccessFilter,
+  const { routesPerAccessPoint, search: prepared } = session;
+  const run = (searchEffort: "quick" | "thorough") => prepared.generate({
     startAccessPointId: accessPointId,
-    routeFamily: "closed",
-    ...input.request.criteria,
     searchEffort,
-    limit: input.request.routesPerAccessPoint,
-  }, {
-    repository,
-    topologyRepository,
-    accessFilter,
-    budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] },
-    signal,
-  });
+    limit: routesPerAccessPoint,
+  }, { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] });
   const quick = await run("quick");
   await new Promise<void>((resolveYield) => setImmediate(resolveYield));
   const thorough = await run("thorough");
@@ -135,7 +115,7 @@ async function search(accessPointId: string): Promise<AccessPointSearchResult> {
     return values.filter(({ id }) => !seen.has(id) && Boolean(seen.add(id)));
   };
   return {
-    exact: unique([...quick.exact, ...thorough.exact]).slice(0, input.request.routesPerAccessPoint),
+    exact: unique([...quick.exact, ...thorough.exact]).slice(0, routesPerAccessPoint),
     nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
     truncated: quick.diagnostics.hardTruncationReasons.length > 0
       || thorough.diagnostics.hardTruncationReasons.length > 0,
