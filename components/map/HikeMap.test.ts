@@ -304,7 +304,7 @@ describe("generated route map features", () => {
       { id: "other", name: "Other start", lon: -122.16, lat: 37.15, kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const },
     ];
 
-    expect(accessPointFeatures(accessPoints, undefined, resultAccessPointIds([route("first", -122.18)]))
+    expect(accessPointFeatures(accessPoints, resultAccessPointIds([route("first", -122.18)]))
       .features.map(({ properties }) => properties?.id)).toEqual(["other"]);
     expect(accessPointFeatures(accessPoints).features).toHaveLength(2);
   });
@@ -380,7 +380,6 @@ describe("generated route map features", () => {
       showRegionBoundaries: false,
       suggestedBounds: boundary,
       display: { center: [-122.16, 37.165], zoom: 12 },
-      trailNetwork: { type: "FeatureCollection", features: [] },
       accessPoints: [{
         id: "start",
         name: "Start",
@@ -392,7 +391,6 @@ describe("generated route map features", () => {
       }],
       routes: [route("first", -122.18)],
       onBoundsChange: () => undefined,
-      onAccessPointSelect: () => undefined,
       onRouteSelect: () => undefined,
     }));
 

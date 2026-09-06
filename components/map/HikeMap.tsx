@@ -19,16 +19,13 @@ type HikeMapProps = {
   showRegionBoundaries: boolean;
   suggestedBounds: Bounds;
   display: { center: [number, number]; zoom: number };
-  trailNetwork: FeatureCollection<LineString>;
   accessPoints: AccessPointOption[];
-  selectedAccessPointId?: string;
   routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
   hoveredRouteId?: string;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
-  onAccessPointSelect: (id: string) => void;
   onRouteSelect: (id: string) => void;
   onRouteHover?: (id?: string) => void;
   onSegmentSelect?: (id: string) => void;
@@ -286,7 +283,6 @@ export function resultAccessPointIds(routes: GeneratedClosedRouteV3[]): Set<stri
 
 export function accessPointFeatures(
   accessPoints: AccessPointOption[],
-  selectedAccessPointId?: string,
   hiddenAccessPointIds: ReadonlySet<string> = new Set(),
 ): FeatureCollection<Point> {
   return {
@@ -297,7 +293,6 @@ export function accessPointFeatures(
         id: point.id,
         name: point.name,
         kind: point.kind,
-        selected: point.id === selectedAccessPointId,
       },
       geometry: { type: "Point", coordinates: [point.lon, point.lat] },
     })),
@@ -495,16 +490,13 @@ export function HikeMap({
   showRegionBoundaries,
   suggestedBounds,
   display,
-  trailNetwork,
   accessPoints,
-  selectedAccessPointId,
   routes,
   selectedRouteId,
   hoveredRouteId,
   selectedSegmentId,
   hoveredSegmentId,
   onBoundsChange,
-  onAccessPointSelect,
   onRouteSelect,
   onRouteHover,
   onSegmentSelect,
@@ -519,17 +511,14 @@ export function HikeMap({
   const onRouteSelectRef = useRef(onRouteSelect);
   const onSegmentSelectRef = useRef(onSegmentSelect);
   const onSegmentHoverRef = useRef(onSegmentHover);
-  const onAccessPointSelectRef = useRef(onAccessPointSelect);
   const startRef = useRef<[number, number] | null>(null);
   const draftBoundsRef = useRef<Bounds | null>(null);
   const boundsRef = useRef(bounds);
   const accessPointsRef = useRef(accessPoints);
-  const trailNetworkRef = useRef(trailNetwork);
   const packIdsRef = useRef(packIds);
   const packCoveragesRef = useRef(packCoverages);
   const showRegionBoundariesRef = useRef(showRegionBoundaries);
   const refreshTrailNetworkRef = useRef<(() => void) | null>(null);
-  const selectedAccessPointIdRef = useRef(selectedAccessPointId);
   const routesRef = useRef(routes);
   const selectedRouteIdRef = useRef(selectedRouteId);
   const selectedSegmentIdRef = useRef(selectedSegmentId);
@@ -573,10 +562,9 @@ export function HikeMap({
   useEffect(() => {
     onRouteHoverRef.current = onRouteHover;
     onRouteSelectRef.current = onRouteSelect;
-    onAccessPointSelectRef.current = onAccessPointSelect;
     onSegmentSelectRef.current = onSegmentSelect;
     onSegmentHoverRef.current = onSegmentHover;
-  }, [onAccessPointSelect, onRouteHover, onRouteSelect, onSegmentHover, onSegmentSelect]);
+  }, [onRouteHover, onRouteSelect, onSegmentHover, onSegmentSelect]);
 
   useEffect(() => {
     boundsRef.current = bounds;
@@ -584,14 +572,7 @@ export function HikeMap({
 
   useEffect(() => {
     accessPointsRef.current = accessPoints;
-    selectedAccessPointIdRef.current = selectedAccessPointId;
-  }, [accessPoints, selectedAccessPointId]);
-
-  useEffect(() => {
-    trailNetworkRef.current = trailNetwork;
-    const source = mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined;
-    source?.setData(trailNetwork);
-  }, [trailNetwork]);
+  }, [accessPoints]);
 
   useEffect(() => {
     packIdsRef.current = packIds;
@@ -725,7 +706,7 @@ export function HikeMap({
             "circle-stroke-width": 3,
           },
         });
-        map?.addSource("trail-network", { type: "geojson", data: trailNetworkRef.current });
+        map?.addSource("trail-network", { type: "geojson", data: EMPTY_LINES });
         // The trail network is context, not content: use a single quiet dashed
         // stroke without a casing so the basemap remains visible in the gaps.
         map?.addLayer({
@@ -753,7 +734,6 @@ export function HikeMap({
           type: "geojson",
           data: accessPointFeatures(
             accessPointsRef.current,
-            selectedAccessPointIdRef.current,
             resultAccessPointIds(routesRef.current),
           ),
           cluster: true,
@@ -799,11 +779,7 @@ export function HikeMap({
           filter: ["!", ["has", "point_count"]],
           paint: {
             "circle-radius": zoomWidth(5.5),
-            "circle-color": [
-              "case",
-              ["==", ["get", "selected"], true], ROUTE_SELECTED,
-              "#173f35",
-            ],
+            "circle-color": "#173f35",
           },
         });
         map?.addLayer({
@@ -813,11 +789,7 @@ export function HikeMap({
           filter: EMPTY_ACCESS_POINT_HOVER_FILTER,
           paint: {
             "circle-radius": zoomWidth(7.5),
-            "circle-color": [
-              "case",
-              ["==", ["get", "selected"], true], ROUTE_SELECTED,
-              "#173f35",
-            ],
+            "circle-color": "#173f35",
           },
         });
         map?.addSource("generated-routes-hit", {
@@ -1031,7 +1003,6 @@ export function HikeMap({
         map?.on("click", "access-points", (event) => {
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
-          onAccessPointSelectRef.current(details.id);
           if (!details.copyName) return;
           void copyTextToClipboard(
             details.copyName,
@@ -1140,8 +1111,8 @@ export function HikeMap({
 
   useEffect(() => {
     const source = mapRef.current?.getSource("access-points") as GeoJSONSource | undefined;
-    source?.setData(accessPointFeatures(accessPoints, selectedAccessPointId, resultAccessPointIds(routes)));
-  }, [accessPoints, routes, selectedAccessPointId]);
+    source?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes)));
+  }, [accessPoints, routes]);
 
   useEffect(() => {
     const map = mapRef.current;
