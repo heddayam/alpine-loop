@@ -487,6 +487,19 @@ the evidence line.
   drawn-boundary Quick/Full flow. No pack schema changed, so installed packs do
   not require rebuilding.
 
+- 2026-09-06 — result rendering now accepts a route collection with its real
+  Quick-search diagnostics or saved-job metadata. Removed synthetic solver
+  responses, aggregated diagnostics, and duplicate saved-page and region-label
+  state. Route ordering, geometry deduplication, selection, and pagination remain
+  unchanged. Relative to `1976e81`, application source is 84 lines smaller and
+  source plus tests is 36 lines smaller. Two consecutive `npm run verify` runs
+  each passed 451 tests across 85 files, lint, type checking, and the production
+  build. Two consecutive `npm run test:browser` runs passed all six Chromium
+  flows. Live localhost checks covered Quick-search limits, opening existing
+  saved routes, map zoom/pan, and mobile internal-panel scrolling. A final status
+  spacing adjustment also passed all 13 results-panel tests. No API, pack schema,
+  or dependency changed. Generated packs and local databases remain ignored.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GeneratedClosedRouteV3, GenerateClosedRoutesResponseV3 } from "@/lib/contracts";
 import { ROUTE_PREVIEW_EVENT } from "../map/routeTraceOverlay";
 import { ResultsPanel } from "./ResultsPanel";
+import type { RouteResults } from "./types";
 
 function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosedRouteV3 {
   return {
@@ -64,11 +65,11 @@ function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosed
   };
 }
 
-type ResponseOverrides = Omit<Partial<GenerateClosedRoutesResponseV3>, "diagnostics"> & {
+type ResultsOverrides = Partial<Pick<GenerateClosedRoutesResponseV3, "requested" | "exact" | "nearMisses">> & {
   diagnostics?: Partial<GenerateClosedRoutesResponseV3["diagnostics"]>;
 };
 
-function response(overrides: ResponseOverrides = {}): GenerateClosedRoutesResponseV3 {
+function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind: "quick" }> {
   const diagnostics: GenerateClosedRoutesResponseV3["diagnostics"] = {
     elapsedMs: 42.4,
     expandedStates: 1200,
@@ -97,52 +98,56 @@ function response(overrides: ResponseOverrides = {}): GenerateClosedRoutesRespon
     nonBudgetShortfallReasons: ["fewer-exact-routes-than-requested"],
     ...overrides.diagnostics,
   };
-  return {
-    version: 3,
-    requestId: "request-results-1",
-    pack: { id: "fixture-pack", schemaVersion: "3", dataVersion: "fixture-3", builtAt: "2026-08-01T00:00:00Z" },
-    requested: 2,
-    resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" },
-    exact: [route()],
-    nearMisses: [{
-      ...route({
-        id: "near-lollipop",
-        distanceMeters: 3218.688,
-        trailNames: ["Skyline Trail"],
-        topology: {
-          kind: "lollipop",
-          cycleCount: 1,
-          cycleBlockCount: 1,
-          repeatedTrailDistanceMeters: 800,
-          repeatedTrailFraction: 0.25,
-          sharedStemDistanceMeters: 400,
-          connectorCount: 1,
-        },
-      }),
-      violations: [{
-        constraint: "distance",
-        value: 3218.688,
-        min: 4828.032,
-        max: 12874.752,
-        delta: 1609.344,
-        normalizedDelta: 0.2,
-      }],
+  const exact = overrides.exact ?? [route()];
+  const nearMisses: GenerateClosedRoutesResponseV3["nearMisses"] = overrides.nearMisses ?? [{
+    ...route({
+      id: "near-lollipop",
+      distanceMeters: 3218.688,
+      trailNames: ["Skyline Trail"],
+      topology: {
+        kind: "lollipop",
+        cycleCount: 1,
+        cycleBlockCount: 1,
+        repeatedTrailDistanceMeters: 800,
+        repeatedTrailFraction: 0.25,
+        sharedStemDistanceMeters: 400,
+        connectorCount: 1,
+      },
+    }),
+    violations: [{
+      constraint: "distance",
+      value: 3218.688,
+      min: 4828.032,
+      max: 12874.752,
+      delta: 1609.344,
+      normalizedDelta: 0.2,
     }],
-    ...overrides,
-    diagnostics,
+  }];
+  return {
+    kind: "quick",
+    requested: overrides.requested ?? 2,
+    exact: exact.map((route) => ({ ...route, regionLabel: "Santa Cruz Mountains" })),
+    nearMisses: nearMisses.map((route) => ({ ...route, regionLabel: "Santa Cruz Mountains" })),
+    searches: [{
+      label: "Santa Cruz Mountains",
+      requestId: "request-results-1",
+      pack: { id: "fixture-pack", schemaVersion: "3", dataVersion: "fixture-3", builtAt: "2026-08-01T00:00:00Z" },
+      resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" },
+      diagnostics,
+    }],
   };
 }
 
 function ControlledResultsPanel() {
   const [selectedRouteId, setSelectedRouteId] = useState("exact-loop");
-  return <ResultsPanel status="done" response={response()} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />;
+  return <ResultsPanel status="done" results={results()} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />;
 }
 
-describe("ResultsPanel V3", () => {
+describe("ResultsPanel", () => {
   afterEach(cleanup);
 
   it("separates exact matches from labeled close matches and renders closed topology", () => {
-    const { rerender } = render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    const { rerender } = render(<ResultsPanel status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
 
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
@@ -157,7 +162,7 @@ describe("ResultsPanel V3", () => {
     expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
-    rerender(<ResultsPanel status="done" response={response()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
+    rerender(<ResultsPanel status="done" results={results()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
     (screen.getByText("Close matches").closest("details") as HTMLDetailsElement).open = true;
     const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.click(within(detail).getByText("Details"));
@@ -210,7 +215,7 @@ describe("ResultsPanel V3", () => {
     };
     render(<ResultsPanel
       status="done"
-      response={response({ exact: [], nearMisses: [closeMatch] })}
+      results={results({ exact: [], nearMisses: [closeMatch] })}
       selectedRouteId="close-metrics"
       nearMissesOpen
       onSelectRoute={() => undefined}
@@ -230,7 +235,7 @@ describe("ResultsPanel V3", () => {
   it("shows and copies trailhead coordinates", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    render(<ResultsPanel status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
     expect(screen.getByText("Trailhead")).toBeVisible();
@@ -242,7 +247,7 @@ describe("ResultsPanel V3", () => {
   it("reports when trailhead coordinates could not be copied", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("Clipboard denied"));
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    render(<ResultsPanel status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(screen.getByText("Trailhead")).toBeVisible();
     expect(await screen.findByText("Couldn’t copy")).toBeVisible();
@@ -255,7 +260,7 @@ describe("ResultsPanel V3", () => {
     const onSelectSegment = vi.fn();
     const { rerender } = render(<ResultsPanel
       status="done"
-      response={response()}
+      results={results()}
       selectedRouteId="exact-loop"
       onSelectRoute={() => undefined}
       onHoverSegment={onHoverSegment}
@@ -280,7 +285,7 @@ describe("ResultsPanel V3", () => {
 
     rerender(<ResultsPanel
       status="done"
-      response={response()}
+      results={results()}
       selectedRouteId="exact-loop"
       hoveredSegmentId="exact-loop:segment:1"
       onSelectRoute={() => undefined}
@@ -291,7 +296,7 @@ describe("ResultsPanel V3", () => {
   });
 
   it("explains grade experience with whole-number percentages", () => {
-    render(<ResultsPanel status="done" response={response({
+    render(<ResultsPanel status="done" results={results({
       exact: [route({ gradeExperience: { climbP90Pct: 11.34, steepClimbingSharePct: 18.73, longestSteepClimbMeters: 275, descentP90Pct: 14.13, windowMeters: 100, steepThresholdPct: 10 } })],
       nearMisses: [],
     })} onSelectRoute={() => undefined} />);
@@ -305,7 +310,7 @@ describe("ResultsPanel V3", () => {
     const previews: Array<string | undefined> = [];
     const handlePreview = (event: Event) => previews.push((event as CustomEvent<{ routeId?: string }>).detail.routeId);
     window.addEventListener(ROUTE_PREVIEW_EVENT, handlePreview);
-    render(<ResultsPanel status="done" response={response()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    render(<ResultsPanel status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
     const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
     const card = within(exactSection).getByRole("article", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.mouseEnter(card);
@@ -317,7 +322,7 @@ describe("ResultsPanel V3", () => {
   it("reports budget truncation and non-budget shortfall honestly", async () => {
     render(<ResultsPanel
       status="done"
-      response={response({
+      results={results({
         requested: 10,
         exact: [],
         nearMisses: [],
@@ -343,18 +348,84 @@ describe("ResultsPanel V3", () => {
   it("does not call a complete exact set partial", () => {
     render(<ResultsPanel
       status="done"
-      response={response({ requested: 1, exact: [route()], nearMisses: [], diagnostics: { hardTruncationReasons: ["deadline"] } })}
+      results={results({ requested: 1, exact: [route()], nearMisses: [], diagnostics: { hardTruncationReasons: ["deadline"] } })}
       onSelectRoute={() => undefined}
     />);
     expect(screen.queryByText(/requested exact routes found/)).not.toBeInTheDocument();
   });
 
+  it("shows saved job progress without a fabricated route target or solver counters", async () => {
+    const saved: RouteResults = {
+      kind: "saved",
+      exact: [],
+      nearMisses: results().nearMisses,
+      job: {
+        version: 1,
+        id: "3d594650-3436-4f8b-a0e8-38d13fc148ca",
+        status: "cancelled",
+        request: {
+          version: 1,
+          packId: "fixture-pack",
+          searchRegionId: "region-1",
+          criteria: {
+            closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+            distanceMiles: { min: 3, max: 8 },
+            includeUncertainAccess: true,
+          },
+          routesPerAccessPoint: 10,
+        },
+        pack: { id: "fixture-pack", dataVersion: "fixture-v4", builtAt: "2026-08-04T00:00:00Z" },
+        searchRegion: { id: "region-1", name: "Santa Cruz Mountains" },
+        progress: { eligibleAccessPointCount: 10, processedAccessPointCount: 4, exactRouteCount: 8, nearMissRouteCount: 2, truncatedAccessPointCount: 1, elapsedMs: 12_000 },
+        partial: true,
+        stale: true,
+        createdAt: "2026-08-06T00:00:00Z",
+        updatedAt: "2026-08-06T00:00:12Z",
+      },
+    };
+    render(<ResultsPanel status="done" results={saved} onSelectRoute={() => undefined} />);
+    expect(screen.getByText("Full search cancelled.")).toBeVisible();
+    expect(screen.getByText("4 of 10 trailheads attempted.")).toBeVisible();
+    expect(screen.getByText("Partial results retained.")).toBeVisible();
+    expect(screen.getByText("Built with an older pack version.")).toBeVisible();
+    expect(screen.getByText(/1 trailhead search.*reached/)).toBeVisible();
+    expect(screen.queryByText(/requested exact routes found/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Diagnostics"));
+    expect(screen.getByText("Saved exact routes").nextElementSibling).toHaveTextContent("8");
+    expect(screen.getByText("Saved close matches").nextElementSibling).toHaveTextContent("2");
+    expect(screen.getByText("Elapsed").nextElementSibling).toHaveTextContent("12,000 ms");
+    expect(screen.queryByText("States explored")).not.toBeInTheDocument();
+    expect(screen.queryByText("Graph queries")).not.toBeInTheDocument();
+  });
+
+  it("keeps each Quick search's diagnostics and identity separate", async () => {
+    const combined = results({ requested: 2 });
+    const first = combined.searches[0]!;
+    combined.searches.push({
+      ...first,
+      label: "East Bay",
+      requestId: "request-east-bay",
+      pack: { ...first.pack, id: "east-bay" },
+      diagnostics: { ...first.diagnostics, elapsedMs: 71, expandedStates: 300 },
+    });
+    render(<ResultsPanel status="done" results={combined} onSelectRoute={() => undefined} />);
+    expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
+    await userEvent.click(screen.getByText("Diagnostics"));
+    const west = within(screen.getByRole("region", { name: "Santa Cruz Mountains" }));
+    const east = within(screen.getByRole("region", { name: "East Bay" }));
+    expect(west.getByText("Elapsed").nextElementSibling).toHaveTextContent("42 ms");
+    expect(east.getByText("Elapsed").nextElementSibling).toHaveTextContent("71 ms");
+    expect(west.getByText("States explored").nextElementSibling).toHaveTextContent("1,200");
+    expect(east.getByText("States explored").nextElementSibling).toHaveTextContent("300");
+    expect(east.getByText("Request ID").nextElementSibling).toHaveTextContent("request-east-bay");
+  });
+
   it("announces loading, error, and cancelled states", () => {
-    const { rerender } = render(<ResultsPanel status="loading" response={null} onSelectRoute={() => undefined} />);
+    const { rerender } = render(<ResultsPanel status="loading" results={null} onSelectRoute={() => undefined} />);
     expect(screen.getByRole("status")).toHaveTextContent("generating routes");
-    rerender(<ResultsPanel status="error" response={null} message="Fixture pack is unavailable." onSelectRoute={() => undefined} />);
+    rerender(<ResultsPanel status="error" results={null} message="Fixture pack is unavailable." onSelectRoute={() => undefined} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Fixture pack is unavailable.");
-    rerender(<ResultsPanel status="cancelled" response={null} onSelectRoute={() => undefined} />);
+    rerender(<ResultsPanel status="cancelled" results={null} onSelectRoute={() => undefined} />);
     expect(screen.getByRole("status")).toHaveTextContent("No routes were changed");
   });
 });

@@ -3,16 +3,17 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type {
   GeneratedClosedRouteV3,
-  GenerateClosedRoutesResponseV3,
+  ConstraintViolationV3,
 } from "@/lib/contracts";
 import { COORDINATE_COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../map/HikeMap";
 import { announceRoutePreview } from "../map/routeTraceOverlay";
+import type { RouteResults } from "./types";
 
 export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
 
 type ResultsPanelProps = {
   status: ResultsStatus;
-  response: GenerateClosedRoutesResponseV3 | null;
+  results: RouteResults | null;
   message?: string;
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
@@ -26,7 +27,6 @@ type ResultsPanelProps = {
   nearMissesOpen?: boolean;
   onToggleNearMisses?: (open: boolean) => void;
   pagination?: { hasNext: boolean; loading: boolean; onNext: () => void };
-  routeRegionLabels?: Readonly<Record<string, string>>;
   onClose?: () => void;
 };
 
@@ -158,7 +158,7 @@ function RouteCard({
   onHoverSegment,
   regionLabel,
 }: {
-  route: GeneratedClosedRouteV3 & { violations?: GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"] };
+  route: GeneratedClosedRouteV3 & { violations?: ConstraintViolationV3[] };
   routeNumber: number;
   selected: boolean;
   hovered: boolean;
@@ -190,7 +190,7 @@ function RouteCard({
     "steep-climbing-share",
     "longest-steep-climb",
     "descent-p90-grade",
-  ].some((constraint) => violated.has(constraint as GenerateClosedRoutesResponseV3["nearMisses"][number]["violations"][number]["constraint"]));
+  ].some((constraint) => violated.has(constraint as ConstraintViolationV3["constraint"]));
   const warningClass = (active: boolean) => active ? "near-match-stat" : undefined;
   const copyCoordinates = () => {
     const attempt = ++coordinateCopyAttemptRef.current;
@@ -352,7 +352,7 @@ function RouteCard({
 
 export function ResultsPanel({
   status,
-  response,
+  results,
   message,
   selectedRouteId,
   onSelectRoute,
@@ -366,7 +366,6 @@ export function ResultsPanel({
   nearMissesOpen = false,
   onToggleNearMisses,
   pagination,
-  routeRegionLabels = {},
   onClose,
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -377,8 +376,8 @@ export function ResultsPanel({
     desktopVisible ? "" : "desktop-panel-hidden",
   ].filter(Boolean).join(" ");
   const routes = useMemo(
-    () => response ? [...response.exact, ...response.nearMisses] : [],
-    [response],
+    () => results ? [...results.exact, ...results.nearMisses] : [],
+    [results],
   );
 
   // Selecting a route or segment on the map snaps its card into view.
@@ -459,28 +458,35 @@ export function ResultsPanel({
     );
   }
 
-  if (!response) return null;
+  if (!results) return null;
 
   const total = routes.length;
-  const exactShortfall = response.exact.length < response.requested;
-  const budgetLimited = response.diagnostics.hardTruncationReasons.length > 0;
-  const shortfallReasons = [
-    ...response.diagnostics.nonBudgetShortfallReasons,
-    ...response.diagnostics.shortfallReasons,
-  ];
+  const quick = results.kind === "quick" ? results : undefined;
+  const job = results.kind === "saved" ? results.job : undefined;
 
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <ResultsHeading total={total} onClose={onClose} />
 
-      {exactShortfall ? (
+      {quick && results.exact.length < quick.requested ? (
         <div className="results-state" role="status" aria-live="polite">
-          <strong>{response.exact.length} of {response.requested} requested exact routes found.</strong>
-          <span>{budgetLimited
+          <strong>{results.exact.length} of {quick.requested} requested exact routes found.</strong>
+          <span>{quick.searches.some(({ diagnostics }) => diagnostics.hardTruncationReasons.length > 0)
             ? "The effort limit stopped the search early."
-            : response.diagnostics.exhausted
+            : quick.searches.every(({ diagnostics }) => diagnostics.exhausted)
               ? "The search was exhausted before finding enough exact matches."
               : "Fewer exact matches than requested."} Close matches are listed separately.</span>
+        </div>
+      ) : null}
+
+      {job ? (
+        <div className="results-state" role="status">
+          <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
+          <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
+          {job.partial ? <span> Partial results retained.</span> : null}
+          {job.stale ? <span> Built with an older pack version.</span> : null}
+          {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
+          {job.error ? <span> {job.error}</span> : null}
         </div>
       ) : null}
 
@@ -494,9 +500,9 @@ export function ResultsPanel({
           <section className="result-section" aria-labelledby="exact-results-title">
             <div className="result-section-heading">
               <h3 id="exact-results-title">Exact matches</h3>
-              <span>{response.exact.length}</span>
+              <span>{results.exact.length}</span>
             </div>
-            {response.exact.map((route, index) => (
+            {results.exact.map((route, index) => (
               <RouteCard
                 key={route.id}
                 route={route}
@@ -513,24 +519,24 @@ export function ResultsPanel({
                 hoveredSegmentId={hoveredSegmentId}
                 onSelectSegment={onSelectSegment}
                 onHoverSegment={onHoverSegment}
-                regionLabel={routeRegionLabels[route.id]}
+                regionLabel={route.regionLabel}
               />
             ))}
           </section>
 
-          {response.nearMisses.length > 0 ? (
+          {results.nearMisses.length > 0 ? (
             /* Close matches stay folded away while there are exact matches to
                read; with none, they are the only thing left to look at. */
             <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => onToggleNearMisses?.(event.currentTarget.open)}>
-              <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{response.nearMisses.length}</span></summary>
-              {response.nearMisses.map((route, index) => (
+              <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{results.nearMisses.length}</span></summary>
+              {results.nearMisses.map((route, index) => (
                 <RouteCard
                   key={route.id}
                   route={route}
-                  routeNumber={response.exact.length + index + 1}
+                  routeNumber={results.exact.length + index + 1}
                   selected={route.id === selectedRouteId}
                   hovered={route.id === hoveredRouteId}
-                  buttonRef={(node) => { cardRefs.current[response.exact.length + index] = node; }}
+                  buttonRef={(node) => { cardRefs.current[results.exact.length + index] = node; }}
                   segmentButtonRef={(segmentId, node) => {
                     if (node) segmentRefs.current.set(segmentId, node);
                     else segmentRefs.current.delete(segmentId);
@@ -540,7 +546,7 @@ export function ResultsPanel({
                   hoveredSegmentId={hoveredSegmentId}
                   onSelectSegment={onSelectSegment}
                   onHoverSegment={onHoverSegment}
-                  regionLabel={routeRegionLabels[route.id]}
+                  regionLabel={route.regionLabel}
                 />
               ))}
             </details>
@@ -558,26 +564,44 @@ export function ResultsPanel({
 
       <details className="diagnostics">
         <summary>Diagnostics</summary>
-        <p>{response.resolvedAccessFilter.label}</p>
-        <dl>
-          <div><dt>Elapsed</dt><dd>{Math.round(response.diagnostics.elapsedMs).toLocaleString("en-US")} ms</dd></div>
-          <div><dt>States explored</dt><dd>{response.diagnostics.expandedStates.toLocaleString("en-US")}</dd></div>
-          <div><dt>Candidates</dt><dd>{response.diagnostics.candidateCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Eligible starts</dt><dd>{response.diagnostics.eligibleAccessPointCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Searched starts</dt><dd>{response.diagnostics.searchedAccessPointCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Graph queries</dt><dd>{response.diagnostics.graphQueryCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Max loaded edges</dt><dd>{response.diagnostics.maximumLoadedDirectedEdges.toLocaleString("en-US")}</dd></div>
-          <div><dt>Cycle-feasible starts</dt><dd>{response.diagnostics.feasibleAccessPointCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>No-cycle starts</dt><dd>{response.diagnostics.noCycleAccessPointCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Attachment groups probed</dt><dd>{response.diagnostics.probedAttachmentGroupCount.toLocaleString("en-US")} / {response.diagnostics.attachmentGroupCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Groups deeply searched</dt><dd>{response.diagnostics.deeplySearchedAttachmentGroupCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Cycle primitives</dt><dd>{response.diagnostics.cyclePrimitiveCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Composed candidates</dt><dd>{response.diagnostics.composedCandidateCount.toLocaleString("en-US")}</dd></div>
-          <div><dt>Request ID</dt><dd>{response.requestId}</dd></div>
-        </dl>
-        {response.diagnostics.hardTruncationReasons.length ? <p><strong>Hard search limits:</strong> {response.diagnostics.hardTruncationReasons.join(" · ")}</p> : null}
-        {response.diagnostics.truncationReasons.length ? <p><strong>Search limits:</strong> {response.diagnostics.truncationReasons.join(" · ")}</p> : null}
-        {shortfallReasons.length ? <p><strong>Shortfall:</strong> {[...new Set(shortfallReasons)].join(" · ")}</p> : null}
+        {quick?.searches.map((search) => {
+          const shortfallReasons = [...new Set([
+            ...search.diagnostics.nonBudgetShortfallReasons,
+            ...search.diagnostics.shortfallReasons,
+          ])];
+          return <section key={search.requestId} aria-label={search.label}>
+            <p><strong>{search.label}</strong> · {search.resolvedAccessFilter.label}</p>
+            <dl>
+              <div><dt>Elapsed</dt><dd>{Math.round(search.diagnostics.elapsedMs).toLocaleString("en-US")} ms</dd></div>
+              <div><dt>States explored</dt><dd>{search.diagnostics.expandedStates.toLocaleString("en-US")}</dd></div>
+              <div><dt>Candidates</dt><dd>{search.diagnostics.candidateCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Eligible starts</dt><dd>{search.diagnostics.eligibleAccessPointCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Searched starts</dt><dd>{search.diagnostics.searchedAccessPointCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Graph queries</dt><dd>{search.diagnostics.graphQueryCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Max loaded edges</dt><dd>{search.diagnostics.maximumLoadedDirectedEdges.toLocaleString("en-US")}</dd></div>
+              <div><dt>Cycle-feasible starts</dt><dd>{search.diagnostics.feasibleAccessPointCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>No-cycle starts</dt><dd>{search.diagnostics.noCycleAccessPointCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Attachment groups probed</dt><dd>{search.diagnostics.probedAttachmentGroupCount.toLocaleString("en-US")} / {search.diagnostics.attachmentGroupCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Groups deeply searched</dt><dd>{search.diagnostics.deeplySearchedAttachmentGroupCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Cycle primitives</dt><dd>{search.diagnostics.cyclePrimitiveCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Composed candidates</dt><dd>{search.diagnostics.composedCandidateCount.toLocaleString("en-US")}</dd></div>
+              <div><dt>Request ID</dt><dd>{search.requestId}</dd></div>
+            </dl>
+            {search.diagnostics.hardTruncationReasons.length ? <p><strong>Hard search limits:</strong> {search.diagnostics.hardTruncationReasons.join(" · ")}</p> : null}
+            {search.diagnostics.truncationReasons.length ? <p><strong>Search limits:</strong> {search.diagnostics.truncationReasons.join(" · ")}</p> : null}
+            {shortfallReasons.length ? <p><strong>Shortfall:</strong> {shortfallReasons.join(" · ")}</p> : null}
+          </section>;
+        })}
+        {job ? <>
+          <p>{job.request.drawnAreaBbox ? "Drawn boundary" : job.request.durationMinutes ? `${job.request.durationMinutes} minutes · ${job.searchRegion.name}` : job.searchRegion.name}</p>
+          <dl>
+            <div><dt>Elapsed</dt><dd>{Math.round(job.progress.elapsedMs).toLocaleString("en-US")} ms</dd></div>
+            <div><dt>Saved exact routes</dt><dd>{job.progress.exactRouteCount}</dd></div>
+            <div><dt>Saved close matches</dt><dd>{job.progress.nearMissRouteCount}</dd></div>
+            <div><dt>Pack version</dt><dd>{job.pack.dataVersion}</dd></div>
+            <div><dt>Job ID</dt><dd>{job.id}</dd></div>
+          </dl>
+        </> : null}
       </details>
     </aside>
   );

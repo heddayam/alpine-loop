@@ -500,7 +500,7 @@ describe("HikeBuilder unified route search", () => {
     expect(generatedPackIds).toEqual(["fixture-pack", "southern-east-bay"]);
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("fixture-pack::fixture-route");
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("southern-east-bay::east-bay-route");
-    expect(screen.getByText("Southern East Bay · Santa Cruz Mountains")).toBeVisible();
+    expect(screen.getByText("Southern East Bay · Santa Cruz Mountains", { selector: ".route-region-label" })).toBeVisible();
   });
 
   it("aborts a stale Quick request after a subsequent boundary change", async () => {
