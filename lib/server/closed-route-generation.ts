@@ -14,6 +14,7 @@ import {
   AccessFilterResolutionError,
   CLOSED_ROUTE_EFFORT_BUDGETS,
   type ReachableGraphClosedRouteContext,
+  type RouteSearchRequest,
   type SolverBudget,
 } from "@/lib/solver";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
@@ -37,7 +38,7 @@ export type ReachableGraphFallbackPack = ClosedRoutePack & {
 
 export interface ClosedRouteSolverV3 {
   generate(
-    request: GenerateClosedRoutesRequestV3,
+    request: RouteSearchRequest,
     context: ReachableGraphClosedRouteContext,
   ): Promise<GenerateClosedRoutesResponseV3>;
 }

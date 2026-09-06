@@ -14,6 +14,7 @@ import type {
 import {
   AccessFilterResolutionError,
   type ReachableGraphClosedRouteContext,
+  type RouteSearchRequest,
   type SolverBudget,
 } from "@/lib/solver";
 import {
@@ -134,7 +135,7 @@ function testPack(overrides: Partial<ClosedRoutePack> = {}): ClosedRoutePack {
 }
 
 function responseFor(
-  request: GenerateClosedRoutesRequestV3,
+  request: RouteSearchRequest,
   context: ReachableGraphClosedRouteContext,
   overrides: Partial<GenerateClosedRoutesResponseV3> = {},
 ): GenerateClosedRoutesResponseV3 {
@@ -179,7 +180,7 @@ function responseFor(
 
 function dynamicSolver(
   implementation: (
-    request: GenerateClosedRoutesRequestV3,
+    request: RouteSearchRequest,
     context: ReachableGraphClosedRouteContext,
   ) => Promise<GenerateClosedRoutesResponseV3> = async (request, context) => responseFor(request, context),
 ): ClosedRouteSolverV3 {
