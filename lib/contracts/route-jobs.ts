@@ -1,27 +1,14 @@
 import { z } from "zod";
-import { finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
+import { finiteNumberSchema, isoDateSchema } from "./common";
 import { originSchema } from "./discovery";
 import {
   areaGeometrySchema,
   bboxSchema,
-  closedRouteTopologyPreferenceV3Schema,
   constraintViolationV3Schema,
   driveTimeDurationSchema,
   generatedClosedRouteV3Schema,
-  gradeExperienceConstraintsSchema,
+  routeCriteriaSchema,
 } from "./routes";
-
-export const batchRouteCriteriaV1Schema = z.object({
-  closedRoute: closedRouteTopologyPreferenceV3Schema,
-  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= 30, {
-    message: "Route distance may not exceed 30 miles",
-  }),
-  elevationGainFeet: orderedRangeSchema.optional(),
-  maximumElevationFeet: orderedRangeSchema.optional(),
-  steepestSustainedGradePct: orderedRangeSchema.optional(),
-  gradeExperience: gradeExperienceConstraintsSchema.optional(),
-  includeUncertainAccess: z.boolean(),
-}).strict();
 
 export const createBatchRouteJobV1Schema = z.object({
   version: z.literal(1),
@@ -30,7 +17,7 @@ export const createBatchRouteJobV1Schema = z.object({
   durationMinutes: driveTimeDurationSchema.optional(),
   searchRegionId: z.string().trim().min(1).optional(),
   drawnAreaBbox: bboxSchema.optional(),
-  criteria: batchRouteCriteriaV1Schema,
+  criteria: routeCriteriaSchema,
   routesPerAccessPoint: z.literal(10),
 }).strict().superRefine((request, context) => {
   if (Boolean(request.origin) !== Boolean(request.durationMinutes)) {
@@ -123,7 +110,6 @@ export const routeJobListSchema = z.object({
   jobs: z.array(routeJobSchema),
 }).strict();
 
-export type BatchRouteCriteriaV1 = z.infer<typeof batchRouteCriteriaV1Schema>;
 export type CreateBatchRouteJobV1 = z.infer<typeof createBatchRouteJobV1Schema>;
 export type RouteJobStatus = z.infer<typeof routeJobStatusSchema>;
 export type RouteJobProgress = z.infer<typeof routeJobProgressSchema>;

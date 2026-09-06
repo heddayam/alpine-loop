@@ -78,12 +78,7 @@ export const gradeExperienceMetricsSchema = z.object({
   steepThresholdPct: z.literal(STEEP_GRADE_THRESHOLD_PCT),
 }).strict();
 
-export const generateClosedRoutesRequestV3Schema = z.object({
-  version: z.literal(3),
-  packId: z.string().trim().min(1),
-  accessFilter: accessFilterV2Schema,
-  startAccessPointId: z.string().trim().min(1).optional(),
-  routeFamily: z.literal("closed"),
+export const routeCriteriaSchema = z.object({
   closedRoute: closedRouteTopologyPreferenceV3Schema,
   distanceMiles: orderedRangeSchema.refine(({ max }) => max <= 30, {
     message: "Route distance may not exceed 30 miles",
@@ -93,6 +88,16 @@ export const generateClosedRoutesRequestV3Schema = z.object({
   steepestSustainedGradePct: orderedRangeSchema.optional(),
   gradeExperience: gradeExperienceConstraintsSchema.optional(),
   includeUncertainAccess: z.boolean(),
+}).strict();
+
+export type RouteCriteria = z.infer<typeof routeCriteriaSchema>;
+
+export const generateClosedRoutesRequestV3Schema = routeCriteriaSchema.extend({
+  version: z.literal(3),
+  packId: z.string().trim().min(1),
+  accessFilter: accessFilterV2Schema,
+  startAccessPointId: z.string().trim().min(1).optional(),
+  routeFamily: z.literal("closed"),
   searchEffort: searchEffortV3Schema,
   limit: z.number().int().min(1).max(20),
 }).strict();

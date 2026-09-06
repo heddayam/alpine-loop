@@ -1,13 +1,8 @@
-import {
-  generateClosedRoutesRequestV3Schema,
-  type AccessFilterV2,
-  type GenerateClosedRoutesRequestV3,
-} from "@/lib/contracts";
-import { FIXTURE_PACK_METADATA } from "@/lib/packs/fixture-pack";
-import type { Bounds, BuilderValues, RangeField } from "./types";
+import { routeCriteriaSchema, type RouteCriteria } from "@/lib/contracts";
+import type { BuilderValues, RangeField } from "./types";
 
-export type ValidationResult =
-  | { success: true; request: GenerateClosedRoutesRequestV3 }
+type ValidationResult =
+  | { success: true; criteria: RouteCriteria; limit: number }
   | { success: false; errors: string[] };
 
 function parseRange(field: RangeField, label: string) {
@@ -23,24 +18,8 @@ function parseRange(field: RangeField, label: string) {
   return { value: { min, max }, errors };
 }
 
-export function isPointInsideBounds(lon: number, lat: number, bounds: Bounds) {
-  const [west, south, east, north] = bounds;
-  return lon >= west && lon <= east && lat >= south && lat <= north;
-}
-
-export function isBoundsInsideBounds(inner: Bounds, outer: Bounds) {
-  return inner[0] >= outer[0] && inner[1] >= outer[1] && inner[2] <= outer[2] && inner[3] <= outer[3];
-}
-
-export function buildGenerateRoutesRequest(
-  values: BuilderValues,
-  accessFilter: AccessFilterV2 | null,
-  startAccessPointId?: string,
-  packId = FIXTURE_PACK_METADATA.id,
-): ValidationResult {
+export function parseSearchCriteria(values: BuilderValues): ValidationResult {
   const errors: string[] = [];
-  if (!accessFilter) errors.push("Choose and complete a trailhead filter first.");
-
   const distance = parseRange(values.distanceMiles, "Distance");
   const elevationGain = parseRange(values.elevationGainFeet, "Elevation gain");
   const maximumElevation = parseRange(values.maximumElevationFeet, "Maximum elevation");
@@ -57,14 +36,9 @@ export function buildGenerateRoutesRequest(
   if (values.maximumSharedStemEnabled && (!Number.isFinite(maximumSharedStemMiles) || maximumSharedStemMiles < 0 || maximumSharedStemMiles > 30)) {
     errors.push("Maximum shared approach must be from 0 through 30 miles.");
   }
-  if (errors.length || !accessFilter || !distance.value) return { success: false, errors };
+  if (errors.length || !distance.value) return { success: false, errors };
 
-  const candidate: GenerateClosedRoutesRequestV3 = {
-    version: 3,
-    packId,
-    accessFilter,
-    ...(startAccessPointId ? { startAccessPointId } : {}),
-    routeFamily: "closed",
+  const candidate: RouteCriteria = {
     closedRoute: {
       maximumRepeatedTrailPct,
       ...(values.maximumSharedStemEnabled ? { maximumSharedStemMiles } : {}),
@@ -75,11 +49,9 @@ export function buildGenerateRoutesRequest(
     ...(maximumElevation.value ? { maximumElevationFeet: maximumElevation.value } : {}),
     ...(values.gradeConstraintEnabled ? { gradeExperience: values.gradePresets[values.selectedGradePreset] } : {}),
     includeUncertainAccess: values.includeUncertainAccess,
-    searchEffort: "quick",
-    limit,
   };
-  const parsed = generateClosedRoutesRequestV3Schema.safeParse(candidate);
+  const parsed = routeCriteriaSchema.safeParse(candidate);
   return parsed.success
-    ? { success: true, request: parsed.data }
+    ? { success: true, criteria: parsed.data, limit }
     : { success: false, errors: parsed.error.issues.map((issue) => issue.message) };
 }

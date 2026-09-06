@@ -1,5 +1,8 @@
 # Alpine Loop implementation plan
 
+The [system design revision](system-design.md) defines the current target.
+This document describes the pre-revision behavior and migration baseline.
+
 ## Product outcome
 
 Alpine Loop generates closed hiking routes from a local, bounded trail graph.

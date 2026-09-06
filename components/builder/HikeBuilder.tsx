@@ -44,7 +44,7 @@ import {
   type DriveTimeDraft,
   type RangeField,
 } from "./types";
-import { buildGenerateRoutesRequest } from "./validation";
+import { parseSearchCriteria } from "./validation";
 
 type AreaGeometry = Polygon | MultiPolygon;
 type PackRegionState = {
@@ -566,14 +566,9 @@ export function HikeBuilder({
     if (!selectedPacks.length) errors.push("Choose at least one region pack.");
     if (!drawnBounds && !driveDraft.origin) errors.push("Resolve a driving origin or draw an optional boundary.");
     if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
-    const criteriaValidation = buildGenerateRoutesRequest(
-      values,
-      drawnBounds ? { mode: "drawn-area", bbox: drawnBounds } : { mode: "drawn-area", bbox: selectedCoverageBbox },
-      undefined,
-      primaryPack.id,
-    );
-    if (!criteriaValidation.success) errors.push(...criteriaValidation.errors);
-    if (errors.length) { setValidationErrors(errors); return; }
+    const parsed = parseSearchCriteria(values);
+    if (!parsed.success) errors.push(...parsed.errors);
+    if (errors.length || !parsed.success) { setValidationErrors(errors); return; }
     generationControllerRef.current?.abort();
     reachabilityControllerRef.current?.abort();
     batchPageControllerRef.current?.abort();
@@ -637,9 +632,11 @@ export function HikeBuilder({
         const accessFilter: AccessFilterV2 = drawnBounds
           ? { mode: "drawn-area", bbox: drawnBounds }
           : { mode: "drive-time", reachabilityId: reachabilityByPack.get(target.pack.id)!.requestId, regionId: target.regionId };
-        const validated = buildGenerateRoutesRequest(values, accessFilter, undefined, target.pack.id);
-        if (!validated.success) throw new Error(validated.errors.join(" "));
-        const response = await fetch("/api/routes/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(validated.request satisfies GenerateClosedRoutesRequestV3), signal: controller.signal });
+        const request: GenerateClosedRoutesRequestV3 = {
+          ...parsed.criteria, version: 3, routeFamily: "closed", packId: target.pack.id,
+          accessFilter, searchEffort: "quick", limit: parsed.limit,
+        };
+        const response = await fetch("/api/routes/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request), signal: controller.signal });
         const payload: unknown = await response.json().catch(() => null);
         if (!response.ok) throw new Error(parseError(payload, `Routes could not be generated for ${target.label}.`));
         return { target, response: generateClosedRoutesResponseV3Schema.parse(payload) };
@@ -648,7 +645,7 @@ export function HikeBuilder({
       const successful = settledSearches.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       const failedSearchCount = settledSearches.length - successful.length + reachabilityFailures.length;
       if (!successful.length) throw new Error("Routes could not be generated for any selected region.");
-      const combined = collectQuickResults(successful.map(({ target, response }) => ({ label: target.label, response })), Number(values.limit));
+      const combined = collectQuickResults(successful.map(({ target, response }) => ({ label: target.label, response })), parsed.limit);
       setRouteResults(combined);
       setSelectedRouteId((combined.exact[0] ?? combined.nearMisses[0])?.id);
       setSelectedSegmentId(undefined);
@@ -672,15 +669,10 @@ export function HikeBuilder({
     if (!drawnBounds && driveDraft.originText.trim() && !driveDraft.origin) errors.push("Choose a suggested origin or clear the field to search the entire reviewed region.");
     if (!drawnBounds && !selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
     if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
-    const validated = buildGenerateRoutesRequest(values, { mode: "drawn-area", bbox: drawnBounds ?? selectedCoverageBbox }, undefined, primaryPack.id);
-    if (!validated.success) errors.push(...validated.errors);
-    if (errors.length || !validated.success) { setValidationErrors(errors); return; }
-    const request = validated.request;
-    const criteria: CreateBatchRouteJobV1["criteria"] = { closedRoute: request.closedRoute, distanceMiles: request.distanceMiles,
-      ...(request.elevationGainFeet ? { elevationGainFeet: request.elevationGainFeet } : {}),
-      ...(request.maximumElevationFeet ? { maximumElevationFeet: request.maximumElevationFeet } : {}),
-      ...(request.steepestSustainedGradePct ? { steepestSustainedGradePct: request.steepestSustainedGradePct } : {}),
-      ...(request.gradeExperience ? { gradeExperience: request.gradeExperience } : {}), includeUncertainAccess: request.includeUncertainAccess };
+    const parsed = parseSearchCriteria(values);
+    if (!parsed.success) errors.push(...parsed.errors);
+    if (errors.length || !parsed.success) { setValidationErrors(errors); return; }
+    const { criteria } = parsed;
     const payloads: CreateBatchRouteJobV1[] = drawnBounds
       ? selectedPacks.map((selectedPack) => ({
           version: 1,
