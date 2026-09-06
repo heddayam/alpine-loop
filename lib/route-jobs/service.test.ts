@@ -24,6 +24,19 @@ const regionWideRequest: CreateBatchRouteJobV1 = {
   criteria: request.criteria,
   routesPerAccessPoint: 10,
 };
+const drawnAreaRequest: CreateBatchRouteJobV1 = {
+  version: 1,
+  packId: "fixture-pack",
+  drawnAreaBbox: [-122.4, 37.1, -122.2, 37.3],
+  criteria: request.criteria,
+  routesPerAccessPoint: 10,
+};
+const drawnAreaGeometry = {
+  type: "Polygon" as const,
+  coordinates: [[
+    [-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1],
+  ]],
+};
 const geometry = { type: "Polygon" as const, coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };
 
 function route(id: string): GeneratedClosedRouteV3 {
@@ -58,6 +71,34 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
 }
 
 describe("RouteJobService", () => {
+  it("runs a drawn-area job against its synthetic search region and exposes its bbox", async () => {
+    const { service, dependencies, store } = harness({
+      resolveJob: vi.fn(async () => ({
+        pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
+        searchRegion: { id: "drawn-area", name: "Drawn area" },
+      })),
+    });
+
+    const job = await service.create(drawnAreaRequest);
+    await service.waitUntilIdle();
+
+    expect(await service.get(job.id)).toMatchObject({
+      status: "completed",
+      request: drawnAreaRequest,
+      searchRegion: { id: "drawn-area", name: "Drawn area" },
+      filterGeometry: drawnAreaGeometry,
+      progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2 },
+    });
+    expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
+    expect(dependencies.openSearchSession).toHaveBeenCalledWith({
+      request: drawnAreaRequest,
+      pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
+      searchRegionId: "drawn-area",
+      signal: expect.any(AbortSignal),
+    });
+    store.close();
+  });
+
   it("runs a region-wide job without drive-time resolution or geometry", async () => {
     const { service, dependencies, store } = harness();
 

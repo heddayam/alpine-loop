@@ -3,6 +3,7 @@ import { finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common"
 import { originSchema } from "./discovery";
 import {
   areaGeometrySchema,
+  bboxSchema,
   closedRouteTopologyPreferenceV3Schema,
   constraintViolationV3Schema,
   driveTimeDurationSchema,
@@ -27,16 +28,32 @@ export const createBatchRouteJobV1Schema = z.object({
   packId: z.string().trim().min(1),
   origin: originSchema.optional(),
   durationMinutes: driveTimeDurationSchema.optional(),
-  searchRegionId: z.string().trim().min(1),
+  searchRegionId: z.string().trim().min(1).optional(),
+  drawnAreaBbox: bboxSchema.optional(),
   criteria: batchRouteCriteriaV1Schema,
   routesPerAccessPoint: z.literal(10),
 }).strict().superRefine((request, context) => {
-  if (Boolean(request.origin) === Boolean(request.durationMinutes)) return;
-  context.addIssue({
-    code: "custom",
-    path: request.origin ? ["durationMinutes"] : ["origin"],
-    message: "Origin and drive time must be provided together",
-  });
+  if (Boolean(request.origin) !== Boolean(request.durationMinutes)) {
+    context.addIssue({
+      code: "custom",
+      path: request.origin ? ["durationMinutes"] : ["origin"],
+      message: "Origin and drive time must be provided together",
+    });
+  }
+  if (Boolean(request.searchRegionId) === Boolean(request.drawnAreaBbox)) {
+    context.addIssue({
+      code: "custom",
+      path: request.drawnAreaBbox ? ["searchRegionId"] : ["drawnAreaBbox"],
+      message: "Choose exactly one reviewed region or drawn area",
+    });
+  }
+  if (request.drawnAreaBbox && (request.origin || request.durationMinutes !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["drawnAreaBbox"],
+      message: "A drawn area cannot be combined with origin or drive time",
+    });
+  }
 });
 
 export const routeJobStatusSchema = z.enum([

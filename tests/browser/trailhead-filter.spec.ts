@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { REACHABILITY_ID } from "./fixtures";
 import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectTypedOrigin } from "./offline-harness";
 
-test("one builder keeps both search actions visible and runs drawn Quick search explicitly", async ({ page }) => {
+test("one builder runs Quick and Full search from the drawn boundary", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
@@ -17,6 +17,7 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
   await enterDrawnArea(page);
+  await expect(page.getByText("Draw on the map to override drive time and reviewed regions for both Quick and Full search.")).toBeVisible();
   expect(harness.generationRequests).toHaveLength(0);
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
@@ -45,6 +46,22 @@ test("one builder keeps both search actions visible and runs drawn Quick search 
   await page.getByRole("button", { name: "Clear results" }).click();
   await expect(page.getByRole("heading", { name: "Results" })).toHaveCount(0);
   await expect(page.locator(".route-pin")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Full search" }).click();
+  const jobs = page.getByRole("dialog", { name: "Jobs" });
+  await expect(jobs).toBeVisible();
+  await expect(jobs.getByText("Drawn boundary")).toBeVisible();
+  expect(harness.batchRequests).toHaveLength(1);
+  expect(harness.batchRequests[0]).toMatchObject({
+    version: 1,
+    packId: "fixture-pack",
+    drawnAreaBbox: [-122.183, 37.155, -122.14, 37.178],
+    routesPerAccessPoint: 10,
+    criteria: { includeUncertainAccess: true },
+  });
+  expect(harness.batchRequests[0]).not.toHaveProperty("searchRegionId");
+  expect(harness.batchRequests[0]).not.toHaveProperty("origin");
+  expect(harness.batchRequests[0]).not.toHaveProperty("durationMinutes");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

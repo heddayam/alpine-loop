@@ -15,4 +15,12 @@ describe("ArcGIS server credential selection", () => {
     expect(arcGisKeys({ ARCGIS_API_KEY: "fallback", ARCGIS_GEOCODING_API_KEY: "geocoding" }))
       .toEqual({ geocodingApiKey: "geocoding", routingApiKey: "fallback" });
   });
+
+  it("treats blank scoped keys as unset so Compose can use the shared fallback", () => {
+    expect(arcGisKeys({
+      ARCGIS_API_KEY: " fallback ",
+      ARCGIS_GEOCODING_API_KEY: "",
+      ARCGIS_ROUTING_API_KEY: "   ",
+    })).toEqual({ geocodingApiKey: "fallback", routingApiKey: "fallback" });
+  });
 });

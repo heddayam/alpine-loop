@@ -452,6 +452,41 @@ the evidence line.
   runs pass all six Chromium flows, including shared-start numbering and anchor
   regression coverage. No contract or pack schema changed.
 
+- 2026-08-23 — added a production Docker workflow for fresh clones. The pinned
+  Node 24 multi-stage image builds the ordinary Next.js app, runs as the
+  unprivileged `node` user, retains the TypeScript solver-child runtime required
+  by Full search, and exposes an uncached `/api/health` check. Compose passes
+  only the documented server credentials, mounts the ignored installed-pack
+  catalog read-only, and persists jobs, settings, and provider counters in a
+  named volume; `.dockerignore` excludes secrets, generated packs, caches, and
+  local databases. Host binding is localhost-only by default, while `.env` can
+  select another host port or explicitly opt into LAN access. A fresh native
+  ARM64 OrbStack 2.2.3 / Docker 29.4.0 / Compose 5.1.2 build produced a healthy
+  327,019,198-byte image with zero npm advisories after the compatible transitive
+  Nano ID patch. Both the `3200` override and default `3000` bindings passed;
+  the main page returned 200, all five installed packs were discovered through
+  the read-only mount, the job database was writable on the named volume, and
+  the production TypeScript solver child loaded successfully. Live ArcGIS place
+  suggestions and a five-minute service-area request also completed from the
+  container using the shared-key fallback when scoped keys were blank.
+  `compose.yaml` parses, two consecutive `npm run verify` runs each pass 440
+  tests across 84 files plus the production build, and two consecutive
+  `npm run test:browser` runs each pass all six Chromium flows.
+
+- 2026-08-23 — extended drawn boundaries to Full search. A drawn boundary now
+  overrides drive time and reviewed regions for both actions: Quick retains its
+  short foreground solve, while Full launches one persistent job per selected
+  installed pack and attempts every eligible access point inside the box. Drawn
+  jobs reject origin/drive-time and reviewed-region combinations, retain the
+  immutable bounding box, restore it when saved results are opened, and use it
+  only to select access points; route geometry remains constrained by exact pack
+  coverage. Existing drive-time, reviewed-region-wide, and saved version-1 jobs
+  remain compatible. Two consecutive `npm run verify` runs each passed 450
+  tests across 84 files plus the production build, and two consecutive `npm run
+  test:browser` runs each passed all six Chromium flows, including the combined
+  drawn-boundary Quick/Full flow. No pack schema changed, so installed packs do
+  not require rebuilding.
+
 ## Local data and risks
 
 - Generated packs, source/build caches, route-job databases, and audits are

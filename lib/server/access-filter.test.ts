@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NamedArea } from "@/lib/contracts";
-import { resolvedNamedRegionAccessFilter } from "./access-filter";
+import { resolvedDrawnAreaAccessFilter, resolvedNamedRegionAccessFilter } from "./access-filter";
 
 const coverage = {
   type: "Polygon" as const,
@@ -29,6 +29,23 @@ describe("resolvedNamedRegionAccessFilter", () => {
       predicates: [region.geometry],
       coverage,
       filterGeometry: region.geometry,
+    });
+  });
+
+  it("builds an exact drawn-area access predicate without a reviewed-region refinement", () => {
+    const bbox: [number, number, number, number] = [-122.4, 37.1, -122.2, 37.3];
+    const geometry = {
+      type: "Polygon" as const,
+      coordinates: [[
+        [-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1],
+      ]],
+    };
+
+    expect(resolvedDrawnAreaAccessFilter({ coverage }, bbox)).toEqual({
+      summary: { mode: "drawn-area", label: "Drawn area" },
+      predicates: [geometry],
+      coverage,
+      filterGeometry: geometry,
     });
   });
 });

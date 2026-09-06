@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CreateBatchRouteJobV1 } from "@/lib/contracts";
 import { RouteJobSolverProcess } from "./route-job-solver-process";
-import type { RouteJobSolverWorkerInput } from "./route-job-solver-protocol";
+import { routeJobSolverRequestAccessFilter, type RouteJobSolverWorkerInput } from "./route-job-solver-protocol";
 
 const request: CreateBatchRouteJobV1 = {
   version: 1,
@@ -21,7 +21,7 @@ const request: CreateBatchRouteJobV1 = {
 const input: RouteJobSolverWorkerInput = {
   request,
   pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
-  searchRegionId: request.searchRegionId,
+  searchRegionId: request.searchRegionId!,
   driveTimeGeometry: {
     type: "Polygon",
     coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]],
@@ -29,6 +29,23 @@ const input: RouteJobSolverWorkerInput = {
 };
 
 describe("RouteJobSolverProcess", () => {
+  it("keeps a drawn bbox as the solver filter for every per-access-point effort", () => {
+    const drawnAreaBbox: [number, number, number, number] = [-122.4, 37.1, -122.2, 37.3];
+    const drawnInput: RouteJobSolverWorkerInput = {
+      request: {
+        ...request,
+        origin: undefined,
+        durationMinutes: undefined,
+        searchRegionId: undefined,
+        drawnAreaBbox,
+      },
+      pack: input.pack,
+      searchRegionId: "drawn-area",
+    };
+
+    expect(routeJobSolverRequestAccessFilter(drawnInput)).toEqual({ mode: "drawn-area", bbox: drawnAreaBbox });
+  });
+
   it("boots the production child entrypoint and reports pinned-pack initialization errors", async () => {
     await expect(RouteJobSolverProcess.open({
       ...input,

@@ -25,6 +25,39 @@ and automated tests usable without generated data; route generation requires
 an installed schema-5 regional pack for Batch search and exact grade-experience
 filtering.
 
+### Run with Docker
+
+From a fresh clone, create the local environment file and start the production
+app:
+
+```sh
+cp .env.example .env
+docker compose up --build
+```
+
+Open <http://localhost:3000>. Compose checks the app at `/api/health` and passes
+the ArcGIS variables from `.env` into the container. The ArcGIS keys are
+optional: leave them blank if place suggestions and drive-time filters are not
+needed, or configure them as described below.
+
+The service binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to
+use <http://localhost:8080> instead. Set `ALPINE_BIND_ADDRESS=0.0.0.0` only when
+access from other devices on the local network is intentional.
+
+The fresh container starts with the committed fixture, so the interface remains
+usable without generated data. Generating routes requires an installed regional
+pack under the host's ignored `.local-data/packs` directory; Compose mounts that
+catalog read-only. Job, settings, and provider state use the persistent
+`alpine-runtime` Docker volume. Both survive image rebuilds and container
+restarts. Secrets, generated packs, and runtime databases are not copied into
+the image or committed to Git.
+
+Stop the app with:
+
+```sh
+docker compose down
+```
+
 ### Enable drive-time filters
 
 ArcGIS credentials stay server-only. Copy `.env.example` to `.env` and
@@ -39,12 +72,13 @@ ARCGIS_GEOCODING_API_KEY=your-geocoding-key
 ARCGIS_ROUTING_API_KEY=your-routing-key
 ```
 
-Restart `npm run dev` after changing `.env`. Typed place suggestions need
-geocoding access; calculating the typical drive-time area needs routing service
-area access. The browser never receives either credential. Provider jobs and
-reachability results stay in process memory for 30 minutes. A launched Batch
-job snapshots its origin and contour in ignored local SQLite until that job is
-deleted; aggregate monthly provider counters are stored separately.
+Restart the local app or recreate the Docker service after changing `.env`.
+Typed place suggestions need geocoding access; calculating the typical
+drive-time area needs routing service area access. The browser never receives
+either credential. Provider jobs and reachability results stay in process
+memory for 30 minutes. A launched Batch job snapshots its origin and contour in
+ignored local SQLite until that job is deleted; aggregate monthly provider
+counters are stored separately.
 
 ### Override the installed-pack catalog
 
