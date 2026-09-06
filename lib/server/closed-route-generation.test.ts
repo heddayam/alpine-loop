@@ -1,3 +1,4 @@
+import { ServerApiError } from "./api-error";
 import { describe, expect, it, vi } from "vitest";
 import type {
   GeneratedClosedRouteV3,
@@ -13,14 +14,13 @@ import type {
 } from "@/lib/graph";
 import {
   AccessFilterResolutionError,
-  type ReachableGraphClosedRouteContext,
   type RouteSearchRequest,
   type SolverBudget,
 } from "@/lib/solver";
 import {
   createGenerateClosedRoutesHandler,
   type ClosedRoutePack,
-  type ClosedRouteSolverV3,
+  type RouteExecutionContext,
 } from "./closed-route-generation";
 
 const PACK_METADATA = {
@@ -136,7 +136,7 @@ function testPack(overrides: Partial<ClosedRoutePack> = {}): ClosedRoutePack {
 
 function responseFor(
   request: RouteSearchRequest,
-  context: ReachableGraphClosedRouteContext,
+  context: RouteExecutionContext,
   overrides: Partial<GenerateClosedRoutesResponseV3> = {},
 ): GenerateClosedRoutesResponseV3 {
   return {
@@ -181,21 +181,21 @@ function responseFor(
 function dynamicSolver(
   implementation: (
     request: RouteSearchRequest,
-    context: ReachableGraphClosedRouteContext,
+    context: RouteExecutionContext,
   ) => Promise<GenerateClosedRoutesResponseV3> = async (request, context) => responseFor(request, context),
-): ClosedRouteSolverV3 {
+) {
   return { generate: vi.fn(implementation) };
 }
 
 function handlerFor(options: {
-  solver?: ClosedRouteSolverV3;
+  solver?: ReturnType<typeof dynamicSolver>;
   pack?: ClosedRoutePack;
   resolveReachability?: Parameters<typeof createGenerateClosedRoutesHandler>[0]["resolveReachability"];
 } = {}) {
   const pack = options.pack ?? testPack();
   return createGenerateClosedRoutesHandler({
     packs: new Map([[pack.id, pack]]),
-    createSolver: async () => options.solver ?? dynamicSolver(),
+    generate: (_pack, request, context) => (options.solver ?? dynamicSolver()).generate(request, context),
     resolveReachability: options.resolveReachability ?? (async () => ({
       geometry: REGION.geometry,
       durationMinutes: 30,
@@ -228,7 +228,7 @@ describe("V3 closed-route generation handler", () => {
     expect(await errorCode(await handlerFor({ pack: unsupported })(jsonRequest()))).toBe("CLOSED_ROUTES_UNAVAILABLE");
   });
 
-  it("uses the selected effort budget, allows routes outside the filter, and closes both repositories", async () => {
+  it("uses the selected effort budget, allows routes outside the filter, without opening graph repositories in the API process", async () => {
     const graph = new TestGraphRepository();
     const feasibility = new TestFeasibilityRepository();
     const solver = dynamicSolver();
@@ -243,8 +243,8 @@ describe("V3 closed-route generation handler", () => {
     expect(context?.budget).toEqual(QUICK_BUDGET);
     expect(context?.accessFilter.coverage).toEqual(COVERAGE);
     expect(context?.accessFilter.predicates).toHaveLength(1);
-    expect(graph.close).toHaveBeenCalledOnce();
-    expect(feasibility.close).toHaveBeenCalledOnce();
+    expect(graph.close).not.toHaveBeenCalled();
+    expect(feasibility.close).not.toHaveBeenCalled();
   });
 
   it("resolves named, drive-time, and refined drive-time filters", async () => {
@@ -282,8 +282,8 @@ describe("V3 closed-route generation handler", () => {
     const invalidResponses: Array<Partial<GenerateClosedRoutesResponseV3>> = [
       { exact: [{ ...ROUTE, geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-121, 37.2], [-122.16, 37.16]] } }] },
       { exact: [{ ...ROUTE, geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.15, 37.17]] } }] },
-      { exact: [], diagnostics: { ...responseFor(VALID_REQUEST, { accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [], coverage: COVERAGE }, budget: THOROUGH_BUDGET, repository: new TestGraphRepository(), topologyRepository: new TestFeasibilityRepository() }).diagnostics } },
-      { diagnostics: { ...responseFor(VALID_REQUEST, { accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [], coverage: COVERAGE }, budget: THOROUGH_BUDGET, repository: new TestGraphRepository(), topologyRepository: new TestFeasibilityRepository() }).diagnostics, hardTruncationReasons: ["deadline"] } },
+      { exact: [], diagnostics: { ...responseFor(VALID_REQUEST, { accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [], coverage: COVERAGE }, budget: THOROUGH_BUDGET, signal: new AbortController().signal }).diagnostics } },
+      { diagnostics: { ...responseFor(VALID_REQUEST, { accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [], coverage: COVERAGE }, budget: THOROUGH_BUDGET, signal: new AbortController().signal }).diagnostics, hardTruncationReasons: ["deadline"] } },
     ];
     for (const overrides of invalidResponses) {
       const solver = dynamicSolver(async (request, context) => responseFor(request, context, overrides));
@@ -291,21 +291,16 @@ describe("V3 closed-route generation handler", () => {
     }
   });
 
-  it("maps pack-open failures, deadline expiry, and client cancellation while closing opened repositories", async () => {
-    const openedGraph = new TestGraphRepository();
-    const unavailable = testPack({
-      loadRepository: async () => openedGraph,
-      loadClosedRouteFeasibilityRepository: async () => { throw new Error("corrupt"); },
-    });
-    expect(await errorCode(await handlerFor({ pack: unavailable })(jsonRequest()))).toBe("PACK_UNAVAILABLE");
-    expect(openedGraph.close).toHaveBeenCalledOnce();
+  it("maps pack-open failures, deadline expiry, and client cancellation from the execution boundary", async () => {
+    const unavailable = dynamicSolver(async () => { throw new ServerApiError("PACK_UNAVAILABLE", "The local pack could not be opened.", 503); });
+    expect(await errorCode(await handlerFor({ solver: unavailable })(jsonRequest()))).toBe("PACK_UNAVAILABLE");
 
     const deadlineSolver = dynamicSolver(async (_request, context) => new Promise((_, reject) => {
       context.signal?.addEventListener("abort", () => reject(context.signal?.reason), { once: true });
     }));
     const deadlineHandler = createGenerateClosedRoutesHandler({
       packs: new Map([[PACK_METADATA.id, testPack()]]),
-      createSolver: () => deadlineSolver,
+      generate: (_pack, request, context) => deadlineSolver.generate(request, context),
       resolveReachability: async () => { throw new Error("unused"); },
       budgets: { quick: { ...QUICK_BUDGET, deadlineMs: 10 }, thorough: { ...THOROUGH_BUDGET, deadlineMs: 10 } },
     });

@@ -1,6 +1,8 @@
+import { getSearchRegion } from "@/lib/data/named-area-catalog";
+import { resolvedDrawnAreaAccessFilter, resolvedDriveTimeAccessFilter, resolvedNamedRegionAccessFilter } from "./access-filter";
 import { resolve } from "node:path";
 import type { CreateBatchRouteJobV1 } from "@/lib/contracts";
-import { loadInstalledPack } from "@/lib/packs/installed-pack";
+import { loadInstalledPack, loadInstalledPackVersion } from "@/lib/packs/installed-pack";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import type { ReachabilityService } from "@/lib/reachability/service";
 import {
@@ -11,7 +13,7 @@ import {
 } from "@/lib/route-jobs";
 import { ServerApiError } from "./api-error";
 import { loadRoutePacks, type RegisteredRoutePack } from "./pack-registry";
-import { RouteJobSolverProcess } from "./route-job-solver-process";
+import { RouteSolverProcess } from "./route-solver-process";
 
 declare global {
   var alpineRouteJobDependencies: RouteJobRunnerDependencies | undefined;
@@ -128,8 +130,22 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
     },
 
     async openSearchSession(input) {
-      const { signal, ...workerInput } = input;
-      return RouteJobSolverProcess.open(workerInput, signal);
+      const { signal, request, pack, driveTimeGeometry } = input;
+      const installed = await loadInstalledPackVersion(pack.id, pack.dataVersion);
+      if (!installed) throw new Error("The pinned pack version is no longer installed.");
+      const coverage = { coverage: installed.manifest.coverage.boundary };
+      const region = request.searchRegionId ? getSearchRegion(installed.databasePath, request.searchRegionId) : null;
+      if (request.searchRegionId && !region) throw new Error("The job's reviewed search region is unavailable.");
+      const accessFilter = request.drawnAreaBbox
+        ? resolvedDrawnAreaAccessFilter(coverage, request.drawnAreaBbox)
+        : driveTimeGeometry && request.origin && request.durationMinutes !== undefined && region
+          ? resolvedDriveTimeAccessFilter(coverage, {
+            geometry: driveTimeGeometry, durationMinutes: request.durationMinutes,
+            resolvedAt: new Date().toISOString(), originLabel: request.origin.label,
+          }, region)
+          : region ? resolvedNamedRegionAccessFilter(coverage, region) : undefined;
+      if (!accessFilter) throw new Error("The job's access filter is unavailable.");
+      return RouteSolverProcess.open({ pack, criteria: request.criteria, accessFilter }, signal);
     },
   };
 }

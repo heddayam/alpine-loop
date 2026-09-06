@@ -1,10 +1,10 @@
-import type { RouteJobSolverRequest, RouteJobSolverResponse } from "../route-job-solver-protocol";
+import type { RouteSolverRequest, RouteSolverResponse } from "../route-solver-protocol";
 
-function send(response: RouteJobSolverResponse): void {
+function send(response: RouteSolverResponse): void {
   process.send?.(response);
 }
 
-process.on("message", (request: RouteJobSolverRequest) => {
+process.on("message", (request: RouteSolverRequest) => {
   if (request.type === "close" && process.env.ALPINE_TEST_CLOSE_HANG === "1") {
     setInterval(() => undefined, 1_000);
     return;

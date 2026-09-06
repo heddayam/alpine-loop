@@ -1,11 +1,14 @@
+import type { GenerateClosedRoutesResponseV3 } from "@/lib/contracts";
+import { AccessFilterResolutionError, type RouteSearchPolicy, type SolverBudget } from "@/lib/solver";
+import { ServerApiError } from "./api-error";
 import type { ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import type { AccessPointSearchResult, RouteJobSearchSession } from "@/lib/route-jobs";
 import type {
-  RouteJobSolverRequest,
-  RouteJobSolverResponse,
-  RouteJobSolverWorkerInput,
-} from "./route-job-solver-protocol";
+  RouteSolverRequest,
+  RouteSolverResponse,
+  RouteSolverWorkerInput,
+} from "./route-solver-protocol";
 
 type PendingRequest = {
   resolve(value: unknown): void;
@@ -13,13 +16,13 @@ type PendingRequest = {
   removeAbortListener(): void;
 };
 
-type RouteJobSolverProcessOptions = {
+type RouteSolverProcessOptions = {
   modulePath?: string;
   env?: Record<string, string | undefined>;
   closeTimeoutMs?: number;
 };
 
-type RouteJobSolverRequestWithoutId = RouteJobSolverRequest extends infer Request
+type RouteSolverRequestWithoutId = RouteSolverRequest extends infer Request
   ? Request extends { id: number } ? Omit<Request, "id"> : never
   : never;
 
@@ -27,23 +30,26 @@ function cancellationError(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException("Cancelled", "AbortError");
 }
 
-function remoteError(value: Extract<RouteJobSolverResponse, { ok: false }>["error"]): Error {
-  const error = new Error(value.message);
+function remoteError(value: Extract<RouteSolverResponse, { ok: false }>["error"]): Error {
+  const error = value.code && ["START_NOT_FOUND", "START_OUTSIDE_FILTER", "START_INELIGIBLE"].includes(value.code)
+    ? new AccessFilterResolutionError(value.code as AccessFilterResolutionError["code"], value.message)
+    : value.code && value.status ? new ServerApiError(value.code, value.message, value.status)
+      : new Error(value.message);
   error.name = value.name;
   if (value.stack) error.stack = value.stack;
   return error;
 }
 
-export class RouteJobSolverProcess implements RouteJobSearchSession {
+export class RouteSolverProcess implements RouteJobSearchSession {
   readonly #child: ChildProcess;
   readonly #pending = new Map<number, PendingRequest>();
   readonly #closeTimeoutMs: number;
   #nextRequestId = 1;
   #ended = false;
 
-  private constructor(options: RouteJobSolverProcessOptions) {
+  private constructor(options: RouteSolverProcessOptions) {
     this.#closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
-    const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-job-solver-child.ts");
+    const modulePath = options.modulePath ?? resolve(process.cwd(), "lib/server/route-solver-child.ts");
     // A direct fork(modulePath) call is treated as a bundle-time module
     // reference by Turbopack. This child is intentionally a local Node runtime
     // entrypoint resolved from the source checkout instead.
@@ -54,7 +60,7 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
       serialization: "advanced",
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
-    this.#child.on("message", (message: RouteJobSolverResponse) => this.#handleResponse(message));
+    this.#child.on("message", (message: RouteSolverResponse) => this.#handleResponse(message));
     this.#child.on("error", (error) => this.#terminate(error));
     this.#child.on("disconnect", () => {
       if (!this.#ended) this.#terminate(new Error("Route solver process disconnected unexpectedly."));
@@ -65,11 +71,11 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
   }
 
   static async open(
-    input: RouteJobSolverWorkerInput,
+    input: RouteSolverWorkerInput,
     signal: AbortSignal,
-    options: RouteJobSolverProcessOptions = {},
-  ): Promise<RouteJobSolverProcess> {
-    const process = new RouteJobSolverProcess(options);
+    options: RouteSolverProcessOptions = {},
+  ): Promise<RouteSolverProcess> {
+    const process = new RouteSolverProcess(options);
     try {
       await process.#request({ type: "initialize", input }, signal);
       return process;
@@ -87,6 +93,10 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
     return this.#request({ type: "search", accessPointId }, signal) as Promise<AccessPointSearchResult>;
   }
 
+  async generate(policy: RouteSearchPolicy, budget: SolverBudget, signal: AbortSignal): Promise<GenerateClosedRoutesResponseV3> {
+    return this.#request({ type: "generate", policy, budget }, signal) as Promise<GenerateClosedRoutesResponseV3>;
+  }
+
   async close(): Promise<void> {
     if (this.#ended) return;
     const controller = new AbortController();
@@ -102,7 +112,7 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
   }
 
   #request(
-    request: RouteJobSolverRequestWithoutId,
+    request: RouteSolverRequestWithoutId,
     signal: AbortSignal,
   ): Promise<unknown> {
     if (signal.aborted) {
@@ -121,13 +131,13 @@ export class RouteJobSolverProcess implements RouteJobSearchSession {
         reject,
         removeAbortListener: () => signal.removeEventListener("abort", abort),
       });
-      this.#child.send({ ...request, id } as RouteJobSolverRequest, (error) => {
+      this.#child.send({ ...request, id } as RouteSolverRequest, (error) => {
         if (error) this.#terminate(error);
       });
     });
   }
 
-  #handleResponse(message: RouteJobSolverResponse): void {
+  #handleResponse(message: RouteSolverResponse): void {
     if (!message || typeof message.id !== "number") return;
     const pending = this.#pending.get(message.id);
     if (!pending) return;

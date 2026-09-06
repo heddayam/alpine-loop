@@ -8,12 +8,11 @@ import {
 import {
   lineIsInsideArea,
   type ClosedRouteFeasibilityRepository,
-  type GraphRepository,
 } from "@/lib/graph";
 import {
   AccessFilterResolutionError,
   CLOSED_ROUTE_EFFORT_BUDGETS,
-  type ReachableGraphClosedRouteContext,
+  type ResolvedAccessFilterContext,
   type RouteSearchRequest,
   type SolverBudget,
 } from "@/lib/solver";
@@ -36,16 +35,19 @@ export type ReachableGraphFallbackPack = ClosedRoutePack & {
   ) => Promise<ClosedRouteFeasibilityRepository>;
 };
 
-export interface ClosedRouteSolverV3 {
-  generate(
-    request: RouteSearchRequest,
-    context: ReachableGraphClosedRouteContext,
-  ): Promise<GenerateClosedRoutesResponseV3>;
-}
+export type RouteExecutionContext = {
+  accessFilter: ResolvedAccessFilterContext;
+  budget: SolverBudget;
+  signal: AbortSignal;
+};
 
 export type ClosedRouteGenerationDependencies = {
   packs: ReadonlyMap<string, ClosedRoutePack>;
-  createSolver: (pack: ReachableGraphFallbackPack) => ClosedRouteSolverV3 | Promise<ClosedRouteSolverV3>;
+  generate: (
+    pack: ReachableGraphFallbackPack,
+    request: RouteSearchRequest,
+    context: RouteExecutionContext,
+  ) => Promise<GenerateClosedRoutesResponseV3>;
   resolveReachability: ReachabilityResolver;
   budgets?: Readonly<Record<SearchEffortV3, Readonly<SolverBudget>>>;
 };
@@ -175,8 +177,6 @@ export function createGenerateClosedRoutesHandler(dependencies: ClosedRouteGener
 
     const budget = { ...budgets[routeRequest.searchEffort] };
     const deadline = deadlineSignal(request.signal, budget.deadlineMs);
-    let repository: GraphRepository | undefined;
-    let topologyRepository: ClosedRouteFeasibilityRepository | undefined;
     try {
       const resolvedFilter = await resolveAccessFilter(
         pack,
@@ -184,22 +184,7 @@ export function createGenerateClosedRoutesHandler(dependencies: ClosedRouteGener
         dependencies.resolveReachability,
         deadline.signal,
       );
-      try {
-        repository = await pack.loadRepository(deadline.signal);
-        topologyRepository = await pack.loadClosedRouteFeasibilityRepository(deadline.signal);
-      } catch (error) {
-        if (deadline.didExpire()) {
-          return errorResponse(504, "DEADLINE_EXCEEDED", "Opening the local pack exceeded the server deadline");
-        }
-        if (request.signal.aborted || isCancellationError(error)) {
-          return errorResponse(499, "REQUEST_CANCELLED", "Route generation was cancelled by the client");
-        }
-        return errorResponse(503, "PACK_UNAVAILABLE", `Pack '${pack.id}' could not be opened; rebuild or reinstall it`);
-      }
-      const solver = await dependencies.createSolver(pack);
-      const solverResponse = await solver.generate(routeRequest, {
-        repository,
-        topologyRepository,
+      const solverResponse = await dependencies.generate(pack, routeRequest, {
         budget,
         signal: deadline.signal,
         accessFilter: resolvedFilter,
@@ -225,12 +210,6 @@ export function createGenerateClosedRoutesHandler(dependencies: ClosedRouteGener
       return errorResponse(500, "INTERNAL_ERROR", "Route generation failed unexpectedly");
     } finally {
       deadline.dispose();
-      if (topologyRepository) {
-        try { await topologyRepository.close(); } catch { /* Read-only close cannot replace the request result. */ }
-      }
-      if (repository) {
-        try { await repository.close(); } catch { /* Read-only close cannot replace the request result. */ }
-      }
     }
   };
 }
