@@ -6,7 +6,7 @@ import type { DataDrivenPropertyValueSpecification, FilterSpecification, Map as 
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
-import { ROUTE_PREVIEW_EVENT } from "./routeTraceOverlay";
+import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 
 type HikeMapProps = {
   packIds: string[];
@@ -24,6 +24,7 @@ type HikeMapProps = {
   selectedAccessPointId?: string;
   routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
+  hoveredRouteId?: string;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
@@ -45,8 +46,6 @@ const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
 const TRAIL_NETWORK_WIDTH = 2.4;
 const TRAIL_NETWORK_HOVER_WIDTH = 2.7;
 export const TRAIL_NETWORK_MIN_ZOOM = 12;
-export const TRAIL_COPY_FEEDBACK_MS = 1_500;
-export const COORDINATE_COPY_FEEDBACK_MS = 1_500;
 /* The menu is positioned from the click point, so it needs its own size to
    stay inside the map instead of being clipped at the right or bottom edge.
    The width covers the single line at its widest: coordinates plus the copy
@@ -200,55 +199,6 @@ export function trailNetworkFeatureDetails(properties?: Record<string, unknown> 
         ? `${Math.round(distanceMeters * 3.28084)} ft`
         : `${(distanceMeters / 1609.344).toFixed(1)} mi`,
   };
-}
-
-export async function copyTextToClipboard(
-  text: string | undefined,
-  clipboard: Pick<Clipboard, "writeText"> | undefined,
-  fallbackCopy?: (value: string) => boolean,
-): Promise<boolean> {
-  if (!text) return false;
-  let clipboardCopy: Promise<boolean> | undefined;
-  if (clipboard) {
-    try {
-      // Start the preferred API while the click's browser activation is live.
-      clipboardCopy = clipboard.writeText(text).then(() => true, () => false);
-    } catch {
-      clipboardCopy = undefined;
-    }
-  }
-  try {
-    // Run the compatibility path before this synchronous click stack unwinds.
-    if (fallbackCopy?.(text)) {
-      void clipboardCopy;
-      return true;
-    }
-  } catch {
-    // The preferred API may still succeed when the compatibility path cannot.
-  }
-  return clipboardCopy ? await clipboardCopy : false;
-}
-
-export function copyTextWithDocument(text: string, copyDocument: Document | undefined): boolean {
-  if (!copyDocument?.body || typeof copyDocument.execCommand !== "function") return false;
-  const activeElement = copyDocument.activeElement;
-  const textarea = copyDocument.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.inset = "-9999px auto auto -9999px";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  copyDocument.body.appendChild(textarea);
-  textarea.select();
-  try {
-    return copyDocument.execCommand("copy");
-  } catch {
-    return false;
-  } finally {
-    textarea.remove();
-    if (activeElement && "focus" in activeElement) (activeElement as HTMLElement).focus({ preventScroll: true });
-  }
 }
 
 /* Widths are authored at zoom 14 and scaled down so low zooms stay readable. */
@@ -550,6 +500,7 @@ export function HikeMap({
   selectedAccessPointId,
   routes,
   selectedRouteId,
+  hoveredRouteId,
   selectedSegmentId,
   hoveredSegmentId,
   onBoundsChange,
@@ -589,7 +540,6 @@ export function HikeMap({
   const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [drawing, setDrawing] = useState(false);
-  const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
   const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
   const [mapCopyFeedback, setMapCopyFeedback] = useState<MapCopyFeedback>();
@@ -614,7 +564,6 @@ export function HikeMap({
 
   // Map-originated hover drives the results list as well as the map itself.
   const previewRoute = useCallback((id?: string) => {
-    setHoveredRouteId(id);
     onRouteHoverRef.current?.(id);
   }, []);
 
@@ -1049,7 +998,7 @@ export function HikeMap({
             mapCopyTimerRef.current = setTimeout(() => {
               setMapCopyFeedback((current) => current?.kind === "trail" && current.id === id ? undefined : current);
               mapCopyTimerRef.current = null;
-            }, TRAIL_COPY_FEEDBACK_MS);
+            }, COPY_FEEDBACK_MS);
           });
         });
         map?.on("mouseleave", "trail-network-hit-target", clearTrailHover);
@@ -1096,7 +1045,7 @@ export function HikeMap({
             mapCopyTimerRef.current = setTimeout(() => {
               setMapCopyFeedback((current) => current?.kind === "access-point" && current.id === details.id ? undefined : current);
               mapCopyTimerRef.current = null;
-            }, TRAIL_COPY_FEEDBACK_MS);
+            }, COPY_FEEDBACK_MS);
           });
         });
         map?.on("mouseenter", "access-points", (event) => {
@@ -1112,6 +1061,7 @@ export function HikeMap({
           clearAccessPointHover();
         });
         map?.on("movestart", () => {
+          previewRoute(undefined);
           cursorTargets.route = false;
           cursorTargets.segment = false;
           clearTrailHover();
@@ -1329,15 +1279,6 @@ export function HikeMap({
     map.fitBounds([[target[0], target[1]], [target[2], target[3]]], { padding: 72, maxZoom: 15, duration: 450 });
   }, [mapReady, routes, selectedRouteId]);
 
-  // Hover announced by the results list (card pointer or focus).
-  useEffect(() => {
-    const handleRoutePreview = (event: Event) => {
-      setHoveredRouteId((event as CustomEvent<{ routeId?: string }>).detail?.routeId);
-    };
-    window.addEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
-    return () => window.removeEventListener(ROUTE_PREVIEW_EVENT, handleRoutePreview);
-  }, []);
-
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !drawing || !drawEnabled) return;
@@ -1431,7 +1372,7 @@ export function HikeMap({
         coordinateCopyTimerRef.current = null;
         setContextMenu(undefined);
         setCoordinateCopyStatus("idle");
-      }, COORDINATE_COPY_FEEDBACK_MS);
+      }, COPY_FEEDBACK_MS);
     });
   }, []);
 

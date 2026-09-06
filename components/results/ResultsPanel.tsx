@@ -5,8 +5,7 @@ import type {
   GeneratedClosedRouteV3,
   ConstraintViolationV3,
 } from "@/lib/contracts";
-import { COORDINATE_COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../map/HikeMap";
-import { announceRoutePreview } from "../map/routeTraceOverlay";
+import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
 
 export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
@@ -17,6 +16,7 @@ type ResultsPanelProps = {
   message?: string;
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
+  onHoverRoute: (routeId: string | undefined) => void;
   mobileVisible?: boolean;
   desktopVisible?: boolean;
   hoveredRouteId?: string;
@@ -152,6 +152,7 @@ function RouteCard({
   buttonRef,
   segmentButtonRef,
   onSelect,
+  onHover,
   selectedSegmentId,
   hoveredSegmentId,
   onSelectSegment,
@@ -165,6 +166,7 @@ function RouteCard({
   buttonRef: (node: HTMLButtonElement | null) => void;
   segmentButtonRef: (segmentId: string, node: HTMLButtonElement | null) => void;
   onSelect: () => void;
+  onHover: (routeId: string | undefined) => void;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
   onSelectSegment?: (segmentId: string) => void;
@@ -205,18 +207,18 @@ function RouteCard({
       coordinateCopyTimerRef.current = setTimeout(() => {
         coordinateCopyTimerRef.current = null;
         setCoordinateCopyStatus("idle");
-      }, COORDINATE_COPY_FEEDBACK_MS);
+      }, COPY_FEEDBACK_MS);
     });
   };
   return (
     <article
       className={["route-card", selected ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
       aria-labelledby={`route-heading-${route.id}`}
-      onMouseEnter={() => announceRoutePreview(route.id)}
-      onMouseLeave={() => announceRoutePreview()}
-      onFocusCapture={() => announceRoutePreview(route.id)}
+      onMouseEnter={() => onHover(route.id)}
+      onMouseLeave={() => onHover(undefined)}
+      onFocusCapture={() => onHover(route.id)}
       onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) announceRoutePreview();
+        if (!event.currentTarget.contains(event.relatedTarget)) onHover(undefined);
       }}
     >
       <button
@@ -356,6 +358,7 @@ export function ResultsPanel({
   message,
   selectedRouteId,
   onSelectRoute,
+  onHoverRoute,
   mobileVisible = true,
   desktopVisible = true,
   hoveredRouteId,
@@ -379,6 +382,8 @@ export function ResultsPanel({
     () => results ? [...results.exact, ...results.nearMisses] : [],
     [results],
   );
+
+  useEffect(() => () => onHoverRoute(undefined), [onHoverRoute, results]);
 
   // Selecting a route or segment on the map snaps its card into view.
   // Selection only — hover must never move the list under the cursor.
@@ -515,6 +520,7 @@ export function ResultsPanel({
                   else segmentRefs.current.delete(segmentId);
                 }}
                 onSelect={() => onSelectRoute(route.id)}
+                onHover={onHoverRoute}
                 selectedSegmentId={selectedSegmentId}
                 hoveredSegmentId={hoveredSegmentId}
                 onSelectSegment={onSelectSegment}
@@ -527,7 +533,7 @@ export function ResultsPanel({
           {results.nearMisses.length > 0 ? (
             /* Close matches stay folded away while there are exact matches to
                read; with none, they are the only thing left to look at. */
-            <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => onToggleNearMisses?.(event.currentTarget.open)}>
+            <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => { if (!event.currentTarget.open) onHoverRoute(undefined); onToggleNearMisses?.(event.currentTarget.open); }}>
               <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{results.nearMisses.length}</span></summary>
               {results.nearMisses.map((route, index) => (
                 <RouteCard
@@ -542,6 +548,7 @@ export function ResultsPanel({
                     else segmentRefs.current.delete(segmentId);
                   }}
                   onSelect={() => onSelectRoute(route.id)}
+                  onHover={onHoverRoute}
                   selectedSegmentId={selectedSegmentId}
                   hoveredSegmentId={hoveredSegmentId}
                   onSelectSegment={onSelectSegment}

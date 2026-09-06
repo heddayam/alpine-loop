@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import {
   HikeMap,
@@ -10,8 +11,6 @@ import {
   accessPointFeatures,
   clusterRouteTrailheadPins,
   accessPointHoverFilter,
-  copyTextToClipboard,
-  copyTextWithDocument,
   contextMenuPosition,
   formatCoordinates,
   mergeTrailNetworkPayloads,
