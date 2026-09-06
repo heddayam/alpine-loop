@@ -3,7 +3,6 @@ import type {
   GradePresetId,
   GradePresets,
   Origin,
-  SearchRegionSummary,
 } from "@/lib/contracts";
 
 export type Bounds = Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"];
@@ -38,8 +37,6 @@ export type BuilderValues = {
   limit: string;
 };
 
-export type DrawnAreaDraft = { bounds: Bounds | null };
-
 export type DriveTimeDraft = {
   originText: string;
   originSuggestions: Array<{ id: string; label: string; magicKey: string }>;
@@ -47,9 +44,6 @@ export type DriveTimeDraft = {
   durationMinutes: number;
   state: "idle" | "suggesting" | "resolving" | "error";
   error?: string;
-  searchRegionId: string;
-  searchRegions: SearchRegionSummary[];
-  regionsState: "idle" | "loading" | "ready" | "error";
 };
 
 export const DEFAULT_BUILDER_VALUES: BuilderValues = {
