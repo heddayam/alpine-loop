@@ -104,54 +104,90 @@ function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind
 
 function ControlledResultsPanel() {
   const [selectedRouteId, setSelectedRouteId] = useState("exact-loop");
-  return <ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />;
+  const [detail, setDetail] = useState(false);
+  const [nearMissesOpen, setNearMissesOpen] = useState(false);
+  return <ResultsPanel onHoverRoute={() => undefined} status="done" results={results()}
+    selectedRouteId={selectedRouteId} detail={detail} onBack={() => setDetail(false)}
+    nearMissesOpen={nearMissesOpen} onToggleNearMisses={setNearMissesOpen}
+    onSelectRoute={(id) => { setSelectedRouteId(id); setDetail(true); }} />;
 }
 
 describe("ResultsPanel", () => {
   afterEach(cleanup);
 
-  it("separates exact matches from labeled close matches and renders closed topology", () => {
-    const { rerender } = render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
-
+  it("keeps selected list cards concise and shows only the explicitly opened detail", () => {
+    const props = { onHoverRoute: () => undefined, status: "done" as const, results: results(), onSelectRoute: () => undefined };
+    const { rerender } = render(<ResultsPanel {...props} selectedRouteId="exact-loop" />);
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
-    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
-    const nearSection = screen.getByRole("heading", { name: "Close matches" }).closest("details") as HTMLElement;
-    const exactSummary = within(exactSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
-    const nearSummary = within(nearSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
-    expect(exactSummary).toHaveAttribute("aria-expanded", "true");
-    expect(nearSummary).toHaveAttribute("aria-expanded", "false");
+    const exactSummary = screen.getByRole("heading", { name: "Exact matches" }).closest("section")!.querySelector("button")!;
+    expect(exactSummary).toHaveAttribute("aria-pressed", "true");
+    expect(exactSummary).toHaveAttribute("aria-expanded", "false");
     expect(exactSummary).toHaveTextContent("5.0 mi");
-    expect(exactSummary).not.toHaveTextContent("Simple loop");
-    expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
+    expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
     expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
-    rerender(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="near-lollipop" onSelectRoute={() => undefined} />);
-    (screen.getByText("Close matches").closest("details") as HTMLDetailsElement).open = true;
+    rerender(<ResultsPanel {...props} selectedRouteId="near-lollipop" detail />);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Close match", { selector: ".route-match-label" })).toBeVisible();
+    expect(screen.getByText(/falls outside your requested constraints/)).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to results/ })).toBeVisible();
+    expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
+    const summary = screen.getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
+    expect(summary.querySelector(".route-number")).toHaveTextContent("2");
+    expect(within(summary).getByTitle("Distance")).toHaveClass("near-match-stat");
     const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.click(within(detail).getByText("Details"));
-    expect(within(detail).getByText("Route shape")).toBeVisible();
     expect(within(detail).getByText("Lollipop")).toBeVisible();
-    expect(within(detail).getByText("Repeated trail")).toBeVisible();
     expect(within(detail).getByText("25%")).toBeVisible();
-    expect(within(detail).getByText("Shared stem")).toBeVisible();
     expect(within(detail).getByText("0.2 mi")).toBeVisible();
-    expect(within(nearSummary).getByTitle("Distance")).toHaveClass("near-match-stat");
-    expect(within(detail).queryByText(/Outside requested constraints/)).not.toBeInTheDocument();
-    expect(within(detail).queryByText("same trailhead")).not.toBeInTheDocument();
   });
 
-  it("synchronizes expanded selection and keyboard focus", () => {
+  it("moves keyboard focus among visible cards and restores it after returning from detail", async () => {
     render(<ControlledResultsPanel />);
-    const list = screen.getByLabelText("Generated routes");
-    fireEvent.keyDown(list, { key: "ArrowDown" });
-    const nearSection = screen.getByRole("heading", { name: "Close matches" }).closest("details") as HTMLElement;
-    const nearSummary = within(nearSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
+    const exactSummary = screen.getByRole("heading", { name: "Exact matches" }).closest("section")!.querySelector("button")!;
+    exactSummary.focus();
+    fireEvent.keyDown(exactSummary, { key: "ArrowDown" });
+    expect(exactSummary).toHaveFocus();
+    await userEvent.click(screen.getByText("Close matches"));
+    const nearSummary = screen.getByRole("heading", { name: "Close matches" }).closest("details")!.querySelector("button")!;
+    exactSummary.focus();
+    fireEvent.keyDown(exactSummary, { key: "End" });
     expect(nearSummary).toHaveFocus();
-    expect(nearSummary).toHaveAttribute("aria-expanded", "true");
-    fireEvent.keyDown(list, { key: "Home" });
-    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
-    expect(within(exactSection).getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ })).toHaveFocus();
+    expect(nearSummary).toHaveAttribute("aria-expanded", "false");
+    fireEvent.keyDown(nearSummary, { key: "Home" });
+    expect(exactSummary).toHaveFocus();
+    fireEvent.keyDown(exactSummary, { key: "ArrowDown" });
+    expect(nearSummary).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    const back = screen.getByRole("button", { name: /Back to results/ });
+    expect(back).toHaveFocus();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    await userEvent.click(back);
+    const returned = screen.getByRole("heading", { name: "Close matches" }).closest("details")!.querySelector("button")!;
+    expect(returned).toHaveFocus();
+    expect(returned).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does not steal focus when the map changes selected detail", () => {
+    const props = { onHoverRoute: () => undefined, status: "done" as const, results: results(), onSelectRoute: () => undefined };
+    const { rerender } = render(<><button>Map selection</button><ResultsPanel {...props} /></>);
+    const map = screen.getByRole("button", { name: "Map selection" });
+    map.focus();
+    rerender(<><button>Map selection</button><ResultsPanel {...props} selectedRouteId="exact-loop" detail /></>);
+    expect(map).toHaveFocus();
+    rerender(<><button>Map selection</button><ResultsPanel {...props} selectedRouteId="near-lollipop" detail /></>);
+    expect(map).toHaveFocus();
+  });
+
+  it("discloses route source warnings in detail", () => {
+    render(<ResultsPanel status="done" results={results({ exact: [route({ warnings: ["Includes unknown access."] })] })}
+      selectedRouteId="exact-loop" detail onSelectRoute={() => undefined} onHoverRoute={() => undefined} />);
+    expect(screen.getByRole("list", { name: "Route warnings" })).toHaveTextContent("Includes unknown access.");
+    fireEvent.click(screen.getByText("Details"));
+    expect(screen.getByText("high", { selector: "strong" })).toBeVisible();
+    expect(screen.getByText("osm, midpen")).toBeVisible();
   });
 
   it("marks only violated close-match metrics in orange without a warning block", () => {
@@ -180,7 +216,7 @@ describe("ResultsPanel", () => {
     render(<ResultsPanel onHoverRoute={() => undefined}
       status="done"
       results={results({ exact: [], nearMisses: [closeMatch] })}
-      selectedRouteId="close-metrics"
+      selectedRouteId="close-metrics" detail
       nearMissesOpen
       onSelectRoute={() => undefined}
     />);
@@ -199,7 +235,7 @@ describe("ResultsPanel", () => {
   it("shows and copies trailhead coordinates", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="exact-loop" detail onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(writeText).toHaveBeenCalledWith("37.15000, -122.18000");
     expect(screen.getByText("Trailhead")).toBeVisible();
@@ -211,7 +247,7 @@ describe("ResultsPanel", () => {
   it("reports when trailhead coordinates could not be copied", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("Clipboard denied"));
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={() => undefined} />);
+    render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="exact-loop" detail onSelectRoute={() => undefined} />);
     await userEvent.click(screen.getByRole("button", { name: "Copy trailhead coordinates 37.15000, -122.18000" }));
     expect(screen.getByText("Trailhead")).toBeVisible();
     expect(await screen.findByText("Couldn’t copy")).toBeVisible();
@@ -225,7 +261,7 @@ describe("ResultsPanel", () => {
     const { rerender } = render(<ResultsPanel onHoverRoute={() => undefined}
       status="done"
       results={results()}
-      selectedRouteId="exact-loop"
+      selectedRouteId="exact-loop" detail
       onSelectRoute={() => undefined}
       onHoverSegment={onHoverSegment}
       onSelectSegment={onSelectSegment}
@@ -250,7 +286,7 @@ describe("ResultsPanel", () => {
     rerender(<ResultsPanel onHoverRoute={() => undefined}
       status="done"
       results={results()}
-      selectedRouteId="exact-loop"
+      selectedRouteId="exact-loop" detail
       hoveredSegmentId="exact-loop:segment:1"
       onSelectRoute={() => undefined}
       onHoverSegment={onHoverSegment}
@@ -273,9 +309,8 @@ describe("ResultsPanel", () => {
   it("previews through callbacks on pointer and focus, and clears a removed view", () => {
     const onHoverRoute = vi.fn();
     const onSelectRoute = vi.fn();
-    const { unmount } = render(<ResultsPanel onHoverRoute={onHoverRoute} status="done" results={results()} selectedRouteId="exact-loop" onSelectRoute={onSelectRoute} />);
-    const exactSection = screen.getByRole("heading", { name: "Exact matches" }).closest("section") as HTMLElement;
-    const card = within(exactSection).getByRole("article", { name: /Saratoga Gap.*Ridge Trail/ });
+    const { unmount } = render(<ResultsPanel onHoverRoute={onHoverRoute} status="done" results={results()} selectedRouteId="exact-loop" detail onSelectRoute={onSelectRoute} />);
+    const card = screen.getByRole("article", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.mouseEnter(card);
     expect(onHoverRoute).toHaveBeenLastCalledWith("exact-loop");
     fireEvent.mouseLeave(card);
@@ -354,6 +389,33 @@ describe("ResultsPanel", () => {
     expect(screen.getByText("Elapsed").nextElementSibling).toHaveTextContent("12,000 ms");
     expect(screen.queryByText("States explored")).not.toBeInTheDocument();
     expect(screen.queryByText("Graph queries")).not.toBeInTheDocument();
+  });
+
+  it("keeps the previous page visible on a paging error and advances only when available", async () => {
+    const onNext = vi.fn();
+    const props = { onHoverRoute: () => undefined, results: results(), onSelectRoute: () => undefined };
+    const { rerender } = render(<ResultsPanel {...props} status="error" message="Next page unavailable."
+      pagination={{ hasNext: true, loading: false, onNext }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Next page unavailable.");
+    expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Next 50 routes" }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    rerender(<ResultsPanel {...props} status="done" pagination={{ hasNext: true, loading: true, onNext }} />);
+    expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
+    rerender(<ResultsPanel {...props} status="done" pagination={{ hasNext: false, loading: false, onNext }} />);
+    expect(screen.getByRole("button", { name: "Last page" })).toBeDisabled();
+    rerender(<ResultsPanel {...props} status="error" message="Next page unavailable." selectedRouteId="exact-loop" detail />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Next page unavailable.");
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+  });
+
+  it("shows an empty result explanation and recovers from a selection absent from a new page", () => {
+    const props = { onHoverRoute: () => undefined, status: "done" as const, onSelectRoute: () => undefined };
+    const { rerender } = render(<ResultsPanel {...props} results={results({ exact: [], nearMisses: [] })} />);
+    expect(screen.getByText("No routes found.")).toBeVisible();
+    rerender(<ResultsPanel {...props} results={results()} selectedRouteId="previous-page-route" detail />);
+    expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.queryByRole("complementary", { name: "Route details" })).not.toBeInTheDocument();
   });
 
   it("announces loading and error states", () => {

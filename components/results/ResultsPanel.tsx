@@ -17,8 +17,8 @@ type ResultsPanelProps = {
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
   onHoverRoute: (routeId: string | undefined) => void;
-  mobileVisible?: boolean;
-  desktopVisible?: boolean;
+  detail?: boolean;
+  onBack?: () => void;
   hoveredRouteId?: string;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
@@ -148,6 +148,7 @@ function RouteCard({
   route,
   routeNumber,
   selected,
+  expanded,
   hovered,
   buttonRef,
   segmentButtonRef,
@@ -162,6 +163,7 @@ function RouteCard({
   route: GeneratedClosedRouteV3 & { violations?: ConstraintViolationV3[] };
   routeNumber: number;
   selected: boolean;
+  expanded: boolean;
   hovered: boolean;
   buttonRef: (node: HTMLButtonElement | null) => void;
   segmentButtonRef: (segmentId: string, node: HTMLButtonElement | null) => void;
@@ -226,8 +228,8 @@ function RouteCard({
         className="route-card-select route-summary"
         type="button"
         aria-pressed={selected}
-        aria-expanded={selected}
-        aria-controls={selected ? detailId : undefined}
+        aria-expanded={expanded}
+        aria-controls={expanded ? detailId : undefined}
         onClick={onSelect}
       >
         <span className="route-number" aria-hidden="true"><span>{routeNumber}</span></span>
@@ -249,8 +251,9 @@ function RouteCard({
         </span>
       </button>
 
-      {selected ? (
+      {expanded ? (
         <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-heading-${route.id}`}>
+          {route.warnings.length ? <ul className="route-warnings" aria-label="Route warnings">{route.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
           <ElevationProfile route={route} />
           <button
             type="button"
@@ -359,8 +362,8 @@ export function ResultsPanel({
   selectedRouteId,
   onSelectRoute,
   onHoverRoute,
-  mobileVisible = true,
-  desktopVisible = true,
+  detail = false,
+  onBack,
   hoveredRouteId,
   selectedSegmentId,
   hoveredSegmentId,
@@ -373,11 +376,9 @@ export function ResultsPanel({
 }: ResultsPanelProps) {
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const segmentRefs = useRef(new Map<string, HTMLButtonElement>());
-  const panelClassName = [
-    "results-panel",
-    mobileVisible ? "" : "mobile-panel-hidden",
-    desktopVisible ? "" : "desktop-panel-hidden",
-  ].filter(Boolean).join(" ");
+  const panelClassName = "results-panel";
+  const backRef = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<"detail" | "list" | null>(null);
   const routes = useMemo(
     () => results ? [...results.exact, ...results.nearMisses] : [],
     [results],
@@ -385,20 +386,15 @@ export function ResultsPanel({
 
   useEffect(() => () => onHoverRoute(undefined), [onHoverRoute, results]);
 
-  // Selecting a route or segment on the map snaps its card into view.
-  // Selection only — hover must never move the list under the cursor.
+  // Only panel-origin navigation moves focus. Map selections remain on the map.
   useEffect(() => {
-    if (!selectedRouteId) return;
-    const index = routes.findIndex((route) => route.id === selectedRouteId);
-    if (index < 0) return;
-    const button = cardRefs.current[index];
-    // Scroll the whole card, not just its summary button, so neither the
-    // card's edges nor its expanded detail land outside the viewport.
-    const card = button?.closest(".route-card") ?? button;
-    if (typeof card?.scrollIntoView === "function") {
-      card.scrollIntoView({ block: "nearest" });
+    if (detail && pendingFocus.current === "detail") backRef.current?.focus();
+    if (!detail && pendingFocus.current === "list") {
+      const index = routes.findIndex((route) => route.id === selectedRouteId);
+      cardRefs.current[index]?.focus();
     }
-  }, [selectedRouteId, routes]);
+    pendingFocus.current = null;
+  }, [detail, routes, selectedRouteId]);
 
   useEffect(() => {
     if (!selectedSegmentId) return;
@@ -422,19 +418,46 @@ export function ResultsPanel({
   }, [hoveredSegmentId]);
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || routes.length === 0) return;
+    if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = cardRefs.current.filter((button): button is HTMLButtonElement =>
+      Boolean(button && !button.closest("details:not([open])")),
+    );
+    const currentIndex = buttons.findIndex((button) => button === event.target);
+    if (currentIndex < 0) return;
     event.preventDefault();
-    const currentIndex = Math.max(0, routes.findIndex((route) => route.id === selectedRouteId));
     let nextIndex = currentIndex;
     if (event.key === "Home") nextIndex = 0;
-    else if (event.key === "End") nextIndex = routes.length - 1;
-    else if (event.key === "ArrowDown" || event.key === "ArrowRight") nextIndex = (currentIndex + 1) % routes.length;
-    else nextIndex = (currentIndex - 1 + routes.length) % routes.length;
-    const nextRoute = routes[nextIndex];
-    if (!nextRoute) return;
-    onSelectRoute(nextRoute.id);
-    cardRefs.current[nextIndex]?.focus();
+    else if (event.key === "End") nextIndex = buttons.length - 1;
+    else if (event.key === "ArrowDown" || event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+    else nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+    buttons[nextIndex]?.focus();
   };
+
+  const renderCard = (route: (typeof routes)[number], index: number, expanded = false) => (
+    <RouteCard
+      key={route.id}
+      route={route}
+      routeNumber={index + 1}
+      selected={route.id === selectedRouteId}
+      expanded={expanded}
+      hovered={route.id === hoveredRouteId}
+      buttonRef={(node) => { cardRefs.current[index] = node; }}
+      segmentButtonRef={(segmentId, node) => {
+        if (node) segmentRefs.current.set(segmentId, node);
+        else segmentRefs.current.delete(segmentId);
+      }}
+      onSelect={() => {
+        if (!detail) pendingFocus.current = "detail";
+        onSelectRoute(route.id);
+      }}
+      onHover={onHoverRoute}
+      selectedSegmentId={selectedSegmentId}
+      hoveredSegmentId={hoveredSegmentId}
+      onSelectSegment={onSelectSegment}
+      onHoverSegment={onHoverSegment}
+      regionLabel={route.regionLabel}
+    />
+  );
 
   if (status === "loading") {
     return (
@@ -459,6 +482,26 @@ export function ResultsPanel({
   const total = routes.length;
   const quick = results.kind === "quick" ? results : undefined;
   const job = results.kind === "saved" ? results.job : undefined;
+
+  const selectedIndex = routes.findIndex((route) => route.id === selectedRouteId);
+  const selectedRoute = routes[selectedIndex];
+  if (detail && selectedRoute) {
+    const closeMatch = selectedIndex >= results.exact.length;
+    return (
+      <aside className={`${panelClassName} route-detail-view`} aria-label="Route details">
+        <div className="results-heading">
+          <button ref={backRef} type="button" className="btn detail-back" onClick={() => {
+            pendingFocus.current = "list";
+            onBack?.();
+          }}>← Back to results</button>
+          <span className={`route-match-label${closeMatch ? " close-match" : ""}`}>{closeMatch ? "Close match" : "Exact match"}</span>
+        </div>
+        {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
+        {closeMatch ? <p className="results-state close-match">This route falls outside your requested constraints. Highlighted metrics show where it differs.</p> : null}
+        {renderCard(selectedRoute, selectedIndex, true)}
+      </aside>
+    );
+  }
 
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
@@ -500,27 +543,7 @@ export function ResultsPanel({
               <h3 id="exact-results-title">Exact matches</h3>
               <span>{results.exact.length}</span>
             </div>
-            {results.exact.map((route, index) => (
-              <RouteCard
-                key={route.id}
-                route={route}
-                routeNumber={index + 1}
-                selected={route.id === selectedRouteId}
-                hovered={route.id === hoveredRouteId}
-                buttonRef={(node) => { cardRefs.current[index] = node; }}
-                segmentButtonRef={(segmentId, node) => {
-                  if (node) segmentRefs.current.set(segmentId, node);
-                  else segmentRefs.current.delete(segmentId);
-                }}
-                onSelect={() => onSelectRoute(route.id)}
-                onHover={onHoverRoute}
-                selectedSegmentId={selectedSegmentId}
-                hoveredSegmentId={hoveredSegmentId}
-                onSelectSegment={onSelectSegment}
-                onHoverSegment={onHoverSegment}
-                regionLabel={route.regionLabel}
-              />
-            ))}
+            {results.exact.map((route, index) => renderCard(route, index))}
           </section>
 
           {results.nearMisses.length > 0 ? (
@@ -528,27 +551,7 @@ export function ResultsPanel({
                read; with none, they are the only thing left to look at. */
             <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => { if (!event.currentTarget.open) onHoverRoute(undefined); onToggleNearMisses?.(event.currentTarget.open); }}>
               <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{results.nearMisses.length}</span></summary>
-              {results.nearMisses.map((route, index) => (
-                <RouteCard
-                  key={route.id}
-                  route={route}
-                  routeNumber={results.exact.length + index + 1}
-                  selected={route.id === selectedRouteId}
-                  hovered={route.id === hoveredRouteId}
-                  buttonRef={(node) => { cardRefs.current[results.exact.length + index] = node; }}
-                  segmentButtonRef={(segmentId, node) => {
-                    if (node) segmentRefs.current.set(segmentId, node);
-                    else segmentRefs.current.delete(segmentId);
-                  }}
-                  onSelect={() => onSelectRoute(route.id)}
-                  onHover={onHoverRoute}
-                  selectedSegmentId={selectedSegmentId}
-                  hoveredSegmentId={hoveredSegmentId}
-                  onSelectSegment={onSelectSegment}
-                  onHoverSegment={onHoverSegment}
-                  regionLabel={route.regionLabel}
-                />
-              ))}
+              {results.nearMisses.map((route, index) => renderCard(route, results.exact.length + index))}
             </details>
           ) : null}
         </div>
