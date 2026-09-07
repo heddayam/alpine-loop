@@ -38,4 +38,3 @@ export async function readJsonBody(request: Request, maxBytes = 32_768): Promise
   const text = chunks.join("");
   try { return JSON.parse(text); } catch { throw new ServerApiError("MALFORMED_JSON", "Request body must be valid JSON.", 400); }
 }
-

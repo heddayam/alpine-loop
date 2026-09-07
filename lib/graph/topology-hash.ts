@@ -43,4 +43,3 @@ export function topologySha256(value: unknown): string {
   updateCanonicalHash(hash, value);
   return `sha256:${hash.digest("hex")}`;
 }
-
