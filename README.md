@@ -2,7 +2,7 @@
 
 Alpine Loop is a **loop hike builder**. A user filters eligible
 trailheads by a drawn area, an installed named region, or a typical drive-time
-area, optionally chooses one of those trailheads, sets physical constraints and
+area, sets physical constraints and
 acceptable repeated trail, and receives closed routes from a versioned local
 trail-graph pack. Filter shapes do not clip hikes; exact installed-pack coverage
 is the route boundary.
@@ -20,10 +20,14 @@ npm run verify
 npm run dev
 ```
 
-Open <http://localhost:3000> in a browser. The committed fixture keeps the UI
-and automated tests usable without generated data; route generation requires
-an installed schema-5 regional pack for Batch search and exact grade-experience
-filtering.
+Open <http://localhost:3000> in a browser. Search requires installed schema-6
+regional data. Without it, the app shows a data-unavailable state. Automated
+tests compile small committed inputs into the same SQLite format used locally.
+
+Quick search returns up to the requested number of alternatives across eligible data.
+Full search attempts every eligible trailhead and retains up to ten exact routes
+per start, or a clearly labeled close match. One Full search creates one saved
+job. Results keep their original area and criteria while the form remains editable.
 
 ### Run with Docker
 
@@ -44,10 +48,8 @@ The service binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to
 use <http://localhost:8080> instead. Set `ALPINE_BIND_ADDRESS=0.0.0.0` only when
 access from other devices on the local network is intentional.
 
-The fresh container starts with the committed fixture, so the interface remains
-usable without generated data. Generating routes requires an installed regional
-pack under the host's ignored `.local-data/packs` directory; Compose mounts that
-catalog read-only. Job, settings, and provider state use the persistent
+Generating routes requires installed regional data under the host's ignored
+`.local-data/packs` directory. Compose mounts that catalog read-only. Job, settings, and provider state use the persistent
 `alpine-runtime` Docker volume. Both survive image rebuilds and container
 restarts. Secrets, generated packs, and runtime databases are not copied into
 the image or committed to Git.
@@ -75,8 +77,8 @@ ARCGIS_ROUTING_API_KEY=your-routing-key
 Restart the local app or recreate the Docker service after changing `.env`.
 Typed place suggestions need geocoding access; calculating the typical
 drive-time area needs routing service area access. The browser never receives
-either credential. Provider jobs and reachability results stay in process
-memory for 30 minutes. A launched Batch job snapshots its origin and contour in
+either credential. Completed drive-time areas are cached in process memory for 30 minutes.
+A Full search snapshots its origin and contour in
 ignored local SQLite until that job is deleted; aggregate monthly provider
 counters are stored separately.
 
@@ -115,8 +117,8 @@ npm run pack:bootstrap -- \
 ```
 
 Downloads, build caches, SQLite databases, audit output, and generated packs
-remain local and ignored by Git. Normal runtime and automated tests never use
-the network.
+remain local and ignored by Git. Automated tests never use the network. The runtime reads trails locally;
+basemap tiles, place suggestions, and drive-time resolution use their providers.
 
 ### Verify an installed closed-route pack
 
@@ -130,7 +132,7 @@ npm run --silent pack:checkpoint -- \
   --effort=thorough
 ```
 
-The shared real-pack checkpoint exercises the active V3 closed-route runtime
+The shared real-pack checkpoint exercises the closed-route engine
 against representative starts. For Monterey–Carmel:
 
 ```sh
@@ -139,14 +141,6 @@ npm run --silent pack:checkpoint -- \
   --database=.local-data/packs/monterey-carmel/<data-version>/pack.sqlite \
   --manifest=.local-data/packs/monterey-carmel/<data-version>/manifest.json \
   --effort=thorough
-```
-
-The original Santa Cruz checkpoint remains available:
-
-```sh
-node --import tsx scripts/research/gate5-topology-real-checkpoint.ts \
-  --database=.local-data/packs/santa-cruz-mountains/<data-version>/pack.sqlite \
-  --manifest=.local-data/packs/santa-cruz-mountains/<data-version>/manifest.json
 ```
 
 Closed-route search uses bounded penalized forward/return searches, strict

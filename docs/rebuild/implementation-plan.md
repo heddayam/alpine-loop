@@ -1,138 +1,94 @@
 # Alpine Loop implementation plan
 
-The [system design revision](system-design.md) defines the current target.
-This document describes the pre-revision behavior and migration baseline.
+The [system design revision](system-design.md) records the current design and
+its acceptance evidence. [Status](status.md) is the execution resume point.
 
-## Product outcome
+## Product
 
-Alpine Loop generates closed hiking routes from a local, bounded trail graph.
-It is not a catalog of known hikes. The first installed pack covers the Santa
-Cruz Mountains; regional behavior comes from versioned packs rather than UI or
-solver branches.
+Alpine Loop generates closed hiking routes from installed trail data. It is not
+a catalog of known hikes. Users choose an area, physical route constraints,
+acceptable repetition, and whether unknown access is included.
 
-The active route builder is one shared search form. Origin, typical drive time,
-a reviewed pack-provided region, route constraints, and access policy are
-configured once. Two buttons at the bottom choose execution only:
+An area can be drawn, named, or based on typical driving time. Named regions
+may refine a driving area. A drawn boundary overrides those choices. These
+filters select eligible starting points; they never clip hiking routes. Exact
+installed coverage is the hard route boundary. Failed filters never silently
+broaden the area.
 
-1. **Quick search** — resolve the selected drive-time area and run a short
-   foreground search. A user may instead draw a boundary on the map as the
-   search-area override. Filter geometry selects eligible access points; it
-   never clips route geometry.
-2. **Full search** — launch a persistent background job under the same
-   snapshotted route/access criteria. A drawn boundary overrides drive time and
-   reviewed regions and attempts every eligible trailhead inside that boundary
-   for each selected pack. Otherwise, an origin searches the drive-time and
-   reviewed-region intersection; without an origin, it attempts the entire
-   reviewed region.
+- Quick search returns up to the requested number of alternatives across the
+  eligible data. The count ranges from 1 through 20 and defaults to 10.
+- Full search attempts every eligible trailhead and retains up to ten exact
+  routes per start, or one close match if no exact route was found there.
+  One request creates one saved job regardless of internal data partitions.
+- Exact and clearly labeled close matches remain separate. A completed Full
+  search means every eligible start was attempted, not that every possible
+  closed walk was enumerated. Computation limits remain visible.
 
-Generated routes start and finish at one trailhead and contain a physical-trail
-cycle. Simple loop, lollipop, figure-eight, chained-loops, and complex-closed are
-result labels. Exact matches and explicitly labeled close matches remain separate
-(`nearMisses` remains the compatibility name in stored/API contracts).
+Routes contain a physical trail cycle and finish at their starting point.
+Simple loop, lollipop, figure-eight, chained-loop, and complex-closed describe
+results. The search preserves direction, access restrictions, metric accuracy,
+repetition limits, and topology. Unknown access is included by default.
 
-Regional growth follows the catalog, activation rules, boundaries, and
-repeatable approval process in the [regional expansion roadmap](regional-expansion-plan.md).
-Planned regions may be visible before their packs are approved, but only a
-catalog-linked, valid installed pack is selectable.
+## Workspace
 
-## User experience
+One editable form supplies both search actions. The viewed result has its own
+area and criteria snapshot; editing the form does not change the meaning of
+saved results. Search, opening saved work, and paging share one cancellation
+scope and reject stale completion. Closing a pending saved view cancels it.
 
-- The top bar shows the installed pack, Settings, panel controls, and a Jobs
-  button with active-job state.
-- The left panel has no product-mode switch. Drive-time inputs and shared
-  closed-route/physical constraints are visible together.
-- Settings controls uncertain access and the number of
-  Quick-search results. The chosen action determines effort; there is no effort
-  selector.
-- The map shows pack coverage, active filter geometry, eligible access points,
-  and only the currently loaded result page.
-- The results panel compares exact routes first, then close matches, with topology,
-  metrics, warnings, source confidence, and elevation profiles.
-- The Jobs modal lists queued, resolving, running, completed, cancelled, failed,
-  and deleting jobs. Users can cancel, retain/view partial results, and delete
-  records. Opening a completed/cancelled job restores its contour and paginated
-  routes to the map workspace.
+The map renders coverage, the active filter, eligible starts, and the loaded
+result page. Viewport queries own trail data updates. Hover and selection have
+one explicit path. Results show metrics, route topology, warnings, source
+confidence, elevation profiles, and segment observations.
 
-Quick search is explicit, cancellable, and always uses the Quick server budget.
-Batch search has no explicit-start control. It retains up to ten diverse exact
-routes per trailhead, or the single best labeled close match when that trailhead
-has no exact result.
+The Jobs dialog lists saved work, progress, cancellation, and deletion. Opening
+completed or cancelled work loads its exact-first result page. Cancellation
+retains partial results; deletion removes the job and its results. Settings
+have one validated value and one ordered persistence path. Incomplete numeric
+input stays local to the form.
 
-## Active contracts and storage
+## Application boundaries
 
-`POST /api/routes/generate` accepts the V3 closed-route request described in
-`closed-route-topology-plan.md`. Schema-3, schema-4, and schema-5 packs may serve
-foreground generation. Schema 5 adds compact direction-aware elevation profiles
-for exact grade-experience filtering.
+The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 
-Schema 4 adds a reviewed `search_regions` catalog referencing named-area
-geometry. The Santa Cruz pack initially exposes the whole pack plus Big Basin,
-Castle Rock, Henry Cowell, Forest of Nisene Marks, Bear Creek Redwoods, Sierra
-Azul, and Rancho San Antonio. Raw cities, counties, small parks, and closed-area
-variants are not batch choices.
+- `GET /api/search/catalog` provides named regions, installed coverage, and the
+  initial map view. No installed coverage means data is unavailable.
+- `POST /api/search` accepts one area, route criteria, and the global count.
+  The application resolves driving time, selects data, executes bounded work,
+  namespaces identities, and combines results.
+- `GET /api/map?bbox=...` supplies viewport access points and trails.
+- `/api/route-jobs` and its detail, cancel, delete, and results operations retain
+  version-2 jobs. Public records contain intent and area, not internal plans.
 
-Batch jobs use the versioned `CreateBatchRouteJobV1` contract and these APIs:
+The route engine accepts prepared starts, criteria, graph context, and budget.
+A dedicated local process owns graph-reader lifetime so CPU work cannot block
+app status or cancellation. Quick and Full share execution primitives. Full
+preserves the union of Quick and Thorough candidates because the heuristic is
+not monotonic in its budget.
 
-- `POST/GET /api/route-jobs` — enqueue and list jobs;
-- `GET/DELETE /api/route-jobs/:id` — inspect or delete;
-- `POST /api/route-jobs/:id/cancel` — cooperative cancellation;
-- `GET /api/route-jobs/:id/results` — stable exact-first cursor pagination;
-- `GET /api/packs/:packId/search-regions` — reviewed region discovery.
+Provider submission, polling, deadlines, and cancellation stay inside driving
+area resolution. Completed contours are cached for 30 minutes. Credentials
+remain server-only. Runtime never requests trail or elevation data remotely.
 
-Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The database
-stores the immutable request/origin snapshot, resolved contour, pinned pack data
-version, per-trailhead checkpoints, results, and diagnostics until deletion.
-One FIFO worker runs at a time. Interrupted jobs resume at the first unfinished
-trailhead while their pinned pack version remains installed. Publishing a new
-pack prunes older builds, so unfinished jobs pinned to an older version become
-stale and cannot resume; already stored result geometry remains viewable.
+## Local data and preparation
 
-The FIFO coordinator stays in the app process, while each active job opens one
-dedicated local solver process that reuses the pinned pack repositories for the
-whole session. CPU-heavy Quick/Thorough work therefore cannot block status,
-cancellation, refresh, or other application requests; cancellation terminates
-the active solver process immediately. The coordinator also yields around setup
-and every persisted trailhead checkpoint. Drive-time resolution has a bounded
-overall deadline. The browser keeps exactly one serialized jobs poll in flight,
-polls more frequently while the Jobs modal is open, suppresses stale responses,
-and advances the displayed elapsed time locally between accepted server snapshots.
+Schema 6 is the supported graph representation. Pack selection, storage paths,
+version pinning, and provider jobs are backend details. Saved result geometry
+remains readable independently of graph-format support.
 
-Batch completeness means every eligible trailhead was attempted. It does not
-claim enumeration of every possible closed walk. Per-trailhead truncation and
-failures remain visible in job diagnostics.
+Preparation converts pinned sources into normalized records. The artifact
+builder computes metrics and feasibility, writes SQLite, audits the artifact,
+and activates it only after acceptance. Failed builds leave the previous
+artifact and current pointer intact. Downloads are immutable and cached.
 
-## Technical boundaries and invariants
+Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
+internal plan pins contributing data versions. One FIFO coordinator resumes
+interrupted work from its first unfinished start while the pinned data remains
+available. Old saved geometry stays viewable when data changes. Cancellation and
+deletion take precedence over late worker completion.
 
-- Next.js App Router, React, TypeScript, MapLibre, Zod, and local SQLite.
-- Pack/runtime code remains region-independent; reviewed region lists are pack
-  inputs and participate in data-version hashing.
-- Runtime never calls public OSM/Overpass or a remote elevation service.
-- Drive-time service areas use ArcGIS typical/static time, not live traffic.
-- Exact pack coverage is the only hard route-geometry boundary.
-- Unknown access is included by default and can be explicitly disabled.
-- Starts that sit among buildings, or that cannot reach a cycle, are excluded
-  from map visibility, previews, and automatic solver starts. Both are product
-  behaviour, not user settings: this app only offers wilderness loops.
-- Automated tests use committed fixtures and never require network access.
-- Generated packs, runtime databases, source downloads, caches, and secrets stay
-  out of Git.
-
-## Acceptance
-
-- Quick search resolves drive time without a separate calculation step, is
-  cancellable, deterministic, accessible, and suppresses stale responses.
-- Full-search launch validates the drawn boundary or reviewed region and all
-  snapshotted criteria before enqueueing. A drawn boundary cannot be combined
-  with origin or drive time. Otherwise, origin and drive time are an optional
-  pair; omitting both selects the entire reviewed region.
-- Persistent jobs recover across server restarts; cancellation retains partial
-  results; deletion cascades through checkpoints and routes.
-- Job polling never overlaps, elapsed progress remains visibly live between
-  responses, duplicate launches are blocked, and interruption during a pending
-  cancellation recovers as a terminal cancellation rather than a stranded job.
-- Every eligible batch trailhead is attempted once, with at most ten exact routes
-  or one otherwise-empty close match retained.
-- Pagination, stale pack labeling, map restoration, responsive layout, keyboard
-  focus, and screen-reader progress announcements pass browser coverage.
-- A real schema-5 Santa Cruz pack rebuild/audit and the complete verify/browser
-  suites pass before the gate is recorded complete.
+Generated packs, source downloads, caches, secrets, and local databases stay out
+of Git. Automated tests use committed inputs and production storage without
+network access. Verification covers changed invariants, existing behavior,
+current-data comparisons, builds, and desktop/mobile map interaction according
+to the [runbook](agent-runbook.md).

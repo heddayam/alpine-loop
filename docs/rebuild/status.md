@@ -8,17 +8,19 @@ the evidence line.
 
 The full revision is tracked in [system-design.md](system-design.md). All original
 rebuild gates below are historical completions, not acceptance of the new goal.
-The revision starts from `810e44c` and remains incomplete.
+The revision starts from `810e44c` and is complete through `b097b6d` on
+`codex/system-design`. All nine system-design acceptance items are complete.
 
-The geographic wave is integrated through `e9f722c`. Geographic search/map
-operations replace browser pack/provider orchestration; one Full job spans
-eligible data; viewed results and saved-work resources have single owners.
-Existing saved data migrated with fixture-backed rollback/preservation checks.
-Two final verification passes each pass 387 tests and production build, and two
-browser passes each pass six flows. Source is 1,999 lines smaller than baseline;
-tests/helpers are 1,755 lines smaller. See system-design.md for exact scope and
-live-check limitations. The next incomplete milestone is one supported graph
-representation and production-storage fixtures.
+The full change covers geographic application operations, workspace and saved
+result ownership, ordered preferences, map updates, reusable engine sessions,
+transport-independent domain results, audited publication, one graph format,
+and production-storage fixtures. Final source is 20,485 lines, 3,114 fewer
+than baseline. Tests/helpers are 9,019 lines, 2,023 fewer. No dependency was
+added. Two final verify passes each pass 383 offline tests, lint, types, and build;
+two final browser passes each pass all six flows. Live desktop/mobile checks and
+current-data comparisons pass with the limitations recorded in system-design.md.
+All delegated worktrees are removed. The application is available locally on
+port 3000. Original saved jobs and installed artifacts remain intact.
 
 - [x] Gate 0 — active app scaffold, shared contracts, fixture graph
   - Evidence: `npm ci` and `npm run verify` pass on Node 24.11.0; 14 boundary/fixture tests cover request, response, manifest, and all four fixture route shapes; Next.js 16.3.0 production build succeeds with `legacy/**` and generated data excluded.

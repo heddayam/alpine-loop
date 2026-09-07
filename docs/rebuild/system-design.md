@@ -188,10 +188,10 @@ implementation and expose an honest no-installed-data state.
 - [x] Workspace, saved work, and preference state have one owner each.
 - [x] Map sources and hover have one explicit update path.
 - [x] Engine sessions reuse prepared starts without transport fabrication.
-- [ ] Artifacts are audited before activation and use one supported graph representation.
-- [ ] Synthetic fixtures exercise production storage instead of a second graph engine.
-- [ ] Superseded paths, adapters, fields, and documentation are removed or updated.
-- [ ] Final source reduction, remaining complexity, tests, real-data comparisons, and UI behavior are measured.
+- [x] Artifacts are audited before activation and use one supported graph representation.
+- [x] Synthetic fixtures exercise production storage instead of a second graph engine.
+- [x] Superseded paths, adapters, fields, and documentation are removed or updated.
+- [x] Final source reduction, remaining complexity, tests, real-data comparisons, and UI behavior are measured.
 
 Use isolated commits for independent boundaries. Keep an implementation branch
 while the system is transitional. Verification is proportionate: existing
@@ -335,12 +335,90 @@ layout, migration rows 1–6, metrics, and data-version inputs remain unchanged.
 Empty historical primitive tables stay in that physical layout, while unused
 write/read branches and the alternate primitive output mode are removed.
 
-Parallel work preserves `fixtureCompileOptionsV6(...)`,
+The production fixture uses `fixtureCompileOptions(...)`,
 `writePackDatabase(path, contents)`, and the input shapes/meaning of
 `buildClosedRouteTopology(...)`. Test graphs supply data to those production
 writers/readers; they do not implement traversal or ranking. The original
 schema-6 compiled fixture is retained at
 `/private/tmp/alpine-schema6-baseline/fixture-pack/fixture-v6` for table/metric
-comparison. Root owns shared manifest contracts and solver/script integration;
-compiler work owns `lib/data/**`; graph work owns `lib/graph/**`, `lib/packs/**`,
-and the reachable-graph solver test.
+comparison. The compiler and reader changes were integrated independently, then verified together.
+
+
+## Final representation and ownership evidence
+
+The compiler and reader support one existing format. Obsolete manifest variants,
+primitive-output branches, schema-dependent SQL, fabricated graph defaults, and
+the duplicate fixture graph engine are removed. Tests now serialize small graph
+inputs into production SQLite. The engine returns domain candidates and real
+search diagnostics without transport IDs, request echoes, or display metadata.
+Installed-data discovery no longer constructs the removed pack-UI response.
+
+The frozen schema-6 fixture and new compiler output have identical manifests,
+audits, all 126 rows across 32 tables, metric values, provenance, and version
+inputs. SQL definitions differ only in whitespace. Twelve old/new reader
+comparisons preserve candidates, induced graphs, and bounded reachable graphs
+under both access policies. All five installed regional databases load with the
+new reader. Their artifacts were neither rebuilt nor rewritten.
+
+The final ownership checks preserve unresolved location intent after a failed
+lookup, show pagination failures alongside retained cards, keep draw callbacks
+stable across unrelated updates, and disclose failed Full-search trailheads
+while preserving successful results. Unused drawing and results-state options
+are removed. A Strict Mode regression confirms saved jobs load after the initial
+mount request is cancelled.
+
+Live inspection caught overview maps unnecessarily loading hidden detailed
+trails. The viewport now requests details only at trail zoom. The same real
+Santa Cruz overview changed from a 6.4-second rejected detail request to a
+522-millisecond successful response with 392 access points and no hidden trails.
+This is a local observation, not a general performance benchmark.
+
+### Complexity deliberately retained
+
+- The closed-route heuristic, directed reconstruction, physical-cycle checks,
+  metric computation, and Quick/Thorough union remain. This revision changes
+  representation and ownership, not the search method or its yield.
+- A compute child remains necessary to isolate synchronous route search. Full
+  work retains durable checkpoints, cancellation, and version pinning.
+- Empty historical SQLite tables remain in the existing artifact layout to
+  preserve installed data. No runtime mode reads or populates those primitives.
+- Provider deadlines, usage accounting, and cancellation remain inside area
+  resolution. Dense detailed map queries remain bounded and can require zooming
+  in. The app is local and does not introduce a general queue or plugin system.
+
+
+## Final acceptance
+
+The full revision is complete through `b097b6d` on `codex/system-design`.
+Final accounting relative to `810e44c`, using the identical scope above:
+
+| Category | Before | After | Net change |
+| --- | ---: | ---: | ---: |
+| Application source | 23,599 | 20,485 | -3,114 |
+| Tests and helpers | 11,042 | 9,019 | -2,023 |
+| Tracked Markdown | 3,591 | 3,986 | +395 |
+
+Application source files decrease from 166 to 155. No dependency was added.
+These totals include all waves, not merely pack-selection removal, and do not
+count moving code as a reduction. Test removals follow removed APIs and alternate
+implementations; regression tests cover the replacement invariants.
+
+Two final `npm run verify` passes each pass 383 offline tests across 74 files,
+lint, type checking, and production build. Two `npm run test:browser` passes each
+pass six flows. Logs: `/private/tmp/alpine-final-verify5.log`,
+`/private/tmp/alpine-final-verify6.log`, `/private/tmp/alpine-final-browser5.log`,
+and `/private/tmp/alpine-final-browser6.log`.
+
+Final live inspection restored seven saved Henry Coe routes, original 25–30-mile
+criteria alongside the independent 1–4-mile draft, desktop map zoom/pan, and a
+390-by-844 mobile viewport. The results panel scrolls 297 pixels internally
+(716-pixel content, 419-pixel viewport). The fresh tab reports no console errors.
+All original 12 jobs remain. A new local Full job appeared during verification
+and was left running without modification. A real Henry Coe Quick request
+returned HTTP 200 in 3,614 ms with explicit computation truncation and no routes.
+An earlier concurrent-load attempt returned 503. This work does not claim better
+search yield or guaranteed latency under load.
+
+All delegated worktrees and branches are removed. The integration branch holds
+the complete reviewable revision. Installed artifacts, archive tags, and saved
+result geometry remain preserved. No publication or deployment was performed.
