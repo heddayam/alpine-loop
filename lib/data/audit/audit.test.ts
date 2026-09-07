@@ -5,7 +5,8 @@ import { assertPackAuditPassed, auditRegionalPack } from "./audit";
 import type { RegionalPackAuditInput } from "./types";
 
 async function fixture(): Promise<RegionalPackAuditInput> {
-  return JSON.parse(await readFile(path.resolve("data/fixtures/source/audit/pack-input.json"), "utf8")) as RegionalPackAuditInput;
+  const input = JSON.parse(await readFile(path.resolve("data/fixtures/source/audit/pack-input.json"), "utf8")) as RegionalPackAuditInput;
+  return { ...input, schemaVersion: "6", edges: input.edges.map((edge) => ({ ...edge, edgeClass: "trail" })) };
 }
 
 describe("regional pack audit", () => {

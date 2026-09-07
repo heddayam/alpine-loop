@@ -1,17 +1,17 @@
 import { DatabaseSync } from "node:sqlite";
 import type { SourceSnapshot } from "./adapters";
 import { namedAreaSearchKey } from "./named-areas";
-import type { CompiledEdge, NormalizedAccessPoint, NormalizedNamedArea, NormalizedNode, NormalizedSearchRegion, Schema3TopologyBuild } from "./types";
+import type { CompiledEdge, NormalizedAccessPoint, NormalizedNamedArea, NormalizedNode, NormalizedSearchRegion, ClosedRouteTopologyBuild } from "./types";
 
 export type DatabaseContents = {
   nodes: NormalizedNode[];
   edges: CompiledEdge[];
   accessPoints: NormalizedAccessPoint[];
-  namedAreas?: NormalizedNamedArea[];
-  searchRegions?: NormalizedSearchRegion[];
+  namedAreas: NormalizedNamedArea[];
+  searchRegions: NormalizedSearchRegion[];
   sources: SourceSnapshot[];
   metadata: Record<string, string>;
-  closedRouteTopology?: Schema3TopologyBuild;
+  closedRouteTopology: ClosedRouteTopologyBuild;
 };
 
 function geometryBounds(geometry: CompiledEdge["geometry"]): [number, number, number, number] {
@@ -21,26 +21,22 @@ function geometryBounds(geometry: CompiledEdge["geometry"]): [number, number, nu
 }
 
 export function writePackDatabase(path: string, contents: DatabaseContents): void {
+  if (contents.metadata.schemaVersion !== "6") throw new Error("Unsupported pack schema version");
+  if (!contents.namedAreas) throw new Error("Schema 6 database requires named areas");
+  if (!contents.closedRouteTopology) throw new Error("Schema 6 database requires closed-route topology");
+  if (!contents.searchRegions) throw new Error("Schema 6 database requires search regions");
   const database = new DatabaseSync(path);
-  const schemaVersion = contents.metadata.schemaVersion;
-  const hasClosedRouteTopology = schemaVersion === "3" || schemaVersion === "4" || schemaVersion === "5" || schemaVersion === "6";
-  const hasElevationProfiles = schemaVersion === "5" || schemaVersion === "6";
-  const hasSearchRegions = schemaVersion === "4" || schemaVersion === "5" || schemaVersion === "6";
-  if (schemaVersion !== "1" && schemaVersion !== "2" && schemaVersion !== "3" && schemaVersion !== "4" && schemaVersion !== "5" && schemaVersion !== "6") throw new Error(`Unsupported database schema version ${schemaVersion}`);
-  if (schemaVersion !== "1" && !contents.namedAreas) throw new Error(`Schema ${schemaVersion} database requires named areas`);
-  if (hasClosedRouteTopology && !contents.closedRouteTopology) throw new Error(`Schema ${schemaVersion} database requires closed-route topology`);
-  if (hasSearchRegions && !contents.searchRegions) throw new Error(`Schema ${schemaVersion} database requires search regions`);
   try {
     database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;");
     database.exec(`
       CREATE TABLE nodes (
-        id TEXT PRIMARY KEY${hasClosedRouteTopology ? ", node_key INTEGER NOT NULL UNIQUE" : ""}, lon REAL NOT NULL, lat REAL NOT NULL,
+        id TEXT PRIMARY KEY, node_key INTEGER NOT NULL UNIQUE, lon REAL NOT NULL, lat REAL NOT NULL,
         elevation_m REAL, flags TEXT NOT NULL
       ) STRICT;
       CREATE VIRTUAL TABLE node_spatial USING rtree(
         row_id, min_lon, max_lon, min_lat, max_lat
       );
-      ${hasClosedRouteTopology ? `
+
       CREATE TABLE physical_edges (
         physical_edge_key INTEGER PRIMARY KEY,
         stable_physical_id TEXT NOT NULL UNIQUE,
@@ -48,13 +44,13 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         to_node_key INTEGER NOT NULL REFERENCES nodes(node_key),
         geometry_hash TEXT NOT NULL
       ) STRICT;
-      CREATE INDEX physical_edges_nodes ON physical_edges(from_node_key, to_node_key);` : ""}
+      CREATE INDEX physical_edges_nodes ON physical_edges(from_node_key, to_node_key);
       CREATE TABLE edges (
-        id TEXT PRIMARY KEY${hasClosedRouteTopology ? ", edge_key INTEGER NOT NULL UNIQUE, physical_edge_key INTEGER NOT NULL REFERENCES physical_edges(physical_edge_key)" : ""}, from_node TEXT NOT NULL REFERENCES nodes(id),
+        id TEXT PRIMARY KEY, edge_key INTEGER NOT NULL UNIQUE, physical_edge_key INTEGER NOT NULL REFERENCES physical_edges(physical_edge_key), from_node TEXT NOT NULL REFERENCES nodes(id),
         to_node TEXT NOT NULL REFERENCES nodes(id), geometry TEXT NOT NULL,
         length_m REAL NOT NULL, gain_m REAL, loss_m REAL,
-        max_elevation_m REAL, max_sustained_grade_pct REAL${hasElevationProfiles ? `, elevation_profile TEXT${schemaVersion === "5" ? " NOT NULL" : ""}` : ""},
-        access_state TEXT NOT NULL${schemaVersion === "6" ? ", edge_class TEXT NOT NULL CHECK(edge_class IN ('trail','service-road','street','sidewalk'))" : ""}, source_refs TEXT NOT NULL, flags TEXT NOT NULL
+        max_elevation_m REAL, max_sustained_grade_pct REAL, elevation_profile TEXT,
+        access_state TEXT NOT NULL, edge_class TEXT NOT NULL CHECK(edge_class IN ('trail','service-road','street','sidewalk')), source_refs TEXT NOT NULL, flags TEXT NOT NULL
       ) STRICT;
       CREATE INDEX edges_from_node ON edges(from_node);
       CREATE INDEX edges_to_node ON edges(to_node);
@@ -65,17 +61,17 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         id TEXT PRIMARY KEY, node_id TEXT NOT NULL REFERENCES nodes(id),
         name TEXT NOT NULL, kind TEXT NOT NULL, access_state TEXT NOT NULL,
         confidence TEXT NOT NULL, parking_evidence TEXT, source_refs TEXT NOT NULL
-        ${schemaVersion !== "1" ? `,
+        ,
         known_connectivity INTEGER NOT NULL CHECK(known_connectivity >= 0),
         inclusive_connectivity INTEGER NOT NULL CHECK(inclusive_connectivity >= 0),
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
         inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
         nearby_building_count INTEGER NOT NULL CHECK(nearby_building_count >= 0)
-        ${schemaVersion === "6" ? `,
+        ,
         reachable_trail_km REAL NOT NULL CHECK(reachable_trail_km >= 0),
         trail_component_id TEXT NOT NULL,
         portal_road_class TEXT NOT NULL CHECK(portal_road_class IN ('street','service-road')),
-        parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)` : ""}` : ""}
+        parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)
       ) STRICT;
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
@@ -86,7 +82,7 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       CREATE TABLE schema_migrations (
         version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL
       ) STRICT;
-      ${schemaVersion !== "1" ? `
+
       CREATE TABLE named_areas (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL,
         context TEXT, min_lon REAL NOT NULL, min_lat REAL NOT NULL,
@@ -102,13 +98,13 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       CREATE INDEX named_area_alias_search ON named_area_aliases(normalized_alias, area_id);
       CREATE VIRTUAL TABLE named_area_spatial USING rtree(
         row_id, min_lon, max_lon, min_lat, max_lat
-      );` : ""}
-      ${hasSearchRegions ? `
+      );
+
       CREATE TABLE search_regions (
         named_area_id TEXT PRIMARY KEY REFERENCES named_areas(id),
         display_order INTEGER NOT NULL UNIQUE CHECK(display_order >= 0)
-      ) STRICT;` : ""}
-      ${hasClosedRouteTopology ? `
+      ) STRICT;
+
       CREATE TABLE topology_profiles (
         profile TEXT PRIMARY KEY CHECK(profile IN ('known','inclusive')),
         format_version INTEGER NOT NULL, node_count INTEGER NOT NULL,
@@ -181,20 +177,20 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         connector_decision_edge_ids TEXT NOT NULL, portal_decision_node_id INTEGER, minimum_stem_distance_m REAL,
         can_reach_cycle INTEGER NOT NULL CHECK(can_reach_cycle IN (0,1)), PRIMARY KEY(profile, access_point_id)
       ) STRICT;
-      CREATE INDEX access_topology_network ON access_topology(profile, cycle_network_id, portal_decision_node_id);` : ""}
+      CREATE INDEX access_topology_network ON access_topology(profile, cycle_network_id, portal_decision_node_id);
     `);
 
     const insertNode = database.prepare(
-      `INSERT INTO nodes(id${hasClosedRouteTopology ? ", node_key" : ""}, lon, lat, elevation_m, flags) VALUES (?${hasClosedRouteTopology ? ", ?" : ""}, ?, ?, ?, ?)`,
+      `INSERT INTO nodes(id, node_key, lon, lat, elevation_m, flags) VALUES (?, ?, ?, ?, ?, ?)`,
     );
     const insertNodeSpatial = database.prepare(
       "INSERT INTO node_spatial(row_id, min_lon, max_lon, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)",
     );
     const insertEdge = database.prepare(`
       INSERT INTO edges(
-        id${hasClosedRouteTopology ? ", edge_key, physical_edge_key" : ""}, from_node, to_node, geometry, length_m, gain_m, loss_m,
-        max_elevation_m, max_sustained_grade_pct${hasElevationProfiles ? ", elevation_profile" : ""}, access_state${schemaVersion === "6" ? ", edge_class" : ""}, source_refs, flags
-      ) VALUES (?${hasClosedRouteTopology ? ", ?, ?" : ""}, ?, ?, ?, ?, ?, ?, ?, ?${hasElevationProfiles ? ", ?" : ""}, ?${schemaVersion === "6" ? ", ?" : ""}, ?, ?)
+        id, edge_key, physical_edge_key, from_node, to_node, geometry, length_m, gain_m, loss_m,
+        max_elevation_m, max_sustained_grade_pct, elevation_profile, access_state, edge_class, source_refs, flags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertEdgeSpatial = database.prepare(
       "INSERT INTO edge_spatial(row_id, min_lon, max_lon, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)",
@@ -202,21 +198,21 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
     const insertAccess = database.prepare(`
       INSERT INTO access_points(
         id, node_id, name, kind, access_state, confidence, parking_evidence, source_refs
-        ${schemaVersion !== "1" ? ", known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, nearby_building_count" : ""}
-        ${schemaVersion === "6" ? ", reachable_trail_km, trail_component_id, portal_road_class, parking_distance_m" : ""}
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?${schemaVersion !== "1" ? ", ?, ?, ?, ?, ?" : ""}${schemaVersion === "6" ? ", ?, ?, ?, ?" : ""})
+        , known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, nearby_building_count
+        , reachable_trail_km, trail_component_id, portal_road_class, parking_distance_m
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const insertNamedArea = schemaVersion !== "1" ? database.prepare(`
+    const insertNamedArea = database.prepare(`
       INSERT INTO named_areas(
         id, name, kind, context, min_lon, min_lat, max_lon, max_lat, geometry, source_refs
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `) : null;
-    const insertNamedAreaAlias = schemaVersion !== "1" ? database.prepare(`
+    `);
+    const insertNamedAreaAlias = database.prepare(`
       INSERT INTO named_area_aliases(area_id, alias, normalized_alias) VALUES (?, ?, ?)
-    `) : null;
-    const insertNamedAreaSpatial = schemaVersion !== "1" ? database.prepare(`
+    `);
+    const insertNamedAreaSpatial = database.prepare(`
       INSERT INTO named_area_spatial(row_id, min_lon, max_lon, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)
-    `) : null;
+    `);
     const insertSource = database.prepare(`
       INSERT INTO sources(
         id, authority, dataset, version, retrieved_at, url, license, content_hash
@@ -227,101 +223,69 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
     database.exec("BEGIN IMMEDIATE");
     try {
       contents.nodes.forEach((node, index) => {
-        insertNode.run(node.id, ...(hasClosedRouteTopology ? [contents.closedRouteTopology!.nodeKeys.get(node.id)!] : []), node.lon, node.lat, node.elevationM, JSON.stringify(node.flags));
+        insertNode.run(node.id, contents.closedRouteTopology.nodeKeys.get(node.id)!, node.lon, node.lat, node.elevationM, JSON.stringify(node.flags));
         insertNodeSpatial.run(index + 1, node.lon, node.lon, node.lat, node.lat);
       });
-      if (hasClosedRouteTopology) {
-        const insertPhysical = database.prepare("INSERT INTO physical_edges VALUES (?, ?, ?, ?, ?)");
-        for (const edge of contents.closedRouteTopology!.physicalEdges) {
-          insertPhysical.run(edge.physicalEdgeKey, edge.stablePhysicalId, edge.fromNodeKey, edge.toNodeKey, edge.geometryHash);
-        }
+      const insertPhysical = database.prepare("INSERT INTO physical_edges VALUES (?, ?, ?, ?, ?)");
+      for (const edge of contents.closedRouteTopology.physicalEdges) {
+        insertPhysical.run(edge.physicalEdgeKey, edge.stablePhysicalId, edge.fromNodeKey, edge.toNodeKey, edge.geometryHash);
       }
       contents.edges.forEach((edge, index) => {
-        if (hasElevationProfiles && (schemaVersion === "5" || edge.edgeClass === "trail") && !edge.elevationProfile) {
-          throw new Error(`Schema ${schemaVersion} trail edge ${edge.id} requires a complete elevation profile`);
+        if (edge.edgeClass === "trail" && !edge.elevationProfile) {
+          throw new Error(`Schema 6 trail edge ${edge.id} requires a complete elevation profile`);
         }
-        if (schemaVersion === "6" && !edge.edgeClass) throw new Error(`Schema 6 edge ${edge.id} requires an edge class`);
+        if (!edge.edgeClass) throw new Error(`Schema 6 edge ${edge.id} requires an edge class`);
         insertEdge.run(
-          edge.id, ...(hasClosedRouteTopology ? [contents.closedRouteTopology!.edgeKeys.get(edge.id)!, contents.closedRouteTopology!.physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!] : []), edge.fromNode, edge.toNode, JSON.stringify(edge.geometry), edge.lengthM,
+          edge.id, contents.closedRouteTopology.edgeKeys.get(edge.id)!, contents.closedRouteTopology.physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!, edge.fromNode, edge.toNode, JSON.stringify(edge.geometry), edge.lengthM,
           edge.gainM, edge.lossM, edge.maxElevationM, edge.maxSustainedGradePct,
-          ...(hasElevationProfiles ? [edge.elevationProfile ? JSON.stringify(edge.elevationProfile.map(
+          edge.elevationProfile ? JSON.stringify(edge.elevationProfile.map(
             ({ distanceMeters, elevationMeters }) => [distanceMeters, elevationMeters],
-          )) : null] : []),
-          edge.accessState, ...(schemaVersion === "6" ? [edge.edgeClass!] : []), JSON.stringify(edge.sourceRefs), JSON.stringify(edge.flags),
+          )) : null,
+          edge.accessState, edge.edgeClass, JSON.stringify(edge.sourceRefs), JSON.stringify(edge.flags),
         );
         insertEdgeSpatial.run(index + 1, ...geometryBounds(edge.geometry));
       });
       for (const point of contents.accessPoints) {
-        const rankingValues = schemaVersion !== "1" ? [
+        const rankingValues = [
           point.knownConnectivity,
           point.inclusiveConnectivity,
           point.knownOutDegree,
           point.inclusiveOutDegree,
-        ] : [];
-        if (schemaVersion !== "1" && rankingValues.some((value) => value === undefined)) {
-          throw new Error(`Access point ${point.id} is missing schema ${schemaVersion} ranking fields`);
+        ];
+        if (rankingValues.some((value) => value === undefined)) {
+          throw new Error(`Access point ${point.id} is missing schema 6 ranking fields`);
         }
         const ranking = rankingValues.map((value) => value!);
         // Not optional: a missing count would make an urban start look wild.
-        if (schemaVersion !== "1" && typeof point.nearbyBuildingCount !== "number") {
+        if (typeof point.nearbyBuildingCount !== "number") {
           throw new Error(`Access point ${point.id} is missing its nearby building count`);
         }
-        const buildings = schemaVersion !== "1" ? [point.nearbyBuildingCount!] : [];
-        if (schemaVersion === "6" && (typeof point.reachableTrailKm !== "number" || !point.trailComponentId || !point.portalRoadClass)) {
+        if (typeof point.reachableTrailKm !== "number" || !point.trailComponentId || !point.portalRoadClass) {
           throw new Error(`Access point ${point.id} is missing schema 6 portal fields`);
         }
-        const portal = schemaVersion === "6" ? [
-          point.reachableTrailKm!,
-          point.trailComponentId!,
-          point.portalRoadClass!,
-          point.parkingDistanceM ?? null,
-        ] : [];
         insertAccess.run(
           point.id, point.nodeId, point.name, point.kind, point.accessState,
-          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, ...buildings, ...portal,
+          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, point.nearbyBuildingCount,
+          point.reachableTrailKm, point.trailComponentId, point.portalRoadClass, point.parkingDistanceM ?? null,
         );
       }
-      contents.namedAreas?.forEach((area, index) => {
-        insertNamedArea!.run(
+      contents.namedAreas.forEach((area, index) => {
+        insertNamedArea.run(
           area.id, area.name, area.kind, area.context ?? null,
           area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3],
           JSON.stringify(area.geometry), JSON.stringify(area.sourceIds),
         );
-        insertNamedAreaSpatial!.run(index + 1, area.bbox[0], area.bbox[2], area.bbox[1], area.bbox[3]);
-        for (const alias of area.aliases) insertNamedAreaAlias!.run(area.id, alias, namedAreaSearchKey(alias));
+        insertNamedAreaSpatial.run(index + 1, area.bbox[0], area.bbox[2], area.bbox[1], area.bbox[3]);
+        for (const alias of area.aliases) insertNamedAreaAlias.run(area.id, alias, namedAreaSearchKey(alias));
       });
-      if (hasSearchRegions) {
-        const insertSearchRegion = database.prepare("INSERT INTO search_regions(named_area_id, display_order) VALUES (?, ?)");
-        for (const region of contents.searchRegions!) insertSearchRegion.run(region.namedAreaId, region.displayOrder);
-      }
-      if (hasClosedRouteTopology) {
-        const topology = contents.closedRouteTopology!;
-        const insertProfile = database.prepare("INSERT INTO topology_profiles VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertNetwork = database.prepare("INSERT INTO topology_networks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertTopologyNode = database.prepare("INSERT INTO topology_nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertDecisionEdge = database.prepare("INSERT INTO topology_decision_edges VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertMember = database.prepare("INSERT INTO topology_decision_edge_members VALUES (?, ?, ?, ?, ?)");
-        const insertBlock = database.prepare("INSERT INTO topology_blocks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertBlockNode = database.prepare("INSERT INTO topology_block_nodes VALUES (?, ?, ?)");
-        const insertBlockEdge = database.prepare("INSERT INTO topology_block_edges VALUES (?, ?, ?)");
-        const insertBlockLink = database.prepare("INSERT INTO topology_block_links VALUES (?, ?, ?, ?, ?, ?)");
-        const insertAccessTopology = database.prepare("INSERT INTO access_topology VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        for (const profile of topology.profiles) {
-          insertProfile.run(profile.profile, profile.formatVersion, profile.nodeCount, profile.physicalEdgeCount, profile.decisionNodeCount, profile.decisionEdgeCount, profile.builtAt, profile.contentHash);
-          for (const network of profile.networks) insertNetwork.run(profile.profile, network.networkId, network.decisionNodeCount, network.decisionEdgeCount, network.cycleBlockCount, network.minimumCycleLengthM, network.maximumCycleLengthM, network.minimumElevationM, network.maximumElevationM, network.contentHash);
-          for (const node of profile.nodes) insertTopologyNode.run(profile.profile, node.denseId, node.sourceNodeId, node.decisionNodeId, node.connectedComponentId, node.directedSccId, node.twoEdgeComponentId, Number(node.isArticulation), node.nearestCycleNetworkId, node.cyclePortalDecisionNodeId, node.minimumStemDistanceM);
-          for (const edge of profile.decisionEdges) {
-            insertDecisionEdge.run(profile.profile, edge.decisionEdgeKey, edge.networkId, edge.fromDecisionNodeId, edge.toDecisionNodeId, edge.lengthM, edge.gainM, edge.lossM, Number(edge.isBridge), edge.twoEdgeComponentId, edge.vertexBlockId, edge.metricsAndFlags);
-            for (const member of edge.members) insertMember.run(profile.profile, edge.decisionEdgeKey, member.sequenceIndex, member.edgeKey, member.physicalEdgeKey);
-          }
-          for (const block of profile.blocks) {
-            insertBlock.run(profile.profile, block.blockId, block.networkId, block.blockKind, block.nodeCount, block.edgeCount, block.cycleRank, block.totalPhysicalLengthM, block.minimumCycleLengthM, block.elevationSummary, block.trailSummary);
-            block.decisionNodeIds.forEach((id) => insertBlockNode.run(profile.profile, block.blockId, id));
-            block.decisionEdgeKeys.forEach((id) => insertBlockEdge.run(profile.profile, block.blockId, id));
-          }
-          profile.blockLinks.forEach((link) => insertBlockLink.run(profile.profile, link.networkId, link.fromBlockId, link.toBlockId, link.articulationDecisionNodeId, link.connectorDistanceM));
-          profile.accessTopology.forEach((access) => insertAccessTopology.run(profile.profile, access.accessPointId, access.attachmentDecisionNodeId, access.cycleNetworkId, access.connectorKey, JSON.stringify(access.connectorDecisionEdgeIds), access.portalDecisionNodeId, access.minimumStemDistanceM, Number(access.canReachCycle)));
-        }
+      const insertSearchRegion = database.prepare("INSERT INTO search_regions(named_area_id, display_order) VALUES (?, ?)");
+      for (const region of contents.searchRegions) insertSearchRegion.run(region.namedAreaId, region.displayOrder);
+      const topology = contents.closedRouteTopology;
+      const insertProfile = database.prepare("INSERT INTO topology_profiles VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertAccessTopology = database.prepare("INSERT INTO access_topology VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      for (const profile of topology.profiles) {
+        insertProfile.run(profile.profile, profile.formatVersion, profile.nodeCount, profile.physicalEdgeCount, profile.decisionNodeCount, profile.decisionEdgeCount, profile.builtAt, profile.contentHash);
+        profile.accessTopology.forEach((access) => insertAccessTopology.run(profile.profile, access.accessPointId, access.attachmentDecisionNodeId, access.cycleNetworkId, access.connectorKey, JSON.stringify(access.connectorDecisionEdgeIds), access.portalDecisionNodeId, access.minimumStemDistanceM, Number(access.canReachCycle)));
       }
       for (const source of contents.sources) {
         insertSource.run(
@@ -330,19 +294,8 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
         );
       }
       for (const [key, value] of Object.entries(contents.metadata)) insertMetadata.run(key, value);
-      database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (1, ?)")
-        .run(contents.metadata.builtAt);
-      if (schemaVersion !== "1") {
-        database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (2, ?)")
-          .run(contents.metadata.builtAt);
-      }
-      if (hasClosedRouteTopology) database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (3, ?)").run(contents.metadata.builtAt);
-      if (schemaVersion === "4") database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (4, ?)").run(contents.metadata.builtAt);
-      if (schemaVersion === "5" || schemaVersion === "6") {
-        database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (4, ?)").run(contents.metadata.builtAt);
-        database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (5, ?)").run(contents.metadata.builtAt);
-      }
-      if (schemaVersion === "6") database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (6, ?)").run(contents.metadata.builtAt);
+      const insertMigration = database.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)");
+      for (let version = 1; version <= 6; version += 1) insertMigration.run(version, contents.metadata.builtAt);
       database.exec("COMMIT");
     } catch (error) {
       database.exec("ROLLBACK");

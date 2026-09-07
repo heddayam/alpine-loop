@@ -1,16 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import {
-  namedAreaSchema,
-  packManifestSchema,
-  type PackManifestV1,
-  type PackManifestV2,
-  type PackManifestV3,
-  type PackManifestV4,
-  type PackManifestV5,
-  type PackManifestV6,
-} from "@/lib/contracts";
+import { namedAreaSchema, packManifestSchema, type PackManifest } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import { edgeInsideCoverage } from "../area-geometry";
 import { auditRegionalPack } from "./audit";
@@ -26,7 +17,6 @@ import { topologySha256 } from "../topology-compiler";
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
 type Metadata = Record<string, string>;
-type AuditablePackManifest = PackManifestV1 | PackManifestV2 | PackManifestV3 | PackManifestV4 | PackManifestV5 | PackManifestV6;
 type BuildMetrics = {
   rejectedEdgeCount: number;
   conflictRecordIds: string[];
@@ -105,7 +95,7 @@ function databaseMetadata(database: DatabaseSync): Metadata {
   ]));
 }
 
-function assertManifestMetadata(manifest: AuditablePackManifest, metadata: Metadata): void {
+function assertManifestMetadata(manifest: PackManifest, metadata: Metadata): void {
   const expected: Metadata = {
     schemaVersion: manifest.schemaVersion,
     packId: manifest.id,
@@ -121,7 +111,7 @@ function assertManifestMetadata(manifest: AuditablePackManifest, metadata: Metad
   }
 }
 
-function sourcesFromDatabase(database: DatabaseSync, manifest: AuditablePackManifest): AuditSource[] {
+function sourcesFromDatabase(database: DatabaseSync, manifest: PackManifest): AuditSource[] {
   const rows = database.prepare(`
     SELECT id, authority, dataset, version, retrieved_at, url, license, content_hash
     FROM sources ORDER BY id
@@ -160,10 +150,10 @@ function sourcesFromDatabase(database: DatabaseSync, manifest: AuditablePackMani
   });
 }
 
-function edgesFromDatabase(database: DatabaseSync, manifest: AuditablePackManifest): AuditEdge[] {
+function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
   const rows = database.prepare(`
     SELECT id, from_node, to_node, geometry, length_m, gain_m, loss_m, max_elevation_m,
-      max_sustained_grade_pct, access_state, ${manifest.schemaVersion === "6" ? "edge_class" : "'trail' AS edge_class"}, source_refs, flags
+      max_sustained_grade_pct, access_state, edge_class, source_refs, flags
     FROM edges ORDER BY id
   `).all() as Array<Record<string, unknown>>;
   return rows.map((row) => {
@@ -188,10 +178,9 @@ function edgesFromDatabase(database: DatabaseSync, manifest: AuditablePackManife
 
 function auditNamedAreas(
   database: DatabaseSync,
-  manifest: AuditablePackManifest,
+  manifest: PackManifest,
   sourceIds: ReadonlySet<string>,
 ): { count: number; errors: string[] } {
-  if (manifest.schemaVersion === "1") return { count: 0, errors: [] };
   const errors: string[] = [];
   const rows = database.prepare(`
     SELECT id, name, kind, context, min_lon, min_lat, max_lon, max_lat, geometry, source_refs
@@ -228,11 +217,7 @@ function auditNamedAreas(
   return { count: rows.length, errors };
 }
 
-function auditSearchRegions(
-  database: DatabaseSync,
-  manifest: AuditablePackManifest,
-): { count: number; errors: string[] } {
-  if (manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") return { count: 0, errors: [] };
+function auditSearchRegions(database: DatabaseSync): { count: number; errors: string[] } {
   const rows = database.prepare(`
     SELECT r.named_area_id, r.display_order, a.name, a.kind
     FROM search_regions r
@@ -260,11 +245,10 @@ function auditSearchRegions(
   return { count: rows.length, errors };
 }
 
-function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
-  if (manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") return [];
+function auditElevationProfiles(database: DatabaseSync): string[] {
   const errors: string[] = [];
   const edges = database.prepare(`SELECT edge_key, id, length_m, elevation_profile FROM edges
-    ${manifest.schemaVersion === "6" ? "WHERE edge_class = 'trail'" : ""} ORDER BY edge_key`)
+    WHERE edge_class = 'trail' ORDER BY edge_key`)
     .all() as Array<Record<string, unknown>>;
   for (const edge of edges) {
     requiredNumber(edge.edge_key, "edges.edge_key");
@@ -292,8 +276,7 @@ function auditElevationProfiles(database: DatabaseSync, manifest: AuditablePackM
   return errors;
 }
 
-function auditPortalAccess(database: DatabaseSync, manifest: AuditablePackManifest): string[] {
-  if (manifest.schemaVersion !== "6") return [];
+function auditPortalAccess(database: DatabaseSync): string[] {
   const errors: string[] = [];
   const contextEdges = requiredNumber(
     (database.prepare("SELECT count(*) AS count FROM edges WHERE edge_class <> 'trail'").get() as Record<string, unknown>).count,
@@ -435,8 +418,7 @@ async function buildMetrics(metadata: Metadata, auditPath: string | null): Promi
 }
 
 export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<RegionalPackAudit> {
-  const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
-  const manifest = parsedManifest;
+  const manifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
   const database = new DatabaseSync(options.databasePath, { readOnly: true });
   let metadata: Metadata;
   let sources: AuditSource[];
@@ -445,78 +427,62 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   let accessPoints: AuditAccessPoint[];
   let namedAreas: ReturnType<typeof auditNamedAreas>;
   let searchRegions: ReturnType<typeof auditSearchRegions>;
-  let topologyCounts: { profiles: number; networks: number; decisionEdges: number } | null = null;
+  let topologyCounts: { profiles: number; networks: number; decisionEdges: number };
   try {
     metadata = databaseMetadata(database);
     assertManifestMetadata(manifest, metadata);
     sources = sourcesFromDatabase(database, manifest);
-    edges = edgesFromDatabase(database, manifest);
+    edges = edgesFromDatabase(database);
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
-    searchRegions = auditSearchRegions(database, manifest);
-    const elevationProfileErrors = auditElevationProfiles(database, manifest);
+    searchRegions = auditSearchRegions(database);
+    const elevationProfileErrors = auditElevationProfiles(database);
     if (elevationProfileErrors.length) throw new Error(elevationProfileErrors.join("; "));
-    const portalErrors = auditPortalAccess(database, manifest);
+    const portalErrors = auditPortalAccess(database);
     if (portalErrors.length) throw new Error(portalErrors.join("; "));
-    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
-      const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
-        decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
-      if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
-      for (const row of profiles) {
-        const profile = requiredString(row.profile, "topology profile");
-        const count = (table: string, predicate = "profile = ?") => requiredNumber(
-          (database.prepare(`SELECT count(*) AS count FROM ${table} WHERE ${predicate}`).get(profile) as Record<string, unknown>).count,
-          `${table} count`,
-        );
-        const expectedNodes = requiredNumber(row.node_count, `${profile}.node_count`);
-        const expectedPhysical = requiredNumber(row.physical_edge_count, `${profile}.physical_edge_count`);
-        const expectedDecisionNodes = requiredNumber(row.decision_node_count, `${profile}.decision_node_count`);
-        const expectedDecisionEdges = requiredNumber(row.decision_edge_count, `${profile}.decision_edge_count`);
-        const actualNodes = count("topology_nodes");
-        const actualPhysical = manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback"
-          ? requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count FROM edges
-              WHERE (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} access_state = 'public')
-                 OR (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} ? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "topology physical count")
-          : requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count
-              FROM topology_decision_edge_members WHERE profile = ?`).get(profile) as Record<string, unknown>).count, "topology physical count");
-        const actualDecisionNodes = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_nodes
-          WHERE profile = ? AND decision_node_id IS NOT NULL`).get(profile) as Record<string, unknown>).count, "topology decision node count");
-        const actualDecisionEdges = count("topology_decision_edges");
-        if (expectedNodes !== actualNodes || expectedPhysical !== actualPhysical || expectedDecisionNodes !== actualDecisionNodes || expectedDecisionEdges !== actualDecisionEdges) {
-          throw new Error(`Closed-route topology count mismatch for ${profile}`);
-        }
-        if (manifest.closedRouteTopology.runtimeMode === "primitive") {
-          const mapped = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_decision_edge_members m
-            JOIN edges e ON e.edge_key = m.edge_key AND e.physical_edge_key = m.physical_edge_key WHERE m.profile = ?`).get(profile) as Record<string, unknown>).count, "mapped edge count");
-          const legal = requiredNumber((database.prepare(`SELECT count(*) AS count FROM edges
-            WHERE (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} access_state = 'public')
-               OR (${manifest.schemaVersion === "6" ? "edge_class = 'trail' AND" : ""} ? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "legal edge count");
-          if (mapped !== legal || count("topology_decision_edge_members") !== legal) throw new Error(`Schema 3 topology member mapping mismatch for ${profile}`);
-        } else {
-          const accessCount = count("access_topology");
-          if (accessCount !== accessPoints.length) throw new Error(`Schema 3 fallback access topology count mismatch for ${profile}`);
-        }
+    const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
+      decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
+    if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
+    for (const row of profiles) {
+      const profile = requiredString(row.profile, "topology profile");
+      const count = (table: string, predicate = "profile = ?") => requiredNumber(
+        (database.prepare(`SELECT count(*) AS count FROM ${table} WHERE ${predicate}`).get(profile) as Record<string, unknown>).count,
+        `${table} count`,
+      );
+      const expectedNodes = requiredNumber(row.node_count, `${profile}.node_count`);
+      const expectedPhysical = requiredNumber(row.physical_edge_count, `${profile}.physical_edge_count`);
+      const expectedDecisionNodes = requiredNumber(row.decision_node_count, `${profile}.decision_node_count`);
+      const expectedDecisionEdges = requiredNumber(row.decision_edge_count, `${profile}.decision_edge_count`);
+      const actualNodes = count("topology_nodes");
+      const actualPhysical = requiredNumber((database.prepare(`SELECT count(DISTINCT physical_edge_key) AS count FROM edges
+            WHERE (edge_class = 'trail' AND access_state = 'public')
+               OR (edge_class = 'trail' AND ? = 'inclusive' AND access_state = 'unknown')`).get(profile) as Record<string, unknown>).count, "topology physical count");
+      const actualDecisionNodes = requiredNumber((database.prepare(`SELECT count(*) AS count FROM topology_nodes
+        WHERE profile = ? AND decision_node_id IS NOT NULL`).get(profile) as Record<string, unknown>).count, "topology decision node count");
+      const actualDecisionEdges = count("topology_decision_edges");
+      if (expectedNodes !== actualNodes || expectedPhysical !== actualPhysical || expectedDecisionNodes !== actualDecisionNodes || expectedDecisionEdges !== actualDecisionEdges) {
+        throw new Error(`Closed-route topology count mismatch for ${profile}`);
       }
-      if (manifest.closedRouteTopology.runtimeMode === "reachable-graph-fallback") {
-        for (const table of ["topology_networks", "topology_nodes", "topology_decision_edges", "topology_decision_edge_members", "topology_blocks", "topology_block_nodes", "topology_block_edges", "topology_block_links"]) {
-          const count = requiredNumber((database.prepare(`SELECT count(*) AS count FROM ${table}`).get() as Record<string, unknown>).count, `${table} count`);
-          if (count !== 0) throw new Error(`Reachable-graph fallback packs must not persist primitive rows in ${table}`);
-        }
-      }
-      const combinedHash = topologySha256({
-        runtimeMode: manifest.closedRouteTopology.runtimeMode,
-        algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
-        policyVersion: manifest.closedRouteTopology.policyVersion,
-        profiles: profiles.map((row) => ({ profile: requiredString(row.profile, "topology profile"), contentHash: requiredString(row.content_hash, "topology content hash") })),
-      });
-      if (metadata.topologyContentHash !== combinedHash) throw new Error("Schema 3 topology content hash mismatch");
-      topologyCounts = {
-        profiles: profiles.length,
-        networks: requiredNumber((database.prepare("SELECT count(*) AS count FROM topology_networks").get() as Record<string, unknown>).count, "topology network count"),
-        decisionEdges: requiredNumber((database.prepare("SELECT count(*) AS count FROM topology_decision_edges").get() as Record<string, unknown>).count, "topology decision edge count"),
-      };
+      const accessCount = count("access_topology");
+      if (accessCount !== accessPoints.length) throw new Error(`Schema 6 fallback access topology count mismatch for ${profile}`);
     }
+    for (const table of ["topology_networks", "topology_nodes", "topology_decision_edges", "topology_decision_edge_members", "topology_blocks", "topology_block_nodes", "topology_block_edges", "topology_block_links"]) {
+      const count = requiredNumber((database.prepare(`SELECT count(*) AS count FROM ${table}`).get() as Record<string, unknown>).count, `${table} count`);
+      if (count !== 0) throw new Error(`Reachable-graph fallback packs must not persist primitive rows in ${table}`);
+    }
+    const combinedHash = topologySha256({
+      runtimeMode: manifest.closedRouteTopology.runtimeMode,
+      algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
+      policyVersion: manifest.closedRouteTopology.policyVersion,
+      profiles: profiles.map((row) => ({ profile: requiredString(row.profile, "topology profile"), contentHash: requiredString(row.content_hash, "topology content hash") })),
+    });
+    if (metadata.topologyContentHash !== combinedHash) throw new Error("Schema 6 topology content hash mismatch");
+    topologyCounts = {
+      profiles: profiles.length,
+      networks: requiredNumber((database.prepare("SELECT count(*) AS count FROM topology_networks").get() as Record<string, unknown>).count, "topology network count"),
+      decisionEdges: requiredNumber((database.prepare("SELECT count(*) AS count FROM topology_decision_edges").get() as Record<string, unknown>).count, "topology decision edge count"),
+    };
   } finally {
     database.close();
   }
@@ -539,20 +505,16 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   audit.warnings.push(...metrics.warnings);
   audit.errors.push(...metrics.errors);
   audit.counts.conflicts = metrics.conflictCount;
-  if (manifest.schemaVersion !== "1") {
-    audit.counts.namedAreas = namedAreas.count;
-    audit.errors.push(...namedAreas.errors);
-    audit.outsideCoverageEdgeIds = edges
-      .filter((edge) => !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary))
-      .map(({ id }) => id);
-    if (audit.outsideCoverageEdgeIds.length) {
-      audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
-    }
+  audit.counts.namedAreas = namedAreas.count;
+  audit.errors.push(...namedAreas.errors);
+  audit.outsideCoverageEdgeIds = edges
+    .filter((edge) => !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary))
+    .map(({ id }) => id);
+  if (audit.outsideCoverageEdgeIds.length) {
+    audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
   }
-  if (manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
-    audit.counts.searchRegions = searchRegions.count;
-    audit.errors.push(...searchRegions.errors);
-  }
-  if (topologyCounts) audit.counts = { ...audit.counts, topologyProfiles: topologyCounts.profiles, topologyNetworks: topologyCounts.networks, topologyDecisionEdges: topologyCounts.decisionEdges };
+  audit.counts.searchRegions = searchRegions.count;
+  audit.errors.push(...searchRegions.errors);
+  audit.counts = { ...audit.counts, topologyProfiles: topologyCounts.profiles, topologyNetworks: topologyCounts.networks, topologyDecisionEdges: topologyCounts.decisionEdges };
   return audit;
 }

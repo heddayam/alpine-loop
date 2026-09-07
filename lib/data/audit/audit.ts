@@ -75,19 +75,15 @@ export function auditRegionalPack(input: RegionalPackAuditInput): RegionalPackAu
   if (implausibleMetricRecordIds.length) errors.push(`${implausibleMetricRecordIds.length} edges have implausible metrics`);
   const conflictRecordIds = [...new Set(input.conflictRecordIds ?? [])];
   if (conflictRecordIds.length) errors.push(`${conflictRecordIds.length} access conflicts require review`);
-  const elevationEdges = input.schemaVersion === "6"
-    ? input.edges.filter(({ edgeClass }) => edgeClass === "trail")
-    : input.edges;
-  const elevationNodeIds = input.schemaVersion === "6"
-    ? new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]))
-    : new Set(input.nodes.map(({ id }) => id));
+  const elevationEdges = input.edges.filter(({ edgeClass }) => edgeClass === "trail");
+  const elevationNodeIds = new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]));
   const missingNodeCount = input.nodes.filter(({ id, elevationM }) => elevationNodeIds.has(id) && elevationM === null).length;
   const missingEdgeCount = elevationEdges.filter(({ maxElevationM }) => maxElevationM === null).length;
   if (missingNodeCount || missingEdgeCount) warnings.push(`Elevation is missing for ${missingNodeCount} nodes and ${missingEdgeCount} edges`);
   if (input.rejectedEdgeCount) warnings.push(`${input.rejectedEdgeCount} source edges were rejected`);
 
   return {
-    schemaVersion: input.schemaVersion ?? "1",
+    schemaVersion: input.schemaVersion ?? "6",
     packId: input.packId,
     dataVersion: input.dataVersion,
     counts: {

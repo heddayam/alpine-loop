@@ -30,7 +30,7 @@ export type AuditEdge = {
 export type AuditAccessPoint = { id: string; accessState: AccessState; sourceRefs: string[] };
 
 export type RegionalPackAuditInput = {
-  schemaVersion?: "1" | "2" | "3" | "4" | "5" | "6";
+  schemaVersion?: "6";
   packId: string;
   dataVersion: string;
   nodes: AuditNode[];
@@ -42,7 +42,7 @@ export type RegionalPackAuditInput = {
 };
 
 export type RegionalPackAudit = {
-  schemaVersion: "1" | "2" | "3" | "4" | "5" | "6";
+  schemaVersion: "6";
   packId: string;
   dataVersion: string;
   counts: {

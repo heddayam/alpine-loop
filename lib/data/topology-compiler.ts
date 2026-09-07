@@ -1,11 +1,11 @@
 import { createHash, type Hash } from "node:crypto";
 import type { TopologyProfile } from "@/lib/contracts";
-import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, Schema3TopologyBuild, TopologyProfileBuild } from "./types";
+import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, ClosedRouteTopologyBuild, TopologyProfileBuild } from "./types";
 
 export const CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION = 1;
 
 type DenseEdge = CompiledEdge & { edgeKey: number; from: number; to: number; physicalEdgeKey: number };
-type Physical = Schema3TopologyBuild["physicalEdges"][number] & { lengthM: number; stableEdgeIds: string[] };
+type Physical = ClosedRouteTopologyBuild["physicalEdges"][number] & { lengthM: number; stableEdgeIds: string[] };
 type BlockWork = { edgeKeys: number[]; nodeKeys: number[]; cycleRank: number; blockId: number };
 
 export function topologyExtrema(values: readonly number[]): { minimum: number; maximum: number } | null {
@@ -609,17 +609,17 @@ export function buildClosedRouteTopology(
   accessPoints: readonly NormalizedAccessPoint[],
   options: {
     builtAt: string;
-    runtimeMode?: "primitive" | "reachable-graph-fallback";
+    runtimeMode?: "reachable-graph-fallback";
     algorithmVersion: string;
     policyVersion: string;
   },
-): Schema3TopologyBuild {
+): ClosedRouteTopologyBuild {
   const nodes = [...nodesInput].sort((a, b) => a.id.localeCompare(b.id));
   const nodeKeys = new Map(nodes.map((node, index) => [node.id, index + 1]));
-  if (nodeKeys.size !== nodes.length) throw new Error("Schema 3 topology requires unique stable node IDs");
+  if (nodeKeys.size !== nodes.length) throw new Error("Closed-route topology requires unique stable node IDs");
   const sortedEdges = [...edgesInput].sort((a, b) => a.id.localeCompare(b.id));
   const edgeKeys = new Map(sortedEdges.map((edge, index) => [edge.id, index + 1]));
-  if (edgeKeys.size !== sortedEdges.length) throw new Error("Schema 3 topology requires unique stable directed edge IDs");
+  if (edgeKeys.size !== sortedEdges.length) throw new Error("Closed-route topology requires unique stable directed edge IDs");
   const byPhysicalId = new Map<string, CompiledEdge[]>();
   for (const edge of sortedEdges) {
     if (!nodeKeys.has(edge.fromNode) || !nodeKeys.has(edge.toNode)) throw new Error(`Edge ${edge.id} references an unknown node`);
@@ -649,10 +649,8 @@ export function buildClosedRouteTopology(
   }));
   const known = buildProfile("known", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, 0);
   const inclusive = buildProfile("inclusive", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, known.decisionEdgeCount);
-  const runtimeMode = options.runtimeMode ?? "primitive";
-  const profiles = runtimeMode === "reachable-graph-fallback"
-    ? [compactFallbackProfile(known), compactFallbackProfile(inclusive)]
-    : [known, inclusive];
+  const runtimeMode = "reachable-graph-fallback";
+  const profiles = [compactFallbackProfile(known), compactFallbackProfile(inclusive)];
   const contentHash = topologySha256({
     runtimeMode, algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion,
     profiles: profiles.map(({ profile, contentHash }) => ({ profile, contentHash })),

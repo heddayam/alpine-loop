@@ -21,10 +21,10 @@ async function fixtureSnapshot(
 }
 
 export const fixturePackSeed: PackSeed = {
-  schemaVersion: "1",
+  schemaVersion: "6",
   id: "fixture-pack",
   name: "Compiler Fixture Pack",
-  dataVersion: "fixture-v1",
+  dataVersion: "fixture-v6",
   compilerVersion: "fixture-compiler-v1",
   coverage: {
     bbox: [-122.161, 37.159, -122.155, 37.162],
@@ -37,22 +37,8 @@ export const fixturePackSeed: PackSeed = {
     },
   },
   display: { center: [-122.158, 37.1605], zoom: 14 },
-  capabilities: { elevation: true, officialAccess: true },
+  capabilities: { elevation: true, officialAccess: true, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
   fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
-};
-
-export const fixturePackSeedV2: PackSeed = {
-  ...fixturePackSeed,
-  schemaVersion: "2",
-  dataVersion: "fixture-v2",
-  capabilities: { ...fixturePackSeed.capabilities, namedAreas: true },
-};
-
-export const fixturePackSeedV3: PackSeed = {
-  ...fixturePackSeedV2,
-  schemaVersion: "3",
-  dataVersion: "fixture-v3",
-  capabilities: { ...fixturePackSeedV2.capabilities, closedRouteTopology: true },
   closedRouteTopology: {
     runtimeMode: "reachable-graph-fallback",
     algorithmVersion: "closed-route-topology-v1",
@@ -61,28 +47,12 @@ export const fixturePackSeedV3: PackSeed = {
   },
 };
 
-export const fixturePackSeedV4: PackSeed = {
-  ...fixturePackSeedV3,
-  schemaVersion: "4",
-  dataVersion: "fixture-v4",
-  capabilities: { ...fixturePackSeedV3.capabilities, batchSearchRegions: true },
-};
-
-export const fixturePackSeedV6: PackSeed = {
-  ...fixturePackSeedV4,
-  schemaVersion: "6",
-  dataVersion: "fixture-v6",
-  capabilities: {
-    ...fixturePackSeedV4.capabilities,
-    elevationProfiles: true,
-    portalAccessPoints: true,
-  },
-};
-
 export async function fixtureCompileOptions(
   outputRoot: string,
   fixtureRoot = path.resolve("data/fixtures/source"),
-  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish">> = {},
+  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
+  searchRegionPath = path.resolve("data/fixtures/search-regions.json"),
+  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish" | "searchRegions">> = {},
 ): Promise<CompilePackOptions> {
   const topology = await fixtureSnapshot(fixtureRoot, "topology.json", {
     id: "fixture-topology",
@@ -111,29 +81,6 @@ export async function fixtureCompileOptions(
   const normalized: NormalizedTopology[] = [];
   for await (const data of new FixtureTopologyAdapter().normalize(topology)) normalized.push(data);
   if (normalized.length !== 1) throw new Error("Fixture topology adapter must produce exactly one graph");
-  return {
-    outputRoot,
-    seed: overrides.seed ?? fixturePackSeed,
-    builtAt: overrides.builtAt ?? RETRIEVED_AT,
-    topology: { data: normalized[0]!, snapshot: topology },
-    officialAccess: { adapter: new FixtureOfficialAccessAdapter(), snapshot: officialAccess },
-    // The fixture region is synthetic and has no buildings.
-    buildings: [],
-    elevation: { sampler: await FixtureElevationSampler.create(elevation), snapshot: elevation },
-    beforePublish: overrides.beforePublish,
-  };
-}
-
-export async function fixtureCompileOptionsV2(
-  outputRoot: string,
-  fixtureRoot = path.resolve("data/fixtures/source"),
-  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
-  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish">> = {},
-): Promise<CompilePackOptions> {
-  const base = await fixtureCompileOptions(outputRoot, fixtureRoot, {
-    ...overrides,
-    seed: overrides.seed ?? fixturePackSeedV2,
-  });
   const namedAreas = await fixtureSnapshot(namedAreaFixtureRoot, "areas.json", {
     id: "fixture-named-areas",
     authority: "Alpine Loop",
@@ -142,59 +89,10 @@ export async function fixtureCompileOptionsV2(
     url: "https://example.invalid/alpine-loop/fixture-named-areas",
     license: "CC0-1.0",
   });
-  return {
-    ...base,
-    namedAreas: { adapter: new FixtureNamedAreaAdapter(), snapshot: namedAreas },
-  };
-}
-
-export async function fixtureCompileOptionsV3(
-  outputRoot: string,
-  fixtureRoot = path.resolve("data/fixtures/source"),
-  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
-  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish">> = {},
-): Promise<CompilePackOptions> {
-  return fixtureCompileOptionsV2(outputRoot, fixtureRoot, namedAreaFixtureRoot, {
-    ...overrides,
-    seed: overrides.seed ?? fixturePackSeedV3,
-  });
-}
-
-export async function fixtureCompileOptionsV4(
-  outputRoot: string,
-  fixtureRoot = path.resolve("data/fixtures/source"),
-  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
-  searchRegionPath = path.resolve("data/fixtures/search-regions.json"),
-  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish" | "searchRegions">> = {},
-): Promise<CompilePackOptions> {
-  const base = await fixtureCompileOptionsV3(outputRoot, fixtureRoot, namedAreaFixtureRoot, {
-    ...overrides,
-    seed: overrides.seed ?? fixturePackSeedV4,
-  });
-  return {
-    ...base,
-    searchRegions: overrides.searchRegions ?? await readSearchRegionInput(searchRegionPath),
-  };
-}
-
-export async function fixtureCompileOptionsV6(
-  outputRoot: string,
-  fixtureRoot = path.resolve("data/fixtures/source"),
-  namedAreaFixtureRoot = path.resolve("data/fixtures/named-areas"),
-  searchRegionPath = path.resolve("data/fixtures/search-regions.json"),
-  overrides: Partial<Pick<CompilePackOptions, "builtAt" | "seed" | "beforePublish" | "searchRegions">> = {},
-): Promise<CompilePackOptions> {
-  const base = await fixtureCompileOptionsV4(
-    outputRoot,
-    fixtureRoot,
-    namedAreaFixtureRoot,
-    searchRegionPath,
-    { ...overrides, seed: overrides.seed ?? fixturePackSeedV6 },
-  );
   const portalTopology = {
-    ...base.topology.data,
-    ways: base.topology.data.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
-    accessPoints: base.topology.data.accessPoints.map((point, index) => ({
+    ...normalized[0]!,
+    ways: normalized[0]!.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
+    accessPoints: normalized[0]!.accessPoints.map((point, index) => ({
       ...point,
       kind: "trailhead" as const,
       reachableTrailKm: 5 + index,
@@ -204,10 +102,18 @@ export async function fixtureCompileOptionsV6(
     })),
   };
   return {
-    ...base,
-    topology: {
-      data: portalTopology,
-      snapshot: base.topology.snapshot,
-    },
+    outputRoot,
+    seed: overrides.seed ?? fixturePackSeed,
+    builtAt: overrides.builtAt ?? RETRIEVED_AT,
+    topology: { data: portalTopology, snapshot: topology },
+    officialAccess: { adapter: new FixtureOfficialAccessAdapter(), snapshot: officialAccess },
+    // The fixture region is synthetic and has no buildings.
+    buildings: [],
+    elevation: { sampler: await FixtureElevationSampler.create(elevation), snapshot: elevation },
+    namedAreas: { adapter: new FixtureNamedAreaAdapter(), snapshot: namedAreas },
+    searchRegions: overrides.searchRegions ?? await readSearchRegionInput(searchRegionPath),
+    beforePublish: overrides.beforePublish,
   };
 }
+
+export const fixtureCompileOptionsV6 = fixtureCompileOptions;

@@ -3,20 +3,12 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV6Schema } from "@/lib/contracts";
+import { packManifestSchema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
 import { compileAuditedPack } from "./audited-pack";
 import type { AreaGeometry } from "./area-geometry";
 import { getNamedArea, listSearchRegions, searchNamedAreas } from "./named-area-catalog";
-import {
-  fixtureCompileOptions,
-  fixtureCompileOptionsV2,
-  fixtureCompileOptionsV3,
-  fixtureCompileOptionsV4,
-  fixtureCompileOptionsV6,
-  fixturePackSeed,
-  fixturePackSeedV2,
-} from "./fixture-pack";
+import { fixtureCompileOptions, fixturePackSeed } from "./fixture-pack";
 
 const temporaryDirectories: string[] = [];
 
@@ -39,15 +31,15 @@ describe("fixture pack compiler", () => {
       ...withoutOfficialAdapter,
       additionalSources: officialAccess ? [officialAccess.snapshot] : [],
     });
-    expect(result.audit.sourceCount).toBe(3);
-    const manifest = packManifestV1Schema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
+    expect(result.audit.sourceCount).toBe(4);
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
     expect(manifest.sources.map(({ id }) => id)).toContain("fixture-official-access");
   });
 
   it("writes a validated manifest, audit, runtime tables, indexes, and records", async () => {
     const outputRoot = await temporaryOutput();
     const result = await compilePack(await fixtureCompileOptions(outputRoot));
-    const manifest = packManifestV1Schema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
     const current = JSON.parse(await readFile(path.join(outputRoot, "fixture-pack", "current.json"), "utf8")) as {
       dataVersion: string;
     };
@@ -55,17 +47,17 @@ describe("fixture pack compiler", () => {
     expect(result.reusedExisting).toBe(false);
     expect(manifest).toMatchObject({
       id: "fixture-pack",
-      dataVersion: "fixture-v1",
+      dataVersion: "fixture-v6",
       metricAlgorithmVersion: "nearest-fixture-v1+metrics-v3",
       capabilities: { elevation: true, officialAccess: true },
     });
-    expect(manifest.sources).toHaveLength(3);
-    expect(current.dataVersion).toBe("fixture-v1");
+    expect(manifest.sources).toHaveLength(4);
+    expect(current.dataVersion).toBe("fixture-v6");
     expect(result.audit).toMatchObject({
       nodeCount: 7,
       directedEdgeCount: 17,
       accessPointCount: 2,
-      sourceCount: 3,
+      sourceCount: 4,
       rejectedWayCount: 1,
       conflictCount: 0,
       missingElevationNodeCount: 0,
@@ -110,7 +102,7 @@ describe("fixture pack compiler", () => {
     await compilePack(await fixtureCompileOptions(outputRoot));
     const pointerPath = path.join(outputRoot, "fixture-pack", "current.json");
     const originalPointer = await readFile(pointerPath, "utf8");
-    const failingOptions = await fixtureCompileOptions(outputRoot, undefined, {
+    const failingOptions = await fixtureCompileOptions(outputRoot, undefined, undefined, undefined, {
       seed: { ...fixturePackSeed, dataVersion: "fixture-v2" },
       builtAt: "2026-08-04T01:00:00Z",
       beforePublish: () => { throw new Error("injected failure"); },
@@ -124,11 +116,11 @@ describe("fixture pack compiler", () => {
 
   it("rejects a semantically invalid regional artifact before activation or pruning", async () => {
     const outputRoot = await temporaryOutput();
-    const first = await compileAuditedPack(await fixtureCompileOptionsV6(outputRoot), () => ({}));
+    const first = await compileAuditedPack(await fixtureCompileOptions(outputRoot), () => ({}));
     const pointerPath = path.join(outputRoot, "fixture-pack", "current.json");
     const originalPointer = await readFile(pointerPath, "utf8");
     const originalManifest = await readFile(first.pack.manifestPath, "utf8");
-    const options = await fixtureCompileOptionsV6(outputRoot);
+    const options = await fixtureCompileOptions(outputRoot);
     const invalid = {
       ...options,
       seed: { ...options.seed, dataVersion: "fixture-invalid" },
@@ -155,7 +147,7 @@ describe("fixture pack compiler", () => {
   it("prunes the previous validated version only after publishing its replacement", async () => {
     const outputRoot = await temporaryOutput();
     const first = await compilePack(await fixtureCompileOptions(outputRoot));
-    const second = await compilePack(await fixtureCompileOptions(outputRoot, undefined, {
+    const second = await compilePack(await fixtureCompileOptions(outputRoot, undefined, undefined, undefined, {
       seed: { ...fixturePackSeed, dataVersion: "fixture-v2" },
       builtAt: "2026-08-04T01:00:00Z",
     }));
@@ -167,16 +159,16 @@ describe("fixture pack compiler", () => {
     });
   });
 
-  it("writes deterministic schema 2 named areas, aliases, spatial rows, and access ranking fields", async () => {
+  it("writes deterministic named areas, aliases, spatial rows, and access ranking fields", async () => {
     const firstRoot = await temporaryOutput();
     const secondRoot = await temporaryOutput();
-    const first = await compilePack(await fixtureCompileOptionsV2(firstRoot));
-    const second = await compilePack(await fixtureCompileOptionsV2(secondRoot));
-    const manifest = packManifestV2Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    const first = await compilePack(await fixtureCompileOptions(firstRoot));
+    const second = await compilePack(await fixtureCompileOptions(secondRoot));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
 
     expect(manifest.capabilities.namedAreas).toBe(true);
     expect(first.audit).toMatchObject({
-      schemaVersion: "2",
+      schemaVersion: "6",
       namedAreaCount: 3,
       rejectedCoverageEdgeCount: 0,
       sourceCount: 4,
@@ -216,7 +208,7 @@ describe("fixture pack compiler", () => {
         inclusive_out_degree: 2,
       });
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
-        .toEqual([{ version: 1 }, { version: 2 }]);
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }]);
     } finally {
       database.close();
       secondDatabase.close();
@@ -242,9 +234,9 @@ describe("fixture pack compiler", () => {
         [-122.1605, 37.1615], [-122.1605, 37.1595],
       ]],
     };
-    const options = await fixtureCompileOptionsV2(outputRoot, undefined, undefined, {
+    const options = await fixtureCompileOptions(outputRoot, undefined, undefined, undefined, {
       seed: {
-        ...fixturePackSeedV2,
+        ...fixturePackSeed,
         dataVersion: "fixture-v2-clipped",
         coverage: { bbox: [-122.1605, 37.1595, -122.1575, 37.1615], boundary },
       },
@@ -261,12 +253,12 @@ describe("fixture pack compiler", () => {
     }
   });
 
-  it("writes deterministic schema 3 topology profiles, dense keys, mappings, and hashes", async () => {
+  it("writes deterministic topology profiles, dense keys, mappings, and hashes", async () => {
     const firstRoot = await temporaryOutput();
     const secondRoot = await temporaryOutput();
-    const first = await compilePack(await fixtureCompileOptionsV3(firstRoot));
-    const second = await compilePack(await fixtureCompileOptionsV3(secondRoot));
-    const manifest = packManifestV3Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    const first = await compilePack(await fixtureCompileOptions(firstRoot));
+    const second = await compilePack(await fixtureCompileOptions(secondRoot));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
     expect(manifest.closedRouteTopology.runtimeMode).toBe("reachable-graph-fallback");
     expect(manifest.closedRouteTopology.profiles).toEqual(["known", "inclusive"]);
     expect(first.audit.topologyProfiles).toHaveLength(2);
@@ -285,22 +277,22 @@ describe("fixture pack compiler", () => {
       expect(database.prepare("SELECT count(*) AS count FROM physical_edges").get()).toEqual({ count: 9 });
       expect(database.prepare("SELECT connector_decision_edge_ids FROM access_topology WHERE profile='known' AND access_point_id='access-n-a'").get())
         .toEqual({ connector_decision_edge_ids: "[]" });
-      const keys = database.prepare("SELECT decision_edge_key FROM topology_decision_edges ORDER BY decision_edge_key").all()
-        .map((row) => (row as { decision_edge_key: number }).decision_edge_key);
-      expect(keys).toEqual([]);
-      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      for (const table of ["topology_networks", "topology_nodes", "topology_decision_edges", "topology_decision_edge_members", "topology_blocks", "topology_block_nodes", "topology_block_edges", "topology_block_links"]) {
+        expect(database.prepare(`SELECT count(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
+      }
+      expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }]);
     } finally { database.close(); replay.close(); }
     expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
   });
 
-  it("writes schema 4 reviewed search regions in deterministic display order", async () => {
+  it("writes reviewed search regions in deterministic display order", async () => {
     const firstRoot = await temporaryOutput();
     const secondRoot = await temporaryOutput();
-    const first = await compilePack(await fixtureCompileOptionsV4(firstRoot));
-    const second = await compilePack(await fixtureCompileOptionsV4(secondRoot));
-    const manifest = packManifestV4Schema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
+    const first = await compilePack(await fixtureCompileOptions(firstRoot));
+    const second = await compilePack(await fixtureCompileOptions(secondRoot));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(first.manifestPath, "utf8")));
     expect(manifest.capabilities.batchSearchRegions).toBe(true);
-    expect(first.audit).toMatchObject({ schemaVersion: "4", searchRegionCount: 2 });
+    expect(first.audit).toMatchObject({ schemaVersion: "6", searchRegionCount: 2 });
     expect(first.audit.topologyContentHash).toBe(second.audit.topologyContentHash);
     expect(listSearchRegions(first.databasePath)).toEqual([
       expect.objectContaining({ id: "pack:fixture-pack", name: "Compiler Fixture Pack", displayOrder: 0 }),
@@ -312,15 +304,15 @@ describe("fixture pack compiler", () => {
       expect(database.prepare("SELECT * FROM search_regions ORDER BY display_order").all())
         .toEqual(replay.prepare("SELECT * FROM search_regions ORDER BY display_order").all());
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
-        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }]);
       expect(database.prepare("SELECT count(*) AS count FROM topology_profiles").get()).toEqual({ count: 2 });
     } finally { database.close(); replay.close(); }
   });
 
   it("writes schema 6 classified hiking edges and measured portals", async () => {
     const outputRoot = await temporaryOutput();
-    const result = await compilePack(await fixtureCompileOptionsV6(outputRoot));
-    const manifest = packManifestV6Schema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
+    const result = await compilePack(await fixtureCompileOptions(outputRoot));
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(result.manifestPath, "utf8")));
     expect(manifest.capabilities.portalAccessPoints).toBe(true);
     const database = new DatabaseSync(result.databasePath, { readOnly: true });
     try {
@@ -348,13 +340,11 @@ describe("fixture pack compiler", () => {
     } finally { database.close(); }
   });
 
-  it("requires reviewed search regions only for schema 4", async () => {
+  it("requires reviewed search regions before building an artifact", async () => {
     const outputRoot = await temporaryOutput();
-    const options = await fixtureCompileOptionsV4(outputRoot);
+    const options = await fixtureCompileOptions(outputRoot);
+    // @ts-expect-error Exercise the runtime boundary with incomplete input.
     await expect(compilePack({ ...options, searchRegions: undefined }))
-      .rejects.toThrow("Schema 4 pack requires reviewed search regions");
-    const v3 = await fixtureCompileOptionsV3(outputRoot);
-    await expect(compilePack({ ...v3, searchRegions: options.searchRegions }))
-      .rejects.toThrow("Schema 3 pack cannot include search regions");
+      .rejects.toThrow("Schema 6 pack requires reviewed search regions");
   });
 });

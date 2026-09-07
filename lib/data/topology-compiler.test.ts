@@ -21,7 +21,7 @@ it("indexes a long bridge forest without per-block full-edge scans", () => {
   }));
   const input = graph(nodeIds, definitions, nodeIds[0]);
   const result = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options);
-  expect(result.profiles[0]?.blocks).toHaveLength(nodeCount - 1);
+  expect(result.profiles[0]?.physicalEdgeCount).toBe(nodeCount - 1);
   expect(result.profiles[0]?.accessTopology[0]).toMatchObject({ canReachCycle: false });
 });
 
@@ -53,7 +53,7 @@ function graph(nodeIds: string[], definitions: Array<{
   return { nodes, edges, accessPoints };
 }
 
-describe("schema 3 closed-route topology compiler", () => {
+describe("closed-route topology compiler", () => {
   it("streams the exact recursively key-sorted canonical JSON hash", () => {
     const value = { z: [{ b: 2, a: 1 }], a: "value" };
     expect(topologySha256(value)).toBe(`sha256:${createHash("sha256").update(canonicalTopologyJson(value)).digest("hex")}`);
@@ -64,32 +64,18 @@ describe("schema 3 closed-route topology compiler", () => {
       { physical: "upper", from: "a", to: "b" },
     ], "a");
     const profile = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options).profiles[0]!;
-    expect(profile.decisionEdges.every(({ isBridge }) => !isBridge)).toBe(true);
-    expect(profile.blocks).toEqual([expect.objectContaining({ blockKind: "vertex-cycle", cycleRank: 1, edgeCount: 2 })]);
+    expect(profile.physicalEdgeCount).toBe(2);
     expect(profile.accessTopology[0]).toMatchObject({ canReachCycle: true, minimumStemDistanceM: 0 });
   });
 
-  it("persists articulation membership and separate vertex-biconnected cycle blocks", () => {
+  it("recognizes access to cycles that share an articulation", () => {
     const input = graph(["a", "b", "c", "d", "e"], [
       { physical: "ab", from: "a", to: "b" }, { physical: "bc", from: "b", to: "c" }, { physical: "ca", from: "c", to: "a" },
       { physical: "cd", from: "c", to: "d" }, { physical: "de", from: "d", to: "e" }, { physical: "ec", from: "e", to: "c" },
     ], "a");
     const profile = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options).profiles[0]!;
-    expect(profile.nodes.find(({ sourceNodeId }) => sourceNodeId === "c")?.isArticulation).toBe(true);
-    expect(profile.blocks.filter(({ blockKind }) => blockKind === "vertex-cycle")).toHaveLength(2);
-    expect(profile.blockLinks).toEqual([expect.objectContaining({ connectorDistanceM: 0 })]);
-  });
-
-  it("retains one stable anchor and exact reconstruction membership for a pure degree-two cycle", () => {
-    const input = graph(["c", "a", "b"], [
-      { physical: "ab", from: "a", to: "b" }, { physical: "bc", from: "b", to: "c" }, { physical: "ca", from: "c", to: "a" },
-    ]);
-    const profile = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options).profiles[0]!;
-    expect(profile.decisionNodeCount).toBe(1);
-    expect(profile.nodes.find(({ decisionNodeId }) => decisionNodeId !== null)?.sourceNodeId).toBe("a");
-    expect(profile.decisionEdges).toHaveLength(2);
-    expect(profile.decisionEdges.map(({ members }) => members.map(({ edgeKey }) => edgeKey).length)).toEqual([3, 3]);
-    expect(new Set(profile.decisionEdges.flatMap(({ members }) => members.map(({ edgeKey }) => edgeKey))).size).toBe(6);
+    expect(profile.physicalEdgeCount).toBe(6);
+    expect(profile.accessTopology[0]).toMatchObject({ canReachCycle: true, minimumStemDistanceM: 0 });
   });
 
   it("does not report an undirected cycle as feasible when directed SCC legality forbids a closed traversal", () => {
@@ -99,12 +85,10 @@ describe("schema 3 closed-route topology compiler", () => {
       { physical: "ca", from: "c", to: "a", reverse: false },
     ], "a");
     const profile = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options).profiles[0]!;
-    expect(profile.blocks[0]).toMatchObject({ cycleRank: 1 });
     expect(profile.accessTopology[0]).toMatchObject({ canReachCycle: false, cycleNetworkId: null, portalDecisionNodeId: null });
-    expect(profile.networks).toEqual([]);
   });
 
-  it("maps an access bridge to the exact compressed connector and cycle portal", () => {
+  it("retains the minimum access stem and cycle portal without persisting a connector graph", () => {
     const input = graph(["access", "a", "b", "c"], [
       { physical: "stem", from: "access", to: "a" },
       { physical: "ab", from: "a", to: "b" }, { physical: "bc", from: "b", to: "c" }, { physical: "ca", from: "c", to: "a" },
@@ -112,11 +96,9 @@ describe("schema 3 closed-route topology compiler", () => {
     const profile = buildClosedRouteTopology(input.nodes, input.edges, input.accessPoints, options).profiles[0]!;
     const access = profile.accessTopology[0]!;
     expect(access).toMatchObject({ canReachCycle: true, minimumStemDistanceM: 100 });
-    expect(access.connectorDecisionEdgeIds).toHaveLength(1);
-    const connector = profile.decisionEdges.find(({ decisionEdgeKey }) => decisionEdgeKey === access.connectorDecisionEdgeIds[0]);
-    expect(connector).toMatchObject({ isBridge: true, lengthM: 100 });
-    expect(connector?.members).toHaveLength(1);
-    expect(access.portalDecisionNodeId).toBe(connector?.toDecisionNodeId);
+    expect(access.connectorDecisionEdgeIds).toEqual([]);
+    expect(access.connectorKey).toMatch(/^sha256:/);
+    expect(access.portalDecisionNodeId).not.toBeNull();
   });
 
   it("builds distinct known and inclusive feasibility profiles deterministically", () => {
@@ -131,7 +113,6 @@ describe("schema 3 closed-route topology compiler", () => {
     expect(first.profiles[1]!.accessTopology[0]!.canReachCycle).toBe(true);
     expect(first.profiles[0]!.physicalEdgeCount).toBe(1);
     expect(first.profiles[1]!.physicalEdgeCount).toBe(2);
-    const keys = first.profiles.flatMap(({ decisionEdges }) => decisionEdges.map(({ decisionEdgeKey }) => decisionEdgeKey));
-    expect(new Set(keys).size).toBe(keys.length);
+    expect(first.edgeKeys).toEqual(second.edgeKeys);
   });
 });

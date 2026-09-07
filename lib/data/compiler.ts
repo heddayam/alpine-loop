@@ -3,20 +3,7 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import {
-  packManifestV1Schema,
-  packManifestV2Schema,
-  packManifestV3Schema,
-  packManifestV4Schema,
-  packManifestV5Schema,
-  packManifestV6Schema,
-  type PackManifestV1,
-  type PackManifestV2,
-  type PackManifestV3,
-  type PackManifestV4,
-  type PackManifestV5,
-  type PackManifestV6,
-} from "@/lib/contracts";
+import { packManifestSchema, type PackManifest } from "@/lib/contracts";
 import type { AccessState } from "@/lib/graph/types";
 import type {
   ElevationSampler,
@@ -45,13 +32,7 @@ import type {
   PackBuildResult,
 } from "./types";
 
-export type PackSeed =
-  | Omit<PackManifestV1, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV2, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV3, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV4, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV5, "builtAt" | "metricAlgorithmVersion" | "sources">
-  | Omit<PackManifestV6, "builtAt" | "metricAlgorithmVersion" | "sources">;
+export type PackSeed = Omit<PackManifest, "builtAt" | "metricAlgorithmVersion" | "sources">;
 
 export type CompilePackOptions = {
   outputRoot: string;
@@ -69,8 +50,8 @@ export type CompilePackOptions = {
    * trailhead from a street corner, and must fail rather than guess.
    */
   buildings: readonly BuildingCentroid[];
-  namedAreas?: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
-  searchRegions?: SearchRegionInput;
+  namedAreas: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
+  searchRegions: SearchRegionInput;
   beforePublish?: (artifact: PackBuildResult) => void | Promise<void>;
 };
 
@@ -92,8 +73,7 @@ async function compileGraph(
   topology: NormalizedTopology,
   evidence: NormalizedAccessEvidence[],
   sampler: ElevationSampler,
-  coverage?: AreaGeometry,
-  trailOnlyElevation = false,
+  coverage: AreaGeometry,
 ): Promise<{
   nodes: NormalizedTopology["nodes"];
   edges: CompiledEdge[];
@@ -110,9 +90,7 @@ async function compileGraph(
     if (!knownExternalIds.has(externalId)) throw new Error(`Official access record targets unknown feature ${externalId}`);
   }
 
-  const elevationNodeIds = trailOnlyElevation
-    ? new Set(topology.ways.filter(({ edgeClass }) => edgeClass === undefined || edgeClass === "trail").flatMap(({ nodeIds }) => nodeIds))
-    : new Set(topology.nodes.map(({ id }) => id));
+  const elevationNodeIds = new Set(topology.ways.filter(({ edgeClass }) => edgeClass === undefined || edgeClass === "trail").flatMap(({ nodeIds }) => nodeIds));
   const elevationNodes = topology.nodes.filter(({ id }) => elevationNodeIds.has(id));
   const sampledElevations = await sampler.sample(elevationNodes.map(({ lon, lat }) => [lon, lat]));
   const elevationByNodeId = new Map(elevationNodes.map((node, index) => [node.id, sampledElevations[index] ?? null]));
@@ -133,11 +111,11 @@ async function compileGraph(
     }));
   });
   let rejectedCoverageEdgeCount = 0;
-  const retainedSegmentPlans = coverage ? segmentPlans.filter(({ geometry, way }) => {
+  const retainedSegmentPlans = segmentPlans.filter(({ geometry, way }) => {
     const accepted = edgeInsideCoverage({ geometry }, coverage);
     if (!accepted) rejectedCoverageEdgeCount += way.bidirectional ? 2 : 1;
     return accepted;
-  }) : segmentPlans;
+  });
   const trailSegmentPlans = retainedSegmentPlans.filter(({ way }) => way.edgeClass === undefined || way.edgeClass === "trail");
   const trailSegmentMetrics = await calculateEdgeMetricsBatch(trailSegmentPlans.map(({ geometry }) => geometry), sampler);
   let trailMetricIndex = 0;
@@ -208,17 +186,14 @@ async function compileGraph(
     };
   });
 
-  if (coverage) {
-    const incidentNodeIds = new Set(edges.flatMap((edge) => [edge.fromNode, edge.toNode]));
-    const retainedNodes = nodes.filter(({ id }) => incidentNodeIds.has(id));
-    const nodeById = new Map(retainedNodes.map((node) => [node.id, node]));
-    accessPoints = accessPoints.filter((point) => {
-      const node = nodeById.get(point.nodeId);
-      return node !== undefined && pointInArea([node.lon, node.lat], coverage);
-    });
-    return { nodes: retainedNodes, edges, accessPoints, conflicts, rejectedCoverageEdgeCount };
-  }
-  return { nodes, edges, accessPoints, conflicts, rejectedCoverageEdgeCount };
+  const incidentNodeIds = new Set(edges.flatMap((edge) => [edge.fromNode, edge.toNode]));
+  const retainedNodes = nodes.filter(({ id }) => incidentNodeIds.has(id));
+  const nodeById = new Map(retainedNodes.map((node) => [node.id, node]));
+  accessPoints = accessPoints.filter((point) => {
+    const node = nodeById.get(point.nodeId);
+    return node !== undefined && pointInArea([node.lon, node.lat], coverage);
+  });
+  return { nodes: retainedNodes, edges, accessPoints, conflicts, rejectedCoverageEdgeCount };
 }
 
 function weakConnectivity(
@@ -310,12 +285,8 @@ function createAudit(
 ): PackAudit {
   const accessStateCounts = { ...EMPTY_ACCESS_COUNTS };
   for (const edge of graph.edges) accessStateCounts[edge.accessState] += 1;
-  const elevationEdges = seed.schemaVersion === "6"
-    ? graph.edges.filter(({ edgeClass }) => edgeClass === "trail")
-    : graph.edges;
-  const elevationNodeIds = seed.schemaVersion === "6"
-    ? new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]))
-    : new Set(graph.nodes.map(({ id }) => id));
+  const elevationEdges = graph.edges.filter(({ edgeClass }) => edgeClass === "trail");
+  const elevationNodeIds = new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]));
   return {
     schemaVersion: seed.schemaVersion,
     packId: seed.id,
@@ -329,11 +300,9 @@ function createAudit(
     missingElevationNodeCount: graph.nodes.filter(({ id, elevationM }) => elevationNodeIds.has(id) && elevationM === null).length,
     missingElevationEdgeCount: elevationEdges.filter(({ maxElevationM }) => maxElevationM === null).length,
     accessStateCounts,
-    ...(seed.schemaVersion !== "1" ? {
-      namedAreaCount: graph.namedAreas.length,
-      rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
-    } : {}),
-    ...(seed.schemaVersion === "4" || seed.schemaVersion === "5" || seed.schemaVersion === "6" ? { searchRegionCount: graph.searchRegions.length } : {}),
+    namedAreaCount: graph.namedAreas.length,
+    rejectedCoverageEdgeCount: graph.rejectedCoverageEdgeCount,
+    searchRegionCount: graph.searchRegions.length,
     // Surfaced so an implausible building join is obvious in the audit rather
     // than quietly filtering every access point out at query time.
     builtUpAccessPointCount: graph.accessPoints.filter(
@@ -342,39 +311,31 @@ function createAudit(
   };
 }
 
-async function existingBuild(finalDirectory: string, schemaVersion: "1" | "2" | "3" | "4" | "5" | "6"): Promise<PackBuildResult | null> {
+async function existingBuild(finalDirectory: string): Promise<PackBuildResult | null> {
   try {
     const manifestPath = path.join(finalDirectory, "manifest.json");
     const auditPath = path.join(finalDirectory, "audit.json");
     const databasePath = path.join(finalDirectory, "pack.sqlite");
-    const manifest = (schemaVersion === "1" ? packManifestV1Schema
-      : schemaVersion === "2" ? packManifestV2Schema
-      : schemaVersion === "3" ? packManifestV3Schema : schemaVersion === "4" ? packManifestV4Schema
-        : schemaVersion === "5" ? packManifestV5Schema : packManifestV6Schema)
+    const manifest = packManifestSchema
       .parse(JSON.parse(await readFile(manifestPath, "utf8")));
-    if (manifest.schemaVersion !== schemaVersion) return null;
     const audit = JSON.parse(await readFile(auditPath, "utf8")) as PackAudit;
     await access(databasePath, constants.R_OK);
-    if (manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
-      const database = new DatabaseSync(databasePath, { readOnly: true });
-      try {
-        const metadata = database.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as { value?: string } | undefined;
-        const profiles = database.prepare("SELECT profile, content_hash FROM topology_profiles ORDER BY profile DESC").all() as Array<{ profile: string; content_hash: string }>;
-        const expected = topologySha256({
-          runtimeMode: manifest.closedRouteTopology.runtimeMode,
-          algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
-          policyVersion: manifest.closedRouteTopology.policyVersion,
-          profiles: profiles.map(({ profile, content_hash: contentHash }) => ({ profile, contentHash })),
-        });
-        if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive" || metadata?.value !== expected || audit.topologyContentHash !== expected) return null;
-        if (manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6") {
-          const regions = database.prepare("SELECT display_order FROM search_regions ORDER BY display_order")
-            .all() as Array<{ display_order: number }>;
-          if (regions.length === 0 || regions.length !== audit.searchRegionCount
-            || regions.some(({ display_order: displayOrder }, index) => displayOrder !== index)) return null;
-        }
-      } finally { database.close(); }
-    }
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const metadata = database.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as { value?: string } | undefined;
+      const profiles = database.prepare("SELECT profile, content_hash FROM topology_profiles ORDER BY profile DESC").all() as Array<{ profile: string; content_hash: string }>;
+      const expected = topologySha256({
+        runtimeMode: manifest.closedRouteTopology.runtimeMode,
+        algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
+        policyVersion: manifest.closedRouteTopology.policyVersion,
+        profiles: profiles.map(({ profile, content_hash: contentHash }) => ({ profile, contentHash })),
+      });
+      if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive" || metadata?.value !== expected || audit.topologyContentHash !== expected) return null;
+      const regions = database.prepare("SELECT display_order FROM search_regions ORDER BY display_order")
+        .all() as Array<{ display_order: number }>;
+      if (regions.length === 0 || regions.length !== audit.searchRegionCount
+        || regions.some(({ display_order: displayOrder }, index) => displayOrder !== index)) return null;
+    } finally { database.close(); }
     return { packDirectory: finalDirectory, manifestPath, auditPath, databasePath, audit, reusedExisting: true };
   } catch {
     return null;
@@ -419,24 +380,19 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
 }
 
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
-  if (options.seed.schemaVersion !== "1" && !options.namedAreas) throw new Error(`Schema ${options.seed.schemaVersion} pack requires a named-area adapter`);
-  if (options.seed.schemaVersion === "1" && options.namedAreas) throw new Error("Schema 1 pack cannot include named areas");
-  if ((options.seed.schemaVersion === "4" || options.seed.schemaVersion === "5" || options.seed.schemaVersion === "6") && !options.searchRegions) throw new Error(`Schema ${options.seed.schemaVersion} pack requires reviewed search regions`);
-  if (options.seed.schemaVersion !== "4" && options.seed.schemaVersion !== "5" && options.seed.schemaVersion !== "6" && options.searchRegions) throw new Error(`Schema ${options.seed.schemaVersion} pack cannot include search regions`);
+  if (!options.namedAreas) throw new Error("Schema 6 pack requires a named-area adapter");
+  if (!options.searchRegions) throw new Error("Schema 6 pack requires reviewed search regions");
+
   const officialAccess = [...(options.officialAccess ? [options.officialAccess] : []), ...(options.additionalOfficialAccess ?? [])];
   const sourceCandidates = [
     options.topology.snapshot,
     ...(options.additionalSources ?? []),
     ...officialAccess.map(({ snapshot }) => snapshot),
     options.elevation.snapshot,
-    ...(options.namedAreas ? [options.namedAreas.snapshot] : []),
+    options.namedAreas.snapshot,
   ];
   const sources = [...new Map(sourceCandidates.map((source) => [source.id, source])).values()];
-  const manifestSchema = options.seed.schemaVersion === "1" ? packManifestV1Schema
-    : options.seed.schemaVersion === "2" ? packManifestV2Schema
-    : options.seed.schemaVersion === "3" ? packManifestV3Schema : options.seed.schemaVersion === "4" ? packManifestV4Schema
-      : options.seed.schemaVersion === "5" ? packManifestV5Schema : packManifestV6Schema;
-  const manifest = manifestSchema.parse({
+  const manifest = packManifestSchema.parse({
     ...options.seed,
     builtAt: options.builtAt,
     metricAlgorithmVersion: options.elevation.sampler.algorithmVersion,
@@ -445,7 +401,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   const packRoot = path.join(options.outputRoot, manifest.id);
   const finalDirectory = path.join(packRoot, manifest.dataVersion);
   await mkdir(packRoot, { recursive: true });
-  const existing = await existingBuild(finalDirectory, manifest.schemaVersion);
+  const existing = await existingBuild(finalDirectory);
   if (existing) {
     await options.beforePublish?.(existing);
     await writeCurrentPointer(packRoot, manifest.dataVersion);
@@ -465,68 +421,56 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       topology,
       evidence,
       options.elevation.sampler,
-      manifest.schemaVersion !== "1" ? manifest.coverage.boundary : undefined,
-      manifest.schemaVersion === "6",
+      manifest.coverage.boundary,
     );
-    let namedAreas: NormalizedNamedArea[] = [];
-    if (manifest.schemaVersion !== "1") {
-      await options.namedAreas!.adapter.validate(options.namedAreas!.snapshot);
-      const providedAreas = await options.namedAreas!.adapter.normalize(options.namedAreas!.snapshot);
-      namedAreas = validateAndSortNamedAreas([{
-        id: `pack:${manifest.id}`,
-        name: manifest.name,
-        kind: "pack",
-        aliases: [],
-        bbox: areaGeometryBounds(manifest.coverage.boundary),
-        geometry: manifest.coverage.boundary,
-        sourceIds: [options.topology.snapshot.id],
-      }, ...providedAreas], new Set(sources.map(({ id }) => id)));
-    }
-    const searchRegions = manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6"
-      ? validateSearchRegions(options.searchRegions!, namedAreas)
-      : [];
-    const rankedAccessPoints = manifest.schemaVersion !== "1"
-      ? addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints)
-      : compiledGraph.accessPoints;
+    await options.namedAreas.adapter.validate(options.namedAreas.snapshot);
+    const providedAreas = await options.namedAreas.adapter.normalize(options.namedAreas.snapshot);
+    const namedAreas = validateAndSortNamedAreas([{
+      id: `pack:${manifest.id}`,
+      name: manifest.name,
+      kind: "pack",
+      aliases: [],
+      bbox: areaGeometryBounds(manifest.coverage.boundary),
+      geometry: manifest.coverage.boundary,
+      sourceIds: [options.topology.snapshot.id],
+    }, ...providedAreas], new Set(sources.map(({ id }) => id)));
+    const searchRegions = validateSearchRegions(options.searchRegions, namedAreas);
+    const rankedAccessPoints = addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints);
     const graph = {
       ...compiledGraph,
       accessPoints: addNearbyBuildingCounts(compiledGraph.nodes, rankedAccessPoints, options.buildings),
       namedAreas,
       searchRegions,
     };
-    const closedRouteTopology = manifest.schemaVersion === "3" || manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6"
-      ? buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
-          builtAt: manifest.builtAt,
-          runtimeMode: manifest.closedRouteTopology.runtimeMode,
-          algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
-          policyVersion: manifest.closedRouteTopology.policyVersion,
-        })
-      : undefined;
+    const closedRouteTopology = buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
+      builtAt: manifest.builtAt,
+      runtimeMode: manifest.closedRouteTopology.runtimeMode,
+      algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
+      policyVersion: manifest.closedRouteTopology.policyVersion,
+    });
     const audit = createAudit(options.seed, topology, graph, sources.length);
-    if (closedRouteTopology) {
-      audit.topologyContentHash = closedRouteTopology.contentHash;
-      audit.topologyProfiles = closedRouteTopology.profiles.map((profile) => ({
-        profile: profile.profile,
-        contentHash: profile.contentHash,
-        nodeCount: profile.nodeCount,
-        physicalEdgeCount: profile.physicalEdgeCount,
-        decisionNodeCount: profile.decisionNodeCount,
-        decisionEdgeCount: profile.decisionEdgeCount,
-        blockCount: profile.blocks.length,
-        cycleBlockCount: profile.blocks.filter(({ cycleRank }) => cycleRank > 0).length,
-        networkCount: profile.networks.length,
-        feasibleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => canReachCycle).length,
-        noCycleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => !canReachCycle).length,
-      }));
-    }
+    audit.topologyContentHash = closedRouteTopology.contentHash;
+    audit.topologyProfiles = closedRouteTopology.profiles.map((profile) => ({
+      profile: profile.profile,
+      contentHash: profile.contentHash,
+      nodeCount: profile.nodeCount,
+      physicalEdgeCount: profile.physicalEdgeCount,
+      decisionNodeCount: profile.decisionNodeCount,
+      decisionEdgeCount: profile.decisionEdgeCount,
+      blockCount: profile.blocks.length,
+      cycleBlockCount: profile.blocks.filter(({ cycleRank }) => cycleRank > 0).length,
+      networkCount: profile.networks.length,
+      feasibleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => canReachCycle).length,
+      noCycleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => !canReachCycle).length,
+    }));
     const databasePath = path.join(stagingDirectory, "pack.sqlite");
     writePackDatabase(databasePath, {
       nodes: graph.nodes,
       edges: graph.edges,
       accessPoints: graph.accessPoints,
-      ...(manifest.schemaVersion !== "1" ? { namedAreas: graph.namedAreas } : {}),
-      ...(manifest.schemaVersion === "4" || manifest.schemaVersion === "5" || manifest.schemaVersion === "6" ? { searchRegions: graph.searchRegions } : {}),
-      ...(closedRouteTopology ? { closedRouteTopology } : {}),
+      namedAreas: graph.namedAreas,
+      searchRegions: graph.searchRegions,
+      closedRouteTopology,
       sources,
       metadata: {
         schemaVersion: manifest.schemaVersion,
@@ -535,7 +479,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
         builtAt: manifest.builtAt,
         compilerVersion: manifest.compilerVersion,
         metricAlgorithmVersion: manifest.metricAlgorithmVersion,
-        ...(closedRouteTopology ? { topologyContentHash: closedRouteTopology.contentHash } : {}),
+        topologyContentHash: closedRouteTopology.contentHash,
       },
     });
     await writeFile(path.join(stagingDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);

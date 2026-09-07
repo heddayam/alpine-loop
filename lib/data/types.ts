@@ -186,8 +186,8 @@ export type TopologyProfileBuild = {
   }>;
 };
 
-export type Schema3TopologyBuild = {
-  runtimeMode: "primitive" | "reachable-graph-fallback";
+export type ClosedRouteTopologyBuild = {
+  runtimeMode: "reachable-graph-fallback";
   algorithmVersion: string;
   policyVersion: string;
   contentHash: string;
@@ -205,7 +205,7 @@ export type Schema3TopologyBuild = {
 };
 
 export type PackAudit = {
-  schemaVersion: "1" | "2" | "3" | "4" | "5" | "6";
+  schemaVersion: "6";
   packId: string;
   dataVersion: string;
   nodeCount: number;
