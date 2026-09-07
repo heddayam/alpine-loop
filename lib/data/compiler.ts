@@ -20,7 +20,8 @@ import { validateSearchRegions, type SearchRegionInput } from "./search-regions"
 import type { BuildingCentroid } from "./osm/buildings";
 import { accessPointIsWildEnough, countNearbyBuildings } from "./wilderness";
 import { writePackDatabase } from "./sqlite-writer";
-import { buildClosedRouteTopology, topologySha256 } from "./topology-compiler";
+import { buildClosedRouteTopology } from "./topology-compiler";
+import { topologySha256 } from "@/lib/graph/topology-hash";
 import type {
   CompiledEdge,
   Coordinate,

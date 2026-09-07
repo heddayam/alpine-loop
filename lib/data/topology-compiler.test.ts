@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHash } from "node:crypto";
-import { buildClosedRouteTopology, canonicalTopologyJson, topologyExtrema, topologySha256 } from "./topology-compiler";
+import { buildClosedRouteTopology, topologyExtrema } from "./topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "./types";
 
 const builtAt = "2026-08-05T00:00:00Z";
@@ -54,10 +53,6 @@ function graph(nodeIds: string[], definitions: Array<{
 }
 
 describe("closed-route topology compiler", () => {
-  it("streams the exact recursively key-sorted canonical JSON hash", () => {
-    const value = { z: [{ b: 2, a: 1 }], a: "value" };
-    expect(topologySha256(value)).toBe(`sha256:${createHash("sha256").update(canonicalTopologyJson(value)).digest("hex")}`);
-  });
   it("treats parallel physical edges as cycle-bearing rather than bridges", () => {
     const input = graph(["a", "b"], [
       { physical: "lower", from: "a", to: "b" },

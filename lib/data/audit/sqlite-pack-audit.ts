@@ -12,7 +12,7 @@ import type {
   AuditSource,
   RegionalPackAudit,
 } from "./types";
-import { topologySha256 } from "../topology-compiler";
+import { topologySha256 } from "@/lib/graph/topology-hash";
 
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 

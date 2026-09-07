@@ -1,4 +1,4 @@
-import { createHash, type Hash } from "node:crypto";
+import { topologySha256 } from "./topology-hash";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { packManifestSchema, type PackManifest, type TopologyProfile } from "@/lib/contracts";
 import type { AccessTopology } from "./closed-route-topology";
@@ -36,39 +36,6 @@ const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 function corruption(message: string): Error {
   return new Error(`Closed-route feasibility corruption: ${message}`);
-}
-
-function updateCanonicalHash(hash: Hash, value: unknown): void {
-  if (Array.isArray(value)) {
-    hash.update("[");
-    value.forEach((item, index) => {
-      if (index) hash.update(",");
-      updateCanonicalHash(hash, item === undefined ? null : item);
-    });
-    hash.update("]");
-    return;
-  }
-  if (value !== null && typeof value === "object") {
-    hash.update("{");
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right));
-    entries.forEach(([key, item], index) => {
-      if (index) hash.update(",");
-      hash.update(JSON.stringify(key));
-      hash.update(":");
-      updateCanonicalHash(hash, item);
-    });
-    hash.update("}");
-    return;
-  }
-  hash.update(JSON.stringify(value));
-}
-
-function topologyHash(value: unknown): string {
-  const hash = createHash("sha256");
-  updateCanonicalHash(hash, value);
-  return `sha256:${hash.digest("hex")}`;
 }
 
 function requiredString(row: SqliteRow, column: string): string {
@@ -302,7 +269,7 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     const accessTopology = this.#validateAccessTopology();
     const profileHashes = PROFILES.map((profile) => {
       const row = profiles.get(profile)!;
-      const contentHash = topologyHash({
+      const contentHash = topologySha256({
         profile,
         formatVersion: requiredInteger(row, "format_version"),
         nodeCount: requiredInteger(row, "node_count"),
@@ -330,7 +297,7 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
       }
       return { profile, contentHash };
     });
-    const combinedHash = topologyHash({
+    const combinedHash = topologySha256({
       runtimeMode: this.#manifest.closedRouteTopology.runtimeMode,
       algorithmVersion: this.#manifest.closedRouteTopology.algorithmVersion,
       policyVersion: this.#manifest.closedRouteTopology.policyVersion,
