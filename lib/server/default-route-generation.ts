@@ -10,7 +10,7 @@ export async function POST(request: Request): Promise<Response> {
     async generate(pack, request, { accessFilter, budget, signal }) {
       const { searchEffort, limit, startAccessPointId } = request;
       const session = await RouteSolverProcess.open({
-        pack,
+        pack: { id: pack.id, dataVersion: pack.dataVersion },
         criteria: routeCriteriaSchema.strip().parse(request),
         accessFilter,
       }, signal);
