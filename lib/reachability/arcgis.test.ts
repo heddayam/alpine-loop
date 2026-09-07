@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ReachabilityRequest } from "@/lib/contracts";
+import type { DriveTimeAreaRequest } from "./types";
 import { ArcGisClient, buildServiceAreaSubmitBody } from "./arcgis";
 import { TestClock } from "./test-helpers";
 
-const REQUEST: ReachabilityRequest = {
-  version: 1,
-  packId: "fixture-pack",
+const REQUEST: DriveTimeAreaRequest = {
   origin: { lon: -122.15, lat: 37.15, label: "Private origin label" },
   durationMinutes: 300,
 };

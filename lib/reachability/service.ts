@@ -1,17 +1,6 @@
-import type {
-  Origin,
-  ReachabilityRequest,
-  ReachabilityResponse,
-} from "@/lib/contracts";
-import { ReachabilityError, toReachabilityError } from "./errors";
-import { MemoryReachabilityJobStore } from "./jobs";
-import type {
-  ArcGisProvider,
-  AreaGeometry,
-  Clock,
-  GeocodingSuggestion,
-  IdGenerator,
-} from "./types";
+import type { Origin } from "@/lib/contracts";
+import { cancelledError, ReachabilityError, toReachabilityError } from "./errors";
+import type { ArcGisProvider, AreaGeometry, Clock, DriveTimeAreaRequest, GeocodingSuggestion } from "./types";
 import {
   ARCGIS_GEOCODING_MONTHLY_LIMIT,
   ARCGIS_GEOCODING_PROVIDER,
@@ -20,19 +9,20 @@ import {
   type UsageStore,
 } from "./usage";
 
+export const DRIVE_TIME_AREA_TTL_MS = 30 * 60 * 1_000;
+export const DRIVE_TIME_AREA_DEADLINE_MS = 120_000;
+
 type ReachabilityServiceOptions = {
   provider: ArcGisProvider;
   usage: UsageStore;
-  jobs: MemoryReachabilityJobStore;
   clock: Clock;
-  id: IdGenerator;
   geocodingMonthlyLimit?: number;
   serviceAreaMonthlyLimit?: number;
 };
 
 export type CompletedReachability = {
   geometry: AreaGeometry;
-  durationMinutes: ReachabilityRequest["durationMinutes"];
+  durationMinutes: DriveTimeAreaRequest["durationMinutes"];
   resolvedAt: string;
   originLabel: string;
 };
@@ -40,18 +30,15 @@ export type CompletedReachability = {
 export class ReachabilityService {
   private readonly provider: ArcGisProvider;
   private readonly usage: UsageStore;
-  private readonly jobs: MemoryReachabilityJobStore;
   private readonly clock: Clock;
-  private readonly id: IdGenerator;
   private readonly geocodingMonthlyLimit: number;
   private readonly serviceAreaMonthlyLimit: number;
+  private readonly areas = new Map<string, { geometry: AreaGeometry; resolvedAt: string; expiresAt: number }>();
 
   constructor(options: ReachabilityServiceOptions) {
     this.provider = options.provider;
     this.usage = options.usage;
-    this.jobs = options.jobs;
     this.clock = options.clock;
-    this.id = options.id;
     this.geocodingMonthlyLimit = options.geocodingMonthlyLimit ?? ARCGIS_GEOCODING_MONTHLY_LIMIT;
     this.serviceAreaMonthlyLimit = options.serviceAreaMonthlyLimit ?? ARCGIS_SERVICE_AREA_MONTHLY_LIMIT;
   }
@@ -88,147 +75,81 @@ export class ReachabilityService {
     return this.provider.resolve(text, magicKey, signal);
   }
 
-  async submit(request: ReachabilityRequest, signal?: AbortSignal): Promise<ReachabilityResponse> {
-    const reusable = this.jobs.findReusable(request);
-    if (reusable) return this.response(reusable.id);
+  /** Resolves typical drive time, reusing only completed process-local geometry. */
+  async resolveArea(request: DriveTimeAreaRequest, signal: AbortSignal): Promise<CompletedReachability> {
+    if (signal.aborted) throw cancelledError();
+    const now = this.clock.now().getTime();
+    for (const [key, area] of this.areas) {
+      if (area.expiresAt <= now) this.areas.delete(key);
+    }
+    const key = JSON.stringify([request.origin.lon, request.origin.lat, request.durationMinutes]);
+    const cached = this.areas.get(key);
+    if (cached) return {
+      geometry: structuredClone(cached.geometry),
+      resolvedAt: cached.resolvedAt,
+      durationMinutes: request.durationMinutes,
+      originLabel: request.origin.label,
+    };
 
-    const id = this.id();
-    this.jobs.create(id, request);
-    try {
-      await this.reserve(ARCGIS_SERVICE_AREA_PROVIDER, this.serviceAreaMonthlyLimit);
-      const providerJobId = await this.provider.submitServiceArea(request, signal);
-      this.jobs.update(id, { providerJobId, state: "pending" });
-      return { status: "pending", requestId: id, pollAfterMs: 1_000 };
-    } catch (error) {
-      const normalized = toReachabilityError(error);
-      this.jobs.delete(id);
-      throw normalized;
-    }
-  }
-
-  async poll(id: string, signal?: AbortSignal): Promise<ReachabilityResponse> {
-    const lookup = this.jobs.lookup(id);
-    if (lookup.state === "expired") {
-      throw new ReachabilityError(
-        "REACHABILITY_EXPIRED",
-        "That drive-time request expired. Calculate it again.",
-        410,
-      );
-    }
-    if (lookup.state === "missing") {
-      throw new ReachabilityError(
-        "REACHABILITY_NOT_FOUND",
-        "That drive-time request was not found.",
-        404,
-      );
-    }
-    const { job } = lookup;
-    if (job.state === "complete" || job.state === "failed" || !job.providerJobId) {
-      return this.response(id);
-    }
-
-    const result = await this.provider.pollServiceArea(job.providerJobId, signal);
-    if (result.state === "pending") {
-      return { status: "pending", requestId: id, pollAfterMs: 1_000 };
-    }
-    if (result.state === "failed") {
-      this.jobs.update(id, { state: "failed", error: result.message });
-      throw new ReachabilityError("REACHABILITY_FAILED", result.message, 502);
-    }
-    this.jobs.update(id, {
-      state: "complete",
-      geometry: result.geometry,
-      resolvedAt: this.clock.now(),
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(new ReachabilityError(
+      "REACHABILITY_FAILED", "The drive-time calculation exceeded its two-minute limit.", 504, true,
+    )), DRIVE_TIME_AREA_DEADLINE_MS);
+    const active = AbortSignal.any([signal, deadline.signal]);
+    let rejectAborted: () => void;
+    const aborted = new Promise<never>((_, reject) => {
+      rejectAborted = () => reject(active.reason);
+      active.addEventListener("abort", rejectAborted, { once: true });
     });
-    return this.response(id);
-  }
-
-  async cancel(id: string, signal?: AbortSignal): Promise<void> {
-    const lookup = this.jobs.lookup(id);
-    if (lookup.state === "expired") {
-      throw new ReachabilityError("REACHABILITY_EXPIRED", "That drive-time request expired.", 410);
-    }
-    if (lookup.state === "missing") {
-      throw new ReachabilityError("REACHABILITY_NOT_FOUND", "That drive-time request was not found.", 404);
-    }
-    const { job } = lookup;
-    if (job.providerJobId && job.state === "pending") {
-      await this.provider.cancelServiceArea(job.providerJobId, signal);
-    }
-    this.jobs.delete(id);
-  }
-
-  /** Resolves only already-completed process-local state; it never contacts ArcGIS. */
-  resolveCompleted(id: string, packId: string): CompletedReachability {
-    const lookup = this.jobs.lookup(id);
-    if (lookup.state === "expired") {
-      throw new ReachabilityError(
-        "REACHABILITY_EXPIRED",
-        "That drive-time request expired. Calculate it again.",
-        410,
-      );
-    }
-    if (lookup.state === "missing") {
-      throw new ReachabilityError(
-        "REACHABILITY_NOT_FOUND",
-        "That drive-time request was not found.",
-        404,
-      );
-    }
-    const { job } = lookup;
-    if (job.packId !== packId) {
-      throw new ReachabilityError(
-        "REACHABILITY_PACK_MISMATCH",
-        "That drive-time area belongs to a different installed pack.",
-        422,
-      );
-    }
-    if (job.state === "failed") {
-      throw new ReachabilityError(
-        "REACHABILITY_FAILED",
-        job.error ?? "The drive-time calculation failed.",
-        502,
-      );
-    }
-    if (job.state !== "complete" || !job.geometry || !job.resolvedAt) {
-      throw new ReachabilityError(
-        "REACHABILITY_PENDING",
-        "That drive-time area is still being calculated.",
-        409,
-        true,
-      );
-    }
-    return {
-      geometry: structuredClone(job.geometry),
-      durationMinutes: job.durationMinutes,
-      resolvedAt: job.resolvedAt.toISOString(),
-      originLabel: job.origin.label,
+    let providerJobId: string | undefined;
+    const cancel = () => {
+      if (!providerJobId) return;
+      const id = providerJobId;
+      providerJobId = undefined;
+      // No work is shared. Cancellation must never delay the caller's failure.
+      void this.provider.cancelServiceArea(id, AbortSignal.timeout(1_000)).catch(() => undefined);
     };
-  }
-
-  private response(id: string): ReachabilityResponse {
-    const lookup = this.jobs.lookup(id);
-    if (lookup.state !== "found") {
-      throw new ReachabilityError("REACHABILITY_NOT_FOUND", "That drive-time request was not found.", 404);
-    }
-    const { job } = lookup;
-    if (job.state === "failed") {
-      throw new ReachabilityError(
-        "REACHABILITY_FAILED",
-        job.error ?? "The drive-time calculation failed.",
-        502,
-      );
-    }
-    if (job.state !== "complete" || !job.geometry || !job.resolvedAt) {
-      return { status: "pending", requestId: id, pollAfterMs: 1_000 };
-    }
-    return {
-      status: "complete",
-      requestId: id,
-      provider: "arcgis",
-      durationMinutes: job.durationMinutes,
-      resolvedAt: job.resolvedAt.toISOString(),
-      geometry: job.geometry,
+    const resolve = async (): Promise<CompletedReachability> => {
+      let completed = false;
+      try {
+        active.throwIfAborted();
+        await this.reserve(ARCGIS_SERVICE_AREA_PROVIDER, this.serviceAreaMonthlyLimit);
+        active.throwIfAborted();
+        providerJobId = await this.provider.submitServiceArea(request, active);
+        for (;;) {
+          active.throwIfAborted();
+          const result = await this.provider.pollServiceArea(providerJobId, active);
+          active.throwIfAborted();
+          if (result.state === "failed") throw new ReachabilityError("REACHABILITY_FAILED", result.message, 502);
+          if (result.state === "complete") {
+            const resolvedAt = this.clock.now();
+            this.areas.set(key, {
+              geometry: structuredClone(result.geometry),
+              resolvedAt: resolvedAt.toISOString(),
+              expiresAt: resolvedAt.getTime() + DRIVE_TIME_AREA_TTL_MS,
+            });
+            completed = true;
+            return {
+              geometry: result.geometry,
+              resolvedAt: resolvedAt.toISOString(),
+              durationMinutes: request.durationMinutes,
+              originLabel: request.origin.label,
+            };
+          }
+          await this.clock.sleep(1_000, active);
+        }
+      } finally {
+        if (!completed) cancel();
+      }
     };
+    try {
+      return await Promise.race([resolve(), aborted]);
+    } catch (error) {
+      cancel();
+      throw signal.aborted ? cancelledError() : toReachabilityError(error);
+    } finally {
+      clearTimeout(timer);
+      active.removeEventListener("abort", rejectAborted!);
+    }
   }
 }

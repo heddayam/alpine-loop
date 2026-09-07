@@ -7,10 +7,14 @@ export const systemClock: Clock = {
       reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
       return;
     }
-    const timeout = setTimeout(resolve, milliseconds);
-    signal?.addEventListener("abort", () => {
+    const aborted = () => {
       clearTimeout(timeout);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    }, { once: true });
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", aborted);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", aborted, { once: true });
   }),
 };

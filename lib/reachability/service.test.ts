@@ -1,53 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
-import type { ReachabilityRequest } from "@/lib/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReachabilityError } from "./errors";
-import { MemoryReachabilityJobStore, REACHABILITY_JOB_TTL_MS } from "./jobs";
-import { ReachabilityService } from "./service";
+import { DRIVE_TIME_AREA_DEADLINE_MS, DRIVE_TIME_AREA_TTL_MS, ReachabilityService } from "./service";
 import { TestClock, TestUsageStore } from "./test-helpers";
-import type { ArcGisProvider, AreaGeometry } from "./types";
+import type { ArcGisProvider, AreaGeometry, DriveTimeAreaRequest } from "./types";
 
-const ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
-const REQUEST: ReachabilityRequest = {
-  version: 1,
-  packId: "fixture",
+const REQUEST: DriveTimeAreaRequest = {
   origin: { lon: -122.1, lat: 37.2, label: "Private origin" },
   durationMinutes: 30,
 };
 const GEOMETRY: AreaGeometry = {
-  type: "Polygon" as const,
+  type: "Polygon",
   coordinates: [[[-122.2, 37.1], [-122.2, 37.2], [-122.1, 37.1], [-122.2, 37.1]]],
 };
 
-function provider(): ArcGisProvider {
-  return {
+function setup() {
+  const clock = new TestClock();
+  const usage = new TestUsageStore();
+  const provider: ArcGisProvider = {
     suggest: vi.fn(async () => [{ id: "one", label: "One", magicKey: "one" }]),
     resolve: vi.fn(async () => REQUEST.origin),
     submitServiceArea: vi.fn(async () => "provider-job"),
-    pollServiceArea: vi.fn(async (): Promise<{ state: "pending" }> => ({ state: "pending" })),
+    pollServiceArea: vi.fn(async () => ({ state: "complete" as const, geometry: structuredClone(GEOMETRY) })),
     cancelServiceArea: vi.fn(async () => undefined),
   };
+  return { clock, usage, provider, service: new ReachabilityService({ provider, usage, clock }) };
 }
+const signal = () => new AbortController().signal;
+afterEach(() => vi.useRealTimers());
 
-function setup(overrides: { provider?: ArcGisProvider; usage?: TestUsageStore } = {}) {
-  const clock = new TestClock();
-  const arcgis = overrides.provider ?? provider();
-  const usage = overrides.usage ?? new TestUsageStore();
-  const jobs = new MemoryReachabilityJobStore(clock);
-  return {
-    clock,
-    provider: arcgis,
-    usage,
-    service: new ReachabilityService({
-      provider: arcgis,
-      usage,
-      jobs,
-      clock,
-      id: () => ID,
-    }),
-  };
-}
-
-describe("reachability orchestration", () => {
+describe("drive-time area resolution", () => {
   it("reserves before every geocoding provider call", async () => {
     const context = setup();
     await expect(context.service.suggest("trailhead")).resolves.toHaveLength(1);
@@ -56,108 +37,79 @@ describe("reachability orchestration", () => {
     expect(context.usage.reserve).toHaveBeenCalledTimes(2);
   });
 
-  it("fails closed without contacting ArcGIS when quota storage is unavailable", async () => {
-    const usage = new TestUsageStore();
-    usage.reserve.mockRejectedValue(new Error("disk unavailable"));
-    const context = setup({ usage });
-
-    await expect(context.service.submit(REQUEST)).rejects.toMatchObject({ code: "USAGE_UNAVAILABLE" });
+  it("blocks provider work when quota storage fails or the cap is reached", async () => {
+    const context = setup();
+    context.usage.reserve.mockRejectedValueOnce(new Error("disk unavailable"));
+    await expect(context.service.resolveArea(REQUEST, signal())).rejects.toMatchObject({ code: "USAGE_UNAVAILABLE" });
+    context.usage.reserve.mockResolvedValueOnce(null);
+    await expect(context.service.resolveArea(REQUEST, signal())).rejects.toMatchObject({ code: "USAGE_LIMIT_REACHED" });
     expect(context.provider.submitServiceArea).not.toHaveBeenCalled();
   });
 
-  it("fails closed at the monthly cap", async () => {
-    const usage = new TestUsageStore();
-    usage.reserve.mockResolvedValue(null);
-    const context = setup({ usage });
-
-    await expect(context.service.submit(REQUEST)).rejects.toMatchObject({ code: "USAGE_LIMIT_REACHED" });
-    expect(context.provider.submitServiceArea).not.toHaveBeenCalled();
-  });
-
-  it("submits asynchronously, reuses live work, and completes on poll", async () => {
-    const arcgis = provider();
-    vi.mocked(arcgis.pollServiceArea).mockResolvedValue({ state: "complete", geometry: GEOMETRY });
-    const context = setup({ provider: arcgis });
-
-    await expect(context.service.submit(REQUEST)).resolves.toEqual({
-      status: "pending",
-      requestId: ID,
-      pollAfterMs: 1_000,
-    });
-    await expect(context.service.submit(REQUEST)).resolves.toEqual({
-      status: "pending",
-      requestId: ID,
-      pollAfterMs: 1_000,
-    });
-    expect(arcgis.submitServiceArea).toHaveBeenCalledOnce();
-
-    await expect(context.service.poll(ID)).resolves.toEqual({
-      status: "complete",
-      requestId: ID,
-      provider: "arcgis",
-      durationMinutes: 30,
-      resolvedAt: "2026-08-04T12:00:00.000Z",
-      geometry: GEOMETRY,
-    });
-    await expect(context.service.poll(ID)).resolves.toMatchObject({ status: "complete" });
-    expect(arcgis.pollServiceArea).toHaveBeenCalledOnce();
-    expect(context.service.resolveCompleted(ID, REQUEST.packId)).toEqual({
-      geometry: GEOMETRY,
-      durationMinutes: 30,
-      resolvedAt: "2026-08-04T12:00:00.000Z",
-      originLabel: "Private origin",
-    });
-    expect(arcgis.pollServiceArea).toHaveBeenCalledOnce();
-  });
-
-  it("distinguishes pending and cross-pack resolution without contacting ArcGIS", async () => {
+  it("polls internally and reuses completed geometry without sharing labels or mutable results", async () => {
     const context = setup();
-    await context.service.submit(REQUEST);
-    expect(() => context.service.resolveCompleted(ID, REQUEST.packId)).toThrowError(
-      expect.objectContaining({ code: "REACHABILITY_PENDING" }),
-    );
-    expect(() => context.service.resolveCompleted(ID, "different-pack")).toThrowError(
-      expect.objectContaining({ code: "REACHABILITY_PACK_MISMATCH" }),
-    );
-    expect(context.provider.pollServiceArea).not.toHaveBeenCalled();
+    vi.mocked(context.provider.pollServiceArea).mockResolvedValueOnce({ state: "pending" });
+    const first = await context.service.resolveArea(REQUEST, signal());
+    expect(first).toEqual({
+      geometry: GEOMETRY, durationMinutes: 30,
+      resolvedAt: "2026-08-04T12:00:00.000Z", originLabel: "Private origin",
+    });
+    expect(context.clock.sleeps).toEqual([1_000]);
+    expect(context.usage.reserve).toHaveBeenCalledBefore(context.provider.submitServiceArea as ReturnType<typeof vi.fn>);
+    first.geometry.coordinates.length = 0;
+    const cached = await context.service.resolveArea({ ...REQUEST, origin: { ...REQUEST.origin, label: "New label" } }, signal());
+    expect(cached).toMatchObject({ geometry: GEOMETRY, originLabel: "New label" });
+    expect(context.provider.submitServiceArea).toHaveBeenCalledOnce();
+    expect(context.usage.reserve).toHaveBeenCalledOnce();
+    context.clock.advance(DRIVE_TIME_AREA_TTL_MS);
+    await context.service.resolveArea(REQUEST, signal());
+    await context.service.resolveArea({ ...REQUEST, durationMinutes: 60 }, signal());
+    expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(3);
   });
 
-  it("returns distinct failed, missing, and expired errors", async () => {
-    const failedProvider = provider();
-    vi.mocked(failedProvider.pollServiceArea).mockResolvedValue({ state: "failed", message: "No roads nearby." });
-    const failed = setup({ provider: failedProvider });
-    await failed.service.submit(REQUEST);
-    await expect(failed.service.poll(ID)).rejects.toMatchObject({ code: "REACHABILITY_FAILED" });
-    await expect(failed.service.poll("7e20fc45-e3e2-4ef0-ab22-da382ce3a0a1")).rejects.toMatchObject({ code: "REACHABILITY_NOT_FOUND" });
-
-    const expired = setup();
-    await expired.service.submit(REQUEST);
-    expired.clock.advance(REACHABILITY_JOB_TTL_MS);
-    await expect(expired.service.poll(ID)).rejects.toMatchObject({ code: "REACHABILITY_EXPIRED" });
-  });
-
-  it("cancels an upstream pending job and removes local location state", async () => {
+  it("does not cache provider failures or expose unexpected provider details", async () => {
     const context = setup();
-    await context.service.submit(REQUEST);
-    await expect(context.service.cancel(ID)).resolves.toBeUndefined();
-    expect(context.provider.cancelServiceArea).toHaveBeenCalledWith("provider-job", undefined);
-    await expect(context.service.poll(ID)).rejects.toMatchObject({ code: "REACHABILITY_NOT_FOUND" });
-  });
-
-  it("propagates cancellation without rewriting it as a provider outage", async () => {
-    const arcgis = provider();
-    vi.mocked(arcgis.submitServiceArea).mockRejectedValue(new DOMException("Aborted", "AbortError"));
-    const context = setup({ provider: arcgis });
-    await expect(context.service.submit(REQUEST)).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
-  });
-
-  it("does not expose provider details through unexpected errors", async () => {
-    const arcgis = provider();
-    vi.mocked(arcgis.submitServiceArea).mockRejectedValue(new Error("secret origin in upstream body"));
-    const context = setup({ provider: arcgis });
-    await expect(context.service.submit(REQUEST)).rejects.toEqual(expect.objectContaining({
-      code: "PROVIDER_UNAVAILABLE",
-      message: "The ArcGIS service could not be reached.",
+    vi.mocked(context.provider.pollServiceArea).mockResolvedValueOnce({ state: "failed", message: "No roads nearby." });
+    await expect(context.service.resolveArea(REQUEST, signal())).rejects.toMatchObject({ code: "REACHABILITY_FAILED" });
+    vi.mocked(context.provider.submitServiceArea).mockRejectedValueOnce(new Error("secret origin in upstream body"));
+    await expect(context.service.resolveArea(REQUEST, signal())).rejects.toEqual(expect.objectContaining({
+      code: "PROVIDER_UNAVAILABLE", message: "The ArcGIS service could not be reached.",
     } satisfies Partial<ReachabilityError>));
+    await expect(context.service.resolveArea(REQUEST, signal())).resolves.toMatchObject({ geometry: GEOMETRY });
+    expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(3);
+  });
+
+  it("aborts even if provider polling and cancellation do not settle", async () => {
+    const context = setup();
+    const controller = new AbortController();
+    vi.mocked(context.provider.pollServiceArea).mockImplementationOnce(async () => {
+      controller.abort();
+      return new Promise(() => undefined);
+    });
+    vi.mocked(context.provider.cancelServiceArea).mockImplementationOnce(async () => new Promise(() => undefined));
+    await expect(context.service.resolveArea(REQUEST, controller.signal)).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
+    expect(context.provider.cancelServiceArea).toHaveBeenCalledWith("provider-job", expect.any(AbortSignal));
+    await expect(context.service.resolveArea(REQUEST, signal())).resolves.toMatchObject({ geometry: GEOMETRY });
+    expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(2);
+  });
+
+  it("enforces the overall deadline while a provider request is stuck", async () => {
+    vi.useFakeTimers();
+    const context = setup();
+    vi.mocked(context.provider.pollServiceArea).mockImplementationOnce(async () => new Promise(() => undefined));
+    const result = context.service.resolveArea(REQUEST, signal());
+    const rejected = expect(result).rejects.toMatchObject({ code: "REACHABILITY_FAILED", status: 504 });
+    await vi.advanceTimersByTimeAsync(DRIVE_TIME_AREA_DEADLINE_MS);
+    await rejected;
+    expect(context.provider.cancelServiceArea).toHaveBeenCalledOnce();
+  });
+
+  it("does not reserve usage or return cached data for an already cancelled request", async () => {
+    const context = setup();
+    await context.service.resolveArea(REQUEST, signal());
+    const controller = new AbortController();
+    controller.abort();
+    await expect(context.service.resolveArea(REQUEST, controller.signal)).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
+    expect(context.usage.reserve).toHaveBeenCalledOnce();
   });
 });

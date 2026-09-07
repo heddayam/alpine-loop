@@ -1,4 +1,4 @@
-import type { Origin, ReachabilityRequest } from "@/lib/contracts";
+import type { Origin } from "@/lib/contracts";
 import { cancelledError, ReachabilityError, toReachabilityError } from "./errors";
 import { normalizeArcGisArea } from "./geometry";
 import type {
@@ -6,6 +6,7 @@ import type {
   AreaGeometry,
   Clock,
   GeocodingSuggestion,
+  DriveTimeAreaRequest,
 } from "./types";
 
 export const ARCGIS_GEOCODING_ENDPOINT =
@@ -92,7 +93,7 @@ function appendToken(url: URL, apiKey: string): URL {
 }
 
 export function buildServiceAreaSubmitBody(
-  request: ReachabilityRequest,
+  request: DriveTimeAreaRequest,
   apiKey: string,
 ): URLSearchParams {
   const body = new URLSearchParams();
@@ -251,7 +252,7 @@ export class ArcGisClient implements ArcGisProvider {
     return { lon: first.location.x, lat: first.location.y, label: address.slice(0, 240) };
   }
 
-  async submitServiceArea(request: ReachabilityRequest, signal?: AbortSignal): Promise<string> {
+  async submitServiceArea(request: DriveTimeAreaRequest, signal?: AbortSignal): Promise<string> {
     const key = requireKey(this.routingApiKey, "ArcGIS reachability", "ARCGIS_ROUTING_API_KEY (or ARCGIS_API_KEY)");
     const payload = await this.json(
       `${this.serviceAreaEndpoint}/submitJob`,

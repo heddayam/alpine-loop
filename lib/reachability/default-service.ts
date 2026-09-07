@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { ArcGisClient } from "./arcgis";
 import { systemClock } from "./clock";
-import { MemoryReachabilityJobStore } from "./jobs";
 import { ReachabilityService } from "./service";
 import { SqliteUsageStore } from "./usage";
 
@@ -33,9 +32,7 @@ function createDefaultService(): ReachabilityService {
   return new ReachabilityService({
     provider,
     usage: new SqliteUsageStore(usagePath),
-    jobs: new MemoryReachabilityJobStore(systemClock),
     clock: systemClock,
-    id: () => crypto.randomUUID(),
   });
 }
 

@@ -1,4 +1,6 @@
-import type { Origin, ReachabilityRequest } from "@/lib/contracts";
+import type { Origin, SearchArea } from "@/lib/contracts";
+
+export type DriveTimeAreaRequest = Pick<Extract<SearchArea, { mode: "drive-time" }>, "origin" | "durationMinutes">;
 
 export type Position = [number, number];
 export type LinearRing = Position[];
@@ -23,12 +25,10 @@ export type Clock = {
   sleep(milliseconds: number, signal?: AbortSignal): Promise<void>;
 };
 
-export type IdGenerator = () => string;
-
 export type ArcGisProvider = {
   suggest(text: string, signal?: AbortSignal): Promise<GeocodingSuggestion[]>;
   resolve(text: string, magicKey: string, signal?: AbortSignal): Promise<Origin>;
-  submitServiceArea(request: ReachabilityRequest, signal?: AbortSignal): Promise<string>;
+  submitServiceArea(request: DriveTimeAreaRequest, signal?: AbortSignal): Promise<string>;
   pollServiceArea(
     providerJobId: string,
     signal?: AbortSignal,

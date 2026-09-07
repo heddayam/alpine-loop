@@ -1,35 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  DRIVE_TIME_DURATIONS_MINUTES,
-  type ReachabilityRequest,
-  type ReachabilityResponse,
-} from "@/lib/contracts";
 import { ReachabilityError } from "./errors";
 import {
   createGeocodingResolveHandler,
   createGeocodingSuggestHandler,
-  createReachabilityCancelHandler,
-  createReachabilityPollHandler,
-  createReachabilitySubmitHandler,
-  type ReachabilityApi,
+  type GeocodingApi,
 } from "./http";
 
-const ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
-const REQUEST: ReachabilityRequest = {
-  version: 1,
-  packId: "fixture",
-  origin: { lon: -122.1, lat: 37.2, label: "Current location" },
-  durationMinutes: 30,
-};
+const ORIGIN = { lon: -122.1, lat: 37.2, label: "Current location" };
 
-function api(): ReachabilityApi {
-  const pending: ReachabilityResponse = { status: "pending", requestId: ID, pollAfterMs: 1_000 };
+function api(): GeocodingApi {
   return {
     suggest: vi.fn(async () => [{ id: "one", label: "One", magicKey: "key" }]),
-    resolve: vi.fn(async () => REQUEST.origin),
-    submit: vi.fn(async () => pending),
-    poll: vi.fn(async () => pending),
-    cancel: vi.fn(async () => undefined),
+    resolve: vi.fn(async () => ORIGIN),
   };
 }
 
@@ -39,10 +21,6 @@ function request(path: string, body: unknown, raw = false): Request {
     headers: { "content-type": "application/json" },
     body: raw ? String(body) : JSON.stringify(body),
   });
-}
-
-function context(id = ID) {
-  return { params: Promise.resolve({ requestId: id }) };
 }
 
 beforeEach(() => {
@@ -56,7 +34,7 @@ describe("geocoding HTTP API", () => {
     const service = api();
     const response = await createGeocodingSuggestHandler(service)(request(
       "/api/geocoding/suggest",
-      { packId: "fixture", text: "Castle Rock" },
+      { text: "Castle Rock" },
     ));
     expect(response.status).toBe(200);
     expect(response.headers.get("x-data-attribution")).toBe("Esri");
@@ -73,95 +51,31 @@ describe("geocoding HTTP API", () => {
     const handler = createGeocodingResolveHandler(service);
     const invalid = await handler(request(
       "/api/geocoding/resolve",
-      { packId: "fixture", text: "Castle Rock" },
+      { text: "Castle Rock" },
     ));
     expect(invalid.status).toBe(400);
     expect(service.resolve).not.toHaveBeenCalled();
 
     const valid = await handler(request(
       "/api/geocoding/resolve",
-      { packId: "fixture", text: "Castle Rock", magicKey: "key" },
+      { text: "Castle Rock", magicKey: "key" },
     ));
     expect(valid.status).toBe(200);
-    await expect(valid.json()).resolves.toMatchObject({ origin: REQUEST.origin });
+    await expect(valid.json()).resolves.toMatchObject({ origin: ORIGIN });
   });
-});
 
-describe("reachability HTTP API", () => {
-  it("validates supported durations and malformed JSON before service calls", async () => {
+  it("rejects malformed bodies and preserves quota errors", async () => {
     const service = api();
-    const handler = createReachabilitySubmitHandler(service);
-    const unsupported = await handler(request(
-      "/api/reachability",
-      { ...REQUEST, durationMinutes: 31 },
-    ));
-    expect(unsupported.status).toBe(400);
-    await expect(unsupported.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
-
-    const malformed = await handler(request("/api/reachability", "{", true));
+    const handler = createGeocodingSuggestHandler(service);
+    const malformed = await handler(request("/api/geocoding/suggest", "{", true));
     expect(malformed.status).toBe(400);
-    await expect(malformed.json()).resolves.toMatchObject({ error: { code: "MALFORMED_JSON" } });
-    expect(service.submit).not.toHaveBeenCalled();
-  });
-
-  it("returns 202 for asynchronous submission and provider attribution metadata", async () => {
-    const service = api();
-    const response = await createReachabilitySubmitHandler(service)(request("/api/reachability", REQUEST));
-    expect(response.status).toBe(202);
-    expect(response.headers.get("x-reachability-provider")).toBe("arcgis");
-    await expect(response.json()).resolves.toMatchObject({ status: "pending", requestId: ID });
-  });
-
-  it("accepts every supported 5–300 minute value", async () => {
-    const service = api();
-    const handler = createReachabilitySubmitHandler(service);
-    for (const durationMinutes of DRIVE_TIME_DURATIONS_MINUTES) {
-      const response = await handler(request("/api/reachability", { ...REQUEST, durationMinutes }));
-      expect(response.status).toBe(202);
-    }
-    expect(service.submit).toHaveBeenCalledTimes(DRIVE_TIME_DURATIONS_MINUTES.length);
-  });
-
-  it("polls and cancels by UUID", async () => {
-    const service = api();
-    const poll = await createReachabilityPollHandler(service)(
-      new Request(`http://localhost/api/reachability/${ID}`),
-      context(),
-    );
-    expect(poll.status).toBe(200);
-    expect(service.poll).toHaveBeenCalledWith(ID, expect.any(AbortSignal));
-
-    const cancel = await createReachabilityCancelHandler(service)(
-      new Request(`http://localhost/api/reachability/${ID}`, { method: "DELETE" }),
-      context(),
-    );
-    expect(cancel.status).toBe(204);
-    expect(service.cancel).toHaveBeenCalledWith(ID, expect.any(AbortSignal));
-  });
-
-  it("maps stable provider and expiry errors without sensitive details", async () => {
-    const service = api();
-    vi.mocked(service.poll).mockRejectedValue(new ReachabilityError(
-      "REACHABILITY_EXPIRED",
-      "That drive-time request expired. Calculate it again.",
-      410,
+    expect(service.suggest).not.toHaveBeenCalled();
+    vi.mocked(service.suggest).mockRejectedValue(new ReachabilityError(
+      "USAGE_LIMIT_REACHED", "The monthly ArcGIS safety limit has been reached.", 429,
     ));
-    const response = await createReachabilityPollHandler(service)(
-      new Request(`http://localhost/api/reachability/${ID}`),
-      context(),
-    );
-    expect(response.status).toBe(410);
-    await expect(response.json()).resolves.toEqual({ error: {
-      code: "REACHABILITY_EXPIRED",
-      message: "That drive-time request expired. Calculate it again.",
-      retryable: false,
-    } });
-
-    const invalid = await createReachabilityPollHandler(service)(
-      new Request("http://localhost/api/reachability/not-a-uuid"),
-      context("not-a-uuid"),
-    );
-    expect(invalid.status).toBe(400);
-    expect(service.poll).toHaveBeenCalledOnce();
+    const limited = await handler(request("/api/geocoding/suggest", { text: "Castle Rock" }));
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+    await expect(limited.json()).resolves.toMatchObject({ error: { code: "USAGE_LIMIT_REACHED" } });
   });
 });
