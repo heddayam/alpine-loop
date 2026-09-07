@@ -12,7 +12,6 @@ function edge(
     id: `edge-${id}`,
     edgeKey: id,
     physicalEdgeKey: id,
-    stablePhysicalEdgeId: `physical-${id}`,
     fromNodeId: from,
     toNodeId: to,
     coordinates: [[id - 1, 0], [id, 0]],

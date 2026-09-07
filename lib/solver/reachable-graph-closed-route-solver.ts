@@ -2,11 +2,11 @@ import type {
   ConstraintViolationV3,
   RouteCriteria,
   PackManifest,
-  TopologyProfile,
 } from "@/lib/contracts";
 import {
   type AccessPointCandidate,
   type AccessTopology,
+  type ClosedRouteFeasibilityRepository as GraphFeasibilityRepository,
   type EdgeTraversal,
   type GraphEdge,
   type GraphRepository,
@@ -19,6 +19,7 @@ import {
   type ValidatedClosedRoute,
 } from "./closed-route-validation";
 import { RouteSearchCancelledError } from "./control";
+import { stableHash } from "./route-identity";
 import { AccessFilterResolutionError } from "./access-filter-error";
 import { searchPenalizedClosedRoutes } from "./penalized-closed-route-search";
 import {
@@ -32,14 +33,7 @@ const METERS_PER_FOOT = 0.3048;
 const MAXIMUM_ALLOWED_OVERLAP = 0.8;
 const FIRST_PASS_ROUTES_PER_START = 2;
 
-export interface ClosedRouteFeasibilityRepository {
-  readonly packId: string;
-  readonly dataVersion: string;
-  getAccessTopology(
-    profile: TopologyProfile,
-    accessPointIds: readonly string[],
-  ): Promise<AccessTopology[]>;
-}
+type ClosedRouteFeasibilityRepository = Omit<GraphFeasibilityRepository, "close">;
 
 export type ReachableGraphClosedRouteContext = {
   repository: GraphRepository;
@@ -89,15 +83,6 @@ type RankedClosedRoute = ValidatedClosedRoute & {
 type SearchRound = {
   deep: boolean;
 };
-
-function stableHash(value: string): string {
-  let hash = 0xcbf29ce484222325n;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= BigInt(value.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-  }
-  return hash.toString(36).padStart(13, "0");
-}
 
 function effectiveBudget(request: RouteSearchRequest, supplied: SolverBudget): SolverBudget {
   const effort = CLOSED_ROUTE_EFFORT_BUDGETS[request.searchEffort];
@@ -156,7 +141,6 @@ function reconstructTraversals(
       ...traversal.edge,
       edgeKey,
       physicalEdgeKey,
-      stablePhysicalEdgeId: `physical:${physicalEdgeKey}`,
       minimumElevationMeters,
       fromElevationMeters: traversal.from.elevationMeters,
       toElevationMeters: traversal.to.elevationMeters,
@@ -550,7 +534,6 @@ export class ReachableGraphClosedRouteSolver {
           const signature = forwardSignature < reverseSignature ? forwardSignature : reverseSignature;
           const routeId = `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}`;
           const validated = validateReconstructedClosedRoute(reconstructed, {
-            compressedEdgeIds: reconstructed.map(({ edgeKey }) => edgeKey),
             start: feasibleStart.start,
             includeUncertainAccess: request.includeUncertainAccess,
             coverage: context.accessFilter.coverage,

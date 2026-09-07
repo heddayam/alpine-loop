@@ -8,6 +8,7 @@ import {
 } from "@/lib/graph";
 
 import type { SolverBudget } from "./budget";
+import { stableHash } from "./route-identity";
 import { RouteSearchCancelledError } from "./control";
 
 const METERS_PER_MILE = 1_609.344;
@@ -72,7 +73,6 @@ export type PenalizedClosedRouteSearchOptions = {
 type InternalGraph = {
   traversals: EdgeTraversal[];
   nodeIds: string[];
-  nodeIndex: Map<string, number>;
   from: Int32Array;
   to: Int32Array;
   length: Float64Array;
@@ -105,11 +105,9 @@ type Candidate = {
   metrics: Metrics;
   score: number;
   violations: string[];
-  provisional: boolean;
 };
 
 type SearchTree = {
-  distance: Float64Array;
   realLength: Float64Array;
   realGain: Float64Array;
   parent: Int32Array;
@@ -169,15 +167,6 @@ class MinHeap {
     [this.#distances[left], this.#distances[right]] = [this.#distances[right]!, this.#distances[left]!];
     [this.#nodes[left], this.#nodes[right]] = [this.#nodes[right]!, this.#nodes[left]!];
   }
-}
-
-function stableHash(value: string): string {
-  let hash = 0xcbf29ce484222325n;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= BigInt(value.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-  }
-  return hash.toString(36).padStart(13, "0");
 }
 
 function physicalKeyOf(edge: EdgeTraversal["edge"]): string {
@@ -241,7 +230,6 @@ function buildGraph(
   return {
     traversals,
     nodeIds,
-    nodeIndex,
     from,
     to,
     length,
@@ -524,7 +512,6 @@ export function searchPenalizedClosedRoutes(
       metrics,
       score: score(metrics),
       violations: candidateViolations,
-      provisional: false,
     };
     if (candidateViolations.length > 0) {
       if (candidateViolations.every((item) => nearEligible.has(item))) {
@@ -537,7 +524,6 @@ export function searchPenalizedClosedRoutes(
     insertBounded(validArchive, candidate, PENALIZED_SEARCH_CAPS.maximumValidArchive, "valid-archive-limit");
     if (provisional.length < request.limit
       && provisional.every((other) => physicalOverlap(candidate.metrics, other.metrics) <= overlapLimit)) {
-      candidate.provisional = true;
       provisional.push(candidate);
       bumpPenalties(metrics, 3);
       return "accepted";
@@ -553,7 +539,6 @@ export function searchPenalizedClosedRoutes(
     settings: {
       forbid?: ReadonlySet<string>;
       discourage?: ReadonlySet<string>;
-      blockedNodes?: ReadonlySet<number>;
       target?: number;
     } = {},
   ): SearchTree => {
@@ -580,7 +565,6 @@ export function searchPenalizedClosedRoutes(
       for (const edge of adjacency[current.node] ?? []) {
         if (settings.forbid?.has(graph.physical[edge]!)) continue;
         const next = forward ? graph.to[edge]! : graph.from[edge]!;
-        if (settings.blockedNodes?.has(next)) continue;
         let weight = graph.length[edge]! * (1 + (penalties.get(graph.physical[edge]!) ?? 0));
         if (settings.discourage?.has(graph.physical[edge]!)) weight += graph.length[edge]! * 50;
         const nextDistance = current.distance + weight;
@@ -593,7 +577,7 @@ export function searchPenalizedClosedRoutes(
         }
       }
     }
-    return { distance, realLength, realGain, parent, settled, source };
+    return { realLength, realGain, parent, settled, source };
   };
 
   const forwardPath = (tree: SearchTree, node: number): number[] | null => {

@@ -14,7 +14,6 @@ function edge(id: number, physicalEdgeKey: number, from: string, to: string, len
     id: `e${id}`,
     edgeKey: id,
     physicalEdgeKey,
-    stablePhysicalEdgeId: `p${physicalEdgeKey}`,
     minimumElevationMeters: 10,
     fromNodeId: from,
     toNodeId: to,
@@ -54,7 +53,6 @@ function start(nodeId = "s"): AccessPointCandidate {
 
 function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s") {
   return validateReconstructedClosedRoute(edges, {
-    compressedEdgeIds: edges.map(({ edgeKey }) => edgeKey),
     start: start(startNodeId),
     includeUncertainAccess: false,
     coverage: {
@@ -161,7 +159,6 @@ describe("closed-route reconstruction validation", () => {
     edges[1]!.coordinates = [[0.5, 0], [0.5, 0.5]];
     edges[2]!.coordinates = [[0.5, 0.5], [-0.5, 0]];
     const result = validateReconstructedClosedRoute(edges, {
-      compressedEdgeIds: [30, 31, 32],
       start: start(),
       includeUncertainAccess: false,
       coverage: {

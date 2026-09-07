@@ -1,5 +1,5 @@
 import type { MultiPolygon, Polygon } from "geojson";
-import type { GraphEdge, GraphNode } from "./types";
+import type { GraphEdge } from "./types";
 
 export type BoundingBox = readonly [west: number, south: number, east: number, north: number];
 
@@ -9,10 +9,6 @@ export function coordinateIsInsideBbox(
 ): boolean {
   const [lon, lat] = coordinate;
   return Number.isFinite(lon) && Number.isFinite(lat) && lon >= west && lon <= east && lat >= south && lat <= north;
-}
-
-export function nodeIsInsideBbox(node: GraphNode, bbox: BoundingBox): boolean {
-  return coordinateIsInsideBbox([node.lon, node.lat], bbox);
 }
 
 export function edgeIsInsideBbox(edge: GraphEdge, bbox: BoundingBox): boolean {

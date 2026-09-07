@@ -5,13 +5,6 @@ export type SolverBudget = {
   maximumRawCandidates: number;
 };
 
-export const DEFAULT_SOLVER_BUDGET: Readonly<SolverBudget> = Object.freeze({
-  maximumDirectedEdges: 10_000,
-  maximumExpandedStates: 100_000,
-  deadlineMs: 3_000,
-  maximumRawCandidates: 2_000,
-});
-
 export const CLOSED_ROUTE_EFFORT_BUDGETS = Object.freeze({
   quick: Object.freeze({
     maximumDirectedEdges: 10_000,

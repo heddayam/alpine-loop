@@ -262,8 +262,6 @@ try {
           distanceMeters: selected.distanceMeters,
           accessState: selected.candidate.accessState,
           confidence: selected.candidate.confidence,
-          remotenessFields: {
-          },
         },
         expectations: [exact, impossible],
       });

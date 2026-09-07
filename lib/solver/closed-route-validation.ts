@@ -23,7 +23,6 @@ export type ClosedRouteValidationFailure =
   | "zero-cycle";
 
 export type ValidatedClosedRoute = {
-  compressedEdgeIds: readonly number[];
   edges: readonly ReconstructedDirectedEdge[];
   physicalEdgeKeys: ReadonlySet<number>;
   route: GeneratedClosedRouteV3;
@@ -34,7 +33,6 @@ export type ClosedRouteValidationResult =
   | { valid: false; reason: ClosedRouteValidationFailure };
 
 export type ClosedRouteValidationOptions = {
-  compressedEdgeIds: readonly number[];
   start: AccessPointCandidate;
   includeUncertainAccess: boolean;
   coverage: AreaGeometry;
@@ -336,7 +334,6 @@ export function validateReconstructedClosedRoute(
   return {
     valid: true,
     value: {
-      compressedEdgeIds: options.compressedEdgeIds,
       edges,
       physicalEdgeKeys: new Set(edges.map(({ physicalEdgeKey }) => physicalEdgeKey)),
       route: {
