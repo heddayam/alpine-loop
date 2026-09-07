@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { appSettingsV1Schema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
+import { useDialogFocus } from "./useDialogFocus";
 
 type SettingsModalProps = {
   open: boolean;
@@ -16,48 +17,12 @@ export function SettingsModal({
   onSave,
   onClose,
 }: SettingsModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState(settings);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const saving = useRef(false);
   const close = useCallback(() => { if (!saving.current) onClose(); }, [onClose]);
 
-  useEffect(() => {
-    if (!open) return;
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const dialog = dialogRef.current;
-    dialog?.querySelector<HTMLElement>("button, input, select")?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close();
-        return;
-      }
-      if (event.key !== "Tab" || !dialog) return;
-      const focusable = [...dialog.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      )].filter((element) => !element.closest("[inert]"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) { event.preventDefault(); return; }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      previouslyFocusedRef.current?.focus();
-    };
-  }, [close, open]);
+  const dialogRef = useDialogFocus(open, close);
 
   if (!open) return null;
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { RouteJobV2 as RouteJob } from "@/lib/contracts/search";
 import { ACTIVE_JOB_STATUSES as ACTIVE_STATUSES, type JobAction } from "./useJobs";
+import { useDialogFocus } from "./useDialogFocus";
 
 export type JobsLoadState = "loading" | "ready" | "error";
 type PendingAction = JobAction | "opening";
@@ -67,28 +68,9 @@ export function JobsModal({
   pendingByJob: Record<string, JobAction>;
   openingJobId?: string;
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useDialogFocus(open, onClose);
   const [now, setNow] = useState(() => Date.now());
   const close = onClose;
-
-  useEffect(() => {
-    if (!open) return;
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); close(); return; }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')];
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => { document.removeEventListener("keydown", onKeyDown); previousFocusRef.current?.focus(); };
-  }, [close, open]);
 
   useEffect(() => {
     if (!open || !jobs.some((job) => ACTIVE_STATUSES.has(job.status) || job.status === "deleting")) return;

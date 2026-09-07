@@ -42,6 +42,31 @@ const baseProps = {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("JobsModal", () => {
+  it.each([false, true])("recovers focus after removing a job (backward: %s)", async (shift) => {
+    const remaining = { ...job, id: "other", area: { label: "Other area" } };
+    const content = (jobs: RouteJob[]) => <><button>Outside</button><JobsModal {...baseProps} jobs={jobs} /></>;
+    const view = render(content([job, remaining]));
+    screen.getByRole("button", { name: "Delete Santa Cruz Mountains job and saved routes" }).focus();
+    view.rerender(content([remaining]));
+    expect(document.activeElement).toBe(document.body);
+    await userEvent.tab({ shift });
+    expect(screen.getByRole("button", { name: shift ? "Delete Other area job and saved routes" : "Close jobs" })).toHaveFocus();
+  });
+
+  it("recovers focus when a pending action disables its button and restores the trigger on close", async () => {
+    const trigger = document.createElement("button");
+    document.body.append(trigger);
+    trigger.focus();
+    const view = render(<JobsModal {...baseProps} jobs={[job]} />);
+    screen.getByRole("button", { name: "Delete Santa Cruz Mountains job and saved routes" }).focus();
+    view.rerender(<JobsModal {...baseProps} jobs={[job]} pendingByJob={{ [job.id]: "deleting" }} />);
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "Close jobs" })).toHaveFocus();
+    view.rerender(<JobsModal {...baseProps} open={false} jobs={[job]} />);
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
   it("shows a human stage and attempted-count progress", () => {
     render(<JobsModal {...baseProps} jobs={[job]} />);
     expect(screen.getByText("Searching trailheads — 4 of 10 attempted.")).toBeVisible();
