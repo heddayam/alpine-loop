@@ -21,6 +21,7 @@ type ResultsPanelProps = {
   onSelectRoute: (routeId: string) => void;
   onHoverRoute: (routeId: string | undefined) => void;
   detail?: boolean;
+  previewsEnabled?: boolean;
   onBack?: () => void;
   hoveredRouteId?: string;
   selectedSegmentId?: string;
@@ -171,11 +172,11 @@ function RouteCard({
   buttonRef: (node: HTMLButtonElement | null) => void;
   segmentButtonRef: (segmentId: string, node: HTMLButtonElement | null) => void;
   onSelect: () => void;
-  onHover: (routeId: string | undefined) => void;
+  onHover: (routeId: string | undefined, source: "pointer" | "focus") => void;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
   onSelectSegment?: (segmentId: string) => void;
-  onHoverSegment?: (segmentId?: string) => void;
+  onHoverSegment?: (segmentId: string | undefined, source: "pointer" | "focus") => void;
   regionLabel?: string;
 }) {
   const detailId = `route-detail-${route.id}`;
@@ -219,11 +220,11 @@ function RouteCard({
     <article
       className={["route-card", selected ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
       aria-labelledby={`route-heading-${route.id}`}
-      onMouseEnter={() => onHover(route.id)}
-      onMouseLeave={() => onHover(undefined)}
-      onFocusCapture={() => onHover(route.id)}
+      onMouseEnter={() => onHover(route.id, "pointer")}
+      onMouseLeave={() => onHover(undefined, "pointer")}
+      onFocusCapture={() => onHover(route.id, "focus")}
       onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) onHover(undefined);
+        if (!event.currentTarget.contains(event.relatedTarget)) onHover(undefined, "focus");
       }}
     >
       <button
@@ -288,17 +289,20 @@ function RouteCard({
                   const active = segment.id === selectedSegmentId;
                   const hovered = segment.id === hoveredSegmentId;
                   return (
-                    <li key={segment.id}>
+                    <li key={segment.id}
+                      onMouseEnter={() => onHoverSegment?.(segment.id, "pointer")}
+                      onMouseLeave={() => onHoverSegment?.(undefined, "pointer")}
+                      onFocusCapture={() => onHoverSegment?.(segment.id, "focus")}
+                      onBlurCapture={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) onHoverSegment?.(undefined, "focus");
+                      }}
+                    >
                       <button
                         ref={(node) => segmentButtonRef(segment.id, node)}
                         type="button"
                         className={["trail-segment-row", active ? "selected" : "", hovered ? "hovered" : ""].filter(Boolean).join(" ")}
                         aria-pressed={active}
                         onClick={() => onSelectSegment?.(segment.id)}
-                        onMouseEnter={() => onHoverSegment?.(segment.id)}
-                        onMouseLeave={() => onHoverSegment?.(undefined)}
-                        onFocus={() => onHoverSegment?.(segment.id)}
-                        onBlur={() => onHoverSegment?.(undefined)}
                       >
                         {/* Length leads the row: it is the only number that
                             distinguishes one segment from the next, and the
@@ -315,10 +319,6 @@ function RouteCard({
                         rel="noopener noreferrer"
                         aria-label={search.label}
                         title="Search trail conditions"
-                        onMouseEnter={() => onHoverSegment?.(segment.id)}
-                        onMouseLeave={() => onHoverSegment?.(undefined)}
-                        onFocus={() => onHoverSegment?.(segment.id)}
-                        onBlur={() => onHoverSegment?.(undefined)}
                       >
                         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                           <circle cx="6.75" cy="6.75" r="4.25" />
@@ -368,6 +368,7 @@ export function ResultsPanel({
   onSelectRoute,
   onHoverRoute,
   detail = false,
+  previewsEnabled = true,
   onBack,
   hoveredRouteId,
   selectedSegmentId,
@@ -389,7 +390,21 @@ export function ResultsPanel({
     [results],
   );
 
-  useEffect(() => () => onHoverRoute(undefined), [onHoverRoute, results]);
+  const previews = useRef<{ route: { pointer?: string; focus?: string }; segment: { pointer?: string; focus?: string } }>({ route: {}, segment: {} });
+  const preview = (kind: "route" | "segment", id: string | undefined, source: "pointer" | "focus") => {
+    if (!previewsEnabled || status === "loading" || (kind === "route" ? detail : !detail)) return;
+    const state = previews.current[kind];
+    state[source] = id;
+    const callback = kind === "route" ? onHoverRoute : onHoverSegment;
+    callback?.(state.pointer ?? state.focus);
+  };
+  // Pointer inspection temporarily takes precedence over keyboard focus. Clear
+  // both sources when their view goes away, even if it stays mounted on mobile.
+  useEffect(() => () => {
+    if (previews.current.route.pointer || previews.current.route.focus) onHoverRoute(undefined);
+    if (previews.current.segment.pointer || previews.current.segment.focus) onHoverSegment?.(undefined);
+    previews.current = { route: {}, segment: {} };
+  }, [onHoverRoute, onHoverSegment, results, detail, selectedRouteId, startKey, nearMissesOpen, previewsEnabled, status]);
 
   // Only panel-origin navigation moves focus. Map selections remain on the map.
   useEffect(() => {
@@ -408,19 +423,6 @@ export function ResultsPanel({
       segment.scrollIntoView({ block: "nearest" });
     }
   }, [selectedSegmentId]);
-
-  // Hovering a segment on the map scrolls it into view, but only within the
-  // segment list's own scrollbox — the results panel must not move on hover.
-  useEffect(() => {
-    if (!hoveredSegmentId) return;
-    const row = segmentRefs.current.get(hoveredSegmentId);
-    const list = row?.closest(".trail-segment-list");
-    if (!row || !(list instanceof HTMLElement)) return;
-    const listRect = list.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    if (rowRect.top < listRect.top) list.scrollTop += rowRect.top - listRect.top;
-    else if (rowRect.bottom > listRect.bottom) list.scrollTop += rowRect.bottom - listRect.bottom;
-  }, [hoveredSegmentId]);
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -443,9 +445,9 @@ export function ResultsPanel({
       key={route.id}
       route={route}
       routeNumber={index + 1}
-      selected={route.id === selectedRouteId}
+      selected={expanded && route.id === selectedRouteId}
       expanded={expanded}
-      hovered={route.id === hoveredRouteId}
+      hovered={!expanded && route.id === hoveredRouteId}
       buttonRef={(node) => { cardRefs.current[index] = node; }}
       segmentButtonRef={(segmentId, node) => {
         if (node) segmentRefs.current.set(segmentId, node);
@@ -455,11 +457,11 @@ export function ResultsPanel({
         if (!detail) pendingFocus.current = "detail";
         onSelectRoute(route.id);
       }}
-      onHover={onHoverRoute}
+      onHover={(id, source) => preview("route", id, source)}
       selectedSegmentId={selectedSegmentId}
       hoveredSegmentId={hoveredSegmentId}
       onSelectSegment={onSelectSegment}
-      onHoverSegment={onHoverSegment}
+      onHoverSegment={(id, source) => preview("segment", id, source)}
       regionLabel={route.regionLabel}
     />
   );

@@ -122,7 +122,8 @@ describe("ResultsPanel", () => {
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
     const exactSummary = screen.getByRole("heading", { name: "Exact matches" }).closest("section")!.querySelector("button")!;
-    expect(exactSummary).toHaveAttribute("aria-pressed", "true");
+    expect(exactSummary).toHaveAttribute("aria-pressed", "false");
+    expect(exactSummary.closest("article")).not.toHaveClass("selected");
     expect(exactSummary).toHaveAttribute("aria-expanded", "false");
     expect(exactSummary).toHaveTextContent("5.0 mi");
     expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
@@ -137,6 +138,8 @@ describe("ResultsPanel", () => {
     expect(screen.getByRole("img", { name: /Elevation profile/ })).toHaveAttribute("preserveAspectRatio", "none");
     const summary = screen.getByRole("button", { name: /Saratoga Gap.*Ridge Trail/ });
     expect(summary.querySelector(".route-number")).toHaveTextContent("2");
+    expect(summary).toHaveAttribute("aria-pressed", "true");
+    expect(summary.closest("article")).toHaveClass("selected");
     expect(within(summary).getByTitle("Distance")).toHaveClass("near-match-stat");
     const detail = screen.getByRole("region", { name: /Saratoga Gap.*Ridge Trail/ });
     fireEvent.click(within(detail).getByText("Details"));
@@ -168,7 +171,7 @@ describe("ResultsPanel", () => {
     await userEvent.click(back);
     const returned = screen.getByRole("heading", { name: "Close matches" }).closest("details")!.querySelector("button")!;
     expect(returned).toHaveFocus();
-    expect(returned).toHaveAttribute("aria-pressed", "true");
+    expect(returned).toHaveAttribute("aria-pressed", "false");
   });
 
   it("does not steal focus when the map changes selected detail", () => {
@@ -307,27 +310,79 @@ describe("ResultsPanel", () => {
     expect(within(summary).getByTitle(/90% of uphill 100 m sections are 11% grade or less/)).toBeVisible();
   });
 
-  it("previews through callbacks on pointer and focus, and clears a removed view", () => {
+  it("restores focused route preview after pointer inspection and clears hidden or removed views", () => {
     const onHoverRoute = vi.fn();
-    const onSelectRoute = vi.fn();
-    const { unmount } = render(<ResultsPanel onHoverRoute={onHoverRoute} status="done" results={results()} selectedRouteId="exact-loop" detail onSelectRoute={onSelectRoute} />);
-    const card = screen.getByRole("article", { name: /Saratoga Gap.*Ridge Trail/ });
-    fireEvent.mouseEnter(card);
+    const props = { onHoverRoute, onSelectRoute: vi.fn(), status: "done" as const, results: results({ exact: [route(), route({ id: "second" })], nearMisses: [] }) };
+    const { rerender, unmount } = render(<ResultsPanel {...props} />);
+    const [first, second] = screen.getAllByRole("article");
+    const [firstButton, secondButton] = [first!, second!].map((card) => within(card).getAllByRole("button")[0]!);
+    firstButton.focus();
     expect(onHoverRoute).toHaveBeenLastCalledWith("exact-loop");
-    fireEvent.mouseLeave(card);
-    expect(onHoverRoute).toHaveBeenLastCalledWith(undefined);
-    const buttons = within(card).getAllByRole("button");
-    fireEvent.focus(buttons[0]!);
+    fireEvent.mouseEnter(second!);
+    expect(onHoverRoute).toHaveBeenLastCalledWith("second");
+    firstButton.blur();
+    expect(onHoverRoute).toHaveBeenLastCalledWith("second");
+    firstButton.focus();
+    expect(onHoverRoute).toHaveBeenLastCalledWith("second");
+    fireEvent.mouseLeave(second!);
     expect(onHoverRoute).toHaveBeenLastCalledWith("exact-loop");
-    const callsBeforeInternalBlur = onHoverRoute.mock.calls.length;
-    fireEvent.blur(buttons[0]!, { relatedTarget: buttons[1] });
-    expect(onHoverRoute).toHaveBeenCalledTimes(callsBeforeInternalBlur);
-    fireEvent.blur(buttons[1]!, { relatedTarget: document.body });
+    expect(props.onSelectRoute).not.toHaveBeenCalled();
+    rerender(<ResultsPanel {...props} previewsEnabled={false} />);
     expect(onHoverRoute).toHaveBeenLastCalledWith(undefined);
-    fireEvent.mouseEnter(card);
+    fireEvent.mouseEnter(second!);
+    fireEvent.focus(secondButton);
+    expect(onHoverRoute).toHaveBeenLastCalledWith(undefined);
+    rerender(<ResultsPanel {...props} />);
+    fireEvent.mouseEnter(first!);
     unmount();
     expect(onHoverRoute).toHaveBeenLastCalledWith(undefined);
-    expect(onSelectRoute).not.toHaveBeenCalled();
+  });
+
+  it("clears route preview on detail entry and segment preview on exit", () => {
+    const props = { onHoverRoute: vi.fn(), onHoverSegment: vi.fn(), onSelectRoute: vi.fn(), status: "done" as const, results: results(), selectedRouteId: "exact-loop" };
+    const { rerender } = render(<ResultsPanel {...props} />);
+    fireEvent.mouseEnter(screen.getAllByRole("article")[0]!);
+    expect(props.onHoverRoute).toHaveBeenLastCalledWith("exact-loop");
+    rerender(<ResultsPanel {...props} detail />);
+    expect(props.onHoverRoute).toHaveBeenLastCalledWith(undefined);
+    fireEvent.mouseEnter(screen.getByRole("article"));
+    expect(props.onHoverRoute).toHaveBeenLastCalledWith(undefined);
+    fireEvent.mouseEnter(screen.getByRole("button", { name: /0.6 mi.*Ridge Trail/i }));
+    expect(props.onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:1");
+    rerender(<ResultsPanel {...props} />);
+    expect(props.onHoverSegment).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("distinguishes pinned segments from preview and restores focus without scrolling on hover", () => {
+    const props = { onHoverRoute: vi.fn(), onHoverSegment: vi.fn(), onSelectRoute: vi.fn(), onSelectSegment: vi.fn(), status: "done" as const, results: results(), selectedRouteId: "exact-loop", detail: true };
+    const { rerender } = render(<ResultsPanel {...props} selectedSegmentId="exact-loop:segment:1" />);
+    const first = screen.getByRole("button", { name: /0.6 mi.*Ridge Trail/i });
+    const second = screen.getByRole("button", { name: /4.4 mi.*Unnamed trail/i });
+    first.focus();
+    fireEvent.mouseEnter(second);
+    expect(props.onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:2");
+    first.blur();
+    expect(props.onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:2");
+    first.focus();
+    fireEvent.mouseLeave(second);
+    expect(props.onHoverSegment).toHaveBeenLastCalledWith("exact-loop:segment:1");
+    const list = first.closest("ol")!;
+    list.scrollTop = 75;
+    vi.spyOn(list, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100 } as DOMRect);
+    vi.spyOn(second, "getBoundingClientRect").mockReturnValue({ top: 200, bottom: 240 } as DOMRect);
+    const scroll = vi.fn();
+    second.scrollIntoView = scroll;
+    rerender(<ResultsPanel {...props} selectedSegmentId="exact-loop:segment:1" hoveredSegmentId="exact-loop:segment:2" />);
+    expect(first).toHaveClass("selected");
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(second).toHaveClass("hovered");
+    expect(second).not.toHaveClass("selected");
+    expect(second).toHaveAttribute("aria-pressed", "false");
+    expect(list.scrollTop).toBe(75);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(props.onSelectSegment).not.toHaveBeenCalled();
+    rerender(<ResultsPanel {...props} selectedSegmentId="exact-loop:segment:2" />);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
   });
 
   it("reports budget truncation and non-budget shortfall honestly", async () => {

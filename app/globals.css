@@ -439,7 +439,8 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .key-refinement { width: .8rem; height: .55rem; border: 1px solid #111; }
 .key-access { width: .6rem; height: .6rem; background: #173f35; border-radius: 50%; }
 .key-route { width: 1.2rem; border-top: 4px solid var(--route); }
-.key-start { width: .6rem; height: .6rem; background: var(--route); border-radius: 50%; }
+.key-route-candidate { width: 1.2rem; border-top: 3px solid var(--accent); }
+.key-start { width: .6rem; height: .6rem; background: var(--accent); border: 1px solid var(--ink-2); outline: 1px solid var(--surface); border-radius: 50%; }
 
 .map-hint {
   position: absolute;
@@ -568,13 +569,12 @@ details.result-section[open] > summary::before { content: "▾"; }
   scroll-margin-bottom: var(--s2);
 }
 .route-card:hover { border-color: var(--line-3); }
-/* Selection and hover read as a whole-card ring, matching the map's route
-   and hover colors, so pointing at either side reads the same. */
-.route-card.selected { border-color: var(--route); box-shadow: 0 0 0 1px var(--route); }
-.route-card.hovered:not(.selected) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* A narrow edge and matching badge link the row to the active map line. */
+.route-card.selected { border-left-color: var(--route); box-shadow: inset 2px 0 var(--route); }
+.route-card.hovered:not(.selected) { border-left-color: var(--accent); box-shadow: inset 2px 0 var(--accent); background: var(--surface-2); }
 .route-card.hovered:not(.selected) .route-number { color: #fff; background: var(--accent); }
 .route-card-select { min-height: 4rem; display: grid; grid-template-columns: 1.15rem minmax(0, 1fr); gap: var(--s1) var(--s2); width: 100%; padding: var(--s2); cursor: pointer; text-align: left; background: none; border: 0; }
-.route-card-select:hover { background: var(--surface-2); }
+.route-card-select:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
 .route-number { grid-row: 1 / span 2; display: grid; place-items: center; width: 1.15rem; height: 1.15rem; color: var(--ink-2); background: var(--surface-3); border-radius: 50%; font-size: 10px; font-weight: 700; }
 .route-card.selected .route-number { color: #fff; background: var(--route); }
 .route-summary-main { min-width: 0; }
@@ -614,8 +614,7 @@ details.result-section[open] > summary::before { content: "▾"; }
 .trailhead-coordinate-feedback.copied { color: var(--accent); text-transform: uppercase; }
 .trailhead-coordinate-feedback.failed { color: var(--danger); }
 
-/* Segment hover and selection use the same red vocabulary as their map focus.
-   The chip holds the segment's length — the ordinal is already in the list. */
+/* Segment preview is temporary; a pinned segment keeps its edge and badge. */
 .trail-segment-inspector { margin-top: var(--s2); }
 .trail-segment-list { display: grid; max-height: 17rem; margin: 0; padding: 0; overflow-y: auto; list-style: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); scrollbar-width: thin; }
 .trail-segment-list > li { display: grid; grid-template-columns: minmax(0, 1fr) 1.7rem; align-items: stretch; min-width: 0; }
@@ -623,11 +622,11 @@ details.result-section[open] > summary::before { content: "▾"; }
 .trail-segment-row { min-height: 2.75rem; display: grid; grid-template-columns: minmax(2.85rem, auto) minmax(0, 1fr); gap: var(--s2); align-items: center; width: 100%; min-width: 0; padding: var(--s1) var(--s2); cursor: pointer; color: var(--ink); background: none; border: 0; text-align: left; scroll-margin-block: var(--s1); }
 /* Row state lives on the <li>, not the button: the search link sits in the
    same row, so hovering either half has to light the whole strip. */
-.trail-segment-list > li:hover, .trail-segment-list > li:has(.trail-segment-row.hovered) { background: var(--route-soft); }
-.trail-segment-list > li:has(.trail-segment-row.selected) { background: var(--route-soft); }
-.trail-segment-row:focus-visible { outline: 2px solid var(--route); outline-offset: -2px; }
+.trail-segment-list > li:has(.trail-segment-row.hovered) { background: var(--route-soft); }
+.trail-segment-row.selected { box-shadow: inset 3px 0 var(--route); }
+.trail-segment-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
 .trail-segment-distance { display: grid; place-items: center; height: 1.15rem; padding: 0 .35rem; color: var(--ink-2); background: var(--surface-3); border-radius: 999px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.trail-segment-list > li:hover .trail-segment-distance, .trail-segment-list > li:has(.trail-segment-row.hovered) .trail-segment-distance { color: #fff; background: var(--route); }
+.trail-segment-list > li:has(.trail-segment-row.hovered) .trail-segment-distance { color: var(--route); }
 .trail-segment-list > li:has(.trail-segment-row.selected) .trail-segment-distance { color: #fff; background: var(--route); }
 .trail-segment-name { min-width: 0; overflow: hidden; font-size: var(--fs-xs); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .trail-segment-name.unnamed { color: var(--ink-3); font-weight: 400; }
