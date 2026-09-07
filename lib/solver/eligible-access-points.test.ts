@@ -68,7 +68,7 @@ describe("eligible access-point enumeration", () => {
     } as unknown as GraphRepository;
     const result = await listEligibleAccessPointCandidates({
       repository,
-      accessFilter: { predicates: [AREA], coverage: AREA, summary: { mode: "drawn-area", label: "Drawn" } },
+      accessFilter: { predicates: [AREA], coverage: AREA },
       includeUncertainAccess: false,
     });
     expect(result.all).toHaveLength(5);
@@ -96,7 +96,7 @@ describe("eligible access-point enumeration", () => {
     } as unknown as GraphRepository;
     const result = await listEligibleAccessPointCandidates({
       repository,
-      accessFilter: { predicates: [AREA], coverage: AREA, summary: { mode: "drawn-area", label: "Drawn" } },
+      accessFilter: { predicates: [AREA], coverage: AREA },
       includeUncertainAccess: false,
     });
     expect(result.eligible.map(({ id }) => id).sort()).toEqual(["loops", "unmeasured"]);
@@ -114,7 +114,6 @@ describe("eligible access-point enumeration", () => {
       namedRegionPredicateIndex: 0,
       predicates: [AREA],
       coverage: AREA,
-      summary: { mode: "named-region" as const, label: "Park", region: { id: "park", name: "Park" } },
     };
     expect(PORTAL_NAMED_REGION_TOLERANCE_M).toBe(500);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, namedFilter)).toBe(true);
@@ -129,23 +128,11 @@ describe("eligible access-point enumeration", () => {
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
       ...namedFilter,
       namedRegionPredicateIndex: undefined,
-      summary: { mode: "drawn-area", label: "Drawn" },
     })).toBe(false);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
       predicates: [AREA, AREA],
       namedRegionPredicateIndex: 1,
       coverage: AREA,
-      summary: {
-        mode: "drive-time",
-        label: "Drive",
-        region: { id: "park", name: "Park" },
-        driveTime: {
-          minutes: 30,
-          provider: "arcgis",
-          resolvedAt: "2026-08-07T00:00:00.000Z",
-          originLabel: "Origin",
-        },
-      },
     })).toBe(false);
   });
 });

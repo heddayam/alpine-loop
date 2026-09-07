@@ -23,7 +23,6 @@ async function openPack(request: SearchIntent, plan: SearchPlan, pack: SearchPla
       pack,
       criteria: request.criteria,
       accessFilter: {
-        summary: { mode: request.area.mode === "named-regions" ? "named-region" : request.area.mode, label: plan.area.label },
         predicates,
         namedRegionPredicateIndex,
         coverage: installed.manifest.coverage.boundary,

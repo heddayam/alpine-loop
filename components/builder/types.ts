@@ -1,13 +1,13 @@
 import { DEFAULT_APP_SETTINGS } from "@/lib/settings/defaults";
 import type {
-  AccessFilterV2,
+  SearchArea,
   AppSettingsV1,
   GradePresetId,
   GradePresets,
   Origin,
 } from "@/lib/contracts";
 
-export type Bounds = Extract<AccessFilterV2, { mode: "drawn-area" }>["bbox"];
+export type Bounds = Extract<SearchArea, { mode: "drawn-area" }>["bbox"];
 export type AccessPointOption = {
   id: string;
   name: string;

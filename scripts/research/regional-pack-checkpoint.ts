@@ -3,9 +3,7 @@ import { performance } from "node:perf_hooks";
 import { z } from "zod";
 import {
   packManifestSchema,
-  type GenerateClosedRoutesRequestV3,
-  type PackManifestV5,
-  type PackManifestV6,
+  type PackManifest,
   type SearchEffortV3,
 } from "@/lib/contracts";
 import { getSearchRegion } from "@/lib/data/named-area-catalog";
@@ -20,6 +18,7 @@ import {
   listEligibleAccessPointCandidates,
   ReachableGraphClosedRouteSolver,
   type ResolvedAccessFilterContext,
+  type RouteSearchRequest,
 } from "@/lib/solver";
 
 const PACK_ID = argument("--pack");
@@ -86,21 +85,14 @@ function nearestCandidate(
       || left.candidate.id.localeCompare(right.candidate.id))[0];
 }
 
-type CheckpointPackManifest = PackManifestV5 | PackManifestV6;
-
 function buildRequest(
-  manifest: CheckpointPackManifest,
   scenario: Scenario,
   startAccessPointId: string,
   expectation: Expectation,
   effort: SearchEffortV3,
-): GenerateClosedRoutesRequestV3 {
+): RouteSearchRequest {
   return {
-    version: 3,
-    packId: manifest.id,
-    accessFilter: { mode: "named-region", regionId: scenario.searchRegionId },
     startAccessPointId,
-    routeFamily: "closed",
     closedRoute: {
       maximumRepeatedTrailPct: scenario.maximumRepeatedTrailPct ?? 35,
       allowMultiCycle: true,
@@ -114,7 +106,7 @@ function buildRequest(
 }
 
 async function runExpectation(options: {
-  manifest: CheckpointPackManifest;
+  manifest: PackManifest;
   scenario: Scenario;
   expectationName: "exact" | "impossible";
   expectation: Expectation;
@@ -130,7 +122,6 @@ async function runExpectation(options: {
   const solver = new ReachableGraphClosedRouteSolver({
     pack: {
       id: manifest.id,
-      schemaVersion: manifest.schemaVersion,
       dataVersion: manifest.dataVersion,
       builtAt: manifest.builtAt,
     },
@@ -145,7 +136,6 @@ async function runExpectation(options: {
     },
   });
   const request = buildRequest(
-    manifest,
     options.scenario,
     options.startAccessPointId,
     options.expectation,
@@ -210,11 +200,6 @@ try {
       const region = getSearchRegion(databasePath, scenario.searchRegionId);
       if (!region) throw new Error(`Reviewed search region ${scenario.searchRegionId} is missing from the pack`);
       const accessFilter: ResolvedAccessFilterContext = {
-        summary: {
-          mode: "named-region",
-          label: region.name,
-          region: { id: region.id, name: region.name },
-        },
         predicates: [region.geometry],
         namedRegionPredicateIndex: 0,
         coverage: manifest.coverage.boundary,

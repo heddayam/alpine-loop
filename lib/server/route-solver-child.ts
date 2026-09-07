@@ -49,14 +49,11 @@ async function initialize(input: RouteSolverWorkerInput): Promise<void> {
     const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
     if (!installed) throw new Error("The pinned pack version is no longer installed.");
     const { manifest } = installed;
-    if (manifest.schemaVersion !== "3" && manifest.schemaVersion !== "4" && manifest.schemaVersion !== "5" && manifest.schemaVersion !== "6") {
-      throw new Error("The pinned pack does not support closed-route search.");
-    }
     repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
     topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath: installed.databasePath, manifest });
     const solver = new ReachableGraphClosedRouteSolver({
       pack: {
-        id: manifest.id, schemaVersion: manifest.schemaVersion,
+        id: manifest.id,
         dataVersion: manifest.dataVersion, builtAt: manifest.builtAt,
       },
       sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,

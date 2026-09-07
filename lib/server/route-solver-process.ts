@@ -1,4 +1,4 @@
-import type { GenerateClosedRoutesResponseV3 } from "@/lib/contracts";
+import type { RouteSearchResult } from "@/lib/solver/types";
 import { AccessFilterResolutionError, type RouteSearchPolicy, type SolverBudget } from "@/lib/solver";
 import { ServerApiError } from "./api-error";
 import type { ChildProcess } from "node:child_process";
@@ -93,8 +93,8 @@ export class RouteSolverProcess {
     return this.#request({ type: "search", accessPointId }, signal) as Promise<StartSearchResult>;
   }
 
-  async generate(policy: RouteSearchPolicy, budget: SolverBudget, signal: AbortSignal): Promise<GenerateClosedRoutesResponseV3> {
-    return this.#request({ type: "generate", policy, budget }, signal) as Promise<GenerateClosedRoutesResponseV3>;
+  async generate(policy: RouteSearchPolicy, budget: SolverBudget, signal: AbortSignal): Promise<RouteSearchResult> {
+    return this.#request({ type: "generate", policy, budget }, signal) as Promise<RouteSearchResult>;
   }
 
   async close(): Promise<void> {

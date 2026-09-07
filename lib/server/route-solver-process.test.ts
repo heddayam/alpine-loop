@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { compilePack } from "@/lib/data/compiler";
 import { fixtureCompileOptionsV6 } from "@/lib/data/fixture-pack";
-import { generateClosedRoutesResponseV3Schema, packManifestV6Schema } from "@/lib/contracts";
+import { generatedClosedRouteV3Schema, packManifestV6Schema } from "@/lib/contracts";
 import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
 import { drawnArea } from "./search-area";
 import { resolve } from "node:path";
@@ -24,7 +24,6 @@ const input: RouteSolverWorkerInput = {
   criteria: request.criteria,
   pack: { id: "fixture-pack", dataVersion: "v4" },
   accessFilter: {
-    summary: { mode: "drawn-area", label: "Drawn area" },
     predicates: [],
     coverage: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
   },
@@ -40,12 +39,13 @@ describe("RouteSolverProcess", () => {
       session = await RouteSolverProcess.open({
         pack: manifest,
         criteria: { ...request.criteria, distanceMiles: { min: 0.1, max: 20 } },
-        accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [drawnArea(manifest.coverage.bbox)], coverage: manifest.coverage.boundary },
+        accessFilter: { predicates: [drawnArea(manifest.coverage.bbox)], coverage: manifest.coverage.boundary },
       }, new AbortController().signal, { env: { ALPINE_PACK_ROOT: root } });
       const signal = new AbortController().signal;
-      const response = generateClosedRoutesResponseV3Schema.parse(await session.generate(
+      const response = await session.generate(
         { searchEffort: "quick", limit: 2 }, CLOSED_ROUTE_EFFORT_BUDGETS.quick, signal,
-      ));
+      );
+      expect(response.exact.every((route) => generatedClosedRouteV3Schema.safeParse(route).success)).toBe(true);
       expect(response.exact.length).toBeGreaterThan(0);
       const starts = await session.enumerateEligibleAccessPointIds(signal);
       expect(starts).toContain(response.exact[0]!.startAccessPoint.id);

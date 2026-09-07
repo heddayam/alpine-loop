@@ -1,7 +1,7 @@
 import type {
   ConstraintViolationV3,
   RouteCriteria,
-  GenerateClosedRoutesResponseV3,
+  PackManifest,
   TopologyProfile,
 } from "@/lib/contracts";
 import {
@@ -25,7 +25,7 @@ import {
   accessPointMatchesResolvedFilter,
   listEligibleAccessPointCandidates,
 } from "./eligible-access-points";
-import type { ResolvedAccessFilterContext, RouteSearchPolicy, RouteSearchRequest } from "./types";
+import type { ResolvedAccessFilterContext, RouteSearchPolicy, RouteSearchRequest, RouteSearchResult } from "./types";
 
 const METERS_PER_MILE = 1_609.344;
 const METERS_PER_FOOT = 0.3048;
@@ -54,11 +54,10 @@ export type RouteGraphContext = Omit<ReachableGraphClosedRouteContext, "budget">
 
 export type PreparedRouteSearch = {
   readonly eligibleAccessPointIds: readonly string[];
-  generate(policy: RouteSearchPolicy, budget: SolverBudget): Promise<GenerateClosedRoutesResponseV3>;
+  generate(policy: RouteSearchPolicy, budget: SolverBudget): Promise<RouteSearchResult>;
 };
 
 type PreparedStarts = {
-  contextKey: string;
   eligible: AccessPointCandidate[];
   starts: AccessPointCandidate[];
   feasible: FeasibleStart[];
@@ -67,8 +66,7 @@ type PreparedStarts = {
 };
 
 export type ReachableGraphClosedRouteSolverOptions = {
-  pack: GenerateClosedRoutesResponseV3["pack"];
-  requestIdFactory?: (request: RouteSearchRequest) => string;
+  pack: Pick<PackManifest, "id" | "dataVersion" | "builtAt">;
   sourceFreshness?: string;
   sourceConfidence?: "high" | "medium" | "low";
   fallbackSourceIds?: readonly string[];
@@ -302,7 +300,7 @@ export class ReachableGraphClosedRouteSolver {
   async generate(
     request: RouteSearchRequest,
     context: ReachableGraphClosedRouteContext,
-  ): Promise<GenerateClosedRoutesResponseV3> {
+  ): Promise<RouteSearchResult> {
     const startedAt = (context.now ?? Date.now)();
     const prepared = await this.#prepare(request, context, request.startAccessPointId);
     return this.#generate(request, context, prepared, startedAt);
@@ -398,7 +396,6 @@ export class ReachableGraphClosedRouteSolver {
     }
 
     return {
-      contextKey: stableHash(JSON.stringify({ pack: this.options.pack, filter: context.accessFilter })),
       eligible, starts, feasible, noCycleStartIds, noCycleExcluded: startAccessPointId ? 0 : noCycleExcluded,
     };
   }
@@ -408,7 +405,7 @@ export class ReachableGraphClosedRouteSolver {
     context: ReachableGraphClosedRouteContext,
     prepared: PreparedStarts,
     startedAt = (context.now ?? Date.now)(),
-  ): Promise<GenerateClosedRoutesResponseV3> {
+  ): Promise<RouteSearchResult> {
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const now = context.now ?? Date.now;
     const budget = effectiveBudget(request, context.budget);
@@ -603,11 +600,6 @@ export class ReachableGraphClosedRouteSolver {
     const truncationReasons = [...hardTruncationReasons].sort();
     const shortfallReasons = [...nonBudgetShortfallReasons].sort();
     return {
-      version: 3,
-      requestId: this.options.requestIdFactory?.(request) ?? `closed-route-request-${stableHash(`${prepared.contextKey}:${JSON.stringify(request)}`)}`,
-      pack: this.options.pack,
-      requested: request.limit,
-      resolvedAccessFilter: context.accessFilter.summary,
       exact: exact.map(({ route }) => route),
       nearMisses: nearMisses.map(({ route, violations }) => ({ ...route, violations })),
       diagnostics: {
@@ -618,17 +610,11 @@ export class ReachableGraphClosedRouteSolver {
         searchedAccessPointCount: searchedStarts.size,
         graphQueryCount,
         maximumLoadedDirectedEdges,
-        exhausted: truncationReasons.length > 0,
-        truncationReasons,
-        shortfallReasons,
         noCycleAccessPointCount,
         feasibleAccessPointCount: feasible.length,
         attachmentGroupCount: new Set(feasible.map(({ groupKey: key }) => key)).size,
         probedAttachmentGroupCount: probedGroups.size,
         deeplySearchedAttachmentGroupCount: deeplySearchedGroups.size,
-        loadedTopologyNetworkCount: 0,
-        cycleBlockCount: 0,
-        cyclePrimitiveCount: 0,
         composedCandidateCount,
         repairedCandidateCount,
         directedValidationRejectionCount,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { packManifestV1Schema, packManifestV2Schema, packManifestV3Schema, packManifestV4Schema, packManifestV5Schema, packManifestV6Schema } from "./manifest";
+import { packManifestSchema } from "./manifest";
 
 const manifest = {
-  schemaVersion: "1",
+  schemaVersion: "6",
   id: "fixture-pack",
   name: "Fixture Pack",
   dataVersion: "fixture-v1",
@@ -14,7 +14,8 @@ const manifest = {
     boundary: { type: "Polygon", coordinates: [[[-122.2, 37.1], [-122.1, 37.1], [-122.1, 37.2], [-122.2, 37.1]]] },
   },
   display: { center: [-122.15, 37.15], zoom: 12 },
-  capabilities: { elevation: true, officialAccess: true },
+  capabilities: { elevation: true, officialAccess: true, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
+  closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: "topology-v1", policyVersion: "decision-v1", profiles: ["known", "inclusive"] },
   fieldConfidence: { elevation: "high" },
   sources: [{
     id: "fixture-source", authority: "Alpine Loop", dataset: "Synthetic fixture", version: "1",
@@ -23,142 +24,17 @@ const manifest = {
   }],
 };
 
-describe("PackManifestV1", () => {
-  it("accepts a complete versioned manifest", () => {
-    expect(packManifestV1Schema.parse(manifest).id).toBe("fixture-pack");
+describe("current graph manifest", () => {
+  it("requires current data capabilities and both deterministic profiles", () => {
+    expect(packManifestSchema.parse(manifest).id).toBe("fixture-pack");
+    for (const capability of ["namedAreas", "closedRouteTopology", "batchSearchRegions", "elevationProfiles", "portalAccessPoints"]) {
+      expect(packManifestSchema.safeParse({ ...manifest, capabilities: { ...manifest.capabilities, [capability]: false } }).success).toBe(false);
+    }
+    expect(packManifestSchema.safeParse({ ...manifest, closedRouteTopology: { ...manifest.closedRouteTopology, profiles: ["inclusive", "known"] } }).success).toBe(false);
   });
-
-  it("rejects a missing source license decision", () => {
-    const source = { ...manifest.sources[0], license: "" };
-    expect(packManifestV1Schema.safeParse({ ...manifest, sources: [source] }).success).toBe(false);
-  });
-});
-
-describe("PackManifestV2", () => {
-  it("requires the named-area capability", () => {
-    const v2 = {
-      ...manifest,
-      schemaVersion: "2",
-      capabilities: { ...manifest.capabilities, namedAreas: true },
-    };
-    expect(packManifestV2Schema.parse(v2).capabilities.namedAreas).toBe(true);
-    expect(packManifestV2Schema.safeParse({
-      ...v2,
-      capabilities: manifest.capabilities,
-    }).success).toBe(false);
-  });
-});
-
-describe("PackManifestV3", () => {
-  const v3 = {
-    ...manifest,
-    schemaVersion: "3",
-    capabilities: {
-      ...manifest.capabilities,
-      namedAreas: true,
-      closedRouteTopology: true,
-    },
-    closedRouteTopology: {
-      runtimeMode: "primitive",
-      algorithmVersion: "closed-topology-v1",
-      policyVersion: "closed-primitives-v1",
-      profiles: ["known", "inclusive"],
-    },
-  };
-
-  it("requires both deterministic topology profiles", () => {
-    expect(packManifestV3Schema.parse(v3).closedRouteTopology.profiles).toEqual(["known", "inclusive"]);
-    expect(packManifestV3Schema.safeParse({
-      ...v3,
-      closedRouteTopology: { ...v3.closedRouteTopology, profiles: ["inclusive", "known"] },
-    }).success).toBe(false);
-  });
-
-  it("requires the closed-route topology capability", () => {
-    expect(packManifestV3Schema.safeParse({
-      ...v3,
-      capabilities: { ...v3.capabilities, closedRouteTopology: false },
-    }).success).toBe(false);
-  });
-});
-
-describe("PackManifestV4", () => {
-  it("requires the reviewed batch-search-region capability", () => {
-    const v4 = {
-      ...manifest,
-      schemaVersion: "4",
-      capabilities: {
-        ...manifest.capabilities,
-        namedAreas: true,
-        closedRouteTopology: true,
-        batchSearchRegions: true,
-      },
-      closedRouteTopology: {
-        runtimeMode: "reachable-graph-fallback",
-        algorithmVersion: "closed-topology-v1",
-        policyVersion: "closed-primitives-v1",
-        profiles: ["known", "inclusive"],
-      },
-    };
-    expect(packManifestV4Schema.parse(v4).capabilities.batchSearchRegions).toBe(true);
-    expect(packManifestV4Schema.safeParse({
-      ...v4,
-      capabilities: { ...v4.capabilities, batchSearchRegions: false },
-    }).success).toBe(false);
-  });
-});
-
-describe("PackManifestV5", () => {
-  it("requires persisted elevation profiles", () => {
-    const v5 = {
-      ...manifest,
-      schemaVersion: "5",
-      capabilities: {
-        ...manifest.capabilities,
-        namedAreas: true,
-        closedRouteTopology: true,
-        batchSearchRegions: true,
-        elevationProfiles: true,
-      },
-      closedRouteTopology: {
-        runtimeMode: "reachable-graph-fallback",
-        algorithmVersion: "closed-topology-v1",
-        policyVersion: "closed-primitives-v1",
-        profiles: ["known", "inclusive"],
-      },
-    };
-    expect(packManifestV5Schema.parse(v5).capabilities.elevationProfiles).toBe(true);
-    expect(packManifestV5Schema.safeParse({
-      ...v5,
-      capabilities: { ...v5.capabilities, elevationProfiles: false },
-    }).success).toBe(false);
-  });
-});
-
-describe("PackManifestV6", () => {
-  it("requires derived portal access points", () => {
-    const v6 = {
-      ...manifest,
-      schemaVersion: "6",
-      capabilities: {
-        ...manifest.capabilities,
-        namedAreas: true,
-        closedRouteTopology: true,
-        batchSearchRegions: true,
-        elevationProfiles: true,
-        portalAccessPoints: true,
-      },
-      closedRouteTopology: {
-        runtimeMode: "reachable-graph-fallback",
-        algorithmVersion: "closed-topology-v1",
-        policyVersion: "closed-primitives-v1",
-        profiles: ["known", "inclusive"],
-      },
-    };
-    expect(packManifestV6Schema.parse(v6).capabilities.portalAccessPoints).toBe(true);
-    expect(packManifestV6Schema.safeParse({
-      ...v6,
-      capabilities: { ...v6.capabilities, portalAccessPoints: false },
-    }).success).toBe(false);
+  it("rejects unsupported representations and unattributed sources", () => {
+    for (const schemaVersion of ["1", "2", "3", "4", "5"]) expect(packManifestSchema.safeParse({ ...manifest, schemaVersion }).success).toBe(false);
+    expect(packManifestSchema.safeParse({ ...manifest, closedRouteTopology: { ...manifest.closedRouteTopology, runtimeMode: "primitive" } }).success).toBe(false);
+    expect(packManifestSchema.safeParse({ ...manifest, sources: [{ ...manifest.sources[0], license: "" }] }).success).toBe(false);
   });
 });
