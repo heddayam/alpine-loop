@@ -267,6 +267,7 @@ describe("generated route map features", () => {
       routes: [route("first", -122.18)],
       onBoundsChange: () => undefined,
       onStartSelect: () => undefined,
+      onRouteSelect: () => undefined,
     }));
 
     expect(markup).toContain('aria-label="Hike search map"');
@@ -286,7 +287,8 @@ describe("generated route map features", () => {
     expect(markup).toContain('Trailhead filter');
     expect(markup).toContain('Trailhead');
     expect(markup).toContain('Mapped trail');
-    expect(markup).toContain('Suggested route');
+    expect(markup).toContain('Available route');
+    expect(markup).not.toContain('Selected route');
     expect(markup).toContain('Route start');
     expect(markup).toContain('aria-label="OpenStreetMap attribution"');
   });

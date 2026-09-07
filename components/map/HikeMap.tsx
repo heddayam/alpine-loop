@@ -26,6 +26,7 @@ type HikeMapProps = {
   hoveredSegmentId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
   onStartSelect: (key: string) => void;
+  onRouteSelect: (id: string) => void;
   onRouteHover?: (id?: string) => void;
   onSegmentSelect?: (id: string) => void;
   onSegmentHover?: (id?: string) => void;
@@ -35,7 +36,9 @@ type HikeMapProps = {
    every unselected route. Weight distinguishes hover and segment focus. */
 const ROUTE_SELECTED = "#d83b20";
 const ROUTE_ALTERNATE = "#2f6a55";
-const ROUTE_WIDTH = 2.5;
+const ROUTE_WIDTH = 2;
+const ROUTE_CASING = "#fffdf7";
+const SEGMENT_FOCUS = "#a62e19";
 const ROUTE_EMPHASIS_WIDTH = 4;
 const TRAIL_NETWORK_COLOR = "#3f5f52";
 const TRAIL_NETWORK_HOVER_COLOR = "#244c3d";
@@ -312,6 +315,7 @@ export function HikeMap({
   hoveredSegmentId,
   onBoundsChange,
   onStartSelect,
+  onRouteSelect,
   onRouteHover,
   onSegmentSelect,
   onSegmentHover,
@@ -321,6 +325,9 @@ export function HikeMap({
   const fittedRouteSetRef = useRef<string>(undefined);
   const onRouteHoverRef = useRef(onRouteHover);
   const onStartSelectRef = useRef(onStartSelect);
+  const onRouteSelectRef = useRef(onRouteSelect);
+  const clearMapHoverRef = useRef<(() => void) | undefined>(undefined);
+  const interactionRef = useRef({ selectedStartKey, selectedRouteId });
   const onSegmentSelectRef = useRef(onSegmentSelect);
   const onSegmentHoverRef = useRef(onSegmentHover);
   const startRef = useRef<[number, number] | null>(null);
@@ -375,9 +382,11 @@ export function HikeMap({
   useEffect(() => {
     onRouteHoverRef.current = onRouteHover;
     onStartSelectRef.current = onStartSelect;
+    onRouteSelectRef.current = onRouteSelect;
+    interactionRef.current = { selectedStartKey, selectedRouteId };
     onSegmentSelectRef.current = onSegmentSelect;
     onSegmentHoverRef.current = onSegmentHover;
-  }, [onRouteHover, onStartSelect, onSegmentHover, onSegmentSelect]);
+  }, [onRouteHover, onRouteSelect, onStartSelect, onSegmentHover, onSegmentSelect, selectedStartKey, selectedRouteId]);
 
   useEffect(() => {
     boundsRef.current = bounds;
@@ -584,22 +593,25 @@ export function HikeMap({
         // only change layer filters, avoiding repeated GeoJSON worker uploads.
         map?.addSource("generated-routes", { type: "geojson", data: EMPTY_LINES });
         map?.addSource("generated-route-segments", { type: "geojson", data: EMPTY_LINES });
-        // Three states, one visual language: unselected routes are thin green,
-        // the hovered route is the same green but heavier, and the selected
-        // route is orange. Result routes have no casing or background stroke.
+        // Draw the preview above the chosen route so shared sections remain
+        // traceable. Casings are crisp linework, never glows or animated strokes.
         for (const [id, source, color, width, opacity] of [
-          ["generated-route-alternates", "generated-routes", ROUTE_ALTERNATE, zoomWidth(ROUTE_WIDTH), 1],
+          ["generated-route-alternates", "generated-routes", ROUTE_ALTERNATE, zoomWidth(ROUTE_WIDTH), 0.8],
+          ["generated-route-selected-casing", "generated-routes", ROUTE_CASING, zoomWidth(5), 1],
+          ["generated-route-selected", "generated-routes", ROUTE_SELECTED, zoomWidth(3), 1],
+          ["generated-route-segment-focus", "generated-route-segments", SEGMENT_FOCUS, zoomWidth(5), 1],
+          ["generated-route-hover-casing", "generated-routes", ROUTE_CASING, zoomWidth(6), 1],
           ["generated-route-hover", "generated-routes", ROUTE_ALTERNATE, zoomWidth(ROUTE_EMPHASIS_WIDTH), 1],
-          ["generated-route-selected", "generated-routes", ROUTE_SELECTED, zoomWidth(ROUTE_WIDTH), 1],
-          ["generated-route-segment-focus", "generated-route-segments", ROUTE_SELECTED, zoomWidth(ROUTE_EMPHASIS_WIDTH), 1],
           // Invisible geometry retains a generous pointer target.
           ["generated-route-hit-target", "generated-routes", "#000000", 14, 0],
           ["generated-route-segment-hit-target", "generated-route-segments", "#000000", 18, 0],
         ] as const) {
           map?.addLayer({
             id, type: "line", source,
+            ...(id.includes("casing") || id.endsWith("selected") || id.endsWith("hover") || id.endsWith("focus") ? { filter: routeFilter() } : {}),
             layout: opacity ? { "line-join": "round", "line-cap": "round" } : {},
-            paint: { "line-color": color, "line-width": width, "line-opacity": opacity },
+            paint: { "line-color": color, "line-width": width, "line-opacity": opacity,
+              "line-opacity-transition": { duration: 0 }, "line-width-transition": { duration: 0 } },
           });
         }
         // Circles always render; only the count labels participate in native
@@ -607,13 +619,16 @@ export function HikeMap({
         map?.addSource("generated-starts", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
           id: "generated-starts", type: "circle", source: "generated-starts",
-          paint: { "circle-radius": 10, "circle-color": ROUTE_ALTERNATE },
+          paint: { "circle-radius": 10, "circle-color": ROUTE_ALTERNATE, "circle-stroke-color": ROUTE_CASING, "circle-stroke-width": 0,
+            "circle-color-transition": { duration: 0 }, "circle-stroke-width-transition": { duration: 0 } },
         });
         map?.addLayer({
           id: "generated-start-counts", type: "symbol", source: "generated-starts",
           layout: { "text-field": ["to-string", ["get", "count"]], "text-font": ["sans-serif"], "text-size": 11 },
           paint: { "text-color": "#ffffff" },
         });
+        let moving = false;
+        let hoverOwner: "start" | "route" | "segment" | "trail" | "accessPoint" | undefined;
         const cursorTargets = { start: false, route: false, segment: false, trail: false, accessPoint: false };
         const syncInteractiveCursor = () => {
           const canvas = map?.getCanvas();
@@ -626,82 +641,72 @@ export function HikeMap({
           map?.queryRenderedFeatures(point, { layers: ["generated-starts"] }).length,
         );
         const routeSegmentAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
-          map?.queryRenderedFeatures(point, { layers: ["generated-route-segment-hit-target"] }).length,
+          interactionRef.current.selectedRouteId && map?.queryRenderedFeatures(point, { layers: ["generated-route-segment-hit-target"] }).length,
         );
         // Drawing owns all feature gestures, including the click emitted after
         // mouseup. The next pointer press releases that completed gesture.
         const onFeature = (type: "click" | "mousemove" | "mouseenter" | "mouseleave", layer: string, handle: (event: MapLayerMouseEvent) => void) => {
           map?.on(type, layer, (event) => {
-            if (drawingRef.current || (type === "click" && drawingClickRef.current)) return;
+            if (drawingRef.current || (type === "click" && drawingClickRef.current) || (moving && (type === "mousemove" || type === "mouseenter"))) return;
             handle(event);
           });
         };
         map?.on("mousedown", () => { if (!drawingRef.current) drawingClickRef.current = false; });
-        const selectStart = (event: MapLayerMouseEvent) => {
+        const routeAtEvent = (event: MapLayerMouseEvent, scoped: boolean) => event.features?.find((feature) =>
+          typeof feature.properties?.id === "string" && (!scoped || !interactionRef.current.selectedStartKey
+            || feature.properties.startKey === interactionRef.current.selectedStartKey));
+        onFeature("click", "generated-route-hit-target", (event) => {
           if (startAtPoint(event.point) || routeSegmentAtPoint(event.point)) return;
-          const key = event.features?.[0]?.properties?.startKey;
-          if (typeof key === "string") onStartSelectRef.current(key);
-        };
-        onFeature("click", "generated-route-hit-target", selectStart);
+          const id = (routeAtEvent(event, true) ?? routeAtEvent(event, false))?.properties?.id;
+          if (typeof id === "string") onRouteSelectRef.current(id);
+        });
         onFeature("click", "generated-starts", (event) => {
           const key = event.features?.[0]?.properties?.key;
           if (typeof key === "string") onStartSelectRef.current(key);
         });
+        const claimHover = (owner: typeof hoverOwner) => {
+          hoverOwner = owner;
+          if (owner !== "route") previewRoute(undefined);
+          if (owner !== "segment") onSegmentHoverRef.current?.(undefined);
+          if (owner !== "trail") clearTrailHover();
+          clearAccessPointHover();
+          for (const key of Object.keys(cursorTargets) as Array<keyof typeof cursorTargets>) cursorTargets[key] = key === owner;
+          syncInteractiveCursor();
+        };
+        clearMapHoverRef.current = () => claimHover(undefined);
         onFeature("mousemove", "generated-starts", (event) => {
           const properties = event.features?.[0]?.properties;
           if (typeof properties?.key !== "string") return;
-          cursorTargets.start = true;
-          syncInteractiveCursor();
-          previewRoute(undefined);
-          onSegmentHoverRef.current?.(undefined);
-          setHoveredTrail(undefined);
+          claimHover("start");
           setHoveredAccessPoint({ id: properties.key, name: properties.name || "Unnamed trailhead", kindLabel: `${properties.count} ${properties.count === 1 ? "route" : "routes"}` });
         });
         onFeature("mouseleave", "generated-starts", () => {
-          cursorTargets.start = false;
-          syncInteractiveCursor();
-          setHoveredAccessPoint(undefined);
+          if (hoverOwner === "start") claimHover(undefined);
         });
         onFeature("mousemove", "generated-route-hit-target", (event) => {
-          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point)) {
-            cursorTargets.route = false;
-            syncInteractiveCursor();
-            previewRoute(undefined);
-            return;
-          }
-          const id = event.features?.[0]?.properties?.id;
-          if (typeof id !== "string") return;
-          cursorTargets.route = true;
-          syncInteractiveCursor();
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point)) return;
+          const id = routeAtEvent(event, true)?.properties?.id;
+          if (typeof id !== "string") { if (hoverOwner === "route") claimHover(undefined); return; }
+          claimHover("route");
           previewRoute(id);
         });
         onFeature("mouseleave", "generated-route-hit-target", () => {
-          cursorTargets.route = false;
-          syncInteractiveCursor();
-          previewRoute(undefined);
+          if (hoverOwner === "route") claimHover(undefined);
         });
         onFeature("click", "generated-route-segment-hit-target", (event) => {
-          if (startAtPoint(event.point)) return;
+          if (!interactionRef.current.selectedRouteId || startAtPoint(event.point)) return;
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onSegmentSelectRef.current?.(id);
         });
         onFeature("mousemove", "generated-route-segment-hit-target", (event) => {
-          if (startAtPoint(event.point)) {
-            cursorTargets.segment = false;
-            syncInteractiveCursor();
-            onSegmentHoverRef.current?.(undefined);
-            return;
-          }
+          if (!interactionRef.current.selectedRouteId || startAtPoint(event.point)) return;
           const id = event.features?.[0]?.properties?.id;
           if (typeof id !== "string") return;
-          cursorTargets.segment = true;
-          syncInteractiveCursor();
+          claimHover("segment");
           onSegmentHoverRef.current?.(id);
         });
         onFeature("mouseleave", "generated-route-segment-hit-target", () => {
-          cursorTargets.segment = false;
-          syncInteractiveCursor();
-          onSegmentHoverRef.current?.(undefined);
+          if (hoverOwner === "segment") claimHover(undefined);
         });
         let styledTrailId: string | undefined;
         const styleTrailHover = (id?: string) => {
@@ -733,8 +738,7 @@ export function HikeMap({
           if (!feature) return;
           const id = feature.properties?.trailGroupId;
           if (typeof id !== "string") return;
-          cursorTargets.trail = true;
-          syncInteractiveCursor();
+          claimHover("trail");
           styleTrailHover(id);
           setHoveredTrail({ id, ...trailNetworkFeatureDetails(feature.properties) });
         });
@@ -761,10 +765,12 @@ export function HikeMap({
             }, COPY_FEEDBACK_MS);
           });
         });
-        onFeature("mouseleave", "trail-network-hit-target", clearTrailHover);
+        onFeature("mouseleave", "trail-network-hit-target", () => {
+          if (hoverOwner === "trail") claimHover(undefined);
+        });
         // Clicking a cluster zooms to the level where it breaks apart.
         onFeature("click", "access-point-clusters", (event) => {
-          if (startAtPoint(event.point)) return;
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point) || map?.queryRenderedFeatures(event.point, { layers: ["generated-route-hit-target"] }).length) return;
           const clusterId = event.features?.[0]?.properties?.cluster_id;
           const source = map?.getSource("access-points") as GeoJSONSource | undefined;
           if (typeof clusterId !== "number" || !source) return;
@@ -773,13 +779,11 @@ export function HikeMap({
           }).catch(() => undefined);
         });
         onFeature("mouseenter", "access-point-clusters", (event) => {
-          if (startAtPoint(event.point)) return;
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point) || map?.queryRenderedFeatures(event.point, { layers: ["generated-route-hit-target"] }).length) return;
           const clusterId = event.features?.[0]?.properties?.cluster_id;
           const pointCount = event.features?.[0]?.properties?.point_count;
           if (typeof clusterId !== "number") return;
-          clearTrailHover();
-          cursorTargets.accessPoint = true;
-          syncInteractiveCursor();
+          claimHover("accessPoint");
           map?.setFilter("access-point-cluster-hover", accessPointClusterHoverFilter(clusterId));
           setHoveredAccessPoint({
             id: clusterId,
@@ -788,10 +792,10 @@ export function HikeMap({
           });
         });
         onFeature("mouseleave", "access-point-clusters", () => {
-          clearAccessPointHover();
+          if (hoverOwner === "accessPoint") claimHover(undefined);
         });
         onFeature("click", "access-points", (event) => {
-          if (startAtPoint(event.point)) return;
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point) || map?.queryRenderedFeatures(event.point, { layers: ["generated-route-hit-target"] }).length) return;
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
           if (!details.copyName) return;
@@ -811,28 +815,22 @@ export function HikeMap({
           });
         });
         onFeature("mouseenter", "access-points", (event) => {
-          if (startAtPoint(event.point)) return;
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point) || map?.queryRenderedFeatures(event.point, { layers: ["generated-route-hit-target"] }).length) return;
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
-          clearTrailHover();
-          cursorTargets.accessPoint = true;
-          syncInteractiveCursor();
+          claimHover("accessPoint");
           map?.setFilter("access-point-hover", accessPointHoverFilter(details.id));
           setHoveredAccessPoint({ id: details.id, kindLabel: details.kindLabel, name: details.name });
         });
         onFeature("mouseleave", "access-points", () => {
-          clearAccessPointHover();
+          if (hoverOwner === "accessPoint") claimHover(undefined);
         });
         map?.on("movestart", () => {
-          previewRoute(undefined);
-          cursorTargets.start = false;
-          cursorTargets.route = false;
-          cursorTargets.segment = false;
-          clearTrailHover();
-          clearAccessPointHover();
-          syncInteractiveCursor();
+          moving = true;
+          claimHover(undefined);
           closeContextMenu();
         });
+        map?.on("moveend", () => { moving = false; });
         // MapLibre forwards the browser event untouched, so the native menu has
         // to be suppressed here or it would cover the one we render.
         map?.on("contextmenu", (event) => {
@@ -874,6 +872,9 @@ export function HikeMap({
       alive = false;
       trailNetworkController?.abort();
       resizeObserver?.disconnect();
+      previewRoute(undefined);
+      onSegmentHoverRef.current?.(undefined);
+      clearMapHoverRef.current = undefined;
       map?.remove();
       mapRef.current = null;
       fittedRouteSetRef.current = undefined;
@@ -918,22 +919,32 @@ export function HikeMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
+    const preview = hoveredRouteId === selectedRouteId ? undefined : hoveredRouteId;
+    const focus = preview ?? selectedRouteId;
     map.setFilter("generated-route-alternates", ["!", routeFilter(selectedRouteId)]);
-    map.setFilter("generated-route-selected", routeFilter(selectedRouteId));
-    map.setFilter("generated-route-hover", routeFilter(hoveredRouteId === selectedRouteId ? undefined : hoveredRouteId));
-  }, [hoveredRouteId, mapReady, selectedRouteId]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-    mapRef.current?.setFilter("generated-route-segment-focus", routeFilter(hoveredSegmentId ?? selectedSegmentId));
-  }, [hoveredSegmentId, mapReady, selectedSegmentId]);
+    for (const layer of ["generated-route-selected", "generated-route-selected-casing"]) {
+      map.setFilter(layer, routeFilter(selectedRouteId));
+      map.setPaintProperty(layer, "line-opacity", preview ? 0.3 : 1);
+    }
+    for (const layer of ["generated-route-hover", "generated-route-hover-casing"]) map.setFilter(layer, routeFilter(preview));
+    map.setPaintProperty("generated-route-alternates", "line-opacity", focus ? 0.2 : selectedStartKey
+      ? ["case", ["==", ["get", "startKey"], selectedStartKey], 0.8, 0.16] : 0.8);
+    map.setPaintProperty("trail-network-lines", "line-opacity", focus ? 0.35 : 0.65);
+    // A segment is meaningful only while its owner is open. Preview temporarily
+    // replaces pinned segment emphasis and leaving restores the pinned segment.
+    map.setFilter("generated-route-segment-focus", routeFilter(selectedRouteId && !preview ? hoveredSegmentId ?? selectedSegmentId : undefined));
+    map.setPaintProperty("generated-route-segment-focus", "line-width", zoomWidth(hoveredSegmentId ? 6 : 5));
+  }, [hoveredRouteId, hoveredSegmentId, mapReady, selectedRouteId, selectedSegmentId, selectedStartKey]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    const key = selectedStartKey ?? (selectedRoute ? routeStart(selectedRoute).key : undefined);
+    const key = selectedRoute ? routeStart(selectedRoute).key : undefined;
     map.setPaintProperty("generated-starts", "circle-color", [
       "case", ["==", ["get", "key"], key ?? ""], ROUTE_SELECTED, ROUTE_ALTERNATE,
+    ]);
+    map.setPaintProperty("generated-starts", "circle-stroke-width", [
+      "case", ["==", ["get", "key"], selectedStartKey ?? ""], 3, 0,
     ]);
   }, [mapReady, selectedRoute, selectedStartKey]);
 
@@ -1093,10 +1104,7 @@ export function HikeMap({
           aria-pressed={drawing}
           onClick={() => {
             closeContextMenu();
-            setHoveredTrail(undefined);
-            setHoveredAccessPoint(undefined);
-            previewRoute(undefined);
-            onSegmentHoverRef.current?.(undefined);
+            clearMapHoverRef.current?.();
             changeDrawing(!drawing);
           }}
         >
@@ -1145,7 +1153,8 @@ export function HikeMap({
           {showRegionBoundaries && refinementGeometry ? <span><i className="key-refinement" aria-hidden="true" />Reviewed-region boundary</span> : null}
           <span><i className="key-access" aria-hidden="true" />Trailhead</span>
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
-          {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
+          {routes.length > 0 ? <span><i className="key-route-candidate" aria-hidden="true" />Available route</span> : null}
+          {selectedRouteId ? <span><i className="key-route" aria-hidden="true" />Selected route</span> : null}
           {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start · route count</span> : null}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
