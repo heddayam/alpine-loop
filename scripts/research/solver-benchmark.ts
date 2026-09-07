@@ -1,6 +1,8 @@
 /** Offline solver comparison; fixtures need no installed pack or network.
  * node --import tsx scripts/research/solver-benchmark.ts --solver-root=. --suite=fixtures --mode=fixed-work
  * Add --suite=packs --data-root=/path/to/.local-data for the first reviewed start in each installed pack.
+ * --search-module=/absolute/prototype.ts substitutes candidate search in both layers (Node 22.15+).
+ * --scenario-index=1 selects a different committed regional scenario for a holdout comparison.
  * Compare identical inputFingerprint values. Fixed-work disables solver clock deadlines, retains all
  * work caps, and measures performance.now externally; deadline mode measures the production policy.
  */
@@ -11,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { registerHooks } from "node:module";
 import type { PackManifest, GeneratedClosedRouteV3 } from "../../lib/contracts";
 import type { EdgeTraversal } from "../../lib/graph";
 import type { ResolvedAccessFilterContext, RouteSearchRequest, RouteSearchResult } from "../../lib/solver";
@@ -45,11 +48,24 @@ const integer = (name: string, fallback: string, min = 0): number => {
 };
 const warmup = integer("warmup", "1");
 const repeats = integer("repeats", "3", 1);
+const scenarioIndex = integer("scenario-index", "0");
 const casePattern = new RegExp(argument("case", ".*"));
 const dataRoot = resolve(argument("data-root", join(ownRoot, ".local-data")));
 const output = argument("output", "");
 const moduleUrl = (path: string): string => pathToFileURL(join(solverRoot, path)).href;
-const { searchPenalizedClosedRoutes } = await import(moduleUrl("lib/solver/penalized-closed-route-search.ts")) as typeof import("../../lib/solver/penalized-closed-route-search");
+// Research-only substitution, including the unchanged production pipeline. Node 22.15+.
+const searchModule = resolve(argument("search-module", join(solverRoot, "lib/solver/penalized-closed-route-search.ts")));
+const searchModuleUrl = pathToFileURL(searchModule).href;
+let pipelineSubstitutions = 0;
+const substitution = registerHooks({ resolve(specifier, context, nextResolve) {
+  if (context.parentURL?.split("?")[0] === moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")
+    && /(?:^|\/)penalized-closed-route-search(?:\.ts)?$/.test(specifier)) {
+    pipelineSubstitutions += 1;
+    return nextResolve(searchModuleUrl, context);
+  }
+  return nextResolve(specifier, context);
+} });
+const { searchPenalizedClosedRoutes } = await import(searchModuleUrl) as typeof import("../../lib/solver/penalized-closed-route-search");
 const { ReachableGraphClosedRouteSolver } = await import(moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")) as typeof import("../../lib/solver/reachable-graph-closed-route-solver");
 const { CLOSED_ROUTE_EFFORT_BUDGETS } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
 const { SQLiteGraphRepository, SQLiteClosedRouteFeasibilityRepository, distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
@@ -171,7 +187,8 @@ try {
     }
   }
   if (suite !== "fixtures") for (const packId of ["santa-cruz-mountains", "henry-coe", "southern-east-bay", "monterey-carmel", "central-cascades"]) {
-    if (!casePattern.test(`pack/${packId}/exact`) && !casePattern.test(`pack/${packId}/near`)) continue;
+    const casePrefix = `pack/${packId}${scenarioIndex ? `/scenario-${scenarioIndex}` : ""}`;
+    if (!casePattern.test(`${casePrefix}/exact`) && !casePattern.test(`${casePrefix}/near`)) continue;
     const packRoot = join(dataRoot, "packs", packId);
     if (!existsSync(join(packRoot, "current.json"))) { skipped.push(`${packId}: not installed`); continue; }
     const current = JSON.parse(readFileSync(join(packRoot, "current.json"), "utf8")) as { path: string };
@@ -186,7 +203,8 @@ try {
         searchRegionId: string; referencePoint: { coordinates: [number, number] }; maximumRepeatedTrailPct?: number;
         exactExpectation: Pick<RouteSearchRequest, "distanceMiles" | "elevationGainFeet">;
         impossibleExpectation: Pick<RouteSearchRequest, "distanceMiles" | "elevationGainFeet">;
-      }> }).scenarios[0]! : undefined;
+      }> }).scenarios[scenarioIndex] : undefined;
+      if (scenarioIndex && !scenario) { skipped.push(`${packId}: no scenario ${scenarioIndex}`); continue; }
       const region = scenario ? getSearchRegion(databasePath, scenario.searchRegionId) : undefined;
       if (scenario && !region) throw new Error(`Missing reviewed region ${scenario.searchRegionId}`);
       const accessFilter = { predicates: [region?.geometry ?? manifest.coverage.boundary],
@@ -197,7 +215,7 @@ try {
         : eligible.filter(({ name }) => /fall creek/i.test(name)).sort((a, b) => a.id.localeCompare(b.id))[0];
       if (!start) throw new Error(`No benchmark start for ${packId}`);
       for (const kind of ["exact", "near"] as const) {
-        const id = `pack/${packId}/${kind}`;
+        const id = `${casePrefix}/${kind}`;
         if (!casePattern.test(id)) continue;
         const expectation = kind === "exact" ? scenario?.exactExpectation : scenario?.impossibleExpectation;
         const target = request({ ...(expectation ?? (kind === "exact"
@@ -223,11 +241,14 @@ const sourceFiles = ["lib/solver", "lib/graph"].flatMap((folder) => readdirSync(
   .map((file) => [join(folder, file), readFileSync(join(solverRoot, folder, file), "utf8")]));
 const report = { formatVersion: 1, solverRoot,
   commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: solverRoot, encoding: "utf8" }).trim(),
-  solverSourceFingerprint: hash(sourceFiles), node: process.version, mode, suite, layer, effort, warmup, repeats, budget,
+  solverSourceFingerprint: hash(sourceFiles), searchModule, searchModuleFingerprint: hash(readFileSync(searchModule, "utf8")),
+  pipelineSubstitutions, node: process.version, mode, suite, layer, effort, scenarioIndex, warmup, repeats, budget,
   notes: ["Raw inputs are loaded before timing; pipeline timing includes SQLite reads and validation.",
     "Target deviation is descriptive, not a complete measure of hike quality. Compare exact counts, diversity, topology, repetition and violations together.",
     "Fixed-work retains expansion and candidate caps. Run benchmarks serially on an idle machine."],
   skipped, cases };
+substitution.deregister();
+if (pipelineSubstitutions !== 1) throw new Error(`Expected one pipeline search-module substitution; saw ${pipelineSubstitutions}`);
 const serialized = JSON.stringify(report, null, 2) + "\n";
 if (output) { mkdirSync(dirname(resolve(output)), { recursive: true }); writeFileSync(output, serialized); }
 else console.log(serialized);
