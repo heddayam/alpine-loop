@@ -1,18 +1,18 @@
 # Alpine Loop
 
-Alpine Loop is a **loop hike builder**. A user filters eligible
-trailheads by a drawn area, an installed named region, or a typical drive-time
-area, sets physical constraints and
-acceptable repeated trail, and receives closed routes from a versioned local
-trail-graph pack. Filter shapes do not clip hikes; exact installed-pack coverage
-is the route boundary.
+Alpine Loop generates loop hikes from local trail data. Choose an area or
+drive time, set your hiking limits and how much trail you are willing to repeat,
+then search for routes.
 
-The application is standard local Next.js plus MapLibre. No hosted deployment
-stack is part of the active build.
+Area filters select trailheads. Hikes can extend beyond the selected area, but
+must stay within the installed data coverage. Exact matches and close matches
+are shown separately.
+
+The app runs locally with Next.js and MapLibre.
 
 ## Run locally
 
-Use Node.js 22 or newer, then install and verify the ordinary local app:
+Install Node.js 22 or newer, then run:
 
 ```sh
 npm ci
@@ -20,39 +20,34 @@ npm run verify
 npm run dev
 ```
 
-Open <http://localhost:3000> in a browser. Search requires installed schema-6
-regional data. Without it, the app shows a data-unavailable state. Automated
-tests compile small committed inputs into the same SQLite format used locally.
+Open <http://localhost:3000>. To search for hikes, first
+[build a regional pack](#build-a-regional-pack). The app shows a message when
+no regional data is installed.
 
-Quick search returns up to the requested number of alternatives across eligible data.
-Full search attempts every eligible trailhead and retains up to ten exact routes
-per start, or a clearly labeled close match. One Full search creates one saved
-job. Results keep their original area and criteria while the form remains editable.
+- **Quick search** returns up to the number of routes you request.
+- **Full search** tries every eligible trailhead and saves up to ten exact routes
+  per start, or a labeled close match. Each search is saved with its original
+  area and criteria, so you can keep editing the form.
 
 ### Run with Docker
 
-From a fresh clone, create the local environment file and start the production
-app:
+Create a local settings file and start the app:
 
 ```sh
 cp .env.example .env
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. Compose checks the app at `/api/health` and passes
-the ArcGIS variables from `.env` into the container. The ArcGIS keys are
-optional: leave them blank if place suggestions and drive-time filters are not
-needed, or configure them as described below.
+Open <http://localhost:3000>. ArcGIS keys are optional. Add them to `.env` if
+you want [place suggestions and drive-time filters](#enable-drive-time-filters).
 
-The service binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to
-use <http://localhost:8080> instead. Set `ALPINE_BIND_ADDRESS=0.0.0.0` only when
-access from other devices on the local network is intentional.
+By default, the app is available only on this computer. Set `ALPINE_PORT=8080`
+in `.env` to use port 8080. To allow access from other devices on your local
+network, also set `ALPINE_BIND_ADDRESS=0.0.0.0`.
 
-Generating routes requires installed regional data under the host's ignored
-`.local-data/packs` directory. Compose mounts that catalog read-only. Job, settings, and provider state use the persistent
-`alpine-runtime` Docker volume. Both survive image rebuilds and container
-restarts. Secrets, generated packs, and runtime databases are not copied into
-the image or committed to Git.
+Build regional packs in `.local-data/packs` on your computer. Docker reads them
+from that folder and stores saved searches, settings, and provider state in the
+`alpine-runtime` volume. Both survive rebuilds and restarts.
 
 Stop the app with:
 
@@ -62,50 +57,53 @@ docker compose down
 
 ### Enable drive-time filters
 
-ArcGIS credentials stay server-only. Copy `.env.example` to `.env` and
-set either one shared scoped key or separate geocoding and routing keys:
+Copy `.env.example` to `.env` if you have not already done so. Add an ArcGIS key
+with access to temporary geocoding and routing service areas:
 
 ```sh
-# One key authorized for both temporary geocoding and service areas:
 ARCGIS_API_KEY=your-scoped-key
+```
 
-# Or separate least-privilege keys:
+Or use separate keys:
+
+```sh
 ARCGIS_GEOCODING_API_KEY=your-geocoding-key
 ARCGIS_ROUTING_API_KEY=your-routing-key
 ```
 
-Restart the local app or recreate the Docker service after changing `.env`.
-Typed place suggestions need geocoding access; calculating the typical
-drive-time area needs routing service area access. The browser never receives
-either credential. Completed drive-time areas are cached in process memory for 30 minutes.
-A Full search snapshots its origin and contour in
-ignored local SQLite until that job is deleted; aggregate monthly provider
-counters are stored separately.
+Restart the app or recreate the Docker service after changing `.env`.
+Geocoding powers place suggestions. Routing service areas power drive-time
+filters. Keys stay on the server.
 
-### Override the installed-pack catalog
+Drive-time areas are cached in memory for 30 minutes. Full searches also save
+their origin and drive-time area locally until you delete the search. Monthly
+provider usage counts are stored separately.
 
-The app loads all installed regional packs from `.local-data/packs` by default.
-`ALPINE_PACK_ROOT` replaces that entire catalog; it does not select an
-alternative build for one region. Leave it unset during normal development.
-For isolated pack testing, scope the override to that one process and expect
-only packs installed beneath the alternate root to be available:
+### Use a different data folder
+
+The app reads regional packs from `.local-data/packs`. To test a different set
+of packs, set `ALPINE_PACK_ROOT` for that run:
 
 ```sh
 ALPINE_PACK_ROOT=.local-data/packs-experiment npm run dev
 ```
 
+Only packs in the chosen folder will be available. Leave this setting unset
+to use the default folder.
+
 ## Build a regional pack
 
-Real-pack builds additionally require `osmium-tool` and
-[uv](https://docs.astral.sh/uv/). Python and rasterio are invoked through uv;
-do not install project Python packages with pip. This explicit command is the
-only workflow that refreshes sources over the network:
+Install `osmium-tool` and [uv](https://docs.astral.sh/uv/), then download the
+source data and build a pack:
 
 ```sh
 npm run pack:bootstrap -- --pack=monterey-carmel
 ```
 
-To rebuild only from an already populated pinned source cache:
+The build uses uv to run Python and rasterio. You do not need to install Python
+packages with pip.
+
+To rebuild from previously downloaded sources without network access:
 
 ```sh
 npm run pack:bootstrap -- \
@@ -116,24 +114,15 @@ npm run pack:bootstrap -- \
   --output=.local-data/packs
 ```
 
-Downloads, build caches, SQLite databases, audit output, and generated packs
-remain local and ignored by Git. Automated tests never use the network. The runtime reads trails locally;
-basemap tiles, place suggestions, and drive-time resolution use their providers.
+Downloads, caches, databases, build reports, and generated packs stay local and
+are ignored by Git. Tests use small fixtures stored in the repository and never
+access the network. The app reads trails locally, but uses online services for
+map tiles, place suggestions, and drive-time filters.
 
-### Verify an installed closed-route pack
+### Check a regional pack
 
-Every new schema-6 region uses the shared checkpoint runner. For Henry Coe:
-
-```sh
-npm run --silent pack:checkpoint -- \
-  --pack=henry-coe \
-  --database=.local-data/packs/henry-coe/<data-version>/pack.sqlite \
-  --manifest=.local-data/packs/henry-coe/<data-version>/manifest.json \
-  --effort=thorough
-```
-
-The shared real-pack checkpoint exercises the closed-route engine
-against representative starts. For Monterey–Carmel:
+Run the route checks against an installed schema-6 pack. Replace
+`<data-version>` with the folder name created by the build:
 
 ```sh
 npm run --silent pack:checkpoint -- \
@@ -143,21 +132,16 @@ npm run --silent pack:checkpoint -- \
   --effort=thorough
 ```
 
-Closed-route search uses bounded penalized forward/return searches, strict
-disjoint-return refinement, core-aware lollipop search, below-range assembly,
-and local repair. The production validator remains authoritative for closure,
-coverage, topology, repetition, shared stem, and exact-versus-close-match status.
+For another region, change the pack name and both file paths. These checks
+generate routes from sample trailheads and validate them with the same rules
+the app uses.
 
-## Project references
+## Project docs
 
-- [Current status and resume point](docs/rebuild/status.md)
-- [Implementation specification](docs/rebuild/implementation-plan.md)
-- [Closed-route engine reference](docs/rebuild/closed-route-topology-plan.md)
-- [Data-source and licensing policy](docs/rebuild/data-sources.md)
-- [Regional expansion roadmap and pack-onboarding protocol](docs/rebuild/regional-expansion-plan.md)
-- [Exact schema-6 region onboarding checklist and friction ledger](docs/rebuild/region-onboarding-checklist.md)
-- [Access-point derivation plan](docs/rebuild/access-point-derivation-plan.md)
-
-The removed pre-rebuild app remains recoverable from the
-`archive/pre-redo-main-2026-08-04`, `archive/pre-redo-trails-2026-08-04`, and
-`archive/pre-redo-working-2026-08-04` tags.
+- [Status and next steps](docs/rebuild/status.md)
+- [Implementation plan](docs/rebuild/implementation-plan.md)
+- [Route engine](docs/rebuild/closed-route-topology-plan.md)
+- [Data sources and licensing](docs/rebuild/data-sources.md)
+- [Regional expansion plan](docs/rebuild/regional-expansion-plan.md)
+- [New region checklist](docs/rebuild/region-onboarding-checklist.md)
+- [How trail access points are chosen](docs/rebuild/access-point-derivation-plan.md)
