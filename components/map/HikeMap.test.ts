@@ -13,11 +13,10 @@ import {
   accessPointHoverFilter,
   contextMenuPosition,
   formatCoordinates,
-  mergeTrailNetworkPayloads,
-  packCoverageFeatures,
+  mapDataSchema,
+  coverageFeatures,
   regionBoundaryVisibility,
   REGION_BOUNDARY_PAINT,
-  TRAIL_NETWORK_MIN_ZOOM,
   routeFeaturePartitions,
   routeFeatures,
   resultAccessPointIds,
@@ -26,8 +25,7 @@ import {
   trailNetworkFeatureDetails,
   trailNetworkLineColor,
   trailNetworkLineWidth,
-  trailNetworkRequestUrl,
-  trailNetworkRequestUrls,
+  mapRequestUrl,
 } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedClosedRouteV3 {
@@ -102,25 +100,7 @@ describe("generated route map features", () => {
   it("loads mapped trails only at detailed zoom and keeps hover names useful", () => {
     const bounds = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
 
-    expect(trailNetworkRequestUrl("fixture-pack", bounds, TRAIL_NETWORK_MIN_ZOOM - 0.01)).toBeUndefined();
-    expect(trailNetworkRequestUrl("fixture-pack", bounds, TRAIL_NETWORK_MIN_ZOOM)).toBe(
-      "/api/packs/fixture-pack/access-points?bbox=-122.18%2C37.155%2C-122.14%2C37.178&includeUncertainAccess=true&includeAccessPoints=false",
-    );
-    expect(trailNetworkRequestUrls(
-      ["fixture-pack", "north/bay", "fixture-pack"],
-      bounds,
-      TRAIL_NETWORK_MIN_ZOOM,
-    )).toEqual([
-      {
-        packId: "fixture-pack",
-        url: "/api/packs/fixture-pack/access-points?bbox=-122.18%2C37.155%2C-122.14%2C37.178&includeUncertainAccess=true&includeAccessPoints=false",
-      },
-      {
-        packId: "north/bay",
-        url: "/api/packs/north%2Fbay/access-points?bbox=-122.18%2C37.155%2C-122.14%2C37.178&includeUncertainAccess=true&includeAccessPoints=false",
-      },
-    ]);
-    expect(trailNetworkRequestUrls(["fixture-pack"], bounds, TRAIL_NETWORK_MIN_ZOOM - 0.01)).toEqual([]);
+    expect(mapRequestUrl(bounds)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178");
     expect(trailNetworkFeatureDetails({ name: "  Skyline Trail  ", distanceMeters: 965.6064 })).toEqual({
       name: "Skyline Trail",
       copyName: "Skyline Trail",
@@ -147,30 +127,12 @@ describe("generated route map features", () => {
     ]);
   });
 
-  it("merges valid mapped trails across packs and scopes hover identities to each pack", () => {
-    const trail = (trailGroupId: unknown, offset: number) => ({
-      type: "Feature",
-      properties: { trailGroupId, name: "Skyline Trail" },
-      geometry: { type: "LineString", coordinates: [[-122.18 + offset, 37.15], [-122.17 + offset, 37.16]] },
-    });
-    const merged = mergeTrailNetworkPayloads([
-      {
-        packId: "south",
-        payload: { trailNetwork: { type: "FeatureCollection", features: [trail("trail-group:1", 0), trail(null, 0)] } },
-      },
-      {
-        packId: "north",
-        payload: { trailNetwork: { type: "FeatureCollection", features: [trail("trail-group:1", 1)] } },
-      },
-      { packId: "broken", payload: { trailNetwork: { type: "Polygon", features: [trail("ignored", 2)] } } },
-    ]);
-
-    expect(merged.features).toHaveLength(2);
-    expect(merged.features.map((feature) => feature.properties?.trailGroupId)).toEqual([
-      "south:trail-group:1",
-      "north:trail-group:1",
-    ]);
-    expect(merged.features.map((feature) => feature.geometry.type)).toEqual(["LineString", "LineString"]);
+  it("accepts server-owned map identities and rejects malformed geometry", () => {
+    const payload = { accessPoints: [], trailNetwork: { type: "FeatureCollection", features: [{
+      type: "Feature", properties: { trailGroupId: "region:trail-1" }, geometry: { type: "LineString", coordinates: [[-122, 37], [-121.9, 37.1]] },
+    }] } };
+    expect(mapDataSchema.parse(payload).trailNetwork.features[0]?.properties.trailGroupId).toBe("region:trail-1");
+    expect(mapDataSchema.safeParse({ ...payload, trailNetwork: { ...payload.trailNetwork, features: [{ ...payload.trailNetwork.features[0], geometry: { type: "LineString", coordinates: [] } }] } }).success).toBe(false);
   });
 
   it("copies the displayed mapped-trail name and reports clipboard failures", async () => {
@@ -230,7 +192,7 @@ describe("generated route map features", () => {
       { type: "MultiPolygon" as const, coordinates: [[[[-121.9, 37.3], [-121.8, 37.3], [-121.8, 37.4], [-121.9, 37.4], [-121.9, 37.3]]]] },
     ];
 
-    expect(packCoverageFeatures(coverages).features.map((feature) => feature.geometry)).toEqual(coverages);
+    expect(coverageFeatures(coverages).features.map((feature) => feature.geometry)).toEqual(coverages);
     expect(regionBoundaryVisibility(false)).toBe("none");
     expect(regionBoundaryVisibility(true)).toBe("visible");
     expect(REGION_BOUNDARY_PAINT).toEqual({
@@ -371,24 +333,13 @@ describe("generated route map features", () => {
   it("renders compact accessible map controls and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
-      packIds: ["fixture-pack"],
       drawBounds: boundary,
       drawEnabled: true,
       filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.155], [-122.14, 37.155], [-122.14, 37.178], [-122.18, 37.178], [-122.18, 37.155]]] },
-      packCoverageBbox: [-122.19, 37.15, -122.13, 37.18],
-      packCoverages: [{ type: "Polygon", coordinates: [[[-122.19, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.19, 37.18], [-122.19, 37.15]]] }],
+      coverages: [{ type: "Polygon", coordinates: [[[-122.19, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.19, 37.18], [-122.19, 37.15]]] }],
       showRegionBoundaries: false,
-      suggestedBounds: boundary,
       display: { center: [-122.16, 37.165], zoom: 12 },
-      accessPoints: [{
-        id: "start",
-        name: "Start",
-        lon: -122.18,
-        lat: 37.15,
-        kind: "trailhead",
-        accessState: "public",
-        confidence: "high",
-      }],
+      includeUncertainAccess: true,
       routes: [route("first", -122.18)],
       onBoundsChange: () => undefined,
       onRouteSelect: () => undefined,
@@ -399,7 +350,7 @@ describe("generated route map features", () => {
     expect(markup).not.toContain('class="map-canvas" aria-hidden="true"');
     expect(markup).toContain('role="toolbar" aria-label="Draw-area tools"');
     expect(markup).toContain('aria-label="Redraw trailhead filter"');
-    expect(markup).toContain('aria-label="Use demo trailhead filter"');
+    expect(markup).not.toContain("Demo");
     expect(markup).toContain('aria-label="Clear trailhead filter"');
     expect(markup).not.toContain('map-status');
     expect(markup).not.toContain('Highlighted areas filter trailheads');

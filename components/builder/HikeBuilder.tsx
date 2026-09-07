@@ -1,463 +1,181 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MultiPolygon, Polygon } from "geojson";
+import type { Polygon } from "geojson";
 import { useRouter } from "next/navigation";
-import {
-  DRIVE_TIME_DURATIONS_MINUTES,
-  generateClosedRoutesResponseV3Schema,
-  namedAreaSchema,
-  originSchema,
-  packCatalogRegionV1Schema,
-  reachabilityResponseSchema,
-  routeJobListSchema,
-  routeJobSchema,
-  routeJobResultsPageSchema,
-  searchRegionSummarySchema,
-  type CreateBatchRouteJobV1,
-  type AppSettingsV1,
-  type GradePresetId,
-  type PackCatalogRegionV1,
-  type AccessFilterV2,
-  type GenerateClosedRoutesRequestV3,
-  type RouteJob,
-  type RouteJobResultsPage,
-  type SearchRegionSummary,
-} from "@/lib/contracts";
-import { FIXTURE_BUILDER_PACK, type BuilderPackConfig } from "@/lib/packs/fixture-pack";
+import { DRIVE_TIME_DURATIONS_MINUTES, originSchema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
+import { searchCatalogSchema, searchResultSchema, searchRequestSchema, routeJobV2Schema, routeJobResultsPageV2Schema, type SearchCatalog, type SearchRequest } from "@/lib/contracts/search";
 import { HikeMap } from "../map/HikeMap";
-import { ResultsPanel, type ResultsStatus } from "../results/ResultsPanel";
-import { JobsModal, type JobsLoadState } from "./JobsModal";
+import { ResultsPanel } from "../results/ResultsPanel";
+import type { RouteResults } from "../results/types";
+import { JobsModal } from "./JobsModal";
 import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
-import { RegionMultiSelect, type RegionOptionGroup } from "./RegionMultiSelect";
+import { RegionMultiSelect } from "./RegionMultiSelect";
 import { SettingsModal } from "./SettingsModal";
 import { usePreferences } from "./usePreferences";
-import { collectQuickResults, savedRouteResults } from "../results/routeResults";
-import type { RouteResults } from "../results/types";
-import { combineAreaGeometries, reconcileSelectedPackIds, unionBounds } from "./multiPackSearch";
-import {
-  DEFAULT_BUILDER_DRAFT,
-  builderValues,
-  type AccessPointOption,
-  type Bounds,
-  type BuilderDraft,
-  type DriveTimeDraft,
-  type RangeField,
-} from "./types";
+import { useJobs, ACTIVE_JOB_STATUSES } from "./useJobs";
+import { DEFAULT_BUILDER_DRAFT, builderValues, type Bounds, type BuilderDraft, type DriveTimeDraft, type RangeField } from "./types";
 import { parseSearchCriteria } from "./validation";
 
-type AreaGeometry = Polygon | MultiPolygon;
-type PackRegionState = {
-  state: "loading" | "ready" | "error";
-  regions: SearchRegionSummary[];
-  error?: string;
+type Workspace = { status: "idle" } | { status: "done"; results: RouteResults } | {
+  status: "loading" | "error";
+  kind: "quick" | "saved";
+  previous?: RouteResults;
+  jobId?: string;
+  message?: string;
 };
-const ACTIVE_JOB_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-drive-time", "running"]);
-const JOB_POLL_OPEN_MS = 2_000;
-const JOB_POLL_CLOSED_MS = 5_000;
 
-export function waitForPoll(milliseconds: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => {
-      window.clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    const timer = window.setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, milliseconds);
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-const FIXTURE_REGION: PackCatalogRegionV1 = packCatalogRegionV1Schema.parse({
-  id: "santa-cruz-mountains",
-  label: "Santa Cruz Mountains",
-  displayOrder: 1,
-  state: "available",
-  packId: FIXTURE_BUILDER_PACK.id,
-  pack: {
-    id: FIXTURE_BUILDER_PACK.id,
-    name: FIXTURE_BUILDER_PACK.name,
-    dataVersion: FIXTURE_BUILDER_PACK.dataVersion,
-    builtAt: FIXTURE_BUILDER_PACK.builtAt,
-    coverageBbox: FIXTURE_BUILDER_PACK.coverageBbox,
-    coverage: FIXTURE_BUILDER_PACK.coverage,
-    display: FIXTURE_BUILDER_PACK.display,
-  },
-});
-const DEFAULT_REGIONS = [FIXTURE_REGION];
-
-function catalogPackConfig(region: Extract<PackCatalogRegionV1, { state: "available" }>): BuilderPackConfig {
-  return {
-    id: region.pack.id,
-    name: region.pack.name,
-    subtitle: `Data ${region.pack.dataVersion}`,
-    dataVersion: region.pack.dataVersion,
-    builtAt: region.pack.builtAt,
-    coverageBbox: region.pack.coverageBbox,
-    coverage: region.pack.coverage,
-    suggestedBounds: region.pack.coverageBbox,
-    display: region.pack.display,
-    trailNetwork: { type: "FeatureCollection", features: [] },
-  };
-}
-
-function boundsGeometry(bounds: Bounds): Polygon {
-  const [west, south, east, north] = bounds;
+function boundsGeometry([west, south, east, north]: Bounds): Polygon {
   return { type: "Polygon", coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
 }
-
 function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderDraft>>, key: keyof Pick<BuilderDraft, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">, next: RangeField) {
   setValues((current) => ({ ...current, [key]: next }));
 }
-
 function parseError(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object" || !("error" in payload)) return fallback;
   const error = payload.error;
   if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
-  return fallback;
+  return error && typeof error === "object" && "message" in error && typeof error.message === "string" ? error.message : fallback;
 }
-
 function parseCoordinateOrigin(text: string) {
   const parts = text.split(/[ ,]+/).filter(Boolean).map(Number);
   if (parts.length !== 2 || !parts.every(Number.isFinite)) return null;
   const [lat, lon] = parts;
   return originSchema.safeParse({ lat, lon, label: `${lat!.toFixed(5)}, ${lon!.toFixed(5)}` });
 }
-
-function resultRegionLabel(packLabel: string, regionName: string) {
-  const pack = packLabel.trim();
-  const region = regionName.trim();
-  return pack.toLowerCase() === region.toLowerCase() ? region : `${pack} · ${region}`;
+async function requestJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(parseError(payload, "The request could not be completed."));
+  return payload;
 }
 
-export function HikeBuilder({
-  pack = FIXTURE_BUILDER_PACK,
-  regions = DEFAULT_REGIONS,
-  initialSelectedPackIds = [pack.id],
-  restoreJobId,
-}: {
-  pack?: BuilderPackConfig;
-  regions?: PackCatalogRegionV1[];
-  initialSelectedPackIds?: string[];
-  restoreJobId?: string;
-}) {
+export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const router = useRouter();
+  const [catalog, setCatalog] = useState<SearchCatalog>();
+  const [catalogError, setCatalogError] = useState("");
   const [drawnBounds, setDrawnBounds] = useState<Bounds | null>(null);
-  const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({
-    originText: "",
-    originSuggestions: [],
-    durationMinutes: 30,
-    state: "idle",
-  });
+  const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
+  const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({ originText: "", originSuggestions: [], durationMinutes: 30, state: "idle" });
   const preferences = usePreferences();
   const { settings: appSettings, loaded: settingsLoaded, error: settingsError } = preferences;
   const [draft, setValues] = useState<BuilderDraft>(DEFAULT_BUILDER_DRAFT);
   const values = builderValues(appSettings, draft);
-  const showRegionBoundaries = appSettings.showRegionBoundaries;
-  const [filterGeometry, setFilterGeometry] = useState<AreaGeometry>();
-  const [refinementGeometry, setRefinementGeometry] = useState<AreaGeometry>();
-  const [visibleAccessPoints, setVisibleAccessPoints] = useState<AccessPointOption[]>([]);
-  const [selectedPackIds, setSelectedPackIds] = useState(initialSelectedPackIds);
-  const [packRegionStates, setPackRegionStates] = useState<Record<string, PackRegionState>>({});
-  const [selectedRegionIds, setSelectedRegionIds] = useState<Record<string, string[]>>({});
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [generationState, setGenerationState] = useState<"idle" | ResultsStatus>("idle");
-  const [generationMessage, setGenerationMessage] = useState("");
-  const [routeResults, setRouteResults] = useState<RouteResults | null>(null);
+  const [workspace, setWorkspace] = useState<Workspace>({ status: "idle" });
   const [selectedRouteId, setSelectedRouteId] = useState<string>();
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
   const [hoveredSegmentId, setHoveredSegmentId] = useState<string>();
-  const savedResults = routeResults?.kind === "saved" ? routeResults : undefined;
-  const [batchPageLoading, setBatchPageLoading] = useState(false);
-  const [jobs, setJobs] = useState<RouteJob[]>([]);
-  const [jobsLoadState, setJobsLoadState] = useState<JobsLoadState>("loading");
-  const [jobsLoadError, setJobsLoadError] = useState<string>();
-  const [jobsRefreshedAt, setJobsRefreshedAt] = useState<number>();
-  const [jobsAnnouncement, setJobsAnnouncement] = useState("");
-  const [jobsOpen, setJobsOpen] = useState(false);
-  const [batchLaunching, setBatchLaunching] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [nearMissesOpen, setNearMissesOpen] = useState(false);
+  const [jobsOpen, setJobsOpen] = useState(false);
+  const jobsResource = useJobs(jobsOpen);
+  const { jobs, refresh: refreshJobs, announcement: jobsAnnouncement } = jobsResource;
+  const [batchLaunching, setBatchLaunching] = useState(false);
+  const batchLaunchRef = useRef(false);
+  const [launchMessage, setLaunchMessage] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
   const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
   const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
-  const generationControllerRef = useRef<AbortController | null>(null);
-  const reachabilityControllerRef = useRef<AbortController | null>(null);
-  const batchPageControllerRef = useRef<AbortController | null>(null);
-  const batchResultGeometryControllerRef = useRef<AbortController | null>(null);
-  const restoredJobControllerRef = useRef<AbortController | null>(null);
+  const operation = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
-  const jobsRef = useRef<RouteJob[]>([]);
-  const jobsLoadedRef = useRef(false);
-  const jobsRefreshControllerRef = useRef<AbortController | null>(null);
-  const jobsRefreshPromiseRef = useRef<Promise<void> | null>(null);
-  const jobsRefreshGenerationRef = useRef(0);
-  const batchLaunchInFlightRef = useRef(false);
-  const restoredJobRef = useRef<string | undefined>(undefined);
-  const applyBatchResultsRef = useRef<(page: RouteJobResultsPage) => void>(() => undefined);
-
-  const orderedRegions = useMemo(
-    () => [...regions].sort((a, b) => a.displayOrder - b.displayOrder || a.label.localeCompare(b.label)),
-    [regions],
-  );
-  const availablePackConfigs = useMemo(() => {
-    const configs = new Map<string, BuilderPackConfig>([[pack.id, pack]]);
-    for (const region of orderedRegions) {
-      if (region.state !== "available" || configs.has(region.packId)) continue;
-      configs.set(region.packId, catalogPackConfig(region));
-    }
-    return configs;
-  }, [orderedRegions, pack]);
-
-  const availablePackOrder = useMemo(() => {
-    const catalogOrder = orderedRegions.flatMap((region) => region.state === "available" ? [region.packId] : []);
-    return [...new Set([...(catalogOrder.includes(pack.id) ? [] : [pack.id]), ...catalogOrder])];
-  }, [orderedRegions, pack.id]);
-
-  const selectedPacks = useMemo(() => reconcileSelectedPackIds(
-    selectedPackIds,
-    availablePackOrder,
-    pack.id,
-    true,
-  ).flatMap((packId) => {
-    const config = availablePackConfigs.get(packId);
-    return config ? [config] : [];
-  }), [availablePackConfigs, availablePackOrder, pack.id, selectedPackIds]);
-  const selectedPackKey = selectedPacks.map(({ id }) => id).join(",");
-  const primaryPack = selectedPacks[0] ?? pack;
-  const selectedCoverageBbox = useMemo(() => selectedPacks.length
-    ? unionBounds(selectedPacks.map(({ coverageBbox }) => coverageBbox))
-    : pack.coverageBbox, [pack.coverageBbox, selectedPacks]);
-  const selectedPackLabels = useMemo(() => new Map(orderedRegions.flatMap((region) =>
-    region.state === "available" ? [[region.packId, region.label] as const] : [])), [orderedRegions]);
-  const regionOptionGroups = useMemo<RegionOptionGroup[]>(() => selectedPacks.map((selectedPack) => {
-    const regionState = packRegionStates[selectedPack.id];
-    return {
-      packId: selectedPack.id,
-      label: selectedPackLabels.get(selectedPack.id) ?? selectedPack.name,
-      state: regionState?.state ?? "loading",
-      ...(regionState?.error ? { error: regionState.error } : {}),
-      options: (regionState?.regions ?? []).map(({ id, name }) => ({ id, name })),
-    };
-  }), [packRegionStates, selectedPackLabels, selectedPacks]);
-  const selectedRegionTargets = useMemo(() => selectedPacks.flatMap((selectedPack) => {
-    const regionState = packRegionStates[selectedPack.id];
-    const selected = new Set(selectedRegionIds[selectedPack.id] ?? []);
-    return (regionState?.regions ?? []).flatMap((region) => selected.has(region.id) ? [{
-      pack: selectedPack,
-      region,
-      label: resultRegionLabel(selectedPackLabels.get(selectedPack.id) ?? selectedPack.name, region.name),
-    }] : []);
-  }), [packRegionStates, selectedPackLabels, selectedPacks, selectedRegionIds]);
-  const selectedRegionKey = selectedRegionTargets.map(({ pack, region }) => `${pack.id}:${region.id}`).join(",");
-
-  const acceptJobs = useCallback((next: RouteJob[], refreshedAt: number, announceTransitions = true) => {
-    if (announceTransitions && jobsLoadedRef.current) {
-      const previousById = new Map(jobsRef.current.map((job) => [job.id, job]));
-      const finished = next.find((job) => {
-        const previous = previousById.get(job.id);
-        return previous && ACTIVE_JOB_STATUSES.has(previous.status) && ["completed", "cancelled", "failed"].includes(job.status);
-      });
-      if (finished) {
-        const message = finished.status === "completed"
-          ? `${finished.searchRegion.name} batch search complete. Open Jobs to view results.`
-          : finished.status === "cancelled"
-            ? `${finished.searchRegion.name} batch search cancelled.`
-            : `${finished.searchRegion.name} batch search failed. Open Jobs for details.`;
-        setJobsAnnouncement(message);
-      }
-    }
-    jobsRef.current = next;
-    jobsLoadedRef.current = true;
-    setJobs(next);
-    setJobsRefreshedAt(refreshedAt);
-    setJobsLoadState("ready");
-    setJobsLoadError(undefined);
-  }, []);
-
-  const refreshJobs = useCallback(async (abortStale = false): Promise<void> => {
-    const existing = jobsRefreshPromiseRef.current;
-    if (existing) {
-      if (!abortStale) return existing;
-      const existingController = jobsRefreshControllerRef.current;
-      existingController?.abort();
-      await existing;
-      if (jobsRefreshPromiseRef.current === existing) jobsRefreshPromiseRef.current = null;
-      if (jobsRefreshControllerRef.current === existingController) jobsRefreshControllerRef.current = null;
-    }
-    if (jobsRefreshPromiseRef.current) return jobsRefreshPromiseRef.current;
-    const controller = new AbortController();
-    const generation = ++jobsRefreshGenerationRef.current;
-    jobsRefreshControllerRef.current = controller;
-    const request = (async () => {
-      try {
-        const response = await fetch("/api/route-jobs", { cache: "no-store", signal: controller.signal });
-        const raw: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error("Jobs could not be refreshed.");
-        const parsed = routeJobListSchema.parse(raw);
-        if (!controller.signal.aborted && jobsRefreshGenerationRef.current === generation) acceptJobs(parsed.jobs, Date.now());
-      } catch (error) {
-        if (!controller.signal.aborted && jobsRefreshGenerationRef.current === generation) {
-          setJobsLoadState("error");
-          setJobsLoadError(error instanceof Error ? error.message : "Jobs could not be refreshed.");
-        }
-      }
-    })();
-    jobsRefreshPromiseRef.current = request;
-    try { await request; }
-    finally {
-      if (jobsRefreshPromiseRef.current === request) jobsRefreshPromiseRef.current = null;
-      if (jobsRefreshControllerRef.current === controller) jobsRefreshControllerRef.current = null;
-    }
-  }, [acceptJobs]);
-
-  const invalidateResults = useCallback(() => {
-    generationControllerRef.current?.abort();
-    generationControllerRef.current = null;
-    batchPageControllerRef.current?.abort();
-    batchPageControllerRef.current = null;
-    batchResultGeometryControllerRef.current?.abort();
-    batchResultGeometryControllerRef.current = null;
-    restoredJobControllerRef.current?.abort();
-    restoredJobControllerRef.current = null;
-    setGenerationState("idle");
-    setGenerationMessage("");
-    setRouteResults(null);
-    setBatchPageLoading(false);
-    setSelectedRouteId(undefined);
-    setHoveredRouteId(undefined);
-    setSelectedSegmentId(undefined);
-    setHoveredSegmentId(undefined);
-  }, []);
+  const routeResults = workspace.status === "done" ? workspace.results : workspace.status === "idle" ? null : workspace.previous ?? null;
+  const savedResults = routeResults?.kind === "saved" ? routeResults : undefined;
+  const generationState = routeResults ? "done" : workspace.status;
+  const generationMessage = workspace.status === "error" ? workspace.message : launchMessage;
+  const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
+  const ready = settingsLoaded && Boolean(catalog?.coverages.length);
 
   useEffect(() => {
-    const reconciled = reconcileSelectedPackIds(selectedPackIds, availablePackOrder, pack.id, true);
-    if (reconciled.join(",") !== selectedPackIds.join(",")) setSelectedPackIds(reconciled);
-  }, [availablePackOrder, pack.id, selectedPackIds]);
+    const controller = new AbortController();
+    void requestJson("/api/search/catalog", { signal: controller.signal }).then((raw) => {
+      const next = searchCatalogSchema.parse(raw);
+      if (!controller.signal.aborted) setCatalog(next);
+    }).catch((error: unknown) => { if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Map data is unavailable."); });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => () => { operation.current?.abort(); originRequestSequenceRef.current += 1; }, []);
 
-  const updateSelectedPacks = useCallback((nextCandidates: string[]) => {
-    const next = reconcileSelectedPackIds(nextCandidates, availablePackOrder, pack.id, true);
-    setSelectedPackIds(next);
-    router.replace(`/?${new URLSearchParams({ packs: next.length ? next.join(",") : "none" })}`);
-    setDrawnBounds(null);
-    setFilterGeometry(undefined);
-    setRefinementGeometry(undefined);
-    invalidateResults();
-  }, [availablePackOrder, invalidateResults, pack.id, router]);
-
-  const togglePack = useCallback((packId: string) => {
-    const selected = selectedPacks.some((candidate) => candidate.id === packId);
-    updateSelectedPacks(selected
-      ? selectedPacks.filter((candidate) => candidate.id !== packId).map(({ id }) => id)
-      : [...selectedPacks.map(({ id }) => id), packId]);
-  }, [selectedPacks, updateSelectedPacks]);
-
-  const selectRoute = useCallback((routeId: string) => {
-    setSelectedRouteId(routeId);
+  // Draft edits cancel pending view work without changing a completed snapshot.
+  const editDraft = useCallback(() => {
+    operation.current?.abort();
+    operation.current = null;
+    setWorkspace((current) => current.status === "loading" || current.status === "error"
+      ? current.previous ? { status: "done", results: current.previous } : { status: "idle" }
+      : current);
+    setValidationErrors([]);
+    setLaunchMessage("");
+  }, []);
+  const clearResults = useCallback(() => {
+    operation.current?.abort();
+    operation.current = null;
+    setWorkspace({ status: "idle" });
+    setSelectedRouteId(undefined);
     setSelectedSegmentId(undefined);
     setHoveredSegmentId(undefined);
+    setHoveredRouteId(undefined);
+    setMobilePanel("builder");
   }, []);
+  const runView = useCallback(async (load: (signal: AbortSignal) => Promise<RouteResults>, kind: "quick" | "saved", jobId?: string, previous?: RouteResults) => {
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    setWorkspace({ status: "loading", kind, jobId, previous });
+    try {
+      const results = await load(controller.signal);
+      if (controller.signal.aborted || operation.current !== controller) return;
+      setWorkspace({ status: "done", results });
+      setSelectedRouteId((results.exact[0] ?? results.nearMisses[0])?.id);
+      setSelectedSegmentId(undefined);
+      setHoveredSegmentId(undefined);
+      setHoveredRouteId(undefined);
+      setNearMissesOpen(results.exact.length === 0);
+      setJobsOpen(false);
+      setMobilePanel("results");
+      router.replace("/");
+    } catch (error) {
+      if (!controller.signal.aborted && operation.current === controller) setWorkspace({ status: "error", kind, jobId, previous, message: error instanceof Error ? error.message : "Search results could not be loaded." });
+    } finally { if (operation.current === controller) operation.current = null; }
+  }, [router]);
+  const loadJob = useCallback((id: string, cursor?: string, previous?: RouteResults) => runView(async (signal) => {
+    const query = new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) });
+    const page = routeJobResultsPageV2Schema.parse(await requestJson(`/api/route-jobs/${encodeURIComponent(id)}/results?${query}`, { signal, cache: "no-store" }));
+    return { kind: "saved", job: page.job, nextCursor: page.nextCursor,
+      exact: page.results.filter((result) => result.matchType === "exact").map(({ route }) => route),
+      nearMisses: page.results.filter((result) => result.matchType === "near-miss").map(({ route }) => route) };
+  }, "saved", id, previous), [runView]);
+  useEffect(() => {
+    if (!restoreJobId) return;
+    void loadJob(restoreJobId);
+    const restoredOperation = operation.current;
+    return () => restoredOperation?.abort();
+  }, [loadJob, restoreJobId]);
 
+  const selectRoute = useCallback((routeId: string) => { setSelectedRouteId(routeId); setSelectedSegmentId(undefined); setHoveredSegmentId(undefined); }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
-  const closeJobs = useCallback(() => setJobsOpen(false), []);
-
-  const displayedAccessPoints = useMemo(() => visibleAccessPoints.filter((point) =>
-    values.includeUncertainAccess || point.accessState !== "unknown"), [values.includeUncertainAccess, visibleAccessPoints]);
-
+  const closeJobs = useCallback(() => {
+    setWorkspace((current) => {
+      if (current.status !== "loading" || current.kind !== "saved") return current;
+      operation.current?.abort();
+      operation.current = null;
+      return current.previous ? { status: "done", results: current.previous } : { status: "idle" };
+    });
+    setJobsOpen(false);
+  }, []);
   const saveSettings = async (settings: AppSettingsV1) => {
     if (!await preferences.save(settings)) return false;
-    invalidateResults();
+    editDraft();
     return true;
   };
-
-  const changeGradePreference = (patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => {
-    void preferences.change((current) => ({ ...current, ...patch }));
-    invalidateResults();
-  };
-
-  const changeLoopPreference = (patch: Partial<AppSettingsV1["loopOptions"]>) => {
-    void preferences.change((current) => ({ ...current, loopOptions: { ...current.loopOptions, ...patch } }));
-    invalidateResults();
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void Promise.allSettled(selectedPacks.map(async (selectedPack) => {
-      const query = new URLSearchParams({ bbox: selectedPack.coverageBbox.join(","), includeUncertainAccess: "true", includeTrails: "false" });
-      const response = await fetch(`/api/packs/${selectedPack.id}/access-points?${query}`, { signal: controller.signal });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok || !payload || typeof payload !== "object" || !("accessPoints" in payload) || !Array.isArray(payload.accessPoints)) return [];
-      return (payload.accessPoints as AccessPointOption[]).map((point) => ({ ...point, id: `${selectedPack.id}::${point.id}` }));
-    })).then((groups) => {
-      if (!controller.signal.aborted) {
-        setVisibleAccessPoints(groups.flatMap((group) => group.status === "fulfilled" ? group.value : []));
-      }
-    });
-    return () => controller.abort();
-  }, [selectedPackKey, selectedPacks]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    for (const selectedPack of selectedPacks) {
-      setPackRegionStates((current) => ({
-        ...current,
-        [selectedPack.id]: { state: "loading", regions: current[selectedPack.id]?.regions ?? [] },
-      }));
-      void fetch(`/api/packs/${selectedPack.id}/search-regions`, { signal: controller.signal })
-        .then(async (response) => {
-          const payload: unknown = await response.json().catch(() => null);
-          if (!response.ok) throw new Error(parseError(payload, "Search regions could not be loaded."));
-          const raw = Array.isArray(payload) ? payload : payload && typeof payload === "object" && "searchRegions" in payload ? payload.searchRegions : payload && typeof payload === "object" && "regions" in payload ? payload.regions : [];
-          const searchRegions = searchRegionSummarySchema.array().parse(raw).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
-          if (controller.signal.aborted) return;
-          setPackRegionStates((current) => ({ ...current, [selectedPack.id]: { state: "ready", regions: searchRegions } }));
-          setSelectedRegionIds((current) => {
-            const valid = new Set(searchRegions.map(({ id }) => id));
-            const retained = (current[selectedPack.id] ?? []).filter((id) => valid.has(id));
-            return { ...current, [selectedPack.id]: retained.length ? retained : searchRegions[0] ? [searchRegions[0].id] : [] };
-          });
-        }).catch((error: unknown) => {
-          if (!controller.signal.aborted) setPackRegionStates((current) => ({
-            ...current,
-            [selectedPack.id]: { state: "error", regions: [], error: error instanceof Error ? error.message : "Search regions could not be loaded." },
-          }));
-        });
-    }
-    return () => controller.abort();
-  }, [selectedPackKey, selectedPacks]);
-
-  useEffect(() => {
-    if (!selectedRegionTargets.length || drawnBounds) {
-      setRefinementGeometry(undefined);
-      return;
-    }
-    setRefinementGeometry(undefined);
-    const controller = new AbortController();
-    void Promise.allSettled(selectedRegionTargets.map(async ({ pack: selectedPack, region }) => {
-      const response = await fetch(`/api/packs/${selectedPack.id}/named-areas/${encodeURIComponent(region.id)}`, { signal: controller.signal });
-      const raw: unknown = await response.json().catch(() => null);
-      const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
-      return response.ok && parsed.success ? parsed.data.geometry : undefined;
-    })).then((geometries) => {
-      if (controller.signal.aborted) return;
-      const available = geometries.flatMap((geometry) => geometry.status === "fulfilled" && geometry.value !== undefined ? [geometry.value] : []);
-      setRefinementGeometry(combineAreaGeometries(available));
-    });
-    return () => controller.abort();
-  }, [drawnBounds, selectedRegionKey, selectedRegionTargets]);
-
+  const changeGradePreference = (patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => { void preferences.change((current) => ({ ...current, ...patch })); editDraft(); };
+  const changeLoopPreference = (patch: Partial<AppSettingsV1["loopOptions"]>) => { void preferences.change((current) => ({ ...current, loopOptions: { ...current.loopOptions, ...patch } })); editDraft(); };
   useEffect(() => {
     if (driveDraft.state !== "suggesting" || driveDraft.origin || driveDraft.originText.trim().length < 2 || parseCoordinateOrigin(driveDraft.originText)?.success) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void fetch("/api/geocoding/suggest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: primaryPack.id, text: driveDraft.originText.trim() }), signal: controller.signal })
+      void fetch("/api/geocoding/suggest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: driveDraft.originText.trim() }), signal: controller.signal })
         .then(async (response) => {
           const payload: unknown = await response.json().catch(() => null);
           if (!response.ok) throw new Error(parseError(payload, "Origin suggestions are unavailable."));
@@ -466,13 +184,13 @@ export function HikeBuilder({
         }).catch((error: unknown) => { if (!controller.signal.aborted) setDriveDraft((current) => ({ ...current, state: "error", error: error instanceof Error ? error.message : "Origin suggestions are unavailable." })); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [driveDraft.origin, driveDraft.originText, driveDraft.state, primaryPack.id]);
+  }, [driveDraft.origin, driveDraft.originText, driveDraft.state]);
 
   const selectOriginSuggestion = async (suggestion: { label: string; magicKey: string }) => {
     const sequence = ++originRequestSequenceRef.current;
     setDriveDraft((current) => ({ ...current, state: "resolving", error: undefined, originSuggestions: [] }));
     try {
-      const response = await fetch("/api/geocoding/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packId: primaryPack.id, text: suggestion.label, magicKey: suggestion.magicKey }) });
+      const response = await fetch("/api/geocoding/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: suggestion.label, magicKey: suggestion.magicKey }) });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new Error(parseError(payload, "That origin could not be resolved."));
       const origin = originSchema.parse(payload && typeof payload === "object" && "origin" in payload ? payload.origin : payload);
@@ -484,7 +202,7 @@ export function HikeBuilder({
   const useCurrentLocation = () => {
     if (!navigator.geolocation) { setDriveDraft((current) => ({ ...current, state: "error", error: "Location is not available in this browser." })); return; }
     const sequence = ++originRequestSequenceRef.current;
-    invalidateResults();
+    editDraft();
     setDriveDraft((current) => ({ ...current, state: "resolving", error: undefined }));
     navigator.geolocation.getCurrentPosition(({ coords }) => {
       if (sequence !== originRequestSequenceRef.current) return;
@@ -493,382 +211,62 @@ export function HikeBuilder({
     }, () => { if (sequence === originRequestSequenceRef.current) setDriveDraft((current) => ({ ...current, state: "error", error: "Location permission was denied. Type an origin or coordinates instead." })); }, { enableHighAccuracy: false, maximumAge: 60_000, timeout: 10_000 });
   };
 
-  const runQuick = async () => {
-    const errors: string[] = [];
-    if (!selectedPacks.length) errors.push("Choose at least one region pack.");
-    if (!drawnBounds && !driveDraft.origin) errors.push("Resolve a driving origin or draw an optional boundary.");
-    if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
+
+  const prepareRequest = (): SearchRequest | null => {
+    if (!ready) return null;
     const parsed = parseSearchCriteria(values);
-    if (!parsed.success) errors.push(...parsed.errors);
-    if (errors.length || !parsed.success) { setValidationErrors(errors); return; }
-    generationControllerRef.current?.abort();
-    reachabilityControllerRef.current?.abort();
-    batchPageControllerRef.current?.abort();
-    batchPageControllerRef.current = null;
-    batchResultGeometryControllerRef.current?.abort();
-    batchResultGeometryControllerRef.current = null;
-    const controller = new AbortController();
-    generationControllerRef.current = controller;
-    reachabilityControllerRef.current = controller;
+    if (!parsed.success) { setValidationErrors(parsed.errors); return null; }
+    if (!drawnBounds && driveDraft.originText.trim() && !driveDraft.origin) {
+      setValidationErrors(["Choose a suggested origin or clear the field to search named regions."]);
+      return null;
+    }
+    const area = drawnBounds ? { mode: "drawn-area" as const, bbox: drawnBounds }
+      : driveDraft.origin ? { mode: "drive-time" as const, origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes, regionIds: selectedRegionIds }
+      : { mode: "named-regions" as const, regionIds: selectedRegionIds };
+    const request = searchRequestSchema.safeParse({ area, criteria: parsed.criteria, limit: parsed.limit });
+    if (!request.success) { setValidationErrors(["Choose named regions, resolve an origin, or draw a boundary."]); return null; }
     setValidationErrors([]);
-    setGenerationState("loading");
-    setGenerationMessage(drawnBounds ? "Running Quick search inside the drawn boundary…" : "Resolving the drive-time area for Quick search…");
-    setRouteResults(null);
-    setBatchPageLoading(false);
-    setSelectedRouteId(undefined);
-    setSelectedSegmentId(undefined);
-    setHoveredSegmentId(undefined);
+    return request.data;
+  };
+  const runQuick = () => {
+    const request = prepareRequest();
+    if (!request) return;
+    setLaunchMessage("");
+    void runView(async (signal) => ({ kind: "quick", ...searchResultSchema.parse(await requestJson("/api/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request), signal })) }), "quick");
+  };
+  const launchBatch = async () => {
+    if (batchLaunchRef.current) return;
+    const request = prepareRequest();
+    if (!request) return;
+    batchLaunchRef.current = true;
+    setBatchLaunching(true);
     try {
-      const resolveReachability = async (selectedPack: BuilderPackConfig) => {
-        let response = await fetch("/api/reachability", {
-          method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
-          body: JSON.stringify({ version: 1, packId: selectedPack.id, origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes }),
-        });
-        let payload: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(parseError(payload, "The drive-time area could not be calculated."));
-        let parsed = reachabilityResponseSchema.parse(payload);
-        while (parsed.status === "pending") {
-          const { requestId, pollAfterMs } = parsed;
-          await waitForPoll(pollAfterMs, controller.signal);
-          response = await fetch(`/api/reachability/${requestId}`, { signal: controller.signal });
-          payload = await response.json().catch(() => null);
-          if (!response.ok) throw new Error(parseError(payload, "The drive-time area could not be calculated."));
-          parsed = reachabilityResponseSchema.parse(payload);
-        }
-        return parsed;
-      };
-
-      const reachabilityByPack = new Map<string, Extract<ReturnType<typeof reachabilityResponseSchema.parse>, { status: "complete" }>>();
-      const reachabilityFailures: string[] = [];
-      if (!drawnBounds) {
-        const settled = await Promise.allSettled(selectedPacks.map(async (selectedPack) => ({
-          pack: selectedPack,
-          reachability: await resolveReachability(selectedPack),
-        })));
-        settled.forEach((result, index) => {
-          const selectedPack = selectedPacks[index]!;
-          if (result.status === "fulfilled") reachabilityByPack.set(selectedPack.id, result.value.reachability);
-          else reachabilityFailures.push(selectedPackLabels.get(selectedPack.id) ?? selectedPack.name);
-        });
-        const firstGeometry = reachabilityByPack.values().next().value?.geometry;
-        if (firstGeometry) setFilterGeometry(firstGeometry);
-      }
-      if (!drawnBounds && reachabilityByPack.size === 0) throw new Error("Drive-time areas could not be calculated for the selected regions.");
-
-      const targets = drawnBounds
-        ? selectedPacks.map((selectedPack) => ({ pack: selectedPack, label: selectedPackLabels.get(selectedPack.id) ?? selectedPack.name, regionId: undefined }))
-        : selectedRegionTargets.flatMap((target) => reachabilityByPack.has(target.pack.id) ? [{ ...target, regionId: target.region.id }] : []);
-      setGenerationMessage("Running Quick search…");
-      if (generationControllerRef.current !== controller) return;
-      const settledSearches = await Promise.allSettled(targets.map(async (target) => {
-        const accessFilter: AccessFilterV2 = drawnBounds
-          ? { mode: "drawn-area", bbox: drawnBounds }
-          : { mode: "drive-time", reachabilityId: reachabilityByPack.get(target.pack.id)!.requestId, regionId: target.regionId };
-        const request: GenerateClosedRoutesRequestV3 = {
-          ...parsed.criteria, version: 3, routeFamily: "closed", packId: target.pack.id,
-          accessFilter, searchEffort: "quick", limit: parsed.limit,
-        };
-        const response = await fetch("/api/routes/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request), signal: controller.signal });
-        const payload: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(parseError(payload, `Routes could not be generated for ${target.label}.`));
-        return { target, response: generateClosedRoutesResponseV3Schema.parse(payload) };
-      }));
-      if (generationControllerRef.current !== controller) return;
-      const successful = settledSearches.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
-      const failedSearchCount = settledSearches.length - successful.length + reachabilityFailures.length;
-      if (!successful.length) throw new Error("Routes could not be generated for any selected region.");
-      const combined = collectQuickResults(successful.map(({ target, response }) => ({ label: target.label, response })), parsed.limit);
-      setRouteResults(combined);
-      setSelectedRouteId((combined.exact[0] ?? combined.nearMisses[0])?.id);
+      const raw = await requestJson("/api/route-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ area: request.area, criteria: request.criteria }) });
+      routeJobV2Schema.parse(raw);
+      setLaunchMessage("Full search queued. Every eligible trailhead will be attempted, with up to ten exact routes per start.");
+      setJobsOpen(true);
+      await refreshJobs(true);
+    } catch (error) { setLaunchMessage(error instanceof Error ? error.message : "Full search could not be started."); }
+    finally { batchLaunchRef.current = false; setBatchLaunching(false); }
+  };
+  const generatedRoutes = useMemo(() => routeResults ? [...routeResults.exact, ...routeResults.nearMisses] : [], [routeResults]);
+  const mappedRoutes = nearMissesOpen ? generatedRoutes : routeResults?.exact ?? [];
+  const viewedRequest = routeResults?.kind === "quick" ? routeResults.request : savedResults?.job.request;
+  const viewedArea = routeResults?.kind === "quick" ? routeResults.area : savedResults?.job.area;
+  const toggleNearMisses = (open: boolean) => {
+    setNearMissesOpen(open);
+    if (!open) {
+      setSelectedRouteId((current) => routeResults?.exact.some(({ id }) => id === current) ? current : routeResults?.exact[0]?.id);
       setSelectedSegmentId(undefined);
       setHoveredSegmentId(undefined);
-      const resultMessage = combined.exact.length ? `${combined.exact.length} exact ${combined.exact.length === 1 ? "route" : "routes"} ready.` : `No exact matches. ${combined.nearMisses.length} close ${combined.nearMisses.length === 1 ? "match" : "matches"} available.`;
-      setGenerationMessage(failedSearchCount ? `${resultMessage} ${failedSearchCount} selected ${failedSearchCount === 1 ? "region was" : "regions were"} unavailable.` : resultMessage);
-      setGenerationState("done");
-      setMobilePanel("results");
-    } catch (error) {
-      if (!controller.signal.aborted) { setGenerationMessage(error instanceof Error ? error.message : "Routes could not be generated."); setGenerationState("error"); }
-    } finally {
-      if (generationControllerRef.current === controller) generationControllerRef.current = null;
-      if (reachabilityControllerRef.current === controller) reachabilityControllerRef.current = null;
     }
   };
-
-  const launchBatch = async () => {
-    if (batchLaunchInFlightRef.current) return;
-    const errors: string[] = [];
-    if (!selectedPacks.length) errors.push("Choose at least one region pack.");
-    if (!drawnBounds && driveDraft.originText.trim() && !driveDraft.origin) errors.push("Choose a suggested origin or clear the field to search the entire reviewed region.");
-    if (!drawnBounds && !selectedRegionTargets.length) errors.push("Choose at least one reviewed region.");
-    if (!drawnBounds && selectedPacks.some(({ id }) => !(selectedRegionIds[id]?.length))) errors.push("Choose at least one reviewed region in every selected pack.");
-    const parsed = parseSearchCriteria(values);
-    if (!parsed.success) errors.push(...parsed.errors);
-    if (errors.length || !parsed.success) { setValidationErrors(errors); return; }
-    const { criteria } = parsed;
-    const payloads: CreateBatchRouteJobV1[] = drawnBounds
-      ? selectedPacks.map((selectedPack) => ({
-          version: 1,
-          packId: selectedPack.id,
-          drawnAreaBbox: drawnBounds,
-          criteria,
-          routesPerAccessPoint: 10,
-        }))
-      : selectedRegionTargets.map(({ pack: selectedPack, region }) => ({
-      version: 1, packId: selectedPack.id,
-      ...(driveDraft.origin ? { origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes } : {}),
-      searchRegionId: region.id,
-      criteria,
-      routesPerAccessPoint: 10,
-    }));
-    batchLaunchInFlightRef.current = true;
-    setBatchLaunching(true);
-    setValidationErrors([]);
-    setGenerationMessage(`Launching ${payloads.length} full ${payloads.length === 1 ? "search" : "searches"}…`);
-    try {
-      const settled = await Promise.allSettled(payloads.map(async (payload) => {
-        const response = await fetch("/api/route-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-        const raw: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(parseError(raw, "A full search could not be launched."));
-        return routeJobSchema.parse(raw && typeof raw === "object" && "job" in raw ? raw.job : raw);
-      }));
-      const launched = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
-      const failed = settled.length - launched.length;
-      if (!launched.length) throw new Error("Full searches could not be launched for any selected area.");
-      jobsRefreshGenerationRef.current += 1;
-      jobsRefreshControllerRef.current?.abort();
-      const launchedIds = new Set(launched.map(({ id }) => id));
-      acceptJobs([...launched, ...jobsRef.current.filter(({ id }) => !launchedIds.has(id))], Date.now(), false);
-      setGenerationMessage(`${launched.length} full ${launched.length === 1 ? "search" : "searches"} queued${failed ? `; ${failed} failed to launch` : ""}. Track progress in Jobs.`);
-      setJobsOpen(true);
-      void refreshJobs(true);
-    } catch (error) { setGenerationMessage(error instanceof Error ? error.message : "Batch search could not be launched."); }
-    finally {
-      batchLaunchInFlightRef.current = false;
-      setBatchLaunching(false);
-    }
-  };
-
-  const applyBatchResults = useCallback((page: RouteJobResultsPage) => {
-    generationControllerRef.current?.abort();
-    generationControllerRef.current = null;
-    reachabilityControllerRef.current?.abort();
-    reachabilityControllerRef.current = null;
-    batchPageControllerRef.current?.abort();
-    batchPageControllerRef.current = null;
-    batchResultGeometryControllerRef.current?.abort();
-    setBatchPageLoading(false);
-    const label = resultRegionLabel(selectedPackLabels.get(page.job.pack.id) ?? page.job.pack.id, page.job.searchRegion.name);
-    const results = savedRouteResults(page, label);
-    setRouteResults(results);
-    setGenerationState("done");
-    setGenerationMessage(`${page.results.length} saved routes loaded${page.nextCursor ? "; more are available" : ""}.`);
-    setSelectedRouteId((results.exact[0] ?? results.nearMisses[0])?.id);
-    setSelectedSegmentId(undefined);
-    setHoveredSegmentId(undefined);
-    setJobsOpen(false);
-    setMobilePanel("results");
-    if (page.job.filterGeometry) {
-      setFilterGeometry(page.job.filterGeometry);
-    } else setFilterGeometry(undefined);
-    if (page.job.request.drawnAreaBbox) {
-      batchResultGeometryControllerRef.current = null;
-      setDrawnBounds(page.job.request.drawnAreaBbox);
-      setRefinementGeometry(undefined);
-      return;
-    }
-    setDrawnBounds(null);
-    const controller = new AbortController();
-    batchResultGeometryControllerRef.current = controller;
-    void fetch(`/api/packs/${page.job.pack.id}/named-areas/${encodeURIComponent(page.job.searchRegion.id)}`, { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((raw: unknown) => {
-        const parsed = namedAreaSchema.safeParse(raw && typeof raw === "object" && "area" in raw ? raw.area : raw && typeof raw === "object" && "region" in raw ? raw.region : raw);
-        if (!controller.signal.aborted && batchResultGeometryControllerRef.current === controller && parsed.success) {
-          setRefinementGeometry(parsed.data.geometry);
-        }
-      }).catch(() => undefined).finally(() => {
-        if (batchResultGeometryControllerRef.current === controller) batchResultGeometryControllerRef.current = null;
-      });
-  }, [selectedPackLabels]);
-
-  useEffect(() => {
-    applyBatchResultsRef.current = applyBatchResults;
-  }, [applyBatchResults]);
-
-  const openBatchResults = useCallback((page: RouteJobResultsPage) => {
-    if (!availablePackConfigs.has(page.job.pack.id)) {
-      setGenerationState("error");
-      setGenerationMessage("The region pack for this saved job is not installed.");
-      return;
-    }
-    const next = [page.job.pack.id];
-    setSelectedPackIds(next);
-    setSelectedRegionIds(page.job.request.searchRegionId ? { [page.job.pack.id]: [page.job.request.searchRegionId] } : {});
-    router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
-    applyBatchResults(page);
-  }, [applyBatchResults, availablePackConfigs, router]);
-
-  useEffect(() => {
-    if (!restoreJobId || restoredJobRef.current === restoreJobId) return;
-    restoredJobRef.current = restoreJobId;
-    restoredJobControllerRef.current?.abort();
-    const controller = new AbortController();
-    restoredJobControllerRef.current = controller;
-    let settled = false;
-    void fetch(`/api/route-jobs/${encodeURIComponent(restoreJobId)}/results?limit=50`, {
-      cache: "no-store",
-      signal: controller.signal,
-    }).then(async (response) => {
-      const raw: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error("Job results could not be loaded.");
-      const page = routeJobResultsPageSchema.parse(raw);
-      if (controller.signal.aborted || restoredJobControllerRef.current !== controller) return;
-      if (!availablePackConfigs.has(page.job.pack.id)) {
-        setGenerationState("error");
-        setGenerationMessage("The region pack for this saved job is not installed.");
-        router.replace(`/?${new URLSearchParams({ packs: selectedPacks.map(({ id }) => id).join(",") })}`);
-        return;
-      }
-      const next = [page.job.pack.id];
-      setSelectedPackIds(next);
-      setSelectedRegionIds(page.job.request.searchRegionId ? { [page.job.pack.id]: [page.job.request.searchRegionId] } : {});
-      applyBatchResultsRef.current(page);
-      settled = true;
-      router.replace(`/?${new URLSearchParams({ packs: next.join(",") })}`);
-    }).catch((error: unknown) => {
-      if (!controller.signal.aborted) {
-        setGenerationState("error");
-        setGenerationMessage(error instanceof Error ? error.message : "Job results could not be loaded.");
-      }
-    }).finally(() => {
-      if (restoredJobControllerRef.current === controller) restoredJobControllerRef.current = null;
-    });
-    return () => {
-      controller.abort();
-      if (restoredJobControllerRef.current === controller) restoredJobControllerRef.current = null;
-      // React Strict Mode immediately replays effects in development. Let the
-      // replay retry an aborted restore instead of treating it as completed.
-      if (!settled && restoredJobRef.current === restoreJobId) restoredJobRef.current = undefined;
-    };
-  }, [availablePackConfigs, restoreJobId, router, selectedPacks]);
-
-  const loadNextBatchPage = async () => {
-    if (!savedResults?.nextCursor || batchPageControllerRef.current) return;
-    const controller = new AbortController();
-    batchPageControllerRef.current = controller;
-    setBatchPageLoading(true);
-    try {
-      const query = new URLSearchParams({ limit: "50", cursor: savedResults.nextCursor });
-      const response = await fetch(`/api/route-jobs/${savedResults.job.id}/results?${query}`, { cache: "no-store", signal: controller.signal });
-      const raw: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error("The next result page could not be loaded.");
-      if (!controller.signal.aborted && batchPageControllerRef.current === controller) openBatchResults(routeJobResultsPageSchema.parse(raw));
-    } catch (error) {
-      if (!controller.signal.aborted) setGenerationMessage(error instanceof Error ? error.message : "The next result page could not be loaded.");
-    } finally {
-      if (batchPageControllerRef.current === controller) {
-        batchPageControllerRef.current = null;
-        setBatchPageLoading(false);
-      }
-    }
-  };
-
-  const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
-
-  useEffect(() => {
-    const needsInitialRefresh = !jobsLoadedRef.current;
-    if (!needsInitialRefresh && activeJobCount === 0) return;
-    let stopped = false;
-    let timer: number | undefined;
-    const poll = async () => {
-      await refreshJobs();
-      const hasActiveJob = jobsRef.current.some((job) => ACTIVE_JOB_STATUSES.has(job.status));
-      if (!stopped && hasActiveJob) timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
-    };
-    if (needsInitialRefresh) void poll();
-    else timer = window.setTimeout(() => void poll(), jobsOpen ? JOB_POLL_OPEN_MS : JOB_POLL_CLOSED_MS);
-    return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); };
-  }, [activeJobCount, jobsOpen, refreshJobs]);
-
-  useEffect(() => {
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") void refreshJobs(true); };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [refreshJobs]);
-
-  useEffect(() => () => {
-    generationControllerRef.current?.abort();
-    reachabilityControllerRef.current?.abort();
-    batchPageControllerRef.current?.abort();
-    batchResultGeometryControllerRef.current?.abort();
-    restoredJobControllerRef.current?.abort();
-    jobsRefreshGenerationRef.current += 1;
-    jobsRefreshControllerRef.current?.abort();
-  }, []);
-
-  // Close matches open themselves only when there is nothing exact to read.
-  useEffect(() => { setNearMissesOpen((routeResults?.exact.length ?? 0) === 0); }, [routeResults]);
-
-  const generatedRoutes = useMemo(() => routeResults ? [...routeResults.exact, ...routeResults.nearMisses] : [], [routeResults]);
-  // Collapsing the close-match list also takes those traces off the map, so the
-  // map never shows more than the list claims to. Exact matches come first,
-  // so trimming the tail keeps every remaining result number correct.
-  const mappedRoutes = useMemo(() => {
-    if (!routeResults) return [];
-    return nearMissesOpen ? generatedRoutes : routeResults.exact;
-  }, [generatedRoutes, routeResults, nearMissesOpen]);
-
-  const toggleNearMisses = useCallback((open: boolean) => {
-    setNearMissesOpen(open);
-    if (open) return;
-    setSelectedRouteId((current) => {
-      const exact = routeResults?.exact ?? [];
-      return current && exact.some(({ id }) => id === current) ? current : exact[0]?.id;
-    });
-    setSelectedSegmentId(undefined);
-    setHoveredSegmentId(undefined);
-  }, [routeResults]);
-  const hasResultsPanel = generationState !== "idle";
-  const clearResults = useCallback(() => {
-    invalidateResults();
-    setMobilePanel("builder");
-  }, [invalidateResults]);
+  const hasResultsPanel = workspace.status !== "idle";
 
   return (
     <main className="app-frame">
       <header className="topbar">
         <h1>Alpine Loop</h1>
-        <nav className="region-strip" aria-label="Region packs">
-          <div className="region-list">
-            {orderedRegions.map((region) => {
-              const available = region.state === "available";
-              const selected = available && selectedPacks.some(({ id }) => id === region.packId);
-              const status = region.state === "planned"
-                ? "Planned; pack not yet available."
-                : region.state === "unavailable"
-                  ? "Pack unavailable on this device."
-                  : selected
-                    ? "Available; selected."
-                    : "Available.";
-              return (
-                <button
-                  type="button"
-                  className={["region-pill", selected ? "region-pill-selected" : ""].filter(Boolean).join(" ")}
-                  key={region.id}
-                  disabled={!available}
-                  aria-pressed={available ? selected : undefined}
-                  aria-label={`${region.label}. ${status}`}
-                  title={available ? `${region.pack.name} — Data ${region.pack.dataVersion}` : status}
-                  onClick={() => { if (available) togglePack(region.packId); }}
-                >
-                  {available ? <span className="status-dot" aria-hidden="true" /> : null}
-                  <span>{region.label}</span>
-                  <span className="visually-hidden"> {status}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
         <div className="topbar-actions">
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
             Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
@@ -880,7 +278,7 @@ export function HikeBuilder({
       </header>
 
       {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
-      <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsLoadState} loadError={jobsLoadError} refreshedAt={jobsRefreshedAt} onRefresh={refreshJobs} onOpenResults={openBatchResults} onClose={closeJobs} />
+      <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" && workspace.kind === "saved" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" && workspace.kind === "saved" ? workspace.jobId : undefined} onClose={closeJobs} />
 
       <div className={["workspace", hasResultsPanel ? "with-results" : "", desktopBuilderVisible ? "" : "without-builder", hasResultsPanel && !desktopResultsVisible ? "without-results" : ""].filter(Boolean).join(" ")}>
         <nav className="mobile-panel-nav" aria-label="Workspace panels">
@@ -902,9 +300,9 @@ export function HikeBuilder({
               <div className="field-row">
                 <label htmlFor="drive-origin">Origin</label>
                 <div className="input-with-action">
-                  <input id="drive-origin" className="control" type="search" aria-label="Driving origin" value={driveDraft.originText} autoComplete="off" placeholder="Address, place, or lat, lon" onChange={(event) => { const originText = event.currentTarget.value; originRequestSequenceRef.current += 1; reachabilityControllerRef.current?.abort(); const coordinates = parseCoordinateOrigin(originText); setDriveDraft((current) => coordinates?.success
+                  <input id="drive-origin" className="control" type="search" aria-label="Driving origin" value={driveDraft.originText} autoComplete="off" placeholder="Address, place, or lat, lon" onChange={(event) => { const originText = event.currentTarget.value; originRequestSequenceRef.current += 1; const coordinates = parseCoordinateOrigin(originText); setDriveDraft((current) => coordinates?.success
                     ? { ...current, originText, origin: coordinates.data, originSuggestions: [], state: "idle", error: undefined }
-                    : { ...current, originText, origin: current.origin?.label === originText ? current.origin : undefined, originSuggestions: [], state: "suggesting", error: undefined }); invalidateResults(); }} />
+                    : { ...current, originText, origin: current.origin?.label === originText ? current.origin : undefined, originSuggestions: [], state: "suggesting", error: undefined }); editDraft(); }} />
                 </div>
               </div>
               {driveDraft.originSuggestions.length ? <ul className="suggestion-list" role="listbox" aria-label="Origin suggestions">{driveDraft.originSuggestions.map((suggestion) => <li key={suggestion.id}><button type="button" role="option" aria-selected="false" onClick={() => void selectOriginSuggestion(suggestion)}>{suggestion.label}</button></li>)}</ul> : null}
@@ -915,19 +313,10 @@ export function HikeBuilder({
 
               <div className="field-row">
                 <label htmlFor="drive-duration">Drive time</label>
-                <select id="drive-duration" className="control" aria-label="Typical drive time" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); reachabilityControllerRef.current?.abort(); setDriveDraft((current) => ({ ...current, durationMinutes })); invalidateResults(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
+                <select id="drive-duration" className="control" aria-label="Typical drive time" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); setDriveDraft((current) => ({ ...current, durationMinutes })); editDraft(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
               </div>
 
-              <RegionMultiSelect
-                groups={regionOptionGroups}
-                selected={selectedRegionIds}
-                onChange={(packId, regionIds) => {
-                  reachabilityControllerRef.current?.abort();
-                  setSelectedRegionIds((current) => ({ ...current, [packId]: regionIds }));
-                  setFilterGeometry(undefined);
-                  invalidateResults();
-                }}
-              />
+              <RegionMultiSelect options={catalog?.regions ?? []} selected={selectedRegionIds} disabled={!catalog} onChange={(ids) => { setSelectedRegionIds(ids); editDraft(); }} />
               {driveDraft.error ? <p className="note-error" role="alert">{driveDraft.error}</p> : null}
 
               <section className="boundary-block" aria-labelledby="boundary-title">
@@ -936,7 +325,7 @@ export function HikeBuilder({
                   {drawnBounds
                     ? <output>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output>
                     : <output className="empty">None — using applicable drive time and reviewed regions</output>}
-                  {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); setFilterGeometry(undefined); invalidateResults(); }}>Clear</button> : null}
+                  {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); editDraft(); }}>Clear</button> : null}
                 </div>
                 <p className="hint">Draw on the map to override drive time and reviewed regions for both Quick and Full search.</p>
               </section>
@@ -946,9 +335,9 @@ export function HikeBuilder({
               <div className="section-head"><h3 id="constraints-title">Route</h3></div>
               <div className="range-table">
                 <div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Min</span><span>Max</span><span>Unit</span></div>
-                <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); invalidateResults(); }} />
-                <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} />
-                <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} />
+                <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); editDraft(); }} />
+                <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); editDraft(); }} />
+                <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); editDraft(); }} />
                 <GradePresetInput
                   disabled={!settingsLoaded}
                   enabled={values.gradeConstraintEnabled}
@@ -968,7 +357,7 @@ export function HikeBuilder({
                   <div className="range-row">
                     <label className="range-label-text" htmlFor="maximum-repeated-trail" title="Maximum share of the full route that may retrace any trail">Repeated trail</label>
                     <span aria-hidden="true" />
-                    <label className="range-value-cell"><span>Maximum repeated trail</span><input id="maximum-repeated-trail" aria-label="Maximum repeated trail" type="number" min="0" max="100" step="1" disabled={!settingsLoaded} value={values.maximumRepeatedTrailPct} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} onBlur={(event) => { const maximumRepeatedTrailPct = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isInteger(maximumRepeatedTrailPct) && maximumRepeatedTrailPct >= 0 && maximumRepeatedTrailPct <= 100) { changeLoopPreference({ maximumRepeatedTrailPct }); setValues((current) => ({ ...current, maximumRepeatedTrailPct: undefined })); } }} /></label>
+                    <label className="range-value-cell"><span>Maximum repeated trail</span><input id="maximum-repeated-trail" aria-label="Maximum repeated trail" type="number" min="0" max="100" step="1" disabled={!settingsLoaded} value={values.maximumRepeatedTrailPct} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); editDraft(); }} onBlur={(event) => { const maximumRepeatedTrailPct = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isInteger(maximumRepeatedTrailPct) && maximumRepeatedTrailPct >= 0 && maximumRepeatedTrailPct <= 100) { changeLoopPreference({ maximumRepeatedTrailPct }); setValues((current) => ({ ...current, maximumRepeatedTrailPct: undefined })); } }} /></label>
                     <span className="range-unit-cell">%</span>
                   </div>
                   <div className="range-row">
@@ -977,7 +366,7 @@ export function HikeBuilder({
                       <span>Shared approach</span>
                     </label>
                     <span aria-hidden="true" />
-                    <label className="range-value-cell"><span>Maximum shared approach</span><input id="maximum-shared-stem" aria-label="Maximum shared approach" type="number" min="0" max="30" step="0.1" disabled={!settingsLoaded || !values.maximumSharedStemEnabled} value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} onBlur={(event) => { const maximumSharedApproachMiles = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isFinite(maximumSharedApproachMiles) && maximumSharedApproachMiles >= 0 && maximumSharedApproachMiles <= 30) { changeLoopPreference({ maximumSharedApproachMiles }); setValues((current) => ({ ...current, maximumSharedStemMiles: undefined })); } }} /></label>
+                    <label className="range-value-cell"><span>Maximum shared approach</span><input id="maximum-shared-stem" aria-label="Maximum shared approach" type="number" min="0" max="30" step="0.1" disabled={!settingsLoaded || !values.maximumSharedStemEnabled} value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); editDraft(); }} onBlur={(event) => { const maximumSharedApproachMiles = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isFinite(maximumSharedApproachMiles) && maximumSharedApproachMiles >= 0 && maximumSharedApproachMiles <= 30) { changeLoopPreference({ maximumSharedApproachMiles }); setValues((current) => ({ ...current, maximumSharedStemMiles: undefined })); } }} /></label>
                     <span className="range-unit-cell">mi</span>
                   </div>
                 </div>
@@ -990,19 +379,20 @@ export function HikeBuilder({
           </div>
 
           <footer className="builder-action-footer">
+            {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. Install regional data to search.</p> : null}
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
             <div className="builder-action-buttons">
-              <button className="btn btn-primary" type="button" disabled={!settingsLoaded || generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button>
-              <button className="btn btn-primary" type="button" disabled={!settingsLoaded || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!ready || (workspace.status === "loading" && workspace.kind === "quick")} onClick={() => void runQuick()}>{workspace.status === "loading" && workspace.kind === "quick" ? "Searching…" : "Quick search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
-            <div className="action-legend" aria-hidden="true"><span>Fast · partial</span><span>Thorough · background</span></div>
+            <div className="action-legend"><span>Requested alternatives</span><span>Every eligible trailhead</span></div>
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}
           </footer>
         </aside>
 
-        <HikeMap packIds={selectedPacks.map(({ id }) => id)} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={selectedCoverageBbox} packCoverages={selectedPacks.map(({ coverage }) => coverage)} showRegionBoundaries={showRegionBoundaries} suggestedBounds={primaryPack.suggestedBounds} display={primaryPack.display} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : undefined); if (bounds) setRefinementGeometry(undefined); invalidateResults(); }} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
+        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} drawEnabled filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { clearResults(); setDrawnBounds(bounds); }} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
-        {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
+        {hasResultsPanel ? <ResultsPanel status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
 
         {hasResultsPanel ? (
           <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>

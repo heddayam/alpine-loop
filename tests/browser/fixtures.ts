@@ -1,6 +1,5 @@
+import type { SearchRequest, SearchResult } from "../../lib/contracts/search";
 import type {
-  GenerateClosedRoutesRequestV3,
-  GenerateClosedRoutesResponseV3,
   GeneratedClosedRouteV3,
   NamedArea,
   NamedAreaSummary,
@@ -59,8 +58,6 @@ export const TRAIL_NETWORK = {
     },
   }],
 };
-
-export const REACHABILITY_ID = "db52ceda-c6ef-47f1-9153-dba294a9eccc";
 
 function route(index: number): GeneratedClosedRouteV3 {
   const accessPoint = ACCESS_POINTS[index % ACCESS_POINTS.length]!;
@@ -139,68 +136,18 @@ function route(index: number): GeneratedClosedRouteV3 {
   };
 }
 
-export function routeResponse(
-  request: GenerateClosedRoutesRequestV3,
-  count = 1,
-): GenerateClosedRoutesResponseV3 {
-  const exact = Array.from({ length: count }, (_, index) => route(index));
-  const mode = request.accessFilter.mode;
+export function routeResponse(request: SearchRequest, count = 1): SearchResult {
   return {
-    version: 3,
-    requestId: `browser-${mode}`,
-    pack: {
-      id: "fixture-pack",
-      schemaVersion: "3",
-      dataVersion: "fixture-v3",
-      builtAt: "2026-08-04T00:00:00Z",
+    request,
+    area: {
+      label: request.area.mode === "drawn-area" ? "Drawn search area" : NAMED_AREA.name,
+      filterGeometry: request.area.mode === "drawn-area" ? {
+        type: "Polygon", coordinates: [[[request.area.bbox[0], request.area.bbox[1]], [request.area.bbox[2], request.area.bbox[1]], [request.area.bbox[2], request.area.bbox[3]], [request.area.bbox[0], request.area.bbox[3]], [request.area.bbox[0], request.area.bbox[1]]]],
+      } : FILTER_GEOMETRY,
+      ...(request.area.mode === "drive-time" && request.area.regionIds.length ? { refinementGeometry: REFINEMENT_GEOMETRY } : {}),
     },
-    requested: request.limit,
-    resolvedAccessFilter: mode === "drive-time"
-      ? {
-        mode,
-        label: request.accessFilter.regionId
-          ? "30 minutes from Castle Rock, refined to Monte Bello Open Space Preserve"
-          : "30 minutes from Castle Rock",
-        ...(request.accessFilter.regionId ? { region: { id: NAMED_AREA.id, name: NAMED_AREA.name } } : {}),
-        driveTime: {
-          minutes: 30,
-          provider: "arcgis",
-          resolvedAt: "2026-08-04T12:00:00Z",
-          originLabel: "Castle Rock, California",
-        },
-      }
-      : mode === "named-region"
-        ? { mode, label: NAMED_AREA.name, region: { id: NAMED_AREA.id, name: NAMED_AREA.name } }
-        : { mode, label: "Drawn trailhead area" },
-    exact,
-    nearMisses: [],
-    diagnostics: {
-      elapsedMs: 18,
-      expandedStates: 84,
-      candidateCount: count,
-      eligibleAccessPointCount: 2,
-      searchedAccessPointCount: 2,
-      graphQueryCount: 2,
-      maximumLoadedDirectedEdges: 42,
-      exhausted: false,
-      truncationReasons: [],
-      shortfallReasons: count < request.limit ? ["fewer-diverse-routes-than-requested"] : [],
-      noCycleAccessPointCount: 0,
-      feasibleAccessPointCount: 2,
-      attachmentGroupCount: 1,
-      probedAttachmentGroupCount: 1,
-      deeplySearchedAttachmentGroupCount: request.searchEffort === "thorough" ? 1 : 0,
-      loadedTopologyNetworkCount: 1,
-      cycleBlockCount: 1,
-      cyclePrimitiveCount: count,
-      composedCandidateCount: count,
-      repairedCandidateCount: 0,
-      directedValidationRejectionCount: 0,
-      expandedAssemblyStates: 84,
-      timeToFirstExactMs: 8,
-      hardTruncationReasons: [],
-      nonBudgetShortfallReasons: count < request.limit ? ["fewer-diverse-routes-than-requested"] : [],
-    },
+    exact: Array.from({ length: count }, (_, index) => ({ ...route(index), regionLabel: NAMED_AREA.name })),
+    nearMisses: [], incomplete: false, messages: [],
   };
 }
 

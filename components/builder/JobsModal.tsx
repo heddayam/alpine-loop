@@ -1,16 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  routeJobResultsPageSchema,
-  type RouteJob,
-  type RouteJobResultsPage,
-} from "@/lib/contracts";
+import { useEffect, useRef, useState } from "react";
+import type { RouteJobV2 as RouteJob } from "@/lib/contracts/search";
+import { ACTIVE_JOB_STATUSES as ACTIVE_STATUSES, type JobAction } from "./useJobs";
 
 export type JobsLoadState = "loading" | "ready" | "error";
-type PendingAction = "cancelling" | "deleting" | "opening";
+type PendingAction = JobAction | "opening";
 
-const ACTIVE_STATUSES = new Set<RouteJob["status"]>(["queued", "resolving-drive-time", "running"]);
 const STATUS_LABELS: Record<RouteJob["status"], string> = {
   queued: "Queued",
   "resolving-drive-time": "Resolving drive time",
@@ -29,7 +25,7 @@ function elapsed(milliseconds: number) {
 
 function stage(job: RouteJob, pending?: PendingAction) {
   const { processedAccessPointCount: processed, eligibleAccessPointCount: eligible } = job.progress;
-  if (pending === "cancelling") return "Stopping after the current trailhead; completed routes will be kept.";
+  if (pending === "cancelling") return "Stopping the search. Completed routes will be kept.";
   if (pending === "deleting" || job.status === "deleting") return "Removing this job and its saved routes.";
   switch (job.status) {
     case "queued": return "Waiting in queue.";
@@ -55,6 +51,9 @@ export function JobsModal({
   onClose,
   onRefresh,
   onOpenResults,
+  onMutate,
+  pendingByJob,
+  openingJobId,
 }: {
   open: boolean;
   jobs: RouteJob[];
@@ -63,22 +62,15 @@ export function JobsModal({
   refreshedAt?: number;
   onClose: () => void;
   onRefresh: (abortStale?: boolean) => Promise<void>;
-  onOpenResults: (page: RouteJobResultsPage) => void;
+  onOpenResults: (id: string) => void;
+  onMutate: (id: string, action: "cancel" | "delete") => void;
+  pendingByJob: Record<string, JobAction>;
+  openingJobId?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const resultsControllerRef = useRef<AbortController | null>(null);
-  const openRef = useRef(open);
-  const mountedRef = useRef(true);
-  const [feedback, setFeedback] = useState<{ kind: "status" | "error"; text: string }>();
-  const [pendingByJob, setPendingByJob] = useState<Record<string, PendingAction>>({});
   const [now, setNow] = useState(() => Date.now());
-
-  const close = useCallback(() => {
-    openRef.current = false;
-    resultsControllerRef.current?.abort();
-    onClose();
-  }, [onClose]);
+  const close = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -99,66 +91,12 @@ export function JobsModal({
   }, [close, open]);
 
   useEffect(() => {
-    openRef.current = open;
-    if (!open) resultsControllerRef.current?.abort();
-    return () => { if (!open) resultsControllerRef.current?.abort(); };
-  }, [open]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      openRef.current = false;
-      resultsControllerRef.current?.abort();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!open || !jobs.some((job) => ACTIVE_STATUSES.has(job.status) || job.status === "deleting")) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [jobs, open]);
 
   if (!open) return null;
-
-  const mutate = async (job: RouteJob, action: "cancel" | "delete") => {
-    const pending: PendingAction = action === "cancel" ? "cancelling" : "deleting";
-    setPendingByJob((current) => ({ ...current, [job.id]: pending }));
-    setFeedback(action === "cancel"
-      ? { kind: "status", text: "Cancellation requested. Completed routes will be kept." }
-      : undefined);
-    try {
-      const response = await fetch(`/api/route-jobs/${job.id}${action === "cancel" ? "/cancel" : ""}`, {
-        method: action === "cancel" ? "POST" : "DELETE",
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string" ? payload.error : `Job could not be ${action === "cancel" ? "cancelled" : "deleted"}.`);
-      await onRefresh(true);
-    } catch (error) {
-      setPendingByJob((current) => { const next = { ...current }; delete next[job.id]; return next; });
-      setFeedback({ kind: "error", text: error instanceof Error ? error.message : "The job could not be updated." });
-    }
-  };
-
-  const loadResults = async (job: RouteJob) => {
-    resultsControllerRef.current?.abort();
-    const controller = new AbortController();
-    resultsControllerRef.current = controller;
-    setPendingByJob((current) => ({ ...current, [job.id]: "opening" }));
-    setFeedback(undefined);
-    try {
-      const response = await fetch(`/api/route-jobs/${job.id}/results?limit=50`, { cache: "no-store", signal: controller.signal });
-      const payload: unknown = await response.json().catch(() => null);
-      if (controller.signal.aborted || resultsControllerRef.current !== controller || !openRef.current) return;
-      if (!response.ok) throw new Error("Job results could not be loaded.");
-      onOpenResults(routeJobResultsPageSchema.parse(payload));
-    } catch (error) {
-      if (!controller.signal.aborted && resultsControllerRef.current === controller && openRef.current) setFeedback({ kind: "error", text: error instanceof Error ? error.message : "Job results could not be loaded." });
-    } finally {
-      if (resultsControllerRef.current === controller) resultsControllerRef.current = null;
-      if (mountedRef.current) setPendingByJob((current) => { const next = { ...current }; delete next[job.id]; return next; });
-    }
-  };
 
   return (
     <div className="settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
@@ -169,12 +107,11 @@ export function JobsModal({
         </header>
         <div className="settings-modal-content jobs-list">
           <p id="jobs-description" className="hint">Saved on this device. Full searches resume after a restart; results stay until deleted.</p>
-          {feedback ? <p className={feedback.kind === "error" ? "error-state" : "job-note"} role={feedback.kind === "error" ? "alert" : "status"} aria-live={feedback.kind === "status" ? "polite" : undefined}>{feedback.text}</p> : null}
-          {loadState === "error" ? <div className="jobs-refresh-error" role="alert"><span>{loadError ?? "Progress may be out of date."}</span><button type="button" className="btn btn-danger" onClick={() => void onRefresh(true)}>Retry</button></div> : null}
+          {loadError ? <div className="jobs-refresh-error" role="alert"><span>{loadError}</span><button type="button" className="btn btn-danger" onClick={() => void onRefresh(true)}>Retry</button></div> : null}
           {loadState === "loading" && jobs.length === 0 ? <p className="loading-state" role="status">Loading saved jobs…</p> : null}
           {loadState !== "loading" && jobs.length === 0 ? <p className="empty-state" role="status">No batch searches yet.</p> : jobs.map((job) => {
             const progress = job.progress;
-            const storedPending = pendingByJob[job.id];
+            const storedPending = openingJobId === job.id ? "opening" : pendingByJob[job.id];
             const pending = storedPending === "cancelling" && !ACTIVE_STATUSES.has(job.status)
               ? undefined
               : storedPending;
@@ -188,11 +125,9 @@ export function JobsModal({
             const busy = Boolean(pending);
             return (
               <article className="job-card" key={job.id} aria-labelledby={titleId} aria-describedby={stageId} aria-busy={busy || undefined}>
-                <header><div><strong id={titleId}>{job.searchRegion.name}</strong><small>{job.request.origin && job.request.durationMinutes
-                  ? `${job.request.durationMinutes} min from ${job.request.origin.label}`
-                  : job.request.drawnAreaBbox
-                    ? "Drawn boundary"
-                    : "Entire reviewed region"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
+                <header><div><strong id={titleId}>{job.area.label}</strong><small>{job.request.area.mode === "drive-time"
+                  ? `${job.request.area.durationMinutes} min from ${job.request.area.origin.label}`
+                  : job.request.area.mode === "drawn-area" ? "Drawn boundary" : "Named regions"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
                 <p className="job-stage" id={stageId}>{stage(job, pending)}</p>
                 {determinate
                   ? <progress max="100" value={percent} aria-label={`${progress.processedAccessPointCount} of ${progress.eligibleAccessPointCount} trailheads attempted`} />
@@ -209,10 +144,10 @@ export function JobsModal({
                 {job.status === "cancelled" && !job.partial && progress.exactRouteCount + progress.nearMissRouteCount === 0 ? <p className="job-note">No routes were saved before cancellation.</p> : null}
                 {job.error ? <p className="error-state">{job.error}</p> : null}
                 <footer>
-                  {canOpen ? <button type="button" className="btn" disabled={busy} aria-label={`View results for ${job.searchRegion.name}`} onClick={() => void loadResults(job)}>{pending === "opening" ? "Opening…" : "View results"}</button> : null}
-                  {canCancel ? <button type="button" className="btn" disabled={busy} aria-label={`Cancel ${job.searchRegion.name} search`} onClick={() => void mutate(job, "cancel")}>Cancel</button> : null}
+                  {canOpen ? <button type="button" className="btn" disabled={busy} aria-label={`View results for ${job.area.label}`} onClick={() => onOpenResults(job.id)}>{pending === "opening" ? "Opening…" : "View results"}</button> : null}
+                  {canCancel ? <button type="button" className="btn" disabled={busy} aria-label={`Cancel ${job.area.label} search`} onClick={() => onMutate(job.id, "cancel")}>Cancel</button> : null}
                   {pending === "cancelling" ? <button type="button" className="btn" disabled>Cancelling…</button> : null}
-                  <button type="button" className="btn btn-danger" disabled={busy || job.status === "deleting"} aria-label={`Delete ${job.searchRegion.name} job and saved routes`} onClick={() => void mutate(job, "delete")}>{pending === "deleting" || job.status === "deleting" ? "Deleting…" : "Delete"}</button>
+                  <button type="button" className="btn btn-danger" disabled={busy || job.status === "deleting"} aria-label={`Delete ${job.area.label} job and saved routes`} onClick={() => onMutate(job.id, "delete")}>{pending === "deleting" || job.status === "deleting" ? "Deleting…" : "Delete"}</button>
                 </footer>
               </article>
             );

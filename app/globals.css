@@ -139,34 +139,6 @@ select.control { padding-right: var(--s1); cursor: pointer; }
   border-bottom: 1px solid var(--line-2);
 }
 .topbar h1 { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -.02em; white-space: nowrap; }
-.region-strip {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
-}
-.region-list { display: flex; gap: var(--s2); width: max-content; padding: 1px 0; }
-.region-pill {
-  display: inline-flex;
-  gap: var(--s2);
-  align-items: center;
-  flex: 0 0 auto;
-  padding: 0 var(--s2);
-  height: 1.4rem;
-  color: var(--ink-2);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: var(--fs-xs);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.region-pill:hover:not(:disabled) { color: var(--ink); border-color: var(--line-3); }
-.region-pill:disabled { cursor: not-allowed; color: var(--ink-3); background: var(--surface); opacity: .72; }
-.region-pill-selected { border-width: 1.5px; border-color: var(--accent); font-weight: 600; }
-.status-dot { flex: 0 0 auto; width: .4rem; height: .4rem; background: var(--accent); border-radius: 50%; }
-
 .topbar-actions { display: flex; flex: 0 0 auto; gap: var(--s2); align-items: center; margin-left: auto; }
 .chip-button {
   display: inline-flex;
@@ -296,14 +268,8 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .region-multiselect-summary { overflow: hidden; height: var(--ctl); padding: 0 var(--s2); line-height: var(--ctl); text-overflow: ellipsis; white-space: nowrap; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius); font-size: var(--fs-sm); }
 .region-multiselect-trigger:focus-visible .region-multiselect-summary { outline: 2px solid var(--accent); outline-offset: 1px; }
 .region-multiselect-panel { position: absolute; z-index: 30; top: calc(100% + var(--s1)); right: 0; left: calc(4.5rem + var(--s2)); max-height: min(22rem, 50dvh); padding: var(--s2); overflow-y: auto; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(16 24 21 / 18%); }
-.region-multiselect-group { margin: 0; padding: 0 0 var(--s2); border: 0; }
-.region-multiselect-group + .region-multiselect-group { padding-top: var(--s2); border-top: 1px solid var(--line); }
-.region-multiselect-group:last-child { padding-bottom: 0; }
-.region-multiselect-group-heading { padding: 0; color: var(--ink-2); font-size: var(--fs-xs); font-weight: 700; }
 .region-multiselect-option { display: flex; gap: var(--s2); align-items: center; min-height: 1.8rem; margin-left: var(--s3); cursor: pointer; font-size: var(--fs-xs); }
 .region-multiselect-option input { margin: 0; accent-color: var(--accent); }
-.region-multiselect-status, .region-multiselect-error { margin: var(--s1) 0 0 var(--s3); color: var(--ink-3); font-size: var(--fs-xs); }
-.region-multiselect-error { color: var(--danger); }
 
 .input-with-action { min-width: 0; }
 
@@ -824,7 +790,6 @@ details.result-section[open] > summary::before { content: "▾"; }
   .app-frame { position: static; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
   .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); padding: var(--s2) var(--s3); }
   .topbar h1 { grid-column: 1; grid-row: 1; }
-  .region-strip { grid-column: 1 / -1; grid-row: 2; width: 100%; }
   .topbar-actions { grid-column: 2; grid-row: 1; width: auto; margin-left: 0; }
   .segmented { display: none; }
   /* Every desktop column variant has to be beaten here, or a panel collapsed
@@ -855,7 +820,6 @@ details.result-section[open] > summary::before { content: "▾"; }
 }
 
 @media (max-width: 420px) {
-  .pack-chip { max-width: 9rem; }
   .coordinate-grid, .access-point-setting-grid { grid-template-columns: 1fr; }
   .settings-backdrop { padding: var(--s2); }
   .settings-modal { max-height: calc(100dvh - .75rem); }
@@ -863,3 +827,6 @@ details.result-section[open] > summary::before { content: "▾"; }
   .grade-preset-editor-head, .grade-preset-editor fieldset { grid-template-columns: minmax(3.5rem, 1fr) repeat(4, 2.85rem); padding-inline: var(--s1); }
   .job-card dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.viewed-search-context { padding: 0 16px; color: var(--ink-2); font-size: 12px; }
+.map-data-error { position: absolute; bottom: 30px; left: 16px; background: white; padding: 6px 10px; font-size: 12px; z-index: 2; }

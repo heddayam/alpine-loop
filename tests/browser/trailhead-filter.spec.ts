@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { REACHABILITY_ID } from "./fixtures";
-import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectTypedOrigin } from "./offline-harness";
+import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
 
 test("one builder runs Quick and Full search from the drawn boundary", async ({ page }) => {
   const harness = await installOfflineHarness(page);
@@ -9,19 +8,21 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("radio")).toHaveCount(0);
   await expect(page.getByLabel("Driving origin", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
+  await selectRegion(page);
   const regions = page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` });
   await expect(regions).toBeVisible();
   await regions.click();
-  await expect(page.getByRole("group", { name: "Fixture pack" }).getByRole("checkbox", { name: SEARCH_REGION.name })).toBeChecked();
+  await expect(page.getByRole("group", { name: "Region selection" }).getByRole("checkbox", { name: SEARCH_REGION.name })).toBeChecked();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
-  await enterDrawnArea(page);
+  const drawnBounds = await enterDrawnArea(page);
   await expect(page.getByText("Draw on the map to override drive time and reviewed regions for both Quick and Full search.")).toBeVisible();
   expect(harness.generationRequests).toHaveLength(0);
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.generationRequests[0]).toMatchObject({ version: 3, searchEffort: "quick", accessFilter: { mode: "drawn-area", bbox: [-122.183, 37.155, -122.14, 37.178] } });
+  expect(harness.generationRequests[0]?.area.mode).toBe("drawn-area");
+  if (harness.generationRequests[0]?.area.mode === "drawn-area") harness.generationRequests[0].area.bbox.forEach((value, index) => expect(value).toBeCloseTo(drawnBounds[index]!, 4));
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const firstCard = page.locator(".route-card").first();
   await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ })).toBeVisible();
@@ -52,35 +53,24 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(jobs).toBeVisible();
   await expect(jobs.getByText("Drawn boundary")).toBeVisible();
   expect(harness.batchRequests).toHaveLength(1);
-  expect(harness.batchRequests[0]).toMatchObject({
-    version: 1,
-    packId: "fixture-pack",
-    drawnAreaBbox: [-122.183, 37.155, -122.14, 37.178],
-    routesPerAccessPoint: 10,
-    criteria: { includeUncertainAccess: true },
-  });
-  expect(harness.batchRequests[0]).not.toHaveProperty("searchRegionId");
-  expect(harness.batchRequests[0]).not.toHaveProperty("origin");
-  expect(harness.batchRequests[0]).not.toHaveProperty("durationMinutes");
+  expect(harness.batchRequests[0]?.area).toEqual(harness.generationRequests[0]?.area);
+  expect(harness.batchRequests[0]?.criteria.includeUncertainAccess).toBe(true);
+  expect(harness.batchRequests[0]).not.toHaveProperty("packId");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("drive-time Quick search resolves reachability and applies the curated region", async ({ page }) => {
+test("drive-time Quick search sends one geographic request with named refinements", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
   await selectTypedOrigin(page);
+  await selectRegion(page);
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Quick search" }).click();
 
   await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.reachabilityRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", durationMinutes: 30, origin: { label: "Castle Rock, California" } });
-  expect(harness.calls).toContainEqual(expect.objectContaining({ method: "GET", pathname: `/api/reachability/${REACHABILITY_ID}` }));
-  expect(harness.generationRequests[0]).toMatchObject({
-    version: 3,
-    searchEffort: "quick",
-    accessFilter: { mode: "drive-time", reachabilityId: REACHABILITY_ID, regionId: SEARCH_REGION.id },
-  });
+  expect(harness.calls.some(({ pathname }) => pathname.includes("reachability"))).toBe(false);
+  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], durationMinutes: 30, origin: { label: "Castle Rock, California" } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
 });
@@ -89,6 +79,7 @@ test("Full search launches a persistent region-wide job without an origin and re
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
+  await selectRegion(page);
   await expect(page.getByLabel("Driving origin", { exact: true })).toHaveValue("");
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Full search" }).click();
@@ -96,15 +87,11 @@ test("Full search launches a persistent region-wide job without an origin and re
   const jobs = page.getByRole("dialog", { name: "Jobs" });
   await expect(jobs).toBeVisible();
   await expect(jobs.getByText("Completed", { exact: true })).toBeVisible();
-  await expect(jobs.getByText("Entire reviewed region")).toBeVisible();
-  expect(harness.batchRequests[0]).toMatchObject({ version: 1, packId: "fixture-pack", searchRegionId: SEARCH_REGION.id, routesPerAccessPoint: 10, criteria: { includeUncertainAccess: true } });
-  expect(harness.batchRequests[0]).not.toHaveProperty("origin");
-  expect(harness.batchRequests[0]).not.toHaveProperty("durationMinutes");
-  expect(harness.batchRequests[0]).not.toHaveProperty("startAccessPointId");
-  expect(harness.batchRequests[0]).not.toHaveProperty("searchEffort");
-  expect(harness.reachabilityRequests).toHaveLength(0);
+  await expect(jobs.getByText("Named regions")).toBeVisible();
+  expect(harness.batchRequests[0]).toMatchObject({ area: { mode: "named-regions", regionIds: [SEARCH_REGION.id] }, criteria: { includeUncertainAccess: true } });
+  expect(harness.batchRequests[0]).not.toHaveProperty("packId");
 
-  await jobs.getByRole("button", { name: "View results" }).click();
+  await jobs.getByRole("button", { name: /View results for/ }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
   expect(harness.blockedExternalRequests).toEqual([]);
@@ -147,21 +134,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   const harness = await installOfflineHarness(page, { routeCount: 10 });
   await page.goto("/");
 
-  const regionStrip = page.getByRole("navigation", { name: "Region packs" });
-  await expect(regionStrip.locator(".region-pill > span:not(.visually-hidden)")).toHaveText([
-    "Santa Cruz Mountains",
-    "Southern East Bay",
-    "Monterey–Carmel",
-    "Henry Coe",
-    "Marin & Mount Tam",
-    "Tahoe–Eldorado",
-    "Central Cascades",
-  ]);
-  const plannedRegion = regionStrip.locator(".region-pill").filter({ hasText: "Southern East Bay" });
-  await expect(plannedRegion).toBeDisabled();
-  await expect(plannedRegion.locator(".status-dot")).toHaveCount(0);
-  await expect.poll(() => regionStrip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await expect.poll(() => regionStrip.evaluate((element) => element.clientWidth)).toBeGreaterThan(300);
+  await expect(page.getByRole("navigation", { name: "Region packs" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Jobs" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Settings" })).toBeVisible();
 
@@ -213,6 +186,6 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
   await enterDrawnArea(page);
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.generationRequests[0]?.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
+  expect(harness.generationRequests[0]?.criteria.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
   expect(harness.blockedExternalRequests).toEqual([]);
 });

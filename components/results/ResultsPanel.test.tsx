@@ -5,12 +5,14 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GeneratedClosedRouteV3, GenerateClosedRoutesResponseV3 } from "@/lib/contracts";
+import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
+import type { SearchResult } from "@/lib/contracts/search";
 import { ResultsPanel } from "./ResultsPanel";
 import type { RouteResults } from "./types";
 
-function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosedRouteV3 {
+function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosedRouteV3 & { regionLabel: string } {
   return {
+    regionLabel: "Santa Cruz Mountains",
     id: "exact-loop",
     geometry: { type: "LineString", coordinates: [[-122.18, 37.15], [-122.16, 37.17], [-122.18, 37.15]] },
     startAccessPoint: { id: "start", name: "Saratoga Gap", lon: -122.18, lat: 37.15, accessState: "public", confidence: "high" },
@@ -64,41 +66,11 @@ function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosed
   };
 }
 
-type ResultsOverrides = Partial<Pick<GenerateClosedRoutesResponseV3, "requested" | "exact" | "nearMisses">> & {
-  diagnostics?: Partial<GenerateClosedRoutesResponseV3["diagnostics"]>;
-};
+type ResultsOverrides = Partial<Pick<SearchResult, "exact" | "nearMisses" | "incomplete" | "messages">> & { requested?: number };
 
 function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind: "quick" }> {
-  const diagnostics: GenerateClosedRoutesResponseV3["diagnostics"] = {
-    elapsedMs: 42.4,
-    expandedStates: 1200,
-    candidateCount: 18,
-    eligibleAccessPointCount: 4,
-    searchedAccessPointCount: 4,
-    graphQueryCount: 4,
-    maximumLoadedDirectedEdges: 900,
-    exhausted: false,
-    truncationReasons: [],
-    shortfallReasons: [],
-    noCycleAccessPointCount: 1,
-    feasibleAccessPointCount: 3,
-    attachmentGroupCount: 3,
-    probedAttachmentGroupCount: 3,
-    deeplySearchedAttachmentGroupCount: 3,
-    loadedTopologyNetworkCount: 2,
-    cycleBlockCount: 4,
-    cyclePrimitiveCount: 12,
-    composedCandidateCount: 8,
-    repairedCandidateCount: 1,
-    directedValidationRejectionCount: 0,
-    expandedAssemblyStates: 400,
-    timeToFirstExactMs: 12,
-    hardTruncationReasons: [],
-    nonBudgetShortfallReasons: ["fewer-exact-routes-than-requested"],
-    ...overrides.diagnostics,
-  };
   const exact = overrides.exact ?? [route()];
-  const nearMisses: GenerateClosedRoutesResponseV3["nearMisses"] = overrides.nearMisses ?? [{
+  const nearMisses: SearchResult["nearMisses"] = overrides.nearMisses ?? [{
     ...route({
       id: "near-lollipop",
       distanceMeters: 3218.688,
@@ -124,16 +96,9 @@ function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind
   }];
   return {
     kind: "quick",
-    requested: overrides.requested ?? 2,
-    exact: exact.map((route) => ({ ...route, regionLabel: "Santa Cruz Mountains" })),
-    nearMisses: nearMisses.map((route) => ({ ...route, regionLabel: "Santa Cruz Mountains" })),
-    searches: [{
-      label: "Santa Cruz Mountains",
-      requestId: "request-results-1",
-      pack: { id: "fixture-pack", schemaVersion: "3", dataVersion: "fixture-3", builtAt: "2026-08-01T00:00:00Z" },
-      resolvedAccessFilter: { mode: "drawn-area", label: "Drawn area" },
-      diagnostics,
-    }],
+    request: { area: { mode: "drawn-area", bbox: [-122.2, 37.1, -122.1, 37.2] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, limit: overrides.requested ?? 2 },
+    area: { label: "Drawn area" },
+    exact, nearMisses, incomplete: overrides.incomplete ?? false, messages: overrides.messages ?? [],
   };
 }
 
@@ -336,29 +301,23 @@ describe("ResultsPanel", () => {
         requested: 10,
         exact: [],
         nearMisses: [],
-        diagnostics: {
-          elapsedMs: 3000,
-          expandedStates: 100000,
-          exhausted: false,
-          hardTruncationReasons: ["deadline"],
-          nonBudgetShortfallReasons: ["no-feasible-cycle-access-points"],
-        },
+        incomplete: true,
+        messages: ["Search stopped at its time limit.", "No feasible cycle starts."],
       })}
       onSelectRoute={() => undefined}
     />);
     expect(screen.getByText("0 of 10 requested exact routes found.")).toBeVisible();
-    expect(screen.getByText(/effort limit stopped the search early/)).toBeVisible();
+    expect(screen.getByText(/This search is incomplete/)).toBeVisible();
     expect(screen.getByText(/Close matches are listed separately/)).toBeVisible();
     await userEvent.click(screen.getByText("Diagnostics"));
-    const diagnostics = screen.getByText("Diagnostics").closest("details") as HTMLElement;
-    expect(within(diagnostics).getByText(/Hard search limits:/).closest("p")).toHaveTextContent("deadline");
-    expect(within(diagnostics).getByText(/Shortfall:/).closest("p")).toHaveTextContent("no-feasible-cycle-access-points");
+    expect(screen.getByText("Search stopped at its time limit.")).toBeVisible();
+    expect(screen.getByText("No feasible cycle starts.")).toBeVisible();
   });
 
   it("does not call a complete exact set partial", () => {
     render(<ResultsPanel onHoverRoute={() => undefined}
       status="done"
-      results={results({ requested: 1, exact: [route()], nearMisses: [], diagnostics: { hardTruncationReasons: ["deadline"] } })}
+      results={results({ requested: 1, exact: [route()], nearMisses: [], incomplete: true })}
       onSelectRoute={() => undefined}
     />);
     expect(screen.queryByText(/requested exact routes found/)).not.toBeInTheDocument();
@@ -370,22 +329,11 @@ describe("ResultsPanel", () => {
       exact: [],
       nearMisses: results().nearMisses,
       job: {
-        version: 1,
+        version: 2,
         id: "3d594650-3436-4f8b-a0e8-38d13fc148ca",
         status: "cancelled",
-        request: {
-          version: 1,
-          packId: "fixture-pack",
-          searchRegionId: "region-1",
-          criteria: {
-            closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
-            distanceMiles: { min: 3, max: 8 },
-            includeUncertainAccess: true,
-          },
-          routesPerAccessPoint: 10,
-        },
-        pack: { id: "fixture-pack", dataVersion: "fixture-v4", builtAt: "2026-08-04T00:00:00Z" },
-        searchRegion: { id: "region-1", name: "Santa Cruz Mountains" },
+        request: { area: { mode: "named-regions", regionIds: ["region-1"] }, criteria: results().request.criteria },
+        area: { label: "Santa Cruz Mountains" },
         progress: { eligibleAccessPointCount: 10, processedAccessPointCount: 4, exactRouteCount: 8, nearMissRouteCount: 2, truncatedAccessPointCount: 1, elapsedMs: 12_000 },
         partial: true,
         stale: true,
@@ -406,28 +354,6 @@ describe("ResultsPanel", () => {
     expect(screen.getByText("Elapsed").nextElementSibling).toHaveTextContent("12,000 ms");
     expect(screen.queryByText("States explored")).not.toBeInTheDocument();
     expect(screen.queryByText("Graph queries")).not.toBeInTheDocument();
-  });
-
-  it("keeps each Quick search's diagnostics and identity separate", async () => {
-    const combined = results({ requested: 2 });
-    const first = combined.searches[0]!;
-    combined.searches.push({
-      ...first,
-      label: "East Bay",
-      requestId: "request-east-bay",
-      pack: { ...first.pack, id: "east-bay" },
-      diagnostics: { ...first.diagnostics, elapsedMs: 71, expandedStates: 300 },
-    });
-    render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={combined} onSelectRoute={() => undefined} />);
-    expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
-    await userEvent.click(screen.getByText("Diagnostics"));
-    const west = within(screen.getByRole("region", { name: "Santa Cruz Mountains" }));
-    const east = within(screen.getByRole("region", { name: "East Bay" }));
-    expect(west.getByText("Elapsed").nextElementSibling).toHaveTextContent("42 ms");
-    expect(east.getByText("Elapsed").nextElementSibling).toHaveTextContent("71 ms");
-    expect(west.getByText("States explored").nextElementSibling).toHaveTextContent("1,200");
-    expect(east.getByText("States explored").nextElementSibling).toHaveTextContent("300");
-    expect(east.getByText("Request ID").nextElementSibling).toHaveTextContent("request-east-bay");
   });
 
   it("announces loading, error, and cancelled states", () => {

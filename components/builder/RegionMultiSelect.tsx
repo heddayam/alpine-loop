@@ -1,35 +1,20 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-
-export type RegionOptionGroup = {
-  packId: string;
-  label: string;
-  state: "loading" | "ready" | "error";
-  error?: string;
-  options: Array<{ id: string; name: string }>;
-};
+import { useEffect, useId, useRef, useState } from "react";
 
 type RegionMultiSelectProps = {
-  groups: RegionOptionGroup[];
-  selected: Readonly<Record<string, readonly string[]>>;
-  onChange: (packId: string, regionIds: string[]) => void;
+  options: Array<{ id: string; name: string }>;
+  selected: readonly string[];
+  onChange: (regionIds: string[]) => void;
   disabled?: boolean;
 };
 
-export function RegionMultiSelect({ groups, selected, onChange, disabled = false }: RegionMultiSelectProps) {
+export function RegionMultiSelect({ options, selected, onChange, disabled = false }: RegionMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-
-  const selectedOptions = useMemo(
-    () => groups.flatMap((group) => {
-      const selectedIds = new Set(selected[group.packId] ?? []);
-      return group.options.filter((option) => selectedIds.has(option.id));
-    }),
-    [groups, selected],
-  );
+  const selectedOptions = options.filter(({ id }) => selected.includes(id));
   const summary = selectedOptions.length === 0
     ? "Choose regions"
     : selectedOptions.length === 1
@@ -57,14 +42,11 @@ export function RegionMultiSelect({ groups, selected, onChange, disabled = false
     };
   }, [open]);
 
-  const updateGroup = (group: RegionOptionGroup, optionId: string, checked: boolean) => {
-    const nextSelected = new Set(selected[group.packId] ?? []);
-    if (checked) nextSelected.add(optionId);
-    else nextSelected.delete(optionId);
-    onChange(
-      group.packId,
-      group.options.filter((option) => nextSelected.has(option.id)).map((option) => option.id),
-    );
+  const update = (optionId: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(optionId);
+    else next.delete(optionId);
+    onChange(options.filter(({ id }) => next.has(id)).map(({ id }) => id));
   };
 
   return (
@@ -86,28 +68,11 @@ export function RegionMultiSelect({ groups, selected, onChange, disabled = false
 
       {open ? (
         <div id={panelId} className="region-multiselect-panel" role="group" aria-label="Region selection">
-          {groups.map((group) => (
-            <fieldset key={group.packId} className="region-multiselect-group">
-              <legend className="region-multiselect-group-heading">{group.label}</legend>
-              {group.state === "loading" ? (
-                <p className="region-multiselect-status" role="status">Loading regions…</p>
-              ) : group.state === "error" ? (
-                <p className="region-multiselect-error" role="alert">{group.error || "Regions unavailable."}</p>
-              ) : group.options.length === 0 ? (
-                <p className="region-multiselect-status">No regions available.</p>
-              ) : (
-                group.options.map((option) => (
-                  <label key={option.id} className="region-multiselect-option">
-                    <input
-                      type="checkbox"
-                      checked={(selected[group.packId] ?? []).includes(option.id)}
-                      onChange={(event) => updateGroup(group, option.id, event.currentTarget.checked)}
-                    />
-                    <span>{option.name}</span>
-                  </label>
-                ))
-              )}
-            </fieldset>
+          {options.map((option) => (
+            <label key={option.id} className="region-multiselect-option">
+              <input type="checkbox" checked={selected.includes(option.id)} onChange={(event) => update(option.id, event.currentTarget.checked)} />
+              <span>{option.name}</span>
+            </label>
           ))}
         </div>
       ) : null}

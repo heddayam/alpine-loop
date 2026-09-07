@@ -472,18 +472,19 @@ export function ResultsPanel({
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <ResultsHeading total={total} onClose={onClose} />
+      <p className="viewed-search-context">Viewing {quick?.area.label ?? job?.area.label} · {(quick?.request.criteria ?? job!.request.criteria).distanceMiles.min}–{(quick?.request.criteria ?? job!.request.criteria).distanceMiles.max} mi</p>
 
-      {quick && results.exact.length < quick.requested ? (
+      {quick && results.exact.length < quick.request.limit ? (
         <div className="results-state" role="status" aria-live="polite">
-          <strong>{results.exact.length} of {quick.requested} requested exact routes found.</strong>
-          <span>{quick.searches.some(({ diagnostics }) => diagnostics.hardTruncationReasons.length > 0)
-            ? "The effort limit stopped the search early."
-            : quick.searches.every(({ diagnostics }) => diagnostics.exhausted)
-              ? "The search was exhausted before finding enough exact matches."
-              : "Fewer exact matches than requested."} Close matches are listed separately.</span>
+          <strong>{results.exact.length} of {quick.request.limit} requested exact routes found.</strong>
+          <span>{quick.incomplete
+            ? "This search is incomplete."
+            : "Fewer exact matches than requested."} Close matches are listed separately.</span>
         </div>
       ) : null}
 
+      {quick?.incomplete && quick.exact.length >= quick.request.limit ? <p className="results-state" role="status">This search is incomplete. Some areas or starts could not be fully searched.</p> : null}
+      {quick?.messages.length ? <div className="results-state" role="status">{quick.messages.map((message, index) => <p key={index}>{message}</p>)}</div> : null}
       {job ? (
         <div className="results-state" role="status">
           <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
@@ -571,41 +572,15 @@ export function ResultsPanel({
 
       <details className="diagnostics">
         <summary>Diagnostics</summary>
-        {quick?.searches.map((search) => {
-          const shortfallReasons = [...new Set([
-            ...search.diagnostics.nonBudgetShortfallReasons,
-            ...search.diagnostics.shortfallReasons,
-          ])];
-          return <section key={search.requestId} aria-label={search.label}>
-            <p><strong>{search.label}</strong> · {search.resolvedAccessFilter.label}</p>
-            <dl>
-              <div><dt>Elapsed</dt><dd>{Math.round(search.diagnostics.elapsedMs).toLocaleString("en-US")} ms</dd></div>
-              <div><dt>States explored</dt><dd>{search.diagnostics.expandedStates.toLocaleString("en-US")}</dd></div>
-              <div><dt>Candidates</dt><dd>{search.diagnostics.candidateCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Eligible starts</dt><dd>{search.diagnostics.eligibleAccessPointCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Searched starts</dt><dd>{search.diagnostics.searchedAccessPointCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Graph queries</dt><dd>{search.diagnostics.graphQueryCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Max loaded edges</dt><dd>{search.diagnostics.maximumLoadedDirectedEdges.toLocaleString("en-US")}</dd></div>
-              <div><dt>Cycle-feasible starts</dt><dd>{search.diagnostics.feasibleAccessPointCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>No-cycle starts</dt><dd>{search.diagnostics.noCycleAccessPointCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Attachment groups probed</dt><dd>{search.diagnostics.probedAttachmentGroupCount.toLocaleString("en-US")} / {search.diagnostics.attachmentGroupCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Groups deeply searched</dt><dd>{search.diagnostics.deeplySearchedAttachmentGroupCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Cycle primitives</dt><dd>{search.diagnostics.cyclePrimitiveCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Composed candidates</dt><dd>{search.diagnostics.composedCandidateCount.toLocaleString("en-US")}</dd></div>
-              <div><dt>Request ID</dt><dd>{search.requestId}</dd></div>
-            </dl>
-            {search.diagnostics.hardTruncationReasons.length ? <p><strong>Hard search limits:</strong> {search.diagnostics.hardTruncationReasons.join(" · ")}</p> : null}
-            {search.diagnostics.truncationReasons.length ? <p><strong>Search limits:</strong> {search.diagnostics.truncationReasons.join(" · ")}</p> : null}
-            {shortfallReasons.length ? <p><strong>Shortfall:</strong> {shortfallReasons.join(" · ")}</p> : null}
-          </section>;
-        })}
+        {quick ? <>
+          <p>{quick.area.label}</p>
+        </> : null}
         {job ? <>
-          <p>{job.request.drawnAreaBbox ? "Drawn boundary" : job.request.durationMinutes ? `${job.request.durationMinutes} minutes · ${job.searchRegion.name}` : job.searchRegion.name}</p>
+          <p>{job.area.label}</p>
           <dl>
             <div><dt>Elapsed</dt><dd>{Math.round(job.progress.elapsedMs).toLocaleString("en-US")} ms</dd></div>
             <div><dt>Saved exact routes</dt><dd>{job.progress.exactRouteCount}</dd></div>
             <div><dt>Saved close matches</dt><dd>{job.progress.nearMissRouteCount}</dd></div>
-            <div><dt>Pack version</dt><dd>{job.pack.dataVersion}</dd></div>
             <div><dt>Job ID</dt><dd>{job.id}</dd></div>
           </dl>
         </> : null}
