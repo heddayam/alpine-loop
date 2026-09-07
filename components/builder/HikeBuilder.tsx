@@ -235,10 +235,6 @@ export function HikeBuilder({
   const selectedCoverageBbox = useMemo(() => selectedPacks.length
     ? unionBounds(selectedPacks.map(({ coverageBbox }) => coverageBbox))
     : pack.coverageBbox, [pack.coverageBbox, selectedPacks]);
-  const trailNetwork = useMemo(() => ({
-    type: "FeatureCollection" as const,
-    features: selectedPacks.flatMap((selectedPack) => selectedPack.trailNetwork.features),
-  }), [selectedPacks]);
   const selectedPackLabels = useMemo(() => new Map(orderedRegions.flatMap((region) =>
     region.state === "available" ? [[region.packId, region.label] as const] : [])), [orderedRegions]);
   const regionOptionGroups = useMemo<RegionOptionGroup[]>(() => selectedPacks.map((selectedPack) => {
@@ -1004,7 +1000,7 @@ export function HikeBuilder({
           </footer>
         </aside>
 
-        <HikeMap packIds={selectedPacks.map(({ id }) => id)} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={selectedCoverageBbox} packCoverages={selectedPacks.map(({ coverage }) => coverage)} showRegionBoundaries={showRegionBoundaries} suggestedBounds={primaryPack.suggestedBounds} display={primaryPack.display} trailNetwork={trailNetwork} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : undefined); if (bounds) setRefinementGeometry(undefined); invalidateResults(); }} onAccessPointSelect={() => undefined} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
+        <HikeMap packIds={selectedPacks.map(({ id }) => id)} drawBounds={drawnBounds} drawEnabled filterGeometry={filterGeometry} refinementGeometry={refinementGeometry} packCoverageBbox={selectedCoverageBbox} packCoverages={selectedPacks.map(({ coverage }) => coverage)} showRegionBoundaries={showRegionBoundaries} suggestedBounds={primaryPack.suggestedBounds} display={primaryPack.display} accessPoints={displayedAccessPoints} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { setDrawnBounds(bounds); setFilterGeometry(bounds ? boundsGeometry(bounds) : undefined); if (bounds) setRefinementGeometry(undefined); invalidateResults(); }} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} />
 
         {hasResultsPanel ? <ResultsPanel status={generationState as ResultsStatus} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: batchPageLoading, onNext: () => void loadNextBatchPage() } : undefined} /> : null}
 
