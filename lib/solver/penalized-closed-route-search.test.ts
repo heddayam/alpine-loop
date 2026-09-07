@@ -136,6 +136,22 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.nearCandidates[0]!.violatedConstraints).toContain("maximum-elevation-outside-range");
   });
 
+  it("retains interior elevation samples when a whole ring becomes one corridor", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 50, oneWay: true, gain: 10 },
+      { id: 2, from: "a", to: "b", length: 50, oneWay: true, gain: 10 },
+      { id: 3, from: "b", to: "s", length: 50, oneWay: true, gain: 0 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      distanceMiles: { min: 140 / 1_609.344, max: 160 / 1_609.344 },
+      steepestSustainedGradePct: { min: 0, max: 5 },
+    }), { budget, now: () => 0 });
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates[0]!.violatedConstraints).toContain("sustained-grade-outside-range");
+    expect(result.nearCandidates[0]!.elevationGainMeters).toBe(20);
+    expect(result.nearCandidates[0]!.traversals.map(({ edge }) => edge.edgeKey)).toEqual([1, 2, 3]);
+  });
+
   it("retains shared-stem failures as labeled near candidates", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "p", length: 500 },
@@ -206,6 +222,28 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.diagnostics.expandedStates).toBe(1);
     expect(result.diagnostics.exhausted).toBe(true);
     expect(result.diagnostics.truncationReasons).toContain("maximum-expanded-states");
+  });
+
+  it("joins distinct cycles when the complete route satisfies the repetition limit", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+      { id: 4, from: "s", to: "p", length: 500 },
+      { id: 5, from: "p", to: "x", length: 700 },
+      { id: 6, from: "x", to: "y", length: 700 },
+      { id: 7, from: "y", to: "p", length: 700 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 10, allowMultiCycle: true },
+      distanceMiles: { min: 6_000 / 1_609.344, max: 6_200 / 1_609.344 },
+      limit: 1,
+    }), { budget, now: () => 0 });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.distanceMeters).toBe(6_100);
+    expect(result.candidates[0]!.repeatedEdgeFraction).toBeCloseTo(500 / 6_100);
+    expect(result.candidates[0]!.violatedConstraints).toEqual([]);
+    expect(new Set(result.candidates[0]!.traversals.map(({ edge }) => edge.physicalEdgeKey)).size).toBe(7);
   });
 
   it("cooperatively aborts before and during graph work", () => {

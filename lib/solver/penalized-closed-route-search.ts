@@ -8,6 +8,7 @@ import {
 } from "@/lib/graph";
 
 import type { SolverBudget } from "./budget";
+import { contractCorridors, physicalKeyOf } from "./contract-corridors";
 import { stableHash } from "./route-identity";
 import { RouteSearchCancelledError } from "./control";
 
@@ -71,15 +72,13 @@ export type PenalizedClosedRouteSearchOptions = {
 };
 
 type InternalGraph = {
-  traversals: EdgeTraversal[];
+  traversals: EdgeTraversal[][];
   nodeIds: string[];
   from: Int32Array;
   to: Int32Array;
   length: Float64Array;
   gain: Float64Array;
   maximumElevation: Float64Array;
-  maximumGrade: Float64Array | null;
-  nodeElevation: Float64Array | null;
   physical: string[];
   directed: string[];
   outgoing: number[][];
@@ -169,81 +168,51 @@ class MinHeap {
   }
 }
 
-function physicalKeyOf(edge: EdgeTraversal["edge"]): string {
-  if (edge.physicalEdgeKey !== undefined) return `physical:${edge.physicalEdgeKey}`;
-  const forward = edge.coordinates.map(([lon, lat]) => `${lon},${lat}`).join(";");
-  const reverse = [...edge.coordinates].reverse().map(([lon, lat]) => `${lon},${lat}`).join(";");
-  return `legacy:${forward < reverse ? forward : reverse}:${edge.lengthMeters}`;
-}
-
 function buildGraph(
   graph: InducedGraph,
   startNodeId: string,
   includeUncertainAccess: boolean,
-  measureSustainedGrade: boolean,
 ): InternalGraph {
-  const traversals: EdgeTraversal[] = [];
+  const originals: EdgeTraversal[] = [];
   for (const edge of graph.edges) {
     const from = graph.nodes.get(edge.fromNodeId);
     const to = graph.nodes.get(edge.toNodeId);
-    if (!from || !to || !edgeIsTraversable(edge, includeUncertainAccess)) continue;
-    traversals.push({ edge, from, to });
+    if (from && to && edgeIsTraversable(edge, includeUncertainAccess)) originals.push({ edge, from, to });
   }
-  traversals.sort((left, right) => left.edge.id.localeCompare(right.edge.id)
-    || left.from.id.localeCompare(right.from.id)
-    || left.to.id.localeCompare(right.to.id));
-  const nodeIds = [...new Set(traversals.flatMap(({ from, to }) => [from.id, to.id]))].sort();
+  originals.sort((left, right) => left.edge.id.localeCompare(right.edge.id)
+    || left.from.id.localeCompare(right.from.id) || left.to.id.localeCompare(right.to.id));
+  const traversals = contractCorridors(originals, startNodeId);
+  const nodeIds = [...new Set(traversals.flatMap((chain) => [chain[0]!.from.id, chain.at(-1)!.to.id]))].sort();
   const nodeIndex = new Map(nodeIds.map((id, index) => [id, index]));
   const from = new Int32Array(traversals.length);
   const to = new Int32Array(traversals.length);
   const length = new Float64Array(traversals.length);
   const gain = new Float64Array(traversals.length);
-  const maximumElevation = new Float64Array(traversals.length);
-  const maximumGrade = measureSustainedGrade ? new Float64Array(traversals.length) : null;
-  const nodeElevation = measureSustainedGrade ? new Float64Array(nodeIds.length) : null;
-  if (nodeElevation) {
-    nodeIds.forEach((id, index) => {
-      nodeElevation[index] = graph.nodes.get(id)?.elevationMeters ?? Number.NaN;
-    });
-  }
+  const maximumElevation = new Float64Array(traversals.length).fill(Number.NEGATIVE_INFINITY);
   const physical: string[] = [];
   const directed: string[] = [];
   const outgoing = Array.from({ length: nodeIds.length }, () => [] as number[]);
   const incoming = Array.from({ length: nodeIds.length }, () => [] as number[]);
   const reverse = new Map<string, number>();
-  for (let index = 0; index < traversals.length; index += 1) {
-    const traversal = traversals[index]!;
-    from[index] = nodeIndex.get(traversal.from.id)!;
-    to[index] = nodeIndex.get(traversal.to.id)!;
-    length[index] = traversal.edge.lengthMeters;
-    gain[index] = traversal.edge.gainMeters;
-    maximumElevation[index] = traversal.edge.maximumElevationMeters ?? Number.NEGATIVE_INFINITY;
-    if (maximumGrade) maximumGrade[index] = traversal.edge.maximumSustainedGradePct ?? 0;
-    physical[index] = physicalKeyOf(traversal.edge);
-    directed[index] = traversal.edge.edgeKey === undefined
-      ? traversal.edge.id
-      : String(traversal.edge.edgeKey);
+  for (const [index, chain] of traversals.entries()) {
+    from[index] = nodeIndex.get(chain[0]!.from.id)!;
+    to[index] = nodeIndex.get(chain.at(-1)!.to.id)!;
+    const keys = chain.map(({ edge }) => physicalKeyOf(edge));
+    const forwardKey = keys.join("|");
+    const reverseKey = [...keys].reverse().join("|");
+    physical[index] = forwardKey < reverseKey ? forwardKey : reverseKey;
+    directed[index] = chain.map(({ edge }) => edge.edgeKey ?? edge.id).join(",");
+    for (const { edge } of chain) {
+      length[index] += edge.lengthMeters;
+      gain[index] += edge.gainMeters;
+      maximumElevation[index] = Math.max(maximumElevation[index]!, edge.maximumElevationMeters ?? Number.NEGATIVE_INFINITY);
+    }
     outgoing[from[index]!]!.push(index);
     incoming[to[index]!]!.push(index);
     reverse.set(`${physical[index]}:${from[index]}:${to[index]}`, index);
   }
-  return {
-    traversals,
-    nodeIds,
-    from,
-    to,
-    length,
-    gain,
-    maximumElevation,
-    maximumGrade,
-    nodeElevation,
-    physical,
-    directed,
-    outgoing,
-    incoming,
-    reverse,
-    start: nodeIndex.get(startNodeId) ?? -1,
-  };
+  return { traversals, nodeIds, from, to, length, gain, maximumElevation, physical, directed,
+    outgoing, incoming, reverse, start: nodeIndex.get(startNodeId) ?? -1 };
 }
 
 function physicalOverlap(left: Metrics, right: Metrics): number {
@@ -269,11 +238,11 @@ export function searchPenalizedClosedRoutes(
   const now = options.now ?? Date.now;
   const startedAt = now();
   const deadlineAt = startedAt + options.budget.deadlineMs;
+  if (options.signal?.aborted) throw new RouteSearchCancelledError(options.signal.reason);
   const graph = buildGraph(
     sourceGraph,
     typeof start === "string" ? start : start.nodeId,
     request.includeUncertainAccess,
-    request.steepestSustainedGradePct !== undefined,
   );
   const truncationReasons = new Set<string>();
   const penalties = new Map<string, number>();
@@ -299,7 +268,7 @@ export function searchPenalizedClosedRoutes(
     : request.closedRoute.maximumSharedStemMiles * METERS_PER_MILE;
   const overlapLimit = options.maximumRouteOverlapFraction ?? 0.8;
 
-  if (graph.traversals.length > options.budget.maximumDirectedEdges) {
+  if (graph.traversals.reduce((count, chain) => count + chain.length, 0) > options.budget.maximumDirectedEdges) {
     truncationReasons.add("maximum-directed-edges");
   }
 
@@ -397,23 +366,26 @@ export function searchPenalizedClosedRoutes(
     let repeated = 0;
     const physicalLengths = new Map<string, number>();
     const nodes = new Set([graph.start]);
-    const elevationProfile = graph.nodeElevation
-      ? [{ distanceMeters: 0, elevationMeters: graph.nodeElevation[graph.start]! }]
+    const elevationProfile = request.steepestSustainedGradePct
+      ? [{ distanceMeters: 0, elevationMeters: sourceGraph.nodes.get(graph.nodeIds[graph.start]!)?.elevationMeters ?? Number.NaN }]
       : null;
     for (const edge of edges) {
       distance += graph.length[edge]!;
       gain += graph.gain[edge]!;
       maximumElevation = Math.max(maximumElevation, graph.maximumElevation[edge]!);
-      if (graph.maximumGrade && graph.length[edge]! >= SUSTAINED_GRADE_WINDOW_M) {
-        maximumGrade = Math.max(maximumGrade, graph.maximumGrade[edge]!);
+      if (elevationProfile) {
+        let offset = distance - graph.length[edge]!;
+        for (const traversal of graph.traversals[edge]!) {
+          if (traversal.edge.lengthMeters >= SUSTAINED_GRADE_WINDOW_M) {
+            maximumGrade = Math.max(maximumGrade, traversal.edge.maximumSustainedGradePct ?? 0);
+          }
+          offset += traversal.edge.lengthMeters;
+          elevationProfile.push({ distanceMeters: offset, elevationMeters: traversal.to.elevationMeters ?? Number.NaN });
+        }
       }
       if (physicalLengths.has(graph.physical[edge]!)) repeated += graph.length[edge]!;
       else physicalLengths.set(graph.physical[edge]!, graph.length[edge]!);
       nodes.add(graph.to[edge]!);
-      elevationProfile?.push({
-        distanceMeters: distance,
-        elevationMeters: graph.nodeElevation![graph.to[edge]!]!,
-      });
     }
     if (elevationProfile?.every(({ elevationMeters }) => Number.isFinite(elevationMeters))) {
       maximumGrade = Math.max(maximumGrade, maximumSustainedGradePct(elevationProfile) ?? 0);
@@ -855,7 +827,11 @@ export function searchPenalizedClosedRoutes(
 
   const assemblyPass = (): void => {
     if (!request.closedRoute.allowMultiCycle) return;
-    const pool = [...nearBelow.filter((candidate) => candidate.violations.every((item) => item.includes("below"))), ...validArchive]
+    // A distinct cycle can dilute a short route's repeated-trail fraction.
+    // Validate the combined walk instead of rejecting that component early.
+    const pool = [...nearBelow.filter((candidate) =>
+      candidate.metrics.repeated <= maximumRepeatedFraction * maxMeters
+      && candidate.violations.every((item) => item.includes("below") || item === "repeated-trail-above-maximum")), ...validArchive]
       .sort(compareCandidate);
     const pairs: Array<{ left: Candidate; right: Candidate; score: number }> = [];
     let enumerated = 0;
@@ -948,7 +924,7 @@ export function searchPenalizedClosedRoutes(
   const near = [...nearBelow, ...nearAbove].sort(compareCandidate).slice(0, PENALIZED_SEARCH_CAPS.maximumNearResults);
   const materialize = (candidate: Candidate): PenalizedClosedRouteCandidate => ({
     id: candidate.id,
-    traversals: candidate.edges.map((edge) => graph.traversals[edge]!),
+    traversals: candidate.edges.flatMap((edge) => graph.traversals[edge]!),
     distanceMeters: candidate.metrics.distance,
     elevationGainMeters: candidate.metrics.gain,
     repeatedEdgeFraction: candidate.metrics.repeatedFraction,
