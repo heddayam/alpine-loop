@@ -2,43 +2,33 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { CreateBatchRouteJobV1, RouteJobResult } from "@/lib/contracts";
+import type { SearchIntent } from "@/lib/contracts";
+import type { SearchPlan } from "@/lib/server/search-plan";
+import type { RouteJobResult } from "./types";
 import { SQLiteRouteJobStore } from "./store";
 
 const temporary: string[] = [];
 afterEach(() => temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
 
-const request: CreateBatchRouteJobV1 = {
-  version: 1,
-  packId: "fixture-pack",
-  origin: { lon: -122.1, lat: 37.3, label: "Home" },
-  durationMinutes: 30,
-  searchRegionId: "pack:fixture-pack",
+const request: SearchIntent = {
+  area: { mode: "drive-time", origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30, regionIds: ["fixture-pack::pack:fixture-pack"] },
   criteria: {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
   },
-  routesPerAccessPoint: 10,
 };
-const regionWideRequest: CreateBatchRouteJobV1 = {
-  version: 1,
-  packId: "fixture-pack",
-  searchRegionId: "pack:fixture-pack",
-  criteria: request.criteria,
-  routesPerAccessPoint: 10,
+const regionWideRequest: SearchIntent = {
+  area: { mode: "named-regions", regionIds: ["fixture-pack::pack:fixture-pack"] }, criteria: request.criteria,
 };
-const drawnAreaRequest: CreateBatchRouteJobV1 = {
-  version: 1,
-  packId: "fixture-pack",
-  drawnAreaBbox: [-122.4, 37.1, -122.2, 37.3],
-  criteria: request.criteria,
-  routesPerAccessPoint: 10,
+const drawnAreaRequest: SearchIntent = {
+  area: { mode: "drawn-area", bbox: [-122.4, 37.1, -122.2, 37.3] }, criteria: request.criteria,
 };
 
 function route(id: string) {
   return {
     id,
+    regionLabel: "Fixture Region",
     geometry: { type: "LineString" as const, coordinates: [[-122.1, 37.3], [-122.11, 37.31], [-122.1, 37.3]] as [number, number][] },
     startAccessPoint: { id: "access", name: "Access", lon: -122.1, lat: 37.3, accessState: "public" as const, confidence: "high" as const },
     distanceMeters: 6_000,
@@ -62,37 +52,28 @@ function setup(now: () => Date = () => new Date("2026-01-01T00:00:00.000Z")) {
 }
 
 const resolved = {
-  pack: { id: "fixture-pack", dataVersion: "fixture-v4", builtAt: "2026-01-01T00:00:00.000Z" },
-  searchRegion: { id: "pack:fixture-pack", name: "Fixture Region" },
+  packs: [{ id: "fixture-pack", dataVersion: "fixture-v4", builtAt: "2026-01-01T00:00:00.000Z" }],
+  area: { label: "Fixture Region" },
 };
 
 describe("SQLiteRouteJobStore", () => {
-  it("persists a drawn-area job and derives its public filter polygon from the immutable bbox", () => {
+  it("persists the resolved area snapshot independently of installed data", () => {
     const { path, store } = setup();
     const id = "00000000-0000-4000-8000-000000000014";
-    const drawnResolved = {
+    const drawnResolved: SearchPlan = {
       ...resolved,
-      searchRegion: { id: "drawn-area", name: "Drawn area" },
+      area: { label: "Drawn area", filterGeometry: { type: "Polygon" as const, coordinates: [[[-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1]]] } },
     };
     store.create(id, drawnAreaRequest, drawnResolved);
 
-    expect(store.claimNext()).toMatchObject({ status: "running", request: drawnAreaRequest });
-    expect(store.toPublic(id, false)).toMatchObject({
-      searchRegion: { id: "drawn-area", name: "Drawn area" },
-      filterGeometry: {
-        type: "Polygon",
-        coordinates: [[
-          [-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1],
-        ]],
-      },
-    });
+    expect(store.claimNext()).toMatchObject({ request: drawnAreaRequest });
+    expect(store.toPublic(id, false)?.area).toEqual(drawnResolved.area);
     store.close();
 
     const reopened = new SQLiteRouteJobStore(path);
     expect(reopened.toPublic(id, false)).toMatchObject({
       request: drawnAreaRequest,
-      searchRegion: { id: "drawn-area", name: "Drawn area" },
-      filterGeometry: { type: "Polygon" },
+      area: drawnResolved.area,
     });
     reopened.close();
   });
@@ -102,22 +83,23 @@ describe("SQLiteRouteJobStore", () => {
     const id = "00000000-0000-4000-8000-000000000013";
     store.create(id, regionWideRequest, resolved);
 
-    expect(store.claimNext()).toMatchObject({ status: "running", request: regionWideRequest });
+    expect(store.claimNext()).toMatchObject({ request: regionWideRequest });
     expect(store.toPublic(id, false)).not.toHaveProperty("filterGeometry");
     store.close();
   });
 
   it("recovers active jobs and running checkpoints for deterministic resume", () => {
     const { path, store } = setup();
-    store.create("00000000-0000-4000-8000-000000000001", request, resolved);
-    expect(store.claimNext()?.status).toBe("resolving-drive-time");
+    const id = "00000000-0000-4000-8000-000000000001";
+    store.create(id, request, resolved);
+    store.claimNext();
+    expect(store.getControl(id)?.status).toBe("resolving-drive-time");
     store.saveDriveTime("00000000-0000-4000-8000-000000000001", {
       geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
       resolvedAt: "2026-01-01T00:00:01.000Z",
     });
     expect(store.toPublic("00000000-0000-4000-8000-000000000001", false))
-      .toMatchObject({ filterGeometry: { type: "Polygon" } });
-    const id = "00000000-0000-4000-8000-000000000001";
+      .toMatchObject({ area: { filterGeometry: { type: "Polygon" } } });
     store.initializeAccessPoints(id, ["b", "a"]);
     expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "b" });
     store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "b", route: route("saved") }], false);
@@ -125,10 +107,12 @@ describe("SQLiteRouteJobStore", () => {
     store.close();
 
     const reopened = new SQLiteRouteJobStore(path);
-    expect(reopened.getStored(id)).toMatchObject({ status: "queued", geometry: { type: "Polygon" } });
+    expect(reopened.getControl(id)?.status).toBe("queued");
+    expect(reopened.getStored(id)?.plan.area.filterGeometry).toMatchObject({ type: "Polygon" });
     expect(reopened.toPublic(id, false)?.progress.processedAccessPointCount).toBe(1);
     expect(reopened.pageResults(id, undefined, 50).results.map(({ route: result }) => result.id)).toEqual(["saved"]);
-    expect(reopened.claimNext()?.status).toBe("running");
+    reopened.claimNext();
+    expect(reopened.getControl(id)?.status).toBe("running");
     expect(reopened.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a" });
     reopened.close();
   });
@@ -137,7 +121,8 @@ describe("SQLiteRouteJobStore", () => {
     const { path, store } = setup();
     const id = "00000000-0000-4000-8000-000000000004";
     store.create(id, request, resolved);
-    expect(store.claimNext()?.status).toBe("resolving-drive-time");
+    store.claimNext();
+    expect(store.getControl(id)?.status).toBe("resolving-drive-time");
     store.saveDriveTime(id, {
       geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
       resolvedAt: "2026-01-01T00:00:01.000Z",
@@ -149,7 +134,7 @@ describe("SQLiteRouteJobStore", () => {
     store.close();
 
     const reopened = new SQLiteRouteJobStore(path);
-    expect(reopened.getStored(id)?.status).toBe("cancelled");
+    expect(reopened.getControl(id)?.status).toBe("cancelled");
     expect(reopened.toPublic(id, false)).toMatchObject({
       status: "cancelled",
       partial: true,
@@ -209,6 +194,32 @@ describe("SQLiteRouteJobStore", () => {
     store.completeAccessPoint(id, 2, [{ matchType: "exact", accessPointId: "third", route: route("later-duplicate") }], false);
     expect(store.pageResults(id, undefined, 50).results.map(({ matchType, route: result }) => [matchType, result.id]))
       .toEqual([["exact", "exact-duplicate"]]);
+    store.close();
+  });
+
+  it("keeps durable cancellation and deletion ahead of late worker completion", () => {
+    const { store } = setup();
+    const cancelled = "00000000-0000-4000-8000-000000000021";
+    store.create(cancelled, regionWideRequest, resolved);
+    store.claimNext();
+    store.requestCancel(cancelled);
+    store.finish(cancelled, "completed");
+    const terminal = store.toPublic(cancelled, false);
+    expect(terminal?.status).toBe("cancelled");
+    store.finish(cancelled, "failed", "late failure");
+    store.saveDriveTime(cancelled, { geometry: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 37]]] }, resolvedAt: "2026-01-01T00:00:01.000Z" });
+    expect(store.toPublic(cancelled, false)).toEqual(terminal);
+
+    const deleted = "00000000-0000-4000-8000-000000000022";
+    store.create(deleted, regionWideRequest, resolved);
+    store.claimNext();
+    store.initializeAccessPoints(deleted, ["access"]);
+    store.completeAccessPoint(deleted, 0, [{ matchType: "exact", accessPointId: "access", route: route("saved") }], false);
+    expect(store.requestDelete(deleted)).toBe("requested");
+    store.finish(deleted, "completed");
+    store.finish(deleted, "failed", "late failure");
+    expect(store.getStored(deleted)).toBeNull();
+    expect(store.pageResults(deleted, undefined, 50).results).toEqual([]);
     store.close();
   });
 

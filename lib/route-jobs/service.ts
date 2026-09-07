@@ -1,15 +1,7 @@
-import {
-  createBatchRouteJobV1Schema,
-  routeJobListSchema,
-  routeJobResultsPageSchema,
-  type CreateBatchRouteJobV1,
-  type RouteJob,
-  type RouteJobResultsPage,
-  type RouteJobResult,
-} from "@/lib/contracts";
+import { areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } from "@/lib/contracts";
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
-import { SQLiteRouteJobStore, type ResultCursor } from "./store";
-import type { DriveTimeBatchRouteJobRequest, RouteJobRunnerDependencies } from "./types";
+import { SQLiteRouteJobStore, type ResultCursor, type StoredJob } from "./store";
+import type { RouteJobRunnerDependencies, RouteJob, RouteJobResultsPage, RouteJobResult } from "./types";
 
 const RESULT_PAGE_SIZE = 50;
 const MAX_CURSOR_LENGTH = 2_048;
@@ -22,10 +14,6 @@ function yieldToEventLoop(signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve)).then(() => {
     if (signal?.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
   });
-}
-
-function hasDriveTime(request: CreateBatchRouteJobV1): request is DriveTimeBatchRouteJobRequest {
-  return request.origin !== undefined && request.durationMinutes !== undefined;
 }
 
 export function encodeResultCursor(cursor: ResultCursor): string {
@@ -83,7 +71,7 @@ export class RouteJobService {
   }
 
   async create(raw: unknown, signal: AbortSignal = new AbortController().signal): Promise<RouteJob> {
-    const parsed = createBatchRouteJobV1Schema.safeParse(raw);
+    const parsed = searchIntentSchema.safeParse(raw);
     if (!parsed.success) {
       throw new ServerApiError("INVALID_REQUEST", "Request body does not match the batch route-job contract.", 400, {
         issues: parsed.error.issues.map(({ path, message }) => ({ path: path.map(String).join("."), message })),
@@ -97,10 +85,7 @@ export class RouteJobService {
       if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
       throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
     }
-    const expectedSearchRegionId = parsed.data.searchRegionId ?? "drawn-area";
-    if (resolved.pack.id !== parsed.data.packId || resolved.searchRegion.id !== expectedSearchRegionId) {
-      throw new ServerApiError("INVALID_BATCH_RESOLUTION", "The resolved pack or search region does not match the request.", 500);
-    }
+    if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
     const id = this.#id();
     this.#store.create(id, parsed.data, resolved);
     this.start();
@@ -111,22 +96,22 @@ export class RouteJobService {
     const stored = this.#store.listIds()
       .map((id) => this.#store.getStored(id))
       .filter((job): job is NonNullable<typeof job> => job !== null);
-    const versions = new Map(await Promise.all([...new Set(stored.map(({ pack }) => pack.id))].map(async (packId) => [
+    const versions = new Map(await Promise.all([...new Set(stored.flatMap(({ plan }) => plan.packs.map(({ id }) => id)))].map(async (packId) => [
       packId,
       await this.#dependencies.currentDataVersion(packId).catch(() => null),
     ] as const)));
-    const jobs = stored.map(({ id, pack }) => {
-      const current = versions.get(pack.id) ?? null;
-      return this.#store.toPublic(id, current !== pack.dataVersion);
+    return stored.flatMap(({ id, plan }) => {
+      const job = this.#store.toPublic(id, plan.packs.some((pack) => versions.get(pack.id) !== pack.dataVersion));
+      return job ? [job] : [];
     });
-    return routeJobListSchema.parse({ version: 1, jobs: jobs.filter((job): job is RouteJob => job !== null) }).jobs;
   }
 
   async get(id: string): Promise<RouteJob | null> {
     const stored = this.#store.getStored(id);
     if (!stored) return null;
-    const current = await this.#dependencies.currentDataVersion(stored.pack.id).catch(() => null);
-    return this.#store.toPublic(id, current !== stored.pack.dataVersion);
+    const changed = await Promise.all(stored.plan.packs.map(async (pack) =>
+      (await this.#dependencies.currentDataVersion(pack.id).catch(() => null)) !== pack.dataVersion));
+    return this.#store.toPublic(id, changed.some(Boolean));
   }
 
   async cancel(id: string): Promise<RouteJob> {
@@ -149,8 +134,8 @@ export class RouteJobService {
       throw new ServerApiError("ROUTE_JOB_RESULTS_NOT_READY", "Results are available after the job completes or is cancelled.", 409);
     }
     const page = this.#store.pageResults(id, decodeResultCursor(cursorText), RESULT_PAGE_SIZE);
-    return routeJobResultsPageSchema.parse({
-      version: 1,
+    return routeJobResultsPageV2Schema.parse({
+      version: 2,
       job,
       results: page.results,
       ...(page.next ? { nextCursor: encodeResultCursor(page.next) } : {}),
@@ -164,40 +149,28 @@ export class RouteJobService {
       const controller = new AbortController();
       this.#active = { id: job.id, controller };
       try {
-        await this.#runJob(job.id, controller.signal);
+        await this.#runJob(job, controller.signal);
+        this.#store.finish(job.id, "completed");
       } catch (error) {
-        const latest = this.#store.getStored(job.id);
-        if (!latest) continue;
-        if (latest.deleteRequested || latest.status === "deleting") this.#store.delete(job.id);
-        else if (latest.cancelRequested || controller.signal.aborted || isCancellationError(error)) this.#store.finish(job.id, "cancelled");
-        else this.#store.finish(job.id, "failed", errorMessage(error));
+        this.#store.finish(job.id, controller.signal.aborted || isCancellationError(error) ? "cancelled" : "failed", errorMessage(error));
       } finally {
-        if (this.#store.getStored(job.id)?.deleteRequested) this.#store.delete(job.id);
         this.#active = undefined;
       }
     }
   }
 
-  async #runJob(id: string, signal: AbortSignal): Promise<void> {
-    let job = this.#store.getStored(id);
-    if (!job) return;
-    if (hasDriveTime(job.request) && !job.geometry) {
-      const driveTime = await this.#dependencies.resolveDriveTime(job.request, signal);
+  async #runJob(job: StoredJob, signal: AbortSignal): Promise<void> {
+    const { id, request } = job;
+    let { plan } = job;
+    if (request.area.mode === "drive-time" && !plan.area.filterGeometry) {
+      const resolved = await this.#dependencies.resolveDriveTime(request.area, signal);
+      const driveTime = { ...resolved, geometry: areaGeometrySchema.parse(resolved.geometry) };
       if (signal.aborted) throw signal.reason;
       this.#store.saveDriveTime(id, driveTime);
-      job = this.#store.getStored(id)!;
+      plan = { ...plan, area: { ...plan.area, filterGeometry: driveTime.geometry } };
     }
-    if (hasDriveTime(job.request) && !job.geometry) throw new Error("Drive-time geometry was not persisted");
-
-    const sessionInput = {
-      request: job.request,
-      pack: job.pack,
-      searchRegionId: job.searchRegion.id,
-      ...(job.geometry ? { driveTimeGeometry: job.geometry } : {}),
-      signal,
-    };
     await yieldToEventLoop(signal);
-    const session = await this.#dependencies.openSearchSession(sessionInput);
+    const session = await this.#dependencies.openSearchSession({ request, plan, signal });
     try {
       await yieldToEventLoop(signal);
       const ids = await session.enumerateEligibleAccessPointIds(signal);
@@ -208,14 +181,14 @@ export class RouteJobService {
 
       for (;;) {
         if (signal.aborted) throw signal.reason;
-        const latest = this.#store.getStored(id);
+        const latest = this.#store.getControl(id);
         if (!latest || latest.cancelRequested || latest.deleteRequested) throw new DOMException("Cancelled", "AbortError");
         const point = this.#store.nextAccessPoint(id);
         if (!point) break;
         try {
           const searched = await session.searchAccessPoint(point.accessPointId, signal);
           if (signal.aborted) throw signal.reason;
-          const results: RouteJobResult[] = searched.exact.slice(0, latest.request.routesPerAccessPoint).map((route) => ({
+          const results: RouteJobResult[] = searched.exact.slice(0, 10).map((route) => ({
             matchType: "exact", accessPointId: point.accessPointId, route,
           }));
           if (results.length === 0 && searched.nearMisses[0]) results.push({
@@ -232,12 +205,7 @@ export class RouteJobService {
         await yieldToEventLoop(signal);
       }
     } finally {
-      await session?.close();
+      await session.close();
     }
-    const latest = this.#store.getStored(id);
-    if (!latest) return;
-    if (latest.deleteRequested) this.#store.delete(id);
-    else if (latest.cancelRequested) this.#store.finish(id, "cancelled");
-    else this.#store.finish(id, "completed");
   }
 }

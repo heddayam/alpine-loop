@@ -1,0 +1,102 @@
+{
+  "matchType": "exact",
+  "accessPointId": "access",
+  "route": {
+    "id": "loop",
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [
+        [
+          -122.1,
+          37.3
+        ],
+        [
+          -122.11,
+          37.31
+        ],
+        [
+          -122.1,
+          37.3
+        ]
+      ]
+    },
+    "startAccessPoint": {
+      "id": "access",
+      "name": "Access",
+      "lon": -122.1,
+      "lat": 37.3,
+      "accessState": "public",
+      "confidence": "high"
+    },
+    "distanceMeters": 6000,
+    "elevationGainMeters": 200,
+    "elevationLossMeters": 200,
+    "minimumElevationMeters": 100,
+    "maximumElevationMeters": 300,
+    "steepestSustainedGradePct": 8,
+    "topology": {
+      "kind": "simple-loop",
+      "cycleCount": 1,
+      "cycleBlockCount": 1,
+      "repeatedTrailDistanceMeters": 0,
+      "repeatedTrailFraction": 0,
+      "sharedStemDistanceMeters": 0,
+      "connectorCount": 0
+    },
+    "trailNames": [
+      "Fixture"
+    ],
+    "warnings": [],
+    "source": {
+      "freshness": "2026-01-01T00:00:00.000Z",
+      "confidence": "high",
+      "sourceIds": [
+        "fixture"
+      ]
+    },
+    "trailSegments": [
+      {
+        "id": "segment",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -122.1,
+              37.3
+            ],
+            [
+              -122.11,
+              37.31
+            ],
+            [
+              -122.1,
+              37.3
+            ]
+          ]
+        },
+        "name": "Fixture",
+        "distanceMeters": 6000,
+        "startDistanceMeters": 0,
+        "endDistanceMeters": 6000,
+        "accessState": "public",
+        "condition": {
+          "surface": "ground"
+        },
+        "sourceFeatureId": "source-feature",
+        "sourceIds": [
+          "fixture"
+        ]
+      }
+    ],
+    "elevationSamples": [
+      {
+        "distanceMeters": 0,
+        "elevationMeters": 100
+      },
+      {
+        "distanceMeters": 6000,
+        "elevationMeters": 100
+      }
+    ]
+  }
+}

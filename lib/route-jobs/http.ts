@@ -56,7 +56,7 @@ export function createRouteJobCollectionHandlers(service: RouteJobService) {
       catch (error) { return handle(error); }
     },
     async GET(): Promise<Response> {
-      try { return Response.json({ version: 1, jobs: await service.list() }); }
+      try { return Response.json({ version: 2, jobs: await service.list() }); }
       catch (error) { return handle(error); }
     },
   };

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CreateBatchRouteJobV1, GeneratedClosedRouteV3 } from "@/lib/contracts";
+import type { SearchIntent, SearchRoute } from "@/lib/contracts";
 import { createRouteJobCancelHandler, createRouteJobCollectionHandlers } from "./http";
 import { RouteJobService, decodeResultCursor, encodeResultCursor } from "./service";
 import { SQLiteRouteJobStore } from "./store";
@@ -11,38 +11,30 @@ import type { RouteJobRunnerDependencies } from "./types";
 const temporary: string[] = [];
 afterEach(() => temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
 
-const request: CreateBatchRouteJobV1 = {
-  version: 1, packId: "fixture-pack",
-  origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30,
-  searchRegionId: "pack:fixture-pack",
+const request: SearchIntent = {
+  area: { mode: "drive-time", origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30, regionIds: ["fixture-pack::pack:fixture-pack"] },
   criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true },
-  routesPerAccessPoint: 10,
 };
-const regionWideRequest: CreateBatchRouteJobV1 = {
-  version: 1, packId: "fixture-pack",
-  searchRegionId: "pack:fixture-pack",
-  criteria: request.criteria,
-  routesPerAccessPoint: 10,
+const regionWideRequest: SearchIntent = {
+  area: { mode: "named-regions", regionIds: ["fixture-pack::pack:fixture-pack"] }, criteria: request.criteria,
 };
-const drawnAreaRequest: CreateBatchRouteJobV1 = {
-  version: 1,
-  packId: "fixture-pack",
-  drawnAreaBbox: [-122.4, 37.1, -122.2, 37.3],
-  criteria: request.criteria,
-  routesPerAccessPoint: 10,
+const drawnAreaRequest: SearchIntent = {
+  area: { mode: "drawn-area", bbox: [-122.4, 37.1, -122.2, 37.3] }, criteria: request.criteria,
 };
+const pack = { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" };
+const plan = { packs: [pack], area: { label: "Fixture" } };
 const drawnAreaGeometry = {
   type: "Polygon" as const,
   coordinates: [[
     [-122.4, 37.1], [-122.2, 37.1], [-122.2, 37.3], [-122.4, 37.3], [-122.4, 37.1],
-  ]],
+  ]] as [number, number][][],
 };
 const geometry = { type: "Polygon" as const, coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };
 
-function route(id: string): GeneratedClosedRouteV3 {
+function route(id: string): SearchRoute {
   const offset = id === "second" ? 0.01 : 0;
   return {
-    id, geometry: { type: "LineString", coordinates: [[-122.1 + offset, 37.3], [-122.11 + offset, 37.31], [-122.1 + offset, 37.3]] },
+    id, regionLabel: "Fixture", geometry: { type: "LineString", coordinates: [[-122.1 + offset, 37.3], [-122.11 + offset, 37.31], [-122.1 + offset, 37.3]] },
     startAccessPoint: { id: "access", name: "Access", lon: -122.1 + offset, lat: 37.3, accessState: "public", confidence: "high" },
     distanceMeters: 6_000, elevationGainMeters: 200, elevationLossMeters: 200, minimumElevationMeters: 100, maximumElevationMeters: 300, steepestSustainedGradePct: 8,
     topology: { kind: "simple-loop", cycleCount: 1, cycleBlockCount: 1, repeatedTrailDistanceMeters: 0, repeatedTrailFraction: 0, sharedStemDistanceMeters: 0, connectorCount: 0 },
@@ -55,7 +47,7 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
   temporary.push(directory);
   const store = new SQLiteRouteJobStore(join(directory, "jobs.sqlite"));
   const dependencies: RouteJobRunnerDependencies = {
-    resolveJob: vi.fn(async () => ({ pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" }, searchRegion: { id: "pack:fixture-pack", name: "Fixture" } })),
+    resolveJob: vi.fn(async () => plan),
     resolveDriveTime: vi.fn(async () => ({ geometry, resolvedAt: "2026-01-01T00:00:00.000Z" })),
     openSearchSession: vi.fn(async () => ({
       enumerateEligibleAccessPointIds: vi.fn(async () => ["first", "second"]),
@@ -71,11 +63,11 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
 }
 
 describe("RouteJobService", () => {
-  it("runs a drawn-area job against its synthetic search region and exposes its bbox", async () => {
+  it("runs a drawn-area job with its resolved geographic plan", async () => {
     const { service, dependencies, store } = harness({
       resolveJob: vi.fn(async () => ({
-        pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
-        searchRegion: { id: "drawn-area", name: "Drawn area" },
+        packs: [pack],
+        area: { label: "Drawn area", filterGeometry: drawnAreaGeometry },
       })),
     });
 
@@ -85,15 +77,13 @@ describe("RouteJobService", () => {
     expect(await service.get(job.id)).toMatchObject({
       status: "completed",
       request: drawnAreaRequest,
-      searchRegion: { id: "drawn-area", name: "Drawn area" },
-      filterGeometry: drawnAreaGeometry,
+      area: { label: "Drawn area", filterGeometry: drawnAreaGeometry },
       progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2 },
     });
     expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
     expect(dependencies.openSearchSession).toHaveBeenCalledWith({
       request: drawnAreaRequest,
-      pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
-      searchRegionId: "drawn-area",
+      plan: { packs: [pack], area: { label: "Drawn area", filterGeometry: drawnAreaGeometry } },
       signal: expect.any(AbortSignal),
     });
     store.close();
@@ -114,8 +104,7 @@ describe("RouteJobService", () => {
     expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
     expect(dependencies.openSearchSession).toHaveBeenCalledWith({
       request: regionWideRequest,
-      pack: { id: "fixture-pack", dataVersion: "v4", builtAt: "2026-01-01T00:00:00.000Z" },
-      searchRegionId: "pack:fixture-pack",
+      plan,
       signal: expect.any(AbortSignal),
     });
     store.close();
@@ -124,11 +113,11 @@ describe("RouteJobService", () => {
   it("runs jobs FIFO, attempts each eligible access point, and persists deterministic results", async () => {
     const { service, dependencies, store } = harness();
     const first = await service.create(request);
-    const second = await service.create({ ...request, origin: { ...request.origin, label: "Other" } });
+    const second = await service.create(request);
     await service.waitUntilIdle();
     expect((await service.get(first.id))?.status).toBe("completed");
     expect((await service.get(second.id))?.status).toBe("completed");
-    expect(await service.get(first.id)).toMatchObject({ filterGeometry: geometry });
+    expect(await service.get(first.id)).toMatchObject({ area: { filterGeometry: geometry } });
     const sessions = await Promise.all(vi.mocked(dependencies.openSearchSession).mock.results.map(({ value }) => value));
     expect(sessions.flatMap((session) => vi.mocked(session.searchAccessPoint).mock.calls.map((call: unknown[]) => call[0])))
       .toEqual(["first", "second", "first", "second"]);
@@ -217,7 +206,7 @@ describe("RouteJobService", () => {
   it("looks up the current pack version once per pack when listing jobs", async () => {
     const { service, dependencies, store } = harness();
     await service.create(request);
-    await service.create({ ...request, origin: { ...request.origin, label: "Other" } });
+    await service.create(request);
     await service.waitUntilIdle();
     vi.mocked(dependencies.currentDataVersion).mockClear();
 
@@ -234,6 +223,53 @@ describe("RouteJobService", () => {
 
     expect(await service.get(job.id)).toMatchObject({ stale: true });
     expect(await service.list()).toMatchObject([{ id: job.id, stale: true }]);
+    store.close();
+  });
+
+  it("covers two pinned packs in one job, retains ten per start, and checks each identity", async () => {
+    const secondPack = { ...pack, id: "other-pack", dataVersion: "v5" };
+    const combined = { packs: [pack, secondPack], area: { label: "Both regions" } };
+    const versions = new Map([[pack.id, "v4"], [secondPack.id, "v5"]]);
+    const starts = ["fixture-pack::access", "other-pack::access"];
+    const closeRoute = {
+      ...route("other-pack::close"),
+      geometry: { type: "LineString" as const, coordinates: [[-121, 37], [-121.01, 37.01], [-121, 37]] as [number, number][] },
+      regionLabel: "Other region",
+      violations: [{ constraint: "distance" as const, value: 3, min: 4, max: 8, delta: 1, normalizedDelta: 0.125 }],
+    };
+    const { service, store, dependencies } = harness({
+      resolveJob: vi.fn(async () => combined),
+      currentDataVersion: vi.fn(async (id) => versions.get(id) ?? null),
+      openSearchSession: vi.fn(async () => ({
+        enumerateEligibleAccessPointIds: vi.fn(async () => starts),
+        searchAccessPoint: vi.fn(async (id) => ({
+          exact: id === starts[0] ? Array.from({ length: 12 }, (_, index) => ({
+            ...route(`fixture-pack::route-${index}`),
+            geometry: { type: "LineString" as const, coordinates: [[-122, 37], [-122.01, 37.01 + index / 100], [-122, 37]] as [number, number][] },
+          })) : [],
+          nearMisses: [closeRoute, { ...closeRoute, id: "ignored-close" }], truncated: false,
+        })),
+        close: vi.fn(async () => undefined),
+      })),
+    });
+    const reads = vi.spyOn(store, "getStored");
+    const job = await service.create(regionWideRequest);
+    await service.waitUntilIdle();
+    // Read once for the initial public job and once to claim it, never per start.
+    expect(reads).toHaveBeenCalledTimes(2);
+    expect(dependencies.openSearchSession).toHaveBeenCalledWith({ request: regionWideRequest, plan: combined, signal: expect.any(AbortSignal) });
+    expect(await service.get(job.id)).toMatchObject({ stale: false, progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 10, nearMissRouteCount: 1 } });
+    const results = (await service.results(job.id)).results;
+    expect(results.map(({ matchType }) => matchType)).toEqual([...Array(10).fill("exact"), "near-miss"]);
+    expect(new Set(results.map(({ accessPointId }) => accessPointId))).toEqual(new Set(starts));
+    versions.set(secondPack.id, "changed");
+    expect(await service.get(job.id)).toMatchObject({ stale: true });
+    vi.mocked(dependencies.currentDataVersion).mockClear();
+    expect(await service.list()).toMatchObject([{ stale: true }]);
+    expect(dependencies.currentDataVersion).toHaveBeenCalledTimes(2);
+    versions.set(secondPack.id, "v5");
+    versions.delete(pack.id);
+    expect(await service.get(job.id)).toMatchObject({ stale: true });
     store.close();
   });
 

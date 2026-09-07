@@ -1,38 +1,14 @@
-import type {
-  CreateBatchRouteJobV1,
-  GeneratedClosedRouteV3,
-  ConstraintViolationV3,
-} from "@/lib/contracts";
+import type { SearchArea, SearchIntent, SearchRoute, CloseSearchRoute } from "@/lib/contracts";
 import type { AreaGeometry } from "@/lib/graph";
+import type { SearchPlan } from "@/lib/server/search-plan";
 
-export type PinnedRouteJobPack = {
-  id: string;
-  dataVersion: string;
-  builtAt: string;
-};
+export type { RouteJobV2 as RouteJob, RouteJobResultV2 as RouteJobResult, RouteJobResultsPageV2 as RouteJobResultsPage } from "@/lib/contracts";
 
-export type ResolvedRouteJob = {
-  pack: PinnedRouteJobPack;
-  searchRegion: { id: string; name: string };
-};
-
-export type ResolvedDriveTime = {
-  geometry: AreaGeometry;
-  resolvedAt: string;
-};
-
-export type DriveTimeBatchRouteJobRequest = CreateBatchRouteJobV1 & {
-  origin: NonNullable<CreateBatchRouteJobV1["origin"]>;
-  durationMinutes: NonNullable<CreateBatchRouteJobV1["durationMinutes"]>;
-};
-
-export type BatchNearMiss = GeneratedClosedRouteV3 & {
-  violations: ConstraintViolationV3[];
-};
+export type ResolvedDriveTime = { geometry: AreaGeometry; resolvedAt: string };
 
 export type AccessPointSearchResult = {
-  exact: GeneratedClosedRouteV3[];
-  nearMisses: BatchNearMiss[];
+  exact: SearchRoute[];
+  nearMisses: CloseSearchRoute[];
   truncated: boolean;
   diagnostics?: unknown;
 };
@@ -44,14 +20,8 @@ export type RouteJobSearchSession = {
 };
 
 export type RouteJobRunnerDependencies = {
-  resolveJob(request: CreateBatchRouteJobV1, signal: AbortSignal): Promise<ResolvedRouteJob>;
-  resolveDriveTime(request: DriveTimeBatchRouteJobRequest, signal: AbortSignal): Promise<ResolvedDriveTime>;
+  resolveJob(request: SearchIntent, signal: AbortSignal): Promise<SearchPlan>;
+  resolveDriveTime(area: Extract<SearchArea, { mode: "drive-time" }>, signal: AbortSignal): Promise<ResolvedDriveTime>;
   currentDataVersion(packId: string): Promise<string | null>;
-  openSearchSession(input: {
-    request: CreateBatchRouteJobV1;
-    pack: PinnedRouteJobPack;
-    searchRegionId: string;
-    driveTimeGeometry?: AreaGeometry;
-    signal: AbortSignal;
-  }): Promise<RouteJobSearchSession>;
+  openSearchSession(input: { request: SearchIntent; plan: SearchPlan; signal: AbortSignal }): Promise<RouteJobSearchSession>;
 };

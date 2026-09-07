@@ -2,31 +2,23 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { z } from "zod";
 import {
-  createBatchRouteJobV1Schema,
-  routeJobResultSchema,
-  routeJobSchema,
-  type CreateBatchRouteJobV1,
-  type RouteJob,
-  type RouteJobResult,
-  type RouteJobStatus,
+  searchIntentSchema, searchAreaSnapshotSchema, routeJobResultV2Schema, routeJobV2Schema,
+  type SearchIntent, type RouteJobStatus,
 } from "@/lib/contracts";
-import { areaGeometrySchema } from "@/lib/contracts";
-import type { AreaGeometry } from "@/lib/graph";
-import type { PinnedRouteJobPack, ResolvedDriveTime, ResolvedRouteJob } from "./types";
+import type { SearchPlan } from "@/lib/server/search-plan";
+import type { ResolvedDriveTime, RouteJob, RouteJobResult } from "./types";
+import { JOB_COLUMNS, migrateLegacyJobs } from "./migration";
 
 type Row = Record<string, SQLInputValue>;
-type StoredJob = {
-  id: string;
-  request: CreateBatchRouteJobV1;
-  pack: PinnedRouteJobPack;
-  searchRegion: { id: string; name: string };
-  status: RouteJobStatus;
-  geometry?: AreaGeometry;
-  resolvedAt?: string;
-  cancelRequested: boolean;
-  deleteRequested: boolean;
-};
+type JobControl = { status: RouteJobStatus; cancelRequested: boolean; deleteRequested: boolean };
+export type StoredJob = { id: string; request: SearchIntent; plan: SearchPlan };
+
+const planSchema = z.object({
+  packs: z.array(z.object({ id: z.string().min(1), dataVersion: z.string().min(1), builtAt: z.string().datetime() }).strict()).min(1),
+  area: searchAreaSnapshotSchema,
+}).strict();
 
 export type ResultCursor = {
   matchRank: number;
@@ -61,17 +53,6 @@ function routeGeometryHash(result: RouteJobResult): string {
   return createHash("sha256").update(JSON.stringify(result.route.geometry.coordinates)).digest("hex");
 }
 
-function drawnAreaGeometry(request: CreateBatchRouteJobV1): AreaGeometry | undefined {
-  if (!request.drawnAreaBbox) return undefined;
-  const [west, south, east, north] = request.drawnAreaBbox;
-  return {
-    type: "Polygon",
-    coordinates: [[
-      [west, south], [east, south], [east, north], [west, north], [west, south],
-    ]],
-  };
-}
-
 export class SQLiteRouteJobStore {
   readonly #database: DatabaseSync;
   readonly #now: () => Date;
@@ -81,34 +62,31 @@ export class SQLiteRouteJobStore {
     this.#database = new DatabaseSync(path);
     this.#now = now;
     this.#database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
-    this.#migrate();
-    this.#recover();
+    try {
+      this.#migrate();
+      this.#recover();
+    } catch (error) {
+      this.#database.close();
+      throw error;
+    }
+  }
+
+  #transaction<T>(work: () => T): T {
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = work();
+      this.#database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   #migrate(): void {
+    migrateLegacyJobs(this.#database);
     this.#database.exec(`
-      CREATE TABLE IF NOT EXISTS route_job_migrations (
-        version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL
-      ) STRICT;
-      CREATE TABLE IF NOT EXISTS route_jobs (
-        id TEXT PRIMARY KEY,
-        request_json TEXT NOT NULL,
-        pack_id TEXT NOT NULL,
-        pack_data_version TEXT NOT NULL,
-        pack_built_at TEXT NOT NULL,
-        search_region_id TEXT NOT NULL,
-        search_region_name TEXT NOT NULL,
-        status TEXT NOT NULL,
-        drive_time_geometry_json TEXT,
-        drive_time_resolved_at TEXT,
-        cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK(cancel_requested IN (0, 1)),
-        delete_requested INTEGER NOT NULL DEFAULT 0 CHECK(delete_requested IN (0, 1)),
-        error TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        started_at TEXT,
-        completed_at TEXT
-      ) STRICT;
+      CREATE TABLE IF NOT EXISTS route_jobs (${JOB_COLUMNS}) STRICT;
       CREATE INDEX IF NOT EXISTS route_jobs_queue ON route_jobs(status, created_at, id);
       CREATE TABLE IF NOT EXISTS route_job_access_points (
         job_id TEXT NOT NULL REFERENCES route_jobs(id) ON DELETE CASCADE,
@@ -137,134 +115,74 @@ export class SQLiteRouteJobStore {
       CREATE INDEX IF NOT EXISTS route_job_results_order
         ON route_job_results(job_id, match_rank, access_ordinal, result_ordinal, route_id);
     `);
-    this.#database.prepare("INSERT OR IGNORE INTO route_job_migrations(version, applied_at) VALUES (1, ?)")
-      .run(nowIso(this.#now));
-
-    const columns = this.#database.prepare("PRAGMA table_info(route_job_results)").all() as Row[];
-    if (!columns.some((column) => column.name === "geometry_hash")) {
-      this.#database.exec("ALTER TABLE route_job_results ADD COLUMN geometry_hash TEXT");
-    }
-    const migrated = this.#database.prepare("SELECT 1 FROM route_job_migrations WHERE version = 2").get();
-    if (!migrated) {
-      this.#database.exec("BEGIN IMMEDIATE");
-      try {
-        const rows = this.#database.prepare(`SELECT rowid, job_id, match_rank, payload_json
-          FROM route_job_results ORDER BY job_id, match_rank, access_ordinal, result_ordinal, route_id`).all() as Row[];
-        const retained = new Map<string, { rowid: number; matchRank: number }>();
-        const update = this.#database.prepare("UPDATE route_job_results SET geometry_hash = ? WHERE rowid = ?");
-        const remove = this.#database.prepare("DELETE FROM route_job_results WHERE rowid = ?");
-        for (const row of rows) {
-          const result = routeJobResultSchema.parse(parseJson(requiredString(row, "payload_json")));
-          const hash = routeGeometryHash(result);
-          const key = `${requiredString(row, "job_id")}:${hash}`;
-          const rowid = integer(row, "rowid");
-          const matchRank = integer(row, "match_rank");
-          const existing = retained.get(key);
-          if (!existing) {
-            update.run(hash, rowid);
-            retained.set(key, { rowid, matchRank });
-          } else if (matchRank < existing.matchRank) {
-            remove.run(existing.rowid);
-            update.run(hash, rowid);
-            retained.set(key, { rowid, matchRank });
-          } else {
-            remove.run(rowid);
-          }
-        }
-        this.#database.exec("CREATE UNIQUE INDEX IF NOT EXISTS route_job_results_geometry ON route_job_results(job_id, geometry_hash)");
-        this.#database.prepare("INSERT INTO route_job_migrations(version, applied_at) VALUES (2, ?)").run(nowIso(this.#now));
-        this.#database.exec("COMMIT");
-      } catch (error) {
-        this.#database.exec("ROLLBACK");
-        throw error;
-      }
-    }
+    this.#database.exec("CREATE INDEX IF NOT EXISTS route_job_results_geometry_lookup ON route_job_results(job_id, geometry_hash)");
   }
 
   #recover(): void {
     const timestamp = nowIso(this.#now);
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
+    this.#transaction(() => {
       this.#database.prepare("DELETE FROM route_jobs WHERE status = 'deleting' OR delete_requested = 1").run();
       this.#database.prepare("UPDATE route_job_access_points SET status = 'pending', started_at = NULL WHERE status = 'running'").run();
       this.#database.prepare(`UPDATE route_jobs SET status = 'cancelled', completed_at = COALESCE(completed_at, ?), updated_at = ?
         WHERE cancel_requested = 1 AND status IN ('queued', 'resolving-drive-time', 'running')`).run(timestamp, timestamp);
       this.#database.prepare(`UPDATE route_jobs SET status = 'queued', updated_at = ?
         WHERE cancel_requested = 0 AND status IN ('resolving-drive-time', 'running')`).run(timestamp);
-      this.#database.exec("COMMIT");
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
+    });
   }
 
-  create(id: string, request: CreateBatchRouteJobV1, resolved: ResolvedRouteJob): void {
+  create(id: string, request: SearchIntent, plan: SearchPlan): void {
     const timestamp = nowIso(this.#now);
-    this.#database.prepare(`INSERT INTO route_jobs(
-      id, request_json, pack_id, pack_data_version, pack_built_at,
-      search_region_id, search_region_name, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`).run(
-      id, JSON.stringify(request), resolved.pack.id, resolved.pack.dataVersion, resolved.pack.builtAt,
-      resolved.searchRegion.id, resolved.searchRegion.name, timestamp, timestamp,
+    this.#database.prepare(`INSERT INTO route_jobs(id, request_json, plan_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, 'queued', ?, ?)`).run(
+      id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(planSchema.parse(plan)), timestamp, timestamp,
     );
   }
 
   claimNext(): StoredJob | null {
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
-      const row = this.#database.prepare(`SELECT * FROM route_jobs
+    return this.#transaction(() => {
+      const row = this.#database.prepare(`SELECT id FROM route_jobs
         WHERE status = 'queued' AND cancel_requested = 0 AND delete_requested = 0
         ORDER BY created_at, id LIMIT 1`).get() as Row | undefined;
-      if (!row) {
-        this.#database.exec("COMMIT");
-        return null;
+      const job = row ? this.getStored(requiredString(row, "id")) : null;
+      if (job) {
+        const status = job.request.area.mode === "drive-time" && !job.plan.area.filterGeometry ? "resolving-drive-time" : "running";
+        const timestamp = nowIso(this.#now);
+        this.#database.prepare(`UPDATE route_jobs SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ?
+          WHERE id = ?`).run(status, timestamp, timestamp, job.id);
       }
-      const request = createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json")));
-      const status = request.origin && row.drive_time_geometry_json === null ? "resolving-drive-time" : "running";
-      const timestamp = nowIso(this.#now);
-      this.#database.prepare(`UPDATE route_jobs SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ?
-        WHERE id = ?`).run(status, timestamp, timestamp, requiredString(row, "id"));
-      this.#database.exec("COMMIT");
-      return this.getStored(requiredString(row, "id"));
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
+      return job;
+    });
   }
 
   getStored(id: string): StoredJob | null {
-    const row = this.#database.prepare("SELECT * FROM route_jobs WHERE id = ?").get(id) as Row | undefined;
-    if (!row) return null;
-    const geometryText = row.drive_time_geometry_json;
-    return {
+    const row = this.#database.prepare("SELECT request_json, plan_json FROM route_jobs WHERE id = ?").get(id) as Row | undefined;
+    return row ? {
       id,
-      request: createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json"))),
-      pack: {
-        id: requiredString(row, "pack_id"),
-        dataVersion: requiredString(row, "pack_data_version"),
-        builtAt: requiredString(row, "pack_built_at"),
-      },
-      searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
+      request: searchIntentSchema.parse(parseJson(requiredString(row, "request_json"))),
+      plan: planSchema.parse(parseJson(requiredString(row, "plan_json"))),
+    } : null;
+  }
+
+  getControl(id: string): JobControl | null {
+    const row = this.#database.prepare("SELECT status, cancel_requested, delete_requested FROM route_jobs WHERE id = ?")
+      .get(id) as Row | undefined;
+    return row ? {
       status: requiredString(row, "status") as RouteJobStatus,
-      ...(typeof geometryText === "string" ? { geometry: areaGeometrySchema.parse(parseJson(geometryText)) } : {}),
-      ...(typeof row.drive_time_resolved_at === "string" ? { resolvedAt: row.drive_time_resolved_at } : {}),
       cancelRequested: integer(row, "cancel_requested") === 1,
       deleteRequested: integer(row, "delete_requested") === 1,
-    };
+    } : null;
   }
 
   saveDriveTime(id: string, driveTime: ResolvedDriveTime): void {
-    this.#database.prepare(`UPDATE route_jobs SET drive_time_geometry_json = ?, drive_time_resolved_at = ?,
-      status = 'running', updated_at = ? WHERE id = ?`).run(
-      JSON.stringify(driveTime.geometry), driveTime.resolvedAt, nowIso(this.#now), id,
-    );
+    this.#database.prepare(`UPDATE route_jobs SET plan_json = json_set(plan_json, '$.area.filterGeometry', json(?)),
+      drive_time_resolved_at = ?, status = 'running',
+      updated_at = ? WHERE id = ? AND status IN ('resolving-drive-time', 'running')`).run(JSON.stringify(driveTime.geometry), driveTime.resolvedAt, nowIso(this.#now), id);
   }
 
   initializeAccessPoints(id: string, accessPointIds: readonly string[]): void {
     const unique = [...new Set(accessPointIds)];
     if (unique.length !== accessPointIds.length) throw new Error("Eligible access-point identifiers must be unique");
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
+    this.#transaction(() => {
       const count = this.#database.prepare("SELECT COUNT(*) AS count FROM route_job_access_points WHERE job_id = ?")
         .get(id) as Row;
       if (integer(count, "count") === 0) {
@@ -272,30 +190,21 @@ export class SQLiteRouteJobStore {
           VALUES (?, ?, ?, 'pending')`);
         accessPointIds.forEach((accessPointId, ordinal) => insert.run(id, ordinal, accessPointId));
       }
-      this.#database.exec("COMMIT");
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
+    });
   }
 
   nextAccessPoint(id: string): { ordinal: number; accessPointId: string } | null {
-    const row = this.#database.prepare(`SELECT ordinal, access_point_id FROM route_job_access_points
-      WHERE job_id = ? AND status = 'pending' ORDER BY ordinal LIMIT 1`).get(id) as Row | undefined;
-    if (!row) return null;
-    const timestamp = nowIso(this.#now);
-    const ordinal = integer(row, "ordinal");
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
+    return this.#transaction(() => {
+      const row = this.#database.prepare(`SELECT ordinal, access_point_id FROM route_job_access_points
+        WHERE job_id = ? AND status = 'pending' ORDER BY ordinal LIMIT 1`).get(id) as Row | undefined;
+      if (!row) return null;
+      const timestamp = nowIso(this.#now);
+      const ordinal = integer(row, "ordinal");
       this.#database.prepare(`UPDATE route_job_access_points SET status = 'running', started_at = ?
-        WHERE job_id = ? AND ordinal = ?`).run(timestamp, id, ordinal);
+          WHERE job_id = ? AND ordinal = ?`).run(timestamp, id, ordinal);
       this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(timestamp, id);
-      this.#database.exec("COMMIT");
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
-    return { ordinal, accessPointId: requiredString(row, "access_point_id") };
+      return { ordinal, accessPointId: requiredString(row, "access_point_id") };
+    });
   }
 
   completeAccessPoint(
@@ -305,8 +214,7 @@ export class SQLiteRouteJobStore {
     truncated: boolean,
     diagnostics?: unknown,
   ): void {
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
+    this.#transaction(() => {
       this.#database.prepare("DELETE FROM route_job_results WHERE job_id = ? AND access_ordinal = ?").run(id, ordinal);
       const existingGeometry = this.#database.prepare(`SELECT rowid, match_rank FROM route_job_results
         WHERE job_id = ? AND geometry_hash = ?`);
@@ -316,7 +224,7 @@ export class SQLiteRouteJobStore {
       let exactOrdinal = 0;
       let nearOrdinal = 0;
       for (const raw of results) {
-        const result = routeJobResultSchema.parse(raw);
+        const result = routeJobResultV2Schema.parse(raw);
         const matchRank = result.matchType === "exact" ? 0 : 1;
         const resultOrdinal = matchRank === 0 ? exactOrdinal++ : nearOrdinal++;
         const geometryHash = routeGeometryHash(result);
@@ -331,11 +239,7 @@ export class SQLiteRouteJobStore {
         nowIso(this.#now), id, ordinal,
       );
       this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
-      this.#database.exec("COMMIT");
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
+    });
   }
 
   failAccessPoint(id: string, ordinal: number, error: string): void {
@@ -344,37 +248,49 @@ export class SQLiteRouteJobStore {
     this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
   }
 
+  /** Deletion and durable cancellation take precedence over worker completion. */
   finish(id: string, status: "completed" | "cancelled" | "failed", error?: string): void {
-    const timestamp = nowIso(this.#now);
-    this.#database.prepare(`UPDATE route_jobs SET status = ?, error = ?, completed_at = ?, updated_at = ?
-      WHERE id = ?`).run(status, error ?? null, timestamp, timestamp, id);
+    this.#transaction(() => {
+      const control = this.getControl(id);
+      if (control?.deleteRequested) this.delete(id);
+      else if (control && !TERMINAL.has(control.status)) {
+        const terminal = control.cancelRequested ? "cancelled" : status;
+        const timestamp = nowIso(this.#now);
+        this.#database.prepare(`UPDATE route_jobs SET status = ?, error = ?, completed_at = ?, updated_at = ?
+          WHERE id = ?`).run(terminal, terminal === "failed" ? error ?? null : null, timestamp, timestamp, id);
+      }
+    });
   }
 
   requestCancel(id: string): "missing" | "terminal" | "cancelled" | "requested" {
-    const job = this.getStored(id);
-    if (!job) return "missing";
-    if (TERMINAL.has(job.status)) return "terminal";
-    const timestamp = nowIso(this.#now);
-    if (job.status === "queued") {
-      this.#database.prepare(`UPDATE route_jobs SET status = 'cancelled', cancel_requested = 1,
-        completed_at = ?, updated_at = ? WHERE id = ?`).run(timestamp, timestamp, id);
-      return "cancelled";
-    }
-    this.#database.prepare("UPDATE route_jobs SET cancel_requested = 1, updated_at = ? WHERE id = ?")
-      .run(timestamp, id);
-    return "requested";
+    return this.#transaction(() => {
+      const job = this.getControl(id);
+      if (!job) return "missing";
+      if (TERMINAL.has(job.status)) return "terminal";
+      const timestamp = nowIso(this.#now);
+      if (job.status === "queued") {
+        this.#database.prepare(`UPDATE route_jobs SET status = 'cancelled', cancel_requested = 1,
+          completed_at = ?, updated_at = ? WHERE id = ?`).run(timestamp, timestamp, id);
+        return "cancelled";
+      }
+      this.#database.prepare("UPDATE route_jobs SET cancel_requested = 1, updated_at = ? WHERE id = ?")
+        .run(timestamp, id);
+      return "requested";
+    });
   }
 
   requestDelete(id: string): "missing" | "deleted" | "requested" {
-    const job = this.getStored(id);
-    if (!job) return "missing";
-    if (["resolving-drive-time", "running", "deleting"].includes(job.status)) {
-      this.#database.prepare(`UPDATE route_jobs SET status = 'deleting', delete_requested = 1,
-        cancel_requested = 1, updated_at = ? WHERE id = ?`).run(nowIso(this.#now), id);
-      return "requested";
-    }
-    this.delete(id);
-    return "deleted";
+    return this.#transaction(() => {
+      const job = this.getControl(id);
+      if (!job) return "missing";
+      if (["resolving-drive-time", "running", "deleting"].includes(job.status)) {
+        this.#database.prepare(`UPDATE route_jobs SET status = 'deleting', delete_requested = 1,
+          cancel_requested = 1, updated_at = ? WHERE id = ?`).run(nowIso(this.#now), id);
+        return "requested";
+      }
+      this.delete(id);
+      return "deleted";
+    });
   }
 
   delete(id: string): void {
@@ -401,20 +317,16 @@ export class SQLiteRouteJobStore {
       FROM route_jobs j WHERE j.id = ?`).get(id) as Row | undefined;
     if (!row) return null;
     const status = requiredString(row, "status") as RouteJobStatus;
-    const request = createBatchRouteJobV1Schema.parse(parseJson(requiredString(row, "request_json")));
-    const filterGeometry = typeof row.drive_time_geometry_json === "string"
-      ? areaGeometrySchema.parse(parseJson(row.drive_time_geometry_json))
-      : drawnAreaGeometry(request);
+    const request = searchIntentSchema.parse(parseJson(requiredString(row, "request_json")));
+    const plan = planSchema.parse(parseJson(requiredString(row, "plan_json")));
     const started = typeof row.started_at === "string" ? Date.parse(row.started_at) : Date.parse(requiredString(row, "created_at"));
     const ended = typeof row.completed_at === "string" ? Date.parse(row.completed_at) : this.#now().getTime();
-    return routeJobSchema.parse({
-      version: 1,
+    return routeJobV2Schema.parse({
+      version: 2,
       id,
       status,
       request,
-      pack: { id: requiredString(row, "pack_id"), dataVersion: requiredString(row, "pack_data_version"), builtAt: requiredString(row, "pack_built_at") },
-      searchRegion: { id: requiredString(row, "search_region_id"), name: requiredString(row, "search_region_name") },
-      ...(filterGeometry ? { filterGeometry } : {}),
+      area: plan.area,
       progress: {
         eligibleAccessPointCount: integer(row, "eligible_count"),
         processedAccessPointCount: integer(row, "processed_count"),
@@ -450,7 +362,7 @@ export class SQLiteRouteJobStore {
     const rows = this.#database.prepare(`SELECT * FROM route_job_results WHERE job_id = ? ${clauses}
       ORDER BY match_rank, access_ordinal, result_ordinal, route_id LIMIT ?`).all(...parameters) as Row[];
     const page = rows.slice(0, limit);
-    const results = page.map((row) => routeJobResultSchema.parse(parseJson(requiredString(row, "payload_json"))));
+    const results = page.map((row) => routeJobResultV2Schema.parse(parseJson(requiredString(row, "payload_json"))));
     const last = page.at(-1);
     return {
       results,

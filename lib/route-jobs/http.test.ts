@@ -27,7 +27,7 @@ describe("route-job HTTP handlers", () => {
     expect((await handlers.POST(new Request("http://local/api/route-jobs", { method: "POST", body: "{" }))).status).toBe(400);
     const listed = await handlers.GET();
     expect(listed.status).toBe(200);
-    expect(await listed.json()).toEqual({ version: 1, jobs: [] });
+    expect(await listed.json()).toEqual({ version: 2, jobs: [] });
   });
 
   it("rejects oversized request bodies before buffering them", async () => {
@@ -58,7 +58,7 @@ describe("route-job HTTP handlers", () => {
       get: vi.fn(async () => ({ id })),
       cancel: vi.fn(async () => ({ id, status: "cancelled" })),
       delete: vi.fn(async () => undefined),
-      results: vi.fn(async () => ({ version: 1, results: [] })),
+      results: vi.fn(async () => ({ version: 2, results: [] })),
     });
     expect((await createRouteJobDetailHandlers(runtime).GET(new Request("http://local"), context)).status).toBe(200);
     expect((await createRouteJobCancelHandler(runtime)(new Request("http://local", { method: "POST" }), context)).status).toBe(200);
