@@ -176,7 +176,9 @@ export function createGenerateClosedRoutesHandler(dependencies: ClosedRouteGener
     }
 
     const budget = { ...budgets[routeRequest.searchEffort] };
-    const deadline = deadlineSignal(request.signal, budget.deadlineMs);
+    // The solver owns its computation budget. The host also allows bounded
+    // worker startup and response transfer so it can return truncated results.
+    const deadline = deadlineSignal(request.signal, budget.deadlineMs + 5_000);
     try {
       const resolvedFilter = await resolveAccessFilter(
         pack,

@@ -304,7 +304,14 @@ describe("V3 closed-route generation handler", () => {
       resolveReachability: async () => { throw new Error("unused"); },
       budgets: { quick: { ...QUICK_BUDGET, deadlineMs: 10 }, thorough: { ...THOROUGH_BUDGET, deadlineMs: 10 } },
     });
-    expect(await errorCode(await deadlineHandler(jsonRequest()))).toBe("DEADLINE_EXCEEDED");
+    vi.useFakeTimers();
+    try {
+      const pending = deadlineHandler(jsonRequest());
+      await vi.advanceTimersByTimeAsync(5_010);
+      expect(await errorCode(await pending)).toBe("DEADLINE_EXCEEDED");
+    } finally {
+      vi.useRealTimers();
+    }
 
     const controller = new AbortController();
     const cancellationSolver = dynamicSolver(async (_request, context) => new Promise((_, reject) => {
