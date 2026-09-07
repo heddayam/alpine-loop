@@ -1,159 +1,147 @@
 # Alpine Loop
 
-Alpine Loop generates loop hikes from local trail data. Choose an area or
-drive time, set your hiking limits and how much trail you are willing to repeat,
-then search for routes.
+Alpine Loop generates loop hikes from local trail data. Choose a region, draw
+an area, or set a drive time; then specify distance, elevation, grade, and how
+much trail you are willing to repeat.
 
-Area filters select trailheads. Hikes can extend beyond the selected area, but
-must stay within the installed data coverage. Exact matches and close matches
-are shown separately.
+- **Quick search** finds up to the number of alternatives you request.
+- **Full search** works through every eligible trailhead and saves its progress
+  and results. You can cancel it and keep the routes found so far.
+- **Exact and close matches stay separate.** Constraints are never relaxed
+  silently, and unknown trail access is included unless you disable it.
 
-The app runs locally with Next.js and MapLibre.
+Areas select starting points; they do not clip hikes. Routes can extend beyond
+an area while staying inside installed data coverage. Results include route
+geometry, elevation profiles, repetition, and mapped trail conditions.
 
-## Run locally
+## Get started
 
-Install Node.js 22 or newer, then run:
+Install Git and Docker with Docker Compose, and make sure Docker is running.
+On Windows, use a WSL terminal with Docker integration enabled.
 
 ```sh
-npm ci
-npm run verify
-npm run dev
+git clone https://github.com/heddayam/alpine-loop.git
+cd alpine-loop
+./alpine.sh
 ```
 
-Open <http://localhost:3000>. To search for hikes, first
-[build a regional pack](#build-a-regional-pack). The app shows a message when
-no regional data is installed.
+The interactive selector lists available regions with download sizes. Type a
+number to toggle a region, then press Enter to apply. Installed packs appear
+in green with a check. Select **Central Cascades** for Glacier Peak, Alpine
+Lakes, and Teanaway.
 
-For everyday use when you are not editing code, stop the development server
-with Ctrl+C and run the production build:
+The script creates `.env` if needed and builds selected packs inside Docker;
+you do not need Node, Python, or geographic tools on your computer. The first
+build downloads substantial source data and can take a while. Progress is
+shown, and completed downloads are cached for reuse if you interrupt and retry.
 
-```sh
-npm run build
-npm start
-```
-
-This avoids the development compiler and file watchers. Rebuild after changing
-code. Use `npm run dev` when you need automatic reloads while editing, and stop
-it with Ctrl+C when finished.
-
-- **Quick search** returns up to the number of routes you request.
-- **Full search** tries every eligible trailhead and saves up to ten exact routes
-  per start, or a labeled close match. Each search is saved with its original
-  area and criteria, so you can keep editing the form.
-
-### Run with Docker
-
-Create a local settings file and start the app:
+Once preparation finishes, start the app:
 
 ```sh
-cp .env.example .env
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. ArcGIS keys are optional. Add them to `.env` if
-you want [place suggestions and drive-time filters](#enable-drive-time-filters).
+Open [localhost:3000](http://localhost:3000). Stop with Ctrl+C; start again with
+`docker compose up`. Use `--build` after updating the application code.
 
-By default, the app is available only on this computer. Set `ALPINE_PORT=8080`
-in `.env` to use port 8080. To allow access from other devices on your local
-network, also set `ALPINE_BIND_ADDRESS=0.0.0.0`.
+### Manage your data
 
-Build regional packs in `.local-data/packs` on your computer. Docker reads them
-from that folder and stores saved searches, settings, and provider state in the
-`alpine-runtime` volume. Both survive rebuilds and restarts.
+Stop the app and rerun `./alpine.sh` to add or remove regions. Removals require
+confirmation and are blocked while unfinished saved searches depend on the
+pack. Completed saved routes are retained. Source caches remain available for
+future builds.
 
-Stop the app with:
+| Data | Location |
+| --- | --- |
+| Installed regional packs | `.local-data/packs/` |
+| Download and build caches | `.cache/` |
+| Docker saved searches and settings | `alpine-runtime` Docker volume |
 
-```sh
-docker compose down
+These survive app restarts and rebuilds and stay out of Git. `docker compose
+down` also preserves them; `docker compose down -v` deletes Docker's saved
+runtime data.
+
+### Optional settings
+
+Named regions and drawn areas work without API keys. For place suggestions and
+drive-time filters, add an ArcGIS key with temporary geocoding and routing
+service-area access to `.env`:
+
+```dotenv
+ARCGIS_API_KEY=your-key
 ```
 
-### Enable drive-time filters
+Separate scoped keys are also supported; see [.env.example](.env.example).
+Keys stay on the server. Apply changes with
+`docker compose up --force-recreate` or restart the local development server.
+Trail and elevation data are local; map tiles, place suggestions, and drive-time
+filters use online services.
 
-Copy `.env.example` to `.env` if you have not already done so. Add an ArcGIS key
-with access to temporary geocoding and routing service areas:
+The app binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to change
+the port, or `ALPINE_BIND_ADDRESS=0.0.0.0` to allow access from your local network.
 
-```sh
-ARCGIS_API_KEY=your-scoped-key
-```
+## Develop
 
-Or use separate keys:
-
-```sh
-ARCGIS_GEOCODING_API_KEY=your-geocoding-key
-ARCGIS_ROUTING_API_KEY=your-routing-key
-```
-
-Restart the app or recreate the Docker service after changing `.env`.
-Geocoding powers place suggestions. Routing service areas power drive-time
-filters. Keys stay on the server.
-
-Drive-time areas are cached in memory for 30 minutes. Full searches also save
-their origin and drive-time area locally until you delete the search. Monthly
-provider usage counts are stored separately.
-
-### Use a different data folder
-
-The app reads regional packs from `.local-data/packs`. To test a different set
-of packs, set `ALPINE_PACK_ROOT` for that run:
+Install packs with `./alpine.sh`, stop the Docker app, then use Node.js 24:
 
 ```sh
-ALPINE_PACK_ROOT=.local-data/packs-experiment npm run dev
+npm ci
+npm run dev
 ```
 
-Only packs in the chosen folder will be available. Leave this setting unset
-to use the default folder.
-
-## Build a regional pack
-
-Install `osmium-tool` and [uv](https://docs.astral.sh/uv/), then download the
-source data and build a pack:
+Open [localhost:3000](http://localhost:3000). Changes reload automatically. Local
+development reads the same packs and stores its own saved searches and settings
+in `.local-data/runtime/`. Set `ALPINE_PACK_ROOT` to use a different pack folder.
 
 ```sh
-npm run pack:bootstrap -- --pack=monterey-carmel
+npm run verify                  # Lint, types, unit tests, production build
+npx playwright install chromium # First browser-test setup
+npm run test:browser             # Browser flows using committed fixtures
 ```
 
-The build uses uv to run Python and rasterio. You do not need to install Python
-packages with pip.
+Automated tests do not fetch trail data or call external providers.
 
-To rebuild from previously downloaded sources without network access:
+### How it fits together
+
+```mermaid
+flowchart LR
+    Sources["Pinned trail + elevation sources"] --> Builder["Pack builder"]
+    Builder --> Packs["Validated SQLite packs"]
+    Packs --> App["Next.js app + route solver"]
+    App --> Map["React + MapLibre"]
+    App --> Jobs["Saved searches · SQLite"]
+```
+
+The builder prepares and validates regional data before activating a pack.
+The app reads packs without modifying them; a separate local process performs
+route searches so the interface and cancellation remain responsive.
+
+- `app/` and `components/` — API routes and map workspace.
+- `lib/solver/` and `lib/graph/` — route generation and graph reads.
+- `lib/data/` and `data/regions/` — pack compilation and regional definitions.
+- `lib/route-jobs/` — saved search execution and persistence.
+
+<details>
+<summary>Build packs directly without Docker</summary>
+
+With Node dependencies installed, install `osmium-tool` and
+[uv](https://docs.astral.sh/uv/), then prepare the locked Python environment:
 
 ```sh
-npm run pack:bootstrap -- \
-  --pack=monterey-carmel \
-  --offline \
-  --cache=.cache/sources \
-  --build-cache=.cache/build/monterey-carmel/sources \
-  --output=.local-data/packs
+uv sync --frozen --project tools/dem --python 3.12
+npm run pack:bootstrap -- --pack=central-cascades --progress
 ```
 
-Downloads, caches, databases, build reports, and generated packs stay local and
-are ignored by Git. Tests use small fixtures stored in the repository and never
-access the network. The app reads trails locally, but uses online services for
-map tiles, place suggestions, and drive-time filters.
+Add `--offline` to rebuild using previously downloaded sources. The default
+output is `.local-data/packs/`. For data audits, representative route checks,
+and adding a region, follow the [regional checklist](docs/rebuild/region-onboarding-checklist.md).
 
-### Check a regional pack
+</details>
 
-Run the route checks against an installed schema-6 pack. Replace
-`<data-version>` with the folder name created by the build:
+## Further reading
 
-```sh
-npm run --silent pack:checkpoint -- \
-  --pack=monterey-carmel \
-  --database=.local-data/packs/monterey-carmel/<data-version>/pack.sqlite \
-  --manifest=.local-data/packs/monterey-carmel/<data-version>/manifest.json \
-  --effort=thorough
-```
-
-For another region, change the pack name and both file paths. These checks
-generate routes from sample trailheads and validate them with the same rules
-the app uses.
-
-## Project docs
-
-- [Status and next steps](docs/rebuild/status.md)
-- [Implementation plan](docs/rebuild/implementation-plan.md)
+- [System design](docs/rebuild/system-design.md) and [product behavior](docs/rebuild/implementation-plan.md)
 - [Route engine](docs/rebuild/closed-route-topology-plan.md)
 - [Data sources and licensing](docs/rebuild/data-sources.md)
-- [Regional expansion plan](docs/rebuild/regional-expansion-plan.md)
-- [New region checklist](docs/rebuild/region-onboarding-checklist.md)
-- [How trail access points are chosen](docs/rebuild/access-point-derivation-plan.md)
+- [Regional roadmap](docs/rebuild/regional-expansion-plan.md) and [new region checklist](docs/rebuild/region-onboarding-checklist.md)
+- [Project status](docs/rebuild/status.md)
