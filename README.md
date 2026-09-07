@@ -24,6 +24,18 @@ Open <http://localhost:3000>. To search for hikes, first
 [build a regional pack](#build-a-regional-pack). The app shows a message when
 no regional data is installed.
 
+For everyday use when you are not editing code, stop the development server
+with Ctrl+C and run the production build:
+
+```sh
+npm run build
+npm start
+```
+
+This avoids the development compiler and file watchers. Rebuild after changing
+code. Use `npm run dev` when you need automatic reloads while editing, and stop
+it with Ctrl+C when finished.
+
 - **Quick search** returns up to the number of routes you request.
 - **Full search** tries every eligible trailhead and saves up to ten exact routes
   per start, or a labeled close match. Each search is saved with its original
