@@ -6,6 +6,30 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — flattened the worker asset directory to `public/maplibre/`
+  and removed the redundant vendor directory. Updated the runtime worker URL,
+  sync/check destination, asset tests, lint exclusion, and README. Both worker
+  files remain byte-identical to the installed package. Two `npm run verify`
+  passes each passed 446 tests across 79 files, lint, types, and production
+  build; two browser passes each passed all seven offline flows. Live localhost
+  desktop zoom/pan and 390 px mobile panel scrolling/map switching passed with
+  trails and access points rendered and no console errors. Viewport reset.
+
+- [x] 2026-09-07 — guarded the local MapLibre worker pair against dependency
+  drift. `npm run maplibre:sync` copies both installed distribution files
+  unchanged, preserving license headers; `npm run maplibre:check` rejects
+  missing or byte-mismatched assets before dev, build (including Docker), and
+  verification. Both current assets already match installed MapLibre 6.1.0;
+  no dependency or asset-content change was needed. Tests compare each sibling
+  against the installed package. An isolated offline smoke check confirmed
+  missing/stale detection, read-only checking, pair repair, and operation from
+  another working directory. Two final `npm run verify` passes each passed
+  446 tests across 79 files, lint, types, and production build; two browser
+  passes each passed all seven offline Chromium flows. Live localhost checks
+  confirmed trail/access-point rendering, desktop zoom/pan anchoring, and
+  390 px mobile panel scrolling and map switching with zero console errors.
+  Viewport override reset; completed test worktree and branch removed.
+
 - [x] 2026-09-07 — reviewed every root file and removed generated
   `next-env.d.ts` from Git and the Docker build context. Type checking now
   generates Next.js declarations first. The browser runner preserves only
@@ -731,7 +755,7 @@ port 3000. Original saved jobs and installed artifacts remain intact.
 - Generated packs, source/build caches, route-job databases, and audits are
   local ignored artifacts. Rebuild packs only through the explicit commands in
   `README.md`; use uv for Python dependencies.
-- Preserve `public/vendor/maplibre/`: the local worker assets are required for
+- Preserve `public/maplibre/`: the local worker assets are required for
   native GeoJSON rendering. Final visual checks must use the live in-app browser
   against localhost and include zoom/pan anchoring plus mobile internal-panel
   scrolling.

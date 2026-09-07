@@ -422,7 +422,7 @@ export function HikeMap({
     let resizeObserver: ResizeObserver | undefined;
     void import("maplibre-gl").then(({ Map, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
-      setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
+      setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
       map = new Map({
         container: containerRef.current,
         center: display.center,

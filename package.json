@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run maplibre:check",
     "dev": "next dev",
+    "prebuild": "npm run maplibre:check",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
@@ -12,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "node scripts/run-browser-tests.mjs --config=tests/browser/playwright.config.ts",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run build",
+    "verify": "npm run maplibre:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "maplibre:check": "node scripts/maplibre-assets.mjs --check",
+    "maplibre:sync": "node scripts/maplibre-assets.mjs --sync",
     "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
     "pack:checkpoint": "node --import tsx scripts/research/regional-pack-checkpoint.ts"
   },
