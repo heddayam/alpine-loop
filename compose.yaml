@@ -1,6 +1,22 @@
 name: alpine-loop
 
 services:
+  packs:
+    profiles: [tools]
+    build:
+      context: .
+      target: packs
+    init: true
+    user: "${ALPINE_UID:-1000}:${ALPINE_GID:-1000}"
+    environment:
+      ALPINE_ROUTE_JOBS_DB: /app/.local-data/runtime/route-jobs.sqlite
+      ALPINE_NATIVE_ROUTE_JOBS_DB: /app/.local-data/native-runtime/route-jobs.sqlite
+    volumes:
+      - ./.cache:/app/.cache
+      - ./.local-data/packs:/app/.local-data/packs
+      - ./.local-data/runtime:/app/.local-data/native-runtime:ro
+      - alpine-runtime:/app/.local-data/runtime:ro
+
   app:
     build:
       context: .

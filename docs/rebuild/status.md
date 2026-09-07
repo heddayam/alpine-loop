@@ -6,6 +6,29 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — added the small `./alpine.sh` regional-pack selector:
+  numbered toggles, green checked installations, gray available packs, measured
+  approximate download sizes, and explicit removal confirmation. The Compose
+  tools profile packages Node, osmium, uv, Python 3.12, and the locked Rasterio
+  environment; host users need only Git and Docker. Builds reuse the existing
+  compiler and caches. Read-only checks protect unfinished Docker and native
+  searches before removal, preserving completed records and source caches.
+  The README now leads with selector/startup commands and includes a compact
+  architecture diagram and local development instructions. Two verification
+  passes each passed 479 tests across 81 files, lint, types, and production
+  build; two offline browser passes each passed all seven flows. Actual ARM64
+  image builds exposed and resolved Rasterio's GDAL/compiler requirement and
+  uv cache permissions for host-mapped users. An isolated, network-disabled
+  tools container validated osmium and Rasterio/GDAL and compiled a committed
+  fixture; the production app discovered it, returned healthy/job endpoints,
+  and retained writable runtime data across restart. Container removal checks
+  blocked a native queued search, then removed only the fixture pack after
+  completion while retaining its record and cache. The real selector listed all
+  five installed packs and quit without changing them. No regional schema or
+  real pack changed; a fresh Cascades source download/build was not repeated.
+  Temporary verification containers, volumes, agent worktrees, and branches
+  were removed after integration.
+
 - [x] 2026-09-07 — flattened the worker asset directory to `public/maplibre/`
   and removed the redundant vendor directory. Updated the runtime worker URL,
   sync/check destination, asset tests, lint exclusion, and README. Both worker

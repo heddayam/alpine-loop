@@ -52,7 +52,7 @@ describe("pack selector metadata", () => {
 });
 
 describe("pack removal", () => {
-  it.each(["queued", "resolving", "running", "deleting"])("blocks a %s search without modifying its database or packs", async (status) => {
+  it.each(["queued", "resolving", "resolving-drive-time", "running", "deleting"])("blocks a %s search without modifying its database or packs", async (status) => {
     createJobs(status);
     const original = await readFile(jobs);
     await expect(removeManagedPacks([pack], catalog, [jobs])).rejects.toThrow(/unfinished search saved-search/);

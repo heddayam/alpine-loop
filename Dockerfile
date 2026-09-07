@@ -6,6 +6,33 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 
+FROM dependencies AS packs
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /usr/local/bin/uv
+# Rasterio's pinned release builds from source on Linux ARM64.
+RUN apt-get update && apt-get install -y --no-install-recommends osmium-tool ca-certificates g++ libgdal-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/dem \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_CACHE_DIR=/tmp/uv-cache
+COPY tools/dem/pyproject.toml tools/dem/uv.lock ./tools/dem/
+RUN uv sync --frozen --project tools/dem --python 3.12 \
+    && chmod -R a+rX /opt/dem /opt/python
+
+ENV UV_NO_SYNC=1
+COPY tsconfig.json ./
+COPY lib ./lib
+COPY scripts ./scripts
+COPY data ./data
+COPY tools/dem/sample_dem.py ./tools/dem/
+RUN rm -rf /tmp/uv-cache \
+    && mkdir -p .local-data/runtime && chown node:node .local-data/runtime
+
+ENTRYPOINT ["node", "--import", "tsx"]
+CMD ["scripts/manage-packs.ts", "list"]
+
+
 FROM node:24.11.0-bookworm-slim AS build
 
 WORKDIR /app

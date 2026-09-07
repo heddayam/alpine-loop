@@ -26,7 +26,7 @@ export async function listManagedPacks(root = localPackRoot()) {
       if (!sizes[id]) throw new Error("Missing download size metadata");
       return { id, label: region.label, installed: Boolean(installed), size };
     } catch (error) {
-      throw new Error(`Cannot inspect ${region.label}: ${(error as Error).message}. Rebuild with docker compose run --rm packs ${id}.`);
+      throw new Error(`Cannot inspect ${region.label}: ${(error as Error).message}. Rebuild with docker compose run --rm packs scripts/pack-bootstrap.ts --pack=${id} --progress.`);
     }
   }));
 }
@@ -54,7 +54,7 @@ async function checkJobs(filename: string, removed: Set<string>): Promise<void> 
     }
     for (const row of database.prepare(`SELECT id, status, ${field} FROM route_jobs`).all()) {
       if (["completed", "cancelled", "failed"].includes(String(row.status))) continue;
-      if (!["queued", "resolving", "running", "deleting"].includes(String(row.status))) {
+      if (!["queued", "resolving", "resolving-drive-time", "running", "deleting"].includes(String(row.status))) {
         throw new Error(`Unknown status for search ${row.id}`);
       }
       const ids = field === "plan_json"
