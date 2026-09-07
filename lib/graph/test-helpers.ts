@@ -49,7 +49,7 @@ export function writeGraphFixture(
     portalRoadClass: point.portalRoadClass ?? "street", parkingDistanceM: point.parkingDistanceM ?? null,
   }));
   const topologyOptions = {
-    builtAt: GRAPH_FIXTURE_IDENTITY.builtAt, runtimeMode: "reachable-graph-fallback" as const,
+    builtAt: GRAPH_FIXTURE_IDENTITY.builtAt,
     algorithmVersion: "closed-route-topology-v1", policyVersion: "closed-route-decision-graph-v1",
   };
   const topology = buildClosedRouteTopology(nodes, edges, accessPoints, topologyOptions);

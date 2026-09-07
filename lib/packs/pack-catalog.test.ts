@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadInstalledPack } from "./installed-pack";
-import { loadPackCatalog } from "./pack-catalog";
+import { discoverCatalogPacks } from "./pack-catalog";
 
 const temporaryRoots: string[] = [];
 
@@ -51,40 +51,24 @@ async function installSantaCruz(root: string): Promise<void> {
 }
 
 describe("catalog-linked pack discovery", () => {
-  it("returns every configured region in display order with planned and unavailable states", async () => {
-    const catalog = await loadPackCatalog(await emptyRoot());
-    expect(catalog.regions.map(({ id }) => id)).toEqual([
-      "santa-cruz-mountains",
-      "southern-east-bay",
-      "monterey-carmel",
-      "henry-coe",
-      "marin-mount-tam",
-      "tahoe-eldorado",
-      "central-cascades",
-    ]);
-    expect(catalog.regions.map(({ state }) => state)).toEqual([
-      "unavailable", "unavailable", "unavailable", "unavailable", "planned", "planned", "unavailable",
-    ]);
+  it("returns no installations when linked data is absent", async () => {
+    expect((await discoverCatalogPacks(await emptyRoot())).size).toBe(0);
   });
 
   it("exposes metadata only for a valid linked installation", async () => {
     const root = await emptyRoot();
     await installSantaCruz(root);
-    const catalog = await loadPackCatalog(root);
-    expect(catalog.regions[0]).toMatchObject({
-      state: "available",
-      packId: "santa-cruz-mountains",
-      pack: { id: "santa-cruz-mountains", dataVersion: "scm-test" },
-    });
-    expect(catalog.regions[1]).not.toHaveProperty("pack");
+    const catalog = await discoverCatalogPacks(root);
+    expect([...catalog.keys()]).toEqual(["santa-cruz-mountains"]);
+    expect(catalog.get("santa-cruz-mountains")?.manifest.dataVersion).toBe("scm-test");
   });
 
   it("downgrades invalid linked installations without weakening direct-load validation", async () => {
     const root = await emptyRoot();
     await mkdir(path.join(root, "santa-cruz-mountains"), { recursive: true });
     await writeFile(path.join(root, "santa-cruz-mountains", "current.json"), "not json");
-    const catalog = await loadPackCatalog(root);
-    expect(catalog.regions[0]).toMatchObject({ id: "santa-cruz-mountains", state: "unavailable" });
+    const catalog = await discoverCatalogPacks(root);
+    expect(catalog.size).toBe(0);
     await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow();
   });
 

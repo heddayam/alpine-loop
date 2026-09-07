@@ -77,7 +77,7 @@ describe("eligible access-point enumeration", () => {
 
   it("keeps starts whose closed-route reachability was never measured", () => {
     expect(accessPointCanStartClosedRoute({ canReachCycle: true })).toBe(true);
-    expect(accessPointCanStartClosedRoute({ canReachCycle: null })).toBe(true);
+    expect(accessPointCanStartClosedRoute({ canReachCycle: undefined })).toBe(true);
     expect(accessPointCanStartClosedRoute({})).toBe(true);
     expect(accessPointCanStartClosedRoute({ canReachCycle: false })).toBe(false);
   });
@@ -86,7 +86,7 @@ describe("eligible access-point enumeration", () => {
     const points = [
       point("loops", { canReachCycle: true }),
       point("dead-end", { canReachCycle: false }),
-      point("unmeasured", { canReachCycle: null }),
+      point("unmeasured", { canReachCycle: undefined }),
       // Dropped for buildings, so it must not be counted as a no-cycle exclusion.
       point("built-up-dead-end", { nearbyBuildingCount: 500, canReachCycle: false }),
     ];

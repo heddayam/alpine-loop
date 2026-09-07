@@ -609,7 +609,6 @@ export function buildClosedRouteTopology(
   accessPoints: readonly NormalizedAccessPoint[],
   options: {
     builtAt: string;
-    runtimeMode?: "reachable-graph-fallback";
     algorithmVersion: string;
     policyVersion: string;
   },

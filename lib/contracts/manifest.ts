@@ -48,5 +48,3 @@ export const packManifestSchema = z.object({
 export const topologyProfileSchema = z.enum(["known", "inclusive"]);
 export type TopologyProfile = z.infer<typeof topologyProfileSchema>;
 export type PackManifest = z.infer<typeof packManifestSchema>;
-export const packManifestV6Schema = packManifestSchema;
-export type PackManifestV6 = PackManifest;

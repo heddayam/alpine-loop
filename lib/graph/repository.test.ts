@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import policy from "@/data/fixtures/graph/policy.json";
 import { packManifestSchema } from "@/lib/contracts";
 import { compilePack } from "@/lib/data/compiler";
-import { fixtureCompileOptionsV6 } from "@/lib/data/fixture-pack";
+import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
 import { lineLengthMeters } from "./geometry";
 import { writeGraphFixture } from "./test-helpers";
 import type { GraphEdge, InducedGraph } from "./types";
@@ -92,7 +92,7 @@ describe("SQLiteGraphRepository", () => {
   });
 
   it("reads a current compiled fixture with direction-aware profiles and nullable parking", async () => {
-    const artifact = await compilePack(await fixtureCompileOptionsV6(directory()));
+    const artifact = await compilePack(await fixtureCompileOptions(directory()));
     const manifest = packManifestSchema.parse(JSON.parse(readFileSync(artifact.manifestPath, "utf8")));
     const repository = new SQLiteGraphRepository(artifact.databasePath, manifest.id);
     repositories.push(repository);

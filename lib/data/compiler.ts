@@ -444,7 +444,6 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     };
     const closedRouteTopology = buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
       builtAt: manifest.builtAt,
-      runtimeMode: manifest.closedRouteTopology.runtimeMode,
       algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
       policyVersion: manifest.closedRouteTopology.policyVersion,
     });

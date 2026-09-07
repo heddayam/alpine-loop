@@ -35,7 +35,7 @@ export function drawnArea([west, south, east, north]: Bounds): AreaGeometry {
 }
 
 export async function installedSearchPacks(): Promise<ReadonlyMap<string, InstalledPack>> {
-  return (await discoverCatalogPacks()).installedPacks;
+  return await discoverCatalogPacks();
 }
 
 export async function searchCatalog(): Promise<SearchCatalog> {

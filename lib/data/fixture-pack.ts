@@ -115,5 +115,3 @@ export async function fixtureCompileOptions(
     beforePublish: overrides.beforePublish,
   };
 }
-
-export const fixtureCompileOptionsV6 = fixtureCompileOptions;

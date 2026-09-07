@@ -1,8 +1,8 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { compilePack } from "@/lib/data/compiler";
-import { fixtureCompileOptionsV6 } from "@/lib/data/fixture-pack";
-import { generatedClosedRouteV3Schema, packManifestV6Schema } from "@/lib/contracts";
+import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
+import { generatedClosedRouteV3Schema, packManifestSchema } from "@/lib/contracts";
 import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
 import { drawnArea } from "./search-area";
 import { resolve } from "node:path";
@@ -34,8 +34,8 @@ describe("RouteSolverProcess", () => {
     const root = await mkdtemp(resolve(tmpdir(), "alpine-compute-"));
     let session: RouteSolverProcess | undefined;
     try {
-      const artifact = await compilePack(await fixtureCompileOptionsV6(root));
-      const manifest = packManifestV6Schema.parse(JSON.parse(await readFile(artifact.manifestPath, "utf8")));
+      const artifact = await compilePack(await fixtureCompileOptions(root));
+      const manifest = packManifestSchema.parse(JSON.parse(await readFile(artifact.manifestPath, "utf8")));
       session = await RouteSolverProcess.open({
         pack: manifest,
         criteria: { ...request.criteria, distanceMiles: { min: 0.1, max: 20 } },

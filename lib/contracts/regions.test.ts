@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
 import registry from "@/data/regions/registry.json";
-import { packCatalogResponseV1Schema, regionRegistryV1Schema } from "./regions";
-
-const PACK = {
-  id: "santa-cruz-mountains",
-  name: "Santa Cruz Mountains",
-  dataVersion: "scm-test",
-  builtAt: "2026-08-06T00:00:00.000Z",
-  coverageBbox: [-122.57, 36.84, -121.82, 37.44],
-  coverage: {
-    type: "Polygon",
-    coordinates: [[[-122.57, 36.84], [-121.82, 36.84], [-121.82, 37.44], [-122.57, 37.44], [-122.57, 36.84]]],
-  },
-  display: { center: [-122.18, 37.319], zoom: 13.5 },
-};
+import { regionRegistryV1Schema } from "./regions";
 
 describe("regional pack catalog contracts", () => {
   it("validates the committed ordered roadmap registry", () => {
@@ -51,19 +38,4 @@ describe("regional pack catalog contracts", () => {
     }).success).toBe(false);
   });
 
-  it("requires pack metadata only for available catalog entries", () => {
-    const parsed = packCatalogResponseV1Schema.parse({
-      version: 1,
-      regions: [
-        { id: "planned", label: "Planned", displayOrder: 1, state: "planned" },
-        { id: "missing", label: "Missing", displayOrder: 2, state: "unavailable", packId: "missing-pack" },
-        { id: "ready", label: "Ready", displayOrder: 3, state: "available", packId: PACK.id, pack: PACK },
-      ],
-    });
-    expect(parsed.regions.map(({ state }) => state)).toEqual(["planned", "unavailable", "available"]);
-    expect(packCatalogResponseV1Schema.safeParse({
-      version: 1,
-      regions: [{ id: "ready", label: "Ready", displayOrder: 1, state: "available", packId: PACK.id }],
-    }).success).toBe(false);
-  });
 });
