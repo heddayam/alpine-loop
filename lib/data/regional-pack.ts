@@ -5,30 +5,12 @@ import { buildHenryCoePack } from "./henry-coe-pack";
 import { buildMontereyCarmelPack } from "./monterey-carmel-pack";
 import { buildSantaCruzPack } from "./santa-cruz-pack";
 import { buildSouthernEastBayPack } from "./southern-east-bay-pack";
-import type { PackBuildResult } from "./types";
+import type { RegionalPackBuildOptions } from "./regional-build-types";
+import type { createRegionalPackBuilder } from "./regional-builder";
 
-export type RegionalPackBuildOptions = {
-  outputRoot: string;
-  sourceCacheRoot: string;
-  preparationRoot: string;
-  refresh: boolean;
-  onProgress?: RegionalPackBuildProgressCallback;
-};
-
-export type RegionalPackBuildProgress = {
-  phase: number;
-  phaseCount: number;
-  label: string;
-};
-
-export type RegionalPackBuildProgressCallback = (progress: RegionalPackBuildProgress) => void;
-
-export type RegionalPackBuildResult = {
-  pack: PackBuildResult;
-  [key: string]: unknown;
-};
-
-export type RegionalPackBuilder = (options: RegionalPackBuildOptions) => Promise<RegionalPackBuildResult>;
+export type { RegionalPackBuildOptions, RegionalPackBuildProgress } from "./regional-build-types";
+export type RegionalPackBuilder = ReturnType<typeof createRegionalPackBuilder>;
+export type RegionalPackBuildResult = Awaited<ReturnType<RegionalPackBuilder>>;
 
 const registry = regionRegistryV1Schema.parse(registryInput);
 const builders = new Map<string, RegionalPackBuilder>([

@@ -132,7 +132,7 @@ function preparationRecord(options: CompilePackOptions) {
     topologyHash: digest(options.topology.data),
     accessPoints: options.topology.data.accessPoints,
     inputsHash: digest({ builtAt: options.builtAt, topology: normalizedSnapshot(options.topology.snapshot),
-      additionalSources: (options.additionalSources ?? []).toSorted((first, second) => first.id.localeCompare(second.id)).map(normalizedSnapshot),
+      additionalSources: [...(options.additionalSources ?? [])].sort((first, second) => first.id.localeCompare(second.id)).map(normalizedSnapshot),
       elevation: normalizedSnapshot(options.elevation.snapshot), elevationAlgorithm: options.elevation.sampler.algorithmVersion,
       namedAreas: normalizedSnapshot(options.namedAreas.snapshot), namedAreaAdapter: options.namedAreas.adapter.adapterVersion,
       buildings: options.buildings, searchRegions: options.searchRegions }),

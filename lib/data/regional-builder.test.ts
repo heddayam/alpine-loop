@@ -37,7 +37,7 @@ vi.mock("./elevation", () => ({
   },
 }));
 
-import { createRegionalPackBuilder, regionalDataVersion, REGIONAL_PACK_BUILD_PHASES } from "./regional-builder";
+import { createRegionalPackBuilder, parseRegionalBoundary, regionalDataVersion, REGIONAL_PACK_BUILD_PHASES } from "./regional-builder";
 
 function source(id: string): SourceSnapshot {
   return { id, authority: "Fixture", dataset: id, version: "v1", license: "CC0-1.0",
@@ -74,6 +74,16 @@ async function fixture() {
 }
 
 describe("shared regional builder", () => {
+  it("rejects mismatched regional identity, boundary versions, and invalid geometry", async () => {
+    const { config } = await fixture();
+    const boundary = JSON.parse(await readFile(path.join(config.regionRoot, "boundary.geojson"), "utf8"));
+    for (const properties of [{ id: "other", boundaryVersion: "v1" }, { id: config.id, boundaryVersion: "v2" }]) {
+      expect(() => parseRegionalBoundary(config, JSON.stringify({ ...boundary, properties }))).toThrow("identity or version");
+    }
+    expect(() => parseRegionalBoundary(config, JSON.stringify({ ...boundary, geometry: { type: "Polygon", coordinates: [] } })))
+      .toThrow();
+  });
+
   it("publishes an audited real artifact, retains progress, and reuses the same pinned identity", async () => {
     const { config, options } = await fixture();
     const progress: RegionalPackBuildProgress[] = [];

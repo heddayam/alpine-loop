@@ -37,7 +37,7 @@ installation as unavailable and violates the onboarding order.
 | Phase | Network | Main output | Repeat rule |
 | --- | --- | --- | --- |
 | Plan/gate | Off | Detailed roadmap entry, unchecked status gate, charter/boundary decisions | Iterate cheaply before source acquisition. |
-| Inputs/builder | Off | Committed config, basic-builder wrapper, tests, scenarios, checkpoint | Focused tests as needed. |
+| Inputs/builder | Off | Committed config, regional definition, tests, scenarios, checkpoint | Focused tests as needed. |
 | Refresh | **On** | Immutable source receipts/pointers plus an isolated refresh build | Once after metadata review; repeat only for explicit source correction/update. |
 | Determinism A | Off | Installed but catalog-unlinked schema-6 candidate | Fresh preparation; `reusedExisting: false`. |
 | Determinism B | Off | Isolated schema-6 candidate | Fresh preparation; `reusedExisting: false`; hashes equal A. |
@@ -54,7 +54,7 @@ end of this document.
 Use the same ID consistently in the directory name, manifest seed, builder
 registry, scenario file, checkpoint, installed-pack path, and final catalog
 `packId`. Pick a short data-version prefix for the region builder (for example,
-`seb` or `mc`; the basic builder adds the hyphen).
+`seb` or `mc`; the shared builder adds the hyphen).
 
 Before editing, read these current references completely:
 
@@ -66,7 +66,7 @@ Before editing, read these current references completely:
   its measurements as historical observations rather than thresholds;
 - `data/regions/southern-east-bay/` and `data/regions/monterey-carmel/` for two
   worked examples; and
-- `lib/data/basic-regional-pack.ts`, `lib/data/southern-east-bay-pack.ts`,
+- `lib/data/regional-builder.ts`, `lib/data/southern-east-bay-pack.ts`,
   `lib/data/monterey-carmel-pack.ts`, their tests, and their gate checkpoint
   scripts for the current implementation pattern.
 
@@ -91,7 +91,7 @@ inputs from conditional material.
 | `elevation-source.json` | Always | The strict fields listed below, with a region-unique `cacheNamespace`, reviewed query bbox, and exact expected 3DEP product IDs. |
 | `search-regions.json` | Always | Version 1 ordered list. Entry zero should normally be `pack:<pack-id>`. Add only stable named areas actually present in the pinned OSM named-area export and useful for eligible loop starts. |
 | `scenarios.json` | Always | Version 1, correct `packId`, and at least one representative scenario per major included trail cluster. Each has an exact expectation and a deliberately impossible, close-match-only expectation. |
-| `access-restrictions.json` | When review finds a restriction | Exact OSM-way removals only. The current parser requires at least one restriction, so omit this input and use the basic builder when review finds none; never invent a placeholder restriction. If present, pin the committed file's SHA-256 in the custom region builder. |
+| `access-restrictions.json` | When review finds a restriction | Exact OSM-way removals only. The current parser requires at least one restriction, so omit this input when review finds none; never invent a placeholder restriction. If present, pin the committed file's SHA-256 in the region definition's `restrictions.contentHash`. |
 | `official-sources/README.md` and source config or reviewed overlay | Optional | Use only for provenance or cosmetic names/confidence on existing portals. State whether it is refreshable, committed, blocked documentation, or excluded. It must not create a start, connector, or permission. |
 
 ### Required source fields and hashes
@@ -178,28 +178,68 @@ Create these implementation and verification files:
 
 | File | Required outcome |
 | --- | --- |
-| `lib/data/<pack-id>-pack.ts` | For the normal case with no restrictions or name overlay, export a `BasicRegionalPackConfig` and the result of `createBasicRegionalPackBuilder(config)` from `lib/data/basic-regional-pack.ts`. The config supplies ID/name, data-version prefix, compiler version, boundary version, region root, and display center/zoom. Use custom orchestration only when reviewed restrictions or an optional name overlay actually exists. |
-| `lib/data/<pack-id>-pack.test.ts` | Assert the exact config, boundary identity/bbox, source namespaces and versions, reviewed search-region order, schema 6/capabilities, and deterministic seed/data-version behavior. For a custom builder, also assert restriction behavior/hash and that optional overlays cannot create starts. |
+| `lib/data/<pack-id>-pack.ts` | Export a `RegionalPackDefinition` and `createRegionalPackBuilder(config)` from `lib/data/regional-builder.ts`. Supply ID/name, data-version prefix, compiler version, boundary version, region root, and display center/zoom. Use the same builder for restrictions, entrance evidence, and official trail supplements. |
+| `lib/data/<pack-id>-pack.test.ts` | Assert regional facts: exact boundary, source namespaces/versions, reviewed search regions, restrictions, entrance-source validation, and regional acceptance checks. Generic preparation, fingerprints, progress, and publication are tested once in `regional-builder.test.ts`; do not duplicate those suites per region. |
 | `lib/data/regional-pack.ts` | Import and register the builder. This is necessary before `pack:bootstrap` recognizes the catalog ID. |
 | `lib/data/regional-pack.test.ts` | Add the ID to stable sorted builder expectations and remove its planned-without-builder expectation. |
 | `scripts/research/regional-pack-checkpoint.ts` | Shared schema-6 real-pack checkpoint using the region's `scenarios.json`; run exact and impossible expectations and emit per-scenario timing, selected start, portal distance, counts, violations, diagnostics, and validation rejections. The runner rejects a reference anchor whose nearest eligible portal is more than 500 m away. |
 
-The basic builder is the optimized default. It reads `boundary.geojson`,
-`search-regions.json`, `osm-source.json`, and `elevation-source.json`; refreshes
-or reads OSM/3DEP; derives and strips portals; extracts buildings; compiles and
-audits; and writes the consistent `regional-audit.json` and
-`portal-audit.json`. It sets `officialAccess: false` and has no curated-access
-source. Do not create empty restriction/name files or fork this orchestration
-for a source-only region. The current shared compiler version is
-`basic-regional-pack-compiler-v1`; bump it when the generic orchestration or its
-deterministic inputs change, not merely because another region uses it.
+Every region uses one fixed build process. It reads and validates the regional
+inputs, resolves pinned sources, prepares OSM topology, adds any reviewed trail
+supplement, applies restrictions, derives trailheads, applies entrance names,
+strips build context, prepares buildings/elevation/named areas, then compiles,
+audits, and publishes. Regions cannot reorder these operations.
 
-The manifest seed must use schema `"6"`, exact coverage plus region display
-center/zoom, and the existing closed-route settings. Its capabilities should be
-`elevation`, `namedAreas`, `closedRouteTopology`, `batchSearchRegions`,
-`elevationProfiles`, and `portalAccessPoints`; set `officialAccess` only when a
-reviewed official source is actually present. Keep topology/access/elevation
-confidence explicit.
+A minimal definition looks like this (use the actual approved catalog ID and
+reviewed values):
+
+```ts
+export const REGION_CONFIG: RegionalPackDefinition = {
+  id: "example-region",
+  name: "Example Region",
+  dataVersionPrefix: "example",
+  compilerVersion: "regional-pack-compiler-v1",
+  boundaryVersion: "example-boundary-v1",
+  regionRoot: path.resolve("data/regions/example-region"),
+  display: { center: [-122, 37], zoom: 10 },
+};
+export const buildExampleRegion = createRegionalPackBuilder(REGION_CONFIG);
+```
+
+Only add capabilities supported by real regional evidence:
+
+- `restrictions: { contentHash }` reads the fixed `access-restrictions.json`
+  path and verifies its exact bytes before applying any changes.
+- `entrances(options)` validates and normalizes an entrance source, returning
+  `{ snapshot, adapterVersion, evidence }`. It owns source-specific acquisition
+  and respects `options.refresh`; it cannot modify the graph or publication.
+  See East Bay for a refreshable source and Monterey for a committed review.
+  Once configured, source failure aborts the build rather than silently omitting
+  that evidence. Entrance loaders run after prerequisite checks and before the
+  large common source downloads, so invalid local evidence fails early.
+- `officialTrails: { sourceConfigPath, conflationPolicyPath }` uses the shared
+  connected-gap conflation process. See Central Cascades.
+- `checkPortals(topology, boundary)` can reject an otherwise valid preparation
+  and return regional measurements to retain in the audit. See East Bay's
+  required corridor coverage. It must inspect the supplied topology without
+  changing it; preparation and publication stay in the shared builder.
+
+All builders return `{ pack, portalAudit, regionalAudit }` and write
+`portal-audit.json` (report schema `"2"`) plus `regional-audit.json`. Optional
+trail supplements also produce `official-trail-conflation-audit.json`. The
+portal report includes common counts, build-context removal, and any configured
+restriction, entrance, or regional-check evidence. Entrance reports distinguish
+actual matches from changed labels; evidence already represented still counts
+as a match. Historical artifacts may retain their earlier report names/shapes.
+No runtime consumer depends on those build reports.
+
+The shared seed supplies graph schema `"6"`, topology settings and capabilities.
+`officialAccess` is true when an entrance source is configured; restrictions
+alone do not imply this capability. Existing compiler versions and the older
+Santa Cruz `fingerprintFormat: "joined-v1"` remain to preserve installed build
+identities. New definitions use the default tagged fingerprint format and must
+include a boundary version. Pure orchestration refactors that preserve frozen
+build inputs need not invalidate existing packs.
 
 Increment the region compiler version when orchestration or deterministic
 inputs change. The data-version hash must cover:
@@ -225,13 +265,14 @@ Run focused offline tests while implementing:
 
 ```sh
 npm test -- lib/data/<pack-id>-pack.test.ts lib/data/regional-pack.test.ts \
-  lib/data/portals.test.ts lib/data/osm/buildings.test.ts \
+  lib/data/regional-builder.test.ts lib/data/portals.test.ts lib/data/osm/buildings.test.ts \
   lib/data/wilderness.test.ts lib/data/audit/sqlite-pack-audit.test.ts
 ```
 
 ## 4. Understand the current trailhead pipeline
 
-This is the sequence the region builder must preserve:
+This sequence is owned by the shared builder. A configured official-trail
+supplement is conflated after OSM normalization and before restrictions:
 
 1. `osmium extract` uses the exact Polygon with `complete_ways`. The topology
    filter includes trail classes, road context, parking, trailhead/information/
@@ -586,10 +627,6 @@ largest costs.
 
 ## Known process gaps to measure before the next region
 
-- `createBasicRegionalPackBuilder` removes orchestration duplication for the
-  source-only case, but restrictions and optional entrance overlays still need
-  a custom builder (or a future generic extension), and older packs use three
-  different portal-audit filenames.
 - The generic `pack:checkpoint` runner removes per-region script duplication,
   but the older Gate 8 and Gate 9 scripts have not yet migrated to it.
 - There is no package command that creates two isolated offline builds, hashes
