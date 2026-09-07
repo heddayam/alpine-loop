@@ -105,7 +105,7 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
   it("rejects missing profiles, obsolete topology formats, and altered content hashes", () => {
     expect(() => open(createFixture((database) => database.exec("PRAGMA foreign_keys = OFF; DELETE FROM topology_profiles WHERE profile = 'inclusive'"))))
       .toThrow(/topology profile count mismatch/);
-    expect(() => open(createFixture((database) => database.exec("UPDATE topology_profiles SET format_version = 2 WHERE profile = 'known'"))))
+    expect(() => open(createFixture((database) => database.exec("UPDATE topology_profiles SET format_version = 99 WHERE profile = 'known'"))))
       .toThrow(/unsupported known topology format version/);
     expect(() => open(createFixture((database) => database.exec("UPDATE topology_profiles SET content_hash = 'tampered' WHERE profile = 'known'"))))
       .toThrow(/invalid known topology content hash/);

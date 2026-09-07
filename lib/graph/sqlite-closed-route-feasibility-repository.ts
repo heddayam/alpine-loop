@@ -1,7 +1,7 @@
 import { topologySha256 } from "./topology-hash";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { packManifestSchema, type PackManifest, type TopologyProfile } from "@/lib/contracts";
-import type { AccessTopology } from "./closed-route-topology";
+import { CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION, type AccessTopology } from "./closed-route-topology";
 
 type SqliteRow = Record<string, SQLInputValue>;
 
@@ -22,7 +22,7 @@ export interface ClosedRouteFeasibilityRepository {
   close(): Promise<void>;
 }
 
-const TOPOLOGY_FORMAT_VERSION = 1;
+const SUPPORTED_TOPOLOGY_FORMATS = new Set([1, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION]);
 const BATCH_SIZE = 500;
 const PROFILES = ["known", "inclusive"] as const satisfies readonly TopologyProfile[];
 const REQUIRED_TABLES = [
@@ -317,7 +317,7 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
       if (seen.has(profile)) throw corruption(`duplicate ${profile} topology profile`);
       seen.add(profile);
       byProfile.set(profile as TopologyProfile, row);
-      if (requiredInteger(row, "format_version") !== TOPOLOGY_FORMAT_VERSION) {
+      if (!SUPPORTED_TOPOLOGY_FORMATS.has(requiredInteger(row, "format_version"))) {
         throw corruption(`unsupported ${profile} topology format version`);
       }
       for (const column of ["node_count", "physical_edge_count", "decision_node_count", "decision_edge_count"]) {
