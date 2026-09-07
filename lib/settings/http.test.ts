@@ -45,6 +45,23 @@ describe("settings HTTP handlers", () => {
     expect(await invalid.json()).toMatchObject({ error: "Invalid settings" });
   });
 
+  it("cancels oversized chunked settings without writing them", async () => {
+    const runtime = store();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(new Uint8Array(32_769)); },
+      cancel,
+    }, { highWaterMark: 0 });
+    const response = await createSettingsHandlers(runtime).PUT(new Request("http://local/api/settings", {
+      method: "PUT", body, duplex: "half",
+    } as RequestInit));
+    expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: "Request body is too large" });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(runtime.put).not.toHaveBeenCalled();
+  });
+
   it("does not cache reads and reports storage failures", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const handlers = createSettingsHandlers(store({ get: vi.fn(async () => { throw new Error("disk unavailable"); }) }));

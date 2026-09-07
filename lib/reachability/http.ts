@@ -6,8 +6,8 @@ import {
 import { ESRI_ATTRIBUTION, type GeocodingSuggestion } from "./types";
 import { ReachabilityError, toReachabilityError } from "./errors";
 import { secondsUntilNextUtcMonth } from "./usage";
-
-const MAXIMUM_BODY_BYTES = 16_384;
+import { readJsonBody } from "@/lib/server/http";
+import { ServerApiError } from "@/lib/server/api-error";
 
 export interface GeocodingApi {
   suggest(text: string, signal?: AbortSignal): Promise<GeocodingSuggestion[]>;
@@ -40,23 +40,14 @@ function errorResponse(error: unknown): Response {
 }
 
 async function jsonBody(request: Request): Promise<unknown> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > MAXIMUM_BODY_BYTES) {
-    throw new ReachabilityError("INVALID_REQUEST", "Request body is too large.", 413);
-  }
-  let text: string;
   try {
-    text = await request.text();
+    return await readJsonBody(request, 16_384);
   } catch (error) {
-    throw toReachabilityError(error);
-  }
-  if (new TextEncoder().encode(text).byteLength > MAXIMUM_BODY_BYTES) {
-    throw new ReachabilityError("INVALID_REQUEST", "Request body is too large.", 413);
-  }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new ReachabilityError("MALFORMED_JSON", "Request body must be valid JSON.", 400);
+    if (error instanceof ServerApiError && ["REQUEST_TOO_LARGE", "MALFORMED_JSON"].includes(error.code)) throw new ReachabilityError(
+      error.code === "REQUEST_TOO_LARGE" ? "INVALID_REQUEST" : "MALFORMED_JSON",
+      error.message, error.status,
+    );
+    throw error;
   }
 }
 

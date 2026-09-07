@@ -1,8 +1,6 @@
 import { ReachabilityError } from "@/lib/reachability/errors";
 import { apiErrorResponse, isCancellationError, ServerApiError } from "./api-error";
 
-const MAX_BODY_BYTES = 32_768;
-
 export function apiFailure(error: unknown, message: string): Response {
   if (error instanceof ServerApiError) return apiErrorResponse(error);
   if (isCancellationError(error)) return apiErrorResponse(new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499));
@@ -10,9 +8,9 @@ export function apiFailure(error: unknown, message: string): Response {
   return apiErrorResponse(new ServerApiError("INTERNAL_ERROR", message, 500));
 }
 
-export async function readJsonBody(request: Request): Promise<unknown> {
+export async function readJsonBody(request: Request, maxBytes = 32_768): Promise<unknown> {
   const contentLength = request.headers.get("content-length");
-  if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_BODY_BYTES) {
+  if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
     throw new ServerApiError("REQUEST_TOO_LARGE", "Request body is too large.", 413);
   }
 
@@ -26,7 +24,7 @@ export async function readJsonBody(request: Request): Promise<unknown> {
         const { done, value } = await reader.read();
         if (done) break;
         bytes += value.byteLength;
-        if (bytes > MAX_BODY_BYTES) {
+        if (bytes > maxBytes) {
           void reader.cancel().catch(() => undefined);
           throw new ServerApiError("REQUEST_TOO_LARGE", "Request body is too large.", 413);
         }

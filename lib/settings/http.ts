@@ -1,4 +1,6 @@
 import { ZodError } from "zod";
+import { readJsonBody } from "@/lib/server/http";
+import { ServerApiError } from "@/lib/server/api-error";
 import type { SettingsStore } from "./store";
 
 function json(value: unknown, status = 200): Response {
@@ -19,8 +21,11 @@ export function createSettingsHandlers(store: SettingsStore) {
     async PUT(request: Request): Promise<Response> {
       let body: unknown;
       try {
-        body = await request.json();
-      } catch {
+        body = await readJsonBody(request);
+      } catch (error) {
+        if (error instanceof ServerApiError && error.code === "REQUEST_TOO_LARGE") {
+          return json({ error: "Request body is too large" }, 413);
+        }
         return json({ error: "Request body must be valid JSON" }, 400);
       }
 

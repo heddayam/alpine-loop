@@ -46,6 +46,26 @@ describe("geocoding HTTP API", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("stops oversized chunked input before calling the provider and keeps its error contract", async () => {
+    const service = api();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(new Uint8Array(16_385)); },
+      cancel,
+    }, { highWaterMark: 0 });
+    const response = await createGeocodingSuggestHandler(service)(new Request("http://local/api/geocoding/suggest", {
+      method: "POST", body, duplex: "half",
+    } as RequestInit));
+    expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-data-attribution")).toBe("Esri");
+    expect(await response.json()).toEqual({ error: {
+      code: "INVALID_REQUEST", message: "Request body is too large.", retryable: false,
+    } });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(service.suggest).not.toHaveBeenCalled();
+  });
+
   it("resolves only an explicit suggestion selection", async () => {
     const service = api();
     const handler = createGeocodingResolveHandler(service);
@@ -69,6 +89,7 @@ describe("geocoding HTTP API", () => {
     const handler = createGeocodingSuggestHandler(service);
     const malformed = await handler(request("/api/geocoding/suggest", "{", true));
     expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toEqual({ error: { code: "MALFORMED_JSON", message: "Request body must be valid JSON.", retryable: false } });
     expect(service.suggest).not.toHaveBeenCalled();
     vi.mocked(service.suggest).mockRejectedValue(new ReachabilityError(
       "USAGE_LIMIT_REACHED", "The monthly ArcGIS safety limit has been reached.", 429,
