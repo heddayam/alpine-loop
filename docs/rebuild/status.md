@@ -6,10 +6,17 @@ the evidence line.
 
 ## Active system design revision
 
-- [ ] Regional pack consolidation — move all five builders onto one fixed
-  preparation and publication process, preserve regional restrictions and
-  acceptance checks, freeze pre-change build identities/graphs, and document
-  region onboarding. Baseline: `dff1b43`; verification evidence pending.
+- [x] 2026-09-06 — regional pack consolidation: all five builders share one
+  preparation and publication process, preserving regional restrictions and
+  acceptance checks. Relative to `dff1b43`, application and test code has 1,112
+  fewer lines. Ten frozen pre-change comparisons pass; two final
+  `npm run verify` runs each pass 403 offline tests across 77 files, lint,
+  types, and build; two `npm run test:browser` runs each pass all six flows.
+  All five installed packs pass read-only audits with zero errors. Live
+  desktop/mobile saved results, map zoom/pan anchoring, and internal scrolling
+  pass. Implementation is integrated through `44aff4e`; temporary worktrees
+  and branches are removed. See [regional-pack-consolidation.md](regional-pack-consolidation.md)
+  for compatibility limits, report changes, measured optimization, and evidence.
 
 - [x] 2026-09-06 — whole-repository architecture review and improvements,
   documented in [architecture-review.md](architecture-review.md). Six focused
