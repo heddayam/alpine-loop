@@ -324,3 +324,23 @@ truncation and zero routes; this does not claim improved yield.
 
 The full revision remains incomplete. Next is one supported graph representation,
 production-storage fixtures, and removal of the remaining superseded surfaces.
+
+## Current graph representation contracts
+
+Only the existing schema-6 manifest and `reachable-graph-fallback` runtime are
+supported. Installed artifacts are not deleted or rewritten. Unsupported
+versions fail with a rebuild instruction. Saved route geometry remains readable
+without its original graph. The serialized schema-6 fields, physical SQLite
+layout, migration rows 1–6, metrics, and data-version inputs remain unchanged.
+Empty historical primitive tables stay in that physical layout, while unused
+write/read branches and the alternate primitive output mode are removed.
+
+Parallel work preserves `fixtureCompileOptionsV6(...)`,
+`writePackDatabase(path, contents)`, and the input shapes/meaning of
+`buildClosedRouteTopology(...)`. Test graphs supply data to those production
+writers/readers; they do not implement traversal or ranking. The original
+schema-6 compiled fixture is retained at
+`/private/tmp/alpine-schema6-baseline/fixture-pack/fixture-v6` for table/metric
+comparison. Root owns shared manifest contracts and solver/script integration;
+compiler work owns `lib/data/**`; graph work owns `lib/graph/**`, `lib/packs/**`,
+and the reachable-graph solver test.
