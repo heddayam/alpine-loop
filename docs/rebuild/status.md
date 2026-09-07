@@ -6,6 +6,29 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — solver efficiency and route-quality exploration, documented in
+  [solver-efficiency.md](solver-efficiency.md) and
+  [principled-route-model.md](principled-route-model.md). Direction-safe corridor
+  contraction accelerates core search 3.6–16.2 times at five measured installed
+  starts; validated exact alternatives increase from 11 to 30. Summed pipeline
+  medians fall from 5.25 to 4.05 seconds, although Henry Coe is slower while
+  returning more alternatives. Corrected non-monotone repetition filtering
+  recovers a valid 6.1 km chained loop. Per user preference, short side loops and
+  retraced spurs are removed before metrics and exact/close classification.
+  All 31 fixed-work cases across raw/pipeline layers and five real-deadline
+  cases are deterministic across three measured repetitions, with matching
+  inputs, zero directed-validation rejections and zero deadline truncations.
+  Per-route quality tradeoffs remain explicit in the report; this is not a
+  universal quality improvement. Application solver code grows 71 lines
+  (2,261 → 2,332); tests add 273, benchmark tooling 344. The separate 153-line
+  mathematical oracle passes 57,672 bounded selections and establishes an
+  objective/constraint reference, not a production solver replacement.
+  Two `npm run verify` passes each pass 427 tests across 78 files, lint, types
+  and build; two `npm run test:browser` passes each pass six flows. Live localhost
+  saved-route, desktop zoom/pan alignment and 390 px internal-scroll checks pass
+  with no console errors. No API, pack schema or dependency changes; installed
+  artifacts and saved jobs remain intact. Agent worktrees and branches are removed.
+
 - [x] 2026-09-06 — original-graph feasibility compilation, implemented through
   `3efccf4` and documented in [feasibility-compilation.md](feasibility-compilation.md).
   Removes 429 application lines; adds 235 test/helper lines, for 194 fewer

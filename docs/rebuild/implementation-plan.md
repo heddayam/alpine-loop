@@ -28,6 +28,9 @@ Routes contain a physical trail cycle and finish at their starting point.
 Simple loop, lollipop, figure-eight, chained-loop, and complex-closed describe
 results. The search preserves direction, access restrictions, metric accuracy,
 repetition limits, and topology. Unknown access is included by default.
+Search removes minor side loops and retraced spurs before checking constraints;
+it does not pad a hike with tiny excursions to meet its distance target. The
+relative size rule preserves intentionally short hikes and substantial chains.
 
 ## Workspace
 
