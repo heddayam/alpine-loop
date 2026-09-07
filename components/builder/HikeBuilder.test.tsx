@@ -5,16 +5,17 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@t
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder } from "./HikeBuilder";
+import { routeStart } from "../results/route-start";
 import { useJobs } from "./useJobs";
 import type { AppSettingsV1 } from "@/lib/contracts";
 import type { SearchRequest, SearchResult, RouteJobV2 } from "@/lib/contracts/search";
 import { DEFAULT_APP_SETTINGS } from "@/lib/settings/defaults";
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filterGeometry, includeUncertainAccess }: {
+vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filterGeometry, includeUncertainAccess, onStartSelect }: {
   onBoundsChange: (bounds: [number, number, number, number]) => void;
-  routes?: Array<{ id: string }>; filterGeometry?: unknown; includeUncertainAccess?: boolean;
-}) => <div aria-label="Mock map"><button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess })}</output></div> }));
+  routes?: SearchResult["exact"]; filterGeometry?: unknown; includeUncertainAccess?: boolean; onStartSelect: (key: string) => void;
+}) => <div aria-label="Mock map">{routes[0] ? <button onClick={() => onStartSelect(routeStart(routes[0]!).key)}>Select fixture trailhead</button> : null}<button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess })}</output></div> }));
 const appSettings = DEFAULT_APP_SETTINGS;
 const catalog = { regions: [{ id: "castle-rock", name: "Castle Rock" }, { id: "sunol", name: "Sunol" }], coverages: [{ type: "Polygon", coordinates: [[[-122.2,37.1],[-122.1,37.1],[-122.1,37.2],[-122.2,37.2],[-122.2,37.1]]] }], display: { center: [-122.15,37.15], zoom: 12 } };
 const request: SearchRequest = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, limit: 10 };
@@ -198,6 +199,25 @@ describe("geographic workspace", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
     const saves = fetchMock.mock.calls.filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT");
     expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
+  });
+
+  it("opens a trailhead list from the map and retains its scope through detail and Back", async () => {
+    vi.restoreAllMocks();
+    const routes = [generatedRoute, { ...generatedRoute, id: "same-start" }, { ...generatedRoute, id: "other-start", startAccessPoint: { ...generatedRoute.startAccessPoint, id: "trailhead-b" } }];
+    mockBaseFetch((url) => url.includes("/results?") ? json({ ...savedPage, results: routes.map((route) => ({ matchType: "exact", accessPointId: route.startAccessPoint.id, route })) }) : undefined);
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await screen.findByRole("heading", { name: "Exact matches" });
+    await userEvent.click(screen.getByRole("button", { name: "Select fixture trailhead" }));
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.queryByRole("complementary", { name: "Route details" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("article")[1]!.querySelector("button")!);
+    expect(screen.getByRole("complementary", { name: "Route details" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Back to results/ }));
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "All trailheads" }));
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    await userEvent.click(screen.getByRole("button", { name: "Clear results" }));
+    expect(screen.queryByRole("button", { name: "All trailheads" })).not.toBeInTheDocument();
   });
 
   it("waits for saved preferences before allowing a search", async () => {
