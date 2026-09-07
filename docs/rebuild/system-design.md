@@ -183,11 +183,11 @@ implementation and expose an honest no-installed-data state.
 
 ## Execution and acceptance
 
-- [ ] Shared domain criteria and preparation boundaries replace transport-shaped inputs.
+- [x] Shared domain criteria and preparation boundaries replace transport-shaped inputs.
 - [ ] Geographic application operations hide packs and provider jobs from the frontend.
 - [ ] Workspace, saved work, and preference state have one owner each.
-- [ ] Map sources and hover have one explicit update path.
-- [ ] Engine sessions reuse prepared starts without transport fabrication.
+- [x] Map sources and hover have one explicit update path.
+- [x] Engine sessions reuse prepared starts without transport fabrication.
 - [ ] Artifacts are audited before activation and use one supported graph representation.
 - [ ] Synthetic fixtures exercise production storage instead of a second graph engine.
 - [ ] Superseded paths, adapters, fields, and documentation are removed or updated.
@@ -200,3 +200,50 @@ and metric comparisons, full build/check gates, and desktop/mobile interaction.
 Do not count tests for obsolete behavior as requirements to keep that behavior.
 Record failures and unresolved decisions rather than declaring the goal complete
 when only one wave passes.
+
+## Integrated evidence, 2026-09-06
+
+The first wave is integrated through `c663ef5` on `codex/system-design`.
+Application source is 96 lines smaller than `810e44c` (844 added, 940 removed).
+Tests/helpers are 159 lines larger (425 added, 266 removed). These figures count
+renames as removal/addition and use the baseline scope above. This is a modest
+reduction, not acceptance of the full revision.
+
+- One criteria schema validates the form and supplies both search policies.
+  Full no longer manufactures a foreground request or placeholder bounding box.
+- The engine accepts criteria and execution policy independently of HTTP.
+  Exhaustive work prepares starts and feasibility once. A three-start comparison
+  preserves complete Quick/Thorough responses while candidate enumeration and
+  topology loading each occur once.
+- Foreground and exhaustive work use the same local compute host. The child owns
+  graph lifetime and receives only pack identity, criteria, and resolved area.
+  Production SQLite fixtures exercise both operations. Cancellation tests keep
+  the app loop responsive while terminating synchronous work in either mode.
+  The solver retains its computation budget, while the host allows five seconds
+  for startup and response transfer. Live testing caught and corrected registry
+  serialization and premature host timeout failures.
+- Hover uses one React callback path. Viewport loading alone writes trail data.
+  Clipboard code is shared independently of the map. Unused access selection,
+  redundant trail props, and the global hover event were deleted.
+- Preferences have one validated value and serialized writes. Local numeric
+  drafts cannot leak into unrelated saves. Search waits for initial settings.
+  Delayed writes, invalid drafts, modal cancel, save failure, and retry are
+  covered by focused behavior tests. Workspace and saved-view ownership remain
+  open work.
+- Compilation consumes normalized topology directly. Regional audits and
+  reports precede activation, including cached artifact reactivation. A rejected
+  real schema-6 fixture leaves the previous pointer and artifact intact.
+  Current-format-only compilation and reading remain open work.
+
+Two final `npm run verify` passes each completed lint, type checking, 456 offline
+tests across 85 files, and the production build. Two integrated browser passes
+each completed six flows. Live localhost inspection covered bounded real-data
+Quick responses, restoring seven saved routes, zoom/pan, and mobile panel
+scrolling. The selected Santa Cruz demo search exhausted its computation budget
+without routes, so this is not evidence of improved search yield. No schema,
+installed artifact, dependency, or saved database changed. Temporary worktrees
+and branches were removed. The integration branch remains active.
+
+Next: geographic application operations, followed by workspace/saved-view
+ownership and current graph representations. Pack selection, provider polling,
+and browser fanout are still present and must be removed as part of that work.
