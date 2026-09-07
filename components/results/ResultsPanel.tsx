@@ -490,7 +490,7 @@ export function ResultsPanel({
           <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
           <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
           {job.partial ? <span> Partial results retained.</span> : null}
-          {job.stale ? <span> Built with an older pack version.</span> : null}
+          {job.stale ? <span> Generated with older map data.</span> : null}
           {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
           {job.error ? <span> {job.error}</span> : null}
         </div>

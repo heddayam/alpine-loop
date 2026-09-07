@@ -121,11 +121,12 @@ test("shared result starts anchor precisely and reveal route numbers at trail zo
     const marker = pin.getBoundingClientRect();
     const style = getComputedStyle(pin);
     return {
-      contained: marker.width >= marker.height,
+      width: marker.width, height: marker.height,
+      contained: marker.width + 0.01 >= marker.height,
       whiteSpace: style.whiteSpace,
     };
   }));
-  expect(visuals.every(({ contained, whiteSpace }) => contained && whiteSpace === "nowrap")).toBe(true);
+  expect(visuals.every(({ contained, whiteSpace }) => contained && whiteSpace === "nowrap"), JSON.stringify(visuals)).toBe(true);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

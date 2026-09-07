@@ -139,7 +139,7 @@ export function JobsModal({
                   <div><dt>Truncated</dt><dd>{progress.truncatedAccessPointCount}</dd></div>
                   <div><dt>Elapsed</dt><dd>{elapsed(displayedElapsed(job, now, refreshedAt))}</dd></div>
                 </dl>
-                {job.stale ? <p className="job-note">Built with an older pack version.</p> : null}
+                {job.stale ? <p className="job-note">Generated with older map data.</p> : null}
                 {job.partial ? <p className="job-note">Partial results retained.</p> : null}
                 {job.status === "cancelled" && !job.partial && progress.exactRouteCount + progress.nearMissRouteCount === 0 ? <p className="job-note">No routes were saved before cancellation.</p> : null}
                 {job.error ? <p className="error-state">{job.error}</p> : null}

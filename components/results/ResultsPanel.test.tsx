@@ -345,7 +345,7 @@ describe("ResultsPanel", () => {
     expect(screen.getByText("Full search cancelled.")).toBeVisible();
     expect(screen.getByText("4 of 10 trailheads attempted.")).toBeVisible();
     expect(screen.getByText("Partial results retained.")).toBeVisible();
-    expect(screen.getByText("Built with an older pack version.")).toBeVisible();
+    expect(screen.getByText("Generated with older map data.")).toBeVisible();
     expect(screen.getByText(/1 trailhead search.*reached/)).toBeVisible();
     expect(screen.queryByText(/requested exact routes found/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Diagnostics"));

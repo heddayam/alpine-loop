@@ -114,7 +114,7 @@ describe("geographic workspace", () => {
   it("restores stale saved geometry in Strict Mode and keeps its context separate from draft edits", async () => {
     render(<StrictMode><HikeBuilder restoreJobId={job.id} /></StrictMode>);
     await screen.findByRole("heading", { name: "Exact matches" });
-    expect(screen.getByText("Built with an older pack version.")).toBeVisible();
+    expect(screen.getByText("Generated with older map data.")).toBeVisible();
     const before = screen.getByLabelText("Map context").textContent;
     fireEvent.change(screen.getByLabelText("Distance minimum"), { target: { value: "8" } });
     expect(screen.getByLabelText("Map context")).toHaveTextContent(before!);

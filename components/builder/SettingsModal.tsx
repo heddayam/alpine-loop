@@ -118,7 +118,7 @@ export function SettingsModal({
                 }}
               />
             </label>
-            <label className="switch-row" title="Shows the exact installed-pack coverage outlines on the map.">
+            <label className="switch-row" title="Shows the coverage of installed map data on the map.">
               <span>Show region boundaries</span>
               <input
                 type="checkbox"
