@@ -6,6 +6,28 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — original-graph feasibility compilation, implemented through
+  `3efccf4` and documented in [feasibility-compilation.md](feasibility-compilation.md).
+  Removes 429 application lines; adds 235 test/helper lines, for 194 fewer
+  combined against `90100fd` (new legacy JSON fixture: 155 separate data lines).
+  Fixes the one-way dead-end minimum-stem defect. Format-2 profiles use versioned
+  regional build identities; format-1 packs retain independent hash validation.
+  The frozen 42-case solver matrix preserves 22 exact routes, 8 close matches,
+  6,168 expanded states and 102 graph queries, allowing only version/group
+  metadata changes. The full fixture retains 117 of 126 SQLite rows; remaining
+  changes are the intended identities, versions and hashes. All 88 Henry Coe
+  feasibility/stem facts and original graph identities match. Five samples per
+  compiler give median stage times of 2,703 ms versus 372 ms on that graph;
+  process peak RSS falls from 621.6 to 463.9 MiB, with measurement limits in the
+  report. Two `npm run verify` passes each pass 412 tests across 77 files, lint,
+  types and production builds; two `npm run test:browser` passes each pass six
+  flows. All five installed packs pass read-only audits and feasibility readers
+  with zero errors; existing disconnected-component/rejected-edge warnings
+  remain. Live localhost saved results, desktop map zoom/pan anchoring and
+  mobile internal scrolling pass without console errors. Installed artifacts,
+  current pointers and saved jobs remain unchanged; the correction applies to
+  newly built packs. Completed agent worktrees and branches are removed.
+
 - [x] 2026-09-06 — further simplification assessment, documented in
   [simplification-assessment.md](simplification-assessment.md). Recounted 19,464
   application and 9,338 test/helper lines; reviewed four clusters and compared
@@ -15,8 +37,8 @@ the evidence line.
   minimum stem incorrectly becoming 0 m after adding a one-way dead-end
   triangle. Attachment groups are diagnostic, not search scheduling inputs.
   Estimated compiler reduction is 280–380 application lines, with 70–140 test
-  lines likely added; implementation and quality/performance comparison remain
-  pending. Fresh focused offline suites pass 148 tests across 19 files. No
+  lines likely added; implementation and quality/performance comparison were
+  pending at assessment time (now completed above). Focused offline suites passed 148 tests across 19 files. No
   application, test, installed-pack, or saved-job changes; no implementation
   verification gate is claimed. The report specifies old/new profile readers,
   new build identities, independent audits and pinned-artifact retention.
