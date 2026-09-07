@@ -41,6 +41,19 @@ function assertInside(root: string, candidate: string): void {
   }
 }
 
+function currentManifest(value: unknown): PackManifest {
+  if (value && typeof value === "object" && "schemaVersion" in value && value.schemaVersion !== "6") {
+    throw new Error(`Unsupported pack schema ${String(value.schemaVersion)}. Rebuild this pack with the current compiler.`);
+  }
+  if (value && typeof value === "object" && "closedRouteTopology" in value) {
+    const topology = value.closedRouteTopology;
+    if (topology && typeof topology === "object" && "runtimeMode" in topology && topology.runtimeMode !== "reachable-graph-fallback") {
+      throw new Error(`Unsupported pack runtime ${String(topology.runtimeMode)}. Rebuild this pack with the current compiler.`);
+    }
+  }
+  return packManifestSchema.parse(value);
+}
+
 export async function loadInstalledPack(
   packId: string,
   root = localPackRoot(),
@@ -57,7 +70,7 @@ export async function loadInstalledPack(
 
   const manifestPath = path.resolve(packRoot, pointer.path);
   assertInside(packRoot, manifestPath);
-  const manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+  const manifest = currentManifest(JSON.parse(await readFile(manifestPath, "utf8")));
   if (manifest.id !== packId) throw new Error(`Installed manifest id ${manifest.id} does not match ${packId}`);
   if (manifest.dataVersion !== pointer.dataVersion) {
     throw new Error(`Installed manifest version ${manifest.dataVersion} does not match current pointer ${pointer.dataVersion}`);
@@ -87,7 +100,7 @@ export async function loadInstalledPackVersion(
   const manifestPath = path.join(directory, "manifest.json");
   let manifest: PackManifest;
   try {
-    manifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    manifest = currentManifest(JSON.parse(await readFile(manifestPath, "utf8")));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;

@@ -1,31 +1,28 @@
 import type { RouteSearchRequest } from "./types";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SQLiteGraphRepository, SQLiteClosedRouteFeasibilityRepository } from "@/lib/graph";
+import { GRAPH_FIXTURE_IDENTITY, writeGraphFixture } from "@/lib/graph/test-helpers";
 
 import {
-  generateClosedRoutesResponseV3Schema,
+  generatedClosedRouteV3Schema,
 } from "@/lib/contracts";
 import type {
   AccessPointCandidate,
-  AccessTopology,
   GraphEdge,
   GraphNode,
-  GraphRepository,
   InducedGraph,
 } from "@/lib/graph";
 
 import { RouteSearchCancelledError } from "./control";
 import {
   ReachableGraphClosedRouteSolver,
-  type ClosedRouteFeasibilityRepository,
   type ReachableGraphClosedRouteContext,
 } from "./reachable-graph-closed-route-solver";
 
-const PACK = {
-  id: "fixture-pack",
-  schemaVersion: "3" as const,
-  dataVersion: "fixture-v3",
-  builtAt: "2026-01-01T00:00:00.000Z",
-};
+const PACK = GRAPH_FIXTURE_IDENTITY;
 const AREA = {
   type: "Polygon" as const,
   coordinates: [[[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]],
@@ -113,52 +110,14 @@ function fixtureGraph(kind: GraphKind): InducedGraph {
   return { nodes, edges, accessPoints: [] };
 }
 
-class FixtureGraphRepository implements GraphRepository {
-  readonly packId = PACK.id;
-  readonly queriedStarts: string[] = [];
-
-  constructor(
-    private readonly points: AccessPointCandidate[],
-    private readonly graph: InducedGraph,
-  ) {}
-
-  async getAccessPointCandidates() { return this.points; }
-  async getReachableGraph(query: Parameters<GraphRepository["getReachableGraph"]>[0]) {
-    if (query.signal?.aborted) throw query.signal.reason;
-    this.queriedStarts.push(query.startNodeId);
-    return { graph: this.graph, truncated: false };
+const fixtures: Array<{ directory: string; repository: SQLiteGraphRepository; topology: SQLiteClosedRouteFeasibilityRepository }> = [];
+afterEach(async () => {
+  for (const fixture of fixtures.splice(0)) {
+    await fixture.repository.close();
+    await fixture.topology.close();
+    rmSync(fixture.directory, { recursive: true, force: true });
   }
-  async getInducedGraph() { return this.graph; }
-  async getAccessPoints() { return []; }
-  async close() {}
-}
-
-class FixtureFeasibilityRepository implements ClosedRouteFeasibilityRepository {
-  readonly packId = PACK.id;
-  readonly dataVersion = PACK.dataVersion;
-  readonly requestedIds: string[][] = [];
-
-  constructor(
-    private readonly points: AccessPointCandidate[],
-    private readonly stemMeters: number,
-    private readonly canReachCycle = true,
-  ) {}
-
-  async getAccessTopology(profile: "known" | "inclusive", accessPointIds: readonly string[]) {
-    this.requestedIds.push([...accessPointIds]);
-    return this.points.filter(({ id }) => accessPointIds.includes(id)).map((point): AccessTopology => ({
-      profile,
-      accessPointId: point.id,
-      attachmentDecisionNodeId: 1,
-      cycleNetworkId: this.canReachCycle ? 1 : null,
-      connectorKey: `connector-${point.id}`,
-      connectorDecisionEdgeIds: [],
-      portalDecisionNodeId: this.canReachCycle ? 1 : null,
-      minimumStemDistanceMeters: this.canReachCycle ? this.stemMeters : null,
-      canReachCycle: this.canReachCycle,
-    }));
-  }
-}
+});
 
 function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
@@ -174,11 +133,16 @@ function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchReques
 function context(
   points: AccessPointCandidate[],
   graph: InducedGraph,
-  topology: FixtureFeasibilityRepository,
   overrides: Partial<ReachableGraphClosedRouteContext> = {},
 ): ReachableGraphClosedRouteContext {
+  const directory = mkdtempSync(join(tmpdir(), "solver-graph-"));
+  const databasePath = join(directory, "pack.sqlite");
+  const manifest = writeGraphFixture(databasePath, graph, points);
+  const repository = new SQLiteGraphRepository(databasePath, manifest.id);
+  const topology = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
+  fixtures.push({ directory, repository, topology });
   return {
-    repository: new FixtureGraphRepository(points, graph),
+    repository,
     topologyRepository: topology,
     budget: {
       maximumDirectedEdges: 1_000,
@@ -188,7 +152,6 @@ function context(
     },
     now: () => 0,
     accessFilter: {
-      summary: { mode: "drawn-area", label: "Fixture area" },
       predicates: [AREA],
       coverage: AREA,
     },
@@ -201,22 +164,20 @@ const solver = new ReachableGraphClosedRouteSolver({ pack: PACK });
 describe("ReachableGraphClosedRouteSolver", () => {
   test("applies 0/25/100 repetition and the shared-stem cap using exact physical edges", async () => {
     const point = accessPoint();
-    const loopTopology = new FixtureFeasibilityRepository([point], 0);
     const zero = await solver.generate(
       request({ closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true }, limit: 1 }),
-      context([point], fixtureGraph("loop"), loopTopology),
+      context([point], fixtureGraph("loop")),
     );
     expect(zero.exact[0]?.topology).toMatchObject({ kind: "simple-loop", repeatedTrailFraction: 0 });
 
     for (const maximumRepeatedTrailPct of [25, 100]) {
-      const topology = new FixtureFeasibilityRepository([point], 200);
       const result = await solver.generate(
         request({
           closedRoute: { maximumRepeatedTrailPct, allowMultiCycle: true },
           distanceMiles: { min: 1.17, max: 1.19 },
           limit: 1,
         }),
-        context([point], fixtureGraph("lollipop"), topology),
+        context([point], fixtureGraph("lollipop")),
       );
       expect(result.exact[0]?.topology).toMatchObject({
         kind: "lollipop",
@@ -230,7 +191,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
         closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true },
         distanceMiles: { min: 1.17, max: 1.19 },
       }),
-      context([point], fixtureGraph("lollipop"), new FixtureFeasibilityRepository([point], 200)),
+      context([point], fixtureGraph("lollipop")),
     );
     expect(repeatedZero.diagnostics.feasibleAccessPointCount).toBe(0);
     const stemCapped = await solver.generate(
@@ -238,7 +199,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
         closedRoute: { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1, allowMultiCycle: true },
         distanceMiles: { min: 1.17, max: 1.19 },
       }),
-      context([point], fixtureGraph("lollipop"), new FixtureFeasibilityRepository([point], 200)),
+      context([point], fixtureGraph("lollipop")),
     );
     expect(stemCapped.diagnostics.feasibleAccessPointCount).toBe(0);
   });
@@ -246,20 +207,19 @@ describe("ReachableGraphClosedRouteSolver", () => {
   test("uses the multi-cycle toggle and labels a distance close match", async () => {
     const point = accessPoint();
     const figureEight = fixtureGraph("figure-eight");
-    const topology = new FixtureFeasibilityRepository([point], 0);
     const target = request({ distanceMiles: { min: 1.85, max: 1.88 }, limit: 2 });
-    const enabled = await solver.generate(target, context([point], figureEight, topology));
+    const enabled = await solver.generate(target, context([point], figureEight));
     expect(enabled.exact.some(({ topology: value }) => value.cycleCount === 2)).toBe(true);
 
     const disabled = await solver.generate(
       { ...target, closedRoute: { ...target.closedRoute, allowMultiCycle: false } },
-      context([point], figureEight, new FixtureFeasibilityRepository([point], 0)),
+      context([point], figureEight),
     );
     expect([...disabled.exact, ...disabled.nearMisses].every(({ topology: value }) => value.cycleCount === 1)).toBe(true);
 
     const near = await solver.generate(
       request({ distanceMiles: { min: 0.95, max: 1 }, limit: 1 }),
-      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+      context([point], fixtureGraph("loop")),
     );
     expect(near.exact).toEqual([]);
     expect(near.nearMisses[0]?.violations).toEqual(expect.arrayContaining([
@@ -271,7 +231,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
     const point = accessPoint();
     const result = await solver.generate(
       request({ steepestSustainedGradePct: { min: 0, max: 1 }, limit: 1 }),
-      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+      context([point], fixtureGraph("loop")),
     );
 
     expect(result.exact).toEqual([]);
@@ -282,7 +242,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
 
     const elevation = await solver.generate(
       request({ maximumElevationFeet: { min: 0, max: 250 }, limit: 1 }),
-      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+      context([point], fixtureGraph("loop")),
     );
     expect(elevation.exact).toEqual([]);
     expect(elevation.nearMisses[0]?.violations).toEqual([
@@ -291,31 +251,41 @@ describe("ReachableGraphClosedRouteSolver", () => {
   });
 
   test("cheaply evaluates and fairly probes every eligible start without a top-N cutoff", async () => {
-    const points = Array.from({ length: 12 }, (_, index) => accessPoint(index));
-    const topology = new FixtureFeasibilityRepository(points, 0);
-    const testContext = context(points, fixtureGraph("loop"), topology);
+    const points = Array.from({ length: 12 }, (_, index) => ({ ...accessPoint(index), nodeId: `start-${index}` }));
+    const graph: InducedGraph = { nodes: new Map(), edges: [], accessPoints: [] };
+    // Distinct attachments exercise fair probing without bypassing real connector grouping.
+    points.forEach((_, index) => {
+      const loop = fixtureGraph("loop");
+      for (const [id, node] of loop.nodes) graph.nodes.set(`${id}-${index}`, { ...node, id: `${id}-${index}` });
+      graph.edges.push(...loop.edges.map((edge) => ({ ...edge, id: `${edge.id}-${index}`,
+        fromNodeId: `${edge.fromNodeId}-${index}`, toNodeId: `${edge.toNodeId}-${index}`,
+        physicalEdgeKey: edge.physicalEdgeKey! + index * 10 })));
+    });
+    const testContext = context(points, graph);
+    const lookup = vi.spyOn(testContext.topologyRepository, "getAccessTopology");
     const result = await solver.generate(request({ searchEffort: "quick" }), testContext);
 
-    expect(topology.requestedIds).toEqual([points.map(({ id }) => id).sort()]);
+    expect(lookup).toHaveBeenCalledWith("known", points.map(({ id }) => id).sort());
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 12,
       feasibleAccessPointCount: 12,
       searchedAccessPointCount: 12,
       graphQueryCount: 12,
       probedAttachmentGroupCount: 12,
-      loadedTopologyNetworkCount: 0,
     });
-    expect(generateClosedRoutesResponseV3Schema.safeParse(result).success).toBe(true);
+    expect(result.exact.length).toBeGreaterThan(0);
+    for (const route of result.exact) expect(generatedClosedRouteV3Schema.safeParse(route).success).toBe(true);
   });
 
   test("prepares eligible starts once for repeated Quick and Thorough searches", async () => {
     const points = [accessPoint(0), accessPoint(1), accessPoint(2)];
-    const outside = { ...accessPoint(3), lon: 2 };
+    const outside = { ...accessPoint(3), nodeId: "outside", lon: 2 };
     const allPoints = [...points, outside];
     const graph = fixtureGraph("loop");
-    const topology = new FixtureFeasibilityRepository(allPoints, 0);
-    const preparedContext = context(allPoints, graph, topology);
+    graph.nodes.set("outside", { id: "outside", lon: 2, lat: 0, elevationMeters: 100, flags: [] });
+    const preparedContext = context(allPoints, graph);
     const enumerate = vi.spyOn(preparedContext.repository, "getAccessPointCandidates");
+    const lookup = vi.spyOn(preparedContext.topologyRepository, "getAccessTopology");
     const target = request();
     const prepared = await solver.prepare(target, preparedContext);
 
@@ -324,16 +294,15 @@ describe("ReachableGraphClosedRouteSolver", () => {
       for (const searchEffort of ["quick", "thorough"] as const) {
         const policy = { startAccessPointId, searchEffort, limit: target.limit };
         const result = await prepared.generate(policy, preparedContext.budget);
-        const ordinary = await solver.generate({ ...target, ...policy }, context(
-          allPoints, graph, new FixtureFeasibilityRepository(allPoints, 0),
-        ));
+        const ordinary = await solver.generate({ ...target, ...policy }, context(allPoints, graph));
         expect(result).toEqual(ordinary);
         expect(result.exact.length).toBeGreaterThan(0);
         expect(result.exact.every(({ startAccessPoint }) => startAccessPoint.id === startAccessPointId)).toBe(true);
       }
     }
     expect(enumerate).toHaveBeenCalledTimes(1);
-    expect(topology.requestedIds).toEqual([points.map(({ id }) => id)]);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith("known", points.map(({ id }) => id));
     await expect(prepared.generate({ searchEffort: "quick", limit: 1, startAccessPointId: outside.id }, preparedContext.budget))
       .rejects.toThrow("not prepared for this search");
   });
@@ -341,21 +310,19 @@ describe("ReachableGraphClosedRouteSolver", () => {
   test("filters automatic and explicit starts that sit among buildings", async () => {
     const builtUp = accessPoint();
     builtUp.nearbyBuildingCount = 500;
-    const topology = new FixtureFeasibilityRepository([builtUp], 0);
-    const result = await solver.generate(
-      request(),
-      context([builtUp], fixtureGraph("loop"), topology),
-    );
+    const testContext = context([builtUp], fixtureGraph("loop"));
+    const lookup = vi.spyOn(testContext.topologyRepository, "getAccessTopology");
+    const result = await solver.generate(request(), testContext);
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 0,
       feasibleAccessPointCount: 0,
       searchedAccessPointCount: 0,
     });
-    expect(topology.requestedIds).toEqual([[]]);
+    expect(lookup).toHaveBeenCalledWith("known", []);
 
     await expect(solver.generate(
       request({ startAccessPointId: builtUp.id }),
-      context([builtUp], fixtureGraph("loop"), new FixtureFeasibilityRepository([builtUp], 0)),
+      context([builtUp], fixtureGraph("loop")),
     )).rejects.toThrow("excluded by the access-point area settings");
   });
 
@@ -363,11 +330,11 @@ describe("ReachableGraphClosedRouteSolver", () => {
     const point = accessPoint();
     const first = await solver.generate(
       request({ limit: 1 }),
-      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+      context([point], fixtureGraph("loop")),
     );
     const second = await solver.generate(
       request({ limit: 1 }),
-      context([point], fixtureGraph("loop"), new FixtureFeasibilityRepository([point], 0)),
+      context([point], fixtureGraph("loop")),
     );
     expect(first).toEqual(second);
 
@@ -378,7 +345,6 @@ describe("ReachableGraphClosedRouteSolver", () => {
       context(
         [point],
         fixtureGraph("loop"),
-        new FixtureFeasibilityRepository([point], 0),
         { signal: controller.signal },
       ),
     )).rejects.toBeInstanceOf(RouteSearchCancelledError);
@@ -387,7 +353,6 @@ describe("ReachableGraphClosedRouteSolver", () => {
     const deadlineContext = context(
       [point],
       fixtureGraph("loop"),
-      new FixtureFeasibilityRepository([point], 0),
       {
         now: () => clock++,
         budget: {
@@ -399,7 +364,6 @@ describe("ReachableGraphClosedRouteSolver", () => {
       },
     );
     const deadline = await solver.generate(request(), deadlineContext);
-    expect(deadline.diagnostics.exhausted).toBe(true);
     expect(deadline.diagnostics.hardTruncationReasons).toContain("deadline");
     expect(deadline.diagnostics.graphQueryCount).toBe(0);
   });

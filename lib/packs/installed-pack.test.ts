@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function packRoot(schemaVersion: "1" | "2" = "1") {
+async function packRoot(schemaVersion = "6") {
   const root = await mkdtemp(path.join(os.tmpdir(), "alpine-installed-pack-"));
   temporaryRoots.push(root);
   const directory = path.join(root, "santa-cruz-mountains", "2026-08-04");
@@ -33,8 +33,9 @@ async function packRoot(schemaVersion: "1" | "2" = "1") {
     capabilities: {
       elevation: true,
       officialAccess: true,
-      ...(schemaVersion === "2" ? { namedAreas: true } : {}),
+      namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true,
     },
+    closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: "test", policyVersion: "test", profiles: ["known", "inclusive"] },
     fieldConfidence: { topology: "high", elevation: "high", access: "medium" },
     sources: [{
       id: "source",
@@ -85,14 +86,35 @@ describe("installed pack discovery", () => {
       .rejects.toThrow("Invalid pack data version");
   });
 
-  it("loads a schema-2 pack with exact coverage and named areas", async () => {
-    const root = await packRoot("2");
-    const installed = await loadInstalledPack("santa-cruz-mountains", root);
-    expect(installed?.manifest).toMatchObject({
-      schemaVersion: "2",
-      capabilities: { namedAreas: true },
-      coverage: { boundary: { type: "Polygon" } },
-    });
+  it.each(["1", "2", "3", "4", "5"])("rejects schema %s in current and pinned loads with a rebuild instruction", async (version) => {
+    const root = await packRoot(version);
+    const manifestPath = path.join(root, "santa-cruz-mountains", "2026-08-04", "manifest.json");
+    const original = await readFile(manifestPath, "utf8");
+    await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow(/Unsupported pack schema.*Rebuild/);
+    await expect(loadInstalledPackVersion("santa-cruz-mountains", "2026-08-04", root)).rejects.toThrow(/Unsupported pack schema.*Rebuild/);
+    expect(await readFile(manifestPath, "utf8")).toBe(original);
+  });
+
+  it("rejects obsolete runtime modes and mismatched manifest identities", async () => {
+    const root = await packRoot();
+    const manifestPath = path.join(root, "santa-cruz-mountains", "2026-08-04", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, closedRouteTopology: { ...manifest.closedRouteTopology, runtimeMode: "primitive" } }));
+    await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow(/Unsupported pack runtime.*Rebuild/);
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, dataVersion: "different" }));
+    await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow(/does not match current pointer/);
+    await expect(loadInstalledPackVersion("santa-cruz-mountains", "2026-08-04", root)).rejects.toThrow(/identity does not match/);
+  });
+
+  it("rejects symlink escapes for both current and pinned installations", async () => {
+    const root = await packRoot();
+    const outside = await mkdtemp(path.join(os.tmpdir(), "outside-pack-root-"));
+    temporaryRoots.push(outside);
+    const directory = path.join(root, "santa-cruz-mountains", "2026-08-04");
+    await rename(directory, path.join(outside, "pack"));
+    await symlink(path.join(outside, "pack"), directory);
+    await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow(/leaves the configured pack root/);
+    await expect(loadInstalledPackVersion("santa-cruz-mountains", "2026-08-04", root)).rejects.toThrow(/leaves the configured pack root/);
   });
 
   it("rejects a current pointer that escapes its pack directory", async () => {

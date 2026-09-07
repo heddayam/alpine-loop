@@ -2,9 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { FIXTURE_BUILDER_PACK } from "./fixture-pack";
 import { loadInstalledPack } from "./installed-pack";
-import { loadBuilderPack } from "./builder-pack";
 import { loadPackCatalog } from "./pack-catalog";
 
 const temporaryRoots: string[] = [];
@@ -25,7 +23,7 @@ async function installSantaCruz(root: string): Promise<void> {
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, "pack.sqlite"), "fixture");
   await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
-    schemaVersion: "1",
+    schemaVersion: "6",
     id: "santa-cruz-mountains",
     name: "Santa Cruz Mountains",
     dataVersion: "scm-test",
@@ -37,7 +35,8 @@ async function installSantaCruz(root: string): Promise<void> {
       boundary: { type: "Polygon", coordinates: [[[-122.55, 36.95], [-121.75, 36.95], [-121.75, 37.55], [-122.55, 37.55], [-122.55, 36.95]]] },
     },
     display: { center: [-122.15, 37.25], zoom: 9 },
-    capabilities: { elevation: true, officialAccess: true },
+    capabilities: { elevation: true, officialAccess: true, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
+    closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: "test", policyVersion: "test", profiles: ["known", "inclusive"] },
     fieldConfidence: { topology: "high", elevation: "high", access: "medium" },
     sources: [{
       id: "source", authority: "Authority", dataset: "Dataset", version: "1",
@@ -89,11 +88,4 @@ describe("catalog-linked pack discovery", () => {
     await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow();
   });
 
-  it("selects a requested available builder pack, falls back to the first available pack, then the fixture", async () => {
-    const root = await emptyRoot();
-    await expect(loadBuilderPack("missing-pack", root)).resolves.toBe(FIXTURE_BUILDER_PACK);
-    await installSantaCruz(root);
-    await expect(loadBuilderPack("santa-cruz-mountains", root)).resolves.toMatchObject({ id: "santa-cruz-mountains" });
-    await expect(loadBuilderPack("missing-pack", root)).resolves.toMatchObject({ id: "santa-cruz-mountains" });
-  });
 });

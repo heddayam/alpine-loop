@@ -20,19 +20,19 @@ type SqliteRow = Record<string, SQLInputValue>;
 
 function requiredString(row: SqliteRow, column: string): string {
   const value = row[column];
-  if (typeof value !== "string" || value.length === 0) throw new Error(`Invalid SQLite ${column}`);
+  if (typeof value !== "string" || value.length === 0) throw new Error(`Graph database corruption: invalid ${column}`);
   return value;
 }
 
 function requiredNumber(row: SqliteRow, column: string): number {
   const value = row[column];
-  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Invalid SQLite ${column}`);
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Graph database corruption: invalid ${column}`);
   return value;
 }
 
 function nullableNumber(row: SqliteRow, column: string): number | null {
   const value = row[column];
-  return value === null || value === undefined ? null : requiredNumber(row, column);
+  return value === null ? null : requiredNumber(row, column);
 }
 
 function numberOrZero(row: SqliteRow, column: string): number {
@@ -40,10 +40,10 @@ function numberOrZero(row: SqliteRow, column: string): number {
 }
 
 function jsonArray<T>(value: SQLInputValue | undefined, label: string): T[] {
-  if (value === null || value === undefined || value === "") return [];
-  if (typeof value !== "string") throw new Error(`Invalid SQLite ${label}`);
-  const parsed: unknown = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error(`Invalid SQLite ${label}`);
+  if (typeof value !== "string") throw new Error(`Graph database corruption: invalid ${label}`);
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new Error(`Graph database corruption: invalid ${label} JSON`); }
+  if (!Array.isArray(parsed)) throw new Error(`Graph database corruption: invalid ${label}`);
   return parsed as T[];
 }
 
@@ -61,7 +61,7 @@ function parseCoordinates(value: SQLInputValue | undefined): Array<readonly [num
         Number.isFinite(coordinate[1]),
     )
   ) {
-    throw new Error("Invalid SQLite edge geometry");
+    throw new Error("Graph database corruption: invalid edge geometry");
   }
   return coordinates.map((coordinate) => {
     const pair = coordinate as number[];
@@ -75,9 +75,19 @@ function parseAccessState(value: string): AccessState {
 }
 
 function parseEdgeClass(value: SQLInputValue | undefined): EdgeClass {
-  if (value === undefined || value === null) return "trail";
   if (["trail", "service-road", "street", "sidewalk"].includes(String(value))) return value as EdgeClass;
   throw new Error(`Invalid edge class: ${String(value)}`);
+}
+
+function parsePortalRoadClass(value: SQLInputValue | undefined): "street" | "service-road" {
+  if (value === "street" || value === "service-road") return value;
+  throw new Error("Graph database corruption: invalid portal road class");
+}
+
+function cycleReachability(row: SqliteRow): boolean {
+  const value = requiredNumber(row, "can_reach_cycle");
+  if (value !== 0 && value !== 1) throw new Error("Graph database corruption: invalid cycle reachability");
+  return value === 1;
 }
 
 function parseNode(row: SqliteRow): GraphNode {
@@ -93,22 +103,18 @@ function parseNode(row: SqliteRow): GraphNode {
 function parseEdge(row: SqliteRow): GraphEdge {
   const flags = jsonArray<string>(row.flags, "edge flags");
   const encodedTrailName = flags.find((flag) => flag.startsWith("trail-name:"))?.slice("trail-name:".length);
-  const encodedElevationProfile = jsonArray<unknown>(row.elevation_profile, "edge elevation_profile");
+  const encodedElevationProfile = row.elevation_profile === null ? [] : jsonArray<unknown>(row.elevation_profile, "edge elevation_profile");
   if (encodedElevationProfile.some((sample) => !Array.isArray(sample) || sample.length !== 2
     || sample.some((value) => typeof value !== "number" || !Number.isFinite(value)))) {
-    throw new Error("Invalid SQLite edge elevation_profile");
+    throw new Error("Graph database corruption: invalid edge elevation_profile");
   }
   const elevationProfile = (encodedElevationProfile as Array<[number, number]>).map(
     ([distanceMeters, elevationMeters]) => ({ distanceMeters, elevationMeters }),
   );
   return {
     id: requiredString(row, "id"),
-    ...(typeof row.edge_key === "number"
-      ? { edgeKey: requiredNumber(row, "edge_key") }
-      : {}),
-    ...(typeof row.physical_edge_key === "number"
-      ? { physicalEdgeKey: requiredNumber(row, "physical_edge_key") }
-      : {}),
+    edgeKey: requiredNumber(row, "edge_key"),
+    physicalEdgeKey: requiredNumber(row, "physical_edge_key"),
     fromNodeId: requiredString(row, "from_node"),
     toNodeId: requiredString(row, "to_node"),
     coordinates: parseCoordinates(row.geometry),
@@ -120,10 +126,7 @@ function parseEdge(row: SqliteRow): GraphEdge {
     ...(elevationProfile.length > 0 ? { elevationProfile } : {}),
     accessState: parseAccessState(requiredString(row, "access_state")),
     edgeClass: parseEdgeClass(row.edge_class),
-    trailName:
-      typeof row.trail_name === "string" && row.trail_name.length > 0
-        ? row.trail_name
-        : encodedTrailName || null,
+    trailName: encodedTrailName || null,
     sourceIds: jsonArray<string>(row.source_refs, "edge source_refs"),
     flags,
   };
@@ -144,11 +147,9 @@ function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     parkingEvidence: typeof row.parking_evidence === "string" ? row.parking_evidence : null,
     sourceIds: jsonArray<string>(row.source_refs, "access point source_refs"),
     nearbyBuildingCount: requiredNumber(row, "nearby_building_count"),
-    reachableTrailKm: numberOrZero(row, "reachable_trail_km"),
-    trailComponentId: typeof row.trail_component_id === "string" ? row.trail_component_id : null,
-    portalRoadClass: row.portal_road_class === "street" || row.portal_road_class === "service-road"
-      ? row.portal_road_class
-      : null,
+    reachableTrailKm: requiredNumber(row, "reachable_trail_km"),
+    trailComponentId: requiredString(row, "trail_component_id"),
+    portalRoadClass: parsePortalRoadClass(row.portal_road_class),
     parkingDistanceM: nullableNumber(row, "parking_distance_m"),
   };
 }
@@ -211,36 +212,35 @@ export class SQLiteGraphRepository implements GraphRepository {
     if (!packId) throw new Error("A pack ID is required for a SQLite graph repository");
     this.packId = packId;
     this.#database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const metadata = this.#database.prepare("SELECT key, value FROM metadata WHERE key IN ('schemaVersion', 'packId')").all();
+      if (metadata.find(({ key }) => key === "schemaVersion")?.value !== "6") throw new Error("expected schema version 6");
+      if (metadata.find(({ key }) => key === "packId")?.value !== packId) throw new Error("pack identity mismatch");
+      // Preparing these queries validates the required layout without scanning graph data.
+      this.#database.prepare("SELECT id, node_key, lon, lat, elevation_m, flags FROM nodes LIMIT 0");
+      this.#database.prepare(`SELECT id, edge_key, physical_edge_key, from_node, to_node, geometry, length_m,
+        gain_m, loss_m, max_elevation_m, max_sustained_grade_pct, elevation_profile, access_state, edge_class,
+        source_refs, flags FROM edges LIMIT 0`);
+      this.#database.prepare(`SELECT id, node_id, name, kind, access_state, confidence, parking_evidence, source_refs,
+        known_connectivity, inclusive_connectivity, known_out_degree, inclusive_out_degree, nearby_building_count,
+        reachable_trail_km, trail_component_id, portal_road_class, parking_distance_m FROM access_points LIMIT 0`);
+      this.#database.prepare("SELECT row_id, min_lon, max_lon, min_lat, max_lat FROM node_spatial LIMIT 0");
+      this.#database.prepare("SELECT row_id, min_lon, max_lon, min_lat, max_lat FROM edge_spatial LIMIT 0");
+      this.#database.prepare("SELECT profile, access_point_id, can_reach_cycle FROM access_topology LIMIT 0");
+    } catch (error) {
+      this.#database.close();
+      throw new Error(`Graph database corruption: ${error instanceof Error ? error.message : String(error)}. Rebuild this pack.`);
+    }
   }
-
-  #hasTable(name: string): boolean {
-    return Boolean(
-      this.#database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name),
-    );
-  }
-
-  #hasColumn(table: string, column: string): boolean {
-    const rows = this.#database.prepare(`PRAGMA table_info(${table})`).all() as SqliteRow[];
-    return rows.some((row) => row.name === column);
-  }
-
 
   async getInducedGraph(query: GraphQuery): Promise<InducedGraph> {
     assertNotAborted(query.signal);
     const [west, south, east, north] = query.bbox;
-    const nodeRows = (this.#hasTable("node_spatial")
-      ? this.#database
-          .prepare(
-            `SELECT nodes.* FROM nodes
-             JOIN node_spatial ON node_spatial.row_id = nodes.rowid
-             WHERE node_spatial.max_lon >= ? AND node_spatial.min_lon <= ?
-               AND node_spatial.max_lat >= ? AND node_spatial.min_lat <= ?
-             ORDER BY nodes.id`,
-          )
-          .all(west, east, south, north)
-      : this.#database
-          .prepare("SELECT * FROM nodes WHERE lon >= ? AND lon <= ? AND lat >= ? AND lat <= ? ORDER BY id")
-          .all(west, east, south, north)) as SqliteRow[];
+    const nodeRows = this.#database.prepare(`SELECT nodes.* FROM nodes
+      JOIN node_spatial ON node_spatial.row_id = nodes.rowid
+      WHERE node_spatial.max_lon >= ? AND node_spatial.min_lon <= ?
+        AND node_spatial.max_lat >= ? AND node_spatial.min_lat <= ?
+      ORDER BY nodes.id`).all(west, east, south, north) as SqliteRow[];
     const nodes = new Map<string, GraphNode>();
     for (const row of nodeRows) {
       assertNotAborted(query.signal);
@@ -248,17 +248,11 @@ export class SQLiteGraphRepository implements GraphRepository {
       nodes.set(node.id, node);
     }
 
-    const edgeRows = (this.#hasTable("edge_spatial")
-      ? this.#database
-          .prepare(
-            `SELECT edges.* FROM edges
-             JOIN edge_spatial ON edge_spatial.row_id = edges.rowid
-             WHERE edge_spatial.max_lon >= ? AND edge_spatial.min_lon <= ?
-               AND edge_spatial.max_lat >= ? AND edge_spatial.min_lat <= ?
-             ORDER BY edges.id`,
-          )
-          .all(west, east, south, north)
-      : this.#database.prepare("SELECT * FROM edges ORDER BY id").all()) as SqliteRow[];
+    const edgeRows = this.#database.prepare(`SELECT edges.* FROM edges
+      JOIN edge_spatial ON edge_spatial.row_id = edges.rowid
+      WHERE edge_spatial.max_lon >= ? AND edge_spatial.min_lon <= ?
+        AND edge_spatial.max_lat >= ? AND edge_spatial.min_lat <= ?
+      ORDER BY edges.id`).all(west, east, south, north) as SqliteRow[];
     const edges: GraphEdge[] = [];
     for (const row of edgeRows) {
       assertNotAborted(query.signal);
@@ -283,59 +277,15 @@ export class SQLiteGraphRepository implements GraphRepository {
     return { nodes, edges, accessPoints };
   }
 
-  async getAccessPoints(
-    bbox: GraphQuery["bbox"],
-    includeUncertainAccess: boolean,
-  ): Promise<GraphAccessPoint[]> {
-    const [west, south, east, north] = bbox;
-    const rows = (this.#hasTable("node_spatial")
-      ? this.#database
-          .prepare(
-            `SELECT access_points.* FROM access_points
-             JOIN nodes ON nodes.id = access_points.node_id
-             JOIN node_spatial ON node_spatial.row_id = nodes.rowid
-             WHERE node_spatial.max_lon >= ? AND node_spatial.min_lon <= ?
-               AND node_spatial.max_lat >= ? AND node_spatial.min_lat <= ?
-             ORDER BY access_points.id`,
-          )
-          .all(west, east, south, north)
-      : this.#database
-          .prepare(
-            `SELECT access_points.* FROM access_points
-             JOIN nodes ON nodes.id = access_points.node_id
-             WHERE nodes.lon >= ? AND nodes.lon <= ? AND nodes.lat >= ? AND nodes.lat <= ?
-             ORDER BY access_points.id`,
-          )
-          .all(west, east, south, north)) as SqliteRow[];
-    return rows.map((row) => parseAccessPoint(row)).filter((accessPoint) => accessPointIsEligible(accessPoint, includeUncertainAccess));
-  }
-
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
     assertNotAborted(query.signal);
     const [west, south, east, north] = query.bbox;
-    const hasRanking = this.#hasColumn("access_points", "known_connectivity");
-    const hasPortalRanking = this.#hasColumn("access_points", "reachable_trail_km");
-    const rankingColumns = hasRanking
-      ? `access_points.known_connectivity, access_points.inclusive_connectivity, access_points.known_out_degree, access_points.inclusive_out_degree,
-         ${hasPortalRanking ? "access_points.reachable_trail_km, access_points.trail_component_id, access_points.portal_road_class, access_points.parking_distance_m" : "0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m"}`
-      : "0 AS known_connectivity, 0 AS inclusive_connectivity, 0 AS known_out_degree, 0 AS inclusive_out_degree, 0 AS reachable_trail_km, NULL AS trail_component_id, NULL AS portal_road_class, NULL AS parking_distance_m";
-    // The `inclusive` profile is the permissive superset of `known`, so a start
-    // that cannot reach a cycle here cannot reach one under any access setting.
-    // Left-joined and nullable so packs predating closed-route topology keep
-    // every candidate instead of losing all of them.
-    const hasTopology = this.#hasTable("access_topology");
-    const topologyColumns = hasTopology
-      ? "access_topology.can_reach_cycle AS can_reach_cycle"
-      : "NULL AS can_reach_cycle";
-    const topologyJoin = hasTopology
-      ? "LEFT JOIN access_topology ON access_topology.access_point_id = access_points.id AND access_topology.profile = 'inclusive'"
-      : "";
     const rows = this.#database.prepare(
-      `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, ${rankingColumns}, ${topologyColumns}
+      `SELECT access_points.*, nodes.lon AS candidate_lon, nodes.lat AS candidate_lat, access_topology.can_reach_cycle
        FROM access_points
        JOIN nodes ON nodes.id = access_points.node_id
        JOIN node_spatial ON node_spatial.row_id = nodes.rowid
-       ${topologyJoin}
+       LEFT JOIN access_topology ON access_topology.access_point_id = access_points.id AND access_topology.profile = 'inclusive'
        WHERE node_spatial.min_lon <= ? AND node_spatial.max_lon >= ?
          AND node_spatial.min_lat <= ? AND node_spatial.max_lat >= ?
        ORDER BY access_points.id`,
@@ -352,15 +302,7 @@ export class SQLiteGraphRepository implements GraphRepository {
         inclusiveConnectivity: requiredNumber(row, "inclusive_connectivity"),
         knownOutDegree: requiredNumber(row, "known_out_degree"),
         inclusiveOutDegree: requiredNumber(row, "inclusive_out_degree"),
-        reachableTrailKm: requiredNumber(row, "reachable_trail_km"),
-        trailComponentId: typeof row.trail_component_id === "string" ? row.trail_component_id : null,
-        portalRoadClass: row.portal_road_class === "street" || row.portal_road_class === "service-road"
-          ? row.portal_road_class
-          : null,
-        parkingDistanceM: nullableNumber(row, "parking_distance_m"),
-        canReachCycle: row.can_reach_cycle === null || row.can_reach_cycle === undefined
-          ? null
-          : requiredNumber(row, "can_reach_cycle") === 1,
+        canReachCycle: cycleReachability(row),
       }];
     });
   }

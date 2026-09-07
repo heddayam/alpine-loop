@@ -1,16 +1,6 @@
 import { createHash, type Hash } from "node:crypto";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import {
-  packManifestV3Schema,
-  packManifestV4Schema,
-  packManifestV5Schema,
-  packManifestV6Schema,
-  type PackManifestV3,
-  type PackManifestV4,
-  type PackManifestV5,
-  type PackManifestV6,
-  type TopologyProfile,
-} from "@/lib/contracts";
+import { packManifestSchema, type PackManifest, type TopologyProfile } from "@/lib/contracts";
 import type { AccessTopology } from "./closed-route-topology";
 
 type SqliteRow = Record<string, SQLInputValue>;
@@ -202,21 +192,12 @@ function metadata(database: DatabaseSync): Map<string, string> {
 export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasibilityRepository {
   readonly packId: string;
   readonly dataVersion: string;
-  readonly #manifest: PackManifestV3 | PackManifestV4 | PackManifestV5 | PackManifestV6;
+  readonly #manifest: PackManifest;
   readonly #database: DatabaseSync;
   #closed = false;
 
   constructor(options: SQLiteClosedRouteFeasibilityRepositoryOptions) {
-    const version = typeof options.manifest === "object" && options.manifest !== null
-      ? (options.manifest as { schemaVersion?: unknown }).schemaVersion
-      : undefined;
-    this.#manifest = version === "6" ? packManifestV6Schema.parse(options.manifest)
-      : version === "5" ? packManifestV5Schema.parse(options.manifest)
-      : version === "4" ? packManifestV4Schema.parse(options.manifest)
-      : packManifestV3Schema.parse(options.manifest);
-    if (this.#manifest.closedRouteTopology.runtimeMode !== "reachable-graph-fallback") {
-      throw new Error("Closed-route feasibility repository requires a reachable-graph fallback pack");
-    }
+    this.#manifest = packManifestSchema.parse(options.manifest);
     this.packId = this.#manifest.id;
     this.dataVersion = this.#manifest.dataVersion;
     this.#database = new DatabaseSync(options.databasePath, { readOnly: true });
@@ -291,9 +272,8 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     const migrations = (this.#database.prepare(
       "SELECT version FROM schema_migrations ORDER BY version",
     ).all() as SqliteRow[]).map((row) => requiredInteger(row, "version"));
-    const expectedMigrationCount = Number(this.#manifest.schemaVersion);
-    const expectedMigrations = Array.from({ length: expectedMigrationCount }, (_, index) => index + 1);
-    if (migrations.length !== expectedMigrationCount || migrations.some((version, index) => version !== expectedMigrations[index])) {
+    const expectedMigrations = [1, 2, 3, 4, 5, 6];
+    if (migrations.length !== expectedMigrations.length || migrations.some((version, index) => version !== expectedMigrations[index])) {
       throw corruption(`expected schema migrations ${expectedMigrations.join(", ")}; got ${migrations.join(", ") || "none"}`);
     }
 

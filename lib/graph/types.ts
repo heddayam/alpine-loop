@@ -25,12 +25,8 @@ export type AccessPointCandidate = GraphAccessPoint & {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
-  /**
-   * Whether a closed route is topologically possible from this start, read from
-   * the `inclusive` topology profile. `null` on packs built before closed-route
-   * topology, which must keep every candidate rather than hiding all of them.
-   */
-  canReachCycle?: boolean | null;
+  /** Whether the inclusive topology profile can reach a physical cycle. */
+  canReachCycle?: boolean;
 };
 
 export type AccessPointCandidateQuery = {
@@ -56,7 +52,6 @@ export type ReachableGraphResult = {
 export interface GraphRepository {
   readonly packId: string;
   getInducedGraph(query: GraphQuery): Promise<InducedGraph>;
-  getAccessPoints(bbox: GraphQuery["bbox"], includeUncertainAccess: boolean): Promise<GraphAccessPoint[]>;
   getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]>;
   getReachableGraph(query: ReachableGraphQuery): Promise<ReachableGraphResult>;
   close(): Promise<void>;

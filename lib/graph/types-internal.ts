@@ -11,9 +11,9 @@ export type GraphNode = {
 
 export type GraphEdge = {
   id: string;
-  /** Stable schema-3 directed edge identity; absent on legacy packs and synthetic fixtures. */
+  /** Stable directed edge identity. Optional only for in-memory algorithm fixtures. */
   edgeKey?: number;
-  /** Stable schema-3 undirected physical identity; absent on legacy packs and synthetic fixtures. */
+  /** Stable undirected physical identity. Optional only for in-memory algorithm fixtures. */
   physicalEdgeKey?: number;
   fromNodeId: string;
   toNodeId: string;
@@ -26,7 +26,7 @@ export type GraphEdge = {
   /** Complete direction-aware profile on schema-5 packs; samples are <=25 m apart. */
   elevationProfile?: Array<{ distanceMeters: number; elevationMeters: number }>;
   accessState: AccessState;
-  /** Schema-6 semantic class. Legacy fixtures default to trail at read time. */
+  /** Semantic class. Required by the SQLite reader. */
   edgeClass?: EdgeClass;
   trailName: string | null;
   sourceIds: string[];
