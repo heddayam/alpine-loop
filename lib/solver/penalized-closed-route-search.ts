@@ -466,12 +466,51 @@ export function searchPenalizedClosedRoutes(
     "shared-stem-above-maximum",
   ]);
 
-  const offer = (edges: number[]): "accepted" | "reserved" | "duplicate" | "invalid" => {
+  const trimExcursions = (walk: readonly number[]): number[] => {
+    const reference = Math.min(0.5 * METERS_PER_MILE,
+      walk.reduce((sum, edge) => sum + graph.length[edge]!, 0) * 0.2);
+    const edges: number[] = [];
+    const distances = [0];
+    const visits = new Map<number, number[]>([[graph.start, [0]]]);
+    const pop = (): void => {
+      visits.get(graph.to[edges.pop()!]!)!.pop();
+      distances.pop();
+    };
+    for (const edge of walk) {
+      const previous = edges.at(-1);
+      const first = previous === undefined ? undefined : graph.traversals[previous]![0]!;
+      const last = graph.traversals[edge]!.at(-1)!;
+      // Cancel retraced spurs, including connectors left after removing a tiny loop.
+      // Compare original endpoints so opposite laps of a contracted ring cancel,
+      // while two traversals of that ring in the same direction do not.
+      if (first && graph.physical[previous!] === graph.physical[edge]
+        && first.from.id === last.to.id && first.to.id === last.from.id) {
+        pop();
+        continue;
+      }
+      edges.push(edge);
+      distances.push(distances.at(-1)! + graph.length[edge]!);
+      const node = graph.to[edge]!;
+      const positions = visits.get(node) ?? [];
+      const left = positions.at(-1);
+      positions.push(edges.length);
+      visits.set(node, positions);
+      // Remove short excursions returning to the same junction. The relative
+      // bound preserves intentionally short hikes and substantial chained loops.
+      if (left !== undefined && distances.at(-1)! - distances[left]! <= reference) {
+        while (edges.length > left) pop();
+      }
+    }
+    return edges;
+  };
+
+  const offer = (walk: number[]): "accepted" | "reserved" | "duplicate" | "invalid" => {
     checkCancellation();
     if (candidateCount >= options.budget.maximumRawCandidates) {
       truncationReasons.add("maximum-raw-candidates");
       return "invalid";
     }
+    const edges = trimExcursions(walk);
     const id = `route-${stableHash(edges.map((edge) => graph.directed[edge]).join(","))}`;
     if (seen.has(id)) return "duplicate";
     seen.add(id);

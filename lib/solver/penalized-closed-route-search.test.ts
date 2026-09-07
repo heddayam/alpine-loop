@@ -246,6 +246,45 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(new Set(result.candidates[0]!.traversals.map(({ edge }) => edge.physicalEdgeKey)).size).toBe(7);
   });
 
+  it.each([0, 1_000])("removes a tiny side loop and its %i m connector instead of padding the distance", (connector) => {
+    const hub = connector ? "p" : "s";
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+      ...(connector ? [{ id: 4, from: "s", to: hub, length: connector }] : []),
+      { id: 5, from: hub, to: "x", length: 200 },
+      { id: 6, from: "x", to: "y", length: 200 },
+      { id: 7, from: "y", to: hub, length: 200 },
+    ]);
+    const target = 3_600 + 2 * connector;
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+      distanceMiles: { min: (target - 100) / 1_609.344, max: (target + 100) / 1_609.344 },
+      limit: 1,
+    }), { budget, now: () => 0 });
+    expect(result.candidates).toEqual([]);
+    const shorter = result.nearCandidates.find((candidate) => candidate.distanceMeters === 3_000)!;
+    expect(shorter.violatedConstraints).toContain("distance-below-minimum");
+    expect(shorter.repeatedEdgeFraction).toBe(0);
+    expect(new Set(shorter.traversals.map(({ edge }) => edge.physicalEdgeKey))).toEqual(new Set([1, 2, 3]));
+  });
+
+  it("does not suggest walking a loop forward and then backward to meet a longer target", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+    ]);
+    const result = searchPenalizedClosedRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 55, allowMultiCycle: true },
+      distanceMiles: { min: 5_900 / 1_609.344, max: 6_100 / 1_609.344 },
+      limit: 1,
+    }), { budget, now: () => 0 });
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.some((candidate) => candidate.distanceMeters === 3_000)).toBe(true);
+  });
+
   it("cooperatively aborts before and during graph work", () => {
     const controller = new AbortController();
     controller.abort(new Error("stop"));
