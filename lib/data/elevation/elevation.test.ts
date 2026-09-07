@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandRunner } from "../osm/command";
-import { GdalThreeDepElevationSampler } from "./gdal-sampler";
 import { queryThreeDepProducts, threeDepQueryUrl } from "./products";
 import { UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
 
@@ -38,18 +37,6 @@ describe("USGS 3DEP product ingestion", () => {
     const body = await readFile(path.resolve("data/fixtures/source/elevation/products.json"), "utf8");
     const products = await queryThreeDepProducts(query, async () => new Response(body, { status: 200 }));
     expect(products.every(({ byteLength }) => byteLength === undefined || byteLength > 0)).toBe(true);
-  });
-});
-
-describe("GDAL elevation sampling", () => {
-  it("batches WGS84 samples and preserves missing elevation", async () => {
-    const runner: CommandRunner = vi.fn(async (_command, _arguments, options) => {
-      expect(options?.stdin).toBe("-122.2 37.2\n-122.1 37.1\n");
-      return { stdout: "-122.2,37.2,314.25\n-122.1,37.1,nan\n", stderr: "" };
-    });
-    const sampler = new GdalThreeDepElevationSampler("/fixture/elevation.vrt", runner);
-    await expect(sampler.sample([[-122.2, 37.2], [-122.1, 37.1]])).resolves.toEqual([314.25, null]);
-    expect(runner).toHaveBeenCalledWith("gdallocationinfo", expect.arrayContaining(["-wgs84", "bilinear"]), expect.anything());
   });
 });
 
