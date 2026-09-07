@@ -9,6 +9,7 @@ import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
 import type { SearchResult } from "@/lib/contracts/search";
 import { ResultsPanel } from "./ResultsPanel";
 import type { RouteResults } from "./types";
+import { routeStart } from "./route-start";
 
 function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosedRouteV3 & { regionLabel: string } {
   return {
@@ -416,6 +417,31 @@ describe("ResultsPanel", () => {
     rerender(<ResultsPanel {...props} results={results()} selectedRouteId="previous-page-route" detail />);
     expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
     expect(screen.queryByRole("complementary", { name: "Route details" })).not.toBeInTheDocument();
+  });
+
+  it("filters a real trailhead without renumbering routes or changing search totals", async () => {
+    const other = route({ id: "other", startAccessPoint: { ...route().startAccessPoint, id: "other-start", name: "Other start" } });
+    const first = route();
+    const second = route({ id: "same-start-second" });
+    const response = results({ exact: [other, first, second], requested: 10 });
+    const onClearStart = vi.fn();
+    const props = { status: "done" as const, results: response, onHoverRoute: vi.fn(), onSelectRoute: vi.fn(), onClearStart };
+    const { rerender } = render(<ResultsPanel {...props} startKey={routeStart(first).key} nearMissesOpen />);
+    expect(screen.getByText("Saratoga Gap · 3 of 4 routes on this page")).toBeVisible();
+    expect(screen.getByText("3 of 10 requested exact routes found.")).toBeVisible();
+    expect(screen.getAllByRole("article").map((card) => card.querySelector(".route-number")?.textContent)).toEqual(["2", "3", "4"]);
+    expect(screen.queryByRole("article", { name: /Other start/ })).not.toBeInTheDocument();
+    const buttons = screen.getAllByRole("article").map((card) => within(card).getAllByRole("button")[0]!);
+    buttons[0]!.focus();
+    fireEvent.keyDown(buttons[0]!, { key: "End" });
+    expect(buttons[2]).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(props.onSelectRoute).toHaveBeenCalledWith("near-lollipop");
+    await userEvent.click(screen.getByRole("button", { name: "All trailheads" }));
+    expect(onClearStart).toHaveBeenCalledOnce();
+    rerender(<ResultsPanel {...props} nearMissesOpen />);
+    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(response.exact).toEqual([other, first, second]);
   });
 
   it("announces loading and error states", () => {

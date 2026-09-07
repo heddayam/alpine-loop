@@ -8,6 +8,7 @@ import { searchCatalogSchema, searchResultSchema, searchRequestSchema, routeJobV
 import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel } from "../results/ResultsPanel";
 import type { RouteResults } from "../results/types";
+import { routeStart } from "../results/route-start";
 import { JobsModal } from "./JobsModal";
 import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
@@ -64,7 +65,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const values = builderValues(appSettings, draft);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [workspace, setWorkspace] = useState<Workspace>({ status: "idle" });
-  const [focus, setFocus] = useState<{ routeId?: string; segmentId?: string; hoveredRouteId?: string; hoveredSegmentId?: string }>({});
+  const [focus, setFocus] = useState<{ startKey?: string; routeId?: string; segmentId?: string; hoveredRouteId?: string; hoveredSegmentId?: string }>({});
   const { routeId: selectedRouteId, segmentId: selectedSegmentId, hoveredRouteId, hoveredSegmentId } = focus;
   const setHoveredRouteId = useCallback((hoveredRouteId?: string) => setFocus((current) => ({ ...current, hoveredRouteId })), []);
   const setHoveredSegmentId = useCallback((hoveredSegmentId?: string) => setFocus((current) => ({ ...current, hoveredSegmentId })), []);
@@ -154,10 +155,16 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   }, [loadJob, restoreJobId]);
 
   const selectRoute = useCallback((routeId: string) => {
-    setFocus({ routeId });
+    setFocus((current) => ({ startKey: current.startKey, routeId }));
     setPanel("route");
     setMapExpanded(false);
   }, []);
+  const selectStart = (startKey: string) => {
+    setFocus({ startKey });
+    setNearMissesOpen(!routeResults?.exact.some((route) => routeStart(route).key === startKey));
+    setPanel("results");
+    setMapExpanded(false);
+  };
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeJobs = useCallback(() => {
     setWorkspace((current) => {
@@ -261,7 +268,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const toggleNearMisses = (open: boolean) => {
     setNearMissesOpen(open);
     if (!open) {
-      setFocus((current) => ({ routeId: routeResults?.exact.some(({ id }) => id === current.routeId) ? current.routeId : routeResults?.exact[0]?.id }));
+      setFocus((current) => ({ startKey: current.startKey, routeId: routeResults?.exact.some(({ id }) => id === current.routeId) ? current.routeId : routeResults?.exact[0]?.id }));
     }
   };
   const hasResultsPanel = workspace.status !== "idle";
@@ -390,11 +397,11 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan"}>
-          {hasResultsPanel ? <ResultsPanel status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => setPanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => setPanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
         </div>
         </section>
 
-        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={changeDrawnBounds} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
+        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={changeDrawnBounds} selectedStartKey={focus.startKey} onStartSelect={selectStart} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
         <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => setMapExpanded((current) => !current)}>{mapExpanded ? "Show panel" : "Show map"}</button>
       </div>

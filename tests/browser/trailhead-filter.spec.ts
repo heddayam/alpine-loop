@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ACCESS_POINTS, routeResponse } from "./fixtures";
 import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
 
 test("one builder runs Quick and Full search from the drawn boundary", async ({ page }) => {
@@ -101,36 +102,43 @@ test("Full search launches a persistent region-wide job without an origin and re
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("shared result starts anchor precisely and reveal route numbers at trail zoom", async ({ page }) => {
+test("native trailhead counts open a filtered list and preserve route numbering", async ({ page }) => {
   const harness = await installOfflineHarness(page, { routeCount: 10 });
   await page.goto("/");
-
   await enterDrawnArea(page);
+  const framed = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/map");
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  await framed;
+  await expect(page.locator(".maplibregl-marker")).toHaveCount(0);
 
-  const expandedPins = page.locator(".route-pin-expanded");
-  await expect(expandedPins).toHaveCount(2);
-  const numberedPins = expandedPins.locator(".route-pin");
-  await expect(numberedPins).toHaveCount(10);
-  await expect(numberedPins).toHaveText(["1", "3", "5", "7", "9", "2", "4", "6", "8", "10"]);
-  const anchors = await expandedPins.evaluateAll((groups) => groups.map((group) => {
-    const anchor = group.getBoundingClientRect();
-    const tip = group.querySelector<HTMLElement>(".route-pin-tip")!.getBoundingClientRect();
-    return Math.abs((tip.left + tip.width / 2) - (anchor.left + anchor.width / 2)) < 0.5
-      && Math.abs(tip.bottom - anchor.bottom) < 0.5;
-  }));
-  expect(anchors).toEqual([true, true]);
-  const visuals = await numberedPins.evaluateAll((pins) => pins.map((pin) => {
-    const marker = pin.getBoundingClientRect();
-    const style = getComputedStyle(pin);
-    return {
-      width: marker.width, height: marker.height,
-      contained: marker.width + 0.01 >= marker.height,
-      whiteSpace: style.whiteSpace,
-    };
-  }));
-  expect(visuals.every(({ contained, whiteSpace }) => contained && whiteSpace === "nowrap"), JSON.stringify(visuals)).toBe(true);
+  // Project the fixture's real start against the documented 64px result framing,
+  // independent of the native marker implementation or any private map instance.
+  const mercator = ([lon, lat]: number[]) => [
+    (lon! + 180) / 360,
+    .5 - Math.log(Math.tan(Math.PI / 4 + lat! * Math.PI / 360)) / (2 * Math.PI),
+  ];
+  const response = routeResponse(harness.generationRequests[0]!, 10);
+  const points = response.exact.flatMap((route) => route.geometry.coordinates.map(mercator));
+  const xs = points.map(([x]) => x!), ys = points.map(([, y]) => y!);
+  const west = Math.min(...xs), east = Math.max(...xs), north = Math.min(...ys), south = Math.max(...ys);
+  const box = (await page.locator(".maplibregl-canvas").boundingBox())!;
+  const scale = Math.min((box.width - 128) / (east - west), (box.height - 128) / (south - north), 512 * 2 ** 14);
+  const [x, y] = mercator([ACCESS_POINTS[0]!.lon, ACCESS_POINTS[0]!.lat]);
+  const start = { x: box.x + box.width / 2 + (x! - (west + east) / 2) * scale, y: box.y + box.height / 2 + (y! - (north + south) / 2) * scale };
+  await page.mouse.move(start.x, start.y);
+  await expect(page.locator(".map-trail-label")).toContainText("5 routes");
+  await page.mouse.click(start.x, start.y);
+  await expect(page.locator(".start-filter")).toContainText("Stevens Creek Trailhead");
+  await expect(page.locator(".route-card")).toHaveCount(5);
+  await expect(page.locator(".route-number")).toHaveText(["1", "3", "5", "7", "9"]);
+  await expect(page.getByRole("complementary", { name: "Route details" })).toHaveCount(0);
+  await page.locator(".route-card-select").nth(2).click();
+  await expect(page.locator(".route-number")).toHaveText(["5"]);
+  await page.getByRole("button", { name: /Back to results/ }).click();
+  await expect(page.locator(".route-card")).toHaveCount(5);
+  await page.getByRole("button", { name: "All trailheads" }).click();
+  await expect(page.locator(".route-card")).toHaveCount(10);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

@@ -7,6 +7,7 @@ import type {
 } from "@/lib/contracts";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
+import { routeStart } from "./route-start";
 
 export type ResultsStatus = "loading" | "done" | "error";
 
@@ -14,6 +15,8 @@ type ResultsPanelProps = {
   status: ResultsStatus;
   results: RouteResults | null;
   message?: string;
+  startKey?: string;
+  onClearStart?: () => void;
   selectedRouteId?: string;
   onSelectRoute: (routeId: string) => void;
   onHoverRoute: (routeId: string | undefined) => void;
@@ -359,6 +362,8 @@ export function ResultsPanel({
   status,
   results,
   message,
+  startKey,
+  onClearStart,
   selectedRouteId,
   onSelectRoute,
   onHoverRoute,
@@ -479,7 +484,11 @@ export function ResultsPanel({
 
   if (!results) return null;
 
-  const total = routes.length;
+  const matchesStart = (route: GeneratedClosedRouteV3) => !startKey || routeStart(route).key === startKey;
+  const exactCount = results.exact.filter(matchesStart).length;
+  const closeCount = results.nearMisses.filter(matchesStart).length;
+  const total = exactCount + closeCount;
+  const start = startKey ? routes.find(matchesStart)?.startAccessPoint : undefined;
   const quick = results.kind === "quick" ? results : undefined;
   const job = results.kind === "saved" ? results.job : undefined;
 
@@ -506,6 +515,7 @@ export function ResultsPanel({
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <ResultsHeading total={total} onClose={onClose} />
+      {startKey ? <div className="start-filter" role="status"><span>{start?.name ?? "Selected trailhead"} · {total} of {routes.length} routes on this page</span><button type="button" className="btn-link" onClick={onClearStart}>All trailheads</button></div> : null}
       {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
       <p className="viewed-search-context">Viewing {quick?.area.label ?? job?.area.label} · {(quick?.request.criteria ?? job!.request.criteria).distanceMiles.min}–{(quick?.request.criteria ?? job!.request.criteria).distanceMiles.max} mi</p>
 
@@ -533,7 +543,7 @@ export function ResultsPanel({
 
       {total === 0 ? (
         <div className="no-results" role="status">
-          <strong>No routes found.</strong>
+          <strong>{startKey ? "No routes at this trailhead on this page." : "No routes found."}</strong>
           <span>Widen the distance range, choose a broader area, or include uncertain access in Settings.</span>
         </div>
       ) : (
@@ -541,17 +551,17 @@ export function ResultsPanel({
           <section className="result-section" aria-labelledby="exact-results-title">
             <div className="result-section-heading">
               <h3 id="exact-results-title">Exact matches</h3>
-              <span>{results.exact.length}</span>
+              <span>{exactCount}</span>
             </div>
-            {results.exact.map((route, index) => renderCard(route, index))}
+            {results.exact.map((route, index) => matchesStart(route) ? renderCard(route, index) : null)}
           </section>
 
-          {results.nearMisses.length > 0 ? (
+          {closeCount > 0 ? (
             /* Close matches stay folded away while there are exact matches to
                read; with none, they are the only thing left to look at. */
             <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => { if (!event.currentTarget.open) onHoverRoute(undefined); onToggleNearMisses?.(event.currentTarget.open); }}>
-              <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{results.nearMisses.length}</span></summary>
-              {results.nearMisses.map((route, index) => renderCard(route, results.exact.length + index))}
+              <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{closeCount}</span></summary>
+              {results.nearMisses.map((route, index) => matchesStart(route) ? renderCard(route, results.exact.length + index) : null)}
             </details>
           ) : null}
         </div>
