@@ -1,8 +1,7 @@
+import { searchAreaSchema, searchAreaSnapshotSchema } from "./search";
 import { describe, expect, it } from "vitest";
 import {
   namedAreaSchema,
-  reachabilityRequestSchema,
-  reachabilityResponseSchema,
 } from "./discovery";
 
 const square = {
@@ -29,28 +28,24 @@ describe("discovery contracts", () => {
 
   it("accepts only the supported drive-time values", () => {
     const input = {
-      version: 1,
-      packId: "fixture",
+      mode: "drive-time",
+      regionIds: [],
       origin: { lon: -122.15, lat: 37.15, label: "Current location" },
       durationMinutes: 30,
     };
-    expect(reachabilityRequestSchema.safeParse(input).success).toBe(true);
-    expect(reachabilityRequestSchema.safeParse({ ...input, durationMinutes: 31 }).success).toBe(false);
+    expect(searchAreaSchema.safeParse(input).success).toBe(true);
+    expect(searchAreaSchema.safeParse({ ...input, durationMinutes: 31 }).success).toBe(false);
   });
 
   it("requires valid closed reachability geometry", () => {
     const response = {
-      status: "complete",
-      requestId: "db52ceda-c6ef-47f1-9153-dba294a9eccc",
-      provider: "arcgis",
-      durationMinutes: 30,
-      resolvedAt: "2026-08-04T00:00:00Z",
-      geometry: square,
+      label: "Drive-time area",
+      filterGeometry: square,
     };
-    expect(reachabilityResponseSchema.safeParse(response).success).toBe(true);
-    expect(reachabilityResponseSchema.safeParse({
+    expect(searchAreaSnapshotSchema.safeParse(response).success).toBe(true);
+    expect(searchAreaSnapshotSchema.safeParse({
       ...response,
-      geometry: { ...square, coordinates: [[...square.coordinates[0].slice(0, -1)]] },
+      filterGeometry: { ...square, coordinates: [[...square.coordinates[0].slice(0, -1)]] },
     }).success).toBe(false);
   });
 });

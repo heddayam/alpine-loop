@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   areaGeometrySchema,
   bboxSchema,
-  driveTimeDurationSchema,
 } from "./routes";
 
 export const namedAreaKindSchema = z.enum([
@@ -52,36 +51,7 @@ export const originSchema = z.object({
   label: z.string().trim().min(1).max(240),
 }).strict();
 
-export const reachabilityRequestSchema = z.object({
-  version: z.literal(1),
-  packId: z.string().min(1),
-  origin: originSchema,
-  durationMinutes: driveTimeDurationSchema,
-}).strict();
-
-export const reachabilityPendingSchema = z.object({
-  status: z.literal("pending"),
-  requestId: z.string().uuid(),
-  pollAfterMs: z.number().int().min(500).max(10_000),
-}).strict();
-
-export const reachabilityCompleteSchema = z.object({
-  status: z.literal("complete"),
-  requestId: z.string().uuid(),
-  provider: z.literal("arcgis"),
-  durationMinutes: driveTimeDurationSchema,
-  resolvedAt: z.string().datetime(),
-  geometry: areaGeometrySchema,
-}).strict();
-
-export const reachabilityResponseSchema = z.discriminatedUnion("status", [
-  reachabilityPendingSchema,
-  reachabilityCompleteSchema,
-]);
-
 export type NamedAreaSummary = z.infer<typeof namedAreaSummarySchema>;
 export type NamedArea = z.infer<typeof namedAreaSchema>;
 export type SearchRegionSummary = z.infer<typeof searchRegionSummarySchema>;
 export type Origin = z.infer<typeof originSchema>;
-export type ReachabilityRequest = z.infer<typeof reachabilityRequestSchema>;
-export type ReachabilityResponse = z.infer<typeof reachabilityResponseSchema>;
