@@ -97,89 +97,27 @@ export type CompiledEdge = {
   flags: string[];
 };
 
-export type TopologyDecisionEdgeMemberRecord = {
-  sequenceIndex: number;
-  edgeKey: number;
-  physicalEdgeKey: number;
-};
-
-export type TopologyDecisionEdgeRecord = {
-  decisionEdgeKey: number;
-  networkId: number;
-  fromDecisionNodeId: number;
-  toDecisionNodeId: number;
-  lengthM: number;
-  gainM: number;
-  lossM: number;
-  isBridge: boolean;
-  twoEdgeComponentId: number;
-  vertexBlockId: number | null;
-  metricsAndFlags: string;
-  members: TopologyDecisionEdgeMemberRecord[];
-};
-
-export type TopologyBlockRecord = {
-  blockId: number;
-  networkId: number;
-  blockKind: "vertex-cycle" | "bridge";
-  nodeCount: number;
-  edgeCount: number;
-  cycleRank: number;
-  totalPhysicalLengthM: number;
-  minimumCycleLengthM: number | null;
-  elevationSummary: string;
-  trailSummary: string;
-  decisionNodeIds: number[];
-  decisionEdgeKeys: number[];
-};
-
+/** Schema-6 compact wire shape: primitive tables are intentionally empty. */
 export type TopologyProfileBuild = {
   profile: TopologyProfile;
   formatVersion: number;
-  nodeCount: number;
+  nodeCount: 0;
   physicalEdgeCount: number;
-  decisionNodeCount: number;
-  decisionEdgeCount: number;
+  decisionNodeCount: 0;
+  decisionEdgeCount: 0;
   builtAt: string;
   contentHash: string;
-  nodes: Array<{
-    denseId: number;
-    sourceNodeId: string;
-    decisionNodeId: number | null;
-    connectedComponentId: number;
-    directedSccId: number;
-    twoEdgeComponentId: number;
-    isArticulation: boolean;
-    nearestCycleNetworkId: number | null;
-    cyclePortalDecisionNodeId: number | null;
-    minimumStemDistanceM: number | null;
-  }>;
-  decisionEdges: TopologyDecisionEdgeRecord[];
-  blocks: TopologyBlockRecord[];
-  blockLinks: Array<{
-    networkId: number;
-    fromBlockId: number;
-    toBlockId: number;
-    articulationDecisionNodeId: number;
-    connectorDistanceM: number;
-  }>;
-  networks: Array<{
-    networkId: number;
-    decisionNodeCount: number;
-    decisionEdgeCount: number;
-    cycleBlockCount: number;
-    minimumCycleLengthM: number | null;
-    maximumCycleLengthM: number | null;
-    minimumElevationM: number | null;
-    maximumElevationM: number | null;
-    contentHash: string;
-  }>;
+  nodes: [];
+  decisionEdges: [];
+  blocks: [];
+  blockLinks: [];
+  networks: [];
   accessTopology: Array<{
     accessPointId: string;
     attachmentDecisionNodeId: number;
     cycleNetworkId: number | null;
     connectorKey: string | null;
-    connectorDecisionEdgeIds: number[];
+    connectorDecisionEdgeIds: [];
     portalDecisionNodeId: number | null;
     minimumStemDistanceM: number | null;
     canReachCycle: boolean;

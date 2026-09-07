@@ -1,50 +1,17 @@
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
+import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 import type { TopologyProfile } from "@/lib/contracts";
 import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, ClosedRouteTopologyBuild, TopologyProfileBuild } from "./types";
 
-export const CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION = 1;
+export { CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 
-type DenseEdge = CompiledEdge & { edgeKey: number; from: number; to: number; physicalEdgeKey: number };
-type Physical = ClosedRouteTopologyBuild["physicalEdges"][number] & { lengthM: number; stableEdgeIds: string[] };
-type BlockWork = { edgeKeys: number[]; nodeKeys: number[]; cycleRank: number; blockId: number };
-
-export function topologyExtrema(values: readonly number[]): { minimum: number; maximum: number } | null {
-  if (values.length === 0) return null;
-  let minimum = Number.POSITIVE_INFINITY;
-  let maximum = Number.NEGATIVE_INFINITY;
-  for (const value of values) {
-    if (value < minimum) minimum = value;
-    if (value > maximum) maximum = value;
-  }
-  return { minimum, maximum };
-}
+type DenseEdge = CompiledEdge & { from: number; to: number; physicalEdgeKey: number };
+type Physical = ClosedRouteTopologyBuild["physicalEdges"][number];
 
 function geometryHash(edge: CompiledEdge): string {
   const forward = canonicalTopologyJson(edge.geometry);
   const reverse = canonicalTopologyJson([...edge.geometry].reverse());
   return topologySha256(forward < reverse ? forward : reverse);
-}
-
-function connectedComponents(nodeCount: number, adjacency: readonly number[][], physicalByKey: Map<number, Physical>): number[] {
-  const result = Array(nodeCount + 1).fill(0) as number[];
-  let component = 0;
-  for (let start = 1; start <= nodeCount; start += 1) {
-    if (result[start] || adjacency[start]!.length === 0) continue;
-    component += 1;
-    const pending = [start];
-    result[start] = component;
-    while (pending.length) {
-      const node = pending.pop()!;
-      for (const edgeKey of adjacency[node]!) {
-        const edge = physicalByKey.get(edgeKey)!;
-        const next = edge.fromNodeKey === node ? edge.toNodeKey : edge.fromNodeKey;
-        if (!result[next]) { result[next] = component; pending.push(next); }
-      }
-    }
-  }
-  // Isolated nodes remain inspectable and receive deterministic components.
-  for (let node = 1; node <= nodeCount; node += 1) if (!result[node]) result[node] = ++component;
-  return result;
 }
 
 function stronglyConnectedComponents(nodeCount: number, edges: readonly DenseEdge[]): number[] {
@@ -83,367 +50,71 @@ function stronglyConnectedComponents(nodeCount: number, edges: readonly DenseEdg
   return component;
 }
 
-function undirectedDecomposition(
-  nodeCount: number,
-  adjacency: readonly number[][],
-  physicalByKey: Map<number, Physical>,
-): { bridges: Set<number>; articulations: Set<number>; blocks: BlockWork[]; twoEdge: number[] } {
+// Only SCC-local physical edges can participate in a legal closed traversal.
+// Iterative low-link traversal handles long stems, parallel edges and self-loops.
+function cycleNodes(nodeCount: number, physical: readonly Physical[]): Set<number> {
+  const adjacency = Array.from({ length: nodeCount + 1 }, () => [] as Physical[]);
+  for (const edge of physical) {
+    adjacency[edge.fromNodeKey]!.push(edge);
+    if (edge.fromNodeKey !== edge.toNodeKey) adjacency[edge.toNodeKey]!.push(edge);
+  }
   const discovery = new Int32Array(nodeCount + 1);
   const low = new Int32Array(nodeCount + 1);
-  const parentNode = new Int32Array(nodeCount + 1);
-  const parentEdge = new Int32Array(nodeCount + 1);
-  const childCount = new Int32Array(nodeCount + 1);
   const bridges = new Set<number>();
-  const articulations = new Set<number>();
-  const rawBlocks: number[][] = [];
-  const edgeStack: number[] = [];
   let time = 0;
   for (let root = 1; root <= nodeCount; root += 1) {
-    if (discovery[root] || adjacency[root]!.length === 0) continue;
+    if (discovery[root]) continue;
     discovery[root] = low[root] = ++time;
-    const frames = [{ node: root, index: 0 }];
-    while (frames.length) {
-      const frame = frames[frames.length - 1]!;
-      const edgeKey = adjacency[frame.node]![frame.index++];
-      if (edgeKey !== undefined) {
-        const edge = physicalByKey.get(edgeKey)!;
+    const stack = [{ node: root, parent: 0, parentEdge: 0, index: 0 }];
+    while (stack.length) {
+      const frame = stack[stack.length - 1]!;
+      const edge = adjacency[frame.node]![frame.index++];
+      if (edge) {
+        if (edge.physicalEdgeKey === frame.parentEdge) continue;
         const next = edge.fromNodeKey === frame.node ? edge.toNodeKey : edge.fromNodeKey;
-        if (next === frame.node) {
-          if (!rawBlocks.some((block) => block.length === 1 && block[0] === edgeKey)) rawBlocks.push([edgeKey]);
-        } else if (!discovery[next]) {
-          parentNode[next] = frame.node;
-          parentEdge[next] = edgeKey;
-          childCount[frame.node] += 1;
-          edgeStack.push(edgeKey);
+        if (discovery[next]) low[frame.node] = Math.min(low[frame.node]!, discovery[next]!);
+        else {
           discovery[next] = low[next] = ++time;
-          frames.push({ node: next, index: 0 });
-        } else if (edgeKey !== parentEdge[frame.node] && discovery[next] < discovery[frame.node]) {
-          low[frame.node] = Math.min(low[frame.node]!, discovery[next]!);
-          edgeStack.push(edgeKey);
+          stack.push({ node: next, parent: frame.node, parentEdge: edge.physicalEdgeKey, index: 0 });
         }
       } else {
-        frames.pop();
-        const parent = parentNode[frame.node]!;
-        if (parent) {
-          low[parent] = Math.min(low[parent]!, low[frame.node]!);
-          if (low[frame.node]! > discovery[parent]!) bridges.add(parentEdge[frame.node]!);
-          if (low[frame.node]! >= discovery[parent]!) {
-            if (parentNode[parent] || childCount[parent]! > 1) articulations.add(parent);
-            const block: number[] = [];
-            while (edgeStack.length) {
-              const popped = edgeStack.pop()!;
-              block.push(popped);
-              if (popped === parentEdge[frame.node]) break;
-            }
-            if (block.length) rawBlocks.push(block);
-          }
-        } else if (childCount[frame.node]! > 1) articulations.add(frame.node);
+        stack.pop();
+        if (frame.parent) {
+          if (low[frame.node]! > discovery[frame.parent]!) bridges.add(frame.parentEdge);
+          low[frame.parent] = Math.min(low[frame.parent]!, low[frame.node]!);
+        }
       }
     }
   }
-  const blocks = rawBlocks.map((edgeKeys) => {
-    const sortedEdges = [...new Set(edgeKeys)].sort((a, b) => a - b);
-    const nodes = [...new Set(sortedEdges.flatMap((key) => {
-      const edge = physicalByKey.get(key)!; return [edge.fromNodeKey, edge.toNodeKey];
-    }))].sort((a, b) => a - b);
-    return { edgeKeys: sortedEdges, nodeKeys: nodes, cycleRank: sortedEdges.length - nodes.length + 1, blockId: 0 };
-  }).sort((a, b) => (a.edgeKeys[0] ?? 0) - (b.edgeKeys[0] ?? 0));
-  blocks.forEach((block, index) => { block.blockId = index + 1; });
-
-  const twoEdge = Array(nodeCount + 1).fill(0) as number[];
-  let component = 0;
-  for (let start = 1; start <= nodeCount; start += 1) {
-    if (twoEdge[start]) continue;
-    component += 1;
-    twoEdge[start] = component;
-    const pending = [start];
-    while (pending.length) {
-      const node = pending.pop()!;
-      for (const edgeKey of adjacency[node]!) {
-        if (bridges.has(edgeKey)) continue;
-        const edge = physicalByKey.get(edgeKey)!;
-        const next = edge.fromNodeKey === node ? edge.toNodeKey : edge.fromNodeKey;
-        if (!twoEdge[next]) { twoEdge[next] = component; pending.push(next); }
-      }
-    }
+  const result = new Set<number>();
+  for (const edge of physical) if (!bridges.has(edge.physicalEdgeKey)) {
+    result.add(edge.fromNodeKey); result.add(edge.toNodeKey);
   }
-  return { bridges, articulations, blocks, twoEdge };
-}
-
-function metadataSignature(edge: DenseEdge): string {
-  return canonicalTopologyJson({ accessState: edge.accessState, flags: edge.flags, sourceRefs: edge.sourceRefs });
-}
-
-function profileHashInput(profile: Omit<TopologyProfileBuild, "contentHash">): unknown {
-  return {
-    profile: profile.profile,
-    formatVersion: profile.formatVersion,
-    nodeCount: profile.nodeCount,
-    physicalEdgeCount: profile.physicalEdgeCount,
-    decisionNodeCount: profile.decisionNodeCount,
-    decisionEdgeCount: profile.decisionEdgeCount,
-    nodes: profile.nodes,
-    decisionEdges: profile.decisionEdges,
-    blocks: profile.blocks,
-    blockLinks: profile.blockLinks,
-    networks: profile.networks.map((network) => ({
-      networkId: network.networkId,
-      decisionNodeCount: network.decisionNodeCount,
-      decisionEdgeCount: network.decisionEdgeCount,
-      cycleBlockCount: network.cycleBlockCount,
-      minimumCycleLengthM: network.minimumCycleLengthM,
-      maximumCycleLengthM: network.maximumCycleLengthM,
-      minimumElevationM: network.minimumElevationM,
-      maximumElevationM: network.maximumElevationM,
-    })),
-    accessTopology: profile.accessTopology,
-  };
-}
-
-function compactFallbackProfile(profile: TopologyProfileBuild): TopologyProfileBuild {
-  const withoutHash: Omit<TopologyProfileBuild, "contentHash"> = {
-    ...profile,
-    nodeCount: 0,
-    decisionNodeCount: 0,
-    decisionEdgeCount: 0,
-    nodes: [],
-    decisionEdges: [],
-    blocks: [],
-    blockLinks: [],
-    networks: [],
-    accessTopology: profile.accessTopology.map((access) => ({
-      ...access,
-      connectorDecisionEdgeIds: [],
-    })),
-  };
-  return { ...withoutHash, contentHash: topologySha256(profileHashInput(withoutHash)) };
+  return result;
 }
 
 function buildProfile(
   profile: TopologyProfile,
-  nodes: readonly NormalizedNode[],
+  nodeKeys: Map<string, number>,
   denseEdges: readonly DenseEdge[],
   physicalEdges: readonly Physical[],
   accessPoints: readonly NormalizedAccessPoint[],
   builtAt: string,
-  globalDecisionEdgeOffset: number,
 ): TopologyProfileBuild {
-  const accepted = profile === "known" ? new Set(["public"]) : new Set(["public", "unknown"]);
-  const edges = denseEdges.filter((edge) => (edge.edgeClass === undefined || edge.edgeClass === "trail") && accepted.has(edge.accessState));
+  const edges = denseEdges.filter((edge) => (edge.edgeClass === undefined || edge.edgeClass === "trail")
+    && (edge.accessState === "public" || (profile === "inclusive" && edge.accessState === "unknown")));
   const includedPhysicalKeys = new Set(edges.map(({ physicalEdgeKey }) => physicalEdgeKey));
   const physical = physicalEdges.filter(({ physicalEdgeKey }) => includedPhysicalKeys.has(physicalEdgeKey));
-  const physicalByKey = new Map(physical.map((edge) => [edge.physicalEdgeKey, edge]));
-  const edgeByKey = new Map(edges.map((edge) => [edge.edgeKey, edge]));
-  const directionsByPhysical = new Map<number, DenseEdge[]>();
-  for (const edge of edges) directionsByPhysical.set(edge.physicalEdgeKey, [...(directionsByPhysical.get(edge.physicalEdgeKey) ?? []), edge]);
-  for (const values of directionsByPhysical.values()) values.sort((a, b) => a.edgeKey - b.edgeKey);
-  const adjacency = Array.from({ length: nodes.length + 1 }, () => [] as number[]);
-  for (const edge of physical) {
-    adjacency[edge.fromNodeKey]!.push(edge.physicalEdgeKey);
-    if (edge.toNodeKey !== edge.fromNodeKey) adjacency[edge.toNodeKey]!.push(edge.physicalEdgeKey);
-  }
-  adjacency.forEach((items) => items.sort((a, b) => a - b));
-  const connected = connectedComponents(nodes.length, adjacency, physicalByKey);
-  const scc = stronglyConnectedComponents(nodes.length, edges);
-  const decomposition = undirectedDecomposition(nodes.length, adjacency, physicalByKey);
-  const blockByPhysical = new Map<number, BlockWork>();
-  decomposition.blocks.forEach((block) => block.edgeKeys.forEach((key) => blockByPhysical.set(key, block)));
-
-  // An SCC is route-feasible only when its physical projection has positive cycle rank.
-  const sccPhysical = new Map<number, Set<number>>();
-  for (const edge of physical) {
-    if (scc[edge.fromNodeKey] === scc[edge.toNodeKey]) {
-      (sccPhysical.get(scc[edge.fromNodeKey]!) ?? sccPhysical.set(scc[edge.fromNodeKey]!, new Set()).get(scc[edge.fromNodeKey]!)!).add(edge.physicalEdgeKey);
-    }
-  }
-  const cyclicScc = new Set<number>();
-  for (const [id, edgeKeys] of sccPhysical) {
-    const incident = new Set<number>();
-    edgeKeys.forEach((key) => { const edge = physicalByKey.get(key)!; incident.add(edge.fromNodeKey); incident.add(edge.toNodeKey); });
-    if (edgeKeys.size - incident.size + 1 > 0) cyclicScc.add(id);
-  }
-
-  const nodeKeyById = new Map(nodes.map((node, index) => [node.id, index + 1]));
-  const accessNodes = new Set(accessPoints.map(({ nodeId }) => nodeKeyById.get(nodeId) ?? 0).filter((key) => key > 0));
-  const retain = new Set<number>();
-  const physicalMetadata = new Map<number, string>();
-  for (const edge of physical) physicalMetadata.set(edge.physicalEdgeKey, metadataSignature(directionsByPhysical.get(edge.physicalEdgeKey)![0]!));
-  for (let node = 1; node <= nodes.length; node += 1) {
-    const incident = adjacency[node]!;
-    const discontinuity = new Set(incident.map((key) => physicalMetadata.get(key))).size > 1;
-    const directionalPairs = incident.map((key) => directionsByPhysical.get(key)!.map((edge) => `${edge.from === node ? "out" : "in"}:${edge.physicalEdgeKey}`).sort().join("|"));
-    const directionDiscontinuity = incident.length === 2 && directionalPairs.some((value) => value.length === 0);
-    if (incident.length !== 2 || accessNodes.has(node) || decomposition.articulations.has(node)
-      || incident.some((key) => decomposition.bridges.has(key)) || discontinuity || directionDiscontinuity) retain.add(node);
-  }
-  // Every cycle block gets a stable portal, which is also the required pure-cycle anchor.
-  for (const block of decomposition.blocks.filter(({ cycleRank }) => cycleRank > 0)) {
-    if (!block.nodeKeys.some((key) => retain.has(key))) retain.add(block.nodeKeys[0]!);
-  }
-  // Direction patterns that cannot be represented by a complete chain force a decision node.
-  for (let node = 1; node <= nodes.length; node += 1) {
-    if (retain.has(node) || adjacency[node]!.length !== 2) continue;
-    const [a, b] = adjacency[node]!;
-    const aEdges = directionsByPhysical.get(a!)!;
-    const bEdges = directionsByPhysical.get(b!)!;
-    const inA = aEdges.some((edge) => edge.to === node), outA = aEdges.some((edge) => edge.from === node);
-    const inB = bEdges.some((edge) => edge.to === node), outB = bEdges.some((edge) => edge.from === node);
-    if (inA !== outB || inB !== outA) retain.add(node);
-  }
-  const retainedKeys = [...retain].sort((a, b) => a - b);
-  const decisionIdByNode = new Map(retainedKeys.map((nodeKey, index) => [nodeKey, index + 1]));
-
-  type Chain = { from: number; to: number; physicalKeys: number[]; orientedNodes: number[] };
-  const chains: Chain[] = [];
-  const visitedPhysical = new Set<number>();
-  for (const start of retainedKeys) {
-    for (const initialEdge of adjacency[start]!) {
-      if (visitedPhysical.has(initialEdge)) continue;
-      const physicalKeys: number[] = [];
-      const orientedNodes = [start];
-      let current = start;
-      let edgeKey = initialEdge;
-      for (;;) {
-        visitedPhysical.add(edgeKey);
-        physicalKeys.push(edgeKey);
-        const physicalEdge = physicalByKey.get(edgeKey)!;
-        const next = physicalEdge.fromNodeKey === current ? physicalEdge.toNodeKey : physicalEdge.fromNodeKey;
-        orientedNodes.push(next);
-        if (retain.has(next)) { chains.push({ from: start, to: next, physicalKeys, orientedNodes }); break; }
-        const nextEdge = adjacency[next]!.find((candidate) => candidate !== edgeKey && !visitedPhysical.has(candidate));
-        if (nextEdge === undefined) { retain.add(next); break; }
-        current = next; edgeKey = nextEdge;
-      }
-    }
-  }
-
-  const decisionEdges: TopologyProfileBuild["decisionEdges"] = [];
-  const originalToDecision = new Map<number, number>();
-  const oriented = (chain: Chain, reverse: boolean): DenseEdge[] | null => {
-    const nodeSequence = reverse ? [...chain.orientedNodes].reverse() : chain.orientedNodes;
-    const keys = reverse ? [...chain.physicalKeys].reverse() : chain.physicalKeys;
-    const result: DenseEdge[] = [];
-    for (let index = 0; index < keys.length; index += 1) {
-      const edge = directionsByPhysical.get(keys[index]!)!.find((candidate) => candidate.from === nodeSequence[index] && candidate.to === nodeSequence[index + 1]);
-      if (!edge) return null;
-      result.push(edge);
-    }
-    return result;
-  };
-  const candidates = chains.flatMap((chain) => [oriented(chain, false), oriented(chain, true)]
-    .filter((members): members is DenseEdge[] => members !== null)
-    .map((members) => ({ chain, members })));
-  candidates.sort((a, b) => {
-    const af = decisionIdByNode.get(a.members[0]!.from)!, bf = decisionIdByNode.get(b.members[0]!.from)!;
-    return af - bf || decisionIdByNode.get(a.members.at(-1)!.to)! - decisionIdByNode.get(b.members.at(-1)!.to)!
-      || a.members.map(({ edgeKey }) => edgeKey).join(",").localeCompare(b.members.map(({ edgeKey }) => edgeKey).join(","));
-  });
-  candidates.forEach(({ members }, index) => {
-    const decisionEdgeKey = globalDecisionEdgeOffset + index + 1;
-    const physicalKeys = members.map(({ physicalEdgeKey }) => physicalEdgeKey);
-    const block = blockByPhysical.get(physicalKeys[0]!);
-    const maximumElevations = members.map(({ maxElevationM }) => maxElevationM).filter((value): value is number => value !== null);
-    const grades = members.map(({ maxSustainedGradePct }) => maxSustainedGradePct).filter((value): value is number => value !== null);
-    const flags = [...new Set(members.flatMap(({ flags }) => flags))].sort();
-    const trailNames = [...new Set(flags.filter((flag) => flag.startsWith("trail-name:")).map((flag) => flag.slice(11)))].sort();
-    const sourceIds = [...new Set(members.flatMap(({ sourceRefs }) => sourceRefs))].sort();
-    const accessStates = [...new Set(members.map(({ accessState }) => accessState))];
-    const elevationExtrema = topologyExtrema(maximumElevations);
-    const gradeExtrema = topologyExtrema(grades);
-    const from = decisionIdByNode.get(members[0]!.from)!;
-    const to = decisionIdByNode.get(members.at(-1)!.to)!;
-    decisionEdges.push({
-      decisionEdgeKey,
-      networkId: connected[members[0]!.from]!,
-      fromDecisionNodeId: from,
-      toDecisionNodeId: to,
-      lengthM: members.reduce((sum, edge) => sum + edge.lengthM, 0),
-      gainM: members.reduce((sum, edge) => sum + (edge.gainM ?? 0), 0),
-      lossM: members.reduce((sum, edge) => sum + (edge.lossM ?? 0), 0),
-      isBridge: physicalKeys.every((key) => decomposition.bridges.has(key)),
-      twoEdgeComponentId: decomposition.twoEdge[members[0]!.from]!,
-      vertexBlockId: block?.blockId ?? null,
-      metricsAndFlags: canonicalTopologyJson({
-        maximumElevationMeters: elevationExtrema?.maximum ?? null,
-        maximumSustainedGradePct: gradeExtrema?.maximum ?? null,
-        accessState: accessStates.includes("unknown") ? "unknown" : "public",
-        trailNames, sourceIds, flags,
-      }),
-      members: members.map((edge, sequenceIndex) => ({ sequenceIndex, edgeKey: edge.edgeKey, physicalEdgeKey: edge.physicalEdgeKey })),
-    });
-    members.forEach(({ edgeKey }) => originalToDecision.set(edgeKey, decisionEdgeKey));
-  });
-  if (originalToDecision.size !== edges.length) throw new Error(`${profile} decision graph mapped ${originalToDecision.size} of ${edges.length} legal directed edges`);
-
-  const decisionNodeIdsForBlock = (block: BlockWork): number[] => block.nodeKeys
-    .map((key) => decisionIdByNode.get(key)).filter((id): id is number => id !== undefined).sort((a, b) => a - b);
-  const decisionEdgesByBlock = new Map<number, number[]>();
-  for (const edge of decisionEdges) {
-    if (edge.vertexBlockId === null) continue;
-    const values = decisionEdgesByBlock.get(edge.vertexBlockId) ?? [];
-    values.push(edge.decisionEdgeKey);
-    decisionEdgesByBlock.set(edge.vertexBlockId, values);
-  }
-  const denseEdgesByBlock = new Map<number, DenseEdge[]>();
-  for (const edge of edges) {
-    const blockId = blockByPhysical.get(edge.physicalEdgeKey)?.blockId;
-    if (blockId === undefined) continue;
-    const values = denseEdgesByBlock.get(blockId) ?? [];
-    values.push(edge);
-    denseEdgesByBlock.set(blockId, values);
-  }
-  const blocks: TopologyProfileBuild["blocks"] = decomposition.blocks.map((block) => {
-    const blockPhysical = block.edgeKeys.map((key) => physicalByKey.get(key)!);
-    const decisionEdgeKeys = [...(decisionEdgesByBlock.get(block.blockId) ?? [])].sort((a, b) => a - b);
-    const blockDenseEdges = denseEdgesByBlock.get(block.blockId) ?? [];
-    const elevations = blockDenseEdges.map(({ maxElevationM }) => maxElevationM).filter((value): value is number => value !== null);
-    const elevationExtrema = topologyExtrema(elevations);
-    const trailNames = [...new Set(blockDenseEdges.flatMap(({ flags }) => flags.filter((flag) => flag.startsWith("trail-name:")).map((flag) => flag.slice(11))))].sort();
-    const total = blockPhysical.reduce((sum, edge) => sum + edge.lengthM, 0);
-    return {
-      blockId: block.blockId,
-      networkId: connected[block.nodeKeys[0]!]!,
-      blockKind: block.cycleRank > 0 ? "vertex-cycle" as const : "bridge" as const,
-      nodeCount: block.nodeKeys.length,
-      edgeCount: block.edgeKeys.length,
-      cycleRank: block.cycleRank,
-      totalPhysicalLengthM: total,
-      minimumCycleLengthM: block.cycleRank === 1 ? total : null,
-      elevationSummary: canonicalTopologyJson({
-        minimumElevationMeters: elevationExtrema?.minimum ?? null,
-        maximumElevationMeters: elevationExtrema?.maximum ?? null,
-      }),
-      trailSummary: canonicalTopologyJson(trailNames),
-      decisionNodeIds: decisionNodeIdsForBlock(block), decisionEdgeKeys,
-    };
-  });
-  const blockLinks: TopologyProfileBuild["blockLinks"] = [];
-  const blocksByNode = new Map<number, typeof blocks>();
-  for (const block of decomposition.blocks) {
-    const persisted = blocks[block.blockId - 1]!;
-    for (const nodeKey of block.nodeKeys) blocksByNode.set(nodeKey, [...(blocksByNode.get(nodeKey) ?? []), persisted]);
-  }
-  for (const nodeKey of [...decomposition.articulations].sort((a, b) => a - b)) {
-    const touching = blocksByNode.get(nodeKey) ?? [];
-    for (let left = 0; left < touching.length; left += 1) for (let right = left + 1; right < touching.length; right += 1) {
-      blockLinks.push({
-        networkId: connected[nodeKey]!, fromBlockId: touching[left]!.blockId, toBlockId: touching[right]!.blockId,
-        articulationDecisionNodeId: decisionIdByNode.get(nodeKey)!, connectorDistanceM: 0,
-      });
-    }
-  }
-
-  const cyclePortalNodeKeys = new Set<number>();
-  for (const block of decomposition.blocks.filter(({ cycleRank }) => cycleRank > 0)) {
-    for (const nodeKey of block.nodeKeys) if (decisionIdByNode.has(nodeKey) && cyclicScc.has(scc[nodeKey]!)) cyclePortalNodeKeys.add(nodeKey);
-  }
-  // Reverse multi-source Dijkstra computes exact directed distance/path to a valid cycle portal.
-  const incoming = Array.from({ length: nodes.length + 1 }, () => [] as DenseEdge[]);
-  edges.forEach((edge) => incoming[edge.to]!.push(edge));
-  incoming.forEach((items) => items.sort((a, b) => a.edgeKey - b.edgeKey));
-  const distance = Array(nodes.length + 1).fill(Number.POSITIVE_INFINITY) as number[];
-  const nextEdge = Array(nodes.length + 1).fill(0) as number[];
-  const portal = Array(nodes.length + 1).fill(0) as number[];
+  const scc = stronglyConnectedComponents(nodeKeys.size, edges);
+  const network = new Map<number, number>();
+  for (let node = 1; node <= nodeKeys.size; node += 1) if (!network.has(scc[node]!)) network.set(scc[node]!, node);
+  const seeds = cycleNodes(nodeKeys.size, physical.filter((edge) => scc[edge.fromNodeKey] === scc[edge.toNodeKey]));
+  const incoming = Array.from({ length: nodeKeys.size + 1 }, () => [] as DenseEdge[]);
+  for (const edge of edges) if (scc[edge.from] === scc[edge.to]) incoming[edge.to]!.push(edge);
+  const distance = Array(nodeKeys.size + 1).fill(Number.POSITIVE_INFINITY) as number[];
+  const portal = Array(nodeKeys.size + 1).fill(0) as number[];
+  const nextEdge = new Map<number, DenseEdge>();
+  const settled = new Uint8Array(nodeKeys.size + 1);
   const heap: Array<{ distance: number; node: number; portal: number }> = [];
   const less = (a: typeof heap[number], b: typeof heap[number]) => a.distance < b.distance
     || (a.distance === b.distance && (a.portal < b.portal || (a.portal === b.portal && a.node < b.node)));
@@ -471,92 +142,47 @@ function buildProfile(
     }
     return first;
   };
-  for (const nodeKey of [...cyclePortalNodeKeys].sort((a, b) => a - b)) { distance[nodeKey] = 0; portal[nodeKey] = nodeKey; push({ distance: 0, node: nodeKey, portal: nodeKey }); }
+  for (const node of seeds) { distance[node] = 0; portal[node] = node; push({ distance: 0, node, portal: node }); }
   while (heap.length) {
     const current = pop();
-    if (current.distance !== distance[current.node] || current.portal !== portal[current.node]) continue;
+    if (settled[current.node] || current.distance !== distance[current.node] || current.portal !== portal[current.node]) continue;
+    settled[current.node] = 1;
     for (const edge of incoming[current.node]!) {
-      if (scc[edge.from] !== scc[current.node]) continue;
+      // Point only toward settled nodes, so even zero-length ties cannot form connector cycles.
+      if (settled[edge.from]) continue;
       const candidate = current.distance + edge.lengthM;
-      if (candidate < distance[edge.from] || (candidate === distance[edge.from] && current.portal < portal[edge.from])) {
-        distance[edge.from] = candidate; portal[edge.from] = current.portal; nextEdge[edge.from] = edge.edgeKey;
+      if (candidate < distance[edge.from]! || (candidate === distance[edge.from] && current.portal < portal[edge.from]!)) {
+        distance[edge.from] = candidate; portal[edge.from] = current.portal; nextEdge.set(edge.from, edge);
         push({ distance: candidate, node: edge.from, portal: current.portal });
       }
     }
   }
-  const accessTopology = [...accessPoints].sort((a, b) => a.id.localeCompare(b.id)).map((point) => {
-    const nodeKey = nodeKeyById.get(point.nodeId) ?? 0;
-    const canReachCycle = nodeKey > 0 && cyclicScc.has(scc[nodeKey]!) && Number.isFinite(distance[nodeKey]!);
-    const connectorEdgeKeys: number[] = [];
+  const accessTopology: TopologyProfileBuild["accessTopology"] = [...accessPoints].sort((a, b) => a.id.localeCompare(b.id)).map((point) => {
+    const node = nodeKeys.get(point.nodeId)!;
+    const canReachCycle = Number.isFinite(distance[node]);
+    const directedEdgeIds: string[] = [];
     if (canReachCycle) {
-      let current = nodeKey;
-      const seen = new Set<number>();
-      while (current !== portal[nodeKey]) {
-        const edgeKey = nextEdge[current]!;
-        if (!edgeKey || seen.has(edgeKey)) throw new Error(`Invalid ${profile} cycle connector for ${point.id}`);
-        seen.add(edgeKey); connectorEdgeKeys.push(edgeKey); current = edgeByKey.get(edgeKey)!.to;
+      let current = node;
+      while (current !== portal[node]) {
+        const edge = nextEdge.get(current);
+        if (!edge || directedEdgeIds.length >= nodeKeys.size) throw new Error(`Invalid ${profile} cycle connector for ${point.id}`);
+        directedEdgeIds.push(edge.id); current = edge.to;
       }
     }
-    const compressed = connectorEdgeKeys.map((key) => originalToDecision.get(key)!).filter((key, index, values) => index === 0 || values[index - 1] !== key);
     return {
-      accessPointId: point.id,
-      attachmentDecisionNodeId: decisionIdByNode.get(nodeKey)!,
-      cycleNetworkId: canReachCycle ? connected[nodeKey]! : null,
-      connectorKey: canReachCycle ? topologySha256(compressed) : null,
-      connectorDecisionEdgeIds: compressed,
-      portalDecisionNodeId: canReachCycle ? decisionIdByNode.get(portal[nodeKey]!)! : null,
-      minimumStemDistanceM: canReachCycle ? distance[nodeKey]! : null,
-      canReachCycle,
+      accessPointId: point.id, attachmentDecisionNodeId: node,
+      cycleNetworkId: canReachCycle ? network.get(scc[node]!)! : null,
+      connectorKey: canReachCycle ? topologySha256({ algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, directedEdgeIds }) : null,
+      connectorDecisionEdgeIds: [], portalDecisionNodeId: canReachCycle ? portal[node]! : null,
+      minimumStemDistanceM: canReachCycle ? distance[node]! : null, canReachCycle,
     };
   });
-  const topologyNodes = nodes.map((node, index) => {
-    const key = index + 1;
-    const feasible = cyclicScc.has(scc[key]!) && Number.isFinite(distance[key]!);
-    return {
-      denseId: key, sourceNodeId: node.id, decisionNodeId: decisionIdByNode.get(key) ?? null,
-      connectedComponentId: connected[key]!, directedSccId: scc[key]!, twoEdgeComponentId: decomposition.twoEdge[key]!,
-      isArticulation: decomposition.articulations.has(key), nearestCycleNetworkId: feasible ? connected[key]! : null,
-      cyclePortalDecisionNodeId: feasible ? decisionIdByNode.get(portal[key]!)! : null,
-      minimumStemDistanceM: feasible ? distance[key]! : null,
-    };
-  });
-  const cyclicNetworks = [...new Set(accessTopology.filter(({ canReachCycle }) => canReachCycle).map(({ cycleNetworkId }) => cycleNetworkId!))].sort((a, b) => a - b);
-  const decisionEdgesByNetwork = new Map<number, typeof decisionEdges>();
-  decisionEdges.forEach((edge) => decisionEdgesByNetwork.set(edge.networkId, [...(decisionEdgesByNetwork.get(edge.networkId) ?? []), edge]));
-  const blocksByNetwork = new Map<number, typeof blocks>();
-  blocks.forEach((block) => blocksByNetwork.set(block.networkId, [...(blocksByNetwork.get(block.networkId) ?? []), block]));
-  const linksByNetwork = new Map<number, typeof blockLinks>();
-  blockLinks.forEach((link) => linksByNetwork.set(link.networkId, [...(linksByNetwork.get(link.networkId) ?? []), link]));
-  const networks: TopologyProfileBuild["networks"] = cyclicNetworks.map((networkId) => {
-    const networkEdges = decisionEdgesByNetwork.get(networkId) ?? [];
-    const networkBlocks = blocksByNetwork.get(networkId) ?? [];
-    const decisionIds = new Set(networkEdges.flatMap((edge) => [edge.fromDecisionNodeId, edge.toDecisionNodeId]));
-    const cycles = networkBlocks.filter(({ cycleRank }) => cycleRank > 0);
-    const cycleLengths = cycles.map(({ minimumCycleLengthM }) => minimumCycleLengthM).filter((value): value is number => value !== null);
-    const elevations = networkEdges.flatMap(({ metricsAndFlags }) => {
-      const value = JSON.parse(metricsAndFlags) as { maximumElevationMeters: number | null }; return value.maximumElevationMeters === null ? [] : [value.maximumElevationMeters];
-    });
-    const cycleLengthExtrema = topologyExtrema(cycleLengths);
-    const elevationExtrema = topologyExtrema(elevations);
-    const content = {
-      networkId, decisionNodeIds: [...decisionIds].sort((a, b) => a - b), decisionEdges: networkEdges,
-      blocks: networkBlocks, blockLinks: linksByNetwork.get(networkId) ?? [],
-    };
-    return {
-      networkId, decisionNodeCount: decisionIds.size, decisionEdgeCount: networkEdges.length, cycleBlockCount: cycles.length,
-      minimumCycleLengthM: cycleLengthExtrema?.minimum ?? null,
-      maximumCycleLengthM: cycleLengthExtrema?.maximum ?? null,
-      minimumElevationM: elevationExtrema?.minimum ?? null,
-      maximumElevationM: elevationExtrema?.maximum ?? null,
-      contentHash: topologySha256(content),
-    };
-  });
-  const withoutHash: Omit<TopologyProfileBuild, "contentHash"> = {
-    profile, formatVersion: CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION, nodeCount: nodes.length,
-    physicalEdgeCount: physical.length, decisionNodeCount: retainedKeys.length, decisionEdgeCount: decisionEdges.length,
-    builtAt, nodes: topologyNodes, decisionEdges, blocks, blockLinks, networks, accessTopology,
-  };
-  return { ...withoutHash, contentHash: topologySha256(profileHashInput(withoutHash)) };
+  const content = {
+    profile, formatVersion: CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION,
+    nodeCount: 0, physicalEdgeCount: physical.length, decisionNodeCount: 0, decisionEdgeCount: 0,
+    nodes: [], decisionEdges: [], blocks: [], blockLinks: [], networks: [], accessTopology,
+  } satisfies Omit<TopologyProfileBuild, "contentHash" | "builtAt">;
+  return { ...content, builtAt, contentHash: topologySha256(content) };
 }
 
 export function buildClosedRouteTopology(
@@ -572,12 +198,16 @@ export function buildClosedRouteTopology(
   const nodes = [...nodesInput].sort((a, b) => a.id.localeCompare(b.id));
   const nodeKeys = new Map(nodes.map((node, index) => [node.id, index + 1]));
   if (nodeKeys.size !== nodes.length) throw new Error("Closed-route topology requires unique stable node IDs");
+  for (const point of accessPoints) {
+    if (!nodeKeys.has(point.nodeId)) throw new Error(`Access point ${point.id} references an unknown node`);
+  }
   const sortedEdges = [...edgesInput].sort((a, b) => a.id.localeCompare(b.id));
   const edgeKeys = new Map(sortedEdges.map((edge, index) => [edge.id, index + 1]));
   if (edgeKeys.size !== sortedEdges.length) throw new Error("Closed-route topology requires unique stable directed edge IDs");
   const byPhysicalId = new Map<string, CompiledEdge[]>();
   for (const edge of sortedEdges) {
     if (!nodeKeys.has(edge.fromNode) || !nodeKeys.has(edge.toNode)) throw new Error(`Edge ${edge.id} references an unknown node`);
+    if (!Number.isFinite(edge.lengthM) || edge.lengthM < 0) throw new Error(`Edge ${edge.id} requires a finite nonnegative length`);
     byPhysicalId.set(edge.stablePhysicalId, [...(byPhysicalId.get(edge.stablePhysicalId) ?? []), edge]);
   }
   const stablePhysicalIds = [...byPhysicalId.keys()].sort();
@@ -595,17 +225,15 @@ export function buildClosedRouteTopology(
     })) throw new Error(`Physical edge ${stablePhysicalId} has inconsistent geometry`);
     return {
       physicalEdgeKey: index + 1, stablePhysicalId, fromNodeKey: keys[0]!, toNodeKey: keys.at(-1)!, geometryHash: firstHash,
-      lengthM: members[0]!.lengthM, stableEdgeIds: members.map(({ id }) => id).sort(),
     };
   });
-  const denseEdges: DenseEdge[] = sortedEdges.map((edge, index) => ({
-    ...edge, edgeKey: index + 1, from: nodeKeys.get(edge.fromNode)!, to: nodeKeys.get(edge.toNode)!,
+  const denseEdges: DenseEdge[] = sortedEdges.map((edge) => ({
+    ...edge, from: nodeKeys.get(edge.fromNode)!, to: nodeKeys.get(edge.toNode)!,
     physicalEdgeKey: physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!,
   }));
-  const known = buildProfile("known", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, 0);
-  const inclusive = buildProfile("inclusive", nodes, denseEdges, physicalEdges, accessPoints, options.builtAt, known.decisionEdgeCount);
+  const profiles = (["known", "inclusive"] as const).map((profile) =>
+    buildProfile(profile, nodeKeys, denseEdges, physicalEdges, accessPoints, options.builtAt));
   const runtimeMode = "reachable-graph-fallback";
-  const profiles = [compactFallbackProfile(known), compactFallbackProfile(inclusive)];
   const contentHash = topologySha256({
     runtimeMode, algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion,
     profiles: profiles.map(({ profile, contentHash }) => ({ profile, contentHash })),
@@ -614,13 +242,7 @@ export function buildClosedRouteTopology(
     runtimeMode, algorithmVersion: options.algorithmVersion, policyVersion: options.policyVersion, contentHash,
     nodeKeys,
     edgeKeys,
-    physicalEdges: physicalEdges.map((edge) => ({
-      physicalEdgeKey: edge.physicalEdgeKey,
-      stablePhysicalId: edge.stablePhysicalId,
-      fromNodeKey: edge.fromNodeKey,
-      toNodeKey: edge.toNodeKey,
-      geometryHash: edge.geometryHash,
-    })),
+    physicalEdges,
     physicalEdgeKeysByStableId, profiles,
   };
 }
