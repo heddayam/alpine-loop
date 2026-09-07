@@ -37,9 +37,8 @@ application.
 - Route count is chosen by the user from 1 through 20 and defaults to 10.
 - The active app is standard local Next.js plus MapLibre. Do not restore Sites,
   ChatGPT/OpenAI hosting, Cloudflare Workers, D1, R2, vinext, or Vite hosting.
-- Pre-rebuild source is preserved by the `archive/pre-redo-*` tags. `legacy/`
-  contains only a pointer and remains excluded from the active build and
-  TypeScript configuration.
+- Pre-rebuild source is preserved by the `archive/pre-redo-*` tags. Keep legacy
+  source excluded from the active build and TypeScript configuration.
 
 ## Git hygiene
 

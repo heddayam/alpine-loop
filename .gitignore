@@ -3,6 +3,7 @@ node_modules/
 .venv/
 .next/
 .next-playwright/
+next-env.d.ts
 out/
 coverage/
 playwright-report/

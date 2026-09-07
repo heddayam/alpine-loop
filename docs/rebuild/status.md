@@ -6,6 +6,25 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — reviewed every root file and removed generated
+  `next-env.d.ts` from Git and the Docker build context. Type checking now
+  generates Next.js declarations first. The browser runner preserves only
+  `tsconfig.json` and can start without the generated declaration file.
+  Removed local `.DS_Store` metadata and corrected the stale legacy-folder
+  note in `AGENTS.md`. The remaining root files have active uses:
+  `package.json` and `package-lock.json` define commands and dependencies,
+  `next.config.ts` and `tsconfig.json` configure the app and types,
+  `eslint.config.mjs` and `vitest.config.ts` configure checks,
+  `Dockerfile`, `compose.yaml`, and `.dockerignore` support Docker,
+  `.env.example` and `.gitignore` support local setup and data exclusions,
+  `README.md` and `AGENTS.md` document usage and development rules, and
+  `skills-lock.json` records the installed project skills. Local `.env` and
+  the ignored TypeScript build cache remain useful and are retained.
+  Two `npm run verify` passes each passed 444 tests across 79 files, lint,
+  types, and the production build. Two browser passes each passed all seven
+  offline flows. A separate fresh source copy passed type checking with no
+  preexisting `next-env.d.ts` or `.next` directory. Final diff checks pass.
+
 - [x] 2026-09-07 — consolidated recent work onto `main` without rewriting
   history. Every local and remote feature branch was already included in the
   current work. Committed the README cleanup, legacy-note removal, and project
