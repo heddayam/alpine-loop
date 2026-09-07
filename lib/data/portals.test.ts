@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NormalizedAccessEvidence } from "./adapters";
 import {
   applyOfficialEntranceOverlay,
+  applyOfficialEntranceOverlayWithReport,
   deriveTrailheadPortals,
   PORTAL_CLUSTER_DISTANCE_M,
   PORTAL_DERIVATION_VERSION,
@@ -356,4 +357,60 @@ describe("official entrance overlay", () => {
       { id: "portal:b", name: "B" },
     ]);
   });
+  it("reports matches independently of changes, preserves inputs, and merges multiple sources once", () => {
+    const nodes = [node("a", 0), node("b", 1_000)];
+    const input = topology(nodes, []);
+    const portal = { ...input.accessPoints[0]!, kind: "trailhead" as const };
+    input.accessPoints = [
+      { ...portal, id: "portal:a", nodeId: "a", name: "Known Entrance", confidence: "high", sourceRefs: ["official-entrances", "osm"] },
+      { ...portal, id: "portal:b", nodeId: "b", name: "Unnamed Entrance" },
+    ];
+    const records = [
+      official("far-z", 2_000, "Out of Range"),
+      official("known", 0, "Known Entrance"),
+      official("known", 0, "Known Entrance"),
+      { ...official("b-farther", 1_020, "Farther Name"), sourceId: "another-source" },
+      { ...official("b-near", 1_001, "Nearest Name"), confidence: "low" as const },
+      official("far-a", 3_000, "Also Out of Range"),
+    ];
+    const original = structuredClone({ input, records });
+
+    const result = applyOfficialEntranceOverlayWithReport(input, records);
+
+    expect(result.report).toEqual({
+      inputCount: 6,
+      matchedEvidenceCount: 4,
+      unmatchedExternalIds: ["far-a", "far-z"],
+      matchedPortalCount: 2,
+      changedPortalCount: 1,
+    });
+    expect(result.topology.accessPoints).toEqual([
+      input.accessPoints[0],
+      {
+        ...input.accessPoints[1],
+        name: "Nearest Name",
+        confidence: "high",
+        sourceRefs: ["another-source", "official-entrances", "osm"],
+      },
+    ]);
+    expect(result.topology).toEqual(applyOfficialEntranceOverlay(input, records));
+    expect(applyOfficialEntranceOverlayWithReport(input, [...records].reverse())).toEqual(result);
+    expect({ input, records }).toEqual(original);
+    expect(applyOfficialEntranceOverlayWithReport(result.topology, records).report).toEqual({
+      ...result.report, changedPortalCount: 0,
+    });
+  });
+
+  it("reports empty inputs and never matches entrance evidence to non-trailhead access points", () => {
+    const input = topology([node("parking", 0)], []);
+    expect(applyOfficialEntranceOverlayWithReport(input, []).report).toEqual({
+      inputCount: 0, matchedEvidenceCount: 0, unmatchedExternalIds: [], matchedPortalCount: 0, changedPortalCount: 0,
+    });
+    const result = applyOfficialEntranceOverlayWithReport(input, [official("parking", 0, "Entrance")]);
+    expect(result.report).toEqual({
+      inputCount: 1, matchedEvidenceCount: 0, unmatchedExternalIds: ["parking"], matchedPortalCount: 0, changedPortalCount: 0,
+    });
+    expect(result.topology).toEqual(input);
+  });
+
 });

@@ -476,6 +476,23 @@ export function applyOfficialEntranceOverlay(
   topology: NormalizedTopology,
   evidence: readonly NormalizedAccessEvidence[],
 ): NormalizedTopology {
+  return applyOfficialEntranceOverlayWithReport(topology, evidence).topology;
+}
+
+/** Reports actual assignments, including records already represented on a portal. */
+export function applyOfficialEntranceOverlayWithReport(
+  topology: NormalizedTopology,
+  evidence: readonly NormalizedAccessEvidence[],
+): {
+  topology: NormalizedTopology;
+  report: {
+    inputCount: number;
+    matchedEvidenceCount: number;
+    unmatchedExternalIds: string[];
+    matchedPortalCount: number;
+    changedPortalCount: number;
+  };
+} {
   const portals = topology.accessPoints.filter(({ kind }) => kind === "trailhead");
   const nodesById = new Map(topology.nodes.map((node) => [node.id, node]));
   const portalGrid = new SpatialGrid<NormalizedAccessPoint>(PORTAL_EVIDENCE_DISTANCE_M);
@@ -486,6 +503,7 @@ export function applyOfficialEntranceOverlay(
   }
 
   const assignments = new Map<string, OfficialAssignment[]>();
+  const unmatchedExternalIds: string[] = [];
   for (const item of [...evidence].sort((first, second) =>
     first.sourceId.localeCompare(second.sourceId) || first.externalId.localeCompare(second.externalId))) {
     if (!Number.isFinite(item.lon) || !Number.isFinite(item.lat)) {
@@ -493,13 +511,17 @@ export function applyOfficialEntranceOverlay(
     }
     const nearest = portalGrid.within([item.lon, item.lat], PORTAL_EVIDENCE_DISTANCE_M)
       .sort((first, second) => first.distanceM - second.distanceM || first.value.id.localeCompare(second.value.id))[0];
-    if (!nearest) continue;
+    if (!nearest) {
+      unmatchedExternalIds.push(item.externalId);
+      continue;
+    }
     const existing = assignments.get(nearest.value.id);
     const assignment = { evidence: item, distanceM: nearest.distanceM };
     if (existing) existing.push(assignment);
     else assignments.set(nearest.value.id, [assignment]);
   }
 
+  let changedPortalCount = 0;
   const accessPoints = topology.accessPoints.map((portal) => {
     const assigned = assignments.get(portal.id);
     if (!assigned || assigned.length === 0) return portal;
@@ -511,12 +533,22 @@ export function applyOfficialEntranceOverlay(
     const bestConfidence = ordered.map(({ evidence: item }) => item.confidence)
       .sort((first, second) => confidenceScore(second) - confidenceScore(first))[0]!;
     const confidence = confidenceScore(bestConfidence) > confidenceScore(portal.confidence) ? bestConfidence : portal.confidence;
-    return {
-      ...portal,
-      name: best.name,
-      confidence,
-      sourceRefs: [...new Set([...portal.sourceRefs, ...ordered.map(({ evidence: item }) => item.sourceId)])].sort(),
-    };
+    const sourceRefs = [...new Set([...portal.sourceRefs, ...ordered.map(({ evidence: item }) => item.sourceId)])].sort();
+    if (portal.name !== best.name || portal.confidence !== confidence
+      || portal.sourceRefs.length !== sourceRefs.length
+      || portal.sourceRefs.some((sourceId, index) => sourceId !== sourceRefs[index])) {
+      changedPortalCount += 1;
+    }
+    return { ...portal, name: best.name, confidence, sourceRefs };
   });
-  return { ...topology, accessPoints };
+  return {
+    topology: { ...topology, accessPoints },
+    report: {
+      inputCount: evidence.length,
+      matchedEvidenceCount: evidence.length - unmatchedExternalIds.length,
+      unmatchedExternalIds,
+      matchedPortalCount: assignments.size,
+      changedPortalCount,
+    },
+  };
 }
