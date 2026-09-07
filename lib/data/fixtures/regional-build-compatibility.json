@@ -1,0 +1,166 @@
+{
+  "santa-cruz-mountains": {
+    "dataVersion": "scm-ec11b99b6c3d77eb",
+    "seedHash": "29c5bdb74ffb560f554abf87e8c8d201fc7ce94b3b31f3d0444ac927b1787a7e",
+    "topologyHash": "5d97ec74f9c08657089c528c3d7f784dfc44d80c522d458001596122163d5324",
+    "accessPoints": [
+      {
+        "id": "portal:0-start",
+        "externalId": "node/1",
+        "nodeId": "0-start",
+        "name": "Fixture trail trailhead",
+        "kind": "trailhead",
+        "accessState": "closed",
+        "confidence": "low",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-norcal-osm",
+          "santa-cruz-reviewed-access-restrictions"
+        ],
+        "reachableTrailKm": 0.3547496358090111,
+        "trailComponentId": "trail-component:0-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      }
+    ],
+    "inputsHash": "b1ad6a68001b283ec01231a47ad549539edba5cb6bade5de443b415ac15624eb"
+  },
+  "southern-east-bay": {
+    "dataVersion": "seb-5811a438a983dc77",
+    "seedHash": "b261a5d98bea1eeaa11b037933f8efa41a3c3b6c9866dfb73db886452872d1a7",
+    "topologyHash": "b36ad8ec4c627e3db61edfa64a779c2441ce977ebca17881e11dc9ac7d4cd097",
+    "accessPoints": [
+      {
+        "id": "portal:0-start",
+        "externalId": "node/1",
+        "nodeId": "0-start",
+        "name": "Reviewed fixture entrance",
+        "kind": "trailhead",
+        "accessState": "closed",
+        "confidence": "high",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "ebrpd-park-entrances",
+          "ebrpd-reviewed-access-removals-2026-08-07",
+          "geofabrik-norcal-osm"
+        ],
+        "reachableTrailKm": 0.3523260361276925,
+        "trailComponentId": "trail-component:0-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      },
+      {
+        "id": "portal:1-start",
+        "externalId": "node/4",
+        "nodeId": "1-start",
+        "name": "Fixture trail trailhead",
+        "kind": "trailhead",
+        "accessState": "unknown",
+        "confidence": "low",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-norcal-osm"
+        ],
+        "reachableTrailKm": 0.3527790903286372,
+        "trailComponentId": "trail-component:1-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      },
+      {
+        "id": "portal:2-start",
+        "externalId": "node/7",
+        "nodeId": "2-start",
+        "name": "Fixture trail trailhead",
+        "kind": "trailhead",
+        "accessState": "unknown",
+        "confidence": "low",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-norcal-osm"
+        ],
+        "reachableTrailKm": 0.35246535088494374,
+        "trailComponentId": "trail-component:2-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      }
+    ],
+    "inputsHash": "b3a5d94825f764c820d4c883c6b6f252e169afd53958cf6afee957d496caecae"
+  },
+  "monterey-carmel": {
+    "dataVersion": "mc-8cef6eb3577417f9",
+    "seedHash": "168b4aa553bab42c305751f14ba62894721c2094863267c612a1494e165c2ccc",
+    "topologyHash": "278f754c13d80f551ca1c25a9e3313c5a0d4093276cfd5504fab8aaf99f04a4d",
+    "accessPoints": [
+      {
+        "id": "portal:0-start",
+        "externalId": "node/1",
+        "nodeId": "0-start",
+        "name": "Palo Corona Rancho Canada entrance",
+        "kind": "trailhead",
+        "accessState": "closed",
+        "confidence": "medium",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-norcal-osm",
+          "monterey-carmel-curated-access-restrictions-2026-08-07",
+          "monterey-carmel-reviewed-official-access-2026-08-07"
+        ],
+        "reachableTrailKm": 0.35736123255214897,
+        "trailComponentId": "trail-component:0-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      }
+    ],
+    "inputsHash": "a3b5a697c1e9bce7c22069abc74f1ff3a0cbac8cb826b72a6ec9e15b69fc7880"
+  },
+  "henry-coe": {
+    "dataVersion": "hc-122f65c99a783d47",
+    "seedHash": "337d50bf7805fb128d789eda0fefd74ff3984aa455b075e12b65f5f90cc6947a",
+    "topologyHash": "b596148331b78bb1ed56574fe767ead9dfb4c988be8e9a4df793ef4e263e50c1",
+    "accessPoints": [
+      {
+        "id": "portal:0-start",
+        "externalId": "node/1",
+        "nodeId": "0-start",
+        "name": "Fixture trail trailhead",
+        "kind": "trailhead",
+        "accessState": "unknown",
+        "confidence": "low",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-norcal-osm"
+        ],
+        "reachableTrailKm": 0.35433786618963525,
+        "trailComponentId": "trail-component:0-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      }
+    ],
+    "inputsHash": "86957f1effa8dc5d5a271edd21452d8941b7202ab85a1c2a7fd9ff9a51f69949"
+  },
+  "central-cascades": {
+    "dataVersion": "cc-49a60eb42d53aee5",
+    "seedHash": "3449a1b35f5c00d8d98f2c702bd708e6b5bfcafb69486949efc98317c895db53",
+    "topologyHash": "4493b4e0e9c3087ec118c3a62cafd7e18c8501760f32610d00f6a1739bd9a32e",
+    "accessPoints": [
+      {
+        "id": "portal:0-start",
+        "externalId": "node/1",
+        "nodeId": "0-start",
+        "name": "Fixture trail trailhead",
+        "kind": "trailhead",
+        "accessState": "unknown",
+        "confidence": "low",
+        "parkingEvidence": null,
+        "sourceRefs": [
+          "geofabrik-washington-osm"
+        ],
+        "reachableTrailKm": 0.2990756355938123,
+        "trailComponentId": "trail-component:0-end",
+        "portalRoadClass": "street",
+        "parkingDistanceM": null
+      }
+    ],
+    "inputsHash": "4daf71bad70682639978f49b66a7b5f4b9d24a1baa645202b33e6494788dfca3"
+  }
+}
