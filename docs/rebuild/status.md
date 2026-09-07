@@ -6,6 +6,20 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — whole-repository architecture review and improvements,
+  documented in [architecture-review.md](architecture-review.md). Six focused
+  changes simplify topology preparation, share artifact/route identity rules,
+  remove unused elevation and solver code, bound request reading, and repair
+  dialog focus through one shared owner. Relative to `aaae59f`, application
+  source is 240 lines smaller; tests/helpers add 130 lines, for 110 fewer lines
+  combined. Two final `npm run verify` runs each pass 394 offline tests across
+  76 files, lint, types, and production build; two `npm run test:browser` runs
+  each pass all six flows. The fixture manifest and 126 rows across 32 tables
+  are unchanged; six deterministic solver responses are byte-identical and all
+  five installed packs validate. Live desktop/mobile map, saved results,
+  internal scrolling, and dialog keyboard checks pass. Implementation is
+  integrated through `6a14e84`; temporary worktrees/branches are removed.
+
 The full revision is tracked in [system-design.md](system-design.md). All original
 rebuild gates below are historical completions, not acceptance of the new goal.
 The revision starts from `810e44c` and is complete through `b097b6d` on
