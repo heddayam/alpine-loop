@@ -6,6 +6,11 @@ the evidence line.
 
 ## Active system design revision
 
+- [ ] Regional pack consolidation — move all five builders onto one fixed
+  preparation and publication process, preserve regional restrictions and
+  acceptance checks, freeze pre-change build identities/graphs, and document
+  region onboarding. Baseline: `dff1b43`; verification evidence pending.
+
 - [x] 2026-09-06 — whole-repository architecture review and improvements,
   documented in [architecture-review.md](architecture-review.md). Six focused
   changes simplify topology preparation, share artifact/route identity rules,
