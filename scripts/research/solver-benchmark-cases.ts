@@ -78,6 +78,22 @@ export function fixtureCases(root: string): BenchmarkCase[] {
     { ...eight, id: "fixture/single-cycle", request: request({ ...eight.request,
       closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: false } }) },
   );
+  for (const connector of [0, 1_000]) {
+    const hub = connector ? "p" : "s";
+    const physical = [
+      { from: "s", to: "a", lengthMeters: 1_000 },
+      { from: "a", to: "b", lengthMeters: 1_000 },
+      { from: "b", to: "s", lengthMeters: 1_000 },
+      ...(connector ? [{ from: "s", to: hub, lengthMeters: connector }] : []),
+      { from: hub, to: "x", lengthMeters: 200 },
+      { from: "x", to: "y", lengthMeters: 200 },
+      { from: "y", to: hub, lengthMeters: 200 },
+    ].map((edge, index) => ({ ...edge, id: `trail-${index}`, directions: "both" }));
+    const target = 3_600 + 2 * connector;
+    cases.push({ id: `fixture/tiny-side-loop-${connector ? "connector" : "direct"}`,
+      ...makeGraph(["s", "a", "b", ...(connector ? ["p"] : []), "x", "y"], physical, "s"),
+      request: request({ distanceMiles: { min: (target - 100) / 1609.344, max: (target + 100) / 1609.344 }, limit: 1 }) });
+  }
   for (const width of [8, 20]) {
     const ids = Array.from({ length: width * width }, (_, index) => `n${index}`);
     const edges: PhysicalEdge[] = [];
