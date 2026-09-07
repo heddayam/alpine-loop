@@ -10,14 +10,15 @@ The full revision is tracked in [system-design.md](system-design.md). All origin
 rebuild gates below are historical completions, not acceptance of the new goal.
 The revision starts from `810e44c` and remains incomplete.
 
-First integrated wave: `c663ef5`. Shared criteria, prepared engine sessions,
-shared compute execution, map update ownership, ordered preferences, and
-pre-activation auditing are implemented. Two final verification passes each
-pass 456 tests and the production build. Two browser passes each pass six flows.
-Application source is 96 lines smaller, tests/helpers 159 lines larger than the
-revision baseline. See the revision document for scope, live-check evidence,
-and remaining work. The next incomplete milestone is geographic application
-operations, which must remove frontend pack and provider-job orchestration.
+The geographic wave is integrated through `e9f722c`. Geographic search/map
+operations replace browser pack/provider orchestration; one Full job spans
+eligible data; viewed results and saved-work resources have single owners.
+Existing saved data migrated with fixture-backed rollback/preservation checks.
+Two final verification passes each pass 387 tests and production build, and two
+browser passes each pass six flows. Source is 1,999 lines smaller than baseline;
+tests/helpers are 1,755 lines smaller. See system-design.md for exact scope and
+live-check limitations. The next incomplete milestone is one supported graph
+representation and production-storage fixtures.
 
 - [x] Gate 0 — active app scaffold, shared contracts, fixture graph
   - Evidence: `npm ci` and `npm run verify` pass on Node 24.11.0; 14 boundary/fixture tests cover request, response, manifest, and all four fixture route shapes; Next.js 16.3.0 production build succeeds with `legacy/**` and generated data excluded.

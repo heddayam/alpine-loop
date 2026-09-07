@@ -184,8 +184,8 @@ implementation and expose an honest no-installed-data state.
 ## Execution and acceptance
 
 - [x] Shared domain criteria and preparation boundaries replace transport-shaped inputs.
-- [ ] Geographic application operations hide packs and provider jobs from the frontend.
-- [ ] Workspace, saved work, and preference state have one owner each.
+- [x] Geographic application operations hide packs and provider jobs from the frontend.
+- [x] Workspace, saved work, and preference state have one owner each.
 - [x] Map sources and hover have one explicit update path.
 - [x] Engine sessions reuse prepared starts without transport fabrication.
 - [ ] Artifacts are audited before activation and use one supported graph representation.
@@ -287,3 +287,40 @@ same operation. A complete migration deletes old frontend fanout, pack URLs,
 provider polling, fake result adapters, and obsolete endpoints. The map's Demo
 button is test scaffolding and will be removed in favor of real drawing in
 browser checks.
+
+## Geographic integration evidence, 2026-09-06
+
+Integrated through `e9f722c`. Relative to `810e44c`, application source is 1,999
+lines smaller (21,600 total), and tests/helpers are 1,755 lines smaller (9,287
+total). Superseded API and frontend-orchestration tests were removed with those
+paths. The remaining tests exercise the replacement behavior.
+
+- The browser sends one geographic Quick request or one retained Full intent.
+  Catalog and map queries use geography. Pack selection, URL reconciliation,
+  client fanout, public provider jobs, and the Demo button are removed.
+- One area resolver owns provider submission, polling, deadline, cancellation,
+  and completed-contour caching. One Full record pins all contributing data.
+- The workspace separates edited inputs from the viewed search snapshot. Search,
+  opening saved work, and paging share cancellation and stale-result rejection.
+  One jobs resource owns polling and mutations. Trail layers do not refresh
+  merely because results change.
+- SQLite migration preserves saved exact/close geometry, identities, ordinals,
+  timestamps, checkpoints, and cancellation/deletion precedence. Historical
+  schema fixtures test rollback and foreign-key integrity. The local database
+  was backed up before migration; all 12 existing jobs remain available.
+- Production SQLite/compute fixtures verify overlapping-data identities,
+  geometric deduplication, a global Quick count, one contour resolution,
+  no-data errors, cancellation, and start filtering without route clipping.
+
+Two final `npm run verify` passes each pass 387 tests across 75 files plus lint,
+TypeScript, and production build. Two browser passes each pass six offline
+flows using real pointer drawing. Logs are `/private/tmp/alpine-geographic-verify2.log`,
+`verify3.log`, `alpine-geographic-browser2.log`, and `browser3.log` (the latter
+short names share the same geographic prefix). Live localhost inspection opens
+seven preserved Henry Coe routes, keeps original criteria apart from the draft,
+and verifies zoom/pan, mobile internal scrolling, and no console errors. A real
+named-area Quick request returns HTTP 200 in 3,361 ms with explicit computation
+truncation and zero routes; this does not claim improved yield.
+
+The full revision remains incomplete. Next is one supported graph representation,
+production-storage fixtures, and removal of the remaining superseded surfaces.
