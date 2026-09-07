@@ -48,7 +48,9 @@ The map renders coverage, the active filter, eligible starts, and the loaded
 result page. Viewport queries own trail data updates. Hover and selection have
 one explicit path. Generated route geometry changes only with the route
 collection; emphasis uses filters, and segment geometry changes with its owner.
-Native count markers represent actual route starts. Clicking a marker filters
+Native trailhead markers use small location dots and rectangular quantity labels
+("1 route", "6 routes"), distinct from circular result route numbers. Clicking
+a dot or its label filters
 the current results page to that trailhead; clicking a route line opens that
 route. Overview results begin without a selected route. Temporary green previews
 render above subdued context with crisp light casing; orange is reserved for

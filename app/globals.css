@@ -440,7 +440,7 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .key-access { width: .6rem; height: .6rem; background: #173f35; border-radius: 50%; }
 .key-route { width: 1.2rem; border-top: 4px solid var(--route); }
 .key-route-candidate { width: 1.2rem; border-top: 3px solid var(--accent); }
-.key-start { width: .6rem; height: .6rem; background: var(--accent); border: 1px solid var(--ink-2); outline: 1px solid var(--surface); border-radius: 50%; }
+.key-start { width: 1.2rem; height: .7rem; background: var(--surface); border: 1px solid var(--line-3); }
 
 .map-hint {
   position: absolute;

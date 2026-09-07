@@ -289,7 +289,7 @@ describe("generated route map features", () => {
     expect(markup).toContain('Mapped trail');
     expect(markup).toContain('Available route');
     expect(markup).not.toContain('Selected route');
-    expect(markup).toContain('Route start');
+    expect(markup).toContain('Trailhead · number of routes');
     expect(markup).toContain('aria-label="OpenStreetMap attribution"');
   });
 });

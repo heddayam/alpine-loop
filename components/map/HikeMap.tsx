@@ -80,6 +80,7 @@ type HoveredAccessPoint = {
 
 const TRAIL_CLICK_PRIORITY_LAYERS = [
   "generated-starts",
+  "generated-start-counts",
   "generated-route-segment-hit-target",
   "generated-route-hit-target",
   "access-points",
@@ -615,18 +616,29 @@ export function HikeMap({
               "line-opacity-transition": { duration: 0 }, "line-width-transition": { duration: 0 } },
           });
         }
-        // Circles always render; only the count labels participate in native
-        // collision handling. Omitting glyphs uses MapLibre's local font renderer.
+        // A small dot anchors the start; a rectangular quantity label names its
+        // count explicitly, distinct from circular route-number badges.
+        const labelPixels = new Uint8Array(8 * 8 * 4);
+        for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+          labelPixels.set(x === 0 || x === 7 || y === 0 || y === 7
+            ? [154, 163, 157, 255] : [255, 255, 255, 255], (y * 8 + x) * 4);
+        }
+        map?.addImage("start-count-label", { width: 8, height: 8, data: labelPixels },
+          { stretchX: [[2, 6]], stretchY: [[2, 6]], content: [2, 2, 6, 6] });
         map?.addSource("generated-starts", { type: "geojson", data: EMPTY_POINTS });
         map?.addLayer({
           id: "generated-starts", type: "circle", source: "generated-starts",
-          paint: { "circle-radius": 10, "circle-color": ROUTE_ALTERNATE, "circle-stroke-color": ROUTE_CASING, "circle-stroke-width": 0,
+          paint: { "circle-radius": 4, "circle-color": ROUTE_ALTERNATE, "circle-stroke-color": ROUTE_CASING, "circle-stroke-width": 0,
             "circle-color-transition": { duration: 0 }, "circle-stroke-width-transition": { duration: 0 } },
         });
         map?.addLayer({
           id: "generated-start-counts", type: "symbol", source: "generated-starts",
-          layout: { "text-field": ["to-string", ["get", "count"]], "text-font": ["sans-serif"], "text-size": 11 },
-          paint: { "text-color": "#ffffff" },
+          layout: {
+            "text-field": ["concat", ["to-string", ["get", "count"]], ["case", ["==", ["get", "count"], 1], " route", " routes"]],
+            "text-font": ["sans-serif"], "text-size": 11, "text-offset": [0, -1.7],
+            "icon-image": "start-count-label", "icon-text-fit": "both", "icon-text-fit-padding": [3, 5, 3, 5],
+          },
+          paint: { "text-color": "#1e2724" },
         });
         let moving = false;
         let hoverOwner: "start" | "route" | "segment" | "trail" | "accessPoint" | undefined;
@@ -639,7 +651,7 @@ export function HikeMap({
           else canvas.style.removeProperty("cursor");
         };
         const startAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
-          map?.queryRenderedFeatures(point, { layers: ["generated-starts"] }).length,
+          map?.queryRenderedFeatures(point, { layers: ["generated-starts", "generated-start-counts"] }).length,
         );
         const routeSegmentAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
           interactionRef.current.selectedRouteId && map?.queryRenderedFeatures(point, { layers: ["generated-route-segment-hit-target"] }).length,
@@ -661,7 +673,7 @@ export function HikeMap({
           const id = (routeAtEvent(event, true) ?? routeAtEvent(event, false))?.properties?.id;
           if (typeof id === "string") onRouteSelectRef.current(id);
         });
-        onFeature("click", "generated-starts", (event) => {
+        for (const layer of ["generated-starts", "generated-start-counts"]) onFeature("click", layer, (event) => {
           const key = event.features?.[0]?.properties?.key;
           if (typeof key === "string") onStartSelectRef.current(key);
         });
@@ -675,13 +687,13 @@ export function HikeMap({
           syncInteractiveCursor();
         };
         clearMapHoverRef.current = () => claimHover(undefined);
-        onFeature("mousemove", "generated-starts", (event) => {
+        for (const layer of ["generated-starts", "generated-start-counts"]) onFeature("mousemove", layer, (event) => {
           const properties = event.features?.[0]?.properties;
           if (typeof properties?.key !== "string") return;
           claimHover("start");
           setHoveredAccessPoint({ id: properties.key, name: properties.name || "Unnamed trailhead", kindLabel: `${properties.count} ${properties.count === 1 ? "route" : "routes"}` });
         });
-        onFeature("mouseleave", "generated-starts", () => {
+        for (const layer of ["generated-starts", "generated-start-counts"]) onFeature("mouseleave", layer, () => {
           if (hoverOwner === "start") claimHover(undefined);
         });
         onFeature("mousemove", "generated-route-hit-target", (event) => {
@@ -1160,7 +1172,7 @@ export function HikeMap({
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route-candidate" aria-hidden="true" />Available route</span> : null}
           {selectedRouteId ? <span><i className="key-route" aria-hidden="true" />Selected route</span> : null}
-          {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start · route count</span> : null}
+          {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Trailhead · number of routes</span> : null}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>

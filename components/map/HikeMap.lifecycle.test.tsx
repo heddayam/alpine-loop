@@ -18,6 +18,7 @@ class RecordingMap {
   removed = false;
   constructor() { recording.maps.push(this); }
   addControl = vi.fn();
+  addImage = vi.fn();
   resize = vi.fn();
   dragPan = { enable: vi.fn(), disable: vi.fn() };
   addSource(id: string, options: { data: FeatureCollection }) {
@@ -132,8 +133,8 @@ describe("MapLibre workspace lifecycle", () => {
     const key = routeStart(first).key;
     expect(map.getSource("generated-starts")?.data.features.map(({ properties }) => properties?.count)).toEqual([2, 1]);
     expect(map.getLayer("generated-starts")).toMatchObject({ type: "circle", source: "generated-starts" });
-    expect(map.getLayer("generated-start-counts")).toMatchObject({ type: "symbol", layout: { "text-field": ["to-string", ["get", "count"]], "text-font": ["sans-serif"] } });
-    act(() => map.emit("click", { key }, "generated-starts"));
+    expect(map.getLayer("generated-start-counts")).toMatchObject({ type: "symbol", layout: { "text-field": ["concat", ["to-string", ["get", "count"]], ["case", ["==", ["get", "count"], 1], " route", " routes"]], "text-font": ["sans-serif"], "icon-text-fit": "both" } });
+    act(() => map.emit("click", { key }, "generated-start-counts"));
     act(() => map.emit("click", { id: shared.id, startKey: key }, "generated-route-hit-target"));
     expect(initial.onStartSelect).toHaveBeenCalledExactlyOnceWith(key);
     expect(initial.onRouteSelect).toHaveBeenCalledExactlyOnceWith(shared.id);

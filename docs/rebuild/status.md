@@ -6,6 +6,19 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — distinguished trailhead quantities from result identifiers.
+  Trailheads now use a small location dot with a plain rectangular native label
+  reading "1 route" or "6 routes"; result numbers retain their circular badges.
+  Labels and dots both open the trailhead group, with marker priority over
+  underlying route lines. The local stretchable label image adds no dependency
+  or external asset request. Native collision handling and exact dot anchoring
+  remain intact. Existing map tests cover label configuration and label clicks;
+  two final verify passes each pass 444 tests across 79 files, lint, types and
+  build, and two browser passes each pass all seven offline Chromium flows.
+  Live Sunol desktop/mobile checks confirm distinct shapes, legible labels,
+  and clicking "6 routes" opens the six-route group, with no console errors.
+  Responsive override reset. Original saved data and unrelated edits preserved.
+
 - [x] 2026-09-07 — adopted the accepted native trailhead-map prototype and
   completed the route hover/selection audit changes. Overview begins without a
   selected route; marker clicks scope the current page and route-line clicks
