@@ -125,13 +125,14 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     const controller = new AbortController();
     operation.current = controller;
     setWorkspace({ status: "loading", kind, jobId, previous });
+    setFocus({});
     setPanel("results");
     setMapExpanded(false);
     try {
       const results = await load(controller.signal);
       if (controller.signal.aborted || operation.current !== controller) return;
       setWorkspace({ status: "done", results });
-      setFocus({ routeId: (results.exact[0] ?? results.nearMisses[0])?.id });
+      setFocus({});
       setNearMissesOpen(results.exact.length === 0);
       setJobsOpen(false);
       setPanel("results");
@@ -155,10 +156,16 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   }, [loadJob, restoreJobId]);
 
   const selectRoute = useCallback((routeId: string) => {
-    setFocus((current) => ({ startKey: current.startKey, routeId }));
+    const route = routeResults && [...routeResults.exact, ...routeResults.nearMisses].find(({ id }) => id === routeId);
+    if (!route) return;
+    setFocus((current) => ({ startKey: current.startKey === routeStart(route).key ? current.startKey : undefined, routeId }));
     setPanel("route");
     setMapExpanded(false);
-  }, []);
+  }, [routeResults]);
+  const changePanel = (next: "plan" | "results") => {
+    setFocus((current) => ({ startKey: current.startKey, routeId: current.routeId }));
+    setPanel(next);
+  };
   const selectStart = (startKey: string) => {
     setFocus({ startKey });
     setNearMissesOpen(!routeResults?.exact.some((route) => routeStart(route).key === startKey));
@@ -268,7 +275,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const toggleNearMisses = (open: boolean) => {
     setNearMissesOpen(open);
     if (!open) {
-      setFocus((current) => ({ startKey: current.startKey, routeId: routeResults?.exact.some(({ id }) => id === current.routeId) ? current.routeId : routeResults?.exact[0]?.id }));
+      setFocus((current) => ({ startKey: current.startKey, routeId: routeResults?.exact.some(({ id }) => id === current.routeId) ? current.routeId : undefined }));
     }
   };
   const hasResultsPanel = workspace.status !== "idle";
@@ -293,8 +300,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       <div className={mapExpanded ? "workspace map-expanded" : "workspace"}>
         <section className="workspace-panel" aria-label="Route planner">
           <nav className="panel-nav" aria-label="Workspace panels">
-            <button type="button" aria-pressed={panel === "plan"} onClick={() => setPanel("plan")}>Plan</button>
-            <button type="button" aria-pressed={panel !== "plan"} disabled={!hasResultsPanel} onClick={() => setPanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
+            <button type="button" aria-pressed={panel === "plan"} onClick={() => changePanel("plan")}>Plan</button>
+            <button type="button" aria-pressed={panel !== "plan"} disabled={!hasResultsPanel} onClick={() => changePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
           </nav>
           <aside className="builder-panel" hidden={panel !== "plan"} aria-labelledby="builder-title">
           <div className="builder-scroll">
@@ -397,13 +404,13 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan"}>
-          {hasResultsPanel ? <ResultsPanel startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => setPanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
         </div>
         </section>
 
-        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={changeDrawnBounds} selectedStartKey={focus.startKey} onStartSelect={selectStart} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
+        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={panel === "route" ? selectedRouteId : undefined} hoveredRouteId={hoveredRouteId} selectedSegmentId={panel === "route" ? selectedSegmentId : undefined} hoveredSegmentId={panel === "route" ? hoveredSegmentId : undefined} onBoundsChange={changeDrawnBounds} selectedStartKey={focus.startKey} onStartSelect={selectStart} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
-        <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => setMapExpanded((current) => !current)}>{mapExpanded ? "Show panel" : "Show map"}</button>
+        <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => { setFocus((current) => ({ ...current, hoveredRouteId: undefined, hoveredSegmentId: undefined })); setMapExpanded((current) => !current); }}>{mapExpanded ? "Show panel" : "Show map"}</button>
       </div>
     </main>
   );

@@ -111,6 +111,7 @@ test("native trailhead counts open a filtered list and preserve route numbering"
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await framed;
   await expect(page.locator(".maplibregl-marker")).toHaveCount(0);
+  await expect(page.locator(".route-card.selected")).toHaveCount(0);
 
   // Project the fixture's real start against the documented 64px result framing,
   // independent of the native marker implementation or any private map instance.
@@ -139,6 +140,26 @@ test("native trailhead counts open a filtered list and preserve route numbering"
   await expect(page.locator(".route-card")).toHaveCount(5);
   await page.getByRole("button", { name: "All trailheads" }).click();
   await expect(page.locator(".route-card")).toHaveCount(10);
+  await expect(page.locator(".route-card.selected")).toHaveCount(0);
+
+  // A route-line preview must predict the route opened by clicking that line.
+  // This point lies on a shared fixture section away from the start marker.
+  const [mx, my] = mercator([-122.1575, 37.166]);
+  const line = { x: box.x + box.width / 2 + (mx! - (west + east) / 2) * scale, y: box.y + box.height / 2 + (my! - (north + south) / 2) * scale };
+  await page.mouse.move(line.x, line.y);
+  await expect(page.locator(".route-card.hovered")).toHaveCount(1);
+  const previewNumber = await page.locator(".route-card.hovered .route-number").innerText();
+  await page.mouse.click(line.x, line.y);
+  await expect(page.getByRole("complementary", { name: "Route details" })).toBeVisible();
+  await expect(page.locator(".route-number")).toHaveText(previewNumber);
+  const segments = page.locator(".trail-segment-row");
+  await segments.first().click();
+  await segments.nth(1).hover();
+  await expect(segments.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(segments.nth(1)).toHaveClass(/hovered/);
+  await expect(segments.nth(1)).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: /Back to results/ }).click();
+  await expect(page.locator(".route-card.selected")).toHaveCount(0);
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
