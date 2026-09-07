@@ -14,13 +14,16 @@ the evidence line.
   route details. List keyboard navigation previews without replacing the list;
   explicit activation opens details and Back restores focus. Corrected the
   results close button to fit its compact header without border clipping.
+  Removed the block-layout override that collapsed the loading spinner; Quick
+  search uses rotation normally and a non-spatial opacity pulse for reduced
+  motion. Live Quick search confirms the pulsing indicator and completion.
   Six generated map geometry sources become two; recorded lifecycle tests show
   zero additional geometry uploads on route/segment hover and only a segment
   upload when the selected owner changes. Full ordered route identity now
   controls framing, drawing suppresses ordinary feature gestures, and container
   resizing and late-load cleanup are covered. Relative to `b974f98`, application
-  and style source is 139 lines smaller; test/helper source grows 303 lines
-  (164 more combined). No measured wall-clock rendering speedup is claimed.
+  and style source is 138 lines smaller; test/helper source grows 303 lines
+  (165 more combined). No measured wall-clock rendering speedup is claimed.
   Two final `npm run verify` passes each pass 435 offline tests across 79 files,
   lint, types, and production build; two final `npm run test:browser` passes
   each pass all seven Chromium flows. Live in-app localhost checks cover real
