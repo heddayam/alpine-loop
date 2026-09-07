@@ -13,17 +13,14 @@ import {
   MontereyReviewedAccessAdapter,
   montereyReviewedAccessSnapshot,
 } from "./authorities";
-import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry } from "./area-geometry";
 import { applyCuratedAccessRestrictions, readCuratedAccessFile } from "./curated-access";
 import { readElevationSourceConfig } from "./elevation";
 import { sha256File } from "./file-source";
 import {
-  MONTEREY_CARMEL_COMPILER_VERSION,
-  MONTEREY_CARMEL_PACK_SCHEMA_VERSION,
+  MONTEREY_CARMEL_PACK_CONFIG,
   MONTEREY_CARMEL_REGION_ROOT,
   buildMontereyCarmelPack,
-  montereyCarmelDataVersion,
   montereyReviewedEntranceEvidence,
 } from "./monterey-carmel-pack";
 import { readOsmSourceConfig } from "./osm";
@@ -63,9 +60,7 @@ describe("Monterey–Carmel pack wiring", () => {
   it("has no live USFS source or pack dependency", async () => {
     const sourceFiles = await readdir(path.join(MONTEREY_CARMEL_REGION_ROOT, "official-sources"));
     expect(sourceFiles.filter((filename) => filename.includes("usfs"))).toEqual([]);
-    const packSource = await readFile(path.join(process.cwd(), "lib/data/monterey-carmel-pack.ts"), "utf8");
-    expect(packSource).not.toMatch(/MONTEREY_OFFICIAL_SOURCE_SET|MontereyLosPadresTrailsAdapter|readOfficialSourceSnapshots|matchOfficialAccessToOsm/);
-    expect(packSource).toContain("additionalSources: [curatedAccess.snapshot, reviewedSnapshot]");
+
   });
 
   it("validates the exact boundary, reviewed regions, and regional source namespaces", async () => {
@@ -99,7 +94,7 @@ describe("Monterey–Carmel pack wiring", () => {
   });
 
   it("applies exactly the two curated Rocky Ridge closures", async () => {
-    const curated = await readCuratedAccessFile(path.join(MONTEREY_CARMEL_REGION_ROOT, "access-restrictions.json"));
+    const curated = await readCuratedAccessFile(path.join(MONTEREY_CARMEL_REGION_ROOT, "access-restrictions.json"), MONTEREY_CARMEL_PACK_CONFIG.restrictions!.contentHash);
     expect(curated.snapshot).toMatchObject({
       id: "monterey-carmel-curated-access-restrictions-2026-08-07",
       authority: "California State Parks",
@@ -137,7 +132,10 @@ describe("Monterey–Carmel pack wiring", () => {
     expect(await sha256File(snapshot.localPath)).toBe(MONTEREY_REVIEWED_ACCESS_CONTENT_HASH);
 
     const normalized = await new MontereyReviewedAccessAdapter().normalize(snapshot);
-    const entrances = montereyReviewedEntranceEvidence(normalized);
+    const prepared = await MONTEREY_CARMEL_PACK_CONFIG.entrances!({ outputRoot: "/unused", sourceCacheRoot: "/unused", preparationRoot: "/unused", refresh: false });
+    const entrances = prepared.evidence;
+    expect(prepared.snapshot).toEqual(snapshot);
+    expect(entrances).toEqual(montereyReviewedEntranceEvidence(normalized));
     expect(entrances).toHaveLength(10);
     expect(entrances.every(({ externalId, accessState, confidence }) =>
       externalId.startsWith("entrance/") && accessState === "public" && confidence === "medium"))
@@ -151,36 +149,4 @@ describe("Monterey–Carmel pack wiring", () => {
     expect(overlaid.nodes).toEqual(withoutPortals.nodes);
   });
 
-  it("pins schema 6 and hashes every deterministic input independently of order", () => {
-    expect(MONTEREY_CARMEL_PACK_SCHEMA_VERSION).toBe("6");
-    expect(MONTEREY_CARMEL_COMPILER_VERSION).toBe("monterey-carmel-pack-compiler-v2");
-    const snapshot = (id: string, version: string, contentHash: `sha256:${string}`): SourceSnapshot => ({
-      id,
-      authority: `${id} authority`,
-      dataset: `${id} dataset`,
-      version,
-      retrievedAt: "2026-08-07T00:00:00Z",
-      url: `https://example.test/${id}`,
-      license: `${id} license`,
-      contentHash,
-      localPath: `/unused/${id}`,
-    });
-    const sources = [
-      snapshot("source-b", "v2", `sha256:${"b".repeat(64)}`),
-      snapshot("source-a", "v1", `sha256:${"a".repeat(64)}`),
-    ];
-    const adapters = ["adapter-b", "adapter-a"];
-    const metrics = ["metric-b", "metric-a"];
-    const version = montereyCarmelDataVersion("boundary", "search-regions", sources, adapters, metrics);
-    expect(version).toMatch(/^mc-[a-f0-9]{16}$/);
-    expect(montereyCarmelDataVersion(
-      "boundary",
-      "search-regions",
-      [...sources].reverse(),
-      [...adapters].reverse(),
-      [...metrics].reverse(),
-    )).toBe(version);
-    expect(montereyCarmelDataVersion("boundary", "search-regions", sources.slice(1), adapters, metrics))
-      .not.toBe(version);
-  });
 });

@@ -1,9 +1,10 @@
 import path from "node:path";
-import { createBasicRegionalPackBuilder, type BasicRegionalPackConfig } from "./basic-regional-pack";
+import { createRegionalPackBuilder } from "./regional-builder";
+import type { RegionalPackDefinition } from "./regional-build-types";
 
 export const HENRY_COE_REGION_ROOT = path.resolve("data/regions/henry-coe");
 
-export const HENRY_COE_PACK_CONFIG: BasicRegionalPackConfig = {
+export const HENRY_COE_PACK_CONFIG: RegionalPackDefinition = {
   id: "henry-coe",
   name: "Henry Coe",
   dataVersionPrefix: "hc",
@@ -13,4 +14,4 @@ export const HENRY_COE_PACK_CONFIG: BasicRegionalPackConfig = {
   display: { center: [-121.45, 37.17], zoom: 10.5 },
 };
 
-export const buildHenryCoePack = createBasicRegionalPackBuilder(HENRY_COE_PACK_CONFIG);
+export const buildHenryCoePack = createRegionalPackBuilder(HENRY_COE_PACK_CONFIG);

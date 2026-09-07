@@ -1,9 +1,10 @@
 import path from "node:path";
-import { createBasicRegionalPackBuilder, type BasicRegionalPackConfig } from "./basic-regional-pack";
+import { createRegionalPackBuilder } from "./regional-builder";
+import type { RegionalPackDefinition } from "./regional-build-types";
 
 export const CENTRAL_CASCADES_REGION_ROOT = path.resolve("data/regions/central-cascades");
 
-export const CENTRAL_CASCADES_PACK_CONFIG: BasicRegionalPackConfig = {
+export const CENTRAL_CASCADES_PACK_CONFIG: RegionalPackDefinition = {
   id: "central-cascades",
   name: "Central Cascades",
   dataVersionPrefix: "cc",
@@ -17,4 +18,4 @@ export const CENTRAL_CASCADES_PACK_CONFIG: BasicRegionalPackConfig = {
   },
 };
 
-export const buildCentralCascadesPack = createBasicRegionalPackBuilder(CENTRAL_CASCADES_PACK_CONFIG);
+export const buildCentralCascadesPack = createRegionalPackBuilder(CENTRAL_CASCADES_PACK_CONFIG);
