@@ -1,5 +1,7 @@
+import { DEFAULT_APP_SETTINGS } from "@/lib/settings/defaults";
 import type {
   AccessFilterV2,
+  AppSettingsV1,
   GradePresetId,
   GradePresets,
   Origin,
@@ -46,21 +48,28 @@ export type DriveTimeDraft = {
   error?: string;
 };
 
-export const DEFAULT_BUILDER_VALUES: BuilderValues = {
-  maximumRepeatedTrailPct: "35",
-  maximumSharedStemEnabled: false,
-  maximumSharedStemMiles: "2",
-  allowMultiCycle: true,
+export type BuilderDraft = Pick<BuilderValues, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">
+  & Partial<Pick<BuilderValues, "maximumRepeatedTrailPct" | "maximumSharedStemMiles">>;
+
+export const DEFAULT_BUILDER_DRAFT: BuilderDraft = {
   distanceMiles: { enabled: true, min: "1", max: "4" },
   elevationGainFeet: { enabled: false, min: "0", max: "2500" },
   maximumElevationFeet: { enabled: false, min: "0", max: "4000" },
-  gradeConstraintEnabled: false,
-  selectedGradePreset: "moderate",
-  gradePresets: {
-    gentle: { maximumClimbP90Pct: 8, maximumSteepClimbingSharePct: 5, maximumSteepRunMiles: 0.1, maximumDescentP90Pct: 10 },
-    moderate: { maximumClimbP90Pct: 12, maximumSteepClimbingSharePct: 20, maximumSteepRunMiles: 0.5, maximumDescentP90Pct: 15 },
-    steep: { maximumClimbP90Pct: 18, maximumSteepClimbingSharePct: 50, maximumSteepRunMiles: 1.5, maximumDescentP90Pct: 22 },
-  },
-  includeUncertainAccess: true,
-  limit: "10",
 };
+
+export function builderValues(settings: AppSettingsV1, draft: BuilderDraft): BuilderValues {
+  return {
+    ...draft,
+    includeUncertainAccess: settings.includeUncertainAccess,
+    limit: String(settings.quickSearchRouteCount),
+    gradeConstraintEnabled: settings.gradeConstraintEnabled,
+    selectedGradePreset: settings.selectedGradePreset,
+    gradePresets: settings.gradePresets,
+    maximumRepeatedTrailPct: draft.maximumRepeatedTrailPct ?? String(settings.loopOptions.maximumRepeatedTrailPct),
+    maximumSharedStemEnabled: settings.loopOptions.sharedApproachEnabled,
+    maximumSharedStemMiles: draft.maximumSharedStemMiles ?? String(settings.loopOptions.maximumSharedApproachMiles),
+    allowMultiCycle: settings.loopOptions.allowMultiCycle,
+  };
+}
+
+export const DEFAULT_BUILDER_VALUES = builderValues(DEFAULT_APP_SETTINGS, DEFAULT_BUILDER_DRAFT);

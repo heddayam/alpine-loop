@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HikeBuilder, waitForPoll } from "./HikeBuilder";
 import { FIXTURE_BUILDER_PACK } from "@/lib/packs/fixture-pack";
-import { packCatalogResponseV1Schema } from "@/lib/contracts";
+import { packCatalogResponseV1Schema, type AppSettingsV1 } from "@/lib/contracts";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -414,6 +414,101 @@ describe("HikeBuilder unified route search", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
     const saves = fetchMock.mock.calls.filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT");
     expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
+  });
+
+  it("waits for saved preferences before allowing a search", async () => {
+    vi.restoreAllMocks();
+    const settingsResponse = deferred<Response>();
+    mockBaseFetch((url) => url === "/api/settings" ? settingsResponse.promise : undefined);
+    render(<HikeBuilder />);
+    expect(screen.getByRole("button", { name: "Settings" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Quick search" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Full search" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Draw fixture area" }));
+    await act(async () => settingsResponse.resolve(new Response(JSON.stringify({
+      ...appSettings, includeUncertainAccess: false, quickSearchRouteCount: 3,
+    }))));
+    expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    await screen.findByText("1 exact route ready.");
+    const generated = vi.mocked(globalThis.fetch).mock.calls.find(([url]) => url === "/api/routes/generate");
+    expect(JSON.parse(String(generated?.[1]?.body))).toMatchObject({ includeUncertainAccess: false, limit: 3 });
+  });
+
+  it("serializes rapid preference changes without losing either server value", async () => {
+    vi.restoreAllMocks();
+    const firstSave = deferred<void>();
+    const writes: AppSettingsV1[] = [];
+    let stored: AppSettingsV1 | undefined;
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/settings" || init?.method !== "PUT") return undefined;
+      const next = JSON.parse(String(init.body)) as AppSettingsV1;
+      writes.push(next);
+      const complete = () => {
+        stored = next;
+        return new Response(JSON.stringify(next), { status: 200 });
+      };
+      return writes.length === 1 ? firstSave.promise.then(complete) : complete();
+    });
+    render(<HikeBuilder />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled());
+    (screen.getByText("Loop options").closest("details") as HTMLDetailsElement).open = true;
+    fireEvent.click(screen.getByRole("checkbox", { name: "Grade" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Allow figure-eights/ }));
+    expect(screen.getByRole("checkbox", { name: "Grade" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
+    await waitFor(() => expect(writes).toHaveLength(1));
+    await act(async () => firstSave.resolve());
+    await waitFor(() => expect(stored).toMatchObject({ gradeConstraintEnabled: true, loopOptions: { allowMultiCycle: false } }));
+    expect(writes).toHaveLength(2);
+  });
+
+  it.each(["", "101"])("keeps incomplete or invalid loop input %j out of unrelated preference saves", async (value) => {
+    render(<HikeBuilder />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled());
+    (screen.getByText("Loop options").closest("details") as HTMLDetailsElement).open = true;
+    const repeated = screen.getByLabelText("Maximum repeated trail");
+    fireEvent.change(repeated, { target: { value } });
+    fireEvent.blur(repeated);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Grade" }));
+    await waitFor(() => {
+      const saves = vi.mocked(globalThis.fetch).mock.calls.filter(([url, init]) => url === "/api/settings" && init?.method === "PUT");
+      expect(saves).toHaveLength(1);
+      expect(JSON.parse(String(saves[0]?.[1]?.body))).toMatchObject({
+        gradeConstraintEnabled: true, loopOptions: { maximumRepeatedTrailPct: 35 },
+      });
+    });
+    expect(repeated).toHaveValue(value ? Number(value) : null);
+  });
+
+  it("keeps cancelled and failed modal edits out of active settings and permits retry", async () => {
+    vi.restoreAllMocks();
+    let attempts = 0;
+    mockBaseFetch((url, init) => {
+      if (url !== "/api/settings" || init?.method !== "PUT") return undefined;
+      attempts += 1;
+      return new Response(JSON.stringify({}), { status: attempts === 1 ? 500 : 200 });
+    });
+    render(<HikeBuilder />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(attempts).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
+    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByText("Settings could not be saved. Check the values and try again.")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
+    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(12);
+    expect(attempts).toBe(2);
   });
 
   it("runs Quick explicitly and uses a drawn boundary as its override", async () => {

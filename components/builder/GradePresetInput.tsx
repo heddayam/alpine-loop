@@ -10,6 +10,7 @@ function presetLabel(id: GradePresetId) {
 }
 
 type GradePresetInputProps = {
+  disabled?: boolean;
   enabled: boolean;
   selected: GradePresetId;
   presets: GradePresets;
@@ -17,7 +18,7 @@ type GradePresetInputProps = {
   onSelectedChange: (selected: GradePresetId) => void;
 };
 
-export function GradePresetInput({ enabled, selected, presets, onEnabledChange, onSelectedChange }: GradePresetInputProps) {
+export function GradePresetInput({ disabled = false, enabled, selected, presets, onEnabledChange, onSelectedChange }: GradePresetInputProps) {
   const [pinned, setPinned] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -31,7 +32,7 @@ export function GradePresetInput({ enabled, selected, presets, onEnabledChange, 
   }, [pinned]);
 
   return (
-    <fieldset className="range-field grade-preset-field">
+    <fieldset className="range-field grade-preset-field" disabled={disabled}>
       <legend className="range-field-legend">Grade preset</legend>
       <div className="grade-preset-row">
         <div className="grade-label-wrap">

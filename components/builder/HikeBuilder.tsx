@@ -5,7 +5,6 @@ import type { MultiPolygon, Polygon } from "geojson";
 import { useRouter } from "next/navigation";
 import {
   DRIVE_TIME_DURATIONS_MINUTES,
-  appSettingsV1Schema,
   generateClosedRoutesResponseV3Schema,
   namedAreaSchema,
   originSchema,
@@ -33,14 +32,16 @@ import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
 import { RegionMultiSelect, type RegionOptionGroup } from "./RegionMultiSelect";
 import { SettingsModal } from "./SettingsModal";
+import { usePreferences } from "./usePreferences";
 import { collectQuickResults, savedRouteResults } from "../results/routeResults";
 import type { RouteResults } from "../results/types";
 import { combineAreaGeometries, reconcileSelectedPackIds, unionBounds } from "./multiPackSearch";
 import {
-  DEFAULT_BUILDER_VALUES,
+  DEFAULT_BUILDER_DRAFT,
+  builderValues,
   type AccessPointOption,
   type Bounds,
-  type BuilderValues,
+  type BuilderDraft,
   type DriveTimeDraft,
   type RangeField,
 } from "./types";
@@ -110,7 +111,7 @@ function boundsGeometry(bounds: Bounds): Polygon {
   return { type: "Polygon", coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
 }
 
-function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderValues>>, key: keyof Pick<BuilderValues, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">, next: RangeField) {
+function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderDraft>>, key: keyof Pick<BuilderDraft, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">, next: RangeField) {
   setValues((current) => ({ ...current, [key]: next }));
 }
 
@@ -154,7 +155,11 @@ export function HikeBuilder({
     durationMinutes: 30,
     state: "idle",
   });
-  const [values, setValues] = useState<BuilderValues>(DEFAULT_BUILDER_VALUES);
+  const preferences = usePreferences();
+  const { settings: appSettings, loaded: settingsLoaded, error: settingsError } = preferences;
+  const [draft, setValues] = useState<BuilderDraft>(DEFAULT_BUILDER_DRAFT);
+  const values = builderValues(appSettings, draft);
+  const showRegionBoundaries = appSettings.showRegionBoundaries;
   const [filterGeometry, setFilterGeometry] = useState<AreaGeometry>();
   const [refinementGeometry, setRefinementGeometry] = useState<AreaGeometry>();
   const [visibleAccessPoints, setVisibleAccessPoints] = useState<AccessPointOption[]>([]);
@@ -178,8 +183,6 @@ export function HikeBuilder({
   const [jobsOpen, setJobsOpen] = useState(false);
   const [batchLaunching, setBatchLaunching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsError, setSettingsError] = useState("");
-  const [showRegionBoundaries, setShowRegionBoundaries] = useState(false);
   const [hoveredRouteId, setHoveredRouteId] = useState<string>();
   const [nearMissesOpen, setNearMissesOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
@@ -372,85 +375,21 @@ export function HikeBuilder({
   const displayedAccessPoints = useMemo(() => visibleAccessPoints.filter((point) =>
     values.includeUncertainAccess || point.accessState !== "unknown"), [values.includeUncertainAccess, visibleAccessPoints]);
 
-  const appSettings = useMemo<AppSettingsV1>(() => ({
-    schemaVersion: 1,
-    includeUncertainAccess: values.includeUncertainAccess,
-    showRegionBoundaries,
-    quickSearchRouteCount: Number(values.limit),
-    gradeConstraintEnabled: values.gradeConstraintEnabled,
-    selectedGradePreset: values.selectedGradePreset,
-    gradePresets: values.gradePresets,
-    loopOptions: {
-      maximumRepeatedTrailPct: Number(values.maximumRepeatedTrailPct),
-      sharedApproachEnabled: values.maximumSharedStemEnabled,
-      maximumSharedApproachMiles: Number(values.maximumSharedStemMiles),
-      allowMultiCycle: values.allowMultiCycle,
-    },
-  }), [showRegionBoundaries, values.allowMultiCycle, values.gradeConstraintEnabled, values.gradePresets, values.includeUncertainAccess, values.limit, values.maximumRepeatedTrailPct, values.maximumSharedStemEnabled, values.maximumSharedStemMiles, values.selectedGradePreset]);
-
-  const applySettings = useCallback((settings: AppSettingsV1) => {
-    setShowRegionBoundaries(settings.showRegionBoundaries);
-    setValues((current) => ({
-      ...current,
-      includeUncertainAccess: settings.includeUncertainAccess,
-      limit: String(settings.quickSearchRouteCount),
-      gradeConstraintEnabled: settings.gradeConstraintEnabled,
-      selectedGradePreset: settings.selectedGradePreset,
-      gradePresets: settings.gradePresets,
-      maximumRepeatedTrailPct: String(settings.loopOptions.maximumRepeatedTrailPct),
-      maximumSharedStemEnabled: settings.loopOptions.sharedApproachEnabled,
-      maximumSharedStemMiles: String(settings.loopOptions.maximumSharedApproachMiles),
-      allowMultiCycle: settings.loopOptions.allowMultiCycle,
-    }));
-  }, []);
-
-  const putSettings = useCallback(async (settings: AppSettingsV1) => {
-    try {
-      const response = await fetch("/api/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) });
-      if (!response.ok) throw new Error("Settings could not be saved.");
-      setSettingsError("");
-      return true;
-    } catch {
-      setSettingsError("Settings could not be saved.");
-      return false;
-    }
-  }, []);
-
-  const saveSettings = useCallback(async (settings: AppSettingsV1) => {
-    if (!await putSettings(settings)) return false;
-    applySettings(settings);
+  const saveSettings = async (settings: AppSettingsV1) => {
+    if (!await preferences.save(settings)) return false;
     invalidateResults();
     return true;
-  }, [applySettings, invalidateResults, putSettings]);
+  };
 
-  const changeGradePreference = useCallback((patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => {
-    const next = { ...appSettings, ...patch };
-    applySettings(next);
+  const changeGradePreference = (patch: { gradeConstraintEnabled?: boolean; selectedGradePreset?: GradePresetId }) => {
+    void preferences.change((current) => ({ ...current, ...patch }));
     invalidateResults();
-    void putSettings(next);
-  }, [appSettings, applySettings, invalidateResults, putSettings]);
+  };
 
-  const changeLoopPreference = useCallback((patch: Partial<AppSettingsV1["loopOptions"]>) => {
-    const next = { ...appSettings, loopOptions: { ...appSettings.loopOptions, ...patch } };
-    applySettings(next);
+  const changeLoopPreference = (patch: Partial<AppSettingsV1["loopOptions"]>) => {
+    void preferences.change((current) => ({ ...current, loopOptions: { ...current.loopOptions, ...patch } }));
     invalidateResults();
-    void putSettings(next);
-  }, [appSettings, applySettings, invalidateResults, putSettings]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const raw: unknown = await response.json().catch(() => null);
-        if (!response.ok) throw new Error("Settings could not be loaded.");
-        const candidate = raw && typeof raw === "object" && "settings" in raw ? raw.settings : raw;
-        const parsed = appSettingsV1Schema.safeParse(candidate);
-        if (!parsed.success) throw new Error("Settings could not be loaded.");
-        applySettings(parsed.data);
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [applySettings]);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -938,7 +877,7 @@ export function HikeBuilder({
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
             Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
           </button>
-          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(true)}>Settings</button>
+          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} disabled={!settingsLoaded} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
         <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
         {settingsError ? <p className="settings-error-banner" role="alert">{settingsError}</p> : null}
@@ -1015,6 +954,7 @@ export function HikeBuilder({
                 <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); invalidateResults(); }} />
                 <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); invalidateResults(); }} />
                 <GradePresetInput
+                  disabled={!settingsLoaded}
                   enabled={values.gradeConstraintEnabled}
                   selected={values.selectedGradePreset}
                   presets={values.gradePresets}
@@ -1032,22 +972,22 @@ export function HikeBuilder({
                   <div className="range-row">
                     <label className="range-label-text" htmlFor="maximum-repeated-trail" title="Maximum share of the full route that may retrace any trail">Repeated trail</label>
                     <span aria-hidden="true" />
-                    <label className="range-value-cell"><span>Maximum repeated trail</span><input id="maximum-repeated-trail" aria-label="Maximum repeated trail" type="number" min="0" max="100" step="1" value={values.maximumRepeatedTrailPct} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} onBlur={(event) => { const maximumRepeatedTrailPct = Number(event.currentTarget.value); if (Number.isInteger(maximumRepeatedTrailPct) && maximumRepeatedTrailPct >= 0 && maximumRepeatedTrailPct <= 100) changeLoopPreference({ maximumRepeatedTrailPct }); }} /></label>
+                    <label className="range-value-cell"><span>Maximum repeated trail</span><input id="maximum-repeated-trail" aria-label="Maximum repeated trail" type="number" min="0" max="100" step="1" disabled={!settingsLoaded} value={values.maximumRepeatedTrailPct} onChange={(event) => { const maximumRepeatedTrailPct = event.currentTarget.value; setValues((current) => ({ ...current, maximumRepeatedTrailPct })); invalidateResults(); }} onBlur={(event) => { const maximumRepeatedTrailPct = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isInteger(maximumRepeatedTrailPct) && maximumRepeatedTrailPct >= 0 && maximumRepeatedTrailPct <= 100) { changeLoopPreference({ maximumRepeatedTrailPct }); setValues((current) => ({ ...current, maximumRepeatedTrailPct: undefined })); } }} /></label>
                     <span className="range-unit-cell">%</span>
                   </div>
                   <div className="range-row">
                     <label className="range-toggle" title="Same approach trail used while leaving and returning near the trailhead">
-                      <input type="checkbox" checked={values.maximumSharedStemEnabled} onChange={(event) => changeLoopPreference({ sharedApproachEnabled: event.currentTarget.checked })} />
+                      <input type="checkbox" disabled={!settingsLoaded} checked={values.maximumSharedStemEnabled} onChange={(event) => changeLoopPreference({ sharedApproachEnabled: event.currentTarget.checked })} />
                       <span>Shared approach</span>
                     </label>
                     <span aria-hidden="true" />
-                    <label className="range-value-cell"><span>Maximum shared approach</span><input id="maximum-shared-stem" aria-label="Maximum shared approach" type="number" min="0" max="30" step="0.1" disabled={!values.maximumSharedStemEnabled} value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} onBlur={(event) => { const maximumSharedApproachMiles = Number(event.currentTarget.value); if (Number.isFinite(maximumSharedApproachMiles) && maximumSharedApproachMiles >= 0 && maximumSharedApproachMiles <= 30) changeLoopPreference({ maximumSharedApproachMiles }); }} /></label>
+                    <label className="range-value-cell"><span>Maximum shared approach</span><input id="maximum-shared-stem" aria-label="Maximum shared approach" type="number" min="0" max="30" step="0.1" disabled={!settingsLoaded || !values.maximumSharedStemEnabled} value={values.maximumSharedStemMiles} onChange={(event) => { const maximumSharedStemMiles = event.currentTarget.value; setValues((current) => ({ ...current, maximumSharedStemMiles })); invalidateResults(); }} onBlur={(event) => { const maximumSharedApproachMiles = Number(event.currentTarget.value); if (event.currentTarget.value.trim() && Number.isFinite(maximumSharedApproachMiles) && maximumSharedApproachMiles >= 0 && maximumSharedApproachMiles <= 30) { changeLoopPreference({ maximumSharedApproachMiles }); setValues((current) => ({ ...current, maximumSharedStemMiles: undefined })); } }} /></label>
                     <span className="range-unit-cell">mi</span>
                   </div>
                 </div>
                 <label className="switch-row">
                   <span>Allow figure-eights and chained loops</span>
-                  <input type="checkbox" role="switch" checked={values.allowMultiCycle} onChange={(event) => changeLoopPreference({ allowMultiCycle: event.currentTarget.checked })} />
+                  <input type="checkbox" role="switch" disabled={!settingsLoaded} checked={values.allowMultiCycle} onChange={(event) => changeLoopPreference({ allowMultiCycle: event.currentTarget.checked })} />
                 </label>
               </div>
             </details>
@@ -1056,8 +996,8 @@ export function HikeBuilder({
           <footer className="builder-action-footer">
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
             <div className="builder-action-buttons">
-              <button className="btn btn-primary" type="button" disabled={generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button>
-              <button className="btn btn-primary" type="button" disabled={batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!settingsLoaded || generationState === "loading"} onClick={() => void runQuick()}>{generationState === "loading" ? "Searching…" : "Quick search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!settingsLoaded || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
             <div className="action-legend" aria-hidden="true"><span>Fast · partial</span><span>Thorough · background</span></div>
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}

@@ -29,11 +29,11 @@ export function parseSearchCriteria(values: BuilderValues): ValidationResult {
   const limit = Number(values.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > 20) errors.push("Route count must be a whole number from 1 through 20.");
   const maximumRepeatedTrailPct = Number(values.maximumRepeatedTrailPct);
-  if (!Number.isInteger(maximumRepeatedTrailPct) || maximumRepeatedTrailPct < 0 || maximumRepeatedTrailPct > 100) {
+  if (!values.maximumRepeatedTrailPct.trim() || !Number.isInteger(maximumRepeatedTrailPct) || maximumRepeatedTrailPct < 0 || maximumRepeatedTrailPct > 100) {
     errors.push("Maximum repeated trail must be a whole percentage from 0 through 100.");
   }
   const maximumSharedStemMiles = Number(values.maximumSharedStemMiles);
-  if (values.maximumSharedStemEnabled && (!Number.isFinite(maximumSharedStemMiles) || maximumSharedStemMiles < 0 || maximumSharedStemMiles > 30)) {
+  if (values.maximumSharedStemEnabled && (!values.maximumSharedStemMiles.trim() || !Number.isFinite(maximumSharedStemMiles) || maximumSharedStemMiles < 0 || maximumSharedStemMiles > 30)) {
     errors.push("Maximum shared approach must be from 0 through 30 miles.");
   }
   if (errors.length || !distance.value) return { success: false, errors };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { appSettingsV1Schema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
 
 type SettingsModalProps = {
@@ -20,6 +20,8 @@ export function SettingsModal({
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState(settings);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+  const saving = useRef(false);
+  const close = useCallback(() => { if (!saving.current) onClose(); }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -32,16 +34,16 @@ export function SettingsModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        close();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
       const focusable = [...dialog.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      )];
+      )].filter((element) => !element.closest("[inert]"));
       const first = focusable[0];
       const last = focusable.at(-1);
-      if (!first || !last) return;
+      if (!first || !last) { event.preventDefault(); return; }
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -55,7 +57,7 @@ export function SettingsModal({
       document.removeEventListener("keydown", onKeyDown);
       previouslyFocusedRef.current?.focus();
     };
-  }, [onClose, open]);
+  }, [close, open]);
 
   if (!open) return null;
 
@@ -64,17 +66,25 @@ export function SettingsModal({
   };
 
   const save = async () => {
+    if (saving.current) return;
     const parsed = appSettingsV1Schema.safeParse(draft);
     if (!parsed.success) { setSaveState("error"); return; }
+    saving.current = true;
     setSaveState("saving");
-    if (await onSave(parsed.data)) onClose();
-    else setSaveState("error");
+    try {
+      if (await onSave(parsed.data)) onClose();
+      else setSaveState("error");
+    } catch {
+      setSaveState("error");
+    } finally {
+      saving.current = false;
+    }
   };
 
   return (
     <div
       className="settings-backdrop"
-      onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}
+      onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}
     >
       <div
         ref={dialogRef}
@@ -86,10 +96,10 @@ export function SettingsModal({
       >
         <header className="settings-modal-heading">
           <h2 id="settings-title">Settings</h2>
-          <button type="button" className="settings-close" aria-label="Close settings" onClick={onClose}>×</button>
+          <button type="button" className="settings-close" aria-label="Close settings" disabled={saveState === "saving"} onClick={close}>×</button>
         </header>
 
-        <div className="settings-modal-content">
+        <div className="settings-modal-content" inert={saveState === "saving"}>
           <p id="settings-description" className="visually-hidden">
             Preferences controlling which trailheads appear and how broadly each route search runs.
           </p>
@@ -127,9 +137,9 @@ export function SettingsModal({
                 type="number"
                 min="1"
                 max="20"
-                value={draft.quickSearchRouteCount}
+                value={Number.isNaN(draft.quickSearchRouteCount) ? "" : draft.quickSearchRouteCount}
                 onChange={(event) => {
-                  const quickSearchRouteCount = Number(event.currentTarget.value);
+                  const quickSearchRouteCount = event.currentTarget.valueAsNumber;
                   setDraft((current) => ({ ...current, quickSearchRouteCount }));
                 }}
               />
@@ -145,10 +155,10 @@ export function SettingsModal({
                 const preset = draft.gradePresets[id];
                 const label = id[0]!.toUpperCase() + id.slice(1);
                 return <fieldset key={id}><legend>{label}</legend><strong>{label}</strong>
-                  <input aria-label={`${label} climb grade`} type="number" min="0" max="100" step="any" value={preset.maximumClimbP90Pct} onChange={(event) => updatePreset(id, "maximumClimbP90Pct", Number(event.currentTarget.value))} />
-                  <input aria-label={`${label} steep climbing share`} type="number" min="0" max="100" step="any" value={preset.maximumSteepClimbingSharePct} onChange={(event) => updatePreset(id, "maximumSteepClimbingSharePct", Number(event.currentTarget.value))} />
-                  <input aria-label={`${label} longest steep run`} type="number" min="0" max="30" step="any" value={preset.maximumSteepRunMiles} onChange={(event) => updatePreset(id, "maximumSteepRunMiles", Number(event.currentTarget.value))} />
-                  <input aria-label={`${label} descent grade`} type="number" min="0" max="100" step="any" value={preset.maximumDescentP90Pct} onChange={(event) => updatePreset(id, "maximumDescentP90Pct", Number(event.currentTarget.value))} />
+                  <input aria-label={`${label} climb grade`} type="number" min="0" max="100" step="any" value={Number.isNaN(preset.maximumClimbP90Pct) ? "" : preset.maximumClimbP90Pct} onChange={(event) => updatePreset(id, "maximumClimbP90Pct", event.currentTarget.valueAsNumber)} />
+                  <input aria-label={`${label} steep climbing share`} type="number" min="0" max="100" step="any" value={Number.isNaN(preset.maximumSteepClimbingSharePct) ? "" : preset.maximumSteepClimbingSharePct} onChange={(event) => updatePreset(id, "maximumSteepClimbingSharePct", event.currentTarget.valueAsNumber)} />
+                  <input aria-label={`${label} longest steep run`} type="number" min="0" max="30" step="any" value={Number.isNaN(preset.maximumSteepRunMiles) ? "" : preset.maximumSteepRunMiles} onChange={(event) => updatePreset(id, "maximumSteepRunMiles", event.currentTarget.valueAsNumber)} />
+                  <input aria-label={`${label} descent grade`} type="number" min="0" max="100" step="any" value={Number.isNaN(preset.maximumDescentP90Pct) ? "" : preset.maximumDescentP90Pct} onChange={(event) => updatePreset(id, "maximumDescentP90Pct", event.currentTarget.valueAsNumber)} />
                 </fieldset>;
               })}
             </div>
