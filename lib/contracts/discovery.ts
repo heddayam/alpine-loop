@@ -32,7 +32,6 @@ export const searchRegionSummarySchema = namedAreaSummarySchema.extend({
 }).strict();
 
 export const geocodingSuggestRequestSchema = z.object({
-  packId: z.string().min(1),
   text: z.string().trim().min(2).max(200),
 }).strict();
 
@@ -43,7 +42,6 @@ export const geocodingSuggestionSchema = z.object({
 }).strict();
 
 export const geocodingResolveRequestSchema = z.object({
-  packId: z.string().min(1),
   text: z.string().trim().min(2).max(200),
   magicKey: z.string().min(1),
 }).strict();
