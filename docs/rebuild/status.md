@@ -6,6 +6,32 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — adopted the accepted native trailhead-map prototype and
+  completed the route hover/selection audit changes. Overview begins without a
+  selected route; marker clicks scope the current page and route-line clicks
+  open the same route they preview, including overlapping scoped geometry.
+  Green previews draw above context with crisp light casing. Orange is reserved
+  for route detail, with an independent trailhead-filter ring. Muted context
+  color plus lower opacity prevents stacked alternatives from becoming too dark.
+  Segment targets exist only in detail; hovered and selected segments have
+  distinct list treatments. Back restores row focus, hover never scrolls the
+  panel or reframes the map, and pan/drawing/hiding clears transient emphasis.
+  Pointer preview falls back to the focused row when leaving the list target.
+  Against `74d7949`, application/styles shrink 145 lines and tests grow 236
+  (91 more combined); no dependencies or public data contracts changed.
+  Two final `npm run verify` passes each pass 444 offline tests across 79 files,
+  lint, types and production build; two final `npm run test:browser` passes
+  each pass all seven Chromium flows. Browser coverage includes native marker
+  clicks, scoped original numbering, route-line preview/click agreement,
+  segment preview versus selection, Back focus, and mobile panel switching.
+  Live localhost:3000 Sunol checks confirm neutral overview, foreground keyboard
+  preview, native six-route trailhead filtering, detail and segment emphasis,
+  and 390×844 map/panel switching with document width 390 and scroll position
+  zero. Zooming clears temporary previews; no console errors observed. The
+  viewport override was reset. Original packs and saved routes are retained;
+  completed subagent worktrees/branches removed. The earlier port-3002 snapshot
+  remains available only as the original prototype comparison.
+
 - [x] 2026-09-07 — completed an isolated native trailhead-map prototype; adoption
   remains pending comparison. Preserved as `prototype/native-map-2026-09-07`
   (`ea065a0`), with [measurements and tradeoffs](native-map-prototype.md).

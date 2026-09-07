@@ -48,6 +48,16 @@ The map renders coverage, the active filter, eligible starts, and the loaded
 result page. Viewport queries own trail data updates. Hover and selection have
 one explicit path. Generated route geometry changes only with the route
 collection; emphasis uses filters, and segment geometry changes with its owner.
+Native count markers represent actual route starts. Clicking a marker filters
+the current results page to that trailhead; clicking a route line opens that
+route. Overview results begin without a selected route. Temporary green previews
+render above subdued context with crisp light casing; orange is reserved for
+the route open in details. A ring identifies the trailhead filter separately.
+Segments are interactive only in route details. Hover never moves the camera
+or scrolls the panel; explicit selection may bring its target into view. Back
+restores the last row's keyboard focus and returns to whole-route comparison.
+Pointer preview temporarily takes precedence over keyboard preview; hiding the
+panel or changing result context clears its transient state.
 Drawing owns pointer gestures until completion, and container resizing updates
 the map without reconstructing it. Results show metrics, route topology, warnings, source
 confidence, elevation profiles, and segment observations.

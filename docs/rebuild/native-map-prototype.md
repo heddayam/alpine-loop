@@ -1,6 +1,8 @@
 # Native trailhead map prototype
 
-Completed 2026-09-07; available for comparison, not adopted into the active app.
+Prototype completed 2026-09-07. Subsequently accepted and adopted with the
+route-preview interaction improvements recorded in status.md. The measurements
+and tradeoffs below describe the original prototype snapshot.
 Baseline: `bbbd77f`. Verified prototype: `ea065a0`, preserved by
 `prototype/native-map-2026-09-07`.
 

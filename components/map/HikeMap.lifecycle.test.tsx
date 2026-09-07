@@ -202,11 +202,13 @@ describe("MapLibre workspace lifecycle", () => {
     expect(layers.indexOf("generated-route-hover")).toBeGreaterThan(layers.indexOf("generated-route-hover-casing"));
     expect(map.getLayer("generated-route-hover-casing")?.filter).toEqual(map.getLayer("generated-route-hover")?.filter);
     expect(map.setPaintProperty).toHaveBeenCalledWith("generated-route-alternates", "line-opacity", 0.2);
+    expect(map.setPaintProperty).toHaveBeenCalledWith("generated-route-alternates", "line-color", "#82958a");
     expect(map.setPaintProperty).toHaveBeenCalledWith("generated-route-selected", "line-opacity", 0.3);
     expect(map.getLayer("generated-route-hover-casing")).toMatchObject({ paint: { "line-color": "#fffdf7" } });
     view.rerender(<HikeMap {...initial} />);
     expect(map.setPaintProperty).toHaveBeenLastCalledWith("generated-route-segment-focus", "line-width", expect.any(Array));
     expect(map.setPaintProperty).toHaveBeenCalledWith("generated-route-selected", "line-opacity", 1);
+
     expect(map.fitBounds).toHaveBeenCalledTimes(framing);
     expect(routeUploads(map)).toEqual(uploads);
   });

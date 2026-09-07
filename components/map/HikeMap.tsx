@@ -36,6 +36,7 @@ type HikeMapProps = {
    every unselected route. Weight distinguishes hover and segment focus. */
 const ROUTE_SELECTED = "#d83b20";
 const ROUTE_ALTERNATE = "#2f6a55";
+const ROUTE_CONTEXT = "#82958a";
 const ROUTE_WIDTH = 2;
 const ROUTE_CASING = "#fffdf7";
 const SEGMENT_FOCUS = "#a62e19";
@@ -929,6 +930,10 @@ export function HikeMap({
     for (const layer of ["generated-route-hover", "generated-route-hover-casing"]) map.setFilter(layer, routeFilter(preview));
     map.setPaintProperty("generated-route-alternates", "line-opacity", focus ? 0.2 : selectedStartKey
       ? ["case", ["==", ["get", "startKey"], selectedStartKey], 0.8, 0.16] : 0.8);
+    // Shared alternatives overdraw each other. Muting their color as well as
+    // opacity prevents a dense overlap from becoming a competing dark line.
+    map.setPaintProperty("generated-route-alternates", "line-color", focus ? ROUTE_CONTEXT : selectedStartKey
+      ? ["case", ["==", ["get", "startKey"], selectedStartKey], ROUTE_ALTERNATE, ROUTE_CONTEXT] : ROUTE_ALTERNATE);
     map.setPaintProperty("trail-network-lines", "line-opacity", focus ? 0.35 : 0.65);
     // A segment is meaningful only while its owner is open. Preview temporarily
     // replaces pinned segment emphasis and leaving restores the pinned segment.
