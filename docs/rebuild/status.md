@@ -6,6 +6,20 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — investigated unified closed-walk replacement search; rejected
+  adoption and removed the experimental code. The prototype uses about 59% less
+  search-module code under common formatting, but the pipeline is slower at
+  eight of nine sampled starts, alternatives are mixed, and small departure/rejoin
+  quality remains unresolved. See [unified-search-investigation.md](unified-search-investigation.md)
+  for all measurements and the historical experimental snapshot (`73ffdce`).
+  All 35 fixed-work cases across raw/pipeline layers are deterministic over
+  three measurements with matching inputs and zero directed-validation rejects;
+  the separate live-deadline Cascades case reports truncation. Eleven independent
+  quality checks pass both implementations. Before cleanup, two verify passes
+  each pass 438 tests, lint, types and build; two browser passes each pass six
+  flows. Final application/test/benchmark source matches `f7b5209`; current solver,
+  installed data and saved jobs are unchanged. Agent worktrees are removed.
+
 - [x] 2026-09-06 — solver efficiency and route-quality exploration, documented in
   [solver-efficiency.md](solver-efficiency.md) and
   [principled-route-model.md](principled-route-model.md). Direction-safe corridor
