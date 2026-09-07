@@ -247,3 +247,43 @@ and branches were removed. The integration branch remains active.
 Next: geographic application operations, followed by workspace/saved-view
 ownership and current graph representations. Pack selection, provider polling,
 and browser fanout are still present and must be removed as part of that work.
+
+## Geographic wave contracts
+
+`lib/contracts/search.ts` defines the replacement application boundary. A search
+has one area and one set of criteria. The area is a drawn box, named-region IDs,
+or an origin/duration with optional named-region IDs. Region IDs are opaque to
+the browser. There is no pack selection. A Quick request adds the global route
+count. One Full request creates one retained job across all eligible installed
+data, preserving ten alternatives per start and exact-first result paging.
+
+- `GET /api/search/catalog` returns region names/IDs, coverage geometries, and an
+  initial map view. An empty coverage list means data is unavailable, not an
+  alternate fixture runtime.
+- `POST /api/search` accepts `SearchRequest` and returns `SearchResult`. The
+  server resolves drive time once, chooses installed data, executes, namespaces
+  identities, deduplicates geometry, and combines results. Partial failures and
+  computation limits are explicit in `incomplete` and `messages`.
+- `GET /api/map?bbox=...` returns `{ accessPoints, trailNetwork }` using the
+  existing point and GeoJSON trail shapes, with identities namespaced by the
+  server. Map loading no longer accepts a pack list.
+- `/api/route-jobs` and its existing detail/cancel/results routes use version-2
+  job envelopes. Creation accepts `SearchIntent`. The stored plan pins all
+  contributing data versions and the resolved area. Existing version-1 jobs and
+  result geometry must migrate losslessly, including partial progress, ordinal
+  checkpoints, cancellations, and timestamps.
+
+The job runner dependencies resolve a `SearchIntent` to a `SearchPlan`, resolve
+an optional drive-time area once, and open one search session from
+`{ request: SearchIntent, plan: SearchPlan, signal }`. The session retains the
+existing enumerate/search-start/close operations, using globally unique start
+IDs. The server composition owns the internal per-data sessions. Public jobs
+carry the request and area snapshot, not the internal plan.
+
+The workspace renders a viewed snapshot with its own area and criteria. Editing
+the draft does not alter the meaning of already-saved results. The Jobs dialog
+emits a job ID, one view operation loads its results, and pagination uses that
+same operation. A complete migration deletes old frontend fanout, pack URLs,
+provider polling, fake result adapters, and obsolete endpoints. The map's Demo
+button is test scaffolding and will be removed in favor of real drawing in
+browser checks.

@@ -6,3 +6,5 @@ export * from "./regions";
 export * from "./routes";
 export * from "./route-jobs";
 export * from "./settings";
+
+export * from "./search";
