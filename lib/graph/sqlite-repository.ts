@@ -1,5 +1,5 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { edgeIsInsideBbox, lineIsInsideArea } from "./geometry";
+import { coordinateIsInsideBbox, edgeIsInsideBbox, lineIsInsideArea } from "./geometry";
 import { accessPointIsEligible, edgeIsTraversable } from "./policy";
 import type {
   AccessState,
@@ -17,6 +17,8 @@ import type {
 } from "./types";
 
 type SqliteRow = Record<string, SQLInputValue>;
+
+type MapTrailEdge = Pick<GraphEdge, "id" | "physicalEdgeKey" | "coordinates" | "lengthMeters" | "trailName" | "accessState" | "sourceIds" | "edgeClass" | "flags">;
 
 function requiredString(row: SqliteRow, column: string): string {
   const value = row[column];
@@ -275,6 +277,50 @@ export class SQLiteGraphRepository implements GraphRepository {
           nodes.has(accessPoint.nodeId) && accessPointIsEligible(accessPoint, query.includeUncertainAccess),
       );
     return { nodes, edges, accessPoints };
+  }
+
+  /** Streams display-only edges; the consumer can stop before loading a whole graph. */
+  async *iterateMapTrails(query: GraphQuery): AsyncGenerator<MapTrailEdge> {
+    assertNotAborted(query.signal);
+    const [west, south, east, north] = query.bbox;
+    const rows = this.#database.prepare(`SELECT edges.id, edges.physical_edge_key, edges.geometry,
+        edges.length_m, edges.access_state, edges.edge_class, edges.source_refs, edges.flags
+      FROM edges
+      JOIN edge_spatial ON edge_spatial.row_id = edges.rowid
+      JOIN nodes AS from_node ON from_node.id = edges.from_node
+      JOIN node_spatial AS from_spatial ON from_spatial.row_id = from_node.rowid
+      JOIN nodes AS to_node ON to_node.id = edges.to_node
+      JOIN node_spatial AS to_spatial ON to_spatial.row_id = to_node.rowid
+      WHERE edge_spatial.max_lon >= ? AND edge_spatial.min_lon <= ?
+        AND edge_spatial.max_lat >= ? AND edge_spatial.min_lat <= ?
+        AND from_spatial.max_lon >= ? AND from_spatial.min_lon <= ?
+        AND from_spatial.max_lat >= ? AND from_spatial.min_lat <= ?
+        AND to_spatial.max_lon >= ? AND to_spatial.min_lon <= ?
+        AND to_spatial.max_lat >= ? AND to_spatial.min_lat <= ?
+      ORDER BY edges.id`).iterate(...Array.from({ length: 3 }, () => [west, east, south, north]).flat());
+    const physicalEdges = new Set<number>();
+    let visited = 0;
+    // for-of closes the SQLite iterator on cancellation, errors, and consumer return.
+    for (const row of rows) {
+      if (++visited % 256 === 0) await new Promise<void>((resolve) => setImmediate(resolve));
+      assertNotAborted(query.signal);
+      const physicalEdgeKey = requiredNumber(row, "physical_edge_key");
+      if (physicalEdges.has(physicalEdgeKey)) continue;
+      const flags = jsonArray<string>(row.flags, "edge flags");
+      const edge: MapTrailEdge = {
+        id: requiredString(row, "id"), physicalEdgeKey,
+        coordinates: parseCoordinates(row.geometry),
+        lengthMeters: requiredNumber(row, "length_m"),
+        trailName: flags.find((flag) => flag.startsWith("trail-name:"))?.slice("trail-name:".length) || null,
+        accessState: parseAccessState(requiredString(row, "access_state")),
+        edgeClass: parseEdgeClass(row.edge_class),
+        sourceIds: jsonArray<string>(row.source_refs, "edge source_refs"), flags,
+      };
+      if (!edgeIsTraversable(edge, query.includeUncertainAccess)
+        || !edge.coordinates.every((coordinate) => coordinateIsInsideBbox(coordinate, query.bbox))) continue;
+      physicalEdges.add(physicalEdgeKey);
+      yield edge;
+    }
   }
 
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {

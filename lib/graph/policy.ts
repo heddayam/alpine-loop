@@ -8,7 +8,7 @@ export function accessStateIsAllowed(accessState: AccessState, includeUncertainA
   return accessState === "public" || (accessState === "unknown" && includeUncertainAccess);
 }
 
-export function edgeIsTraversable(edge: GraphEdge, includeUncertainAccess: boolean): boolean {
+export function edgeIsTraversable(edge: Pick<GraphEdge, "edgeClass" | "accessState" | "flags">, includeUncertainAccess: boolean): boolean {
   return (
     (edge.edgeClass === undefined || edge.edgeClass === "trail") &&
     accessStateIsAllowed(edge.accessState, includeUncertainAccess) &&

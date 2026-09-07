@@ -7,6 +7,7 @@ import { compilePack } from "@/lib/data/compiler";
 import { fixtureCompileOptions, fixturePackSeed } from "@/lib/data/fixture-pack";
 import { loadInstalledPack, type InstalledPack } from "@/lib/packs/installed-pack";
 import { POST } from "@/app/api/search/route";
+import { SQLiteGraphRepository } from "@/lib/graph";
 import { mapData } from "./map";
 import { drawnArea, resolveSearchPlan, searchCatalog } from "./search-area";
 import { generateSearch, openSearchSession } from "./search";
@@ -73,6 +74,50 @@ describe("geographic search with production storage and compute", () => {
     const overview = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}&trails=0`));
     expect(overview.accessPoints).toEqual(map.accessPoints);
     expect(overview.trailNetwork.features).toEqual([]);
+  });
+
+  it("preserves the complete map response from the former graph reader across overlapping packs", async () => {
+    const request = () => new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`);
+    const streamed = await mapData(request());
+    const oldReader = vi.spyOn(SQLiteGraphRepository.prototype, "iterateMapTrails").mockImplementation(async function* (this: SQLiteGraphRepository, query) {
+      const graph = await this.getInducedGraph(query);
+      const physicalEdges = new Set<number>();
+      for (const edge of graph.edges) {
+        if (edge.physicalEdgeKey !== undefined) {
+          if (physicalEdges.has(edge.physicalEdgeKey)) continue;
+          physicalEdges.add(edge.physicalEdgeKey);
+        }
+        yield edge;
+      }
+    });
+    try { expect(streamed).toEqual(await mapData(request())); }
+    finally { oldReader.mockRestore(); }
+  });
+
+  it("stops streaming at the map feature limit, skips duplicate geometry, and closes the reader", async () => {
+    fixtures.packs = new Map([installed.entries().next().value!]);
+    let visited = 0;
+    let readerClosed = false;
+    const close = vi.spyOn(SQLiteGraphRepository.prototype, "close");
+    const reader = vi.spyOn(SQLiteGraphRepository.prototype, "iterateMapTrails").mockImplementation(async function* () {
+      try {
+        for (let index = 0; index < 75_100; index += 1) {
+          visited += 1;
+          // A reversed duplicate at capacity still must not trigger MAP_TOO_LARGE.
+          const coordinates: Array<readonly [number, number]> = index === 75_000
+            ? [[0, 1], [0, 0]] : [[index, 0], [index, 1]];
+          yield { id: String(index), physicalEdgeKey: index, coordinates, lengthMeters: 1,
+            trailName: null, accessState: "public", sourceIds: [], edgeClass: "trail", flags: [] };
+        }
+      } finally { readerClosed = true; }
+    });
+    try {
+      await expect(mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`)))
+        .rejects.toMatchObject({ code: "MAP_TOO_LARGE", status: 422 });
+      expect(visited).toBe(75_002);
+      expect(readerClosed).toBe(true);
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { reader.mockRestore(); close.mockRestore(); }
   });
 
   it("resolves one contour for all data and returns an honest empty result outside coverage", async () => {

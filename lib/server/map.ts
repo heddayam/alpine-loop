@@ -26,20 +26,13 @@ export async function mapData(request: Request) {
     if (!boundsOverlap(bbox.data, manifest.coverage.bbox)) continue;
     const repository = new SQLiteGraphRepository(databasePath, manifest.id);
     try {
-      const [points, graph] = await Promise.all([
-        repository.getAccessPointCandidates({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal }),
-        params.get("trails") === "0" ? { edges: [] } : repository.getInducedGraph({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal }),
-      ]);
+      const points = await repository.getAccessPointCandidates({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal });
       accessPoints.push(...points.filter(accessPointCanStartClosedRoute).filter(accessPointIsWildEnough).map((point) => ({
         id: namespacedId(manifest.id, point.id), name: point.name, lon: point.lon, lat: point.lat,
         kind: point.kind, accessState: point.accessState, confidence: point.confidence,
       })));
-      const physicalEdges = new Set<number>();
-      for (const edge of graph.edges) {
-        if (edge.physicalEdgeKey !== undefined) {
-          if (physicalEdges.has(edge.physicalEdgeKey)) continue;
-          physicalEdges.add(edge.physicalEdgeKey);
-        }
+      if (params.get("trails") === "0") continue;
+      for await (const edge of repository.iterateMapTrails({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal })) {
         const forward = JSON.stringify(edge.coordinates);
         const reverse = JSON.stringify([...edge.coordinates].reverse());
         const key = forward < reverse ? forward : reverse;

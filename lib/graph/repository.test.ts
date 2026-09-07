@@ -61,6 +61,72 @@ const bbox = [-0.1, -0.1, 0.1, 0.1] as const;
 const coverage = { type: "Polygon" as const, coordinates: [[[-0.1, -0.1], [0.1, -0.1], [0.1, 0.1], [-0.1, 0.1], [-0.1, -0.1]]] };
 
 describe("SQLiteGraphRepository", () => {
+  it("streams the same physical display edges as the graph path, including policy and complete containment", async () => {
+    const graph = policyGraph();
+    const edge = graph.edges[0];
+    graph.edges.push({ ...edge, id: "00-reverse", fromNodeId: edge.toNodeId, toNodeId: edge.fromNodeId,
+      coordinates: [...edge.coordinates].reverse(), physicalEdgeKey: 1 });
+    graph.edges[0] = { ...edge, physicalEdgeKey: 1 };
+    graph.edges.push({ ...edge, id: "road", edgeClass: "service-road" });
+    // Geometry is inside, but its referenced endpoint node is outside the viewport.
+    graph.nodes.set("outside", { id: "outside", lon: 1, lat: 1, elevationMeters: 10, flags: [] });
+    graph.edges.push({ ...edge, id: "outside-node", toNodeId: "outside" });
+    const repository = open(graph);
+    for (const includeUncertainAccess of [false, true]) {
+      const query = { bbox, includeUncertainAccess };
+      const full = await repository.getInducedGraph(query);
+      const seen = new Set<number | undefined>();
+      const expected = full.edges.filter(({ physicalEdgeKey }) => {
+        if (seen.has(physicalEdgeKey)) return false;
+        seen.add(physicalEdgeKey);
+        return true;
+      }).map(({ id, physicalEdgeKey, coordinates, lengthMeters, trailName, accessState, sourceIds, edgeClass, flags }) =>
+        ({ id, physicalEdgeKey, coordinates, lengthMeters, trailName, accessState, sourceIds, edgeClass, flags }));
+      const actual = [];
+      for await (const trail of repository.iterateMapTrails(query)) actual.push(trail);
+      expect(actual).toEqual(expected);
+      expect(actual.map(({ id }) => id)).toEqual(includeUncertainAccess ? ["00-reverse", "unknown"] : ["00-reverse"]);
+      expect(actual[0]).not.toHaveProperty("elevationProfile");
+    }
+    const restrictedReverse = open(graph, (database) => database.exec("UPDATE edges SET access_state = 'private' WHERE id = '00-reverse'"));
+    const ids = [];
+    for await (const edge of restrictedReverse.iterateMapTrails({ bbox, includeUncertainAccess: true })) ids.push(edge.id);
+    expect(ids).toEqual(["one-way", "unknown"]);
+  });
+
+  it("yields for cancellation and releases its SQLite iterator before the repository closes", async () => {
+    const graph = policyGraph();
+    graph.edges = Array.from({ length: 600 }, (_, index) => ({ ...graph.edges[0], id: `edge-${index}` }));
+    const repository = open(graph);
+    const controller = new AbortController();
+    let visited = 0;
+    const timer = setImmediate(() => controller.abort(new Error("stop streamed map")));
+    try {
+      await expect((async () => {
+        for await (const edge of repository.iterateMapTrails({ bbox, includeUncertainAccess: true, signal: controller.signal })) {
+          expect(edge.id).toBeTruthy();
+          visited += 1;
+        }
+      })()).rejects.toThrow("stop streamed map");
+      expect(visited).toBeGreaterThan(0);
+      expect(visited).toBeLessThan(600);
+      await expect(repository.close()).resolves.toBeUndefined();
+    } finally { clearImmediate(timer); }
+    const early = open();
+    for await (const edge of early.iterateMapTrails({ bbox, includeUncertainAccess: true })) {
+      expect(edge.id).toBe("one-way");
+      break;
+    }
+    await expect(early.close()).resolves.toBeUndefined();
+  });
+
+  it("does not load solver metrics while displaying trails", async () => {
+    const repository = open(undefined, (database) => database.exec("UPDATE edges SET elevation_profile = 'not-json'"));
+    const ids = [];
+    for await (const edge of repository.iterateMapTrails({ bbox, includeUncertainAccess: true })) ids.push(edge.id);
+    expect(ids).toEqual(["one-way", "unknown"]);
+  });
+
   it("enforces pedestrian policy, uncertain access, and complete geometry containment", async () => {
     const repository = open();
     const known = await repository.getInducedGraph({ bbox, includeUncertainAccess: false });
