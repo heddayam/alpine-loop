@@ -6,6 +6,16 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — consolidated recent work onto `main` without rewriting
+  history. Every local and remote feature branch was already included in the
+  current work. Committed the README cleanup, legacy-note removal, and project
+  skills with their source lockfile. Two `npm run verify` passes each passed
+  444 tests across 79 files, lint, types, and the production build. Two
+  `npm run test:browser` passes each passed all seven offline Chromium flows.
+  Removed two trailing blank lines found by the final diff check. Archive and
+  prototype tags are preserved. Generated packs, caches, secrets, and runtime
+  databases remain local and ignored by Git.
+
 - [x] 2026-09-07 — distinguished trailhead quantities from result identifiers.
   Trailheads now use a small location dot with a plain rectangular native label
   reading "1 route" or "6 routes"; result numbers retain their circular badges.
