@@ -6,6 +6,21 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — further simplification assessment, documented in
+  [simplification-assessment.md](simplification-assessment.md). Recounted 19,464
+  application and 9,338 test/helper lines; reviewed four clusters and compared
+  three interfaces in parallel. Following the user's allowance for justified
+  behavior changes, recommend original-graph feasibility with SCC-local cycle
+  approaches. An isolated production-function experiment reproduced a 100 m
+  minimum stem incorrectly becoming 0 m after adding a one-way dead-end
+  triangle. Attachment groups are diagnostic, not search scheduling inputs.
+  Estimated compiler reduction is 280–380 application lines, with 70–140 test
+  lines likely added; implementation and quality/performance comparison remain
+  pending. Fresh focused offline suites pass 148 tests across 19 files. No
+  application, test, installed-pack, or saved-job changes; no implementation
+  verification gate is claimed. The report specifies old/new profile readers,
+  new build identities, independent audits and pinned-artifact retention.
+
 - [x] 2026-09-06 — regional pack consolidation: all five builders share one
   preparation and publication process, preserving regional restrictions and
   acceptance checks. Relative to `dff1b43`, application and test code has 1,112
