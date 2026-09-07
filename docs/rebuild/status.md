@@ -6,6 +6,19 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — completed an isolated native trailhead-map prototype; adoption
+  remains pending comparison. Preserved as `prototype/native-map-2026-09-07`
+  (`ea065a0`), with [measurements and tradeoffs](native-map-prototype.md).
+  Replaces custom generated-route marker grids/clustering with native counts
+  and a trailhead-scoped results list. Against `bbbd77f`, application/styles
+  shrink 167 lines and tests grow 24 (143 fewer combined). Two verify passes
+  each pass 436 tests across 79 files, lint, types and build; two browser passes
+  each pass seven offline Chromium flows. Live copied Sunol results confirm
+  rendered counts, details/Back and mobile map/panel switching with no console
+  errors. Separate preview runs from `/private/tmp/alpine-native-preview` on
+  port 3002; active application source, original data and dependencies unchanged.
+  Prototype worktree/branch removed after preserving the tag.
+
 - [x] 2026-09-06 — simplified the UI into one Plan/Results/detail panel beside
   a persistent map, with a full-map switch on mobile and the original compact,
   neutral visual language. Added direct 1–20 route-count selection; retained
