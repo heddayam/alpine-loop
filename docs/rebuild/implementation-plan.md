@@ -34,6 +34,11 @@ relative size rule preserves intentionally short hikes and substantial chains.
 
 ## Workspace
 
+A persistent map shares the workspace with one panel for Plan, Results, and
+selected-route details. Mobile switches between the panel and the full map
+without remounting either. The visual language remains compact, neutral, and
+utilitarian. Route count is directly available beside the search actions.
+
 One editable form supplies both search actions. The viewed result has its own
 area and criteria snapshot; editing the form does not change the meaning of
 saved results. Search, opening saved work, and paging share one cancellation
@@ -41,7 +46,10 @@ scope and reject stale completion. Closing a pending saved view cancels it.
 
 The map renders coverage, the active filter, eligible starts, and the loaded
 result page. Viewport queries own trail data updates. Hover and selection have
-one explicit path. Results show metrics, route topology, warnings, source
+one explicit path. Generated route geometry changes only with the route
+collection; emphasis uses filters, and segment geometry changes with its owner.
+Drawing owns pointer gestures until completion, and container resizing updates
+the map without reconstructing it. Results show metrics, route topology, warnings, source
 confidence, elevation profiles, and segment observations.
 
 The Jobs dialog lists saved work, progress, cancellation, and deletion. Opening

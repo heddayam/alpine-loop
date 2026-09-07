@@ -70,6 +70,7 @@ describe("geographic workspace", () => {
     await chooseRegions();
     await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
     await screen.findByRole("heading", { name: "Exact matches" });
+    await userEvent.click(screen.getByRole("button", { name: "Plan" }));
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
     const calls = vi.mocked(fetch).mock.calls;

@@ -6,6 +6,30 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-06 — simplified the UI into one Plan/Results/detail panel beside
+  a persistent map, with a full-map switch on mobile and the original compact,
+  neutral visual language. Added direct 1–20 route-count selection; retained
+  editable criteria separately from viewed result snapshots, cancellation and
+  stale-response rejection, saved jobs, exact/close classification, and all
+  route details. List keyboard navigation previews without replacing the list;
+  explicit activation opens details and Back restores focus. Corrected the
+  results close button to fit its compact header without border clipping.
+  Six generated map geometry sources become two; recorded lifecycle tests show
+  zero additional geometry uploads on route/segment hover and only a segment
+  upload when the selected owner changes. Full ordered route identity now
+  controls framing, drawing suppresses ordinary feature gestures, and container
+  resizing and late-load cleanup are covered. Relative to `b974f98`, application
+  and style source is 139 lines smaller; test/helper source grows 303 lines
+  (164 more combined). No measured wall-clock rendering speedup is claimed.
+  Two final `npm run verify` passes each pass 435 offline tests across 79 files,
+  lint, types, and production build; two final `npm run test:browser` passes
+  each pass all seven Chromium flows. Live in-app localhost checks cover real
+  saved Sunol results, details and Back, desktop zoom/pan anchoring, mobile
+  internal scrolling (document stays at zero), full-map switching, and the
+  close-button border with no console errors. The 390×844 responsive override
+  was reset after inspection. Installed packs, saved databases, contracts, and
+  dependencies remain unchanged; completed agent worktrees/branches removed.
+
 - [x] 2026-09-06 — investigated unified closed-walk replacement search; rejected
   adoption and removed the experimental code. The prototype uses about 59% less
   search-module code under common formatting, but the pipeline is slower at

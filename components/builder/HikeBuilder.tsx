@@ -64,10 +64,11 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const values = builderValues(appSettings, draft);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [workspace, setWorkspace] = useState<Workspace>({ status: "idle" });
-  const [selectedRouteId, setSelectedRouteId] = useState<string>();
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
-  const [hoveredSegmentId, setHoveredSegmentId] = useState<string>();
-  const [hoveredRouteId, setHoveredRouteId] = useState<string>();
+  const [focus, setFocus] = useState<{ routeId?: string; segmentId?: string; hoveredRouteId?: string; hoveredSegmentId?: string }>({});
+  const { routeId: selectedRouteId, segmentId: selectedSegmentId, hoveredRouteId, hoveredSegmentId } = focus;
+  const setHoveredRouteId = useCallback((hoveredRouteId?: string) => setFocus((current) => ({ ...current, hoveredRouteId })), []);
+  const setHoveredSegmentId = useCallback((hoveredSegmentId?: string) => setFocus((current) => ({ ...current, hoveredSegmentId })), []);
+  const setSelectedSegmentId = useCallback((segmentId: string) => setFocus((current) => ({ ...current, segmentId })), []);
   const [nearMissesOpen, setNearMissesOpen] = useState(false);
   const [jobsOpen, setJobsOpen] = useState(false);
   const jobsResource = useJobs(jobsOpen);
@@ -76,9 +77,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const batchLaunchRef = useRef(false);
   const [launchMessage, setLaunchMessage] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<"builder" | "results">("builder");
-  const [desktopBuilderVisible, setDesktopBuilderVisible] = useState(true);
-  const [desktopResultsVisible, setDesktopResultsVisible] = useState(true);
+  const [panel, setPanel] = useState<"plan" | "results" | "route">("plan");
+  const [mapExpanded, setMapExpanded] = useState(false);
   const operation = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
   const routeResults = workspace.status === "done" ? workspace.results : workspace.status === "idle" ? null : workspace.previous ?? null;
@@ -112,11 +112,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     operation.current?.abort();
     operation.current = null;
     setWorkspace({ status: "idle" });
-    setSelectedRouteId(undefined);
-    setSelectedSegmentId(undefined);
-    setHoveredSegmentId(undefined);
-    setHoveredRouteId(undefined);
-    setMobilePanel("builder");
+    setFocus({});
+    setPanel("plan");
   }, []);
   const changeDrawnBounds = useCallback((bounds: Bounds | null) => {
     clearResults();
@@ -127,17 +124,16 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     const controller = new AbortController();
     operation.current = controller;
     setWorkspace({ status: "loading", kind, jobId, previous });
+    setPanel("results");
+    setMapExpanded(false);
     try {
       const results = await load(controller.signal);
       if (controller.signal.aborted || operation.current !== controller) return;
       setWorkspace({ status: "done", results });
-      setSelectedRouteId((results.exact[0] ?? results.nearMisses[0])?.id);
-      setSelectedSegmentId(undefined);
-      setHoveredSegmentId(undefined);
-      setHoveredRouteId(undefined);
+      setFocus({ routeId: (results.exact[0] ?? results.nearMisses[0])?.id });
       setNearMissesOpen(results.exact.length === 0);
       setJobsOpen(false);
-      setMobilePanel("results");
+      setPanel("results");
       router.replace("/");
     } catch (error) {
       if (!controller.signal.aborted && operation.current === controller) setWorkspace({ status: "error", kind, jobId, previous, message: error instanceof Error ? error.message : "Search results could not be loaded." });
@@ -157,7 +153,11 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     return () => restoredOperation?.abort();
   }, [loadJob, restoreJobId]);
 
-  const selectRoute = useCallback((routeId: string) => { setSelectedRouteId(routeId); setSelectedSegmentId(undefined); setHoveredSegmentId(undefined); }, []);
+  const selectRoute = useCallback((routeId: string) => {
+    setFocus({ routeId });
+    setPanel("route");
+    setMapExpanded(false);
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeJobs = useCallback(() => {
     setWorkspace((current) => {
@@ -167,6 +167,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       return current.previous ? { status: "done", results: current.previous } : { status: "idle" };
     });
     setJobsOpen(false);
+    setPanel("plan");
   }, []);
   const saveSettings = async (settings: AppSettingsV1) => {
     if (!await preferences.save(settings)) return false;
@@ -260,9 +261,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const toggleNearMisses = (open: boolean) => {
     setNearMissesOpen(open);
     if (!open) {
-      setSelectedRouteId((current) => routeResults?.exact.some(({ id }) => id === current) ? current : routeResults?.exact[0]?.id);
-      setSelectedSegmentId(undefined);
-      setHoveredSegmentId(undefined);
+      setFocus((current) => ({ routeId: routeResults?.exact.some(({ id }) => id === current.routeId) ? current.routeId : routeResults?.exact[0]?.id }));
     }
   };
   const hasResultsPanel = workspace.status !== "idle";
@@ -284,19 +283,15 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
       <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" && workspace.kind === "saved" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" && workspace.kind === "saved" ? workspace.jobId : undefined} onClose={closeJobs} />
 
-      <div className={["workspace", hasResultsPanel ? "with-results" : "", desktopBuilderVisible ? "" : "without-builder", hasResultsPanel && !desktopResultsVisible ? "without-results" : ""].filter(Boolean).join(" ")}>
-        <nav className="mobile-panel-nav" aria-label="Workspace panels">
-          <button type="button" aria-pressed={mobilePanel === "builder"} onClick={() => setMobilePanel("builder")}>Plan</button>
-          <button type="button" aria-pressed={mobilePanel === "results"} disabled={!hasResultsPanel} onClick={() => setMobilePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
-        </nav>
-
-        <button type="button" className="panel-tab panel-tab-left" aria-expanded={desktopBuilderVisible} aria-label={desktopBuilderVisible ? "Collapse plan panel" : "Expand plan panel"} onClick={() => setDesktopBuilderVisible((value) => !value)}>
-          <span aria-hidden="true">{desktopBuilderVisible ? "‹" : "›"}</span>
-        </button>
-
-        <aside className={["builder-panel", mobilePanel === "builder" ? "" : "mobile-panel-hidden", desktopBuilderVisible ? "" : "desktop-panel-hidden"].filter(Boolean).join(" ")} aria-labelledby="builder-title">
+      <div className={mapExpanded ? "workspace map-expanded" : "workspace"}>
+        <section className="workspace-panel" aria-label="Route planner">
+          <nav className="panel-nav" aria-label="Workspace panels">
+            <button type="button" aria-pressed={panel === "plan"} onClick={() => setPanel("plan")}>Plan</button>
+            <button type="button" aria-pressed={panel !== "plan"} disabled={!hasResultsPanel} onClick={() => setPanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
+          </nav>
+          <aside className="builder-panel" hidden={panel !== "plan"} aria-labelledby="builder-title">
           <div className="builder-scroll">
-            <div className="panel-bar"><h2 id="builder-title">Plan</h2></div>
+            <h2 id="builder-title" className="visually-hidden">Plan</h2>
 
             <section className="panel-section" aria-labelledby="search-area-title">
               <div className="section-head"><h3 id="search-area-title">Search area</h3></div>
@@ -327,11 +322,11 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
                 <div className="boundary-row">
                   <h3 className="field-label" id="boundary-title">Drawn boundary</h3>
                   {drawnBounds
-                    ? <output>{drawnBounds.map((value) => value.toFixed(4)).join(", ")}</output>
-                    : <output className="empty">None — using applicable drive time and reviewed regions</output>}
+                    ? <output data-bounds={drawnBounds.join(",")}>Using your drawn area</output>
+                    : <output className="empty">Draw an area on the map</output>}
                   {drawnBounds ? <button type="button" className="btn-link" onClick={() => { setDrawnBounds(null); editDraft(); }}>Clear</button> : null}
                 </div>
-                <p className="hint">Draw on the map to override drive time and reviewed regions for both Quick and Full search.</p>
+                <p className="hint">An area selects starting points. Your hike can continue beyond it within installed coverage.</p>
               </section>
             </section>
 
@@ -340,8 +335,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
               <div className="range-table">
                 <div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Min</span><span>Max</span><span>Unit</span></div>
                 <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); editDraft(); }} />
-                <RangeInput id="gain" label="Elev. gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); editDraft(); }} />
-                <RangeInput id="altitude" label="Max elev." unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); editDraft(); }} />
+                <RangeInput id="gain" label="Elevation gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); editDraft(); }} />
+                <RangeInput id="altitude" label="Max elevation" unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); editDraft(); }} />
                 <GradePresetInput
                   disabled={!settingsLoaded}
                   enabled={values.gradeConstraintEnabled}
@@ -385,24 +380,23 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           <footer className="builder-action-footer">
             {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. Install regional data to search.</p> : null}
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
+            <div className="search-count"><label htmlFor="route-count">Routes to find</label><select id="route-count" className="control" value={appSettings.quickSearchRouteCount} disabled={!settingsLoaded} onChange={(event) => { const quickSearchRouteCount = Number(event.currentTarget.value); void preferences.change((current) => ({ ...current, quickSearchRouteCount })); editDraft(); }}>{Array.from({ length: 20 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select><span>Quick search</span></div>
             <div className="builder-action-buttons">
               <button className="btn btn-primary" type="button" disabled={!ready || (workspace.status === "loading" && workspace.kind === "quick")} onClick={() => void runQuick()}>{workspace.status === "loading" && workspace.kind === "quick" ? "Searching…" : "Quick search"}</button>
-              <button className="btn btn-primary" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
+              <button className="btn" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
             <div className="action-legend"><span>Requested alternatives</span><span>Every eligible trailhead</span></div>
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}
           </footer>
         </aside>
+        <div className="results-panel-container" hidden={panel === "plan"}>
+          {hasResultsPanel ? <ResultsPanel status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => setPanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
+        </div>
+        </section>
 
         {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={changeDrawnBounds} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
-        {hasResultsPanel ? <ResultsPanel status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
-
-        {hasResultsPanel ? (
-          <button type="button" className="panel-tab panel-tab-right" aria-expanded={desktopResultsVisible} aria-label={desktopResultsVisible ? "Collapse results panel" : "Expand results panel"} onClick={() => setDesktopResultsVisible((value) => !value)}>
-            <span aria-hidden="true">{desktopResultsVisible ? "›" : "‹"}</span>
-          </button>
-        ) : null}
+        <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => setMapExpanded((current) => !current)}>{mapExpanded ? "Show panel" : "Show map"}</button>
       </div>
     </main>
   );

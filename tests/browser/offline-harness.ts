@@ -102,6 +102,8 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
 }
 
 export async function enterDrawnArea(page: Page): Promise<number[]> {
+  const mobile = (page.viewportSize()?.width ?? 1280) <= 760;
+  if (mobile) await page.getByRole("button", { name: "Show map", exact: true }).click();
   const draw = page.getByRole("button", { name: /^(Draw|Redraw) trailhead filter$/ });
   await expect(page.locator(".maplibregl-canvas")).toBeVisible();
   await expect(page.getByRole("region", { name: "Hike search map" })).toHaveAttribute("aria-busy", "false");
@@ -112,9 +114,10 @@ export async function enterDrawnArea(page: Page): Promise<number[]> {
   await page.mouse.down();
   await page.mouse.move(canvas.x + canvas.width * 0.7, canvas.y + canvas.height * 0.7, { steps: 5 });
   await page.mouse.up();
+  if (mobile) await page.getByRole("button", { name: "Show panel", exact: true }).click();
   const output = page.getByRole("region", { name: "Drawn boundary" }).locator("output");
   await expect(output).not.toContainText("None");
-  const bounds = (await output.innerText()).split(",").map(Number);
+  const bounds = (await output.getAttribute("data-bounds"))!.split(",").map(Number);
   expect(bounds).toHaveLength(4);
   expect(bounds.every(Number.isFinite)).toBe(true);
   expect(bounds[0]).toBeLessThan(bounds[2]!);

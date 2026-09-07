@@ -17,7 +17,7 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
   const drawnBounds = await enterDrawnArea(page);
-  await expect(page.getByText("Draw on the map to override drive time and reviewed regions for both Quick and Full search.")).toBeVisible();
+  await expect(page.getByText("An area selects starting points. Your hike can continue beyond it within installed coverage.")).toBeVisible();
   expect(harness.generationRequests).toHaveLength(0);
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
@@ -26,6 +26,8 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const firstCard = page.locator(".route-card").first();
   await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Trail segments" })).toHaveCount(0);
+  await firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ }).click();
   await expect(firstCard.getByRole("region", { name: "Trail segments" })).toBeVisible();
   const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
   await firstSegment.hover();
@@ -35,6 +37,8 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   const conditionSearch = firstCard.getByRole("link", { name: "Search Google for Canyon Trail 1 conditions" });
   await expect(conditionSearch).toHaveAttribute("href", "https://www.google.com/search?q=Canyon%20Trail%201%20conditions");
   await expect(conditionSearch).toHaveAttribute("target", "_blank");
+  await page.getByRole("button", { name: "Back to results" }).click();
+  await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Quick-search routes")).toHaveValue("10");
@@ -188,5 +192,38 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
   await page.getByRole("button", { name: "Quick search" }).click();
   await expect.poll(() => harness.generationRequests.length).toBe(1);
   expect(harness.generationRequests[0]?.criteria.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
+  expect(harness.blockedExternalRequests).toEqual([]);
+});
+
+
+test("one panel preserves the draft and selection while switching map and route detail", async ({ page }) => {
+  const harness = await installOfflineHarness(page, { routeCount: 10 });
+  await page.goto("/");
+  await page.getByLabel("Routes to find").selectOption("3");
+  await enterDrawnArea(page);
+  await page.getByRole("button", { name: "Quick search", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  expect(harness.generationRequests[0]?.limit).toBe(3);
+  await expect(page.getByLabel("Distance minimum")).toBeHidden();
+  await page.locator(".route-card-select").first().focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator(".route-card-select").nth(1)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".route-card")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Back to results" })).toBeFocused();
+  await page.getByRole("button", { name: "Back to results" }).click();
+  await expect(page.locator(".route-card-select").nth(1)).toBeFocused();
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByLabel("Distance minimum").fill("2");
+  await page.getByRole("button", { name: /^Results \(/ }).click();
+  await expect(page.getByText(/Viewing .*1–4 mi/)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Show map" }).click();
+  await expect(page.getByRole("region", { name: "Route planner" })).toBeHidden();
+  await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+  await page.getByRole("button", { name: "Show panel" }).click();
+  await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
+  await expect(page.getByLabel("Distance minimum")).toHaveValue("2");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
