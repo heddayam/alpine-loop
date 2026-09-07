@@ -3,9 +3,10 @@ import { writePackDatabase } from "@/lib/data/sqlite-writer";
 import { buildClosedRouteTopology } from "@/lib/data/topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "@/lib/data/types";
 import type { AccessPointCandidate, GraphAccessPoint, InducedGraph } from "./types";
+import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "./closed-route-topology";
 
 export const GRAPH_FIXTURE_IDENTITY = {
-  id: "fixture-pack", dataVersion: "fixture-v6", builtAt: "2026-01-01T00:00:00.000Z",
+  id: "fixture-pack", dataVersion: "fixture-v6-feasibility-v2", builtAt: "2026-01-01T00:00:00.000Z",
 };
 
 /** Write explicit graph measurements through the production schema and topology builder. */
@@ -50,7 +51,7 @@ export function writeGraphFixture(
   }));
   const topologyOptions = {
     builtAt: GRAPH_FIXTURE_IDENTITY.builtAt,
-    algorithmVersion: "closed-route-topology-v1", policyVersion: "closed-route-decision-graph-v1",
+    algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, policyVersion: "closed-route-decision-graph-v1",
   };
   const topology = buildClosedRouteTopology(nodes, edges, accessPoints, topologyOptions);
   const manifest = packManifestSchema.parse({

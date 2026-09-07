@@ -13,6 +13,7 @@ import type {
   RegionalPackAudit,
 } from "./types";
 import { topologySha256 } from "@/lib/graph/topology-hash";
+import { CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 
 const ACCESS_STATES = new Set<AccessState>(["public", "unknown", "private", "closed", "prohibited"]);
 
@@ -446,6 +447,9 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
     for (const row of profiles) {
       const profile = requiredString(row.profile, "topology profile");
+      if (row.format_version !== 1 && row.format_version !== CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION) {
+        throw new Error(`Unsupported ${profile} topology format version`);
+      }
       const count = (table: string, predicate = "profile = ?") => requiredNumber(
         (database.prepare(`SELECT count(*) AS count FROM ${table} WHERE ${predicate}`).get(profile) as Record<string, unknown>).count,
         `${table} count`,

@@ -1,0 +1,155 @@
+{
+  "manifest": {
+    "schemaVersion": "6",
+    "id": "fixture-pack",
+    "name": "Graph fixture",
+    "dataVersion": "fixture-v6",
+    "builtAt": "2026-01-01T00:00:00.000Z",
+    "compilerVersion": "fixture-compiler",
+    "metricAlgorithmVersion": "fixture-metrics",
+    "coverage": {
+      "bbox": [
+        -180,
+        -85,
+        180,
+        85
+      ],
+      "boundary": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -180,
+              -85
+            ],
+            [
+              180,
+              -85
+            ],
+            [
+              180,
+              85
+            ],
+            [
+              -180,
+              85
+            ],
+            [
+              -180,
+              -85
+            ]
+          ]
+        ]
+      }
+    },
+    "display": {
+      "center": [
+        0,
+        0
+      ],
+      "zoom": 10
+    },
+    "capabilities": {
+      "elevation": true,
+      "officialAccess": true,
+      "namedAreas": true,
+      "closedRouteTopology": true,
+      "batchSearchRegions": true,
+      "elevationProfiles": true,
+      "portalAccessPoints": true
+    },
+    "closedRouteTopology": {
+      "runtimeMode": "reachable-graph-fallback",
+      "algorithmVersion": "closed-route-topology-v1",
+      "policyVersion": "closed-route-decision-graph-v1",
+      "profiles": [
+        "known",
+        "inclusive"
+      ]
+    },
+    "fieldConfidence": {
+      "topology": "high"
+    },
+    "sources": [
+      {
+        "id": "fixture",
+        "authority": "Fixture",
+        "dataset": "Graph cases",
+        "version": "1",
+        "retrievedAt": "2026-01-01T00:00:00.000Z",
+        "url": "https://example.invalid/fixture",
+        "license": "CC0-1.0",
+        "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "profile": "known",
+      "format_version": 1,
+      "node_count": 0,
+      "physical_edge_count": 3,
+      "decision_node_count": 0,
+      "decision_edge_count": 0,
+      "built_at": "2026-01-01T00:00:00.000Z",
+      "content_hash": "sha256:2dba74e9ecb8c8d6f9713e009b1e33a1eff57c2721020733ba8f518897b6827c"
+    },
+    {
+      "profile": "inclusive",
+      "format_version": 1,
+      "node_count": 0,
+      "physical_edge_count": 4,
+      "decision_node_count": 0,
+      "decision_edge_count": 0,
+      "built_at": "2026-01-01T00:00:00.000Z",
+      "content_hash": "sha256:d16da245a9850e5e8cefb82ad28b651ae70a6ddab6c90b4358bbaa4f207dce80"
+    }
+  ],
+  "accessTopology": [
+    {
+      "profile": "known",
+      "access_point_id": "start-a",
+      "attachment_decision_node_id": 1,
+      "cycle_network_id": 1,
+      "connector_key": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "connector_decision_edge_ids": "[]",
+      "portal_decision_node_id": 1,
+      "minimum_stem_distance_m": 0,
+      "can_reach_cycle": 1
+    },
+    {
+      "profile": "known",
+      "access_point_id": "start-b",
+      "attachment_decision_node_id": 2,
+      "cycle_network_id": null,
+      "connector_key": null,
+      "connector_decision_edge_ids": "[]",
+      "portal_decision_node_id": null,
+      "minimum_stem_distance_m": null,
+      "can_reach_cycle": 0
+    },
+    {
+      "profile": "inclusive",
+      "access_point_id": "start-a",
+      "attachment_decision_node_id": 1,
+      "cycle_network_id": 1,
+      "connector_key": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "connector_decision_edge_ids": "[]",
+      "portal_decision_node_id": 1,
+      "minimum_stem_distance_m": 0,
+      "can_reach_cycle": 1
+    },
+    {
+      "profile": "inclusive",
+      "access_point_id": "start-b",
+      "attachment_decision_node_id": 2,
+      "cycle_network_id": 1,
+      "connector_key": "sha256:fe94b827f0455bee6f4a6a265286f827f18748ede569565ee827058085bad146",
+      "connector_decision_edge_ids": "[]",
+      "portal_decision_node_id": 1,
+      "minimum_stem_distance_m": 25,
+      "can_reach_cycle": 1
+    }
+  ],
+  "topologyContentHash": "sha256:50db8b12da323064d9c8c8bb6d8b161af88866fb6da26a25c8cf404685ad1b9d"
+}

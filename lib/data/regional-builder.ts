@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
 import { compileAuditedPack } from "./audited-pack";
@@ -94,6 +95,7 @@ export function regionalDataVersion(
   const hash = createHash("sha256");
   hash.update(boundaryContents);
   hash.update(searchRegionContents);
+  hash.update(`topology\0${CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION}\n`);
   if (config.fingerprintFormat === "joined-v1") {
     hash.update(config.compilerVersion);
     hash.update(adapterVersions.join("+"));
@@ -146,7 +148,7 @@ export function createRegionalPackSeed(input: {
     },
     closedRouteTopology: {
       runtimeMode: "reachable-graph-fallback",
-      algorithmVersion: "closed-route-safe-pruning-v1",
+      algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION,
       policyVersion: "penalized-closed-route-search-v1",
       profiles: ["known", "inclusive"],
     },

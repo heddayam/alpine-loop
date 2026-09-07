@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { compilePack } from "../compiler";
-import { fixtureCompileOptions } from "../fixture-pack";
+import { fixtureCompileOptions, fixturePackSeed } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 
 const temporaryDirectories: string[] = [];
@@ -39,7 +39,7 @@ describe("SQLite regional pack audit extraction", () => {
 
     expect(audit).toMatchObject({
       packId: "fixture-pack",
-      dataVersion: "fixture-v6",
+      dataVersion: fixturePackSeed.dataVersion,
       counts: { nodes: 7, directedEdges: 17, accessPoints: 2, sources: 4, rejectedEdges: 0, conflicts: 0 },
       elevation: { missingNodeCount: 0, missingEdgeCount: 0 },
       unattributedRecordIds: [],
@@ -98,7 +98,7 @@ describe("SQLite regional pack audit extraction", () => {
       .rejects.toThrow(/Manifest\/database mismatch for dataVersion/);
 
     mutateDatabase(pack.databasePath, `
-      UPDATE metadata SET value = 'fixture-v6' WHERE key = 'dataVersion';
+      UPDATE metadata SET value = '${fixturePackSeed.dataVersion}' WHERE key = 'dataVersion';
       UPDATE sources SET license = 'different' WHERE id = 'fixture-topology';
     `);
     await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
@@ -146,6 +146,10 @@ describe("SQLite regional pack audit extraction", () => {
   });
 
   it("fails closed on topology count or access corruption", async () => {
+    const versionPack = await buildFixture();
+    mutateDatabase(versionPack.databasePath, "UPDATE topology_profiles SET format_version=99 WHERE profile='known'");
+    await expect(auditSqlitePack({ databasePath: versionPack.databasePath, manifestPath: versionPack.manifestPath }))
+      .rejects.toThrow(/Unsupported known topology format version/);
     const countPack = await buildFixture();
     mutateDatabase(countPack.databasePath, "UPDATE topology_profiles SET decision_edge_count=decision_edge_count+1 WHERE profile='known'");
     await expect(auditSqlitePack({ databasePath: countPack.databasePath, manifestPath: countPack.manifestPath }))

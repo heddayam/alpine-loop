@@ -1,4 +1,5 @@
 import path from "node:path";
+import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import type { SourceSnapshot } from "./adapters";
 import type { CompilePackOptions, PackSeed } from "./compiler";
 import { FixtureElevationSampler } from "./fixture-elevation-sampler";
@@ -23,8 +24,8 @@ export const fixturePackSeed: PackSeed = {
   schemaVersion: "6",
   id: "fixture-pack",
   name: "Compiler Fixture Pack",
-  dataVersion: "fixture-v6",
-  compilerVersion: "fixture-compiler-v1",
+  dataVersion: "fixture-v6-feasibility-v2",
+  compilerVersion: "fixture-compiler-v2",
   coverage: {
     bbox: [-122.161, 37.159, -122.155, 37.162],
     boundary: {
@@ -40,7 +41,7 @@ export const fixturePackSeed: PackSeed = {
   fieldConfidence: { topology: "high", access: "medium", elevation: "high" },
   closedRouteTopology: {
     runtimeMode: "reachable-graph-fallback",
-    algorithmVersion: "closed-route-topology-v1",
+    algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION,
     policyVersion: "closed-route-decision-graph-v1",
     profiles: ["known", "inclusive"],
   },

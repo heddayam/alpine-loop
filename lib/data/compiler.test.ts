@@ -47,12 +47,12 @@ describe("fixture pack compiler", () => {
     expect(result.reusedExisting).toBe(false);
     expect(manifest).toMatchObject({
       id: "fixture-pack",
-      dataVersion: "fixture-v6",
+      dataVersion: fixturePackSeed.dataVersion,
       metricAlgorithmVersion: "nearest-fixture-v1+metrics-v3",
       capabilities: { elevation: true, officialAccess: true },
     });
     expect(manifest.sources).toHaveLength(4);
-    expect(current.dataVersion).toBe("fixture-v6");
+    expect(current.dataVersion).toBe(fixturePackSeed.dataVersion);
     expect(result.audit).toMatchObject({
       nodeCount: 7,
       directedEdgeCount: 17,

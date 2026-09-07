@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { PackManifest } from "@/lib/contracts";
+import { packManifestSchema, type PackManifest } from "@/lib/contracts";
 import type { GraphEdge, GraphNode, InducedGraph } from "./types";
-import { writeGraphFixture } from "./test-helpers";
+import { GRAPH_FIXTURE_IDENTITY, writeGraphFixture } from "./test-helpers";
+import legacy from "./fixtures/legacy-feasibility.json";
 import { SQLiteClosedRouteFeasibilityRepository } from "./sqlite-closed-route-feasibility-repository";
 
 const directories: string[] = [];
@@ -62,6 +63,23 @@ function open(fixture: { databasePath: string; manifest: PackManifest }) {
   return repository;
 }
 
+// These rows and hashes were frozen from the format-1 compiler before replacement.
+// Loading them must not depend on the current producer reproducing old identities.
+function createLegacyFixture(tamper = false) {
+  const fixture = createFixture((database) => {
+    database.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
+    for (const [table, rows] of [["topology_profiles", legacy.profiles], ["access_topology", legacy.accessTopology]] as const) {
+      const columns = Object.keys(rows[0]!);
+      const insert = database.prepare(`INSERT INTO ${table} (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`);
+      for (const row of rows) insert.run(...Object.values(row));
+    }
+    database.prepare("UPDATE metadata SET value = ? WHERE key = 'dataVersion'").run(legacy.manifest.dataVersion);
+    database.prepare("UPDATE metadata SET value = ? WHERE key = 'topologyContentHash'").run(legacy.topologyContentHash);
+    if (tamper) database.exec("UPDATE access_topology SET minimum_stem_distance_m = 26 WHERE profile = 'inclusive' AND access_point_id = 'start-b'");
+  });
+  return { ...fixture, manifest: packManifestSchema.parse(legacy.manifest) };
+}
+
 describe("SQLiteClosedRouteFeasibilityRepository", () => {
   it("reads both production topology profiles, preserves lookup order, and retains minimum stems", async () => {
     const repository = open(createFixture());
@@ -74,9 +92,20 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
     await expect(repository.getAccessTopology("inclusive", ["start-b"]))
       .resolves.toEqual([expect.objectContaining({ accessPointId: "start-b", connectorDecisionEdgeIds: [], minimumStemDistanceMeters: 25 })]);
     expect(repository.packId).toBe("fixture-pack");
-    expect(repository.dataVersion).toBe("fixture-v6");
+    expect(repository.dataVersion).toBe(GRAPH_FIXTURE_IDENTITY.dataVersion);
     await repository.close();
     await expect(repository.getAccessTopology("known", ["start-a"])).rejects.toThrow(/closed/);
+  });
+
+  it("reads authentic format-1 rows and still checks their independent content hashes", async () => {
+    const repository = open(createLegacyFixture());
+    expect(repository.dataVersion).toBe("fixture-v6");
+    await expect(repository.getAccessTopology("known", ["start-b"]))
+      .resolves.toEqual([expect.objectContaining({ canReachCycle: false, minimumStemDistanceMeters: null })]);
+    await expect(repository.getAccessTopology("inclusive", ["start-b"]))
+      .resolves.toEqual([expect.objectContaining({ canReachCycle: true, minimumStemDistanceMeters: 25,
+        connectorKey: legacy.accessTopology[3]!.connector_key })]);
+    expect(() => open(createLegacyFixture(true))).toThrow(/profile content hash mismatch/);
   });
 
   it("rejects packs without the complete current migration chain", () => {

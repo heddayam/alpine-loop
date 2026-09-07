@@ -458,7 +458,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       decisionNodeCount: profile.decisionNodeCount,
       decisionEdgeCount: profile.decisionEdgeCount,
       blockCount: profile.blocks.length,
-      cycleBlockCount: profile.blocks.filter(({ cycleRank }) => cycleRank > 0).length,
+      cycleBlockCount: 0,
       networkCount: profile.networks.length,
       feasibleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => canReachCycle).length,
       noCycleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => !canReachCycle).length,

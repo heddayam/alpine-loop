@@ -11,6 +11,11 @@ import baseline from "./fixtures/regional-build-compatibility.json";
 // consolidated. Only external acquisition is substituted; restrictions, portal
 // derivation, entrance overlays, source configs and fingerprints remain real.
 const captured = vi.hoisted(() => ({ options: undefined as CompilePackOptions | undefined }));
+const topologyVersion = vi.hoisted(() => ({ value: "original-graph-feasibility-v2" }));
+vi.mock("../graph/closed-route-topology", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../graph/closed-route-topology")>(),
+  get CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION() { return topologyVersion.value; },
+}));
 vi.mock("./audited-pack", () => ({
   compileAuditedPack: async (options: CompilePackOptions) => {
     captured.options = options;
@@ -147,7 +152,25 @@ describe("regional preparation compatibility with dff1b43", () => {
       await build({ outputRoot: "/fixture/output", sourceCacheRoot: "/fixture/cache", preparationRoot: "/fixture/prepared", refresh });
       expect(captured.options).toBeDefined();
       const actual = preparationRecord(captured.options!);
-      expect(actual).toEqual(baseline[region as keyof typeof baseline]);
+      const old = baseline[region as keyof typeof baseline];
+      const seed = captured.options!.seed;
+      expect(seed.closedRouteTopology.algorithmVersion).toBe(topologyVersion.value);
+      expect(actual.dataVersion).not.toBe(old.dataVersion);
+      // Only the explicitly versioned feasibility compilation changes the seed;
+      // normalized regional inputs retain their original frozen expectations.
+      expect({ ...actual, dataVersion: old.dataVersion, seedHash: digest({ ...seed,
+        dataVersion: old.dataVersion, closedRouteTopology: { ...seed.closedRouteTopology,
+          algorithmVersion: "closed-route-safe-pruning-v1" } }) }).toEqual(old);
+      if (!refresh) {
+        const currentVersion = topologyVersion.value;
+        try {
+          topologyVersion.value = "future-feasibility-version";
+          await build({ outputRoot: "/fixture/output", sourceCacheRoot: "/fixture/cache", preparationRoot: "/fixture/prepared", refresh });
+          expect(captured.options!.seed.dataVersion).not.toBe(actual.dataVersion);
+          expect(captured.options!.seed.closedRouteTopology.algorithmVersion).toBe(topologyVersion.value);
+          expect(preparationRecord(captured.options!).topologyHash).toBe(actual.topologyHash);
+        } finally { topologyVersion.value = currentVersion; }
+      }
     },
   );
 });
