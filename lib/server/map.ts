@@ -15,7 +15,8 @@ type MapPoint = {
 };
 
 export async function mapData(request: Request) {
-  const bbox = bboxSchema.safeParse(new URL(request.url).searchParams.get("bbox")?.split(",").map(Number));
+  const params = new URL(request.url).searchParams;
+  const bbox = bboxSchema.safeParse(params.get("bbox")?.split(",").map(Number));
   if (!bbox.success) throw new ServerApiError("INVALID_BOUNDS", "A valid map bounding box is required.", 400);
   const accessPoints: MapPoint[] = [];
   const features: FeatureCollection<LineString>["features"] = [];
@@ -27,7 +28,7 @@ export async function mapData(request: Request) {
     try {
       const [points, graph] = await Promise.all([
         repository.getAccessPointCandidates({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal }),
-        repository.getInducedGraph({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal }),
+        params.get("trails") === "0" ? { edges: [] } : repository.getInducedGraph({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal }),
       ]);
       accessPoints.push(...points.filter(accessPointCanStartClosedRoute).filter(accessPointIsWildEnough).map((point) => ({
         id: namespacedId(manifest.id, point.id), name: point.name, lon: point.lon, lat: point.lat,

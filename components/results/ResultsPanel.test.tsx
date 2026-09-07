@@ -356,12 +356,10 @@ describe("ResultsPanel", () => {
     expect(screen.queryByText("Graph queries")).not.toBeInTheDocument();
   });
 
-  it("announces loading, error, and cancelled states", () => {
+  it("announces loading and error states", () => {
     const { rerender } = render(<ResultsPanel onHoverRoute={() => undefined} status="loading" results={null} onSelectRoute={() => undefined} />);
     expect(screen.getByRole("status")).toHaveTextContent("generating routes");
     rerender(<ResultsPanel onHoverRoute={() => undefined} status="error" results={null} message="Fixture pack is unavailable." onSelectRoute={() => undefined} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Fixture pack is unavailable.");
-    rerender(<ResultsPanel onHoverRoute={() => undefined} status="cancelled" results={null} onSelectRoute={() => undefined} />);
-    expect(screen.getByRole("status")).toHaveTextContent("No routes were changed");
   });
 });

@@ -100,7 +100,8 @@ describe("generated route map features", () => {
   it("loads mapped trails only at detailed zoom and keeps hover names useful", () => {
     const bounds = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
 
-    expect(mapRequestUrl(bounds)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178");
+    expect(mapRequestUrl(bounds, 12)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178&trails=1");
+    expect(mapRequestUrl(bounds, 11)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178&trails=0");
     expect(trailNetworkFeatureDetails({ name: "  Skyline Trail  ", distanceMeters: 965.6064 })).toEqual({
       name: "Skyline Trail",
       copyName: "Skyline Trail",
@@ -334,7 +335,6 @@ describe("generated route map features", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {
       drawBounds: boundary,
-      drawEnabled: true,
       filterGeometry: { type: "Polygon", coordinates: [[[-122.18, 37.155], [-122.14, 37.155], [-122.14, 37.178], [-122.18, 37.178], [-122.18, 37.155]]] },
       coverages: [{ type: "Polygon", coordinates: [[[-122.19, 37.15], [-122.13, 37.15], [-122.13, 37.18], [-122.19, 37.18], [-122.19, 37.15]]] }],
       showRegionBoundaries: false,

@@ -311,6 +311,7 @@ export class SQLiteRouteJobStore {
     const row = this.#database.prepare(`SELECT j.*,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id) AS eligible_count,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.status IN ('done','failed')) AS processed_count,
+      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.status = 'failed') AS failed_count,
       (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 0) AS exact_count,
       (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 1) AS near_count,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.truncated = 1) AS truncated_count
@@ -321,6 +322,8 @@ export class SQLiteRouteJobStore {
     const plan = planSchema.parse(parseJson(requiredString(row, "plan_json")));
     const started = typeof row.started_at === "string" ? Date.parse(row.started_at) : Date.parse(requiredString(row, "created_at"));
     const ended = typeof row.completed_at === "string" ? Date.parse(row.completed_at) : this.#now().getTime();
+    const failed = integer(row, "failed_count");
+    const error = typeof row.error === "string" ? row.error : failed ? `${failed} trailhead search${failed === 1 ? "" : "es"} failed. Available results are retained.` : undefined;
     return routeJobV2Schema.parse({
       version: 2,
       id,
@@ -335,12 +338,12 @@ export class SQLiteRouteJobStore {
         truncatedAccessPointCount: integer(row, "truncated_count"),
         elapsedMs: Math.max(0, ended - started),
       },
-      partial: status === "cancelled" && integer(row, "processed_count") < integer(row, "eligible_count"),
+      partial: failed > 0 || (status === "cancelled" && integer(row, "processed_count") < integer(row, "eligible_count")),
       stale,
       createdAt: requiredString(row, "created_at"),
       updatedAt: requiredString(row, "updated_at"),
       ...(typeof row.completed_at === "string" ? { completedAt: row.completed_at } : {}),
-      ...(typeof row.error === "string" ? { error: row.error } : {}),
+      ...(error ? { error } : {}),
     });
   }
 

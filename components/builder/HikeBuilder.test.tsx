@@ -142,6 +142,41 @@ describe("geographic workspace", () => {
     await waitFor(() => expect(screen.getByLabelText("Map routes")).toHaveTextContent("second-page"));
     expect(screen.getByRole("button", { name: "Last page" })).toBeDisabled();
   });
+  it("keeps previous routes visible and reports a failed page in Results", async () => {
+    vi.restoreAllMocks();
+    mockBaseFetch((url) => url.includes("/results?") ? url.includes("cursor=")
+      ? json({ error: { message: "The next page is unavailable." } }, 503)
+      : json({ ...savedPage, nextCursor: "next" }) : undefined);
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Next 50 routes" }));
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Results" })).toHaveTextContent("The next page is unavailable."));
+    expect(screen.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+  });
+  it("never substitutes named regions or an old origin for pending or failed geolocation", async () => {
+    let fail: PositionErrorCallback | undefined;
+    const original = Object.getOwnPropertyDescriptor(navigator, "geolocation");
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: {
+      getCurrentPosition: (_success: PositionCallback, error: PositionErrorCallback) => { fail = error; },
+    } });
+    try {
+      render(<HikeBuilder />);
+      await chooseRegions();
+      fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.2, -122.1" } });
+      await userEvent.click(screen.getByRole("button", { name: "Use my current location" }));
+      await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+      await act(async () => fail?.({ code: 1, message: "Denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
+      await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+      expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/search" || (url === "/api/route-jobs" && init?.method === "POST"))).toBe(false);
+      fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "" } });
+      await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+      await screen.findByRole("heading", { name: "Exact matches" });
+      expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area.mode).toBe("named-regions");
+    } finally {
+      if (original) Object.defineProperty(navigator, "geolocation", original);
+      else Reflect.deleteProperty(navigator, "geolocation");
+    }
+  });
   it("resolves the compact grade preset into numeric constraints and persists edits", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     render(<HikeBuilder />);
@@ -291,4 +326,10 @@ it("serializes slow job refreshes and continues polling until a deletion disappe
   expect(result.current.pending).toEqual({});
   await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
   expect(listCalls).toBe(3);
+});
+
+it("loads jobs after StrictMode cancels the initial mount request", async () => {
+  const { result } = renderHook(() => useJobs(false), { wrapper: StrictMode });
+  await waitFor(() => expect(result.current.loadState).toBe("ready"));
+  expect(result.current.jobs.map(({ id }) => id)).toEqual([job.id]);
 });

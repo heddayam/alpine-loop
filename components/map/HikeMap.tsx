@@ -11,7 +11,6 @@ import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../
 
 type HikeMapProps = {
   drawBounds: Bounds | null;
-  drawEnabled: boolean;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
   coverages: Array<Polygon | MultiPolygon>;
@@ -124,8 +123,8 @@ export function contextMenuPosition(
   };
 }
 
-export function mapRequestUrl(bounds: Bounds): string {
-  return `/api/map?${new URLSearchParams({ bbox: bounds.join(",") })}`;
+export function mapRequestUrl(bounds: Bounds, zoom: number): string {
+  return `/api/map?${new URLSearchParams({ bbox: bounds.join(","), trails: zoom >= TRAIL_NETWORK_MIN_ZOOM ? "1" : "0" })}`;
 }
 
 export const mapDataSchema = z.object({
@@ -443,7 +442,6 @@ export function clusterRouteTrailheadPins(
 
 export function HikeMap({
   drawBounds: bounds,
-  drawEnabled,
   filterGeometry,
   refinementGeometry,
   coverages,
@@ -998,7 +996,7 @@ export function HikeMap({
           trailNetworkController = controller;
           styleTrailHover();
           setHoveredTrail(undefined);
-          void fetch(mapRequestUrl([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]), { signal: controller.signal })
+          void fetch(mapRequestUrl([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], map.getZoom()), { signal: controller.signal })
             .then(async (response) => {
               if (!response.ok) throw new Error("Trail map data could not be loaded.");
               const next = mapDataSchema.parse(await response.json());
@@ -1180,7 +1178,7 @@ export function HikeMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !drawing || !drawEnabled) return;
+    if (!map || !drawing) return;
     const previewSource = map.getSource("boundary-preview") as GeoJSONSource | undefined;
     const cornerSource = map.getSource("boundary-preview-corners") as GeoJSONSource | undefined;
     const clearPreview = () => {
@@ -1238,7 +1236,7 @@ export function HikeMap({
       startRef.current = null;
       clearPreview();
     };
-  }, [drawEnabled, drawing, mapReady, onBoundsChange]);
+  }, [drawing, mapReady, onBoundsChange]);
 
   // Escape and any press outside the menu dismiss it; presses on the canvas are
   // already covered by the map's own click handler.
@@ -1288,7 +1286,7 @@ export function HikeMap({
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map" aria-busy={!mapReady}>
-      {drawEnabled ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
+      <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
         <button
           type="button"
           className={`map-tool map-tool-draw${drawing ? " active" : ""}`}
@@ -1301,7 +1299,7 @@ export function HikeMap({
         <button type="button" className="map-tool map-tool-clear" aria-label="Clear trailhead filter" disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
-      </div> : null}
+      </div>
       <div ref={containerRef} className="map-canvas" />
       {mapError ? <p className="map-data-error" role="status">{mapError}</p> : null}
       {contextMenu ? (

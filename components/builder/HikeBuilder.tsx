@@ -83,7 +83,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const originRequestSequenceRef = useRef(0);
   const routeResults = workspace.status === "done" ? workspace.results : workspace.status === "idle" ? null : workspace.previous ?? null;
   const savedResults = routeResults?.kind === "saved" ? routeResults : undefined;
-  const generationState = routeResults ? "done" : workspace.status;
+  const generationState = workspace.status === "error" ? "error" : routeResults ? "done" : workspace.status;
   const generationMessage = workspace.status === "error" ? workspace.message : launchMessage;
   const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
   const ready = settingsLoaded && Boolean(catalog?.coverages.length);
@@ -118,6 +118,10 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     setHoveredRouteId(undefined);
     setMobilePanel("builder");
   }, []);
+  const changeDrawnBounds = useCallback((bounds: Bounds | null) => {
+    clearResults();
+    setDrawnBounds(bounds);
+  }, [clearResults]);
   const runView = useCallback(async (load: (signal: AbortSignal) => Promise<RouteResults>, kind: "quick" | "saved", jobId?: string, previous?: RouteResults) => {
     operation.current?.abort();
     const controller = new AbortController();
@@ -200,10 +204,10 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   };
 
   const useCurrentLocation = () => {
-    if (!navigator.geolocation) { setDriveDraft((current) => ({ ...current, state: "error", error: "Location is not available in this browser." })); return; }
     const sequence = ++originRequestSequenceRef.current;
     editDraft();
-    setDriveDraft((current) => ({ ...current, state: "resolving", error: undefined }));
+    setDriveDraft((current) => ({ ...current, origin: undefined, originText: "Current location", originSuggestions: [], state: "resolving", error: undefined }));
+    if (!navigator.geolocation) { setDriveDraft((current) => ({ ...current, state: "error", error: "Location is not available in this browser." })); return; }
     navigator.geolocation.getCurrentPosition(({ coords }) => {
       if (sequence !== originRequestSequenceRef.current) return;
       const origin = { lon: coords.longitude, lat: coords.latitude, label: "Current location" };
@@ -390,7 +394,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
 
-        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} drawEnabled filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={(bounds) => { clearResults(); setDrawnBounds(bounds); }} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
+        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} onBoundsChange={changeDrawnBounds} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
         {hasResultsPanel ? <ResultsPanel status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} mobileVisible={mobilePanel === "results"} desktopVisible={desktopResultsVisible} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
 

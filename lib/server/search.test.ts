@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchCatalogSchema, searchResultSchema, type SearchRequest } from "@/lib/contracts";
 import { compilePack } from "@/lib/data/compiler";
-import { fixtureCompileOptionsV6, fixturePackSeedV6 } from "@/lib/data/fixture-pack";
+import { fixtureCompileOptions, fixturePackSeed } from "@/lib/data/fixture-pack";
 import { loadInstalledPack, type InstalledPack } from "@/lib/packs/installed-pack";
 import { POST } from "@/app/api/search/route";
 import { mapData } from "./map";
@@ -12,7 +12,7 @@ import { drawnArea, resolveSearchPlan, searchCatalog } from "./search-area";
 import { generateSearch, openSearchSession } from "./search";
 
 const fixtures = vi.hoisted(() => ({ packs: new Map<string, InstalledPack>(), resolveArea: vi.fn() }));
-vi.mock("@/lib/packs/pack-catalog", () => ({ discoverCatalogPacks: async () => ({ installedPacks: fixtures.packs }) }));
+vi.mock("@/lib/packs/pack-catalog", () => ({ discoverCatalogPacks: async () => fixtures.packs }));
 vi.mock("@/lib/reachability/default-service", () => ({ defaultReachabilityService: () => ({ resolveArea: fixtures.resolveArea }) }));
 
 const signal = () => new AbortController().signal;
@@ -32,8 +32,8 @@ beforeAll(async () => {
   vi.stubEnv("ALPINE_PACK_ROOT", root);
   installed = new Map();
   for (const id of ["fixture-pack", "fixture-neighbor"]) {
-    await compilePack(await fixtureCompileOptionsV6(root, undefined, undefined, undefined, {
-      seed: { ...fixturePackSeedV6, id, name: id },
+    await compilePack(await fixtureCompileOptions(root, undefined, undefined, undefined, {
+      seed: { ...fixturePackSeed, id, name: id },
       searchRegions: { version: 1, regions: [{ namedAreaId: "osm:relation/1001", expectedName: "Redwood Preserve" }] },
     }));
     installed.set(id, (await loadInstalledPack(id, root))!);
@@ -41,7 +41,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   fixtures.packs = new Map(installed);
-  fixtures.resolveArea.mockReset().mockResolvedValue({ geometry: drawnArea(fixturePackSeedV6.coverage.bbox), resolvedAt: "2026-09-06T00:00:00Z" });
+  fixtures.resolveArea.mockReset().mockResolvedValue({ geometry: drawnArea(fixturePackSeed.coverage.bbox), resolvedAt: "2026-09-06T00:00:00Z" });
 });
 afterAll(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 
@@ -65,11 +65,14 @@ describe("geographic search with production storage and compute", () => {
     const catalog = searchCatalogSchema.parse(await searchCatalog());
     expect(catalog.regions.map(({ id }) => id)).toEqual(["fixture-pack::osm:relation/1001", "fixture-neighbor::osm:relation/1001"]);
     expect(catalog).not.toHaveProperty("packs");
-    const map = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeedV6.coverage.bbox}`));
+    const map = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`));
     expect(map.accessPoints.length).toBeGreaterThan(0);
     expect(new Set(map.accessPoints.map(({ id }) => id)).size).toBe(map.accessPoints.length);
     expect(map.accessPoints.every(({ id }) => id.includes("::"))).toBe(true);
     expect(map.trailNetwork.features.length).toBeGreaterThan(0);
+    const overview = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}&trails=0`));
+    expect(overview.accessPoints).toEqual(map.accessPoints);
+    expect(overview.trailNetwork.features).toEqual([]);
   });
 
   it("resolves one contour for all data and returns an honest empty result outside coverage", async () => {

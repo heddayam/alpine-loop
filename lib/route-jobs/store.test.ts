@@ -57,6 +57,25 @@ const resolved = {
 };
 
 describe("SQLiteRouteJobStore", () => {
+  it("discloses failed trailhead attempts while retaining successful results", () => {
+    const { store } = setup();
+    const id = "00000000-0000-4000-8000-000000000015";
+    try {
+      store.create(id, regionWideRequest, resolved);
+      store.claimNext();
+      store.initializeAccessPoints(id, ["first", "second"]);
+      store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "first", route: route("saved") }], false);
+      store.failAccessPoint(id, 1, "Worker stopped unexpectedly.");
+      store.finish(id, "completed");
+      expect(store.toPublic(id, false)).toMatchObject({
+        status: "completed", partial: true,
+        error: "1 trailhead search failed. Available results are retained.",
+        progress: { processedAccessPointCount: 2, exactRouteCount: 1 },
+      });
+      expect(store.pageResults(id, undefined, 20).results.map(({ route }) => route.id)).toEqual(["saved"]);
+    } finally { store.close(); }
+  });
+
   it("persists the resolved area snapshot independently of installed data", () => {
     const { path, store } = setup();
     const id = "00000000-0000-4000-8000-000000000014";

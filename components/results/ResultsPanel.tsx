@@ -8,7 +8,7 @@ import type {
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
 
-export type ResultsStatus = "loading" | "done" | "error" | "cancelled";
+export type ResultsStatus = "loading" | "done" | "error";
 
 type ResultsPanelProps = {
   status: ResultsStatus;
@@ -445,20 +445,11 @@ export function ResultsPanel({
     );
   }
 
-  if (status === "error") {
+  if (status === "error" && !results) {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
         <ResultsHeading onClose={onClose} />
         <div className="results-state error-state" role="alert"><strong>Routes could not be generated.</strong><span>{message ?? "Try a different area or looser constraints."}</span></div>
-      </aside>
-    );
-  }
-
-  if (status === "cancelled") {
-    return (
-      <aside className={panelClassName} aria-labelledby="results-title">
-        <ResultsHeading onClose={onClose} />
-        <div className="results-state cancelled-state" role="status" aria-live="polite"><strong>No routes were changed.</strong><span>Adjust your settings and search again.</span></div>
       </aside>
     );
   }
@@ -472,6 +463,7 @@ export function ResultsPanel({
   return (
     <aside className={panelClassName} aria-labelledby="results-title">
       <ResultsHeading total={total} onClose={onClose} />
+      {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
       <p className="viewed-search-context">Viewing {quick?.area.label ?? job?.area.label} · {(quick?.request.criteria ?? job!.request.criteria).distanceMiles.min}–{(quick?.request.criteria ?? job!.request.criteria).distanceMiles.max} mi</p>
 
       {quick && results.exact.length < quick.request.limit ? (
