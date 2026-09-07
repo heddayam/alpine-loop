@@ -4,18 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeatureCollection } from "geojson";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
+import { routeStart } from "../results/route-start";
 import { HikeMap } from "./HikeMap";
 
 type Handler = (event: Record<string, unknown>) => void;
-const recording = vi.hoisted(() => ({ maps: [] as RecordingMap[], markers: [] as RecordingMarker[] }));
+const recording = vi.hoisted(() => ({ maps: [] as RecordingMap[] }));
 
-class RecordingMarker {
-  removed = false;
-  constructor(readonly options: { element: HTMLElement }) { recording.markers.push(this); }
-  setLngLat = vi.fn().mockReturnThis();
-  addTo = vi.fn().mockReturnThis();
-  remove = vi.fn(() => { this.removed = true; });
-}
 class RecordingMap {
   sources = new Map<string, { data: FeatureCollection; setData: ReturnType<typeof vi.fn>; getClusterExpansionZoom: ReturnType<typeof vi.fn> }>();
   layers = new Map<string, Record<string, unknown>>();
@@ -39,10 +33,9 @@ class RecordingMap {
   getCanvas() { return this.canvas; }
   getZoom() { return 13; }
   getBounds() { return { getWest: () => -123, getSouth: () => 36, getEast: () => -120, getNorth: () => 39, contains: () => true }; }
-  project([x, y]: number[]) { return { x: x! * 1000, y: y! * 1000 }; }
   fitBounds = vi.fn();
   easeTo = vi.fn();
-  queryRenderedFeatures = vi.fn(() => []);
+  queryRenderedFeatures = vi.fn<(point: unknown, options: { layers: string[] }) => Array<{ properties: Record<string, unknown> }>>(() => []);
   on(type: string, layerOrHandler: string | Handler, handler?: Handler) {
     const key = typeof layerOrHandler === "string" ? `${type}:${layerOrHandler}` : type;
     const set = this.handlers.get(key) ?? new Set();
@@ -63,7 +56,6 @@ class RecordingMap {
 
 vi.mock("maplibre-gl", () => ({
   Map: RecordingMap,
-  Marker: RecordingMarker,
   NavigationControl: class {},
   setWorkerUrl: vi.fn(),
 }));
@@ -81,13 +73,12 @@ function route(id: string, longitude = -122): GeneratedClosedRouteV3 {
 const display = { center: [-122, 37] as [number, number], zoom: 13 };
 function props(routes = [route("first"), route("second", -121.8)]): ComponentProps<typeof HikeMap> {
   return { drawBounds: null, coverages: [], showRegionBoundaries: false, display, includeUncertainAccess: true, routes,
-    selectedRouteId: routes[0]?.id, onBoundsChange: vi.fn(), onRouteSelect: vi.fn(), onRouteHover: vi.fn(), onSegmentSelect: vi.fn(), onSegmentHover: vi.fn() };
+    selectedRouteId: routes[0]?.id, onBoundsChange: vi.fn(), onStartSelect: vi.fn(), onRouteHover: vi.fn(), onSegmentSelect: vi.fn(), onSegmentHover: vi.fn() };
 }
 let resize: ResizeObserverCallback;
 let disconnect: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   recording.maps.length = 0;
-  recording.markers.length = 0;
   disconnect = vi.fn();
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: ResizeObserverCallback) { resize = callback; }
@@ -112,16 +103,16 @@ describe("MapLibre workspace lifecycle", () => {
     const initial = props();
     const view = render(<HikeMap {...initial} />);
     const map = await loadMap();
-    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 1]]);
+    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 1], ["generated-starts", 1]]);
     expect(map.getSource("generated-routes")?.data.features.map((feature) => feature.geometry)).toEqual(initial.routes.map(({ geometry }) => geometry));
     for (const hoveredRouteId of ["second", "first", undefined, "second"]) {
       view.rerender(<HikeMap {...initial} hoveredRouteId={hoveredRouteId} hoveredSegmentId="first:2" />);
     }
-    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 1]]);
+    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 1], ["generated-starts", 1]]);
     expect(map.getLayer("generated-route-hover")?.filter).toEqual(["in", ["get", "id"], ["literal", ["second"]]]);
     expect(map.getLayer("generated-route-segment-focus")?.filter).toEqual(["in", ["get", "id"], ["literal", ["first:2"]]]);
     view.rerender(<HikeMap {...initial} selectedRouteId="second" hoveredRouteId="second" selectedSegmentId="second:1" />);
-    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 2]]);
+    expect(routeUploads(map)).toEqual([["generated-routes", 1], ["generated-route-segments", 2], ["generated-starts", 1]]);
     expect(map.getSource("generated-route-segments")?.data.features.map(({ properties }) => properties?.routeId)).toEqual(["second", "second"]);
     expect(map.getLayer("generated-route-hover")?.filter).toEqual(["in", ["get", "id"], ["literal", []]]);
     expect(map.getLayer("generated-route-selected")?.filter).toEqual(["in", ["get", "id"], ["literal", ["second"]]]);
@@ -130,6 +121,51 @@ describe("MapLibre workspace lifecycle", () => {
     expect(initial.onSegmentSelect).toHaveBeenCalledWith("second:1");
     act(() => map.emit("mousemove", { id: "first" }, "generated-route-hit-target"));
     expect(initial.onRouteHover).toHaveBeenCalledWith("first");
+  });
+
+  it("renders native start circles and counts, and delegates route activation to the panel", async () => {
+    const first = route("first");
+    const shared = { ...route("shared"), startAccessPoint: first.startAccessPoint };
+    const initial = props([first, shared, route("elsewhere", -121.8)]);
+    const view = render(<HikeMap {...initial} />);
+    const map = await loadMap();
+    const key = routeStart(first).key;
+    expect(map.getSource("generated-starts")?.data.features.map(({ properties }) => properties?.count)).toEqual([2, 1]);
+    expect(map.getLayer("generated-starts")).toMatchObject({ type: "circle", source: "generated-starts" });
+    expect(map.getLayer("generated-start-counts")).toMatchObject({ type: "symbol", layout: { "text-field": ["to-string", ["get", "count"]], "text-font": ["sans-serif"] } });
+    act(() => map.emit("click", { key }, "generated-starts"));
+    act(() => map.emit("click", { id: shared.id, startKey: key }, "generated-route-hit-target"));
+    expect(vi.mocked(initial.onStartSelect).mock.calls).toEqual([[key], [key]]);
+    const latestSelect = vi.fn();
+    view.rerender(<HikeMap {...initial} selectedStartKey={key} onStartSelect={latestSelect} />);
+    act(() => map.emit("click", { key }, "generated-starts"));
+    expect(latestSelect).toHaveBeenCalledWith(key);
+    expect(map.setPaintProperty).toHaveBeenCalledWith("generated-starts", "circle-color", ["case", ["==", ["get", "key"], key], "#d83b20", "#2f6a55"]);
+    expect(recording.maps).toHaveLength(1);
+    expect(map.getSource("generated-starts")?.setData).toHaveBeenCalledOnce();
+  });
+
+  it("prioritizes starts over overlapping route and segment gestures", async () => {
+    const initial = props();
+    render(<HikeMap {...initial} />);
+    const map = await loadMap();
+    map.queryRenderedFeatures.mockImplementation((_point, options) => options.layers.includes("generated-starts") ? [{ properties: { key: "start" } }] : []);
+    act(() => {
+      map.emit("click", { id: "first", startKey: "start" }, "generated-route-hit-target");
+      map.emit("click", { id: "first:1" }, "generated-route-segment-hit-target");
+      map.emit("mousemove", { id: "first" }, "generated-route-hit-target");
+      map.emit("mousemove", { id: "first:1" }, "generated-route-segment-hit-target");
+      map.emit("mousemove", { key: "start", name: "Start", count: 2 }, "generated-starts");
+      map.emit("click", { key: "start" }, "generated-starts");
+    });
+    expect(initial.onStartSelect).toHaveBeenCalledExactlyOnceWith("start");
+    expect(initial.onSegmentSelect).not.toHaveBeenCalled();
+    expect(initial.onRouteHover).not.toHaveBeenCalledWith("first");
+    expect(initial.onSegmentHover).not.toHaveBeenCalledWith("first:1");
+    expect(screen.getByRole("status").textContent).toBe("2 routesStart");
+    act(() => map.emit("movestart"));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(map.canvas.style.cursor).toBe("");
   });
 
   it("uses the latest inputs after a delayed load and frames changes to middle result IDs", async () => {
@@ -164,26 +200,24 @@ describe("MapLibre workspace lifecycle", () => {
       map.emit("click", { trailGroupId: "trail", name: "Trail" }, "trail-network-hit-target");
       map.emit("contextmenu");
     });
-    const pin = recording.markers.find((marker) => !marker.removed)!.options.element.querySelector("button")!;
-    fireEvent.click(pin);
-    expect(initial.onRouteSelect).not.toHaveBeenCalled();
+    act(() => map.emit("click", { key: "first-start" }, "generated-starts"));
+    expect(initial.onStartSelect).not.toHaveBeenCalled();
     expect(initial.onSegmentSelect).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
     expect(screen.queryByRole("menu")).toBeNull();
     expect(map.canvas.style.cursor).toBe("crosshair");
     act(() => { map.emit("mousemove", {}, undefined, { lng: -121.9, lat: 37.1 }); map.emit("mouseup", {}, undefined, { lng: -121.9, lat: 37.1 }); });
     expect(initial.onBoundsChange).toHaveBeenCalledWith([-122, 37, -121.9, 37.1]);
-    fireEvent.click(pin, { detail: 1 });
+    act(() => map.emit("click", { key: "first-start" }, "generated-starts"));
     act(() => { map.emit("click", { id: "second" }, "generated-route-hit-target"); });
-    expect(initial.onRouteSelect).not.toHaveBeenCalled();
-    // Keyboard activation has no new pointer press and remains available.
-    fireEvent.click(pin, { detail: 0 });
-    expect(initial.onRouteSelect).toHaveBeenCalledWith("first");
-    act(() => { map.emit("mousedown"); map.emit("click", { id: "second" }, "generated-route-hit-target"); });
-    expect(initial.onRouteSelect).toHaveBeenCalledWith("second");
+    expect(initial.onStartSelect).not.toHaveBeenCalled();
+    act(() => { map.emit("mousedown"); map.emit("click", { startKey: "second-start" }, "generated-route-hit-target"); });
+    expect(initial.onStartSelect).toHaveBeenCalledWith("second-start");
+    act(() => map.emit("click", { key: "first-start" }, "generated-starts"));
+    expect(initial.onStartSelect).toHaveBeenCalledWith("first-start");
   });
 
-  it("resizes the retained map and cleans up requests, markers and listeners", async () => {
+  it("resizes the retained map and cleans up requests and native listeners", async () => {
     const view = render(<HikeMap {...props()} />);
     const map = await loadMap();
     act(() => resize([], {} as ResizeObserver));
@@ -194,7 +228,6 @@ describe("MapLibre workspace lifecycle", () => {
     expect(signal?.aborted).toBe(true);
     expect(map.remove).toHaveBeenCalledOnce();
     expect(disconnect).toHaveBeenCalledOnce();
-    expect(recording.markers.every(({ removed }) => removed)).toBe(true);
     expect([...map.handlers.values()].every((handlers) => handlers.size === 0)).toBe(true);
     act(() => resize([], {} as ResizeObserver));
     expect(map.resize).toHaveBeenCalledOnce();
@@ -208,7 +241,6 @@ describe("MapLibre workspace lifecycle", () => {
     act(() => pendingLoad({}));
     expect(map.sources.size).toBe(0);
     expect(fetch).not.toHaveBeenCalled();
-    expect(recording.markers).toHaveLength(0);
   });
 
 });

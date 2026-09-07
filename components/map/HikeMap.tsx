@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
-import type { DataDrivenPropertyValueSpecification, ExpressionSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource, Marker } from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, ExpressionSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import { lineStringSchema, type GeneratedClosedRouteV3 } from "@/lib/contracts";
 import { z } from "zod";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
+import { routeStart } from "../results/route-start";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 
 type HikeMapProps = {
@@ -19,11 +20,12 @@ type HikeMapProps = {
   includeUncertainAccess: boolean;
   routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
+  selectedStartKey?: string;
   hoveredRouteId?: string;
   selectedSegmentId?: string;
   hoveredSegmentId?: string;
   onBoundsChange: (bounds: Bounds | null) => void;
-  onRouteSelect: (id: string) => void;
+  onStartSelect: (key: string) => void;
   onRouteHover?: (id?: string) => void;
   onSegmentSelect?: (id: string) => void;
   onSegmentHover?: (id?: string) => void;
@@ -73,6 +75,7 @@ type HoveredAccessPoint = {
 };
 
 const TRAIL_CLICK_PRIORITY_LAYERS = [
+  "generated-starts",
   "generated-route-segment-hit-target",
   "generated-route-hit-target",
   "access-points",
@@ -190,24 +193,6 @@ export function lineBounds(geometry: LineString): Bounds | null {
   return Number.isFinite(west) ? [west, south, east, north] : null;
 }
 
-export type RouteTrailheadPin = {
-  key: string;
-  coordinates: [number, number];
-  name: string;
-  routeIds: string[];
-  routeNumbers: number[];
-  numberLabel: string;
-  selected: boolean;
-  nextRouteId: string;
-};
-
-// A selected numbered pin is about 22px wide. Split a cluster as soon as its
-// centers clear that footprint, so numbering returns before deep trail zooms.
-export const ROUTE_PIN_CLUSTER_RADIUS_PX = 22;
-export const ROUTE_PIN_NUMBER_MIN_ZOOM = 11;
-
-type RoutePinScreenPoint = { x: number; y: number };
-
 const EMPTY_POINTS: FeatureCollection<Point> = { type: "FeatureCollection", features: [] };
 const EMPTY_LINES: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
 
@@ -263,11 +248,11 @@ export function accessPointFeatures(
 export function routeFeatures(routes: GeneratedClosedRouteV3[]): FeatureCollection<LineString> {
   return {
     type: "FeatureCollection",
-    features: routes.map((route, index) => ({
+    features: routes.map((route) => ({
       type: "Feature",
       properties: {
         id: route.id,
-        routeNumber: index + 1,
+        startKey: routeStart(route).key,
         shape: route.topology.kind,
       },
       geometry: route.geometry,
@@ -296,130 +281,19 @@ function routeFilter(id?: string): ExpressionSpecification {
   return ["in", ["get", "id"], ["literal", id === undefined ? [] : [id]]];
 }
 
-function numberLabel(numbers: number[]): string {
-  if (numbers.length <= 4) return numbers.join("·");
-  const consecutive = numbers.every((number, index) => index === 0 || number === numbers[index - 1]! + 1);
-  return consecutive ? `${numbers[0]}–${numbers.at(-1)}` : `${numbers.slice(0, 3).join("·")}+${numbers.length - 3}`;
-}
-
-export function routeTrailheadPins(routes: GeneratedClosedRouteV3[], selectedRouteId?: string): RouteTrailheadPin[] {
-  const groups = new Map<string, Omit<RouteTrailheadPin, "numberLabel" | "selected" | "nextRouteId">>();
-  routes.forEach((route, index) => {
-    const point = route.startAccessPoint;
-    const firstCoordinate = route.geometry.coordinates[0];
-    const coordinates: [number, number] = firstCoordinate
-      ? [firstCoordinate[0], firstCoordinate[1]]
-      : [point.lon, point.lat];
-    const key = `${point.id}:${coordinates[0]}:${coordinates[1]}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.routeIds.push(route.id);
-      existing.routeNumbers.push(index + 1);
-      return;
-    }
-    groups.set(key, {
-      key,
-      coordinates,
-      name: point.name,
-      routeIds: [route.id],
-      routeNumbers: [index + 1],
+/** One feature per real start; nearby starts never acquire an invented midpoint. */
+export function routeStartFeatures(routes: GeneratedClosedRouteV3[]): FeatureCollection<Point> {
+  const starts = new Map<string, Feature<Point, { key: string; name: string; count: number }>>();
+  for (const route of routes) {
+    const { key, name, coordinates } = routeStart(route);
+    const existing = starts.get(key);
+    if (existing) existing.properties.count += 1;
+    else starts.set(key, {
+      type: "Feature", properties: { key, name, count: 1 },
+      geometry: { type: "Point", coordinates },
     });
-  });
-
-  return [...groups.values()].map((group) => {
-    const selectedIndex = selectedRouteId ? group.routeIds.indexOf(selectedRouteId) : -1;
-    return {
-      ...group,
-      numberLabel: numberLabel(group.routeNumbers),
-      selected: selectedIndex >= 0,
-      nextRouteId: selectedIndex >= 0
-        ? group.routeIds[(selectedIndex + 1) % group.routeIds.length]!
-        : group.routeIds[0]!,
-    };
-  });
-}
-
-export function clusterRouteTrailheadPins(
-  pins: RouteTrailheadPin[],
-  selectedRouteId: string | undefined,
-  project: (coordinates: [number, number]) => RoutePinScreenPoint,
-  radiusPx = ROUTE_PIN_CLUSTER_RADIUS_PX,
-): RouteTrailheadPin[] {
-  if (pins.length < 2) return pins;
-
-  // Result sets contain at most 20 routes, so a small connected-components
-  // pass keeps grouping deterministic while allowing a chain of nearby starts
-  // to read as one cluster at low zoom.
-  const screenPoints = pins.map((pin) => project(pin.coordinates));
-  const parents = pins.map((_, index) => index);
-  const root = (index: number): number => {
-    let current = index;
-    while (parents[current] !== current) {
-      parents[current] = parents[parents[current]!]!;
-      current = parents[current]!;
-    }
-    return current;
-  };
-  const join = (left: number, right: number) => {
-    const leftRoot = root(left);
-    const rightRoot = root(right);
-    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
-  };
-
-  for (let left = 0; left < pins.length; left += 1) {
-    for (let right = left + 1; right < pins.length; right += 1) {
-      const dx = screenPoints[left]!.x - screenPoints[right]!.x;
-      const dy = screenPoints[left]!.y - screenPoints[right]!.y;
-      if ((dx * dx) + (dy * dy) <= radiusPx * radiusPx) join(left, right);
-    }
   }
-
-  const groups = new Map<number, number[]>();
-  pins.forEach((_, index) => {
-    const groupRoot = root(index);
-    groups.set(groupRoot, [...(groups.get(groupRoot) ?? []), index]);
-  });
-
-  return [...groups.values()].map((indexes) => {
-    if (indexes.length === 1) return pins[indexes[0]!]!;
-
-    const members = indexes
-      .flatMap((index) => pins[index]!.routeNumbers.map((routeNumber, routeIndex) => ({
-        routeNumber,
-        routeId: pins[index]!.routeIds[routeIndex]!,
-      })))
-      .sort((left, right) => left.routeNumber - right.routeNumber);
-    const routeIds = members.map(({ routeId }) => routeId);
-    const routeNumbers = members.map(({ routeNumber }) => routeNumber);
-    const selectedIndex = selectedRouteId ? routeIds.indexOf(selectedRouteId) : -1;
-    const center = indexes.reduce<RoutePinScreenPoint>((total, index) => ({
-      x: total.x + screenPoints[index]!.x / indexes.length,
-      y: total.y + screenPoints[index]!.y / indexes.length,
-    }), { x: 0, y: 0 });
-    const selectedPinIndex = indexes.find((index) => pins[index]!.selected);
-    const anchorIndex = selectedPinIndex ?? indexes.reduce((closest, index) => {
-      const closestDistance = ((screenPoints[closest]!.x - center.x) ** 2) + ((screenPoints[closest]!.y - center.y) ** 2);
-      const distance = ((screenPoints[index]!.x - center.x) ** 2) + ((screenPoints[index]!.y - center.y) ** 2);
-      return distance < closestDistance ? index : closest;
-    });
-    const names = [...new Set(indexes.map((index) => pins[index]!.name))];
-
-    return {
-      key: `cluster:${indexes.map((index) => pins[index]!.key).sort().join("|")}`,
-      // A cluster is a summary, but its anchor must still be geographically
-      // honest. Prefer the selected start, otherwise the member closest to the
-      // group center; never invent a midpoint where no route starts.
-      coordinates: pins[anchorIndex]!.coordinates,
-      name: names.join(", "),
-      routeIds,
-      routeNumbers,
-      numberLabel: numberLabel(routeNumbers),
-      selected: selectedIndex >= 0,
-      nextRouteId: selectedIndex >= 0
-        ? routeIds[(selectedIndex + 1) % routeIds.length]!
-        : routeIds[0]!,
-    };
-  });
+  return { type: "FeatureCollection", features: [...starts.values()] };
 }
 
 export function HikeMap({
@@ -432,22 +306,21 @@ export function HikeMap({
   includeUncertainAccess,
   routes,
   selectedRouteId,
+  selectedStartKey,
   hoveredRouteId,
   selectedSegmentId,
   hoveredSegmentId,
   onBoundsChange,
-  onRouteSelect,
+  onStartSelect,
   onRouteHover,
   onSegmentSelect,
   onSegmentHover,
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markerFactoryRef = useRef<typeof Marker | null>(null);
-  const markersRef = useRef<Marker[]>([]);
   const fittedRouteSetRef = useRef<string>(undefined);
   const onRouteHoverRef = useRef(onRouteHover);
-  const onRouteSelectRef = useRef(onRouteSelect);
+  const onStartSelectRef = useRef(onStartSelect);
   const onSegmentSelectRef = useRef(onSegmentSelect);
   const onSegmentHoverRef = useRef(onSegmentHover);
   const startRef = useRef<[number, number] | null>(null);
@@ -501,10 +374,10 @@ export function HikeMap({
   // tore down and rebuilt the whole map on every keystroke in the plan panel.
   useEffect(() => {
     onRouteHoverRef.current = onRouteHover;
-    onRouteSelectRef.current = onRouteSelect;
+    onStartSelectRef.current = onStartSelect;
     onSegmentSelectRef.current = onSegmentSelect;
     onSegmentHoverRef.current = onSegmentHover;
-  }, [onRouteHover, onRouteSelect, onSegmentHover, onSegmentSelect]);
+  }, [onRouteHover, onStartSelect, onSegmentHover, onSegmentSelect]);
 
   useEffect(() => {
     boundsRef.current = bounds;
@@ -536,10 +409,9 @@ export function HikeMap({
     let map: MapLibreMap | null = null;
     let trailNetworkController: AbortController | null = null;
     let resizeObserver: ResizeObserver | undefined;
-    void import("maplibre-gl").then(({ Map, Marker: MarkerClass, NavigationControl, setWorkerUrl }) => {
+    void import("maplibre-gl").then(({ Map, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
       setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
-      markerFactoryRef.current = MarkerClass;
       map = new Map({
         container: containerRef.current,
         center: display.center,
@@ -730,7 +602,19 @@ export function HikeMap({
             paint: { "line-color": color, "line-width": width, "line-opacity": opacity },
           });
         }
-        const cursorTargets = { route: false, segment: false, trail: false, accessPoint: false };
+        // Circles always render; only the count labels participate in native
+        // collision handling. Omitting glyphs uses MapLibre's local font renderer.
+        map?.addSource("generated-starts", { type: "geojson", data: EMPTY_POINTS });
+        map?.addLayer({
+          id: "generated-starts", type: "circle", source: "generated-starts",
+          paint: { "circle-radius": 10, "circle-color": ROUTE_ALTERNATE },
+        });
+        map?.addLayer({
+          id: "generated-start-counts", type: "symbol", source: "generated-starts",
+          layout: { "text-field": ["to-string", ["get", "count"]], "text-font": ["sans-serif"], "text-size": 11 },
+          paint: { "text-color": "#ffffff" },
+        });
+        const cursorTargets = { start: false, route: false, segment: false, trail: false, accessPoint: false };
         const syncInteractiveCursor = () => {
           const canvas = map?.getCanvas();
           if (!canvas) return;
@@ -738,6 +622,9 @@ export function HikeMap({
           if (Object.values(cursorTargets).some(Boolean)) canvas.style.setProperty("cursor", "pointer");
           else canvas.style.removeProperty("cursor");
         };
+        const startAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
+          map?.queryRenderedFeatures(point, { layers: ["generated-starts"] }).length,
+        );
         const routeSegmentAtPoint = (point: MapLayerMouseEvent["point"]) => Boolean(
           map?.queryRenderedFeatures(point, { layers: ["generated-route-segment-hit-target"] }).length,
         );
@@ -750,14 +637,33 @@ export function HikeMap({
           });
         };
         map?.on("mousedown", () => { if (!drawingRef.current) drawingClickRef.current = false; });
-        const selectRoute = (event: MapLayerMouseEvent) => {
-          if (routeSegmentAtPoint(event.point)) return;
-          const id = event.features?.[0]?.properties?.id;
-          if (typeof id === "string") onRouteSelectRef.current(id);
+        const selectStart = (event: MapLayerMouseEvent) => {
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point)) return;
+          const key = event.features?.[0]?.properties?.startKey;
+          if (typeof key === "string") onStartSelectRef.current(key);
         };
-        onFeature("click", "generated-route-hit-target", selectRoute);
+        onFeature("click", "generated-route-hit-target", selectStart);
+        onFeature("click", "generated-starts", (event) => {
+          const key = event.features?.[0]?.properties?.key;
+          if (typeof key === "string") onStartSelectRef.current(key);
+        });
+        onFeature("mousemove", "generated-starts", (event) => {
+          const properties = event.features?.[0]?.properties;
+          if (typeof properties?.key !== "string") return;
+          cursorTargets.start = true;
+          syncInteractiveCursor();
+          previewRoute(undefined);
+          onSegmentHoverRef.current?.(undefined);
+          setHoveredTrail(undefined);
+          setHoveredAccessPoint({ id: properties.key, name: properties.name || "Unnamed trailhead", kindLabel: `${properties.count} ${properties.count === 1 ? "route" : "routes"}` });
+        });
+        onFeature("mouseleave", "generated-starts", () => {
+          cursorTargets.start = false;
+          syncInteractiveCursor();
+          setHoveredAccessPoint(undefined);
+        });
         onFeature("mousemove", "generated-route-hit-target", (event) => {
-          if (routeSegmentAtPoint(event.point)) {
+          if (startAtPoint(event.point) || routeSegmentAtPoint(event.point)) {
             cursorTargets.route = false;
             syncInteractiveCursor();
             previewRoute(undefined);
@@ -775,10 +681,17 @@ export function HikeMap({
           previewRoute(undefined);
         });
         onFeature("click", "generated-route-segment-hit-target", (event) => {
+          if (startAtPoint(event.point)) return;
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") onSegmentSelectRef.current?.(id);
         });
         onFeature("mousemove", "generated-route-segment-hit-target", (event) => {
+          if (startAtPoint(event.point)) {
+            cursorTargets.segment = false;
+            syncInteractiveCursor();
+            onSegmentHoverRef.current?.(undefined);
+            return;
+          }
           const id = event.features?.[0]?.properties?.id;
           if (typeof id !== "string") return;
           cursorTargets.segment = true;
@@ -851,6 +764,7 @@ export function HikeMap({
         onFeature("mouseleave", "trail-network-hit-target", clearTrailHover);
         // Clicking a cluster zooms to the level where it breaks apart.
         onFeature("click", "access-point-clusters", (event) => {
+          if (startAtPoint(event.point)) return;
           const clusterId = event.features?.[0]?.properties?.cluster_id;
           const source = map?.getSource("access-points") as GeoJSONSource | undefined;
           if (typeof clusterId !== "number" || !source) return;
@@ -859,6 +773,7 @@ export function HikeMap({
           }).catch(() => undefined);
         });
         onFeature("mouseenter", "access-point-clusters", (event) => {
+          if (startAtPoint(event.point)) return;
           const clusterId = event.features?.[0]?.properties?.cluster_id;
           const pointCount = event.features?.[0]?.properties?.point_count;
           if (typeof clusterId !== "number") return;
@@ -876,6 +791,7 @@ export function HikeMap({
           clearAccessPointHover();
         });
         onFeature("click", "access-points", (event) => {
+          if (startAtPoint(event.point)) return;
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
           if (!details.copyName) return;
@@ -895,6 +811,7 @@ export function HikeMap({
           });
         });
         onFeature("mouseenter", "access-points", (event) => {
+          if (startAtPoint(event.point)) return;
           const details = accessPointFeatureDetails(event.features?.[0]?.properties);
           if (!details.id) return;
           clearTrailHover();
@@ -908,6 +825,7 @@ export function HikeMap({
         });
         map?.on("movestart", () => {
           previewRoute(undefined);
+          cursorTargets.start = false;
           cursorTargets.route = false;
           cursorTargets.segment = false;
           clearTrailHover();
@@ -956,8 +874,6 @@ export function HikeMap({
       alive = false;
       trailNetworkController?.abort();
       resizeObserver?.disconnect();
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current = [];
       map?.remove();
       mapRef.current = null;
       fittedRouteSetRef.current = undefined;
@@ -988,6 +904,7 @@ export function HikeMap({
     const map = mapRef.current;
     if (!map || !mapReady) return;
     (map.getSource("generated-routes") as GeoJSONSource | undefined)?.setData(routeFeatures(routes));
+    (map.getSource("generated-starts") as GeoJSONSource | undefined)?.setData(routeStartFeatures(routes));
   }, [mapReady, routes]);
 
   useEffect(() => {
@@ -1011,90 +928,14 @@ export function HikeMap({
     mapRef.current?.setFilter("generated-route-segment-focus", routeFilter(hoveredSegmentId ?? selectedSegmentId));
   }, [hoveredSegmentId, mapReady, selectedSegmentId]);
 
-  // Numbered start pins are DOM markers rather than a symbol layer: the style
-  // ships no glyph endpoint, so map-rendered text would never appear at all.
   useEffect(() => {
     const map = mapRef.current;
-    const MarkerFactory = markerFactoryRef.current;
-    if (!map || !mapReady || !MarkerFactory) return;
-    let markers: Marker[] = [];
-    const clearMarkers = () => {
-      markers.forEach((marker) => marker.remove());
-      markers = [];
-      markersRef.current = [];
-    };
-    const renderMarkers = () => {
-      clearMarkers();
-      const numbered = map.getZoom() >= ROUTE_PIN_NUMBER_MIN_ZOOM;
-      const exactPins = routeTrailheadPins(routes, selectedRouteId);
-      const pins = numbered
-        ? exactPins
-        : clusterRouteTrailheadPins(exactPins, selectedRouteId, (coordinates) => map.project(coordinates));
-      markers = pins.map((pin) => {
-        if (numbered && pin.routeIds.length > 1) {
-          const anchor = document.createElement("div");
-          anchor.className = "route-pin-expanded";
-          const grid = document.createElement("div");
-          grid.className = pin.routeIds.length > 4 ? "route-pin-expanded-grid many" : "route-pin-expanded-grid";
-          pin.routeIds.forEach((routeId, index) => {
-            const routeNumber = pin.routeNumbers[index]!;
-            const element = document.createElement("button");
-            element.type = "button";
-            element.className = ["route-pin", routeId === selectedRouteId ? "selected" : ""].filter(Boolean).join(" ");
-            element.textContent = String(routeNumber);
-            element.title = pin.name;
-            element.setAttribute("aria-label", `Route ${routeNumber} start at ${pin.name}`);
-            element.addEventListener("click", (event) => { event.stopPropagation(); if (drawingRef.current || (drawingClickRef.current && event.detail !== 0)) return; onRouteSelectRef.current(routeId); });
-            element.addEventListener("mouseenter", () => { if (!drawingRef.current) previewRoute(routeId); });
-            element.addEventListener("mouseleave", () => previewRoute(undefined));
-            grid.append(element);
-          });
-          const tip = document.createElement("span");
-          tip.className = pin.selected ? "route-pin-tip selected" : "route-pin-tip";
-          tip.setAttribute("aria-hidden", "true");
-          anchor.append(grid, tip);
-          return new MarkerFactory({ element: anchor, anchor: "bottom", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
-        }
-
-        // MapLibre writes its positioning transform onto the element it is
-        // given, so only the button inside the anchor may animate.
-        const anchor = document.createElement("div");
-        anchor.className = "route-pin-anchor";
-        const element = document.createElement("button");
-        const overview = !numbered;
-        const groupedOverview = overview && pin.routeIds.length > 1;
-        const groupSize = pin.routeIds.length > 9 ? "dense" : pin.routeIds.length > 4 ? "many" : "";
-        element.type = "button";
-        element.className = [
-          "route-pin",
-          pin.selected ? "selected" : "",
-          groupedOverview ? "overview" : "",
-          groupedOverview ? groupSize : pin.numberLabel.length > 3 ? "wide" : "",
-        ].filter(Boolean).join(" ");
-        element.textContent = groupedOverview ? "" : pin.numberLabel;
-        element.title = groupedOverview ? `${pin.routeIds.length} results near ${pin.name}` : pin.name;
-        element.setAttribute(
-          "aria-label",
-          groupedOverview
-            ? `${pin.routeIds.length} result starts near ${pin.name}`
-            : `Route ${pin.numberLabel} start at ${pin.name}`,
-        );
-        element.addEventListener("click", (event) => { event.stopPropagation(); if (drawingRef.current || (drawingClickRef.current && event.detail !== 0)) return; onRouteSelectRef.current(pin.nextRouteId); });
-        element.addEventListener("mouseenter", () => { if (!drawingRef.current) previewRoute(pin.selected ? selectedRouteId : pin.routeIds[0]); });
-        element.addEventListener("mouseleave", () => previewRoute(undefined));
-        anchor.append(element);
-        return new MarkerFactory({ element: anchor, anchor: "center", subpixelPositioning: true }).setLngLat(pin.coordinates).addTo(map);
-      });
-      markersRef.current = markers;
-    };
-
-    renderMarkers();
-    map.on("zoomend", renderMarkers);
-    return () => {
-      map.off("zoomend", renderMarkers);
-      clearMarkers();
-    };
-  }, [mapReady, previewRoute, routes, selectedRouteId]);
+    if (!map || !mapReady) return;
+    const key = selectedStartKey ?? (selectedRoute ? routeStart(selectedRoute).key : undefined);
+    map.setPaintProperty("generated-starts", "circle-color", [
+      "case", ["==", ["get", "key"], key ?? ""], ROUTE_SELECTED, ROUTE_ALTERNATE,
+    ]);
+  }, [mapReady, selectedRoute, selectedStartKey]);
 
   // Framing rules, in priority order:
   //   1. A brand new result set frames every route, so results are never left
@@ -1305,7 +1146,7 @@ export function HikeMap({
           <span><i className="key-access" aria-hidden="true" />Trailhead</span>
           <span><i className="key-trail" aria-hidden="true" />Mapped trail</span>
           {routes.length > 0 ? <span><i className="key-route" aria-hidden="true" />Suggested route</span> : null}
-          {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start</span> : null}
+          {routes.length > 0 ? <span><i className="key-start" aria-hidden="true" />Route start · route count</span> : null}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap attribution">© OpenStreetMap contributors</a>
         </div>
       </details>
