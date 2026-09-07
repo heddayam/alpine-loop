@@ -17,7 +17,6 @@ import {
   coverageFeatures,
   regionBoundaryVisibility,
   REGION_BOUNDARY_PAINT,
-  routeFeaturePartitions,
   routeFeatures,
   resultAccessPointIds,
   routeSegmentFeatures,
@@ -204,38 +203,25 @@ describe("generated route map features", () => {
     expect(REGION_BOUNDARY_PAINT).not.toHaveProperty("line-dasharray");
   });
 
-  it("preserves all contract geometries and marks exactly one selected route for non-color styling", () => {
+  it("preserves all contract geometries, full identities and result numbering", () => {
     const routes = [route("first", -122.18), route("second", -122.16)];
-    const features = routeFeatures(routes, "second");
+    const features = routeFeatures(routes);
 
     expect(features.features).toHaveLength(2);
     expect(features.features[0]?.geometry).toEqual(routes[0]?.geometry);
-    expect(features.features[0]?.properties).toMatchObject({ id: "first", selected: false, routeNumber: 1 });
+    expect(features.features[0]?.properties).toMatchObject({ id: "first", routeNumber: 1 });
     expect(features.features[1]?.geometry).toEqual(routes[1]?.geometry);
-    expect(features.features[1]?.properties).toMatchObject({ id: "second", selected: true, routeNumber: 2 });
+    expect(features.features[1]?.properties).toMatchObject({ id: "second", routeNumber: 2 });
   });
 
-  it("partitions native MapLibre sources without changing geographic coordinates", () => {
-    const routes = [route("first", -122.18), route("second", -122.16)];
-    const partitions = routeFeaturePartitions(routes, "first", "second");
-
-    expect(partitions.all.features.map(({ properties }) => properties?.id)).toEqual(["first", "second"]);
-    expect(partitions.selected.features.map(({ properties }) => properties?.id)).toEqual(["first"]);
-    expect(partitions.alternates.features.map(({ properties }) => properties?.id)).toEqual(["second"]);
-    expect(partitions.hovered.features.map(({ properties }) => properties?.id)).toEqual(["second"]);
-    expect(partitions.selected.features[0]?.geometry).toEqual(routes[0]?.geometry);
-    expect(partitions.hovered.features[0]?.geometry).toEqual(routes[1]?.geometry);
-  });
-
-  it("exposes only the selected route segments and isolates the focused segment", () => {
-    const routes = [route("first", -122.18), route("second", -122.16)];
-    const all = routeSegmentFeatures(routes, "second");
-    const focused = routeSegmentFeatures(routes, "second", "second:segment:1");
+  it("exposes the selected route segments with their original identities and geometry", () => {
+    const selected = route("second", -122.16);
+    const all = routeSegmentFeatures(selected);
 
     expect(all.features.map(({ properties }) => properties?.id)).toEqual(["second:segment:1"]);
     expect(all.features[0]?.properties).toMatchObject({ routeId: "second", segmentNumber: 1, name: "Fixture Trail" });
-    expect(focused.features[0]?.geometry).toEqual(routes[1]?.trailSegments?.[0]?.geometry);
-    expect(routeSegmentFeatures(routes, "second", "missing").features).toEqual([]);
+    expect(all.features[0]?.geometry).toEqual(selected.trailSegments?.[0]?.geometry);
+    expect(routeSegmentFeatures().features).toEqual([]);
   });
 
   it("creates numbered trailhead pins and emphasizes the selected route pin", () => {
