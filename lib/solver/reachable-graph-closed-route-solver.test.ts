@@ -204,6 +204,32 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(stemCapped.diagnostics.feasibleAccessPointCount).toBe(0);
   });
 
+  test("prunes an unavoidable stem despite a one-way dead-end triangle at its start", async () => {
+    const graph = fixtureGraph("lollipop");
+    graph.nodes.set("dead-a", { ...graph.nodes.get("start")!, id: "dead-a", lon: -0.001 });
+    graph.nodes.set("dead-b", { ...graph.nodes.get("start")!, id: "dead-b", lon: -0.001, lat: 0.001 });
+    for (const [index, [from, to]] of [["start", "dead-a"], ["dead-a", "dead-b"], ["start", "dead-b"]].entries()) {
+      const a = graph.nodes.get(from)!;
+      const b = graph.nodes.get(to)!;
+      graph.edges.push({ ...graph.edges[0], id: `${from}->${to}`, edgeKey: graph.edges.length + 1,
+        fromNodeId: from, toNodeId: to, coordinates: [[a.lon, a.lat], [b.lon, b.lat]],
+        lengthMeters: 100, physicalEdgeKey: 10 + index });
+    }
+    const testContext = context([accessPoint()], graph);
+    const graphQuery = vi.spyOn(testContext.repository, "getReachableGraph");
+    for (const closedRoute of [
+      { maximumRepeatedTrailPct: 0, allowMultiCycle: true },
+      { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1, allowMultiCycle: true },
+    ]) {
+      const result = await solver.generate(request({ closedRoute, distanceMiles: { min: 1.17, max: 1.19 } }), testContext);
+      expect(result.diagnostics).toMatchObject({ feasibleAccessPointCount: 0, graphQueryCount: 0 });
+      expect(graphQuery).not.toHaveBeenCalled();
+    }
+    const permitted = await solver.generate(request({ distanceMiles: { min: 1.17, max: 1.19 } }), testContext);
+    expect(permitted.exact[0]?.topology).toMatchObject({ kind: "lollipop", sharedStemDistanceMeters: 200 });
+    expect(graphQuery).toHaveBeenCalled();
+  });
+
   test("uses the multi-cycle toggle and labels a distance close match", async () => {
     const point = accessPoint();
     const figureEight = fixtureGraph("figure-eight");
@@ -262,6 +288,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
         physicalEdgeKey: edge.physicalEdgeKey! + index * 10 })));
     });
     const testContext = context(points, graph);
+    const readTopology = testContext.topologyRepository.getAccessTopology.bind(testContext.topologyRepository);
     const lookup = vi.spyOn(testContext.topologyRepository, "getAccessTopology");
     const result = await solver.generate(request({ searchEffort: "quick" }), testContext);
 
@@ -275,6 +302,24 @@ describe("ReachableGraphClosedRouteSolver", () => {
     });
     expect(result.exact.length).toBeGreaterThan(0);
     for (const route of result.exact) expect(generatedClosedRouteV3Schema.safeParse(route).success).toBe(true);
+
+    const withoutGroupCounts = (value: typeof result) => ({ ...value, diagnostics: {
+      ...value.diagnostics, attachmentGroupCount: 0, probedAttachmentGroupCount: 0,
+      deeplySearchedAttachmentGroupCount: 0,
+    } });
+    for (const sharedGroup of [true, false]) {
+      lookup.mockImplementation(async (profile, ids) => (await readTopology(profile, ids)).map((value, index) => ({
+        ...value, cycleNetworkId: 900, portalDecisionNodeId: 700,
+        connectorKey: sharedGroup ? "arbitrary-shared-identity" : `arbitrary-identity-${index}`,
+      })));
+      const regrouped = await solver.generate(request({ searchEffort: "quick" }), testContext);
+      expect(regrouped.diagnostics).toMatchObject({
+        searchedAccessPointCount: 12, graphQueryCount: 12,
+        attachmentGroupCount: sharedGroup ? 1 : 12,
+        probedAttachmentGroupCount: sharedGroup ? 1 : 12,
+      });
+      expect(withoutGroupCounts(regrouped)).toEqual(withoutGroupCounts(result));
+    }
   });
 
   test("prepares eligible starts once for repeated Quick and Thorough searches", async () => {
