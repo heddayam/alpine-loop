@@ -17,7 +17,8 @@ import {
   BUILDINGS_ADAPTER_VERSION,
   prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
-  OsmPbfTopologyAdapter,
+  OSM_TOPOLOGY_ADAPTER_VERSION,
+  prepareOsmTopology,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -94,16 +95,6 @@ function dataVersion(
   return `scm-${hash.digest("hex").slice(0, 16)}`;
 }
 
-async function normalizedTopology(
-  adapter: OsmPbfTopologyAdapter,
-  snapshot: Parameters<OsmPbfTopologyAdapter["normalize"]>[0],
-): Promise<NormalizedTopology> {
-  const normalized: NormalizedTopology[] = [];
-  for await (const topology of adapter.normalize(snapshot)) normalized.push(topology);
-  if (normalized.length !== 1) throw new Error(`OSM adapter produced ${normalized.length} topologies`);
-  return normalized[0]!;
-}
-
 function countByAccessState(points: readonly NormalizedAccessPoint[]): CountByAccessState {
   const counts: CountByAccessState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
   for (const point of points) counts[point.accessState] += 1;
@@ -171,16 +162,15 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
   ]);
 
-  const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
-    boundaryPath,
-    preparationRoot: path.join(options.preparationRoot, "osm"),
-  });
   const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
     boundaryPath,
     preparationRoot: path.join(options.preparationRoot, "osm"),
     namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
   });
-  const classifiedTopology = await normalizedTopology(sourceTopologyAdapter, osmSnapshot);
+  const classifiedTopology = await prepareOsmTopology(osmSnapshot, {
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+  });
   const restrictedTopology = applyCuratedAccessRestrictions(
     classifiedTopology,
     curatedAccess.snapshot.id,
@@ -209,7 +199,7 @@ export async function buildSantaCruzPack(options: SantaCruzPackBuildOptions): Pr
       boundaryContents,
       searchRegionContents,
       snapshots.map((snapshot) => `${snapshot.id}\0${snapshot.version}\0${snapshot.contentHash}\0${snapshot.license}`),
-      `${sourceTopologyAdapter.adapterVersion}+${namedAreaAdapter.adapterVersion}+${PORTAL_DERIVATION_VERSION}`,
+      `${OSM_TOPOLOGY_ADAPTER_VERSION}+${namedAreaAdapter.adapterVersion}+${PORTAL_DERIVATION_VERSION}`,
       `${elevationSampler.algorithmVersion}+${BUILDINGS_ADAPTER_VERSION}`,
     ),
     compilerVersion: COMPILER_VERSION,

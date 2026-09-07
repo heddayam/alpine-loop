@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AccessState } from "@/lib/graph/types";
-import type { SourceSnapshot, TopologySourceAdapter } from "./adapters";
+import type { SourceSnapshot } from "./adapters";
 import { readValidatedSnapshot } from "./file-source";
 import type { NormalizedAccessPoint, NormalizedTopology } from "./types";
 
@@ -52,55 +52,45 @@ function accessPointForNode(node: TopologyInput["nodes"][number], sourceId: stri
   };
 }
 
-export class FixtureTopologyAdapter implements TopologySourceAdapter<NormalizedTopology> {
-  readonly adapterVersion = "fixture-osm-v1";
-
-  async validate(snapshot: SourceSnapshot): Promise<void> {
-    const input = topologySchema.parse(await readValidatedSnapshot(snapshot));
-    const nodeIds = new Set(input.nodes.map(({ id }) => id));
-    if (nodeIds.size !== input.nodes.length) throw new Error("Topology contains duplicate node IDs");
-    for (const way of input.ways) {
-      for (const nodeId of way.nodeIds) {
-        if (!nodeIds.has(nodeId)) throw new Error(`Way ${way.id} references missing node ${nodeId}`);
-      }
+export async function prepareFixtureTopology(snapshot: SourceSnapshot): Promise<NormalizedTopology> {
+  const input = topologySchema.parse(await readValidatedSnapshot(snapshot));
+  const nodeById = new Map(input.nodes.map((node) => [node.id, node]));
+  if (nodeById.size !== input.nodes.length) throw new Error("Topology contains duplicate node IDs");
+  for (const way of input.ways) {
+    for (const nodeId of way.nodeIds) {
+      if (!nodeById.has(nodeId)) throw new Error(`Way ${way.id} references missing node ${nodeId}`);
     }
   }
-
-  async *normalize(snapshot: SourceSnapshot): AsyncIterable<NormalizedTopology> {
-    const input = topologySchema.parse(await readValidatedSnapshot(snapshot));
-    const nodeById = new Map(input.nodes.map((node) => [node.id, node]));
-    const acceptedWays = input.ways.filter((way) =>
-      PEDESTRIAN_HIGHWAYS.has(way.tags.highway ?? "") && way.tags.foot !== "no",
-    );
-    yield {
-      nodes: input.nodes.map((node) => ({
-        id: node.id,
-        externalId: node.id,
-        lon: node.lon,
-        lat: node.lat,
-        elevationM: null,
-        flags: [],
-        sourceRefs: [snapshot.id],
-      })),
-      ways: acceptedWays.map((way) => ({
-        id: way.id,
-        externalId: way.id,
-        nodeIds: [...way.nodeIds],
-        coordinates: way.nodeIds.map((nodeId) => {
-          const node = nodeById.get(nodeId);
-          if (!node) throw new Error(`Way ${way.id} references missing node ${nodeId}`);
-          return [node.lon, node.lat] as const;
-        }),
-        name: way.tags.name ?? null,
-        accessState: osmAccess(way.tags),
-        bidirectional: way.tags.oneway !== "yes" && way.tags["foot:backward"] !== "no",
-        sourceRefs: [snapshot.id],
-        flags: way.tags.oneway === "yes" ? ["oneway"] : [],
-      })),
-      accessPoints: input.nodes
-        .map((node) => accessPointForNode(node, snapshot.id))
-        .filter((point): point is NormalizedAccessPoint => point !== null),
-      rejectedWayCount: input.ways.length - acceptedWays.length,
-    };
-  }
+  const acceptedWays = input.ways.filter((way) =>
+    PEDESTRIAN_HIGHWAYS.has(way.tags.highway ?? "") && way.tags.foot !== "no",
+  );
+  return {
+    nodes: input.nodes.map((node) => ({
+      id: node.id,
+      externalId: node.id,
+      lon: node.lon,
+      lat: node.lat,
+      elevationM: null,
+      flags: [],
+      sourceRefs: [snapshot.id],
+    })),
+    ways: acceptedWays.map((way) => ({
+      id: way.id,
+      externalId: way.id,
+      nodeIds: [...way.nodeIds],
+      coordinates: way.nodeIds.map((nodeId) => {
+        const node = nodeById.get(nodeId)!;
+        return [node.lon, node.lat] as const;
+      }),
+      name: way.tags.name ?? null,
+      accessState: osmAccess(way.tags),
+      bidirectional: way.tags.oneway !== "yes" && way.tags["foot:backward"] !== "no",
+      sourceRefs: [snapshot.id],
+      flags: way.tags.oneway === "yes" ? ["oneway"] : [],
+    })),
+    accessPoints: input.nodes
+      .map((node) => accessPointForNode(node, snapshot.id))
+      .filter((point): point is NormalizedAccessPoint => point !== null),
+    rejectedWayCount: input.ways.length - acceptedWays.length,
+  };
 }

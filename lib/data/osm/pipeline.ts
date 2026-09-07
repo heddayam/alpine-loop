@@ -3,7 +3,7 @@ import { access, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { areaGeometrySchema } from "@/lib/contracts";
 import { z } from "zod";
-import type { SourceSnapshot, TopologySourceAdapter } from "../adapters";
+import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
 import { withAtomicDirectory } from "../source-cache";
 import type { NormalizedTopology } from "../types";
@@ -22,7 +22,7 @@ export type OsmPipelineOptions = {
   runner?: CommandRunner;
 };
 
-const ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v9";
+export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v9";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
@@ -47,7 +47,7 @@ export async function validateOsmPrerequisites(runner: CommandRunner = runComman
 
 async function preparationDestination(snapshot: SourceSnapshot, options: OsmPipelineOptions): Promise<string> {
   const boundaryHash = await sha256File(options.boundaryPath);
-  const key = `${snapshot.contentHash.slice(7, 23)}-${boundaryHash.slice(7, 23)}-${ADAPTER_VERSION}`;
+  const key = `${snapshot.contentHash.slice(7, 23)}-${boundaryHash.slice(7, 23)}-${OSM_TOPOLOGY_ADAPTER_VERSION}`;
   return path.join(options.preparationRoot, key);
 }
 
@@ -102,18 +102,4 @@ export async function prepareOsmTopology(
   });
   if (!result) throw new Error("OSM preparation did not produce topology");
   return result;
-}
-
-export class OsmPbfTopologyAdapter implements TopologySourceAdapter<NormalizedTopology> {
-  readonly adapterVersion = ADAPTER_VERSION;
-
-  constructor(private readonly options: OsmPipelineOptions) {}
-
-  async validate(snapshot: SourceSnapshot): Promise<void> {
-    await prepareOsmTopology(snapshot, this.options);
-  }
-
-  async *normalize(snapshot: SourceSnapshot): AsyncIterable<NormalizedTopology> {
-    yield await prepareOsmTopology(snapshot, this.options);
-  }
 }

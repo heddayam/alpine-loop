@@ -24,7 +24,8 @@ import {
   BUILDINGS_ADAPTER_VERSION,
   prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
-  OsmPbfTopologyAdapter,
+  OSM_TOPOLOGY_ADAPTER_VERSION,
+  prepareOsmTopology,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -207,13 +208,6 @@ function portalInventory(topology: NormalizedTopology, boundary: AreaGeometry) {
   return inventory;
 }
 
-async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceSnapshot): Promise<NormalizedTopology> {
-  const topologies: NormalizedTopology[] = [];
-  for await (const topology of adapter.normalize(snapshot)) topologies.push(topology);
-  if (topologies.length !== 1) throw new Error(`OSM adapter produced ${topologies.length} topologies`);
-  return topologies[0]!;
-}
-
 function overlayMatchedEntranceCount(
   topology: NormalizedTopology,
   entranceEvidence: readonly NormalizedAccessEvidence[],
@@ -312,10 +306,6 @@ export async function buildSouthernEastBayPack(
   const entrancesSnapshot = requiredSnapshot(officialSnapshots, OFFICIAL_ENTRANCES_SOURCE_ID);
   const entrancesAdapter = new EastBayRegionalParkDistrictEntranceAdapter();
   await entrancesAdapter.validate(entrancesSnapshot);
-  const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
-    boundaryPath,
-    preparationRoot: path.join(options.preparationRoot, "osm"),
-  });
   const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
     boundaryPath,
     preparationRoot: path.join(options.preparationRoot, "osm"),
@@ -324,7 +314,10 @@ export async function buildSouthernEastBayPack(
 
   const entranceEvidence = await entrancesAdapter.normalize(entrancesSnapshot);
   const prepared = prepareSouthernEastBayPortalTopology(
-    await collectTopology(sourceTopologyAdapter, osmSnapshot),
+    await prepareOsmTopology(osmSnapshot, {
+      boundaryPath,
+      preparationRoot: path.join(options.preparationRoot, "osm"),
+    }),
     curatedAccess.snapshot.id,
     curatedAccess.restrictions,
     entranceEvidence,
@@ -343,7 +336,7 @@ export async function buildSouthernEastBayPack(
     dem.snapshot,
   ];
   const adapterVersions = [
-    sourceTopologyAdapter.adapterVersion,
+    OSM_TOPOLOGY_ADAPTER_VERSION,
     namedAreaAdapter.adapterVersion,
     entrancesAdapter.adapterVersion,
     PORTAL_DERIVATION_VERSION,

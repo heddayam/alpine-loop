@@ -103,12 +103,8 @@ vi.mock("./osm", () => ({
   OsmPbfNamedAreaAdapter: class {
     readonly adapterVersion = "test-named-areas-v1";
   },
-  OsmPbfTopologyAdapter: class {
-    readonly adapterVersion = "test-topology-v1";
-    async *normalize() {
-      yield mocks.topology;
-    }
-  },
+  OSM_TOPOLOGY_ADAPTER_VERSION: "test-topology-v1",
+  prepareOsmTopology: vi.fn(async () => mocks.topology),
   readOsmSourceConfig: vi.fn(async () => ({})),
   readPinnedOsmSnapshot: mocks.readOsm,
   refreshPinnedOsmSnapshot: mocks.refreshOsm,

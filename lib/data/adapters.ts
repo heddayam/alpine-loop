@@ -23,12 +23,6 @@ export type NormalizedAccessEvidence = {
   confidence: "high" | "medium" | "low";
 };
 
-export interface TopologySourceAdapter<T = unknown> {
-  readonly adapterVersion: string;
-  validate(snapshot: SourceSnapshot): Promise<void>;
-  normalize(snapshot: SourceSnapshot): AsyncIterable<T>;
-}
-
 export interface OfficialAccessAdapter {
   readonly adapterVersion: string;
   validate(snapshot: SourceSnapshot): Promise<void>;

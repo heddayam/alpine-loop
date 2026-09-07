@@ -38,11 +38,8 @@ vi.mock("./osm", () => ({
   readPinnedOsmSnapshot: vi.fn(async () => snapshot("osm", "2026-08-02T00:00:00.000Z")),
   refreshPinnedOsmSnapshot: vi.fn(async () => ({ snapshot: snapshot("osm") })),
   validateOsmPrerequisites: vi.fn(async () => undefined),
-  OsmPbfTopologyAdapter: class {
-    readonly adapterVersion = "classified-osm-v8";
-    async validate() {}
-    async *normalize() { yield mocks.topology; }
-  },
+  OSM_TOPOLOGY_ADAPTER_VERSION: "classified-osm-v8",
+  prepareOsmTopology: vi.fn(async () => mocks.topology),
   OsmPbfNamedAreaAdapter: class {
     readonly adapterVersion = "named-areas-v1";
     async validate() {}

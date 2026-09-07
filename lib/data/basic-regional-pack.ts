@@ -17,7 +17,8 @@ import {
   BUILDINGS_ADAPTER_VERSION,
   prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
-  OsmPbfTopologyAdapter,
+  OSM_TOPOLOGY_ADAPTER_VERSION,
+  prepareOsmTopology,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -157,13 +158,6 @@ export function createBasicRegionalPackSeed(input: {
   };
 }
 
-async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceSnapshot): Promise<NormalizedTopology> {
-  const topologies: NormalizedTopology[] = [];
-  for await (const topology of adapter.normalize(snapshot)) topologies.push(topology);
-  if (topologies.length !== 1) throw new Error(`OSM adapter produced ${topologies.length} topologies`);
-  return topologies[0]!;
-}
-
 function portalReport(input: NormalizedTopology, portals: NormalizedTopology, published: NormalizedTopology, boundary: AreaGeometry) {
   const nodes = new Map(portals.nodes.map((node) => [node.id, node]));
   const byAccessState = { public: 0, unknown: 0, private: 0, closed: 0, prohibited: 0 };
@@ -277,17 +271,16 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
         : Promise.resolve(null),
     ]);
 
-    const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
-      boundaryPath,
-      preparationRoot: path.join(options.preparationRoot, "osm"),
-    });
     const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
       boundaryPath,
       preparationRoot: path.join(options.preparationRoot, "osm"),
       namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
     });
     reportBuildProgress(options, 3);
-    const sourceTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
+    const sourceTopology = await prepareOsmTopology(osmSnapshot, {
+      boundaryPath,
+      preparationRoot: path.join(options.preparationRoot, "osm"),
+    });
     reportBuildProgress(options, 4);
     let inputTopology = sourceTopology;
     let officialTrailConflationAudit: OfficialTrailConflationAudit | null = null;
@@ -315,7 +308,7 @@ export function createBasicRegionalPackBuilder(config: BasicRegionalPackConfig) 
     const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
     const snapshots = [osmSnapshot, dem.snapshot, ...(officialTrailSnapshot ? [officialTrailSnapshot] : [])];
     const adapterVersions = [
-      sourceTopologyAdapter.adapterVersion,
+      OSM_TOPOLOGY_ADAPTER_VERSION,
       namedAreaAdapter.adapterVersion,
       PORTAL_DERIVATION_VERSION,
       ...(officialTrailSnapshot ? [OFFICIAL_TRAIL_CONFLATION_VERSION, USGS_NATIONAL_DIGITAL_TRAILS_ADAPTER_VERSION] : []),

@@ -4,10 +4,9 @@ import type { CompilePackOptions, PackSeed } from "./compiler";
 import { FixtureElevationSampler } from "./fixture-elevation-sampler";
 import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";
-import { FixtureTopologyAdapter } from "./fixture-topology-adapter";
+import { prepareFixtureTopology } from "./fixture-topology-adapter";
 import { sha256File } from "./file-source";
 import { readSearchRegionInput } from "./search-regions";
-import type { NormalizedTopology } from "./types";
 
 const RETRIEVED_AT = "2026-08-04T00:00:00Z";
 
@@ -78,9 +77,7 @@ export async function fixtureCompileOptions(
     url: "https://example.invalid/alpine-loop/fixture-elevation",
     license: "CC0-1.0",
   });
-  const normalized: NormalizedTopology[] = [];
-  for await (const data of new FixtureTopologyAdapter().normalize(topology)) normalized.push(data);
-  if (normalized.length !== 1) throw new Error("Fixture topology adapter must produce exactly one graph");
+  const normalized = await prepareFixtureTopology(topology);
   const namedAreas = await fixtureSnapshot(namedAreaFixtureRoot, "areas.json", {
     id: "fixture-named-areas",
     authority: "Alpine Loop",
@@ -90,9 +87,9 @@ export async function fixtureCompileOptions(
     license: "CC0-1.0",
   });
   const portalTopology = {
-    ...normalized[0]!,
-    ways: normalized[0]!.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
-    accessPoints: normalized[0]!.accessPoints.map((point, index) => ({
+    ...normalized,
+    ways: normalized.ways.map((way) => ({ ...way, edgeClass: "trail" as const })),
+    accessPoints: normalized.accessPoints.map((point, index) => ({
       ...point,
       kind: "trailhead" as const,
       reachableTrailKm: 5 + index,

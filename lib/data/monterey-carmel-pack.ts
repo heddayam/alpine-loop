@@ -23,7 +23,8 @@ import {
   BUILDINGS_ADAPTER_VERSION,
   prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
-  OsmPbfTopologyAdapter,
+  OSM_TOPOLOGY_ADAPTER_VERSION,
+  prepareOsmTopology,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
   refreshPinnedOsmSnapshot,
@@ -168,13 +169,6 @@ export function montereyReviewedEntranceEvidence(
   return entrances.sort((first, second) => first.externalId.localeCompare(second.externalId));
 }
 
-async function collectTopology(adapter: OsmPbfTopologyAdapter, snapshot: SourceSnapshot): Promise<NormalizedTopology> {
-  const topologies: NormalizedTopology[] = [];
-  for await (const topology of adapter.normalize(snapshot)) topologies.push(topology);
-  if (topologies.length !== 1) throw new Error(`OSM adapter produced ${topologies.length} topologies`);
-  return topologies[0]!;
-}
-
 function newlyCarriesSource(
   before: readonly NormalizedAccessPoint[],
   after: readonly NormalizedAccessPoint[],
@@ -297,16 +291,15 @@ export async function buildMontereyCarmelPack(
       : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
   ]);
 
-  const sourceTopologyAdapter = new OsmPbfTopologyAdapter({
-    boundaryPath,
-    preparationRoot: path.join(options.preparationRoot, "osm"),
-  });
   const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
     boundaryPath,
     preparationRoot: path.join(options.preparationRoot, "osm"),
     namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
   });
-  const classifiedTopology = await collectTopology(sourceTopologyAdapter, osmSnapshot);
+  const classifiedTopology = await prepareOsmTopology(osmSnapshot, {
+    boundaryPath,
+    preparationRoot: path.join(options.preparationRoot, "osm"),
+  });
   const restrictedTopology = applyCuratedAccessRestrictions(
     classifiedTopology,
     curatedAccess.snapshot.id,
@@ -341,7 +334,7 @@ export async function buildMontereyCarmelPack(
     dem.snapshot,
   ];
   const adapterVersions = [
-    sourceTopologyAdapter.adapterVersion,
+    OSM_TOPOLOGY_ADAPTER_VERSION,
     namedAreaAdapter.adapterVersion,
     reviewedAdapter.adapterVersion,
     PORTAL_DERIVATION_VERSION,
