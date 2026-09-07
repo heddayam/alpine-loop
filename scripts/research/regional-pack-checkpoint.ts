@@ -216,6 +216,7 @@ try {
           region: { id: region.id, name: region.name },
         },
         predicates: [region.geometry],
+        namedRegionPredicateIndex: 0,
         coverage: manifest.coverage.boundary,
       };
       const { eligible } = await listEligibleAccessPointCandidates({

@@ -3,7 +3,6 @@ import {
   SQLiteGraphRepository,
 } from "@/lib/graph";
 import { loadInstalledPackVersion } from "@/lib/packs/installed-pack";
-import type { AccessPointSearchResult } from "@/lib/route-jobs";
 import {
   CLOSED_ROUTE_EFFORT_BUDGETS,
   type PreparedRouteSearch,
@@ -13,6 +12,7 @@ import {
 } from "@/lib/solver";
 import { ServerApiError } from "./api-error";
 import type {
+  StartSearchResult,
   RouteSolverRequest,
   RouteSolverResponse,
   RouteSolverWorkerInput,
@@ -77,7 +77,7 @@ async function preparedSearch(): Promise<PreparedRouteSearch> {
   return session.search;
 }
 
-async function search(accessPointId: string): Promise<AccessPointSearchResult> {
+async function search(accessPointId: string): Promise<StartSearchResult> {
   const prepared = await preparedSearch();
   const routesPerAccessPoint = 10;
   const run = (searchEffort: "quick" | "thorough") => prepared.generate({

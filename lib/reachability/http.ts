@@ -73,7 +73,7 @@ function validationError(issues: Array<{ path: PropertyKey[]; message: string }>
 export function createGeocodingSuggestHandler(service: GeocodingApi) {
   return async function POST(request: Request): Promise<Response> {
     try {
-      const parsed = geocodingSuggestRequestSchema.pick({ text: true }).safeParse(await jsonBody(request));
+      const parsed = geocodingSuggestRequestSchema.safeParse(await jsonBody(request));
       if (!parsed.success) throw validationError(parsed.error.issues);
       const suggestions = await service.suggest(parsed.data.text, request.signal);
       return Response.json({ suggestions, attribution: ESRI_ATTRIBUTION }, { headers: providerHeaders() });
@@ -86,7 +86,7 @@ export function createGeocodingSuggestHandler(service: GeocodingApi) {
 export function createGeocodingResolveHandler(service: GeocodingApi) {
   return async function POST(request: Request): Promise<Response> {
     try {
-      const parsed = geocodingResolveRequestSchema.pick({ text: true, magicKey: true }).safeParse(await jsonBody(request));
+      const parsed = geocodingResolveRequestSchema.safeParse(await jsonBody(request));
       if (!parsed.success) throw validationError(parsed.error.issues);
       const origin = await service.resolve(parsed.data.text, parsed.data.magicKey, request.signal);
       return Response.json({ origin, attribution: ESRI_ATTRIBUTION }, { headers: providerHeaders() });

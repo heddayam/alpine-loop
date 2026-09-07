@@ -111,6 +111,7 @@ describe("eligible access-point enumeration", () => {
       reachableTrailKm: 10,
     });
     const namedFilter = {
+      namedRegionPredicateIndex: 0,
       predicates: [AREA],
       coverage: AREA,
       summary: { mode: "named-region" as const, label: "Park", region: { id: "park", name: "Park" } },
@@ -127,10 +128,12 @@ describe("eligible access-point enumeration", () => {
     )).toBe(false);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
       ...namedFilter,
+      namedRegionPredicateIndex: undefined,
       summary: { mode: "drawn-area", label: "Drawn" },
     })).toBe(false);
     expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
       predicates: [AREA, AREA],
+      namedRegionPredicateIndex: 1,
       coverage: AREA,
       summary: {
         mode: "drive-time",

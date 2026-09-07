@@ -4,6 +4,7 @@ import type { AreaGeometry } from "@/lib/graph";
 export type ResolvedAccessFilterContext = {
   summary: GenerateClosedRoutesResponseV3["resolvedAccessFilter"];
   predicates: readonly AreaGeometry[];
+  namedRegionPredicateIndex?: number;
   coverage: AreaGeometry;
 };
 

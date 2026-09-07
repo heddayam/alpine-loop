@@ -3,8 +3,8 @@ import { AccessFilterResolutionError, type RouteSearchPolicy, type SolverBudget 
 import { ServerApiError } from "./api-error";
 import type { ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
-import type { AccessPointSearchResult, RouteJobSearchSession } from "@/lib/route-jobs";
 import type {
+  StartSearchResult,
   RouteSolverRequest,
   RouteSolverResponse,
   RouteSolverWorkerInput,
@@ -40,7 +40,7 @@ function remoteError(value: Extract<RouteSolverResponse, { ok: false }>["error"]
   return error;
 }
 
-export class RouteSolverProcess implements RouteJobSearchSession {
+export class RouteSolverProcess {
   readonly #child: ChildProcess;
   readonly #pending = new Map<number, PendingRequest>();
   readonly #closeTimeoutMs: number;
@@ -89,8 +89,8 @@ export class RouteSolverProcess implements RouteJobSearchSession {
     return this.#request({ type: "enumerate" }, signal) as Promise<readonly string[]>;
   }
 
-  async searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<AccessPointSearchResult> {
-    return this.#request({ type: "search", accessPointId }, signal) as Promise<AccessPointSearchResult>;
+  async searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<StartSearchResult> {
+    return this.#request({ type: "search", accessPointId }, signal) as Promise<StartSearchResult>;
   }
 
   async generate(policy: RouteSearchPolicy, budget: SolverBudget, signal: AbortSignal): Promise<GenerateClosedRoutesResponseV3> {

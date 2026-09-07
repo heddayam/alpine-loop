@@ -43,9 +43,7 @@ export function accessPointMatchesResolvedFilter(
   candidate: Pick<AccessPointCandidate, "lon" | "lat" | "trailComponentId">,
   accessFilter: ResolvedAccessFilterContext,
 ): boolean {
-  const namedRegionPredicateIndex = accessFilter.summary.region
-    ? accessFilter.predicates.length - 1
-    : -1;
+  const namedRegionPredicateIndex = accessFilter.namedRegionPredicateIndex ?? -1;
   return accessFilter.predicates.every((geometry, index) => {
     const coordinate = [candidate.lon, candidate.lat] as const;
     if (coordinateIsInsideArea(coordinate, geometry)) return true;

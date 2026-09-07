@@ -4,25 +4,20 @@ import { compilePack } from "@/lib/data/compiler";
 import { fixtureCompileOptionsV6 } from "@/lib/data/fixture-pack";
 import { generateClosedRoutesResponseV3Schema, packManifestV6Schema } from "@/lib/contracts";
 import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
-import { resolvedDrawnAreaAccessFilter } from "./access-filter";
+import { drawnArea } from "./search-area";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CreateBatchRouteJobV1 } from "@/lib/contracts";
+import type { SearchIntent } from "@/lib/contracts";
 import { RouteSolverProcess } from "./route-solver-process";
 import type { RouteSolverWorkerInput } from "./route-solver-protocol";
 
-const request: CreateBatchRouteJobV1 = {
-  version: 1,
-  packId: "fixture-pack",
-  origin: { lon: -122.1, lat: 37.3, label: "Home" },
-  durationMinutes: 30,
-  searchRegionId: "pack:fixture-pack",
+const request: SearchIntent = {
+  area: { mode: "drawn-area", bbox: [-123, 37, -122, 38] },
   criteria: {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
   },
-  routesPerAccessPoint: 10,
 };
 
 const input: RouteSolverWorkerInput = {
@@ -45,7 +40,7 @@ describe("RouteSolverProcess", () => {
       session = await RouteSolverProcess.open({
         pack: manifest,
         criteria: { ...request.criteria, distanceMiles: { min: 0.1, max: 20 } },
-        accessFilter: resolvedDrawnAreaAccessFilter({ coverage: manifest.coverage.boundary }, manifest.coverage.bbox),
+        accessFilter: { summary: { mode: "drawn-area", label: "Drawn area" }, predicates: [drawnArea(manifest.coverage.bbox)], coverage: manifest.coverage.boundary },
       }, new AbortController().signal, { env: { ALPINE_PACK_ROOT: root } });
       const signal = new AbortController().signal;
       const response = generateClosedRoutesResponseV3Schema.parse(await session.generate(
