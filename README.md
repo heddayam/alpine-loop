@@ -25,10 +25,11 @@ cd alpine-loop
 ./alpine.sh
 ```
 
-The interactive selector lists available regions with download sizes. Type a
-number to toggle a region, then press Enter to apply. Installed packs appear
-in green with a check. Select **Central Cascades** for Glacier Peak, Alpine
-Lakes, and Teanaway.
+The interactive selector lists available regions with download sizes. Use
+↑/↓ to move and Enter to toggle a region, then choose **Apply changes**.
+Installed packs start checked. Checked rows are green; pending installs and
+removals are labeled as you change the selection.
+Select **Central Cascades** for Glacier Peak, Alpine Lakes, and Teanaway.
 
 The script creates `.env` if needed and builds selected packs inside Docker;
 you do not need Node, Python, or geographic tools on your computer. The first

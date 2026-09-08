@@ -5,6 +5,8 @@ import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 
 const roots: string[] = [];
+const up = "\u001b[A";
+const down = "\u001b[B";
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
 
 function selector(input: string, options: { running?: boolean; fail?: boolean; env?: string } = {}) {
@@ -34,10 +36,11 @@ esac
 }
 
 it("installs only additions, preserves settings, and works outside the checkout", () => {
-  const result = selector("2\n\n", { env: "EXISTING=keep\n" });
+  const result = selector(`${down}\n${down}\n`, { env: "EXISTING=keep\n" });
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("✓ Central Cascades");
   expect(result.stdout).toContain("○ Henry Coe");
+  expect(result.stdout).toContain("✓ Henry Coe (~1.15 GB download) — install");
   expect(result.calls).toContain("scripts/pack-bootstrap.ts --pack=henry-coe --progress");
   expect(result.calls).not.toContain("--pack=central-cascades");
   expect(result.calls).toContain("--interactive=false");
@@ -45,7 +48,7 @@ it("installs only additions, preserves settings, and works outside the checkout"
 });
 
 it("creates settings once and leaves packs alone when quitting or making no changes", () => {
-  for (const input of ["q\n", "\n", ""]) {
+  for (const input of ["q", `${up}\n`, ""]) {
     const result = selector(input);
     expect(result.status).toBe(0);
     expect(result.calls).not.toContain("scripts/pack-bootstrap.ts");
@@ -55,25 +58,25 @@ it("creates settings once and leaves packs alone when quitting or making no chan
 });
 
 it("ignores malformed input and permits toggling back without a build", () => {
-  const result = selector("999999999999999999999999\n$((1))\n2\n2\n\n");
+  const result = selector(`999999999999999999999999$((1))${down}\n\n${down}\n`);
   expect(result.status).toBe(0);
-  expect(result.stdout).toContain("Choose one of the displayed numbers.");
+  expect(result.stdout).toContain("› Apply changes");
   expect(result.calls).not.toContain("scripts/pack-bootstrap.ts");
 });
 
 it("requires removal confirmation and refuses removal while Docker app is running", () => {
-  expect(selector("1\n\nn\n").calls).not.toContain("scripts/manage-packs.ts remove");
-  const running = selector("1\n\ny\n", { running: true });
+  expect(selector(`\n${up}\nn\n`).calls).not.toContain("scripts/manage-packs.ts remove");
+  const running = selector(`\n${up}\ny\n`, { running: true });
   expect(running.status).toBe(1);
   expect(running.stderr).toContain("Stop the app");
   expect(running.calls).not.toContain("scripts/manage-packs.ts remove");
-  const confirmed = selector("1\n\ny\n");
+  const confirmed = selector(`\n${up}\ny\n`);
   expect(confirmed.status).toBe(0);
   expect(confirmed.calls).toContain("scripts/manage-packs.ts remove central-cascades");
 });
 
 it("does not report success when a pack build fails", () => {
-  const result = selector("2\n\n", { fail: true });
+  const result = selector(`${down}\n${down}\n`, { fail: true });
   expect(result.status).toBe(1);
   expect(result.stdout).not.toContain("Packs updated.");
 });

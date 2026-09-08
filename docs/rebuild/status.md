@@ -6,6 +6,19 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — replaced numbered selector input with up/down navigation,
+  Enter toggling, a visible cursor, and an Apply changes row. Checked rows now
+  turn green immediately; unchecked rows are gray, with pending installs and
+  removals labeled. The README describes the new controls. No dependency was
+  added; the Bash script grew by seven lines. Updated offline selector tests
+  cover keyboard selection, wrapping to Apply, cancellation, removal guards,
+  and build failure. A real pseudo-terminal check confirmed arrow focus,
+  immediate ANSI color changes in both directions, and clean quit behavior.
+  Two `npm run verify` passes each passed 479 tests across 81 files, lint,
+  types, and production build; two browser passes each passed all seven
+  offline flows. Pack data, runtime storage, and application behavior are
+  unchanged; the completed integration branch was removed.
+
 - [x] 2026-09-07 — added the small `./alpine.sh` regional-pack selector:
   numbered toggles, green checked installations, gray available packs, measured
   approximate download sizes, and explicit removal confirmation. The Compose

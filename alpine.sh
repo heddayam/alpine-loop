@@ -21,30 +21,37 @@ green='' gray='' reset=''
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   green=$'\033[32m'; gray=$'\033[90m'; reset=$'\033[0m'
 fi
+cursor=0
 while :; do
   if [[ -t 1 && ${TERM:-dumb} != dumb ]]; then printf '\033[H\033[2J'; fi
   printf '\nAlpine Loop · Regional packs\n\n'
   for i in "${!ids[@]}"; do
     color=$gray; mark='○'; change=''
-    [[ ${installed[i]} == 0 ]] || color=$green
-    [[ ${selected[i]} == 0 ]] || mark='✓'
+    if [[ ${selected[i]} == 1 ]]; then color=$green; mark='✓'; fi
     if [[ ${selected[i]} != "${installed[i]}" ]]; then
       if [[ ${selected[i]} == 1 ]]; then change=' — install'; else change=' — remove'; fi
     fi
-    printf '  %s%d  %s %s (%s)%s%s\n' "$color" "$((i+1))" "$mark" "${names[i]}" "${sizes[i]}" "$change" "$reset"
+    pointer=' '; [[ $cursor != "$i" ]] || pointer='›'
+    printf ' %s %s%s %s (%s)%s%s\n' "$pointer" "$color" "$mark" "${names[i]}" "${sizes[i]}" "$change" "$reset"
   done
+  pointer=' '; [[ $cursor != "${#ids[@]}" ]] || pointer='›'
+  printf '\n %s Apply changes\n' "$pointer"
   printf '\nSizes are approximate; shared downloads are cached. Installing builds from source.\n'
-  read -r -p 'Number to toggle · Enter to apply · q to quit: ' choice || exit 0
+  printf '↑/↓ move · Enter toggle/apply · q quit\n'
+  read -rsn1 choice || exit 0
   case "$choice" in
     q|Q) exit 0 ;;
-    '') break ;;
-    *)
-      # Match displayed numbers directly; never evaluate terminal input as arithmetic.
-      found=0
-      for i in "${!ids[@]}"; do
-        if [[ "$choice" == "$((i+1))" ]]; then selected[i]=$((1-selected[i])); found=1; break; fi
-      done
-      [[ $found == 1 ]] || printf 'Choose one of the displayed numbers.\n'
+    $'\033')
+      # Bash 3.2 (macOS) supports whole-second read timeouts.
+      read -rsn2 -t 1 choice || continue
+      case "$choice" in
+        '[A'|'OA') cursor=$(((cursor+${#ids[@]}) % (${#ids[@]}+1))) ;;
+        '[B'|'OB') cursor=$(((cursor+1) % (${#ids[@]}+1))) ;;
+      esac
+      ;;
+    ''|' ')
+      [[ $cursor != "${#ids[@]}" ]] || break
+      selected[cursor]=$((1-selected[cursor]))
       ;;
   esac
 done
