@@ -16,7 +16,7 @@ geometry, elevation profiles, repetition, and mapped trail conditions.
 
 ## Get started
 
-Install Git and Docker with Docker Compose, and make sure Docker is running.
+Install Git and Docker with Docker Compose, and make sure Docker is running. I personally use orbStack.
 On Windows, use a WSL terminal with Docker integration enabled.
 
 ```sh

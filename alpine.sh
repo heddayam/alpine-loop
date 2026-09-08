@@ -36,7 +36,6 @@ while :; do
   done
   pointer=' '; [[ $cursor != "${#ids[@]}" ]] || pointer='›'
   printf '\n %s Apply changes\n' "$pointer"
-  printf '\nFinished sizes exclude source caches. Estimates use ~; installed sizes are measured.\n'
   printf 'Installing builds from source; shared downloads are cached.\n'
   printf '↑/↓ move · Enter toggle/apply · q quit\n'
   read -rsn1 choice || exit 0
