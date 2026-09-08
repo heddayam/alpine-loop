@@ -31,6 +31,7 @@ export type SqlitePackAuditOptions = {
   manifestPath: string;
   /** Defaults to audit.json beside the manifest. Pass null when no build audit exists. */
   auditPath?: string | null;
+  onProgress?: (label: string) => void;
 };
 
 function requiredString(value: unknown, field: string): string {
@@ -419,6 +420,7 @@ async function buildMetrics(metadata: Metadata, auditPath: string | null): Promi
 }
 
 export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<RegionalPackAudit> {
+  options.onProgress?.("Validate pack metadata and source records");
   const manifest = packManifestSchema.parse(JSON.parse(await readFile(options.manifestPath, "utf8")));
   const database = new DatabaseSync(options.databasePath, { readOnly: true });
   let metadata: Metadata;
@@ -433,15 +435,18 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     metadata = databaseMetadata(database);
     assertManifestMetadata(manifest, metadata);
     sources = sourcesFromDatabase(database, manifest);
+    options.onProgress?.("Read the graph and access points");
     edges = edgesFromDatabase(database);
     nodes = nodesFromDatabase(database, edges);
     accessPoints = accessPointsFromDatabase(database);
+    options.onProgress?.("Validate named areas, elevation profiles, and access");
     namedAreas = auditNamedAreas(database, manifest, new Set(sources.map(({ id }) => id)));
     searchRegions = auditSearchRegions(database);
     const elevationProfileErrors = auditElevationProfiles(database);
     if (elevationProfileErrors.length) throw new Error(elevationProfileErrors.join("; "));
     const portalErrors = auditPortalAccess(database);
     if (portalErrors.length) throw new Error(portalErrors.join("; "));
+    options.onProgress?.("Validate topology counts and hashes");
     const profiles = database.prepare(`SELECT profile, format_version, node_count, physical_edge_count,
       decision_node_count, decision_edge_count, built_at, content_hash FROM topology_profiles ORDER BY profile DESC`).all() as Array<Record<string, unknown>>;
     if (profiles.map(({ profile }) => profile).join(",") !== "known,inclusive") throw new Error("Closed-route topology profiles must be exactly known,inclusive");
@@ -491,6 +496,7 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
     database.close();
   }
 
+  options.onProgress?.("Audit graph connectivity and build metrics");
   const metrics = await buildMetrics(
     metadata,
     options.auditPath === undefined ? path.join(path.dirname(options.manifestPath), "audit.json") : options.auditPath,
@@ -511,9 +517,19 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   audit.counts.conflicts = metrics.conflictCount;
   audit.counts.namedAreas = namedAreas.count;
   audit.errors.push(...namedAreas.errors);
+  options.onProgress?.(`Check exact coverage: 0/${edges.length} edges`);
+  let lastCoverageProgress = options.onProgress ? Date.now() : 0;
   audit.outsideCoverageEdgeIds = edges
-    .filter((edge) => !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary))
+    .filter((edge, index) => {
+      const outside = !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary);
+      if (options.onProgress && Date.now() - lastCoverageProgress >= 5_000) {
+        options.onProgress(`Check exact coverage: ${index + 1}/${edges.length} edges`);
+        lastCoverageProgress = Date.now();
+      }
+      return outside;
+    })
     .map(({ id }) => id);
+  options.onProgress?.(`Check exact coverage: ${edges.length}/${edges.length} edges`);
   if (audit.outsideCoverageEdgeIds.length) {
     audit.errors.push(`${audit.outsideCoverageEdgeIds.length} persisted edges leave exact pack coverage`);
   }
