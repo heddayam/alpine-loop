@@ -3,10 +3,10 @@
   "id": "geofabrik-washington-osm",
   "authority": "Geofabrik GmbH / OpenStreetMap contributors",
   "dataset": "Geofabrik Washington OpenStreetMap extract",
-  "version": "washington-260806",
-  "upstreamTimestamp": "2026-08-06T20:21:21.000Z",
-  "url": "https://download.geofabrik.de/north-america/us/washington-260806.osm.pbf",
-  "expectedByteLength": 360317339,
+  "version": "washington-260801",
+  "upstreamTimestamp": "2026-08-01T20:21:21.000Z",
+  "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+  "expectedByteLength": 359826867,
   "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright",
   "attribution": "© OpenStreetMap contributors; extract provided by Geofabrik GmbH"
 }

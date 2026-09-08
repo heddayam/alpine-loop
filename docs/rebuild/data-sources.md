@@ -23,6 +23,10 @@ input so it can be adjusted without changing app or solver code.
   `.osm.pbf`](https://download.geofabrik.de/north-america/us/california/norcal.html).
 - Pin the source URL, retrieval time, upstream timestamp, size, and SHA-256 in
   build metadata.
+- Geofabrik removes older snapshots. Prefer retained first-of-month extracts
+  and verify their URLs from an empty cache when reviewing setup; cached builds
+  cannot prove fresh-install availability. These upstream URLs are not permanent
+  archives, so pins still need periodic review.
 - Use [`osmium extract`](https://docs.osmcode.org/osmium/latest/osmium-extract.html)
   with the versioned pack polygon and a reference-complete strategy before
   retaining ways/nodes needed for pedestrian topology.

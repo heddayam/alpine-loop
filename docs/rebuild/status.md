@@ -6,6 +6,19 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — repaired the Central Cascades fresh-install 404 by replacing
+  the removed Washington August 6 snapshot with the available August 1 pin.
+  Verified HTTP 200, 359,826,867-byte length, and the PBF header timestamp;
+  updated the source contract test and the compatibility fixture's input hash.
+  The container image rebuilt successfully. An isolated empty-cache build
+  downloaded and validated all four DEMs and the official trail snapshot, but
+  was stopped during the OSM download at the user's request to test personally;
+  an end-to-end build of this pin is not yet verified. Two `npm run verify`
+  passes each passed 479 tests across 81 files, lint, types, and build; two
+  browser passes each passed all seven offline flows. Existing packs and caches
+  were untouched. Source policy now records upstream retention and the need to
+  check fresh downloads instead of relying on cached builds.
+
 - [x] 2026-09-07 — the pack selector now shows estimated download and finished
   sizes before installation, and measures all files in the current installed
   artifact afterward. Finished estimates are rounded from the five existing
@@ -798,6 +811,11 @@ port 3000. Original saved jobs and installed artifacts remain intact.
   or dependency changed. Generated packs and local databases remain ignored.
 
 ## Local data and risks
+
+- Fresh-source audit also found a separate Santa Cruz DEM metadata mismatch:
+  the n37w123 catalog reports 6,891,248 bytes, while the historical TIFF and
+  existing receipt are 5,494,012 bytes. The current size check will reject that
+  fresh download. This remains unresolved and does not affect Cascades.
 
 - Generated packs, source/build caches, route-job databases, and audits are
   local ignored artifacts. Rebuild packs only through the explicit commands in

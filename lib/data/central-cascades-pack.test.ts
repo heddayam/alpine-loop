@@ -47,7 +47,13 @@ describe("Central Cascades pack wiring", () => {
       readOfficialTrailSourceConfig(path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-source.json")),
       readOfficialTrailConflationPolicy(path.join(CENTRAL_CASCADES_REGION_ROOT, "official-trail-conflation.json")),
     ]);
-    expect(osm).toMatchObject({ id: "geofabrik-washington-osm", version: "washington-260806" });
+    expect(osm).toMatchObject({
+      id: "geofabrik-washington-osm",
+      version: "washington-260801",
+      upstreamTimestamp: "2026-08-01T20:21:21.000Z",
+      url: "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+      expectedByteLength: 359826867,
+    });
     expect(elevation).toMatchObject({
       cacheNamespace: "central-cascades-elevation",
       expectedProductIds: [
