@@ -20,8 +20,8 @@ function selector(input: string, options: { running?: boolean; fail?: boolean; e
 printf '%s\\n' "$*" >> "$ALPINE_TEST_CALLS"
 case "$*" in
   *'scripts/manage-packs.ts list')
-    printf 'central-cascades\\tCentral Cascades\\t1\\t386 MB database\\n'
-    printf 'henry-coe\\tHenry Coe\\t0\\t~1.15 GB download\\n' ;;
+    printf 'central-cascades\\tCentral Cascades\\t1\\t404.5 MB installed\\n'
+    printf 'henry-coe\\tHenry Coe\\t0\\t~1.15 GB download · ~41 MB finished\\n' ;;
   'compose ps --status running -q app') [[ "$ALPINE_TEST_RUNNING" == 0 ]] || echo container ;;
   *'scripts/pack-bootstrap.ts'*) [[ "$ALPINE_TEST_FAIL" == 0 ]] || exit 1 ;;
 esac
@@ -40,7 +40,7 @@ it("installs only additions, preserves settings, and works outside the checkout"
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("✓ Central Cascades");
   expect(result.stdout).toContain("○ Henry Coe");
-  expect(result.stdout).toContain("✓ Henry Coe (~1.15 GB download) — install");
+  expect(result.stdout).toContain("✓ Henry Coe (~1.15 GB download · ~41 MB finished) — install");
   expect(result.calls).toContain("scripts/pack-bootstrap.ts --pack=henry-coe --progress");
   expect(result.calls).not.toContain("--pack=central-cascades");
   expect(result.calls).toContain("--interactive=false");

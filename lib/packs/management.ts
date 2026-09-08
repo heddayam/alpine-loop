@@ -1,9 +1,9 @@
-import { lstat, rm, stat } from "node:fs/promises";
+import { lstat, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import registryJson from "@/data/regions/registry.json";
-import downloadSizes from "@/data/regions/download-sizes.json";
+import packSizes from "@/data/regions/pack-sizes.json";
 import { regionRegistryV1Schema } from "@/lib/contracts";
 import { listRegionalPackBuilderIds } from "@/lib/data/regional-pack";
 import { loadInstalledPack, localPackRoot } from "./installed-pack";
@@ -12,7 +12,7 @@ const builders = new Set(listRegionalPackBuilderIds());
 const regions = regionRegistryV1Schema.parse(registryJson).regions
   .filter((region) => region.packId && builders.has(region.packId))
   .sort((left, right) => left.displayOrder - right.displayOrder);
-const sizes: Record<string, number> = downloadSizes;
+const sizes: Record<string, { downloadBytes: number; finishedBytes: number }> = packSizes;
 const jobPacks = z.object({ packs: z.array(z.object({ id: z.string().min(1) })).min(1) });
 
 export async function listManagedPacks(root = localPackRoot()) {
@@ -20,10 +20,14 @@ export async function listManagedPacks(root = localPackRoot()) {
     const id = region.packId!;
     try {
       const installed = await loadInstalledPack(id, root);
-      const size = installed
-        ? `${((await stat(installed.databasePath)).size / 1e6).toFixed(1)} MB database`
-        : `~${(sizes[id]! / 1e9).toFixed(2)} GB download`;
-      if (!sizes[id]) throw new Error("Missing download size metadata");
+      const estimate = sizes[id];
+      if (!estimate) throw new Error("Missing pack size metadata");
+      let size = `~${(estimate.downloadBytes / 1e9).toFixed(2)} GB download · ~${Math.round(estimate.finishedBytes / 1e6)} MB finished`;
+      if (installed) {
+        const files = await readdir(installed.directory, { recursive: true, withFileTypes: true });
+        const bytes = await Promise.all(files.filter((file) => file.isFile()).map(async (file) => (await stat(path.join(file.parentPath, file.name))).size));
+        size = `${(bytes.reduce((sum, value) => sum + value, 0) / 1e6).toFixed(1)} MB installed`;
+      }
       return { id, label: region.label, installed: Boolean(installed), size };
     } catch (error) {
       throw new Error(`Cannot inspect ${region.label}: ${(error as Error).message}. Rebuild with docker compose run --rm packs scripts/pack-bootstrap.ts --pack=${id} --progress.`);

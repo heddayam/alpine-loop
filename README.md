@@ -25,7 +25,8 @@ cd alpine-loop
 ./alpine.sh
 ```
 
-The interactive selector lists available regions with download sizes. Use
+The interactive selector shows estimated download and finished pack sizes, or
+the actual pack size for installed regions. Finished sizes exclude source caches. Use
 ↑/↓ to move and Enter to toggle a region, then choose **Apply changes**.
 Installed packs start checked. Checked rows are green; pending installs and
 removals are labeled as you change the selection.

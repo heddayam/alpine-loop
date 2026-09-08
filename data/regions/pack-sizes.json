@@ -1,0 +1,7 @@
+{
+  "central-cascades": { "downloadBytes": 2240000000, "finishedBytes": 404000000 },
+  "henry-coe": { "downloadBytes": 1150000000, "finishedBytes": 41000000 },
+  "monterey-carmel": { "downloadBytes": 1070000000, "finishedBytes": 95000000 },
+  "santa-cruz-mountains": { "downloadBytes": 1800000000, "finishedBytes": 347000000 },
+  "southern-east-bay": { "downloadBytes": 1380000000, "finishedBytes": 135000000 }
+}

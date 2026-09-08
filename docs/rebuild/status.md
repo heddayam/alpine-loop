@@ -6,6 +6,17 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — the pack selector now shows estimated download and finished
+  sizes before installation, and measures all files in the current installed
+  artifact afterward. Finished estimates are rounded from the five existing
+  local builds (Cascades: 404,491,894 bytes including metadata and audits).
+  The selector and README explain that source caches are additional. Existing
+  offline helper and keyboard tests cover the updated labels; empty-catalog
+  and real installed-catalog checks confirm all five regions. Two `npm run
+  verify` passes each passed 479 tests across 81 files, lint, types, and build;
+  two browser passes each passed all seven offline flows. No dependency, pack
+  schema, or generated data changed.
+
 - [x] 2026-09-07 — replaced numbered selector input with up/down navigation,
   Enter toggling, a visible cursor, and an Apply changes row. Checked rows now
   turn green immediately; unchecked rows are gray, with pending installs and
