@@ -6,6 +6,12 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — extended step 9 progress with audit substeps, checked/total
+  edge counts during exact-coverage validation, and report writing. Coverage
+  updates are limited to once per five seconds plus start/completion. Tests,
+  builds, and live audits were explicitly skipped at the user's request so
+  they can test the commit themselves. Existing audit rules are unchanged.
+
 - [x] 2026-09-07 — replaced the bootstrap command's final JSON dump with one
   `Pack ready: <directory>` line for regional and fixture builds. Detailed audit
   files remain on disk. An isolated fixture CLI run confirmed one stdout line

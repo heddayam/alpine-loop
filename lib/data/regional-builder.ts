@@ -394,7 +394,7 @@ export function createRegionalPackBuilder(config: RegionalPackDefinition) {
         "portal-audit.json": portalAudit,
         ...(officialTrailConflationAudit ? { "official-trail-conflation-audit.json": officialTrailConflationAudit } : {}),
       };
-    });
+    }, options.onProgress ? (detail) => reportBuildProgress(options, 9, undefined, detail) : undefined);
     reportBuildProgress(options, 10);
     return { pack, portalAudit, regionalAudit, ...(officialTrailConflationAudit ? { officialTrailConflationAudit } : {}) };
   };

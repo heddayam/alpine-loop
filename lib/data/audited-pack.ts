@@ -8,14 +8,16 @@ import type { PackBuildResult } from "./types";
 export async function compileAuditedPack(
   options: CompilePackOptions,
   reports: (artifact: PackBuildResult) => Record<string, unknown>,
+  onProgress?: (label: string) => void,
 ): Promise<{ pack: PackBuildResult; regionalAudit: RegionalPackAudit }> {
   let regionalAudit!: RegionalPackAudit;
   const pack = await compilePack({
     ...options,
     beforePublish: async (artifact) => {
       await options.beforePublish?.(artifact);
-      regionalAudit = await auditSqlitePack(artifact);
+      regionalAudit = await auditSqlitePack({ ...artifact, onProgress });
       assertPackAuditPassed(regionalAudit);
+      onProgress?.("Write regional reports");
       await Promise.all(Object.entries({
         ...reports(artifact),
         "regional-audit.json": regionalAudit,
