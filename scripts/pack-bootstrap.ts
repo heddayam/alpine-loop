@@ -31,13 +31,9 @@ if (!packArgument) {
         },
       } : {}),
     });
-    console.log(JSON.stringify(result, null, 2));
+    console.log(`Pack ready: ${result.pack.packDirectory}`);
   } else {
     const result = await compilePack(await fixtureCompileOptions(outputRoot));
-    console.log(JSON.stringify({
-      packDirectory: result.packDirectory,
-      reusedExisting: result.reusedExisting,
-      audit: result.audit,
-    }, null, 2));
+    console.log(`Pack ready: ${result.packDirectory}`);
   }
 }

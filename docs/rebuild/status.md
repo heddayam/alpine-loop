@@ -6,6 +6,13 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — replaced the bootstrap command's final JSON dump with one
+  `Pack ready: <directory>` line for regional and fixture builds. Detailed audit
+  files remain on disk. An isolated fixture CLI run confirmed one stdout line
+  and a readable audit file. Two verify passes each passed 480 tests across 81
+  files, lint, types, and build; two browser passes each passed seven offline
+  flows. The implementation is four lines shorter; no build behavior changed.
+
 - [x] 2026-09-07 — added lightweight detail to pack-build progress. Step 2
   reports per-file MB, known-size percentages, verified cache reuse, and
   successful completion; streaming updates are limited to once per five seconds
