@@ -6,6 +6,20 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-07 — added lightweight detail to pack-build progress. Step 2
+  reports per-file MB, known-size percentages, verified cache reuse, and
+  successful completion; streaming updates are limited to once per five seconds
+  per file. Step 8 reports elevation/segment counts and named-area, access,
+  topology, database, and integrity substeps. Existing `--progress` controls all
+  output; no dependency or terminal control sequence was added. Offline tests
+  cover known/unknown sizes, cache reuse, failed validation without completion,
+  phase order, and byte-identical database output with reporting. Two verify
+  passes each passed 480 tests across 81 files, lint, types, and build; two
+  browser passes each passed seven offline flows. The tools image built and a
+  network-disabled container reported 0/5/6 MB for a streamed 6 MB fixture,
+  followed by all seven compiler substeps. No regional pack was rebuilt or
+  altered. Temporary agent worktree and smoke container were removed.
+
 - [x] 2026-09-07 — repaired the Central Cascades fresh-install 404 by replacing
   the removed Washington August 6 snapshot with the available August 1 pin.
   Verified HTTP 200, 359,826,867-byte length, and the PBF header timestamp;

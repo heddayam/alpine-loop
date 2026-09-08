@@ -91,8 +91,10 @@ describe("shared regional builder", () => {
     expect(first.regionalAudit.errors).toEqual([]);
     expect(first.portalAudit).toMatchObject({ schemaVersion: "2", portals: { total: 1 },
       buildContext: { inputWayCount: 2, publishedWayCount: 1, strippedWayCount: 1 } });
-    expect(progress.map(({ label }) => label)).toEqual([...REGIONAL_PACK_BUILD_PHASES]);
-    expect(progress.every(({ phase, phaseCount }, index) => phase === index + 1 && phaseCount === progress.length)).toBe(true);
+    const phases = progress.filter(({ detail }) => !detail);
+    expect(phases.map(({ label }) => label)).toEqual([...REGIONAL_PACK_BUILD_PHASES]);
+    expect(phases.every(({ phase, phaseCount }, index) => phase === index + 1 && phaseCount === phases.length)).toBe(true);
+    expect(progress.some(({ phase, detail }) => phase === 8 && detail)).toBe(true);
     const database = new DatabaseSync(first.pack.databasePath, { readOnly: true });
     try {
       expect(database.prepare("SELECT DISTINCT edge_class FROM edges").all()).toEqual([{ edge_class: "trail" }]);

@@ -31,6 +31,7 @@ export type CacheDownloadOptions = {
   /** Reuse a verified immutable object with the same original URL. */
   reuseExistingUrl?: boolean;
   fetchImpl?: typeof fetch;
+  onProgress?: (progress: { fileName: string; receivedBytes: number; totalBytes?: number; state: "downloading" | "cached" | "complete" }) => void;
 };
 
 function safeSegment(value: string): string {
@@ -61,12 +62,17 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
   const sourceId = safeSegment(options.sourceId);
   const fileName = safeSegment(options.fileName);
   const sourceRoot = path.join(options.cacheRoot, sourceId);
+  const report = (receivedBytes: number, state: "downloading" | "cached" | "complete", totalBytes = options.expectedByteLength) =>
+    options.onProgress?.({ fileName, receivedBytes, totalBytes, state });
   await mkdir(sourceRoot, { recursive: true });
 
   if (options.expectedSha256) {
     const expectedDirectory = path.join(sourceRoot, options.expectedSha256.slice("sha256:".length));
     const reusable = await reusableSnapshot(expectedDirectory, options.expectedSha256);
-    if (reusable) return reusable;
+    if (reusable) {
+      report(reusable.receipt.byteLength, "cached", reusable.receipt.byteLength);
+      return reusable;
+    }
   }
 
   if (options.reuseExistingUrl) {
@@ -76,6 +82,7 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
       const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name));
       if (reusable?.receipt.originalUrl !== options.url) continue;
       if (options.expectedByteLength !== undefined && reusable.receipt.byteLength !== options.expectedByteLength) continue;
+      report(reusable.receipt.byteLength, "cached", reusable.receipt.byteLength);
       return reusable;
     }
   }
@@ -87,10 +94,17 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
   }
   const hash = createHash("sha256");
   let byteLength = 0;
+  const totalBytes = options.expectedByteLength ?? (Number(response.headers.get("content-length")) || undefined);
+  report(0, "downloading", totalBytes);
+  let lastProgress = Date.now();
   const measure = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       byteLength += chunk.length;
       hash.update(chunk);
+      if (Date.now() - lastProgress >= 5000) {
+        report(byteLength, "downloading", totalBytes);
+        lastProgress = Date.now();
+      }
       callback(null, chunk);
     },
   });
@@ -109,6 +123,7 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
     const reusable = await reusableSnapshot(directory, sha256);
     if (reusable) {
       await rm(temporaryPath, { force: true });
+      report(byteLength, "complete", totalBytes);
       return reusable;
     }
     snapshotStaging = path.join(sourceRoot, `.snapshot-${sha256.slice(7, 23)}-${randomUUID()}`);
@@ -137,11 +152,15 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
       const winner = await reusableSnapshot(directory, sha256);
       await rm(stagingDirectory, { recursive: true, force: true });
       snapshotStaging = null;
-      if (winner) return winner;
+      if (winner) {
+        report(byteLength, "complete", totalBytes);
+        return winner;
+      }
       throw error;
     }
     const filePath = path.join(directory, fileName);
     const receiptPath = path.join(directory, "receipt.json");
+    report(byteLength, "complete", totalBytes);
     return { directory, filePath, receiptPath, receipt, reused: false };
   } catch (error) {
     await rm(temporaryPath, { force: true });

@@ -35,7 +35,8 @@ Select **Central Cascades** for Glacier Peak, Alpine Lakes, and Teanaway.
 The script creates `.env` if needed and builds selected packs inside Docker;
 you do not need Node, Python, or geographic tools on your computer. The first
 build downloads substantial source data and can take a while. Progress is
-shown, and completed downloads are cached for reuse if you interrupt and retry.
+shown with download counters and compiler substeps, and completed downloads are
+cached for reuse if you interrupt and retry.
 
 Once preparation finishes, start the app:
 

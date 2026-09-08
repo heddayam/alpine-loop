@@ -10,7 +10,7 @@ export type RegionalPackBuildOptions = {
   onProgress?: (progress: RegionalPackBuildProgress) => void;
 };
 
-export type RegionalPackBuildProgress = { phase: number; phaseCount: number; label: string };
+export type RegionalPackBuildProgress = { phase: number; phaseCount: number; label: string; detail?: string };
 
 /** Source adapters finish validation before handing entrance evidence to the builder. */
 export type PreparedRegionalEntrances = {

@@ -42,6 +42,7 @@ import type { PreparedRegionalEntrances, RegionalPackBuildOptions, RegionalPackD
 export type { RegionalPackDefinition } from "./regional-build-types";
 import { searchRegionInputSchema } from "./search-regions";
 import type { NormalizedTopology } from "./types";
+import type { CacheDownloadOptions } from "./source-cache";
 
 export const REGIONAL_PACK_BUILD_PHASES = [
   "Validate regional inputs and prerequisites",
@@ -56,11 +57,12 @@ export const REGIONAL_PACK_BUILD_PHASES = [
   "Regional pack build complete",
 ] as const;
 
-function reportBuildProgress(options: RegionalPackBuildOptions, phase: number, label?: string): void {
+function reportBuildProgress(options: RegionalPackBuildOptions, phase: number, label?: string, detail?: string): void {
   options.onProgress?.({
     phase,
     phaseCount: REGIONAL_PACK_BUILD_PHASES.length,
     label: label ?? REGIONAL_PACK_BUILD_PHASES[phase - 1]!,
+    ...(detail ? { detail } : {}),
   });
 }
 
@@ -287,16 +289,21 @@ export function createRegionalPackBuilder(config: RegionalPackDefinition) {
     reportBuildProgress(options, 2, options.refresh ? "Refresh pinned source snapshots" : undefined);
     // Validate regional entrance sources before starting the large common downloads.
     const entrances = await config.entrances?.(options);
+    const onDownload: CacheDownloadOptions["onProgress"] = options.onProgress ? ({ fileName, receivedBytes, totalBytes, state }) => {
+      const amount = `${(receivedBytes / 1e6).toFixed(1)}${totalBytes ? ` / ${(totalBytes / 1e6).toFixed(1)}` : ""} MB`;
+      const status = state === "downloading" && totalBytes ? `${Math.floor(100 * receivedBytes / totalBytes)}%` : state;
+      reportBuildProgress(options, 2, undefined, `${fileName}: ${amount} (${status})`);
+    } : undefined;
     const [osmSnapshot, dem, officialTrailSnapshot] = await Promise.all([
       options.refresh
-        ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig).then(({ snapshot }) => snapshot)
+        ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig, undefined, onDownload).then(({ snapshot }) => snapshot)
         : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
       options.refresh
-        ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig)
+        ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig, undefined, onDownload)
         : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
       officialTrailConfig
         ? options.refresh
-          ? refreshPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig).then(({ snapshot }) => snapshot)
+          ? refreshPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig, undefined, onDownload).then(({ snapshot }) => snapshot)
           : readPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig)
         : Promise.resolve(null),
     ]);
@@ -378,6 +385,7 @@ export function createRegionalPackBuilder(config: RegionalPackDefinition) {
       searchRegions,
       additionalSources,
       beforePublish: () => reportBuildProgress(options, 9),
+      onProgress: options.onProgress ? (detail) => reportBuildProgress(options, 8, undefined, detail) : undefined,
     }, (artifact) => {
       if (officialTrailConflationAudit && officialTrailSnapshot) {
         addOfficialTrailPublicationCounts(officialTrailConflationAudit, artifact.databasePath, officialTrailSnapshot.id);

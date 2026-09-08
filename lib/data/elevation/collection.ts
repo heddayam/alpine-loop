@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { downloadToSourceCache, withAtomicDirectory, type SourceReceipt } from "../source-cache";
+import { downloadToSourceCache, withAtomicDirectory, type SourceReceipt, type CacheDownloadOptions } from "../source-cache";
 import { queryThreeDepProducts, threeDepQueryUrl, type ThreeDepQuery } from "./products";
 
 export const threeDepCollectionSchema = z.object({
@@ -40,6 +40,7 @@ export type RefreshThreeDepOptions = {
   catalogId: string;
   retrievedAt?: string;
   fetchImpl?: typeof fetch;
+  onProgress?: CacheDownloadOptions["onProgress"];
 };
 
 function tifFileName(productId: string, downloadUrl: string): string {
@@ -69,6 +70,7 @@ export async function refreshThreeDepCollection(options: RefreshThreeDepOptions)
       fileName: tifFileName(product.productId, product.downloadUrl),
       retrievedAt,
       reuseExistingUrl: true,
+      onProgress: options.onProgress,
       ...(product.byteLength ? { expectedByteLength: product.byteLength } : {}),
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });

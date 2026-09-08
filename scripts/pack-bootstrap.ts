@@ -4,7 +4,7 @@ import { fixtureCompileOptions } from "../lib/data/fixture-pack";
 import { buildRegionalPack, type RegionalPackBuildProgress } from "../lib/data/regional-pack";
 
 export function formatRegionalPackBuildProgress(progress: RegionalPackBuildProgress): string {
-  return `[${progress.phase}/${progress.phaseCount}] ${progress.label}`;
+  return progress.detail ? `  ${progress.detail}` : `[${progress.phase}/${progress.phaseCount}] ${progress.label}`;
 }
 
 const packArgument = process.argv.find((argument) => argument.startsWith("--pack="));

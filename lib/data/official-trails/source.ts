@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
-import { downloadToSourceCache, writeJsonAtomically, type CachedSource } from "../source-cache";
+import { downloadToSourceCache, writeJsonAtomically, type CachedSource, type CacheDownloadOptions } from "../source-cache";
 import type { OfficialTrailConflationPolicy } from "./types";
 
 export const officialTrailSourceConfigSchema = z.object({
@@ -71,6 +71,7 @@ export async function refreshPinnedOfficialTrailSnapshot(
   cacheRoot: string,
   config: OfficialTrailSourceConfig,
   fetchImpl?: typeof fetch,
+  onProgress?: CacheDownloadOptions["onProgress"],
 ): Promise<{ snapshot: SourceSnapshot; cached: CachedSource }> {
   const cached = await downloadToSourceCache({
     cacheRoot,
@@ -79,6 +80,7 @@ export async function refreshPinnedOfficialTrailSnapshot(
     fileName: `${config.id}-${config.version}.geojson`,
     expectedSha256: config.expectedSha256 as `sha256:${string}`,
     expectedByteLength: config.expectedByteLength,
+    onProgress,
     ...(fetchImpl ? { fetchImpl } : {}),
   });
   await writeJsonAtomically(officialTrailPointerPath(cacheRoot, config.id), {

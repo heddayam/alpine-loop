@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
-import { writeJsonAtomically } from "../source-cache";
+import { writeJsonAtomically, type CacheDownloadOptions } from "../source-cache";
 import { readThreeDepCollection, refreshThreeDepCollection, type ThreeDepCollection } from "./collection";
 
 export const elevationSourceConfigSchema = z.object({
@@ -63,6 +63,7 @@ export async function refreshPinnedThreeDepCollection(
   cacheRoot: string,
   config: ElevationSourceConfig,
   fetchImpl?: typeof fetch,
+  onProgress?: CacheDownloadOptions["onProgress"],
 ): Promise<Awaited<ReturnType<typeof readPinnedThreeDepCollection>>> {
   const result = await refreshThreeDepCollection({
     cacheRoot,
@@ -75,6 +76,7 @@ export async function refreshPinnedThreeDepCollection(
       expectedProductIds: config.expectedProductIds,
     },
     catalogId: config.catalogId,
+    onProgress,
     ...(fetchImpl ? { fetchImpl } : {}),
   });
   await writeJsonAtomically(elevationPointerPath(cacheRoot, config), {

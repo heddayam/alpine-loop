@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
-import { downloadToSourceCache, writeJsonAtomically, type CachedSource } from "../source-cache";
+import { downloadToSourceCache, writeJsonAtomically, type CachedSource, type CacheDownloadOptions } from "../source-cache";
 
 export const osmSourceConfigSchema = z.object({
   schemaVersion: z.literal(1),
@@ -48,6 +48,7 @@ export async function refreshPinnedOsmSnapshot(
   cacheRoot: string,
   config: OsmSourceConfig,
   fetchImpl?: typeof fetch,
+  onProgress?: CacheDownloadOptions["onProgress"],
 ): Promise<{ snapshot: SourceSnapshot; cached: CachedSource }> {
   let expectedSha256: `sha256:${string}` | undefined;
   try {
@@ -61,6 +62,7 @@ export async function refreshPinnedOsmSnapshot(
     url: config.url,
     fileName: `${config.id}-${config.version}.osm.pbf`,
     expectedByteLength: config.expectedByteLength,
+    onProgress,
     ...(expectedSha256 ? { expectedSha256 } : {}),
     ...(fetchImpl ? { fetchImpl } : {}),
   });
