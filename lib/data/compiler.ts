@@ -53,6 +53,7 @@ export type CompilePackOptions = {
   buildings: readonly BuildingCentroid[];
   namedAreas: { adapter: NamedAreaSourceAdapter; snapshot: SourceSnapshot };
   searchRegions: SearchRegionInput;
+  onProgress?: (label: string) => void;
   beforePublish?: (artifact: PackBuildResult) => void | Promise<void>;
 };
 
@@ -75,6 +76,7 @@ async function compileGraph(
   evidence: NormalizedAccessEvidence[],
   sampler: ElevationSampler,
   coverage: AreaGeometry,
+  onProgress?: CompilePackOptions["onProgress"],
 ): Promise<{
   nodes: NormalizedTopology["nodes"];
   edges: CompiledEdge[];
@@ -93,6 +95,7 @@ async function compileGraph(
 
   const elevationNodeIds = new Set(topology.ways.filter(({ edgeClass }) => edgeClass === undefined || edgeClass === "trail").flatMap(({ nodeIds }) => nodeIds));
   const elevationNodes = topology.nodes.filter(({ id }) => elevationNodeIds.has(id));
+  onProgress?.(`Sample elevations for ${elevationNodes.length.toLocaleString("en-US")} trail nodes`);
   const sampledElevations = await sampler.sample(elevationNodes.map(({ lon, lat }) => [lon, lat]));
   const elevationByNodeId = new Map(elevationNodes.map((node, index) => [node.id, sampledElevations[index] ?? null]));
   const nodes = topology.nodes.map((node) => ({ ...node, elevationM: elevationByNodeId.get(node.id) ?? null }));
@@ -118,6 +121,7 @@ async function compileGraph(
     return accepted;
   });
   const trailSegmentPlans = retainedSegmentPlans.filter(({ way }) => way.edgeClass === undefined || way.edgeClass === "trail");
+  onProgress?.(`Calculate metrics for ${trailSegmentPlans.length.toLocaleString("en-US")} trail segments`);
   const trailSegmentMetrics = await calculateEdgeMetricsBatch(trailSegmentPlans.map(({ geometry }) => geometry), sampler);
   let trailMetricIndex = 0;
 
@@ -404,6 +408,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   await mkdir(packRoot, { recursive: true });
   const existing = await existingBuild(finalDirectory);
   if (existing) {
+    options.onProgress?.("Reuse existing compiled pack");
     await options.beforePublish?.(existing);
     await writeCurrentPointer(packRoot, manifest.dataVersion);
     return existing;
@@ -423,7 +428,9 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       evidence,
       options.elevation.sampler,
       manifest.coverage.boundary,
+      options.onProgress,
     );
+    options.onProgress?.("Normalize named areas");
     await options.namedAreas.adapter.validate(options.namedAreas.snapshot);
     const providedAreas = await options.namedAreas.adapter.normalize(options.namedAreas.snapshot);
     const namedAreas = validateAndSortNamedAreas([{
@@ -436,6 +443,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       sourceIds: [options.topology.snapshot.id],
     }, ...providedAreas], new Set(sources.map(({ id }) => id)));
     const searchRegions = validateSearchRegions(options.searchRegions, namedAreas);
+    options.onProgress?.("Rank access points and check nearby buildings");
     const rankedAccessPoints = addAccessRankingFields(compiledGraph.nodes, compiledGraph.edges, compiledGraph.accessPoints);
     const graph = {
       ...compiledGraph,
@@ -443,6 +451,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       namedAreas,
       searchRegions,
     };
+    options.onProgress?.("Build closed-route topology");
     const closedRouteTopology = buildClosedRouteTopology(graph.nodes, graph.edges, graph.accessPoints, {
       builtAt: manifest.builtAt,
       algorithmVersion: manifest.closedRouteTopology.algorithmVersion,
@@ -464,6 +473,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       noCycleAccessPointCount: profile.accessTopology.filter(({ canReachCycle }) => !canReachCycle).length,
     }));
     const databasePath = path.join(stagingDirectory, "pack.sqlite");
+    options.onProgress?.("Write pack database");
     writePackDatabase(databasePath, {
       nodes: graph.nodes,
       edges: graph.edges,
@@ -485,6 +495,7 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
     await writeFile(path.join(stagingDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(path.join(stagingDirectory, "audit.json"), `${JSON.stringify(audit, null, 2)}\n`);
 
+    options.onProgress?.("Check database integrity");
     const verificationDatabase = new DatabaseSync(databasePath, { readOnly: true });
     try {
       const row = verificationDatabase.prepare("PRAGMA integrity_check").get() as { integrity_check: string };

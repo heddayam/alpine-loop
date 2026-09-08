@@ -23,6 +23,29 @@ afterEach(async () => {
 });
 
 describe("fixture pack compiler", () => {
+  it("reports compilation work and distinguishes reuse without changing the artifact", async () => {
+    const outputRoot = await temporaryOutput();
+    const options = await fixtureCompileOptions(outputRoot);
+    const progress: string[] = [];
+    const onProgress = (label: string) => { progress.push(label); };
+    const built = await compilePack({ ...options, onProgress });
+    expect(progress).toEqual([
+      "Sample elevations for 7 trail nodes",
+      "Calculate metrics for 9 trail segments",
+      "Normalize named areas",
+      "Rank access points and check nearby buildings",
+      "Build closed-route topology",
+      "Write pack database",
+      "Check database integrity",
+    ]);
+    const silent = await compilePack(await fixtureCompileOptions(await temporaryOutput()));
+    expect(await readFile(built.databasePath)).toEqual(await readFile(silent.databasePath));
+    progress.length = 0;
+    const reused = await compilePack({ ...options, onProgress });
+    expect(reused.reusedExisting).toBe(true);
+    expect(progress).toEqual(["Reuse existing compiled pack"]);
+  });
+
   it("accepts a prepared topology with attributed additional sources and no live official adapter", async () => {
     const outputRoot = await temporaryOutput();
     const options = await fixtureCompileOptions(outputRoot);
