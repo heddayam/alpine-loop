@@ -6,6 +6,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import type { CachedSource, SourceReceipt } from "./types";
+import { sha256File } from "../file-source";
 
 const receiptSchema = z.object({
   schemaVersion: z.literal(1),
@@ -41,17 +42,17 @@ function safeSegment(value: string): string {
   return value;
 }
 
-async function reusableSnapshot(directory: string, expectedSha256?: string): Promise<CachedSource | null> {
+async function reusableSnapshot(directory: string, expectedSha256?: string, url?: string, byteLength?: number): Promise<CachedSource | null> {
   try {
     const receiptPath = path.join(directory, "receipt.json");
     const receipt = receiptSchema.parse(JSON.parse(await readFile(receiptPath, "utf8"))) as SourceReceipt;
     if (expectedSha256 && receipt.sha256 !== expectedSha256) return null;
+    if (url && receipt.originalUrl !== url) return null;
+    if (byteLength !== undefined && receipt.byteLength !== byteLength) return null;
     const filePath = path.join(directory, receipt.fileName);
     const fileStat = await stat(filePath);
     if (fileStat.size !== receipt.byteLength) return null;
-    const hash = createHash("sha256");
-    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
-    if (`sha256:${hash.digest("hex")}` !== receipt.sha256) return null;
+    if (await sha256File(filePath) !== receipt.sha256) return null;
     return { directory, filePath, receiptPath, receipt, reused: true };
   } catch {
     return null;
@@ -79,9 +80,8 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
     const entries = await readdir(sourceRoot, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name));
-      if (reusable?.receipt.originalUrl !== options.url) continue;
-      if (options.expectedByteLength !== undefined && reusable.receipt.byteLength !== options.expectedByteLength) continue;
+      const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name), undefined, options.url, options.expectedByteLength);
+      if (!reusable) continue;
       report(reusable.receipt.byteLength, "cached", reusable.receipt.byteLength);
       return reusable;
     }

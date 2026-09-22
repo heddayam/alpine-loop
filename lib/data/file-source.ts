@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { SourceSnapshot } from "./adapters";
 
 export async function sha256File(path: string): Promise<`sha256:${string}`> {
-  const contents = await readFile(path);
-  return `sha256:${createHash("sha256").update(contents).digest("hex")}`;
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return `sha256:${hash.digest("hex")}`;
 }
 
 export async function readValidatedSnapshot(snapshot: SourceSnapshot): Promise<unknown> {

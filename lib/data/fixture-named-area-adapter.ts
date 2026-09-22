@@ -20,10 +20,6 @@ const fixtureNamedAreasSchema = z.object({
 export class FixtureNamedAreaAdapter implements NamedAreaSourceAdapter {
   readonly adapterVersion = "fixture-named-areas-v1";
 
-  async validate(snapshot: SourceSnapshot): Promise<void> {
-    fixtureNamedAreasSchema.parse(await readValidatedSnapshot(snapshot));
-  }
-
   async normalize(snapshot: SourceSnapshot): Promise<NormalizedNamedArea[]> {
     const input = fixtureNamedAreasSchema.parse(await readValidatedSnapshot(snapshot));
     return input.areas.map((area) => ({

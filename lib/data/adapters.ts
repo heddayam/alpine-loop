@@ -36,6 +36,6 @@ export interface ElevationSampler {
 
 export interface NamedAreaSourceAdapter {
   readonly adapterVersion: string;
-  validate(snapshot: SourceSnapshot): Promise<void>;
+  /** Validate the source and return its normalized areas in one operation. */
   normalize(snapshot: SourceSnapshot): Promise<NormalizedNamedArea[]>;
 }
