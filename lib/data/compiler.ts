@@ -13,7 +13,7 @@ import type {
   SourceSnapshot,
 } from "./adapters";
 import { reconcileAccess } from "./access";
-import { calculateEdgeMetricsBatch, distanceMeters } from "./metrics";
+import { calculateEdgeMetricsBatch, distanceMeters, MAX_ELEVATION_BATCH_COORDINATES, sampleElevations } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
 import { validateSearchRegions, type SearchRegionInput } from "./search-regions";
@@ -93,39 +93,37 @@ async function compileGraph(
     if (!knownExternalIds.has(externalId)) throw new Error(`Official access record targets unknown feature ${externalId}`);
   }
 
-  const elevationNodeIds = new Set(topology.ways.filter(({ edgeClass }) => edgeClass === undefined || edgeClass === "trail").flatMap(({ nodeIds }) => nodeIds));
-  const elevationNodes = topology.nodes.filter(({ id }) => elevationNodeIds.has(id));
+  const elevationNodeIds = new Set<string>();
+  for (const way of topology.ways) {
+    if (way.edgeClass === undefined || way.edgeClass === "trail") for (const id of way.nodeIds) elevationNodeIds.add(id);
+  }
+  const nodes = topology.nodes.map((node) => ({ ...node, elevationM: null as number | null }));
+  const elevationNodes = nodes.filter(({ id }) => elevationNodeIds.has(id));
   onProgress?.(`Sample elevations for ${elevationNodes.length.toLocaleString("en-US")} trail nodes`);
-  const sampledElevations = await sampler.sample(elevationNodes.map(({ lon, lat }) => [lon, lat]));
-  const elevationByNodeId = new Map(elevationNodes.map((node, index) => [node.id, sampledElevations[index] ?? null]));
-  const nodes = topology.nodes.map((node) => ({ ...node, elevationM: elevationByNodeId.get(node.id) ?? null }));
+  for (let offset = 0; offset < elevationNodes.length; offset += MAX_ELEVATION_BATCH_COORDINATES) {
+    const batch = elevationNodes.slice(offset, offset + MAX_ELEVATION_BATCH_COORDINATES);
+    const samples = await sampleElevations(batch.map(({ lon, lat }) => [lon, lat]), sampler);
+    batch.forEach((node, index) => { node.elevationM = samples[index]!; });
+  }
   let conflicts = 0;
   const edges: CompiledEdge[] = [];
-  const segmentPlans = topology.ways.flatMap((way) => {
-    const official = byExternalId.get(way.externalId) ?? [];
-    const resolution = reconcileAccess(way.accessState, official.map(({ accessState }) => accessState));
-    if (resolution.conflict) conflicts += 1;
-    const sourceRefs = [...new Set([...way.sourceRefs, ...official.map(({ sourceId }) => sourceId)])];
-    return Array.from({ length: way.nodeIds.length - 1 }, (_, segment) => ({
-      way,
-      segment,
-      resolution,
-      sourceRefs,
-      geometry: [way.coordinates[segment], way.coordinates[segment + 1]] as [Coordinate, Coordinate],
-    }));
-  });
+  type SegmentPlan = {
+    way: NormalizedTopology["ways"][number];
+    segment: number;
+    resolution: ReturnType<typeof reconcileAccess>;
+    sourceRefs: string[];
+    geometry: [Coordinate, Coordinate];
+  };
+  let segmentPlans: SegmentPlan[] = [];
   let rejectedCoverageEdgeCount = 0;
-  const retainedSegmentPlans = segmentPlans.filter(({ geometry, way }) => {
-    const accepted = edgeInsideCoverage({ geometry }, coverage);
-    if (!accepted) rejectedCoverageEdgeCount += way.bidirectional ? 2 : 1;
-    return accepted;
-  });
-  const trailSegmentPlans = retainedSegmentPlans.filter(({ way }) => way.edgeClass === undefined || way.edgeClass === "trail");
-  onProgress?.(`Calculate metrics for ${trailSegmentPlans.length.toLocaleString("en-US")} trail segments`);
-  const trailSegmentMetrics = await calculateEdgeMetricsBatch(trailSegmentPlans.map(({ geometry }) => geometry), sampler);
-  let trailMetricIndex = 0;
-
-  retainedSegmentPlans.forEach(({ way, segment, resolution, sourceRefs, geometry }) => {
+  const segmentCount = topology.ways.reduce((count, way) =>
+    count + (way.edgeClass === undefined || way.edgeClass === "trail" ? way.nodeIds.length - 1 : 0), 0);
+  onProgress?.(`Calculate metrics for up to ${segmentCount.toLocaleString("en-US")} trail segments`);
+  const flushSegments = async () => {
+    const trailSegmentMetrics = await calculateEdgeMetricsBatch(segmentPlans
+      .filter(({ way }) => way.edgeClass === undefined || way.edgeClass === "trail").map(({ geometry }) => geometry), sampler);
+    let trailMetricIndex = 0;
+    for (const { way, segment, resolution, sourceRefs, geometry } of segmentPlans) {
       const trail = way.edgeClass === undefined || way.edgeClass === "trail";
       const metrics = trail ? trailSegmentMetrics[trailMetricIndex++]! : {
         lengthM: distanceMeters(geometry[0], geometry[1]),
@@ -171,7 +169,25 @@ async function compileGraph(
           ...common,
         });
       }
-  });
+    }
+    segmentPlans = [];
+  };
+  for (const way of topology.ways) {
+    const official = byExternalId.get(way.externalId) ?? [];
+    const resolution = reconcileAccess(way.accessState, official.map(({ accessState }) => accessState));
+    if (resolution.conflict) conflicts += 1;
+    const sourceRefs = [...new Set([...way.sourceRefs, ...official.map(({ sourceId }) => sourceId)])];
+    for (let segment = 0; segment < way.nodeIds.length - 1; segment += 1) {
+      const geometry: [Coordinate, Coordinate] = [way.coordinates[segment], way.coordinates[segment + 1]];
+      if (!edgeInsideCoverage({ geometry }, coverage)) {
+        rejectedCoverageEdgeCount += way.bidirectional ? 2 : 1;
+        continue;
+      }
+      segmentPlans.push({ way, segment, resolution, sourceRefs, geometry });
+      if (segmentPlans.length === 5_000) await flushSegments();
+    }
+  }
+  await flushSegments();
 
   let accessPoints = topology.accessPoints.map((point) => {
     const official = byExternalId.get(point.externalId) ?? [];
@@ -431,7 +447,6 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
       options.onProgress,
     );
     options.onProgress?.("Normalize named areas");
-    await options.namedAreas.adapter.validate(options.namedAreas.snapshot);
     const providedAreas = await options.namedAreas.adapter.normalize(options.namedAreas.snapshot);
     const namedAreas = validateAndSortNamedAreas([{
       id: `pack:${manifest.id}`,

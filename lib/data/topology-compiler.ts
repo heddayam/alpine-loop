@@ -5,14 +5,9 @@ import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, ClosedRouteTo
 
 export { CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 
-type DenseEdge = CompiledEdge & { from: number; to: number; physicalEdgeKey: number };
+type DenseEdge = Pick<CompiledEdge, "id" | "lengthM" | "edgeClass" | "accessState">
+  & { from: number; to: number; physicalEdgeKey: number };
 type Physical = ClosedRouteTopologyBuild["physicalEdges"][number];
-
-function geometryHash(edge: CompiledEdge): string {
-  const forward = canonicalTopologyJson(edge.geometry);
-  const reverse = canonicalTopologyJson([...edge.geometry].reverse());
-  return topologySha256(forward < reverse ? forward : reverse);
-}
 
 function stronglyConnectedComponents(nodeCount: number, edges: readonly DenseEdge[]): number[] {
   const outgoing = Array.from({ length: nodeCount + 1 }, () => [] as number[]);
@@ -217,18 +212,20 @@ export function buildClosedRouteTopology(
     const endpoints = [...new Set(members.flatMap(({ fromNode, toNode }) => [fromNode, toNode]))];
     if (endpoints.length > 2) throw new Error(`Physical edge ${stablePhysicalId} has inconsistent endpoints`);
     const keys = endpoints.map((id) => nodeKeys.get(id)!).sort((a, b) => a - b);
-    const firstHash = geometryHash(members[0]!);
     const firstForward = canonicalTopologyJson(members[0]!.geometry);
     const firstReverse = canonicalTopologyJson([...members[0]!.geometry].reverse());
-    if (members.some((member) => {
+    if (members.some((member, index) => {
+      if (index === 0) return false;
       const value = canonicalTopologyJson(member.geometry); return value !== firstForward && value !== firstReverse;
     })) throw new Error(`Physical edge ${stablePhysicalId} has inconsistent geometry`);
     return {
-      physicalEdgeKey: index + 1, stablePhysicalId, fromNodeKey: keys[0]!, toNodeKey: keys.at(-1)!, geometryHash: firstHash,
+      physicalEdgeKey: index + 1, stablePhysicalId, fromNodeKey: keys[0]!, toNodeKey: keys.at(-1)!,
+      geometryHash: topologySha256(firstForward < firstReverse ? firstForward : firstReverse),
     };
   });
   const denseEdges: DenseEdge[] = sortedEdges.map((edge) => ({
-    ...edge, from: nodeKeys.get(edge.fromNode)!, to: nodeKeys.get(edge.toNode)!,
+    id: edge.id, lengthM: edge.lengthM, edgeClass: edge.edgeClass, accessState: edge.accessState,
+    from: nodeKeys.get(edge.fromNode)!, to: nodeKeys.get(edge.toNode)!,
     physicalEdgeKey: physicalEdgeKeysByStableId.get(edge.stablePhysicalId)!,
   }));
   const profiles = (["known", "inclusive"] as const).map((profile) =>
