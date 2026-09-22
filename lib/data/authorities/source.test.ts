@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,12 +27,13 @@ describe("regional official source sets", () => {
     const configRoot = path.join(root, "configs");
     const cacheRoot = path.join(root, "cache");
     const cacheNamespace = "southern-east-bay-official-access";
-    const localPath = path.join(root, "source.json");
+    const localPath = path.join(cacheRoot, "ebrpd-trails", "fixture-hash", "source.json");
     const metadataContentHash = `sha256:${"a".repeat(64)}`;
     const inspectedSnapshotContentHash = `sha256:${createHash("sha256").update("fixture source bytes").digest("hex")}`;
     const sourceSet: OfficialSourceSet = { configRoot, filenames: ["ebrpd.json"], cacheNamespace };
     await mkdir(configRoot, { recursive: true });
     await mkdir(path.join(cacheRoot, cacheNamespace), { recursive: true });
+    await mkdir(path.dirname(localPath), { recursive: true });
     await writeFile(localPath, "fixture source bytes");
     await writeFile(path.join(configRoot, "ebrpd.json"), JSON.stringify({
       id: "ebrpd-trails",
@@ -61,6 +62,12 @@ describe("regional official source sets", () => {
 
     await writeFile(localPath, "changed source bytes");
     await expect(readOfficialSourceSnapshots(cacheRoot, sourceSet)).rejects.toThrow(/inspected snapshot hash/);
+    await writeFile(localPath, "fixture source bytes");
+    const moved = path.join(root, "moved-cache");
+    await rename(cacheRoot, moved);
+    await expect(readOfficialSourceSnapshots(moved, sourceSet)).resolves.toMatchObject([{
+      localPath: path.join(moved, path.relative(cacheRoot, localPath)), contentHash: inspectedSnapshotContentHash,
+    }]);
   });
 
   it("rejects unsafe cache namespaces and config paths", async () => {

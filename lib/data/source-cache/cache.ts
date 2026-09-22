@@ -42,6 +42,37 @@ function safeSegment(value: string): string {
   return value;
 }
 
+/** Reconstruct immutable source locations without retaining a machine's root. */
+export function cachedSourcePath(cacheRoot: string, input: SourceReceipt): string {
+  const receipt = receiptSchema.parse(input);
+  return path.join(cacheRoot, safeSegment(receipt.sourceId), receipt.sha256.slice(7), safeSegment(receipt.fileName));
+}
+
+/** Also accepts the absolute pointers written by older native/container builds. */
+export function resolveSourcePath(cacheRoot: string, storedPath: string, namespace: string): string {
+  let relative = path.isAbsolute(storedPath) ? path.relative(cacheRoot, storedPath) : storedPath;
+  if (path.isAbsolute(storedPath) && relative.startsWith(`..${path.sep}`)) {
+    const marker = `${path.sep}${safeSegment(namespace)}${path.sep}`;
+    const index = storedPath.lastIndexOf(marker);
+    if (index < 0) throw new Error(`Source pointer does not belong to ${namespace}`);
+    relative = storedPath.slice(index + 1);
+  }
+  const resolved = path.resolve(cacheRoot, relative);
+  if (path.relative(path.resolve(cacheRoot), resolved).split(path.sep).includes("..")) {
+    throw new Error("Source pointer escapes the cache root");
+  }
+  return resolved;
+}
+
+/** undefined uses local pins first; false is strictly offline; true rediscovers. */
+export async function readOrAcquireSource<T>(refresh: boolean | undefined, read: () => Promise<T>, acquire: () => Promise<T>): Promise<T> {
+  if (refresh === true) return acquire();
+  try { return await read(); } catch (error) {
+    if (refresh === false) throw error;
+    return acquire();
+  }
+}
+
 async function reusableSnapshot(directory: string, expectedSha256?: string, url?: string, byteLength?: number): Promise<CachedSource | null> {
   try {
     const receiptPath = path.join(directory, "receipt.json");
