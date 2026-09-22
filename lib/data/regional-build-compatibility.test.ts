@@ -30,14 +30,14 @@ vi.mock("./osm", async (importOriginal) => {
     readPinnedOsmSnapshot: async (_root: string, config: SourceConfig) => snapshot(config),
     refreshPinnedOsmSnapshot: async (_root: string, config: SourceConfig) => ({ snapshot: snapshot(config) }),
     prepareOsmTopology: async (source: SourceSnapshot, options: { boundaryPath: string }) =>
-      tinyTopology(path.dirname(options.boundaryPath), source.id),
+      ({ topology: await tinyTopology(path.dirname(options.boundaryPath), source.id), regionPath: "/fixture/region.osm.pbf", identity: "fixture" }),
     prepareOsmBuildings: async () => [[-121.5, 37.1]],
   };
 });
 vi.mock("./elevation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./elevation")>();
   const collection = async (_root: string, config: SourceConfig) => ({
-    collectionPath: "/fixture/dem.json", snapshot: snapshot(config),
+    collectionPath: "/fixture/dem.json", snapshot: snapshot(config), buildFingerprint: snapshot(config).contentHash,
   });
   return { ...actual, validateUvRasterioPrerequisites: async () => undefined,
     readPinnedThreeDepCollection: collection, refreshPinnedThreeDepCollection: collection };

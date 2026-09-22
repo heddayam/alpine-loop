@@ -400,6 +400,19 @@ function manifestSource(source: SourceSnapshot): Omit<SourceSnapshot, "localPath
   };
 }
 
+/** Revalidate before activation, without requiring graph preparation on a hit. */
+export async function reuseCompiledPack(
+  options: Pick<CompilePackOptions, "outputRoot" | "seed" | "beforePublish" | "onProgress">,
+): Promise<PackBuildResult | null> {
+  const packRoot = path.join(options.outputRoot, options.seed.id);
+  const existing = await existingBuild(path.join(packRoot, options.seed.dataVersion));
+  if (!existing || existing.audit.packId !== options.seed.id || existing.audit.dataVersion !== options.seed.dataVersion) return null;
+  options.onProgress?.("Reuse existing compiled pack");
+  await options.beforePublish?.(existing);
+  await writeCurrentPointer(packRoot, options.seed.dataVersion);
+  return existing;
+}
+
 export async function compilePack(options: CompilePackOptions): Promise<PackBuildResult> {
   if (!options.namedAreas) throw new Error("Schema 6 pack requires a named-area adapter");
   if (!options.searchRegions) throw new Error("Schema 6 pack requires reviewed search regions");
@@ -422,13 +435,8 @@ export async function compilePack(options: CompilePackOptions): Promise<PackBuil
   const packRoot = path.join(options.outputRoot, manifest.id);
   const finalDirectory = path.join(packRoot, manifest.dataVersion);
   await mkdir(packRoot, { recursive: true });
-  const existing = await existingBuild(finalDirectory);
-  if (existing) {
-    options.onProgress?.("Reuse existing compiled pack");
-    await options.beforePublish?.(existing);
-    await writeCurrentPointer(packRoot, manifest.dataVersion);
-    return existing;
-  }
+  const existing = await reuseCompiledPack(options);
+  if (existing) return existing;
 
   const stagingDirectory = path.join(packRoot, `.staging-${manifest.dataVersion}-${randomUUID()}`);
   await mkdir(stagingDirectory);

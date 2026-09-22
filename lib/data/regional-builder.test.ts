@@ -12,23 +12,22 @@ import type { RegionalPackBuildProgress, RegionalPackDefinition } from "./region
 // compiler, SQLite writer, persisted audit, and publication path.
 vi.mock("./osm", async (importOriginal) => ({
   ...await importOriginal<typeof import("./osm")>(),
-  validateOsmPrerequisites: async () => undefined,
+  validateOsmPrerequisites: vi.fn(async () => undefined),
   readOsmSourceConfig: async () => ({}),
   readPinnedOsmSnapshot: async () => source("osm"),
   refreshPinnedOsmSnapshot: async () => ({ snapshot: source("osm") }),
-  prepareOsmTopology: async () => topology(),
+  prepareOsmTopology: vi.fn(async () => ({ topology: topology(), regionPath: "/fixture/region.osm.pbf", identity: "fixture" })),
   prepareOsmBuildings: async () => [],
   OsmPbfNamedAreaAdapter: class {
     adapterVersion = "fixture-names-v1";
-    async validate() {}
     async normalize() { return []; }
   },
 }));
 vi.mock("./elevation", () => ({
   validateUvRasterioPrerequisites: async () => undefined,
   readElevationSourceConfig: async () => ({}),
-  readPinnedThreeDepCollection: async () => ({ snapshot: source("dem"), collectionPath: "/fixture/dem" }),
-  refreshPinnedThreeDepCollection: async () => ({ snapshot: source("dem"), collectionPath: "/fixture/dem" }),
+  readPinnedThreeDepCollection: async () => ({ snapshot: source("dem"), collectionPath: "/fixture/dem", buildFingerprint: source("dem").contentHash }),
+  refreshPinnedThreeDepCollection: async () => ({ snapshot: source("dem"), collectionPath: "/fixture/dem", buildFingerprint: source("dem").contentHash }),
   UvRasterioThreeDepElevationSampler: class {
     algorithmVersion = "fixture-elevation-v1";
     async sample(coordinates: ReadonlyArray<readonly [number, number]>) {
@@ -37,6 +36,7 @@ vi.mock("./elevation", () => ({
   },
 }));
 
+import { prepareOsmTopology, validateOsmPrerequisites } from "./osm";
 import { createRegionalPackBuilder, parseRegionalBoundary, regionalDataVersion, REGIONAL_PACK_BUILD_PHASES } from "./regional-builder";
 
 function source(id: string): SourceSnapshot {
@@ -101,9 +101,15 @@ describe("shared regional builder", () => {
       expect(database.prepare("SELECT COUNT(*) AS count FROM access_points").get()).toEqual({ count: 1 });
     } finally { database.close(); }
     expect(JSON.parse(await readFile(path.join(first.pack.packDirectory, "portal-audit.json"), "utf8"))).toEqual(first.portalAudit);
+    vi.mocked(prepareOsmTopology).mockClear();
+    vi.mocked(validateOsmPrerequisites).mockClear();
     const secondProgress: RegionalPackBuildProgress[] = [];
     const second = await createRegionalPackBuilder(config)({ ...options, refresh: true, onProgress: (value) => secondProgress.push(value) });
     expect(second.pack.reusedExisting).toBe(true);
+    expect(prepareOsmTopology).not.toHaveBeenCalled();
+    expect(validateOsmPrerequisites).not.toHaveBeenCalled();
+    expect(second.portalAudit).toEqual(first.portalAudit);
+    expect(second.regionalAudit).toEqual(first.regionalAudit);
     expect(second.pack.packDirectory).toBe(first.pack.packDirectory);
     expect(secondProgress[1]!.label).toBe("Refresh pinned source snapshots");
   });
@@ -118,6 +124,20 @@ describe("shared regional builder", () => {
     await expect(rejected(options)).rejects.toThrow("Required corridor has no trailheads");
     expect(await readFile(pointerPath, "utf8")).toBe(pointer);
     await expect(readFile(first.pack.manifestPath, "utf8")).resolves.toContain(config.id);
+  });
+
+  it("revalidates reused artifacts and leaves the current pointer intact on corruption", async () => {
+    const { config, options } = await fixture();
+    const first = await createRegionalPackBuilder(config)(options);
+    const pointerPath = path.join(options.outputRoot, config.id, "current.json");
+    const pointer = await readFile(pointerPath, "utf8");
+    const database = new DatabaseSync(first.pack.databasePath);
+    try { database.exec("UPDATE edges SET length_m = -1 WHERE edge_key = 1"); }
+    finally { database.close(); }
+    vi.mocked(prepareOsmTopology).mockClear();
+    await expect(createRegionalPackBuilder(config)(options)).rejects.toThrow();
+    expect(prepareOsmTopology).not.toHaveBeenCalled();
+    expect(await readFile(pointerPath, "utf8")).toBe(pointer);
   });
 
   it("pins restrictions and applies them before entrance labels", async () => {

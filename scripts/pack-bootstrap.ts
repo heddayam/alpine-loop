@@ -13,8 +13,8 @@ const cacheArgument = process.argv.find((argument) => argument.startsWith("--cac
 const buildCacheArgument = process.argv.find((argument) => argument.startsWith("--build-cache="));
 const progressEnabled = process.argv.includes("--progress");
 
-if (!packArgument) {
-  console.error("Usage: npm run pack:bootstrap -- --pack=<pack-id> [--progress]");
+if (!packArgument || (process.argv.includes("--offline") && process.argv.includes("--refresh"))) {
+  console.error("Usage: npm run pack:bootstrap -- --pack=<pack-id> [--progress] [--offline | --refresh]");
   process.exitCode = 2;
 } else {
   const packId = packArgument.slice("--pack=".length);
@@ -24,7 +24,7 @@ if (!packArgument) {
       outputRoot,
       sourceCacheRoot: path.resolve(cacheArgument?.slice("--cache=".length) ?? ".cache/sources"),
       preparationRoot: path.resolve(buildCacheArgument?.slice("--build-cache=".length) ?? `.cache/build/${packId}/sources`),
-      refresh: !process.argv.includes("--offline"),
+      refresh: process.argv.includes("--refresh") ? true : process.argv.includes("--offline") ? false : undefined,
       ...(progressEnabled ? {
         onProgress: (progress: RegionalPackBuildProgress) => {
           process.stdout.write(`${formatRegionalPackBuildProgress(progress)}\n`);

@@ -84,6 +84,9 @@ region without such a source gets generic portal names, not missing routes.
   (nominally 10 m / 1/3 arc-second when available).
 - Record product identifiers, resolution, vertical datum, retrieval date, and
   hashes.
+- Treat USGS catalog byte counts as advisory. Record the actual downloaded size
+  and SHA-256, and verify both on later reads. Build identity uses tile content,
+  sample precedence, resolution, and datums; retrieval dates stay in provenance.
 - Reproject/resample once in the compiler. Densify edge geometry, sample the DEM,
   suppress small vertical noise with one versioned algorithm, then persist
   direction-aware gain/loss, maximum elevation, and rolling-100 m grade.
@@ -145,6 +148,9 @@ data/fixtures/                          committed tiny deterministic inputs
 
 - Download to a temporary filename, verify, then atomically rename.
 - Never mutate a source snapshot in place.
+- Store source pointers independently of the machine's cache-root path. Ordinary
+  builds reuse verified configured pins, acquiring only missing/unusable inputs;
+  `--offline` prohibits acquisition and `--refresh` explicitly rediscovers sources.
 - Build to a staging directory and publish only after all validation succeeds.
 - Point an atomic `current` manifest/symlink at the new version, then prune older
   validated builds for that pack. Failed builds leave the current build intact.

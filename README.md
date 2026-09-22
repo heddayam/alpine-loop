@@ -135,8 +135,12 @@ uv sync --frozen --project tools/dem --python 3.12
 npm run pack:bootstrap -- --pack=central-cascades --progress
 ```
 
-Add `--offline` to rebuild using previously downloaded sources. The default
-output is `.local-data/packs/`. For data audits, representative route checks,
+Builds reuse verified local sources and download missing inputs. Add `--offline`
+to prohibit source acquisition, or `--refresh` to explicitly rediscover pinned
+sources. An unchanged pack is revalidated and reused before graph preparation.
+The source cache works across Docker and native builds; moving the checkout does
+not require downloading the sources again. The default output is `.local-data/packs/`.
+For data audits, representative route checks,
 and adding a region, follow the [regional checklist](docs/rebuild/region-onboarding-checklist.md).
 
 </details>

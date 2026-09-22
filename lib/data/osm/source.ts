@@ -20,7 +20,7 @@ export const osmSourceConfigSchema = z.object({
 
 export type OsmSourceConfig = z.infer<typeof osmSourceConfigSchema>;
 
-type OsmPointer = { configVersion: string; cached: Pick<CachedSource, "receipt"> };
+type OsmPointer = { configVersion: string; configUrl?: string; cached: Pick<CachedSource, "receipt"> };
 
 export async function readOsmSourceConfig(configPath: string): Promise<OsmSourceConfig> {
   return osmSourceConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
@@ -32,7 +32,7 @@ export function osmPointerPath(cacheRoot: string, sourceId: string): string {
 export async function readPinnedOsmSnapshot(cacheRoot: string, config: OsmSourceConfig): Promise<SourceSnapshot> {
   const pointer = JSON.parse(await readFile(osmPointerPath(cacheRoot, config.id), "utf8")) as OsmPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached OSM snapshot does not match configured version");
-  if (pointer.cached.receipt.sourceId !== config.id || pointer.cached.receipt.originalUrl !== config.url
+  if (pointer.cached.receipt.sourceId !== config.id || (pointer.configUrl ?? pointer.cached.receipt.originalUrl) !== config.url
     || pointer.cached.receipt.byteLength !== config.expectedByteLength) throw new Error("Cached OSM snapshot does not match configured source");
   const localPath = cachedSourcePath(cacheRoot, pointer.cached.receipt);
   if (await sha256File(localPath) !== pointer.cached.receipt.sha256) throw new Error("Cached OSM source failed integrity validation");
@@ -71,6 +71,6 @@ export async function refreshPinnedOsmSnapshot(
     ...(expectedSha256 ? { expectedSha256 } : {}),
     ...(fetchImpl ? { fetchImpl } : {}),
   });
-  await writeJsonAtomically(osmPointerPath(cacheRoot, config.id), { configVersion: config.version, cached: { receipt: cached.receipt } });
+  await writeJsonAtomically(osmPointerPath(cacheRoot, config.id), { configVersion: config.version, configUrl: config.url, cached: { receipt: cached.receipt } });
   return { snapshot: await readPinnedOsmSnapshot(cacheRoot, config), cached };
 }

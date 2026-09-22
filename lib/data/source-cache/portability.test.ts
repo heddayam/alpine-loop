@@ -35,8 +35,13 @@ it("reuses OSM and official trail receipts after moving a cache, including legac
     expect(await readFile(source.localPath)).toEqual(bytes);
   }
   const source = await readPinnedOsmSnapshot(moved, osm);
+  const revised = { ...osm, version: "v2", url: "https://fixtures.invalid/new-osm.pbf" };
+  const refreshed = await refreshPinnedOsmSnapshot(moved, revised, fetchFile);
+  expect(refreshed.cached.reused).toBe(true);
+  expect(refreshed.snapshot.contentHash).toBe(source.contentHash);
+  expect((await readPinnedOsmSnapshot(moved, revised)).url).toBe(revised.url);
   await writeFile(source.localPath, "corrupt");
-  await expect(readPinnedOsmSnapshot(moved, osm)).rejects.toThrow("integrity");
+  await expect(readPinnedOsmSnapshot(moved, revised)).rejects.toThrow("integrity");
 });
 
 it("keeps DEM build identity stable across roots and retrieval dates while validating actual tiles", async () => {
@@ -65,8 +70,26 @@ it("keeps DEM build identity stable across roots and retrieval dates while valid
   expect(snapshots[0]!.snapshot.contentHash).not.toBe(snapshots[1]!.snapshot.contentHash);
   expect(snapshots[0]!.buildFingerprint).toBe(snapshots[1]!.buildFingerprint);
   const last = snapshots[1]!;
-  await writeFile(path.resolve(path.dirname(last.collectionPath), last.collection.products[0]!.filePath), "corrupt");
-  await expect(readPinnedThreeDepCollection(path.join(directory, "moved-1"), config)).rejects.toThrow("integrity");
+  const tile = last.collection.products[0]!;
+  const tilePath = path.resolve(path.dirname(last.collectionPath), tile.filePath);
+  const revisedBytes = Buffer.from("revised-valid-tile");
+  await writeFile(tilePath, revisedBytes);
+  tile.receipt.byteLength = revisedBytes.length;
+  tile.receipt.sha256 = `sha256:${createHash("sha256").update(revisedBytes).digest("hex")}`;
+  await writeFile(last.collectionPath, JSON.stringify(last.collection));
+  const revised = await readPinnedThreeDepCollection(path.join(directory, "moved-1"), config);
+  expect(revised.buildFingerprint).not.toBe(last.buildFingerprint);
+  // Overlapping tiles use collection order, so reordering must invalidate reuse.
+  last.collection.products.push({ ...tile, productId: "overlapping-tile" });
+  const overlapping = { ...config, expectedProductIds: ["tile", "overlapping-tile"] };
+  await writeFile(last.collectionPath, JSON.stringify(last.collection));
+  const ordered = await readPinnedThreeDepCollection(path.join(directory, "moved-1"), overlapping);
+  last.collection.products.reverse();
+  await writeFile(last.collectionPath, JSON.stringify(last.collection));
+  expect((await readPinnedThreeDepCollection(path.join(directory, "moved-1"), overlapping)).buildFingerprint)
+    .not.toBe(ordered.buildFingerprint);
+  await writeFile(tilePath, "corrupt");
+  await expect(readPinnedThreeDepCollection(path.join(directory, "moved-1"), overlapping)).rejects.toThrow("integrity");
 });
 
 it("resolves relocated legacy authority paths and rejects escape paths", async () => {
