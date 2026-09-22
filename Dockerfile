@@ -10,7 +10,12 @@ FROM dependencies AS packs
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /usr/local/bin/uv
 # Rasterio's pinned release builds from source on Linux ARM64.
-RUN apt-get update && apt-get install -y --no-install-recommends osmium-tool ca-certificates g++ libgdal-dev \
+# Bootstrap HTTPS from Node's bundled roots until ca-certificates is installed.
+RUN mkdir -p /etc/ssl/certs \
+    && node -e 'require("node:fs").writeFileSync("/etc/ssl/certs/ca-certificates.crt", require("node:tls").rootCertificates.join("\n") + "\n")' \
+    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::https::Timeout=30 -o Acquire::Retries=1 -o APT::Update::Error-Mode=any update \
+    && apt-get -o Acquire::https::Timeout=30 -o Acquire::Retries=1 install -y --no-install-recommends osmium-tool ca-certificates g++ libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/dem \
