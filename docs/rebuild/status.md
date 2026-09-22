@@ -6,6 +6,22 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — repaired the tools-image build hanging on Debian HTTP
+  package downloads before the pack selector opens. The image now uses verified
+  HTTPS, bootstraps its missing CA bundle from Node's bundled trust roots until
+  the standard certificate package is installed, uses 30-second HTTPS timeouts
+  with one retry, and rejects incomplete index updates. TLS and Debian package
+  signatures remain enforced. Exact-base-image probes reproduced HTTP failure
+  even with IPv4 forced or DNS SRV disabled; HTTPS fetched the indexes in nine
+  seconds. The full ARM64 tools image built successfully (Debian installation
+  268.4 seconds; locked Python/Rasterio setup 204.3 seconds), and a second build
+  reused all tools layers. A network-disabled container loaded osmium and
+  Rasterio/GDAL, compiled the committed fixture, and produced byte-identical
+  results for four cached real DEM samples. Two verify passes each passed 506
+  tests in 82 files, lint, types, and production build; two browser passes each
+  passed seven offline flows. The Dockerfile grows five lines and installs the
+  same packages. Existing packs and source data were untouched.
+
 - [x] 2026-09-22 — implemented the pack-build efficiency audit: prepare OSM
   once with boundary-aware child caches, stream hashes and OPL, share unchanged
   topology, bound temporary metric/sampling batches, and reduce persisted-audit
