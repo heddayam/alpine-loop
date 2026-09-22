@@ -6,6 +6,18 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — completed a read-only pack-build efficiency and architecture
+  [audit](pack-build-audit.md). Reproduced stale boundary-derived caches,
+  nonportable source pointers, and retrieval-time-dependent DEM fingerprints
+  using offline temporary fixtures. Isolated cached Cascades measurements found
+  whole-file hashing at 435–438 MiB peak RSS versus 120–121 MiB with streaming,
+  reference-complete extraction at 1.93 GiB, and the persisted audit at 2.05 GiB
+  and 35.56 seconds (30.29 seconds in exact coverage). The existing Cascades
+  artifact audited with zero errors; 168 focused offline tests passed across
+  34 files. These measurements use the older August 6 source, not the current
+  August 1 pin. No application code, installed pack, or source cache changed;
+  a full regional build and constrained-memory acceptance remain unverified.
+
 - [x] 2026-09-07 — extended step 9 progress with audit substeps, checked/total
   edge counts during exact-coverage validation, and report writing. Coverage
   updates are limited to once per five seconds plus start/completion. Tests,
