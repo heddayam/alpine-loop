@@ -38,6 +38,11 @@ build downloads substantial source data and can take a while. Progress is
 shown with download counters and compiler substeps, and completed downloads are
 cached for reuse if you interrupt and retry.
 
+The current Central Cascades builder has completed a full build with Docker
+limited to 4 GiB RAM and swap disabled. See the
+[pack-build measurements](docs/rebuild/pack-build-audit.md#implementation-results)
+for the tested data and limits.
+
 Once preparation finishes, start the app:
 
 ```sh

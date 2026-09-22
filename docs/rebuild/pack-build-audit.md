@@ -1,8 +1,64 @@
 # Pack-build efficiency and architecture audit
 
 2026-09-22. Reviewed application revision `1e70404e0fbcb6f35d4612820b1faa685442af1a`.
-This is an audit and proposed implementation sequence; no builder changes have
-been implemented by this work.
+The findings below describe that baseline. The implementation results section
+records the subsequent changes and their verification.
+
+## Implementation results
+
+The builder now prepares OSM once, derives child caches from that preparation's
+boundary-aware identity, streams hashing and OPL parsing, shares unchanged
+conflation records, and removes the unused GeoJSON parser and export files.
+Compiler work uses batches of 5,000 segment plans and at most 20,000 coordinates
+per elevation-sampler call. Persisted audits iterate database rows and reuse an
+adjacent forward/reverse coverage result only after comparing every coordinate.
+
+Source pointers survive cache relocation, including legacy absolute pointers.
+DEM build fingerprints use ordered tile identities/content and sampling metadata;
+retrieval metadata retains its separate provenance checksum. Ordinary builds use
+verified pins first, `--offline` prohibits acquisition, and `--refresh` explicitly
+rediscovers sources. Finished packs are audited before activation without loading
+topology, running extraction, or sampling elevations again.
+
+| Verification | Result |
+| --- | --- |
+| Same existing August 6 Cascades artifact, standalone audit before/after | Peak RSS **2.081 → 0.980 GiB**; wall time **34.303 → 20.480 seconds**; complete audit JSON byte-identical, zero errors. |
+| Exact coverage within that audit | **29.086 → 13.519 seconds**; geometry rejection rules unchanged. |
+| Compiler fixture before/after | SQLite SHA-256 unchanged: `f5dd9b5e7d1728c256be793c43a488b730fec368f0e250aea6919ab521ac5eba`. |
+| Offline compatibility | All five regional compatibility fixtures pass. |
+| Full verification | Two `npm run verify` passes: **506 tests in 82 files**, lint, types, and production build. |
+| Browser verification | Two `npm run test:browser` passes: **7 offline Chromium flows** each. |
+| Real August 1 Cascades build, fresh preparation/output | **4 GiB container, swap disabled, exit 0, no OOM kill**. Cgroup peak **4,125,081,600 bytes (3.842 GiB)**. **553 seconds** including source acquisition; approximately **170 seconds** from extraction to completion. |
+| Same pack, fresh container, networking and swap disabled | **34 seconds**, **3,662,049,280 bytes (3.410 GiB)** cgroup peak, exit 0; phases 1, 2, 9, and 10 only. |
+| Native offline reuse of the container's cache and artifact | **32.34 seconds**, **1,154,154,496 bytes (1.075 GiB)** peak process RSS, exit 0; all artifact checksums unchanged. |
+
+The constrained build used the existing tools image with current `lib`, `scripts`,
+and `data` mounted read-only: Node 24.11.0, osmium 1.15.0, uv 0.11.6, Rasterio
+1.4.3, and GDAL 3.6.2. Rebuilding the tools image encountered a stalled Debian
+package-index fetch and was stopped. DEM/official-trail sources were already
+cached; the pinned 359,826,867-byte Washington PBF was downloaded. Container peaks
+include child processes and charged filesystem cache; they are not Node RSS.
+This is one successful 4 GiB acceptance run, not a universal RAM guarantee.
+
+The new artifact `cc-110b6ae49ad85409` contains **271,402 nodes**, **539,985
+directed edges**, and **566 access points**, with zero audit errors and zero
+missing elevations. It is isolated under
+`.cache/pack-build-validation-20260922/packs/`; installed packs were untouched.
+Both offline reuse runs preserve every artifact file checksum. The container
+verification logs are `/private/tmp/alpine-pack-4g-build.log` and
+`/private/tmp/alpine-pack-4g-warm.log`; temporary containers were removed.
+
+Relative to audit revision `c191911`, production TypeScript is **11 lines
+smaller**, tests grow **360 lines**, and no dependency or pack schema was added.
+Tests cover source relocation, identical bytes at changed OSM URLs, DEM content
+and tile-order invalidation, boundary-derived cache invalidation, frozen
+conflation inputs, bounded sampler calls, audit corruption, and early reuse.
+
+The graph itself still scales with region size. Source validation remains
+streaming but can repeat between acquisition and preparation; it is not yet
+strictly one checksum pass per invocation. Persistent Python workers, download
+resume, and prebuilt artifact distribution remain separate follow-ups requiring
+evidence that their added machinery is useful.
 
 ## Recommendation
 
