@@ -5,6 +5,7 @@ const EARTH_RADIUS_M = 6_371_008.8;
 const MAX_SAMPLE_SPACING_M = 25;
 const ELEVATION_NOISE_THRESHOLD_M = 1;
 export const SUSTAINED_GRADE_WINDOW_M = 100;
+export const MAX_ELEVATION_BATCH_COORDINATES = 20_000;
 
 export type ElevationProfileSample = {
   distanceMeters: number;
@@ -17,7 +18,6 @@ export type EdgeMetrics = {
   lossM: number | null;
   maxElevationM: number | null;
   maxSustainedGradePct: number | null;
-  samples: Array<number | null>;
   elevationProfile: ElevationProfileSample[] | null;
 };
 
@@ -116,9 +116,7 @@ export async function calculateEdgeMetrics(
   geometry: readonly Coordinate[],
   sampler: ElevationSampler,
 ): Promise<EdgeMetrics> {
-  const coordinates = densifyGeometry(geometry);
-  const samples = await sampler.sample(coordinates);
-  return metricsFromSamples(coordinates, samples);
+  return (await calculateEdgeMetricsBatch([geometry], sampler))[0]!;
 }
 
 function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | null>): EdgeMetrics {
@@ -129,7 +127,7 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
   const lengthM = distances.at(-1) ?? 0;
   const complete = samples.every((sample): sample is number => sample !== null);
   if (!complete) {
-    return { lengthM, gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, samples, elevationProfile: null };
+    return { lengthM, gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, elevationProfile: null };
   }
 
   let gainM = 0;
@@ -141,19 +139,15 @@ function metricsFromSamples(coordinates: Coordinate[], samples: Array<number | n
     else lossM += -delta;
   }
 
-  const maxSustainedGradePct = maximumSustainedGradePct(distances.map((distanceMeters, index) => ({
-    distanceMeters,
-    elevationMeters: samples[index]!,
-  })));
+  const elevationProfile = distances.map((distanceMeters, index) => ({ distanceMeters, elevationMeters: samples[index]! }));
 
   return {
     lengthM,
     gainM,
     lossM,
-    maxElevationM: Math.max(...samples),
-    maxSustainedGradePct,
-    samples,
-    elevationProfile: distances.map((distanceMeters, index) => ({ distanceMeters, elevationMeters: samples[index]! })),
+    maxElevationM: samples.reduce((maximum, sample) => Math.max(maximum, sample), -Infinity),
+    maxSustainedGradePct: maximumSustainedGradePct(elevationProfile),
+    elevationProfile,
   };
 }
 
@@ -241,26 +235,52 @@ export function gradeExperienceMetrics(
   };
 }
 
+/** Bound sampler input even when densification expands a single long edge. */
+export async function sampleElevations(
+  coordinates: readonly Coordinate[],
+  sampler: ElevationSampler,
+  maxCoordinates = MAX_ELEVATION_BATCH_COORDINATES,
+): Promise<Array<number | null>> {
+  if (!Number.isInteger(maxCoordinates) || maxCoordinates < 1) throw new Error("Elevation coordinate budget must be a positive integer");
+  const result: Array<number | null> = [];
+  for (let offset = 0; offset < coordinates.length; offset += maxCoordinates) {
+    const batch = coordinates.slice(offset, offset + maxCoordinates);
+    const samples = await sampler.sample(batch);
+    if (samples.length !== batch.length) {
+      throw new Error(`Elevation sampler returned ${samples.length} values for ${batch.length} coordinates`);
+    }
+    for (const sample of samples) result.push(sample);
+  }
+  return result;
+}
+
 export async function calculateEdgeMetricsBatch(
   geometries: ReadonlyArray<readonly Coordinate[]>,
   sampler: ElevationSampler,
-  batchSize = 5_000,
+  maxCoordinates = MAX_ELEVATION_BATCH_COORDINATES,
 ): Promise<EdgeMetrics[]> {
-  if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Metric batch size must be a positive integer");
+  if (!Number.isInteger(maxCoordinates) || maxCoordinates < 1) throw new Error("Elevation coordinate budget must be a positive integer");
   const result: EdgeMetrics[] = [];
-  for (let offset = 0; offset < geometries.length; offset += batchSize) {
-    const dense = geometries.slice(offset, offset + batchSize).map(densifyGeometry);
-    const flat = dense.flat();
-    const samples = await sampler.sample(flat);
-    if (samples.length !== flat.length) {
-      throw new Error(`Elevation sampler returned ${samples.length} values for ${flat.length} batched coordinates`);
-    }
-    let sampleOffset = 0;
+  let dense: Coordinate[][] = [];
+  let coordinateCount = 0;
+  const flush = async () => {
+    if (!dense.length) return;
+    const samples = await sampleElevations(dense.length === 1 ? dense[0]! : dense.flat(), sampler, maxCoordinates);
+    let offset = 0;
     for (const coordinates of dense) {
-      const nextOffset = sampleOffset + coordinates.length;
-      result.push(metricsFromSamples(coordinates, samples.slice(sampleOffset, nextOffset)));
-      sampleOffset = nextOffset;
+      result.push(metricsFromSamples(coordinates, samples.slice(offset, offset + coordinates.length)));
+      offset += coordinates.length;
     }
+    dense = [];
+    coordinateCount = 0;
+  };
+  for (const geometry of geometries) {
+    const coordinates = densifyGeometry(geometry);
+    if (coordinateCount + coordinates.length > maxCoordinates) await flush();
+    dense.push(coordinates);
+    coordinateCount += coordinates.length;
+    if (coordinateCount >= maxCoordinates) await flush();
   }
+  await flush();
   return result;
 }

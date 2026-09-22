@@ -53,6 +53,36 @@ describe("official trail conflation", () => {
     });
   });
 
+  it("preserves frozen inputs and shares unchanged records while replacing attached ways", () => {
+    const topology = baseTopology();
+    topology.nodes.push(
+      { ...topology.nodes[0]!, id: "southwest", externalId: "southwest", lat: -0.01 },
+      { ...topology.nodes[1]!, id: "southeast", externalId: "southeast", lat: -0.01 },
+    );
+    topology.ways.push({
+      ...topology.ways[0]!, id: "unchanged", externalId: "way/2", nodeIds: ["southwest", "southeast"],
+      coordinates: [[0, -0.01], [0.01, -0.01]],
+    });
+    const features = [official("loop-gap", [[0.002, 0], [0.002, 0.004], [0.008, 0.004], [0.008, 0]])];
+    const original = structuredClone({ topology, features });
+    const freeze = (value: unknown): void => {
+      if (value && typeof value === "object") {
+        Object.freeze(value);
+        Object.values(value).forEach(freeze);
+      }
+    };
+    freeze(topology);
+    freeze(features);
+    const result = conflateOfficialTrails({ topology, features, sourceId: "official", policy });
+
+    expect({ topology, features }).toEqual(original);
+    expect(result.audit.acceptedGapCount).toBe(1);
+    for (const node of topology.nodes) expect(result.topology.nodes.find(({ id }) => id === node.id)).toBe(node);
+    expect(result.topology.ways[1]).toBe(topology.ways[1]);
+    expect(result.topology.ways[0]).not.toBe(topology.ways[0]);
+    expect(result.topology.ways[0]?.nodeIds.length).toBeGreaterThan(topology.ways[0]!.nodeIds.length);
+  });
+
   it("adds a long confirmed gap only when its component attaches to base topology", () => {
     const result = conflateOfficialTrails({
       topology: baseTopology(),

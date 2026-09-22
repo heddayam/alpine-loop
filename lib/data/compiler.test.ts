@@ -2,13 +2,15 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { packManifestSchema } from "@/lib/contracts";
 import { compilePack } from "./compiler";
 import { compileAuditedPack } from "./audited-pack";
 import type { AreaGeometry } from "./area-geometry";
 import { getNamedArea, listSearchRegions, searchNamedAreas } from "./named-area-catalog";
 import { fixtureCompileOptions, fixturePackSeed } from "./fixture-pack";
+import { MAX_ELEVATION_BATCH_COORDINATES } from "./metrics";
+import type { Coordinate } from "./types";
 
 const temporaryDirectories: string[] = [];
 
@@ -31,7 +33,7 @@ describe("fixture pack compiler", () => {
     const built = await compilePack({ ...options, onProgress });
     expect(progress).toEqual([
       "Sample elevations for 7 trail nodes",
-      "Calculate metrics for 9 trail segments",
+      "Calculate metrics for up to 9 trail segments",
       "Normalize named areas",
       "Rank access points and check nearby buildings",
       "Build closed-route topology",
@@ -44,6 +46,64 @@ describe("fixture pack compiler", () => {
     const reused = await compilePack({ ...options, onProgress });
     expect(reused.reusedExisting).toBe(true);
     expect(progress).toEqual(["Reuse existing compiled pack"]);
+  });
+
+  it("bounds node and segment work while preserving persisted order across mixed-edge batches", async () => {
+    const options = await fixtureCompileOptions(await temporaryOutput());
+    const sourceTopology = options.topology.data;
+    const nodes = Array.from({ length: MAX_ELEVATION_BATCH_COORDINATES + 3 }, (_, index) => ({
+      ...sourceTopology.nodes[0]!, id: `node-${index}`, lon: -122.16 + index * 0.0000001,
+    }));
+    const way = (id: string, first: number, end: number, edgeClass: "trail" | "street") => ({
+      ...sourceTopology.ways[0]!, id, externalId: id, edgeClass, bidirectional: true,
+      nodeIds: nodes.slice(first, end).map(({ id }) => id),
+      coordinates: nodes.slice(first, end).map(({ lon, lat }): Coordinate => [lon, lat]),
+    });
+    const sample = vi.fn(async (coordinates: readonly Coordinate[]) => coordinates.map(([lon]) => lon * 1_000));
+    const built = await compilePack({
+      ...options, officialAccess: undefined,
+      topology: { ...options.topology, data: {
+        ...sourceTopology, nodes, accessPoints: [],
+        ways: [way("before", 0, 5_000, "trail"), way("street", 4_999, 5_001, "street"), way("after", 5_000, nodes.length, "trail")],
+      } },
+      elevation: { ...options.elevation, sampler: { algorithmVersion: "test", sample } },
+    });
+    expect(sample.mock.calls.every(([coordinates]) => coordinates.length <= MAX_ELEVATION_BATCH_COORDINATES)).toBe(true);
+    expect(sample.mock.calls.slice(0, 2).flatMap(([coordinates]) => coordinates)).toEqual(nodes.map(({ lon, lat }) => [lon, lat]));
+    expect(sample.mock.calls.slice(2).map(([coordinates]) => coordinates.length)).toEqual([9_998, 10_000, 10_000, 10_000, 4]);
+    expect(built.audit.directedEdgeCount).toBe((nodes.length - 1) * 2);
+    const database = new DatabaseSync(built.databasePath, { readOnly: true });
+    try {
+      expect(database.prepare("SELECT id FROM edges ORDER BY rowid LIMIT 6 OFFSET 9996").all()).toEqual([
+        { id: "before:4998:forward" }, { id: "before:4998:reverse" },
+        { id: "street:0:forward" }, { id: "street:0:reverse" },
+        { id: "after:0:forward" }, { id: "after:0:reverse" },
+      ]);
+      const profiles = database.prepare("SELECT id, elevation_profile FROM edges WHERE id IN ('street:0:forward', 'after:0:forward', 'after:0:reverse') ORDER BY id")
+        .all() as Array<{ id: string; elevation_profile: string | null }>;
+      const forward = JSON.parse(profiles[0]!.elevation_profile!) as Array<[number, number]>;
+      const reverse = JSON.parse(profiles[1]!.elevation_profile!) as typeof forward;
+      expect(forward.map(([, elevation]) => elevation)).toEqual([nodes[5_000]!.lon * 1_000, nodes[5_001]!.lon * 1_000]);
+      expect(reverse.map(([, elevation]) => elevation)).toEqual(forward.map(([, elevation]) => elevation).reverse());
+      expect(reverse.map(([distance]) => distance)).toEqual(forward.map(([distance]) => distance));
+      expect(profiles[2]!.elevation_profile).toBeNull();
+      expect(database.prepare("SELECT elevation_m FROM nodes WHERE id = ?").get(nodes.at(-1)!.id))
+        .toEqual({ elevation_m: nodes.at(-1)!.lon * 1_000 });
+    } finally { database.close(); }
+  });
+
+  it.each([
+    { phase: "node", call: 1, difference: -1 }, { phase: "node", call: 1, difference: 1 },
+    { phase: "edge", call: 2, difference: -1 }, { phase: "edge", call: 2, difference: 1 },
+  ])("rejects $phase sample cardinality mismatch ($difference)", async ({ call, difference }) => {
+    const options = await fixtureCompileOptions(await temporaryOutput());
+    let calls = 0;
+    options.elevation.sampler = {
+      algorithmVersion: "test",
+      async sample(coordinates) { return Array<number>(coordinates.length + (++calls === call ? difference : 0)).fill(100); },
+    };
+    await expect(compilePack(options)).rejects.toThrow(/Elevation sampler returned .* values for .* coordinates/);
+    await expect(readFile(path.join(options.outputRoot, options.seed.id, "current.json"))).rejects.toThrow();
   });
 
   it("accepts a prepared topology with attributed additional sources and no live official adapter", async () => {

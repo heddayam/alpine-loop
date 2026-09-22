@@ -6,6 +6,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import type { CachedSource, SourceReceipt } from "./types";
+import { sha256File } from "../file-source";
 
 const receiptSchema = z.object({
   schemaVersion: z.literal(1),
@@ -41,17 +42,48 @@ function safeSegment(value: string): string {
   return value;
 }
 
-async function reusableSnapshot(directory: string, expectedSha256?: string): Promise<CachedSource | null> {
+/** Reconstruct immutable source locations without retaining a machine's root. */
+export function cachedSourcePath(cacheRoot: string, input: SourceReceipt): string {
+  const receipt = receiptSchema.parse(input);
+  return path.join(cacheRoot, safeSegment(receipt.sourceId), receipt.sha256.slice(7), safeSegment(receipt.fileName));
+}
+
+/** Also accepts the absolute pointers written by older native/container builds. */
+export function resolveSourcePath(cacheRoot: string, storedPath: string, namespace: string): string {
+  let relative = path.isAbsolute(storedPath) ? path.relative(cacheRoot, storedPath) : storedPath;
+  if (path.isAbsolute(storedPath) && relative.startsWith(`..${path.sep}`)) {
+    const marker = `${path.sep}${safeSegment(namespace)}${path.sep}`;
+    const index = storedPath.lastIndexOf(marker);
+    if (index < 0) throw new Error(`Source pointer does not belong to ${namespace}`);
+    relative = storedPath.slice(index + 1);
+  }
+  const resolved = path.resolve(cacheRoot, relative);
+  if (path.relative(path.resolve(cacheRoot), resolved).split(path.sep).includes("..")) {
+    throw new Error("Source pointer escapes the cache root");
+  }
+  return resolved;
+}
+
+/** undefined uses local pins first; false is strictly offline; true rediscovers. */
+export async function readOrAcquireSource<T>(refresh: boolean | undefined, read: () => Promise<T>, acquire: () => Promise<T>): Promise<T> {
+  if (refresh === true) return acquire();
+  try { return await read(); } catch (error) {
+    if (refresh === false) throw error;
+    return acquire();
+  }
+}
+
+async function reusableSnapshot(directory: string, expectedSha256?: string, url?: string, byteLength?: number): Promise<CachedSource | null> {
   try {
     const receiptPath = path.join(directory, "receipt.json");
     const receipt = receiptSchema.parse(JSON.parse(await readFile(receiptPath, "utf8"))) as SourceReceipt;
     if (expectedSha256 && receipt.sha256 !== expectedSha256) return null;
+    if (url && receipt.originalUrl !== url) return null;
+    if (byteLength !== undefined && receipt.byteLength !== byteLength) return null;
     const filePath = path.join(directory, receipt.fileName);
     const fileStat = await stat(filePath);
     if (fileStat.size !== receipt.byteLength) return null;
-    const hash = createHash("sha256");
-    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
-    if (`sha256:${hash.digest("hex")}` !== receipt.sha256) return null;
+    if (await sha256File(filePath) !== receipt.sha256) return null;
     return { directory, filePath, receiptPath, receipt, reused: true };
   } catch {
     return null;
@@ -79,9 +111,8 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
     const entries = await readdir(sourceRoot, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name));
-      if (reusable?.receipt.originalUrl !== options.url) continue;
-      if (options.expectedByteLength !== undefined && reusable.receipt.byteLength !== options.expectedByteLength) continue;
+      const reusable = await reusableSnapshot(path.join(sourceRoot, entry.name), undefined, options.url, options.expectedByteLength);
+      if (!reusable) continue;
       report(reusable.receipt.byteLength, "cached", reusable.receipt.byteLength);
       return reusable;
     }

@@ -71,7 +71,8 @@ export async function refreshThreeDepCollection(options: RefreshThreeDepOptions)
       retrievedAt,
       reuseExistingUrl: true,
       onProgress: options.onProgress,
-      ...(product.byteLength ? { expectedByteLength: product.byteLength } : {}),
+      // Catalog sizes can lag the object. The downloaded bytes and their hash
+      // become the immutable receipt; later builds verify that receipt.
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });
     cached.push({

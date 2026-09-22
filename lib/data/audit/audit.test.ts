@@ -59,4 +59,22 @@ describe("regional pack audit", () => {
     })) as RegionalPackAuditInput["edges"];
     expect(auditRegionalPack(input).accessStateCounts).toEqual({ public: 1, unknown: 1, private: 1, closed: 1, prohibited: 1 });
   });
+
+  it("retains node, edge, and access-point order in attribution failures", async () => {
+    const input = await fixture();
+    input.nodes[0].sourceRefs = [];
+    input.nodes[1].sourceRefs = ["missing-source"];
+    input.edges[0].sourceRefs = [];
+    input.edges[1].sourceRefs = ["missing-source"];
+    input.accessPoints.push({ id: "unknown", accessState: "unknown", sourceRefs: ["missing-source"] });
+    input.accessPoints[0].sourceRefs = [];
+
+    const audit = auditRegionalPack(input);
+    expect(audit.unattributedRecordIds).toEqual(["node:a", "edge:ab", "access-point:start"]);
+    expect(audit.unknownSourceReferenceRecordIds).toEqual(["node:b", "edge:ba", "access-point:unknown"]);
+    expect(audit.errors).toEqual([
+      "3 records have no source attribution",
+      "3 records reference unknown sources",
+    ]);
+  });
 });

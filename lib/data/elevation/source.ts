@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
-import { writeJsonAtomically, type CacheDownloadOptions } from "../source-cache";
+import { resolveSourcePath, writeJsonAtomically, type CacheDownloadOptions } from "../source-cache";
 import { readThreeDepCollection, refreshThreeDepCollection, type ThreeDepCollection } from "./collection";
 
 export const elevationSourceConfigSchema = z.object({
@@ -38,13 +39,30 @@ export function elevationPointerPath(cacheRoot: string, config: ElevationSourceC
 export async function readPinnedThreeDepCollection(
   cacheRoot: string,
   config: ElevationSourceConfig,
-): Promise<{ collection: ThreeDepCollection; collectionPath: string; snapshot: SourceSnapshot }> {
+): Promise<{ collection: ThreeDepCollection; collectionPath: string; snapshot: SourceSnapshot; buildFingerprint: `sha256:${string}` }> {
   const pointer = JSON.parse(await readFile(elevationPointerPath(cacheRoot, config), "utf8")) as ElevationPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached 3DEP collection does not match configured version");
-  const collection = await readThreeDepCollection(pointer.collectionPath);
+  const collectionPath = resolveSourcePath(cacheRoot, pointer.collectionPath, config.cacheNamespace ?? config.id);
+  const collection = await readThreeDepCollection(collectionPath);
+  if (collection.products.map(({ productId }) => productId).sort().join("\n") !== [...config.expectedProductIds].sort().join("\n")) {
+    throw new Error("Cached 3DEP collection does not match configured products");
+  }
+  for (const product of collection.products) {
+    const file = path.resolve(path.dirname(collectionPath), product.filePath);
+    if ((await stat(file)).size !== product.receipt.byteLength || await sha256File(file) !== product.receipt.sha256) {
+      throw new Error(`Cached 3DEP product ${product.productId} failed integrity validation`);
+    }
+  }
+  // Preserve product order: it determines precedence where DEM tiles overlap.
+  const buildFingerprint = `sha256:${createHash("sha256").update(JSON.stringify({
+    version: "dem-content-v1", resolution: collection.resolution,
+    horizontalDatum: collection.horizontalDatum, verticalDatum: collection.verticalDatum,
+    products: collection.products.map(({ productId, receipt }) => [productId, receipt.sha256]),
+  })).digest("hex")}` as const;
   return {
     collection,
-    collectionPath: pointer.collectionPath,
+    collectionPath,
+    buildFingerprint,
     snapshot: {
       id: config.id,
       authority: config.authority,
@@ -53,8 +71,8 @@ export async function readPinnedThreeDepCollection(
       retrievedAt: collection.retrievedAt,
       url: config.endpoint,
       license: config.license,
-      contentHash: await sha256File(pointer.collectionPath),
-      localPath: pointer.collectionPath,
+      contentHash: await sha256File(collectionPath),
+      localPath: collectionPath,
     },
   };
 }
@@ -81,7 +99,7 @@ export async function refreshPinnedThreeDepCollection(
   });
   await writeJsonAtomically(elevationPointerPath(cacheRoot, config), {
     configVersion: config.version,
-    collectionPath: result.collectionPath,
+    collectionPath: path.relative(cacheRoot, result.collectionPath),
   });
   return readPinnedThreeDepCollection(cacheRoot, config);
 }

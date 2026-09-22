@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
+import { packManifestSchema } from "@/lib/contracts";
 import { compilePack } from "../compiler";
 import { fixtureCompileOptions, fixturePackSeed } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
@@ -143,6 +144,87 @@ describe("SQLite regional pack audit extraction", () => {
     mutateDatabase(pack.databasePath, "UPDATE topology_profiles SET content_hash='sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' WHERE profile='known'");
     await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
       .rejects.toThrow("topology content hash mismatch");
+  });
+
+  it("independently checks changed reverse geometry, including its interior coordinates", async () => {
+    const pack = await buildFixture();
+    // Endpoints still reverse the forward edge; only the changed interior point
+    // leaves coverage. The persisted physical identity is unchanged.
+    mutateDatabase(pack.databasePath, `
+      UPDATE edges SET geometry = '[[-122.159,37.16],[-122.158,37.16],[-122.157,37.16]]' WHERE id = 'w-loop:0:forward';
+      UPDATE edges SET geometry = '[[-122.157,37.16],[0,0],[-122.159,37.16]]' WHERE id = 'w-loop:0:reverse';
+    `);
+    const audit = await auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath });
+    expect(audit.outsideCoverageEdgeIds).toEqual(["w-loop:0:reverse"]);
+    expect(audit.errors).toContain("1 persisted edges leave exact pack coverage");
+  });
+
+  it("reports both directions of identical geometry outside coverage in persisted order", async () => {
+    const pack = await buildFixture();
+    mutateDatabase(pack.databasePath, `
+      UPDATE edges SET geometry = '[[0,0],[1,1]]' WHERE id = 'w-loop:0:forward';
+      UPDATE edges SET geometry = '[[1,1],[0,0]]' WHERE id = 'w-loop:0:reverse';
+    `);
+    const audit = await auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath });
+    expect(audit.outsideCoverageEdgeIds).toEqual(["w-loop:0:forward", "w-loop:0:reverse"]);
+    expect(audit.errors).toContain("2 persisted edges leave exact pack coverage");
+  });
+
+  it.each([
+    {
+      name: "hole crossing with inside endpoints", inside: false,
+      boundary: { type: "Polygon", coordinates: [
+        [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+        [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]],
+      ] }, geometry: [[2, 5], [8, 5]],
+    },
+    {
+      name: "concave crossing with inside endpoints", inside: false,
+      boundary: { type: "Polygon", coordinates: [
+        [[0, 0], [6, 0], [6, 6], [4, 6], [4, 2], [2, 2], [2, 6], [0, 6], [0, 0]],
+      ] }, geometry: [[1, 5], [5, 5]],
+    },
+    {
+      name: "disjoint islands", inside: false,
+      boundary: { type: "MultiPolygon", coordinates: [
+        [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
+        [[[8, 8], [10, 8], [10, 10], [8, 10], [8, 8]]],
+      ] }, geometry: [[1, 1], [9, 9]],
+    },
+    {
+      name: "outer boundary contact", inside: true,
+      boundary: { type: "Polygon", coordinates: [
+        [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+      ] }, geometry: [[0, 0], [10, 0]],
+    },
+    {
+      name: "hole boundary contact", inside: true,
+      boundary: { type: "Polygon", coordinates: [
+        [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+        [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]],
+      ] }, geometry: [[4, 4], [6, 4]],
+    },
+  ])("preserves exact coverage in both directions for $name", async ({ boundary, geometry, inside }) => {
+    const pack = await buildFixture();
+    const manifest = packManifestSchema.parse(JSON.parse(await readFile(pack.manifestPath, "utf8")));
+    await writeFile(pack.manifestPath, JSON.stringify({ ...manifest, coverage: { bbox: [0, 0, 10, 10], boundary } }));
+    mutateDatabase(pack.databasePath, `
+      UPDATE edges SET geometry = '[[1,1],[1,2]]';
+      UPDATE edges SET geometry = '${JSON.stringify(geometry)}' WHERE id = 'w-loop:0:forward';
+      UPDATE edges SET geometry = '${JSON.stringify([...geometry].reverse())}' WHERE id = 'w-loop:0:reverse';
+    `);
+    const audit = await auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath });
+    expect(audit.outsideCoverageEdgeIds).toEqual(inside ? [] : ["w-loop:0:forward", "w-loop:0:reverse"]);
+  });
+
+  it("retains persisted profile error ordering across malformed and incomplete rows", async () => {
+    const pack = await buildFixture();
+    mutateDatabase(pack.databasePath, `
+      UPDATE edges SET elevation_profile = '[[0,100,1]]' WHERE edge_key = (SELECT min(edge_key) FROM edges);
+      UPDATE edges SET elevation_profile = 'not-json' WHERE edge_key = (SELECT max(edge_key) FROM edges);
+    `);
+    await expect(auditSqlitePack({ databasePath: pack.databasePath, manifestPath: pack.manifestPath }))
+      .rejects.toThrow(/Edge .+ has no complete elevation profile; Edge .+ has no complete elevation profile/);
   });
 
   it("fails closed on topology count or access corruption", async () => {

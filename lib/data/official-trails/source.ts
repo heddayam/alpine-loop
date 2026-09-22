@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
-import { downloadToSourceCache, writeJsonAtomically, type CachedSource, type CacheDownloadOptions } from "../source-cache";
+import { sha256File } from "../file-source";
+import { cachedSourcePath, downloadToSourceCache, writeJsonAtomically, type CachedSource, type CacheDownloadOptions } from "../source-cache";
 import type { OfficialTrailConflationPolicy } from "./types";
 
 export const officialTrailSourceConfigSchema = z.object({
@@ -32,7 +33,7 @@ export const officialTrailConflationPolicySchema = z.object({
   duplicateCoverageRatio: z.number().positive().max(1),
   minimumGapLengthM: z.number().positive(),
 }).strict();
-type OfficialTrailPointer = { configVersion: string; cached: CachedSource };
+type OfficialTrailPointer = { configVersion: string; cached: Pick<CachedSource, "receipt"> };
 
 export async function readOfficialTrailSourceConfig(configPath: string): Promise<OfficialTrailSourceConfig> {
   return officialTrailSourceConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
@@ -52,8 +53,11 @@ export async function readPinnedOfficialTrailSnapshot(
 ): Promise<SourceSnapshot> {
   const pointer = JSON.parse(await readFile(officialTrailPointerPath(cacheRoot, config.id), "utf8")) as OfficialTrailPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached official trail snapshot does not match configured version");
+  if (pointer.cached.receipt.sourceId !== config.id) throw new Error("Cached official trail snapshot does not match configured source");
   if (pointer.cached.receipt.sha256 !== config.expectedSha256) throw new Error("Cached official trail snapshot does not match configured hash");
   if (pointer.cached.receipt.byteLength !== config.expectedByteLength) throw new Error("Cached official trail snapshot does not match configured byte length");
+  const localPath = cachedSourcePath(cacheRoot, pointer.cached.receipt);
+  if (await sha256File(localPath) !== pointer.cached.receipt.sha256) throw new Error("Cached official trail source failed integrity validation");
   return {
     id: config.id,
     authority: config.authority,
@@ -63,7 +67,7 @@ export async function readPinnedOfficialTrailSnapshot(
     url: config.url,
     license: config.license,
     contentHash: pointer.cached.receipt.sha256,
-    localPath: pointer.cached.filePath,
+    localPath,
   };
 }
 
@@ -85,7 +89,7 @@ export async function refreshPinnedOfficialTrailSnapshot(
   });
   await writeJsonAtomically(officialTrailPointerPath(cacheRoot, config.id), {
     configVersion: config.version,
-    cached,
+    cached: { receipt: cached.receipt },
   });
   return { snapshot: await readPinnedOfficialTrailSnapshot(cacheRoot, config), cached };
 }

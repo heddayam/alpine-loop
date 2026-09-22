@@ -6,7 +6,8 @@ export type RegionalPackBuildOptions = {
   outputRoot: string;
   sourceCacheRoot: string;
   preparationRoot: string;
-  refresh: boolean;
+  /** Default: reuse configured local sources, acquiring only when unavailable. */
+  refresh?: boolean;
   onProgress?: (progress: RegionalPackBuildProgress) => void;
 };
 

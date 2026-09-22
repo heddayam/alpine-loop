@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import type { NormalizedNode, NormalizedPortalEvidence, NormalizedTopology, NormalizedWay } from "../types";
 import {
   classifyOsmWay,
@@ -77,28 +78,26 @@ function parseTags(value: string | undefined): Record<string, string> {
   return result;
 }
 
-export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedTopology {
-  const nodes = new Map<string, OplNode>();
-  const inputWays: OplWay[] = [];
-  for (const [index, rawLine] of contents.split(/\r?\n/).entries()) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const tokens = line.split(" ");
-    const object = tokens[0];
-    if (object.startsWith("n")) {
-      const longitude = Number(field(tokens, "x"));
-      const latitude = Number(field(tokens, "y"));
-      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-        throw new Error(`OSM OPL node has invalid coordinates at line ${index + 1}`);
-      }
-      nodes.set(object.slice(1), { id: object.slice(1), lon: longitude, lat: latitude, tags: parseTags(field(tokens, "T")) });
-    } else if (object.startsWith("w")) {
-      const refs = field(tokens, "N")?.split(",").filter(Boolean).map((ref) => ref.replace(/^n/, "")) ?? [];
-      if (refs.length < 2) throw new Error(`OSM OPL way has fewer than two nodes at line ${index + 1}`);
-      inputWays.push({ id: object.slice(1), nodeIds: refs, tags: parseTags(field(tokens, "T")) });
+function parseOplLine(nodes: Map<string, OplNode>, inputWays: OplWay[], rawLine: string, index: number): void {
+  const line = rawLine.trim();
+  if (!line) return;
+  const tokens = line.split(" ");
+  const object = tokens[0];
+  if (object.startsWith("n")) {
+    const longitude = Number(field(tokens, "x"));
+    const latitude = Number(field(tokens, "y"));
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      throw new Error(`OSM OPL node has invalid coordinates at line ${index + 1}`);
     }
+    nodes.set(object.slice(1), { id: object.slice(1), lon: longitude, lat: latitude, tags: parseTags(field(tokens, "T")) });
+  } else if (object.startsWith("w")) {
+    const refs = field(tokens, "N")?.split(",").filter(Boolean).map((ref) => ref.replace(/^n/, "")) ?? [];
+    if (refs.length < 2) throw new Error(`OSM OPL way has fewer than two nodes at line ${index + 1}`);
+    inputWays.push({ id: object.slice(1), nodeIds: refs, tags: parseTags(field(tokens, "T")) });
   }
+}
 
+function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], sourceId: string): NormalizedTopology {
   const retainedNodes = new Map<string, NormalizedNode>();
   const retainNode = (id: string): NormalizedNode => {
     const existing = retainedNodes.get(id);
@@ -187,8 +186,29 @@ export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedT
   return { nodes: [...retainedNodes.values()], ways, accessPoints: [], portalEvidence, rejectedWayCount };
 }
 
+export function normalizeOsmOpl(contents: string, sourceId: string): NormalizedTopology {
+  const nodes = new Map<string, OplNode>();
+  const inputWays: OplWay[] = [];
+  for (const [index, line] of contents.split(/\r?\n/).entries()) parseOplLine(nodes, inputWays, line, index);
+  return normalizeOsmRecords(nodes, inputWays, sourceId);
+}
+
 export async function readAndNormalizeOsmOpl(filePath: string, sourceId: string): Promise<NormalizedTopology> {
-  const contents = await readFile(filePath, "utf8");
-  if (!contents.trim()) throw new Error(`OSM OPL extraction is empty: ${filePath}`);
-  return normalizeOsmOpl(contents, sourceId);
+  const nodes = new Map<string, OplNode>();
+  const inputWays: OplWay[] = [];
+  const input = createReadStream(filePath, { encoding: "utf8" });
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  let index = 0;
+  let nonempty = false;
+  try {
+    for await (const line of lines) {
+      if (line.trim()) nonempty = true;
+      parseOplLine(nodes, inputWays, line, index++);
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  if (!nonempty) throw new Error(`OSM OPL extraction is empty: ${filePath}`);
+  return normalizeOsmRecords(nodes, inputWays, sourceId);
 }

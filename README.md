@@ -38,6 +38,11 @@ build downloads substantial source data and can take a while. Progress is
 shown with download counters and compiler substeps, and completed downloads are
 cached for reuse if you interrupt and retry.
 
+The current Central Cascades builder has completed a full build with Docker
+limited to 4 GiB RAM and swap disabled. See the
+[pack-build measurements](docs/rebuild/pack-build-audit.md#implementation-results)
+for the tested data and limits.
+
 Once preparation finishes, start the app:
 
 ```sh
@@ -135,8 +140,12 @@ uv sync --frozen --project tools/dem --python 3.12
 npm run pack:bootstrap -- --pack=central-cascades --progress
 ```
 
-Add `--offline` to rebuild using previously downloaded sources. The default
-output is `.local-data/packs/`. For data audits, representative route checks,
+Builds reuse verified local sources and download missing inputs. Add `--offline`
+to prohibit source acquisition, or `--refresh` to explicitly rediscover pinned
+sources. An unchanged pack is revalidated and reused before graph preparation.
+The source cache works across Docker and native builds; moving the checkout does
+not require downloading the sources again. The default output is `.local-data/packs/`.
+For data audits, representative route checks,
 and adding a region, follow the [regional checklist](docs/rebuild/region-onboarding-checklist.md).
 
 </details>

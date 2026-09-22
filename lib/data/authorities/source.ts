@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
-import { downloadToSourceCache, writeJsonAtomically } from "../source-cache";
+import { downloadToSourceCache, resolveSourcePath, writeJsonAtomically } from "../source-cache";
 
 const sourceConfigSchema = z.object({
   id: z.string().min(1),
@@ -89,7 +89,7 @@ export async function refreshOfficialSourceSnapshots(
         ? { expectedSha256: config.inspectedSnapshotContentHash as `sha256:${string}` }
         : {}),
     });
-    records.push({ id: config.id, metadataContentHash: config.metadataContentHash, localPath: cached.filePath });
+    records.push({ id: config.id, metadataContentHash: config.metadataContentHash, localPath: path.relative(cacheRoot, cached.filePath) });
     snapshots.push(snapshot(config, cached.filePath, cached.receipt.sha256));
   }
   await writeJsonAtomically(pointerPath(cacheRoot, sourceSet), { schemaVersion: 1, sources: records } satisfies OfficialPointer);
@@ -108,10 +108,11 @@ export async function readOfficialSourceSnapshots(
     if (!record || record.metadataContentHash !== config.metadataContentHash) {
       throw new Error(`Cached official source ${config.id} does not match the pinned metadata`);
     }
-    const contentHash = await sha256File(record.localPath);
+    const localPath = resolveSourcePath(cacheRoot, record.localPath, config.id);
+    const contentHash = await sha256File(localPath);
     if (config.inspectedSnapshotContentHash && contentHash !== config.inspectedSnapshotContentHash) {
       throw new Error(`Cached official source ${config.id} does not match the inspected snapshot hash`);
     }
-    return snapshot(config, record.localPath, contentHash);
+    return snapshot(config, localPath, contentHash);
   }));
 }

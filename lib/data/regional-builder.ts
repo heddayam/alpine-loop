@@ -6,7 +6,8 @@ import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-rout
 import type { SourceSnapshot } from "./adapters";
 import { areaGeometryBounds, assertValidAreaGeometry, pointInArea, type AreaGeometry } from "./area-geometry";
 import { compileAuditedPack } from "./audited-pack";
-import type { PackSeed } from "./compiler";
+import { assertPackAuditPassed, auditSqlitePack, type RegionalPackAudit } from "./audit";
+import { reuseCompiledPack, type PackSeed } from "./compiler";
 import {
   readElevationSourceConfig,
   readPinnedThreeDepCollection,
@@ -19,6 +20,7 @@ import {
   prepareOsmBuildings,
   OsmPbfNamedAreaAdapter,
   OSM_TOPOLOGY_ADAPTER_VERSION,
+  OSM_NAMED_AREA_ADAPTER_VERSION,
   prepareOsmTopology,
   readOsmSourceConfig,
   readPinnedOsmSnapshot,
@@ -42,7 +44,7 @@ import type { PreparedRegionalEntrances, RegionalPackBuildOptions, RegionalPackD
 export type { RegionalPackDefinition } from "./regional-build-types";
 import { searchRegionInputSchema } from "./search-regions";
 import type { NormalizedTopology } from "./types";
-import type { CacheDownloadOptions } from "./source-cache";
+import { readOrAcquireSource, type CacheDownloadOptions } from "./source-cache";
 
 export const REGIONAL_PACK_BUILD_PHASES = [
   "Validate regional inputs and prerequisites",
@@ -285,39 +287,91 @@ export function createRegionalPackBuilder(config: RegionalPackDefinition) {
     const boundary = parseRegionalBoundary(config, boundaryContents);
     const searchRegions = searchRegionInputSchema.parse(JSON.parse(searchRegionContents));
 
-    await Promise.all([validateOsmPrerequisites(), validateUvRasterioPrerequisites()]);
     reportBuildProgress(options, 2, options.refresh ? "Refresh pinned source snapshots" : undefined);
     // Validate regional entrance sources before starting the large common downloads.
-    const entrances = await config.entrances?.(options);
+    const entrances = config.entrances ? await readOrAcquireSource(options.refresh,
+      () => config.entrances!({ ...options, refresh: false }),
+      () => config.entrances!({ ...options, refresh: true })) : undefined;
     const onDownload: CacheDownloadOptions["onProgress"] = options.onProgress ? ({ fileName, receivedBytes, totalBytes, state }) => {
       const amount = `${(receivedBytes / 1e6).toFixed(1)}${totalBytes ? ` / ${(totalBytes / 1e6).toFixed(1)}` : ""} MB`;
       const status = state === "downloading" && totalBytes ? `${Math.floor(100 * receivedBytes / totalBytes)}%` : state;
       reportBuildProgress(options, 2, undefined, `${fileName}: ${amount} (${status})`);
     } : undefined;
     const [osmSnapshot, dem, officialTrailSnapshot] = await Promise.all([
-      options.refresh
-        ? refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig, undefined, onDownload).then(({ snapshot }) => snapshot)
-        : readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
-      options.refresh
-        ? refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig, undefined, onDownload)
-        : readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
+      readOrAcquireSource(options.refresh,
+        () => readPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig),
+        () => refreshPinnedOsmSnapshot(options.sourceCacheRoot, osmConfig, undefined, onDownload).then(({ snapshot }) => snapshot)),
+      readOrAcquireSource(options.refresh,
+        () => readPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig),
+        () => refreshPinnedThreeDepCollection(options.sourceCacheRoot, elevationConfig, undefined, onDownload)),
       officialTrailConfig
-        ? options.refresh
-          ? refreshPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig, undefined, onDownload).then(({ snapshot }) => snapshot)
-          : readPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig)
+        ? readOrAcquireSource(options.refresh,
+          () => readPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig),
+          () => refreshPinnedOfficialTrailSnapshot(options.sourceCacheRoot, officialTrailConfig, undefined, onDownload).then(({ snapshot }) => snapshot))
         : Promise.resolve(null),
     ]);
 
-    const namedAreaAdapter = new OsmPbfNamedAreaAdapter({
-      boundaryPath,
-      preparationRoot: path.join(options.preparationRoot, "osm"),
-      namedAreaPreparationRoot: path.join(options.preparationRoot, "osm-named-areas"),
+    const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
+    const additionalSources = [
+      ...(restrictions ? [restrictions.snapshot] : []),
+      ...(entrances ? [entrances.snapshot] : []),
+      ...(officialTrailSnapshot ? [officialTrailSnapshot] : []),
+    ];
+    const snapshots = [osmSnapshot, dem.snapshot, ...additionalSources];
+    const adapterVersions = [
+      OSM_TOPOLOGY_ADAPTER_VERSION,
+      OSM_NAMED_AREA_ADAPTER_VERSION,
+      ...(entrances ? [entrances.adapterVersion] : []),
+      PORTAL_DERIVATION_VERSION,
+      ...(officialTrailSnapshot ? [OFFICIAL_TRAIL_CONFLATION_VERSION, USGS_NATIONAL_DIGITAL_TRAILS_ADAPTER_VERSION] : []),
+      ...(officialTrailPolicy ? [
+        `official-trail-policy:${createHash("sha256").update(JSON.stringify(officialTrailPolicy)).digest("hex")}`,
+      ] : []),
+    ];
+    const metricVersions = [elevationSampler.algorithmVersion, BUILDINGS_ADAPTER_VERSION];
+    const seed = createRegionalPackSeed({
+      config,
+      boundary: boundary.geometry,
+      boundaryContents,
+      searchRegionContents,
+      snapshots: snapshots.map((snapshot) => snapshot === dem.snapshot ? { ...snapshot, contentHash: dem.buildFingerprint } : snapshot),
+      adapterVersions,
+      metricVersions,
     });
+    const directory = path.join(options.outputRoot, seed.id, seed.dataVersion);
+    let saved: { portalAudit: ReturnType<typeof prepareRegionalPortals>["report"]; officialTrailConflationAudit?: OfficialTrailConflationAudit } | undefined;
+    try {
+      const portalAudit = JSON.parse(await readFile(path.join(directory, "portal-audit.json"), "utf8")) as ReturnType<typeof prepareRegionalPortals>["report"];
+      if (portalAudit.schemaVersion === "2" && Number.isInteger(portalAudit.portals?.total)) {
+        saved = { portalAudit, ...(officialTrailSnapshot ? {
+          officialTrailConflationAudit: JSON.parse(await readFile(path.join(directory, "official-trail-conflation-audit.json"), "utf8")) as OfficialTrailConflationAudit,
+        } : {}) };
+      }
+    } catch { /* Missing reports require preparation to regenerate them. */ }
+    if (saved) {
+      let regionalAudit!: RegionalPackAudit;
+      const pack = await reuseCompiledPack({ outputRoot: options.outputRoot, seed,
+        beforePublish: async (artifact) => {
+          reportBuildProgress(options, 9, "Validate existing regional pack");
+          regionalAudit = await auditSqlitePack({ ...artifact,
+            onProgress: options.onProgress ? (detail) => reportBuildProgress(options, 9, undefined, detail) : undefined });
+          assertPackAuditPassed(regionalAudit);
+        },
+      });
+      if (pack) {
+        reportBuildProgress(options, 10);
+        return { pack, regionalAudit, ...saved };
+      }
+    }
+
+    await Promise.all([validateOsmPrerequisites(), validateUvRasterioPrerequisites()]);
+
     reportBuildProgress(options, 3);
-    const sourceTopology = await prepareOsmTopology(osmSnapshot, {
+    const { topology: sourceTopology, ...region } = await prepareOsmTopology(osmSnapshot, {
       boundaryPath,
       preparationRoot: path.join(options.preparationRoot, "osm"),
     });
+    const namedAreaAdapter = new OsmPbfNamedAreaAdapter(region, { preparationRoot: path.join(options.preparationRoot, "osm") });
     reportBuildProgress(options, 4);
     let inputTopology = sourceTopology;
     let officialTrailConflationAudit: OfficialTrailConflationAudit | null = null;
@@ -338,38 +392,10 @@ export function createRegionalPackBuilder(config: RegionalPackDefinition) {
       checkPortals: config.checkPortals,
     });
     reportBuildProgress(options, 6);
-    const buildings = await prepareOsmBuildings(osmSnapshot, {
-      boundaryPath,
+    const buildings = await prepareOsmBuildings(region, {
       preparationRoot: path.join(options.preparationRoot, "osm"),
     });
     reportBuildProgress(options, 7);
-    const elevationSampler = new UvRasterioThreeDepElevationSampler(dem.collectionPath);
-    const additionalSources = [
-      ...(restrictions ? [restrictions.snapshot] : []),
-      ...(entrances ? [entrances.snapshot] : []),
-      ...(officialTrailSnapshot ? [officialTrailSnapshot] : []),
-    ];
-    const snapshots = [osmSnapshot, dem.snapshot, ...additionalSources];
-    const adapterVersions = [
-      OSM_TOPOLOGY_ADAPTER_VERSION,
-      namedAreaAdapter.adapterVersion,
-      ...(entrances ? [entrances.adapterVersion] : []),
-      PORTAL_DERIVATION_VERSION,
-      ...(officialTrailSnapshot ? [OFFICIAL_TRAIL_CONFLATION_VERSION, USGS_NATIONAL_DIGITAL_TRAILS_ADAPTER_VERSION] : []),
-      ...(officialTrailPolicy ? [
-        `official-trail-policy:${createHash("sha256").update(JSON.stringify(officialTrailPolicy)).digest("hex")}`,
-      ] : []),
-    ];
-    const metricVersions = [elevationSampler.algorithmVersion, BUILDINGS_ADAPTER_VERSION];
-    const seed = createRegionalPackSeed({
-      config,
-      boundary: boundary.geometry,
-      boundaryContents,
-      searchRegionContents,
-      snapshots,
-      adapterVersions,
-      metricVersions,
-    });
     reportBuildProgress(options, 8);
     const { pack, regionalAudit } = await compileAuditedPack({
       outputRoot: options.outputRoot,

@@ -157,8 +157,8 @@ function edgesFromDatabase(database: DatabaseSync): AuditEdge[] {
     SELECT id, from_node, to_node, geometry, length_m, gain_m, loss_m, max_elevation_m,
       max_sustained_grade_pct, access_state, edge_class, source_refs, flags
     FROM edges ORDER BY id
-  `).all() as Array<Record<string, unknown>>;
-  return rows.map((row) => {
+  `).iterate();
+  return Array.from(rows, (row) => {
     const id = requiredString(row.id, "edges.id");
     return {
       id,
@@ -251,7 +251,7 @@ function auditElevationProfiles(database: DatabaseSync): string[] {
   const errors: string[] = [];
   const edges = database.prepare(`SELECT edge_key, id, length_m, elevation_profile FROM edges
     WHERE edge_class = 'trail' ORDER BY edge_key`)
-    .all() as Array<Record<string, unknown>>;
+    .iterate();
   for (const edge of edges) {
     requiredNumber(edge.edge_key, "edges.edge_key");
     const id = requiredString(edge.id, "edges.id");
@@ -286,7 +286,7 @@ function auditPortalAccess(database: DatabaseSync): string[] {
   );
   if (contextEdges > 0) errors.push(`${contextEdges} build-only road or sidewalk edges were published`);
   const rows = database.prepare(`SELECT id, kind, reachable_trail_km, trail_component_id,
-    portal_road_class, parking_distance_m FROM access_points ORDER BY id`).all() as Array<Record<string, unknown>>;
+    portal_road_class, parking_distance_m FROM access_points ORDER BY id`).iterate();
   for (const row of rows) {
     const id = requiredString(row.id, "access_points.id");
     if (row.kind !== "trailhead") errors.push(`Schema 6 access point ${id} is not a trailhead portal`);
@@ -313,8 +313,8 @@ function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNod
       incidentSources.set(nodeId, refs);
     }
   }
-  const rows = database.prepare("SELECT id, elevation_m FROM nodes ORDER BY id").all() as Array<Record<string, unknown>>;
-  return rows.map((row) => {
+  const rows = database.prepare("SELECT id, elevation_m FROM nodes ORDER BY id").iterate();
+  return Array.from(rows, (row) => {
     const id = requiredString(row.id, "nodes.id");
     return {
       id,
@@ -327,8 +327,8 @@ function nodesFromDatabase(database: DatabaseSync, edges: AuditEdge[]): AuditNod
 function accessPointsFromDatabase(database: DatabaseSync): AuditAccessPoint[] {
   const rows = database.prepare(`
     SELECT id, access_state, source_refs FROM access_points ORDER BY id
-  `).all() as Array<Record<string, unknown>>;
-  return rows.map((row) => {
+  `).iterate();
+  return Array.from(rows, (row) => {
     const id = requiredString(row.id, "access_points.id");
     return {
       id,
@@ -519,9 +519,20 @@ export async function auditSqlitePack(options: SqlitePackAuditOptions): Promise<
   audit.errors.push(...namedAreas.errors);
   options.onProgress?.(`Check exact coverage: 0/${edges.length} edges`);
   let lastCoverageProgress = options.onProgress ? Date.now() : 0;
+  let previousGeometry: AuditEdge["geometry"];
+  let previousOutside = false;
   audit.outsideCoverageEdgeIds = edges
     .filter((edge, index) => {
-      const outside = !edgeInsideCoverage({ geometry: edge.geometry! }, manifest.coverage.boundary);
+      const geometry = edge.geometry!;
+      // Adjacent directed edges commonly reverse the same geometry. Compare every
+      // coordinate: a shared physical ID cannot establish persisted-data integrity.
+      const sameGeometry = previousGeometry?.length === geometry.length && (
+        geometry.every(([lon, lat], i) => lon === previousGeometry![i][0] && lat === previousGeometry![i][1])
+        || geometry.every(([lon, lat], i) => lon === previousGeometry![geometry.length - 1 - i][0] && lat === previousGeometry![geometry.length - 1 - i][1])
+      );
+      const outside = sameGeometry ? previousOutside : !edgeInsideCoverage({ geometry }, manifest.coverage.boundary);
+      previousGeometry = geometry;
+      previousOutside = outside;
       if (options.onProgress && Date.now() - lastCoverageProgress >= 5_000) {
         options.onProgress(`Check exact coverage: ${index + 1}/${edges.length} edges`);
         lastCoverageProgress = Date.now();

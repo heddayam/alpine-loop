@@ -6,6 +6,39 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — implemented the pack-build efficiency audit: prepare OSM
+  once with boundary-aware child caches, stream hashes and OPL, share unchanged
+  topology, bound temporary metric/sampling batches, and reduce persisted-audit
+  allocations and duplicate coverage work. Sources survive native/container
+  cache relocation; DEM identity depends on tile content and order; ordinary
+  builds reuse verified pins, with explicit offline/refresh modes. Unchanged
+  artifacts are audited before activation without graph preparation. Production
+  TypeScript shrinks 11 lines; regression tests grow 360; no dependency/schema
+  changes. Compiler fixture database bytes and the existing real pack's full
+  audit report remain identical. Standalone audit peak RSS falls from 2.081 to
+  0.980 GiB and wall time from 34.303 to 20.480 seconds. The current August 1
+  Cascades pin built and audited successfully in an isolated 4 GiB container
+  with swap disabled: 3.842 GiB cgroup peak, 553 seconds including acquisition,
+  approximately 170 seconds after acquisition. Offline warm reuse passed in
+  34 seconds with networking disabled; native reuse of the same cache also
+  passed, preserving all artifact checksums. Two `npm run verify` passes each
+  passed 506 tests in 82 files, lint, types, and build; two browser passes each
+  passed seven offline flows. See [full evidence](pack-build-audit.md#implementation-results).
+  Existing installed packs and source caches were preserved; validation data
+  remains ignored, and completed task worktrees/containers were removed.
+
+- [x] 2026-09-22 — completed a read-only pack-build efficiency and architecture
+  [audit](pack-build-audit.md). Reproduced stale boundary-derived caches,
+  nonportable source pointers, and retrieval-time-dependent DEM fingerprints
+  using offline temporary fixtures. Isolated cached Cascades measurements found
+  whole-file hashing at 435–438 MiB peak RSS versus 120–121 MiB with streaming,
+  reference-complete extraction at 1.93 GiB, and the persisted audit at 2.05 GiB
+  and 35.56 seconds (30.29 seconds in exact coverage). The existing Cascades
+  artifact audited with zero errors; 168 focused offline tests passed across
+  34 files. These measurements use the older August 6 source, not the current
+  August 1 pin. No application code, installed pack, or source cache changed;
+  a full regional build and constrained-memory acceptance remain unverified.
+
 - [x] 2026-09-07 — extended step 9 progress with audit substeps, checked/total
   edge counts during exact-coverage validation, and report writing. Coverage
   updates are limited to once per five seconds plus start/completion. Tests,
@@ -839,10 +872,10 @@ port 3000. Original saved jobs and installed artifacts remain intact.
 
 ## Local data and risks
 
-- Fresh-source audit also found a separate Santa Cruz DEM metadata mismatch:
-  the n37w123 catalog reports 6,891,248 bytes, while the historical TIFF and
-  existing receipt are 5,494,012 bytes. The current size check will reject that
-  fresh download. This remains unresolved and does not affect Cascades.
+- USGS catalog sizes can differ from historical TIFFs (observed for Santa Cruz
+  n37w123). Acquisition now treats catalog size as advisory and pins the actual
+  bytes/hash, covered by an offline mismatched-size regression. That source was
+  not downloaded again during this change.
 
 - Generated packs, source/build caches, route-job databases, and audits are
   local ignored artifacts. Rebuild packs only through the explicit commands in

@@ -1,14 +1,37 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { describe, expect, it } from "vitest";
-import { normalizeOsmOpl } from "./opl";
+import { normalizeOsmOpl, readAndNormalizeOsmOpl } from "./opl";
 
 describe("OSM OPL normalization", () => {
+  it("reports empty and malformed streamed extracts with their original line numbers", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "alpine-opl-"));
+    const filePath = path.join(directory, "hiking.opl");
+    try {
+      await writeFile(filePath, "\n  \r\n");
+      await expect(readAndNormalizeOsmOpl(filePath, "fixture")).rejects.toThrow("OSM OPL extraction is empty");
+      await writeFile(filePath, "\r\nn1 x0 y0\r\nn2 xbad y0\r\n");
+      await expect(readAndNormalizeOsmOpl(filePath, "fixture")).rejects.toThrow("invalid coordinates at line 3");
+      await writeFile(filePath, "n1 x0 y0\nw1 Thighway=path Nn1\n");
+      await expect(readAndNormalizeOsmOpl(filePath, "fixture")).rejects.toThrow("fewer than two nodes at line 2");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("preserves exact OSM node references instead of connecting coordinate-only crossings", async () => {
     const contents = await readFile(path.resolve("data/fixtures/source/osm/hiking.opl"), "utf8");
     const topology = normalizeOsmOpl(contents, "osm-fixture");
 
+    expect(await readAndNormalizeOsmOpl(path.resolve("data/fixtures/source/osm/hiking.opl"), "osm-fixture"))
+      .toEqual(topology);
     expect(topology.ways).toHaveLength(3);
+    expect(topology.ways[0]).toMatchObject({ accessState: "public", bidirectional: true });
+    expect(topology.ways[1]).toMatchObject({ accessState: "private", bidirectional: false });
+    expect(topology.ways[1].coordinates[0]).toEqual([-122.17, 37.19]);
+    expect(topology.portalEvidence?.map(({ accessState }) => accessState)).toEqual(["public", "unknown"]);
+    expect(new Set(topology.nodes.map(({ id }) => id)).size).toBe(topology.nodes.length);
     expect(topology.rejectedWayCount).toBe(0);
     expect(topology.ways[0].nodeIds).toEqual(["osm-node-1", "osm-node-2", "osm-node-3"]);
     expect(topology.ways[1].nodeIds).toEqual(["osm-node-4", "osm-node-3"]);
@@ -20,11 +43,11 @@ describe("OSM OPL normalization", () => {
     expect(topology.portalEvidence?.map(({ externalId }) => externalId).sort()).toEqual(["node/1", "node/4"]);
   });
 
-  it("preserves condition tags identically to GeoJSON normalization", () => {
+  it("preserves observed condition tags without interpreting maintenance", () => {
     const topology = normalizeOsmOpl([
       "n1 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.2 y37.2",
       "n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2",
-      "w9 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,surface=rock,smoothness=bad,trail_visibility=intermediate,sac_scale=hiking,informal=no,abandoned=yes Nn1,n2",
+      "w9 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,surface=rock,smoothness=bad,trail_visibility=intermediate,sac_scale=hiking,informal=no,disused=yes,abandoned=yes Nn1,n2",
     ].join("\n"), "osm-fixture");
 
     expect(topology.ways[0].flags).toEqual([
@@ -35,6 +58,7 @@ describe("OSM OPL normalization", () => {
       "trail-visibility:intermediate",
       "sac-scale:hiking",
       "informal:no",
+      "disused:yes",
       "abandoned:yes",
     ]);
   });
@@ -89,7 +113,8 @@ describe("OSM OPL normalization", () => {
     });
     expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/7")?.kind).toBe("gate");
     expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/8")?.kind).toBe("information");
-    expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/9")?.kind).toBe("information");
+    expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/9"))
+      .toMatchObject({ kind: "information", name: null, coordinates: [[-122.193, 37.2]] });
     expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/10")?.kind).toBe("trailhead");
     expect(topology.portalEvidence?.find(({ externalId }) => externalId === "node/11")?.kind).toBe("trailhead");
     expect(topology.portalEvidence?.find(({ externalId }) => externalId === "way/3")?.accessState).toBe("private");
