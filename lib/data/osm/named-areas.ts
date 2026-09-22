@@ -1,5 +1,4 @@
-import { constants } from "node:fs";
-import { access, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { NamedAreaSourceAdapter, SourceSnapshot } from "../adapters";
@@ -8,9 +7,9 @@ import { aliasesFromOsmTags, osmNamedAreaKind, validateAndSortNamedAreas } from 
 import { withAtomicDirectory } from "../source-cache";
 import type { NormalizedNamedArea } from "../types";
 import { runCommand } from "./command";
-import { preparedOsmRegionPath, type OsmPipelineOptions } from "./pipeline";
+import type { OsmRegionOptions, PreparedOsmRegion } from "./pipeline";
 
-const ADAPTER_VERSION = "osmium-named-areas-v1";
+export const OSM_NAMED_AREA_ADAPTER_VERSION = "osmium-named-areas-v1";
 const AREA_FILTERS = [
   "wr/boundary=administrative,protected_area,national_park",
   "wr/leisure=park,nature_reserve",
@@ -81,7 +80,6 @@ async function nonempty(filePath: string, label: string): Promise<void> {
 
 async function readPrepared(filePath: string): Promise<NormalizedNamedArea[] | null> {
   try {
-    await access(filePath, constants.R_OK);
     const value = JSON.parse(await readFile(filePath, "utf8")) as NormalizedNamedArea[];
     return Array.isArray(value) && value.length > 0 ? value : null;
   } catch {
@@ -89,18 +87,14 @@ async function readPrepared(filePath: string): Promise<NormalizedNamedArea[] | n
   }
 }
 
-export type OsmNamedAreaOptions = OsmPipelineOptions & {
-  namedAreaPreparationRoot?: string;
-};
-
 export async function prepareOsmNamedAreas(
   snapshot: SourceSnapshot,
-  options: OsmNamedAreaOptions,
+  region: PreparedOsmRegion,
+  options: OsmRegionOptions,
 ): Promise<NormalizedNamedArea[]> {
-  const regionPath = await preparedOsmRegionPath(snapshot, options);
   const destination = path.join(
-    options.namedAreaPreparationRoot ?? path.join(options.preparationRoot, "named-areas"),
-    `${snapshot.contentHash.slice(7, 23)}-${ADAPTER_VERSION}`,
+    options.preparationRoot, "named-areas",
+    `${region.identity}-${OSM_NAMED_AREA_ADAPTER_VERSION}`,
   );
   const normalizedPath = path.join(destination, "named-areas.json");
   const prepared = await readPrepared(normalizedPath);
@@ -111,7 +105,7 @@ export async function prepareOsmNamedAreas(
     const filtered = path.join(staging, "named-areas.osm.pbf");
     const geojson = path.join(staging, "named-areas.geojson");
     const runner = options.runner ?? runCommand;
-    await runner("osmium", ["tags-filter", regionPath, ...AREA_FILTERS, "--overwrite", "--output", filtered]);
+    await runner("osmium", ["tags-filter", region.regionPath, ...AREA_FILTERS, "--overwrite", "--output", filtered]);
     await nonempty(filtered, "OSM named-area filter");
     await runner("osmium", [
       "export", filtered, "--geometry-types=polygon", "--output-format=geojson",
@@ -122,21 +116,21 @@ export async function prepareOsmNamedAreas(
     result = normalizeOsmNamedAreaGeoJson(await readFile(geojson, "utf8"), snapshot.id);
     if (result.length === 0) throw new Error("OSM named-area extraction produced no supported named polygons");
     await writeFile(path.join(staging, "named-areas.json"), `${JSON.stringify(result)}\n`, { flag: "wx" });
+    await Promise.all([rm(filtered), rm(geojson)]);
   });
   if (!result) throw new Error("OSM named-area preparation did not produce named areas");
   return result;
 }
 
 export class OsmPbfNamedAreaAdapter implements NamedAreaSourceAdapter {
-  readonly adapterVersion = ADAPTER_VERSION;
+  readonly adapterVersion = OSM_NAMED_AREA_ADAPTER_VERSION;
 
-  constructor(private readonly options: OsmNamedAreaOptions) {}
-
-  async validate(snapshot: SourceSnapshot): Promise<void> {
-    await prepareOsmNamedAreas(snapshot, this.options);
-  }
+  constructor(
+    private readonly region: PreparedOsmRegion,
+    private readonly options: OsmRegionOptions,
+  ) {}
 
   async normalize(snapshot: SourceSnapshot): Promise<NormalizedNamedArea[]> {
-    return prepareOsmNamedAreas(snapshot, this.options);
+    return prepareOsmNamedAreas(snapshot, this.region, this.options);
   }
 }

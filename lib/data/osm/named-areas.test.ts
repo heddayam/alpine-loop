@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -79,7 +79,6 @@ describe("OSM named-area preparation", () => {
         contentHash: await sha256File(pbf),
         localPath: pbf,
       };
-      const fixtureOpl = path.resolve("data/fixtures/source/osm/hiking.opl");
       const exported = JSON.stringify({
         type: "FeatureCollection",
         features: [{
@@ -92,22 +91,22 @@ describe("OSM named-area preparation", () => {
         if (arguments_[0] === "--version") return { stdout: "osmium version fixture\n", stderr: "" };
         expect(command).toBe("osmium");
         const output = arguments_[arguments_.indexOf("--output") + 1]!;
-        if (arguments_[0] === "cat") await copyFile(fixtureOpl, output);
-        else if (arguments_[0] === "export") await writeFile(output, exported);
+        if (arguments_[0] === "export") await writeFile(output, exported);
         else await writeFile(output, `fixture ${arguments_[0]}`);
         return { stdout: "", stderr: "" };
       });
-      const result = await prepareOsmNamedAreas(snapshot, {
-        boundaryPath: path.resolve("data/regions/santa-cruz-mountains/boundary.geojson"),
+      const region = { regionPath: path.join(directory, "region.osm.pbf"), identity: "region-identity" };
+      await writeFile(region.regionPath, "prepared region");
+      const result = await prepareOsmNamedAreas(snapshot, region, {
         preparationRoot: path.join(directory, "topology"),
-        namedAreaPreparationRoot: path.join(directory, "named"),
         runner,
       });
       expect(result.map(({ id }) => id)).toEqual(["osm:relation/99"]);
       const namedFilter = vi.mocked(runner).mock.calls.find(([, arguments_]) =>
         arguments_[0] === "tags-filter" && arguments_.some((argument) => argument.includes("named-areas.osm.pbf")));
       expect(namedFilter?.[1][1]).toMatch(/region\.osm\.pbf$/);
-      expect(namedFilter?.[1][1]).not.toBe(pbf);
+      expect(namedFilter?.[1][1]).toBe(region.regionPath);
+      expect(vi.mocked(runner).mock.calls.map(([, args]) => args[0])).toEqual(["tags-filter", "export"]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -1,5 +1,5 @@
-import { constants } from "node:fs";
-import { access, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { areaGeometrySchema } from "@/lib/contracts";
 import { z } from "zod";
@@ -22,6 +22,9 @@ export type OsmPipelineOptions = {
   runner?: CommandRunner;
 };
 
+export type PreparedOsmRegion = { regionPath: string; identity: string };
+export type OsmRegionOptions = Pick<OsmPipelineOptions, "preparationRoot" | "runner">;
+
 export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v9";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
@@ -32,7 +35,6 @@ async function nonempty(filePath: string, label: string): Promise<void> {
 
 async function readPrepared(filePath: string): Promise<NormalizedTopology | null> {
   try {
-    await access(filePath, constants.R_OK);
     const value = JSON.parse(await readFile(filePath, "utf8")) as NormalizedTopology;
     if (!Array.isArray(value.nodes) || !Array.isArray(value.ways) || value.ways.length === 0) return null;
     return value;
@@ -45,35 +47,27 @@ export async function validateOsmPrerequisites(runner: CommandRunner = runComman
   return requireCommand("osmium", runner);
 }
 
-async function preparationDestination(snapshot: SourceSnapshot, options: OsmPipelineOptions): Promise<string> {
-  const boundaryHash = await sha256File(options.boundaryPath);
-  const key = `${snapshot.contentHash.slice(7, 23)}-${boundaryHash.slice(7, 23)}-${OSM_TOPOLOGY_ADAPTER_VERSION}`;
-  return path.join(options.preparationRoot, key);
-}
-
-export async function preparedOsmRegionPath(
-  snapshot: SourceSnapshot,
-  options: OsmPipelineOptions,
-): Promise<string> {
-  await prepareOsmTopology(snapshot, options);
-  const regionPath = path.join(await preparationDestination(snapshot, options), "region.osm.pbf");
-  await nonempty(regionPath, "Prepared OSM regional extract");
-  return regionPath;
-}
-
 export async function prepareOsmTopology(
   snapshot: SourceSnapshot,
   options: OsmPipelineOptions,
-): Promise<NormalizedTopology> {
+): Promise<PreparedOsmRegion & { topology: NormalizedTopology }> {
   if (!snapshot.license.trim()) throw new Error(`Source ${snapshot.id} has no license decision`);
   const actualHash = await sha256File(snapshot.localPath);
   if (actualHash !== snapshot.contentHash) throw new Error(`Content hash mismatch for source ${snapshot.id}`);
   boundarySchema.parse(JSON.parse(await readFile(options.boundaryPath, "utf8")));
   await validateOsmPrerequisites(options.runner);
-  const destination = await preparationDestination(snapshot, options);
+  const boundaryHash = await sha256File(options.boundaryPath);
+  const identity = createHash("sha256").update(JSON.stringify([
+    snapshot.id, snapshot.version, snapshot.contentHash, boundaryHash, OSM_TOPOLOGY_ADAPTER_VERSION,
+  ])).digest("hex");
+  const destination = path.join(options.preparationRoot, identity);
+  const region = { regionPath: path.join(destination, "region.osm.pbf"), identity };
   const normalizedPath = path.join(destination, "topology.json");
   const prepared = await readPrepared(normalizedPath);
-  if (prepared) return prepared;
+  if (prepared) {
+    await nonempty(region.regionPath, "Prepared OSM regional extract");
+    return { ...region, topology: prepared };
+  }
 
   let result: NormalizedTopology | null = null;
   await withAtomicDirectory(destination, async (staging) => {
@@ -99,7 +93,8 @@ export async function prepareOsmTopology(
     await nonempty(opl, "OSM OPL export");
     result = await readAndNormalizeOsmOpl(opl, snapshot.id);
     await writeFile(path.join(staging, "topology.json"), `${JSON.stringify(result)}\n`, { flag: "wx" });
+    await Promise.all([rm(filtered), rm(opl)]);
   });
   if (!result) throw new Error("OSM preparation did not produce topology");
-  return result;
+  return { ...region, topology: result };
 }

@@ -343,8 +343,8 @@ function attachToBaseTopology(
   topology: NormalizedTopology,
   candidates: readonly Candidate[],
 ): { topology: NormalizedTopology; endpointNodes: Map<string, string>; attachmentCount: number } {
-  const nodes = topology.nodes.map((node) => ({ ...node, flags: [...node.flags], sourceRefs: [...node.sourceRefs] }));
-  const ways = topology.ways.map((way) => ({ ...way, nodeIds: [...way.nodeIds], coordinates: [...way.coordinates], flags: [...way.flags], sourceRefs: [...way.sourceRefs] }));
+  const nodes = [...topology.nodes];
+  const ways = [...topology.ways];
   const endpointNodes = new Map<string, string>();
   const bySegment = new Map<string, Array<{ candidate: Candidate; name: EndpointName; nearest: NearestSegment }>>();
   for (const candidate of candidates) for (const name of ["start", "end"] as const) {

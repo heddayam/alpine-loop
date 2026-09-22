@@ -1,9 +1,8 @@
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SourceSnapshot } from "../adapters";
 import { withAtomicDirectory } from "../source-cache";
 import { runCommand } from "./command";
-import { preparedOsmRegionPath, type OsmPipelineOptions } from "./pipeline";
+import type { OsmRegionOptions, PreparedOsmRegion } from "./pipeline";
 
 /**
  * Building centroids, used to tell a trailhead apart from a street corner.
@@ -76,14 +75,13 @@ async function readPreparedBuildings(filePath: string): Promise<BuildingCentroid
 }
 
 export async function prepareOsmBuildings(
-  snapshot: SourceSnapshot,
-  options: OsmPipelineOptions,
+  region: PreparedOsmRegion,
+  options: OsmRegionOptions,
 ): Promise<BuildingCentroid[]> {
-  const regionPath = await preparedOsmRegionPath(snapshot, options);
   const destination = path.join(
     options.preparationRoot,
     "buildings",
-    `${snapshot.contentHash.slice(7, 23)}-${BUILDINGS_ADAPTER_VERSION}`,
+    `${region.identity}-${BUILDINGS_ADAPTER_VERSION}`,
   );
   const normalizedPath = path.join(destination, "buildings.json");
   const prepared = await readPreparedBuildings(normalizedPath);
@@ -94,7 +92,7 @@ export async function prepareOsmBuildings(
     const filtered = path.join(staging, "buildings.osm.pbf");
     const exported = path.join(staging, "buildings.geojsonseq");
     const runner = options.runner ?? runCommand;
-    await runner("osmium", ["tags-filter", regionPath, "wa/building", "--overwrite", "--output", filtered]);
+    await runner("osmium", ["tags-filter", region.regionPath, "wa/building", "--overwrite", "--output", filtered]);
     await nonempty(filtered, "OSM building filter");
     await runner("osmium", [
       "export", filtered, "--output-format=geojsonseq", "--overwrite", "--output", exported,
