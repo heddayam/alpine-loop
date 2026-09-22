@@ -68,7 +68,7 @@ inspection show that an included loop-capable network would otherwise be cut.
 ## Reviewed search regions
 
 The following relations were verified against live OSM metadata on 2026-08-10
-and predate the pinned 2026-08-06 Washington extract:
+and predate the configured 2026-08-01 Washington extract:
 
 | Candidate | OSM object | Verified metadata | v1 decision |
 | --- | --- | --- | --- |
@@ -117,8 +117,8 @@ portal review, but it is not misrepresented as a passing exact-route scenario.
 
 ### OSM topology and runtime evidence
 
-Use the pinned Geofabrik Washington extract `washington-260806`, upstream
-`2026-08-06T20:21:21Z`, 360,317,339 bytes, under ODbL 1.0. OSM is the sole
+Use the configured Geofabrik Washington extract `washington-260801`, upstream
+`2026-08-01T20:21:21Z`, 359,826,867 bytes, under ODbL 1.0. OSM is the sole
 topology baseline and supplies access tags, trailhead and parking evidence,
 buildings, and named areas. Preserve OpenStreetMap contributor attribution and
 the required derived-database offer/license material for distribution.

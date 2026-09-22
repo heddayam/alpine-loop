@@ -13,6 +13,10 @@ describe("regional pack catalog contracts", () => {
       "marin-mount-tam",
       "tahoe-eldorado",
       "central-cascades",
+      "north-cascades",
+      "rainier-goat-rocks",
+      "southwest-cascades",
+      "olympic-peninsula",
     ]);
     expect(parsed.regions.filter(({ packId }) => packId)).toEqual([
       expect.objectContaining({ id: "santa-cruz-mountains", packId: "santa-cruz-mountains" }),
@@ -21,6 +25,7 @@ describe("regional pack catalog contracts", () => {
       expect.objectContaining({ id: "henry-coe", packId: "henry-coe" }),
       expect.objectContaining({ id: "central-cascades", packId: "central-cascades" }),
     ]);
+    expect(parsed.regions.slice(7).every(({ packId }) => packId === undefined)).toBe(true);
   });
 
   it("rejects duplicate ids, duplicate display orders, and invalid slugs", () => {

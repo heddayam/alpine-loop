@@ -3,10 +3,10 @@
 Planning review: **2026-09-22**. This is the charter and boundary-preflight brief
 for the three remaining packs in the [accepted four-pack Cascades
 family](regional-expansion-plan.md#washington-cascades-family). Central Cascades is
-already installed and [has an exact, versioned hard
+already activated and [has an exact, versioned hard
 boundary](../../data/regions/central-cascades/charter.md). The three IDs below
-are proposed directory/build IDs; their catalog entries, exact polygons,
-sources, and activation remain separate onboarding decisions. Each pack serves
+are planned catalog and future directory/build IDs; exact polygons, source
+pins, and activation remain separate onboarding decisions. Each pack serves
 route generation from a local trail graph, not a catalog of named hikes.
 
 ## Scope and seam decisions to make before drawing polygons
@@ -126,7 +126,7 @@ caches; build twice independently offline from the same pins; compare data
 version and byte hashes; require zero audit, integrity, missing trail-elevation,
 source/provenance, and out-of-coverage errors; review component, portal,
 building, and cycle distributions; run every representative exact/close
-checkpoint plus Quick and Batch spot checks. Run the required application and
+checkpoint plus Quick and Full spot checks. Run the required application and
 browser verification twice and inspect the local app. Only after license,
 data, routing, and UI evidence passes should a focused catalog activation
 change add that pack's `packId` and record results in status. Keep generated

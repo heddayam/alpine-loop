@@ -18,7 +18,15 @@ describe("regional pack builder registry", () => {
   });
 
   it("distinguishes planned regions from unknown pack ids", () => {
-    expect(() => requireRegionalPackBuilder("marin-mount-tam")).toThrow(/planned.*does not have a pack builder/i);
+    for (const id of [
+      "marin-mount-tam",
+      "north-cascades",
+      "rainier-goat-rocks",
+      "southwest-cascades",
+      "olympic-peninsula",
+    ]) {
+      expect(() => requireRegionalPackBuilder(id)).toThrow(/planned.*does not have a pack builder/i);
+    }
     expect(() => requireRegionalPackBuilder("not-a-region")).toThrow(/unknown regional pack/i);
   });
 });

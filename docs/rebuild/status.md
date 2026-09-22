@@ -578,6 +578,43 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     horizontal mobile overflow (`846 px` content in a `374 px` strip), and zero
     browser console errors.
 
+- [x] Gate 12 — remaining Washington Cascades and Olympic Peninsula setup
+  - Evidence: reserved `north-cascades`, `rainier-goat-rocks`,
+    `southwest-cascades`, and `olympic-peninsula` in the version-1 catalog
+    without activation links or builders. The [Cascades brief](washington-cascades-packs.md)
+    and [Olympic brief](olympic-peninsula-pack.md), reviewed 2026-09-22 against
+    linked primary agency and source pages, define proposed systems, seam and
+    authority questions, candidate selectors, checkpoint clusters, source
+    policy, and per-pack preflight. Olympic beach trails, including Ozette's
+    beach leg, are in scope; tide timing remains a recorded later limitation.
+    The roadmap and onboarding checklist reflect the current geographic
+    workspace and local installer. The Central Cascades charter now matches
+    its configured August 1 Washington OSM source. The registry example
+    matches the committed JSON, local document links resolve, and focused
+    catalog/selector tests pass 27/27. Two `npm run verify` passes each pass
+    506 offline tests in 82 files, lint, types, and production build; two
+    `npm run test:browser` passes each pass seven offline flows. No exact new
+    boundary, source pin, pack build, or activation is claimed.
+- [ ] Gate 13 — North Cascades regional pack
+  - Acceptance: complete the schema-6 onboarding protocol for Mount Baker,
+    Highway 20, the North Cascades complex, and Pasayten/Methow, including
+    explicit Central Cascades overlap review and activation only after two
+    independent byte-identical offline builds, audits, route checks, and app
+    verification.
+- [ ] Gate 14 — Rainier–Goat Rocks regional pack
+  - Acceptance: complete the same protocol for Mount Rainier, Naches/White
+    Pass, and Goat Rocks, with Central and Southwest seam review.
+- [ ] Gate 15 — Southwest Cascades regional pack
+  - Acceptance: complete the same protocol for Mount St. Helens, Mount Adams,
+    and the southern Gifford Pinchot hiking systems, with Rainier–Goat Rocks
+    seam and Washington/Oregon border review.
+- [ ] Gate 16 — Olympic Peninsula regional pack
+  - Acceptance: complete the same protocol for the reviewed Olympic mountain,
+    rainforest, and beach hiking systems, including Ozette's beach leg. Verify
+    park/forest and tribal-land access, coastal graph topology, and boundary
+    seams before activation. Record the lack of tide-aware passability as a
+    limitation for later work.
+
 ## Post-gate fixes
 
 - 2026-08-10 — added the Central Cascades official-trail conflation pipeline,
