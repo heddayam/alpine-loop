@@ -5,7 +5,8 @@ const ACCESS_COUNTS: Record<AccessState, number> = { public: 0, unknown: 0, priv
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 function topology(input: RegionalPackAuditInput): RegionalPackAudit["topology"] {
-  const neighbours = new Map(input.nodes.map(({ id }) => [id, new Set<string>()]));
+  const neighbours = new Map<string, Set<string>>();
+  for (const node of input.nodes) neighbours.set(node.id, new Set());
   for (const edge of input.edges) {
     neighbours.get(edge.fromNode)?.add(edge.toNode);
     neighbours.get(edge.toNode)?.add(edge.fromNode);
@@ -27,9 +28,11 @@ function topology(input: RegionalPackAuditInput): RegionalPackAudit["topology"] 
     sizes.push(size);
   }
   const largest = sizes.reduce((maximum, size) => Math.max(maximum, size), 0);
+  let isolatedNodeCount = 0;
+  for (const adjacent of neighbours.values()) if (adjacent.size === 0) isolatedNodeCount += 1;
   return {
     componentCount: sizes.length,
-    isolatedNodeCount: [...neighbours.values()].filter((items) => items.size === 0).length,
+    isolatedNodeCount,
     largestComponentNodeCount: largest,
     largestComponentFraction: input.nodes.length ? largest / input.nodes.length : 0,
   };
@@ -54,15 +57,14 @@ export function auditRegionalPack(input: RegionalPackAuditInput): RegionalPackAu
     if (!HASH_PATTERN.test(source.contentHash)) errors.push(`Source ${source.id} has no valid content hash`);
   }
 
-  const allRecords = [
-    ...input.nodes.map((record) => ({ type: "node", ...record })),
-    ...input.edges.map((record) => ({ type: "edge", ...record })),
-    ...input.accessPoints.map((record) => ({ type: "access-point", ...record })),
-  ];
-  const unattributedRecordIds = allRecords.filter(({ sourceRefs }) => sourceRefs.length === 0).map(({ type, id }) => `${type}:${id}`);
-  const unknownSourceReferenceRecordIds = allRecords
-    .filter(({ sourceRefs }) => sourceRefs.some((id) => !sourceIds.has(id)))
-    .map(({ type, id }) => `${type}:${id}`);
+  const unattributedRecordIds: string[] = [];
+  const unknownSourceReferenceRecordIds: string[] = [];
+  for (const [type, records] of [["node", input.nodes], ["edge", input.edges], ["access-point", input.accessPoints]] as const) {
+    for (const { id, sourceRefs } of records) {
+      if (sourceRefs.length === 0) unattributedRecordIds.push(`${type}:${id}`);
+      if (sourceRefs.some((sourceId) => !sourceIds.has(sourceId))) unknownSourceReferenceRecordIds.push(`${type}:${id}`);
+    }
+  }
   if (unattributedRecordIds.length) errors.push(`${unattributedRecordIds.length} records have no source attribution`);
   if (unknownSourceReferenceRecordIds.length) errors.push(`${unknownSourceReferenceRecordIds.length} records reference unknown sources`);
 
@@ -75,10 +77,15 @@ export function auditRegionalPack(input: RegionalPackAuditInput): RegionalPackAu
   if (implausibleMetricRecordIds.length) errors.push(`${implausibleMetricRecordIds.length} edges have implausible metrics`);
   const conflictRecordIds = [...new Set(input.conflictRecordIds ?? [])];
   if (conflictRecordIds.length) errors.push(`${conflictRecordIds.length} access conflicts require review`);
-  const elevationEdges = input.edges.filter(({ edgeClass }) => edgeClass === "trail");
-  const elevationNodeIds = new Set(elevationEdges.flatMap(({ fromNode, toNode }) => [fromNode, toNode]));
+  const elevationNodeIds = new Set<string>();
+  let missingEdgeCount = 0;
+  for (const edge of input.edges) {
+    if (edge.edgeClass !== "trail") continue;
+    elevationNodeIds.add(edge.fromNode);
+    elevationNodeIds.add(edge.toNode);
+    if (edge.maxElevationM === null) missingEdgeCount += 1;
+  }
   const missingNodeCount = input.nodes.filter(({ id, elevationM }) => elevationNodeIds.has(id) && elevationM === null).length;
-  const missingEdgeCount = elevationEdges.filter(({ maxElevationM }) => maxElevationM === null).length;
   if (missingNodeCount || missingEdgeCount) warnings.push(`Elevation is missing for ${missingNodeCount} nodes and ${missingEdgeCount} edges`);
   if (input.rejectedEdgeCount) warnings.push(`${input.rejectedEdgeCount} source edges were rejected`);
 
