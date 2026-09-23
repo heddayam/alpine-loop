@@ -119,11 +119,53 @@ request plus a deliberately impossible request with a labeled close result.
 
 ## Activation gate
 
-Before catalog activation, inspect the 179 raw path/footway/track ways that
-touch but are not wholly covered by this draft boundary, especially coastal
-crossings; audit source access and jurisdiction seams; derive portal/building
-and connected-cycle distributions; refresh pinned sources once; build twice
-offline from independent preparation roots with byte-identical manifest,
-SQLite, and audits; pass representative exact/close route and browser checks.
-This charter does not claim those checks have passed. Generated downloads,
-packs, receipts, caches, and databases stay outside Git.
+The final candidate `op-34b052c73d4a5711` passed two fresh independent
+offline builds from the same pinned caches. SHA-256 matched byte for byte:
+manifest `189ae96ea59c5be3c3f3b941156b5a6a762f8cc93fa1e7cf14874d2844aef396`,
+SQLite `18a3d68f6ca252a7cf8272a1960ddda6d3057abbb69073062f26e9b48b12d8fa`,
+base audit `4bc6d4a581b591e4cd173aa80d4607203033a5376269951980eeb33bc8fcc7fa`,
+regional audit `4f4272edabe92eb968a4460413211a8f3f4eafd7b38e0caec5969672246bec3d`,
+and portal audit `1788c365774b6e6b09641f3da12a619d67a2ed8d2336e293244bb9fc7e919437`.
+The audit has 128,029 nodes, 255,244 directed edges, 407 published access
+points, zero missing elevation nodes/edges, zero outside-coverage edges, zero
+unattributed records, and zero errors. The input included 437 derived portals,
+of which 29 fell outside exact coverage; 128 published starts can reach a
+cycle when unknown access is included. One published start is near an OSM
+building. The graph has 446 disconnected components, and 13,314 source edges
+were rejected by coverage/access normalization; these remain review signals.
+The raw boundary-crossing inventory contains 139 tracks, 35 paths, and five
+footways. Named coastal crossings include the Shi Shi–Ozette travelway,
+South Kalaloch Beach, Second Beach's approach, Hoh Head Way, and Hoh Head
+Low Tide Route. The first three meet unresolved tribal/neighboring-land
+jurisdiction, while the Hoh Head lines briefly leave the mapped park outline;
+the v1 hard boundary intentionally clips them rather than asserting an
+unreviewed public corridor. Other crossings include Little River, Mount
+Muller, Wynoochee, and several forest approach trails; they are not claimed
+as complete circuits by this pack. The Ozette triangle's three validated
+legs have no boundary crossing.
+
+The final-version Thorough checkpoint passed all nine accepted scenarios,
+each with an exact route and a labeled close match, with zero directed
+validation rejections. Ozette's generated route follows Cape Alava Trail,
+the mapped beach travelway, and Sand Point Trail: 14.25 km, 166 m gain, and
+2.6% repeated trail. It carries the normal uncertain-access warning; tide
+timing is still unmodeled. Quick spot checks passed Ozette and Hoh; the bounded
+Quick search exhausted its budget at Sol Duc and found no impossible-request
+close match at Buckhorn, while Thorough passed both. This is visible search
+incompleteness, not silent constraint relaxation.
+
+With a temporary local catalog link, the app catalog exposed all four retained
+Olympic choices, `/api/map` returned 20 Ozette trail features and one access
+point for a coastal viewport, and the real `/api/search` endpoint returned one
+exact Ozette route. Desktop and 390 px mobile Chromium checks found the region
+choice, working mobile map toggle, no horizontal overflow, and no page/console
+errors. Basemap tiles did not render in that local browser run, so that check
+does not establish live external-tile availability.
+
+Before committed catalog activation, finish the repeated full
+application/browser verification and record acceptance in `status.md`. The
+excluded crossing corridors above require new jurisdiction evidence and a
+boundary version before they can be claimed as complete routes. The Colonel Bob Peak
+Trailhead and some linear coast routes lack a qualifying closed-route portal,
+and live tide-aware passability remains deferred. Generated downloads, packs,
+receipts, caches, and databases stay outside Git.
