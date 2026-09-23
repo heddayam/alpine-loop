@@ -40,6 +40,30 @@
       "label": "Central Cascades",
       "displayOrder": 7,
       "packId": "central-cascades"
+    },
+    {
+      "id": "north-cascades",
+      "label": "North Cascades",
+      "displayOrder": 8,
+      "packId": "north-cascades"
+    },
+    {
+      "id": "rainier-goat-rocks",
+      "label": "Rainier–Goat Rocks",
+      "displayOrder": 9,
+      "packId": "rainier-goat-rocks"
+    },
+    {
+      "id": "southwest-cascades",
+      "label": "Southwest Cascades",
+      "displayOrder": 10,
+      "packId": "southwest-cascades"
+    },
+    {
+      "id": "olympic-peninsula",
+      "label": "Olympic Peninsula",
+      "displayOrder": 11,
+      "packId": "olympic-peninsula"
     }
   ]
 }

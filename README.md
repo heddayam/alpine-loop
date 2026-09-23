@@ -1,7 +1,7 @@
 # Alpine Loop
 
 Alpine Loop generates loop hikes from local trail data. Choose a region, draw
-an area, or set a drive time; then specify distance, elevation, grade, and how
+an area, or set a minimum and maximum drive time; then specify distance, elevation, grade, and how
 much trail you are willing to repeat.
 
 - **Quick search** finds up to the number of alternatives you request.
@@ -13,6 +13,11 @@ much trail you are willing to repeat.
 Areas select starting points; they do not clip hikes. Routes can extend beyond
 an area while staying inside installed data coverage. Results include route
 geometry, elevation profiles, repetition, and mapped trail conditions.
+
+Open a route in Results and choose **Export GPX** to download its full track
+and starting point. In [CalTopo](https://training.caltopo.com/all_users/import-export/import),
+choose **Import** and select the downloaded `.gpx` file. Export also works for
+saved Full-search results.
 
 ## Get started
 
@@ -30,7 +35,11 @@ the actual pack size for installed regions. Finished sizes exclude source caches
 ↑/↓ to move and Enter to toggle a region, then choose **Apply changes**.
 Installed packs start checked. Checked rows are green; pending installs and
 removals are labeled as you change the selection.
-Select **Central Cascades** for Glacier Peak, Alpine Lakes, and Teanaway.
+Washington choices include **North Cascades**, **Central Cascades**,
+**Rainier–Goat Rocks**, **Southwest Cascades**, and **Olympic Peninsula**.
+Olympic includes mapped beach trails such as the Ozette loop; check tides and
+current conditions yourself because route generation does not time beach
+passability.
 
 The script creates `.env` if needed and builds selected packs inside Docker;
 you do not need Node, Python, or geographic tools on your computer. The first
@@ -121,8 +130,13 @@ flowchart LR
 ```
 
 The builder prepares and validates regional data before activating a pack.
-The app reads packs without modifying them; a separate local process performs
-route searches so the interface and cancellation remain responsive.
+The app reads packs without modifying them. A bounded pool of local processes
+runs Quick searches across packs and Full searches across trailheads, including
+within one pack, while keeping the interface and cancellation responsive.
+Quick search within a single pack retains its existing search budget.
+`ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs
+per search; additional workers use more memory. Set it in `.env` for native or
+Docker use. Saved Full searches remain FIFO, with ordered progress checkpoints.
 
 - `app/` and `components/` — API routes and map workspace.
 - `lib/solver/` and `lib/graph/` — route generation and graph reads.

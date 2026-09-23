@@ -82,7 +82,7 @@ export class ReachabilityService {
     for (const [key, area] of this.areas) {
       if (area.expiresAt <= now) this.areas.delete(key);
     }
-    const key = JSON.stringify([request.origin.lon, request.origin.lat, request.durationMinutes]);
+    const key = JSON.stringify([request.origin.lon, request.origin.lat, request.minDurationMinutes ?? 0, request.durationMinutes]);
     const cached = this.areas.get(key);
     if (cached) return {
       geometry: structuredClone(cached.geometry),
@@ -118,7 +118,7 @@ export class ReachabilityService {
         providerJobId = await this.provider.submitServiceArea(request, active);
         for (;;) {
           active.throwIfAborted();
-          const result = await this.provider.pollServiceArea(providerJobId, active);
+          const result = await this.provider.pollServiceArea(providerJobId, active, request);
           active.throwIfAborted();
           if (result.state === "failed") throw new ReachabilityError("REACHABILITY_FAILED", result.message, 502);
           if (result.state === "complete") {

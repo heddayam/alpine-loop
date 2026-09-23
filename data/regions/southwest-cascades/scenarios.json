@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "packId": "southwest-cascades",
+  "scenarios": [
+    {
+      "id": "ape-canyon-loowit",
+      "cluster": "Loowit east feeder and volcanic circuit",
+      "referencePoint": {
+        "name": "Ape Canyon Trailhead parking way/65069378",
+        "coordinates": [
+          -122.092329,
+          46.165278
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 80,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 20,
+          "max": 45
+        },
+        "elevationGainFeet": {
+          "min": 2000,
+          "max": 14000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 20,
+          "max": 45
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "june-lake-loowit",
+      "cluster": "Loowit south feeder",
+      "referencePoint": {
+        "name": "June Lake Trailhead parking way/439071688",
+        "coordinates": [
+          -122.156895,
+          46.137063
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 80,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 18,
+          "max": 45
+        },
+        "elevationGainFeet": {
+          "min": 1500,
+          "max": 14000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 18,
+          "max": 45
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "mount-margaret-boundary",
+      "cluster": "Mount Margaret and eastern Boundary Trail",
+      "referencePoint": {
+        "name": "Norway Pass Trailhead",
+        "coordinates": [
+          -122.08246,
+          46.305338
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 60,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "adams-south-stagman",
+      "cluster": "Mount Adams south and west approaches",
+      "referencePoint": {
+        "name": "Stagman Ridge Trailhead",
+        "coordinates": [
+          -121.597287,
+          46.140186
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 70,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 30
+        },
+        "elevationGainFeet": {
+          "min": 1000,
+          "max": 12000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 30
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "adams-north-killen",
+      "cluster": "Mount Adams north approaches",
+      "referencePoint": {
+        "name": "Killen Creek Trailhead",
+        "coordinates": [
+          -121.55234,
+          46.288305
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 70,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 8,
+          "max": 35
+        },
+        "elevationGainFeet": {
+          "min": 1500,
+          "max": 14000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 8,
+          "max": 35
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "upper-cispus-blue-lake",
+      "cluster": "Upper Cispus Blue Lake–Valley Trail loops",
+      "referencePoint": {
+        "name": "Blue Lake ORV Trailhead parking way/716832243",
+        "coordinates": [
+          -121.73118,
+          46.396063
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 65,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "indian-heaven-lemei",
+      "cluster": "Indian Heaven Wilderness",
+      "referencePoint": {
+        "name": "Lemei Trailhead",
+        "coordinates": [
+          -121.685829,
+          46.028666
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 60,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 8000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "trapper-creek-big-hollow",
+      "cluster": "Trapper Creek Wilderness",
+      "referencePoint": {
+        "name": "Big Hollow Trailhead",
+        "coordinates": [
+          -121.97989,
+          45.926158
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 60,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 7000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "silver-star-tarbell",
+      "cluster": "Silver Star–Tarbell connected trails",
+      "referencePoint": {
+        "name": "Rock Creek Trailhead",
+        "coordinates": [
+          -122.321364,
+          45.764257
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 60,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 7000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}

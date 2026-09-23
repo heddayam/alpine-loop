@@ -11,6 +11,9 @@ import { SQLiteGraphRepository } from "@/lib/graph";
 import { mapData } from "./map";
 import { drawnArea, resolveSearchPlan, searchCatalog } from "./search-area";
 import { generateSearch, openSearchSession } from "./search";
+import { RouteSolverProcess } from "./route-solver-process";
+
+vi.mock("node:os", async (original) => ({ ...await original<typeof import("node:os")>(), availableParallelism: () => 4 }));
 
 const fixtures = vi.hoisted(() => ({ packs: new Map<string, InstalledPack>(), resolveArea: vi.fn() }));
 vi.mock("@/lib/packs/pack-catalog", () => ({ discoverCatalogPacks: async () => fixtures.packs }));
@@ -59,6 +62,53 @@ describe("geographic search with production storage and compute", () => {
       expect(route.geometry.coordinates[0]).toEqual(route.geometry.coordinates.at(-1));
       expect(route.geometry.coordinates.some(([lon]) => lon! > -122.1599)).toBe(true);
       expect(route.geometry.coordinates.every(([lon, lat]) => lon! >= -122.161 && lon! <= -122.155 && lat! >= 37.159 && lat! <= 37.162)).toBe(true);
+    }
+  });
+
+  it("runs Quick packs concurrently and keeps deterministic merging", async () => {
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+    const original = RouteSolverProcess.prototype.generate;
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    let active = 0;
+    let peak = 0;
+    const generate = vi.spyOn(RouteSolverProcess.prototype, "generate").mockImplementation(async function (this: RouteSolverProcess, ...args) {
+      peak = Math.max(peak, ++active);
+      if (active === 2) release();
+      await barrier;
+      try { return await original.apply(this, args); }
+      finally { active -= 1; }
+    });
+    let parallel;
+    try { parallel = await generateSearch(request, signal()); }
+    finally { generate.mockRestore(); }
+    expect(peak).toBe(2);
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "1");
+    expect(await generateSearch(request, signal())).toEqual(parallel);
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+  });
+
+  it("uses two independent Full workers within one pack and closes all readers", async () => {
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+    fixtures.packs = new Map([installed.entries().next().value!]);
+    const opened = vi.spyOn(RouteSolverProcess, "open");
+    const close = vi.spyOn(RouteSolverProcess.prototype, "close");
+    const plan = await resolveSearchPlan(request, signal());
+    const session = await openSearchSession({ request, plan, signal: signal() });
+    try {
+      expect(opened).not.toHaveBeenCalled();
+      const starts = await session.enumerateEligibleAccessPointIds(signal());
+      expect(close).toHaveBeenCalledTimes(1);
+      const results = await Promise.all([session.searchAccessPoint(starts[0]!, signal()), session.searchAccessPoint(starts[0]!, signal())]);
+      expect(results[0]!.exact).toEqual(results[1]!.exact);
+      expect(results[0]!.nearMisses).toEqual(results[1]!.nearMisses);
+      expect(opened).toHaveBeenCalledTimes(3); // one discovery reader, two retained workers
+      const workers = await Promise.all(opened.mock.results.map(({ value }) => value));
+      expect(new Set(workers).size).toBe(3);
+    } finally {
+      await session.close();
+      expect(close).toHaveBeenCalledTimes(3);
+      opened.mockRestore(); close.mockRestore();
     }
   });
 
@@ -129,6 +179,36 @@ describe("geographic search with production storage and compute", () => {
     expect(result.exact).toEqual([]);
     expect(result.incomplete).toBe(false);
     expect(result.messages).not.toEqual([]);
+  });
+
+  it("honors drive-time band holes for starts without clipping hiking geometry", async () => {
+    fixtures.packs = new Map([installed.entries().next().value!]);
+    const excludedStart = (await generateSearch(request, signal())).exact[0]!.startAccessPoint.id;
+    const driveRequest: SearchRequest = { ...request, area: {
+      mode: "drive-time", origin: { lon: -122.16, lat: 37.16, label: "Home" }, minDurationMinutes: 15, durationMinutes: 30, regionIds: [],
+    } };
+    const outer = drawnArea(fixturePackSeed.coverage.bbox);
+    if (outer.type !== "Polygon") throw new Error("Expected fixture polygon");
+    const atStart = drawnArea(request.area.mode === "drawn-area" ? request.area.bbox : fixturePackSeed.coverage.bbox);
+    if (atStart.type !== "Polygon") throw new Error("Expected fixture polygon");
+    const band = { type: "Polygon" as const, coordinates: [outer.coordinates[0]!, atStart.coordinates[0]!] };
+    fixtures.resolveArea.mockResolvedValue({ geometry: band, resolvedAt: "2026-09-06T00:00:00Z" });
+    const quick = await generateSearch(driveRequest, signal());
+    expect(fixtures.resolveArea).toHaveBeenCalledWith(driveRequest.area, expect.any(AbortSignal));
+    expect([...quick.exact, ...quick.nearMisses].every(({ startAccessPoint }) => startAccessPoint.lon !== -122.16)).toBe(true);
+    const plan = await resolveSearchPlan(driveRequest, signal());
+    const session = await openSearchSession({ request: driveRequest, plan: { ...plan, area: { ...plan.area, filterGeometry: band } }, signal: signal() });
+    try {
+      const starts = await session.enumerateEligibleAccessPointIds(signal());
+      expect(starts).not.toContain(excludedStart);
+    } finally { await session.close(); }
+    // A hole around an interior trail node must not cut the hiking route.
+    const atTrail = drawnArea([-122.1581, 37.1599, -122.1579, 37.1601]);
+    if (atTrail.type !== "Polygon") throw new Error("Expected fixture polygon");
+    fixtures.resolveArea.mockResolvedValue({ geometry: { ...band, coordinates: [outer.coordinates[0]!, atTrail.coordinates[0]!] }, resolvedAt: "2026-09-06T00:00:00Z" });
+    const throughHole = await generateSearch(driveRequest, signal());
+    expect(throughHole.exact.length).toBeGreaterThan(0);
+    expect(throughHole.exact.some(({ geometry }) => geometry.coordinates.some(([lon, lat]) => lon === -122.158 && lat === 37.16))).toBe(true);
   });
 
   it("uses one Full session with distinct starts and labeled routes across datasets", async () => {

@@ -116,6 +116,37 @@ function ControlledResultsPanel() {
 describe("ResultsPanel", () => {
   afterEach(cleanup);
 
+  it("exports a close match without selecting another route and releases the download URL", () => {
+    vi.useFakeTimers();
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:route-export");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toMatch(/^alpine-loop-route-2.*\.gpx$/i);
+      expect(this.href).toBe("blob:route-export");
+      expect(this.isConnected).toBe(true);
+    });
+    const onSelectRoute = vi.fn();
+    try {
+      render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={results()} selectedRouteId="near-lollipop" detail onSelectRoute={onSelectRoute} />);
+      fireEvent.click(screen.getByRole("button", { name: "Export GPX" }));
+      expect(click).toHaveBeenCalledOnce();
+      expect(createObjectURL.mock.calls[0]?.[0]).toMatchObject({ type: "application/gpx+xml;charset=utf-8" });
+      expect(onSelectRoute).not.toHaveBeenCalled();
+      expect(document.querySelector("a[download]")).toBeNull();
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+      vi.runAllTimers();
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:route-export");
+    } finally {
+      click.mockRestore();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps selected list cards concise and shows only the explicitly opened detail", () => {
     const props = { onHoverRoute: () => undefined, status: "done" as const, results: results(), onSelectRoute: () => undefined };
     const { rerender } = render(<ResultsPanel {...props} selectedRouteId="exact-loop" />);

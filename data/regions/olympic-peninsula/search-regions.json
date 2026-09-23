@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:olympic-peninsula",
+      "expectedName": "Olympic Peninsula"
+    },
+    {
+      "namedAreaId": "osm:relation/6122342",
+      "expectedName": "Buckhorn Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/6122955",
+      "expectedName": "Colonel Bob Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/6122367",
+      "expectedName": "Mount Skokomish Wilderness"
+    }
+  ]
+}

@@ -39,10 +39,17 @@ describe("pack selector metadata", () => {
     const packs = await listManagedPacks(catalog);
     expect(packs.map(({ id }) => id)).toEqual([
       pack, "southern-east-bay", "monterey-carmel", "henry-coe", "central-cascades",
+      "north-cascades", "rainier-goat-rocks", "southwest-cascades", "olympic-peninsula",
     ]);
     expect(packs[0]).toMatchObject({ id: pack, label: "Santa Cruz Mountains", installed: true });
     expect(packs[0]!.size).toMatch(/^\d+\.\d MB installed$/);
     expect(packs[4]).toMatchObject({ installed: false, size: "~2.24 GB download · ~404 MB finished" });
+    expect(packs.slice(5).map(({ size }) => size)).toEqual([
+      "~2.11 GB download · ~334 MB finished",
+      "~2.62 GB download · ~269 MB finished",
+      "~2.24 GB download · ~255 MB finished",
+      "~2.21 GB download · ~188 MB finished",
+    ]);
   });
 
   it("explains an invalid installation instead of presenting it as absent", async () => {

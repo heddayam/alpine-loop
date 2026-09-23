@@ -1,6 +1,6 @@
 import type { Origin, SearchArea } from "@/lib/contracts";
 
-export type DriveTimeAreaRequest = Pick<Extract<SearchArea, { mode: "drive-time" }>, "origin" | "durationMinutes">;
+export type DriveTimeAreaRequest = Pick<Extract<SearchArea, { mode: "drive-time" }>, "origin" | "minDurationMinutes" | "durationMinutes">;
 
 export type Position = [number, number];
 export type LinearRing = Position[];
@@ -32,6 +32,7 @@ export type ArcGisProvider = {
   pollServiceArea(
     providerJobId: string,
     signal?: AbortSignal,
+    request?: DriveTimeAreaRequest,
   ): Promise<
     | { state: "pending" }
     | { state: "failed"; message: string }

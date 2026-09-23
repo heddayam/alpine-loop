@@ -273,6 +273,106 @@ describe("RouteJobService", () => {
     store.close();
   });
 
+  it("bounds parallel starts and checkpoints in ordinal order despite reversed completion", async () => {
+    const releases = new Map<string, () => void>();
+    const started: string[] = [];
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        concurrency: 2,
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third", "fourth"],
+        searchAccessPoint: async (id) => {
+          started.push(id);
+          await new Promise<void>((resolve) => releases.set(id, resolve));
+          // Identical geometry exercises deterministic first-start ownership.
+          return { exact: [{ ...route("first"), id }], nearMisses: [], truncated: false };
+        },
+        close: async () => undefined,
+      }),
+    });
+    const completed = vi.spyOn(store, "completeAccessPoint");
+    const job = await service.create(regionWideRequest);
+    await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
+    releases.get("second")!();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(completed).not.toHaveBeenCalled();
+    expect(started).toEqual(["first", "second"]);
+    releases.get("first")!();
+    await vi.waitFor(() => expect(started).toEqual(["first", "second", "third", "fourth"]));
+    releases.get("fourth")!();
+    releases.get("third")!();
+    await service.waitUntilIdle();
+    expect(completed.mock.calls.map((call) => call[1])).toEqual([0, 1, 2, 3]);
+    expect((await service.results(job.id)).results.map(({ accessPointId }) => accessPointId)).toEqual(["first"]);
+    store.close();
+  });
+
+  it.each(["cancel", "delete"] as const)("discards buffered and late parallel results after %s", async (action) => {
+    const started: string[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const close = vi.fn(async () => { release(); });
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        concurrency: 2,
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third"],
+        searchAccessPoint: async (id, signal) => {
+          started.push(id);
+          if (id === "first") await Promise.race([blocked, new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))]);
+          return { exact: [route(id)], nearMisses: [], truncated: false };
+        },
+        close,
+      }),
+    });
+    const job = await service.create(regionWideRequest);
+    await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
+    await service[action](job.id);
+    await service.waitUntilIdle();
+    expect(close).toHaveBeenCalledOnce();
+    expect(started).toEqual(["first", "second"]);
+    if (action === "delete") expect(await service.get(job.id)).toBeNull();
+    else {
+      expect(await service.get(job.id)).toMatchObject({ status: "cancelled", progress: { processedAccessPointCount: 0 } });
+      expect((await service.results(job.id)).results).toEqual([]);
+    }
+    store.close();
+  });
+
+  it("resumes every uncommitted parallel start after reopening storage", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "route-job-resume-parallel-"));
+    temporary.push(directory);
+    const path = join(directory, "jobs.sqlite");
+    let store = new SQLiteRouteJobStore(path);
+    const id = "00000000-0000-4000-8000-000000000012";
+    store.create(id, regionWideRequest, plan);
+    store.claimNext();
+    store.initializeAccessPoints(id, ["first", "second", "third", "fourth"]);
+    store.nextAccessPoint(id);
+    store.completeAccessPoint(id, 0, [], false);
+    expect(store.nextAccessPoint(id)?.accessPointId).toBe("second");
+    expect(store.nextAccessPoint(id)?.accessPointId).toBe("third");
+    store.close();
+    store = new SQLiteRouteJobStore(path);
+    const searched: string[] = [];
+    const { dependencies, store: unusedStore, service: unusedService } = harness();
+    await unusedService.waitUntilIdle();
+    unusedStore.close();
+    const service = new RouteJobService({ store, dependencies: { ...dependencies,
+      openSearchSession: async () => ({
+        concurrency: 2,
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third", "fourth"],
+        searchAccessPoint: async (id) => {
+          searched.push(id);
+          return { exact: [], nearMisses: [], truncated: false };
+        },
+        close: async () => undefined,
+      }),
+    } });
+    await service.waitUntilIdle();
+    expect(searched).toEqual(["second", "third", "fourth"]);
+    expect(await service.get(id)).toMatchObject({ status: "completed", progress: { processedAccessPointCount: 4 } });
+    store.close();
+  });
+
   it("rejects malformed cursors and round-trips tuple cursors", () => {
     const cursor = { matchRank: 1, accessOrdinal: 2, resultOrdinal: 3, routeId: "route" };
     expect(decodeResultCursor(encodeResultCursor(cursor))).toEqual(cursor);

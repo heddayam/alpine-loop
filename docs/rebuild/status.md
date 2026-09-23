@@ -6,6 +6,68 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — completed a solver acceleration investigation without changing
+  production code or settings. The observed Full job completed 156 starts in
+  594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
+  loading, dominated by repeated exact coverage predicates. Across 17 isolated
+  eight-start fixed-work trials, exact/close payload fingerprints, ordering,
+  counts, and expanded states matched. A bounded exact-coverage-cache prototype
+  reduced two-worker median runtime from 47.82 to 25.10 seconds (1.91× throughput).
+  Cached two- and six-worker timings overlapped; larger pools used more memory
+  and uncached six-worker repeats varied substantially. Replaying all 156 start
+  durations predicts 11.1% more throughput from completion-driven scheduling at
+  two workers; this is a model, not an end-to-end measured gain. Prioritize exact
+  coverage caching, same-start reuse, first-free worker scheduling with ordered
+  checkpoints, then shared resource admission and broader worker-count tuning.
+  The prototype passed 57 existing offline tests and 48 direct geometry checks.
+  Its worktree/branch and benchmark container were removed; raw job/profile data
+  remains ignored. See [measurements and implementation requirements](solver-acceleration-audit.md).
+
+- [x] 2026-09-22 — added **Export GPX** in route details for Quick and saved
+  Full-search results, including close matches. GPX 1.1 contains the complete
+  ordered track (including retraced sections), a named starting waypoint,
+  source provenance, and warnings. Downloads use safe filenames and release
+  browser object URLs. Elevations are omitted because profile samples are not
+  paired with geometry vertices. CalTopo's documented GPX import is linked in
+  the README; no live CalTopo upload was performed.
+  Evidence: two `npm run verify` passes each passed 552 offline tests in 88
+  files, lint, types, and production build. Two `npm run test:browser` passes
+  each passed seven flows, including parsing a real Quick-result download and
+  comparing every coordinate, plus a saved-result download at 390 px. Focused
+  tests cover XML escaping, Unicode, legacy geometry, repeated paths, close
+  match export, and download cleanup. Live in-app checks with a saved Sunol
+  route passed desktop/mobile layout, map zoom/pan, mobile segment scrolling,
+  and zero console errors. No dependency, API, or pack-schema changes. The
+  temporary GPX worktree/branch and preview server were removed; unrelated
+  regional-pack and solver work remains in progress in the shared workspace.
+
+- [x] 2026-09-22 — added minimum/maximum drive-time areas and bounded parallel
+  solving. The form defaults to 0–30 minutes, validates minimum < maximum for
+  Quick and Full, and retains the range in saved requests and Jobs labels.
+  Existing requests without a minimum still mean zero. ArcGIS returns a ring
+  between the requested breaks; positive-minimum responses must identify that
+  exact band, and the cache distinguishes both bounds. The band filters starts
+  without clipping hiking geometry. Quick searches independent packs in parallel;
+  Full searches independent trailheads, including within one pack. Lazy worker
+  slots default to at most two available CPUs per search, configurable through
+  `ALPINE_SOLVER_WORKERS` (1–8, CPU-capped). Ordered, bounded checkpoints preserve
+  deterministic deduplication, cancellation/deletion precedence, and restart
+  recovery without retaining a process for every installed pack.
+  Evidence: two `npm run verify` passes each passed 546 offline tests in 87
+  files, lint, types, and production build; two `npm run test:browser` passes
+  each passed seven flows, including Quick/Full 15–60 minute requests. New tests
+  cover invalid/legacy ranges, inner-contour exclusion, unclipped trails,
+  minimum-aware caching, reversed completion, interrupted parallel starts, and
+  late results after cancel/delete. Distinct child PIDs overlap synchronous
+  300 ms CPU fixtures by over 100 ms; serial/parallel Quick results are identical
+  on committed pack fixtures. Live in-app desktop and 390 px checks passed range
+  controls, map zoom/pan, panel scrolling, and mobile map switching without
+  browser errors. Compose configuration validates. An initial full run overlapped
+  another task's Olympic selector update; both final runs passed after its
+  matching test update. No live ArcGIS band call or regional throughput benchmark
+  was performed. No dependency or pack-schema change is required; this feature's
+  temporary worktrees and visual-check server were removed.
+
 - [x] 2026-09-22 — implemented the pack-build efficiency audit: prepare OSM
   once with boundary-aware child caches, stream hashes and OPL, share unchanged
   topology, bound temporary metric/sampling batches, and reduce persisted-audit
@@ -577,6 +639,106 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     Live desktop and 390 px checks confirmed selection, all four region choices,
     horizontal mobile overflow (`846 px` content in a `374 px` strip), and zero
     browser console errors.
+
+- [x] Gate 12 — remaining Washington Cascades and Olympic Peninsula setup
+  - Evidence: reserved `north-cascades`, `rainier-goat-rocks`,
+    `southwest-cascades`, and `olympic-peninsula` in the version-1 catalog
+    without activation links or builders. The [Cascades brief](washington-cascades-packs.md)
+    and [Olympic brief](olympic-peninsula-pack.md), reviewed 2026-09-22 against
+    linked primary agency and source pages, define proposed systems, seam and
+    authority questions, candidate selectors, checkpoint clusters, source
+    policy, and per-pack preflight. Olympic beach trails, including Ozette's
+    beach leg, are in scope; tide timing remains a recorded later limitation.
+    The roadmap and onboarding checklist reflect the current geographic
+    workspace and local installer. The Central Cascades charter now matches
+    its configured August 1 Washington OSM source. The registry example
+    matches the committed JSON, local document links resolve, and focused
+    catalog/selector tests pass 27/27. Two `npm run verify` passes each pass
+    506 offline tests in 82 files, lint, types, and production build; two
+    `npm run test:browser` passes each pass seven offline flows. No exact new
+    boundary, source pin, pack build, or activation is claimed.
+- [x] Gate 13 — North Cascades regional pack
+  - Evidence: the [North charter](../../data/regions/north-cascades/charter.md)
+    records the v3 hard boundary around Baker, Highway 20, Stehekin, Methow,
+    and Pasayten; the deliberate Central PCT–South Fork Agnes overlap; and two
+    narrow 49°N insets where USGS 3DEP has no elevation data. The pinned August
+    1 Washington OSM snapshot is ODbL; four pinned USGS tiles are public
+    domain, with product IDs, bytes, and SHA-256 receipts in the charter.
+    Refresh plus two fresh offline builds produced identical schema-6
+    `nc-989d91f71a1d0be6` manifests, SQLite, and three audit files (all five
+    SHA-256 values in the charter). Audit: 224,334 nodes, 447,092 directed
+    trail edges, 631 portals, 38 built-up, 303 inclusive/42 known
+    cycle-feasible, 282 default-eligible, 625 components, zero errors,
+    outside edges, missing elevation, non-trail published edges, or SQLite
+    integrity/foreign-key issues. All eight Thorough and eight Quick scenario
+    pairs returned exact and labeled impossible-request close routes with zero
+    directed validation rejections; the final checkpoint was rerun from the
+    integration checkout after fixing long-route DFS stack overflow. Live
+    Artist Point Quick returned an exact 18.4 km route. Crescent Mine's sole
+    eligible selector portal reaches the Sawtooth polygon by 606 m of mapped
+    trail. Cascade Pass remains covered but cycle-poor, and a South Fork Agnes
+    ford and South Creek restriction lead remain explicit later reviews.
+- [x] Gate 14 — Rainier–Goat Rocks regional pack
+  - Evidence: the [Rainier charter](../../data/regions/rainier-goat-rocks/charter.md)
+    records the exact v1 park/wilderness and PCT approach envelope, all 76
+    mapped Wonderland ways, north overlap with Central, and the upper Cispus
+    overlap with Southwest. August 1 OSM ODbL and five public-domain USGS 3DEP
+    products are pinned with receipts. After one source refresh, two independent
+    offline builds produced byte-identical schema-6 `rgr-9037762d7a78ff57` outputs;
+    the charter has all five published-file SHA-256 values. Audit: 182,673
+    nodes, 364,899 edges, 853 portals, 28 built-up, 317 inclusive/69 known
+    cycle-feasible, 303 default-eligible, 749 components, zero errors,
+    outside edges, missing elevation, non-trail edges, or SQL integrity/foreign
+    key issues. Ten Thorough scenario pairs passed with zero directed
+    rejections; three Quick spots passed. William O. Douglas and Goat Rocks
+    selectors have reviewed trail entry; Rainier National Park and Norse Peak
+    selectors remain deferred for disconnected fringe starts. Live Pear Butte
+    Quick returned an exact 18.6 km route.
+- [x] Gate 15 — Southwest Cascades regional pack
+  - Evidence: the [Southwest charter](../../data/regions/southwest-cascades/charter.md)
+    records the v1 Mount St. Helens, Adams, Gifford Pinchot, upper Cispus, and
+    Silver Star–Tarbell coverage, excluding the Yakama Reservation and Oregon.
+    August 1 OSM ODbL and four public-domain USGS 3DEP products are pinned with
+    receipts. Refresh plus two fresh offline builds produced byte-identical
+    schema-6 `swc-f877817cbcde78fe` outputs; all five SHA-256 values are in
+    the charter. Audit: 176,693 nodes, 352,490 edges, 839 portals, five
+    built-up, 325 inclusive/26 known cycle-feasible, 324 default-eligible,
+    729 components, zero errors, outside edges, missing elevation, non-trail
+    edges, or SQL integrity/foreign-key issues. All nine Thorough and Quick
+    scenario pairs passed with zero directed rejections. Cody's nearest portal
+    is no-cycle; the source-backed Blue Lake start passed instead. Live Blue
+    Lake Quick returned an exact 22.88 km route. Rainier/Southwest share 3,062
+    forward edge IDs (86.257 km) with identical geometry and access state.
+- [x] Gate 16 — Olympic Peninsula regional pack
+  - Evidence: the [Olympic charter](../../data/regions/olympic-peninsula/charter.md)
+    records the four-part v1 park/forest hard boundary and reviewed mountain,
+    rainforest, and coastal systems. The mapped Ozette beach travelway and
+    inland arms form a compiled route; unreviewed tribal approaches and some
+    boundary-crossing coastal ways remain excluded. August 1 OSM ODbL and six
+    public-domain USGS 3DEP products are pinned with receipts. After one source
+    refresh, two fresh offline builds produced byte-identical schema-6
+    `op-34b052c73d4a5711` outputs; all five SHA-256 values are in the
+    charter. Audit: 128,029 nodes, 255,244 edges, 407 portals, one built-up,
+    128 inclusive/39 known cycle-feasible, 127 default-eligible, 446
+    components, zero errors, outside edges, missing elevation, non-trail
+    edges, or SQL integrity/foreign-key issues. All nine Thorough scenario
+    pairs passed with zero directed rejections. Live Ozette Quick returned a
+    14.25 km Cape Alava–beach–Sand Point route. A real Full search completed
+    with one exact route, restored after restart, and showed the older-map-data
+    label against a separate empty pack root. Tide and surf passability remain
+    unmodeled and require trip-time checking.
+  - Shared activation: catalog links and measured installer size metadata were
+    added for all four packs. Two `npm run verify` runs each passed 553 offline
+    tests in 88 files, lint, types, and production build; two corrected offline
+    `npm run test:browser` runs each passed seven Chromium flows. The first
+    browser invocation could not bind localhost inside the filesystem sandbox;
+    both full passes succeeded with local-server permission. The live catalog
+    listed every retained selector; four representative map windows returned
+    trails and starts, and all four real Quick API calls returned exact routes.
+    Desktop and 390 px mobile checks showed all four choices, keyboard Escape,
+    mobile map switching, no horizontal overflow, and zero browser/page errors.
+    Basemap tile availability was not established in this local run. Generated
+    packs, downloads, caches, receipts, and runtime databases remain ignored.
 
 ## Post-gate fixes
 

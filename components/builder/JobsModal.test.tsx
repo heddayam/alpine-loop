@@ -70,13 +70,19 @@ describe("JobsModal", () => {
   it("shows a human stage and attempted-count progress", () => {
     render(<JobsModal {...baseProps} jobs={[job]} />);
     expect(screen.getByText("Searching trailheads — 4 of 10 attempted.")).toBeVisible();
-    expect(screen.getByText("30 min from Castle Rock")).toBeVisible();
+    expect(screen.getByText("0–30 min from Castle Rock")).toBeVisible();
     expect(screen.getByRole("progressbar", { name: "4 of 10 trailheads attempted" })).toHaveAttribute("value", "40");
 
     const queued = { ...job, status: "queued" as const, progress: { ...job.progress, eligibleAccessPointCount: 0, processedAccessPointCount: 0 } };
     cleanup();
     render(<JobsModal {...baseProps} jobs={[queued]} />);
     expect(screen.getByRole("progressbar", { name: "Preparing trailhead search" })).not.toHaveAttribute("value");
+  });
+
+  it("shows the saved minimum and maximum driving times", () => {
+    const rangedJob: RouteJob = { ...job, request: { ...job.request, area: { ...job.request.area as Extract<RouteJob["request"]["area"], { mode: "drive-time" }>, minDurationMinutes: 15, durationMinutes: 60 } } };
+    render(<JobsModal {...baseProps} jobs={[rangedJob]} />);
+    expect(screen.getByText("15–60 min from Castle Rock")).toBeVisible();
   });
 
   it("labels jobs without an origin as covering the entire reviewed region", () => {

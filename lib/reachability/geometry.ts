@@ -1,9 +1,9 @@
 import { areaGeometrySchema } from "@/lib/contracts";
-import type { AreaGeometry, LinearRing, Position } from "./types";
+import type { AreaGeometry, DriveTimeAreaRequest, LinearRing, Position } from "./types";
 
 type ArcGisFeatureSet = {
   spatialReference?: unknown;
-  features?: Array<{ geometry?: { rings?: unknown } }>;
+  features?: Array<{ attributes?: { FromBreak?: unknown; ToBreak?: unknown }; geometry?: { rings?: unknown } }>;
 };
 
 function isPosition(value: unknown): value is Position {
@@ -58,16 +58,25 @@ function wkid(value: unknown): number | undefined {
 }
 
 /** Converts an ArcGIS WGS84 feature set to strict Polygon/MultiPolygon GeoJSON. */
-export function normalizeArcGisArea(value: unknown): AreaGeometry | null {
+export function normalizeArcGisArea(value: unknown, request?: DriveTimeAreaRequest): AreaGeometry | null {
   if (!value || typeof value !== "object") return null;
   const featureSet = value as ArcGisFeatureSet;
   const spatialReference = wkid(featureSet.spatialReference);
   if (spatialReference !== undefined && spatialReference !== 4326) return null;
   if (!Array.isArray(featureSet.features) || featureSet.features.length === 0) return null;
 
+  // A provider ring is already the difference of its break contours. Never union
+  // the inner and outer features: that would silently remove the minimum filter.
+  // Zero-minimum legacy requests keep accepting the previous single-contour shape.
+  const minimum = request?.minDurationMinutes ?? 0;
+  const features = minimum > 0
+    ? featureSet.features.filter((feature) => feature?.attributes?.FromBreak === minimum
+      && feature.attributes.ToBreak === request!.durationMinutes)
+    : featureSet.features;
+  if (!features.length) return null;
   const polygons: LinearRing[][] = [];
-  for (const feature of featureSet.features) {
-    const rawRings = feature.geometry?.rings;
+  for (const feature of features) {
+    const rawRings = feature?.geometry?.rings;
     if (!Array.isArray(rawRings) || rawRings.length === 0) return null;
     const rings = rawRings.map(normalizeRing);
     if (rings.some((ring) => ring === null)) return null;

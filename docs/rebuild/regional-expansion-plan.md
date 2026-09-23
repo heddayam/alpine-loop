@@ -2,7 +2,7 @@
 
 This document is the authoritative plan for expanding Alpine Loop beyond the
 Santa Cruz Mountains. It defines the planned region catalog, the order and
-boundaries of upcoming packs, the user-facing pack selector, and the approval
+boundaries of upcoming packs, the local pack selector, and the approval
 protocol for activating a region. The product and route-generation invariants
 remain defined in [the implementation plan](implementation-plan.md), and source
 handling remains governed by [the data policy](data-sources.md).
@@ -10,8 +10,8 @@ handling remains governed by [the data policy](data-sources.md).
 ## Region catalog and pack selector
 
 Commit the product roadmap as `data/regions/registry.json`. The catalog is the
-single source of truth for every region pill shown in the header; installed
-files alone never make a region selectable. The initial catalog is:
+source of truth for pack IDs and activation links; installed files alone never
+make a region searchable. The current catalog is:
 
 ```json
 {
@@ -54,37 +54,43 @@ files alone never make a region selectable. The initial catalog is:
     {
       "id": "central-cascades",
       "label": "Central Cascades",
-      "displayOrder": 7
+      "displayOrder": 7,
+      "packId": "central-cascades"
+    },
+    {
+      "id": "north-cascades",
+      "label": "North Cascades",
+      "displayOrder": 8
+    },
+    {
+      "id": "rainier-goat-rocks",
+      "label": "Rainier–Goat Rocks",
+      "displayOrder": 9
+    },
+    {
+      "id": "southwest-cascades",
+      "label": "Southwest Cascades",
+      "displayOrder": 10
+    },
+    {
+      "id": "olympic-peninsula",
+      "label": "Olympic Peninsula",
+      "displayOrder": 11
     }
   ]
 }
 ```
 
 `packId` is an explicit publication link, not a discovery hint. Add it only
-after that region passes the activation gate below.
-
-| Catalog and local-pack state | Header presentation | Behavior |
-| --- | --- | --- |
-| No `packId` | Disabled neutral pill with no green dot | Planned and not selectable |
-| Linked pack missing or invalid locally | Disabled pill with no green dot and visually hidden `pack unavailable` status | Cannot select |
-| Linked, valid installed pack | Green status dot | Selectable |
-| Currently selected pack | Green dot plus selected styling | Active workspace |
-
-Render all entries horizontally in `displayOrder`. Planned and unavailable
-pills are native-disabled and expose their status to assistive technology. On
-narrow screens the pill strip scrolls horizontally without wrapping or pushing
-the Jobs and Settings controls out of the header.
-
-Selecting an available pill updates `?pack=<pack-id>`, recenters the map on the
-pack display defaults, and clears pack-specific filters and results while
-preserving Settings and saved Jobs. Opening a saved Job from another installed
-pack switches to that pack before restoring its contour and results.
-
-Validate the catalog as a versioned `RegionRegistryV1` contract. `GET
-/api/packs` returns every catalog entry in configured order with a `planned`,
-`available`, or `unavailable` state, and includes pack metadata only for a valid
-linked pack. Pack loading must validate catalog links and safe local paths. The
-existing pack-manifest and route-request/response schemas do not change.
+after that region passes the activation gate below. The local `./alpine.sh`
+selector lists linked regions with registered builders, and the app discovers
+only valid installed, linked packs. Planned entries have no builder or size
+estimate yet and do not appear in that selector. The active workspace uses
+one geographic area across installed data; it has no per-pack selection.
+`GET /api/search/catalog` returns the reviewed search regions and exact
+coverage of installed packs. Validate the registry as `RegionRegistryV1` and
+keep pack paths and manifests strictly checked. Adding a planned entry does
+not change the search or route contracts.
 
 ## Expansion sequence
 
@@ -95,8 +101,8 @@ existing pack-manifest and route-request/response schemas do not change.
   the solver or public route contracts.
 - Discover and validate only the installed packs explicitly linked by the
   catalog.
-- Add the catalog-driven header pills, URL selection, state reset, map
-  recentering, and cross-pack saved-Job restoration described above.
+- Current searches use one geographic area across eligible installed packs.
+  Catalog entries remain invisible to runtime until an audited pack is linked.
 
 ### 2. Southern East Bay
 
@@ -158,7 +164,7 @@ Use pack ID `henry-coe` and the schema-6 workflow in the dedicated
 
 ### 5. Later catalog regions
 
-Keep Marin and Mount Tam and Tahoe–Eldorado visible as disabled roadmap pills.
+Keep Marin and Mount Tam and Tahoe–Eldorado as unlinked roadmap entries.
 Stanislaus, Grant/Pacheco expansion, and deep Big Sur/Ventana remain outside the
 catalog and current detailed roadmap.
 
@@ -175,6 +181,13 @@ pack or packs clipped to agency boundaries:
 3. **Rainier–Goat Rocks** — Mount Rainier, Naches/White Pass, and Goat Rocks.
 4. **Southwest Cascades** — Mount St. Helens, Mount Adams, and the southern
    Gifford Pinchot systems.
+
+Central Cascades is activated. The other three have reserved catalog IDs
+`north-cascades`, `rainier-goat-rocks`, and `southwest-cascades` but no build or
+activation link. Their [planning brief](washington-cascades-packs.md) records
+proposed systems, seams, named-area candidates, source reviews, scenario
+clusters, and unresolved boundary decisions. It is the input to the first
+charter and extraction preflight, not a substitute for either.
 
 Central Cascades must include Napeequa Valley and the complete Glacier
 Peak–Alpine Lakes corridor even though that crosses the historic Wenatchee
@@ -203,6 +216,26 @@ eligible cycle-bearing portals. Exercise Napeequa–Little Giant/High Pass,
 Chiwawa/Spider Meadow, a west-side Glacier Peak access, Stevens Pass,
 Icicle/Enchantments, Snoqualmie/Alpine Lakes, Cle Elum, and Teanaway in the
 schema-6 checkpoint.
+
+### 7. Olympic Peninsula
+
+Reserve `olympic-peninsula` for the Olympic mountain, rainforest, and beach
+hiking networks and their public approaches across Olympic National Park and
+Olympic National Forest. Review the park/forest seam as a connected trail
+system rather than using agency boundaries as hard coverage. Keep Puget
+lowlands, offshore islands, and tribal lands without verified public access
+outside the proposed hard boundary. Include mapped beach trails, including
+Ozette's beach leg, in the coastal preflight. Tide timing is a documented
+limitation for later work; the static graph cannot establish passability at a
+particular time.
+The [Olympic planning brief](olympic-peninsula-pack.md) records the proposed
+systems, authority and access decisions, candidate areas, checkpoint clusters,
+and what must be measured before an exact boundary or source pin is committed.
+
+The catalog entry is planned only. Its builder, size estimate, and `packId`
+activation link follow the schema-6 regional onboarding protocol after a clean
+boundary extraction, source review, independent offline builds, route checks,
+and app verification.
 
 ## Region-onboarding protocol
 
@@ -264,7 +297,7 @@ change.
   trail kilometres, disconnected components, viable cycle-bearing portals, and
   reviewed-region ordering. Assert that previously walkable road connectors
   remain in the published trail graph and that build-only road context does not.
-- Run representative Quick and Batch searches across every major included
+- Run representative Quick and Full searches across every major included
   trail cluster. Include exact routes and deliberately impossible requests that
   remain honestly labeled close matches.
 
@@ -273,9 +306,9 @@ change.
 - Add the catalog entry's `packId` only after the pack passes its build, audit,
   solver, browser, and licensing review. Merely producing local pack files does
   not activate it.
-- Verify pack switching, map recentering, reviewed-region discovery, access
-  previews, Quick search, Batch search, saved Jobs, stale-version behavior,
-  keyboard use, and narrow-screen pill scrolling.
+- Verify installed coverage and reviewed-region discovery, access previews,
+  Quick search, Full search, saved Jobs, stale-version behavior, keyboard use,
+  and narrow-screen form controls.
 - Run two consecutive `npm run verify` and two consecutive `npm run
   test:browser` passes. Record
   the exact pack version and evidence in status.
@@ -285,11 +318,8 @@ change.
 ## Test expectations for the multi-pack foundation
 
 - Contract tests cover registry versioning, unique IDs and pack links, display
-  ordering, planned/available/unavailable states, malformed linked packs, safe
-  path validation, and fixture fallback when no valid real pack is available.
-- Backend tests exercise generic bootstrap dispatch and source/cache namespaces
-  with at least two fixture region definitions.
-- UI and browser tests cover disabled semantics, green/selected presentation,
-  pack switching, query-string updates, map recentering, pack-specific state
-  clearing, cross-pack Job restoration, keyboard navigation, and mobile
-  horizontal overflow.
+  ordering, unlinked planned regions, malformed linked packs, and safe paths.
+- Backend tests exercise generic bootstrap dispatch, source/cache namespaces,
+  and geographic selection across installed packs without broadening filters.
+- UI and browser tests cover reviewed-region selection, result and saved-job
+  restoration across installed data, keyboard navigation, and mobile controls.

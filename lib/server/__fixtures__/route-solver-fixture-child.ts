@@ -23,6 +23,7 @@ process.on("message", (request: RouteSolverRequest) => {
     return;
   }
   const duration = Number(process.env.ALPINE_TEST_SOLVE_MS ?? 0);
+  const startedAt = Date.now();
   const deadline = performance.now() + duration;
   while (performance.now() < deadline) {
     // Deliberately occupy this child process exactly like a synchronous solver.
@@ -30,6 +31,6 @@ process.on("message", (request: RouteSolverRequest) => {
   send({
     id: request.id,
     ok: true,
-    value: { exact: [], nearMisses: [], truncated: false },
+    value: { exact: [], nearMisses: [], truncated: false, diagnostics: { pid: process.pid, startedAt, finishedAt: Date.now() } },
   });
 });

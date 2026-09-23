@@ -82,6 +82,30 @@ describe("closed-route reconstruction validation", () => {
     expect(result.value.route.minimumElevationMeters).toBe(10);
   });
 
+  test("validates a long loop without exhausting the JavaScript call stack", () => {
+    const nodeCount = 12_000;
+    const edges = Array.from({ length: nodeCount }, (_, index) => {
+      const fromNodeId = index === 0 ? "s" : `n${index}`;
+      const toNodeId = index === nodeCount - 1 ? "s" : `n${index + 1}`;
+      return {
+        ...edge(index + 1, index + 1, "s", "a", 1),
+        fromNodeId,
+        toNodeId,
+        coordinates: [
+          [index / nodeCount / 100, 0],
+          [(index + 1) % nodeCount / nodeCount / 100, 0],
+        ] as [[number, number], [number, number]],
+      };
+    });
+    const result = validate(edges);
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(result.value.route.topology).toMatchObject({
+      kind: "simple-loop",
+      cycleCount: 1,
+      cycleBlockCount: 1,
+    });
+  });
+
   test("classifies a lollipop and measures the one-way repeated stem exactly", () => {
     const result = validate([
       edge(1, 1, "s", "h"), edge(2, 2, "h", "a"), edge(3, 3, "a", "b"),

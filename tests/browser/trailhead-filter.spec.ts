@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { ACCESS_POINTS, routeResponse } from "./fixtures";
 import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
 
@@ -8,7 +9,8 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
 
   await expect(page.getByRole("radio")).toHaveCount(0);
   await expect(page.getByLabel("Driving origin", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
+  await expect(page.getByLabel("Minimum drive time")).toHaveValue("0");
+  await expect(page.getByLabel("Maximum drive time")).toHaveValue("30");
   await selectRegion(page);
   const regions = page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` });
   await expect(regions).toBeVisible();
@@ -30,6 +32,22 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("region", { name: "Trail segments" })).toHaveCount(0);
   await firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ }).click();
   await expect(firstCard.getByRole("region", { name: "Trail segments" })).toBeVisible();
+  const downloadStarted = page.waitForEvent("download");
+  await firstCard.getByRole("button", { name: "Export GPX" }).click();
+  const download = await downloadStarted;
+  expect(download.suggestedFilename()).toMatch(/\.gpx$/);
+  const xml = await readFile((await download.path())!, "utf8");
+  const exported = await page.evaluate((text) => {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    return {
+      errors: doc.querySelectorAll("parsererror").length,
+      namespace: doc.documentElement.namespaceURI,
+      points: Array.from(doc.querySelectorAll("trkpt"), (point) => [Number(point.getAttribute("lon")), Number(point.getAttribute("lat"))]),
+    };
+  }, xml);
+  expect(exported.errors).toBe(0);
+  expect(exported.namespace).toBe("http://www.topografix.com/GPX/1/1");
+  expect(exported.points).toEqual(routeResponse(harness.generationRequests[0]!).exact[0]!.geometry.coordinates);
   const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
   await firstSegment.hover();
   await expect(firstSegment).toHaveClass(/hovered/);
@@ -64,19 +82,26 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("drive-time Quick search sends one geographic request with named refinements", async ({ page }) => {
+test("drive-time range sends Quick and Full requests with named refinements", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
   await selectTypedOrigin(page);
+  await page.getByLabel("Minimum drive time").selectOption("15");
+  await page.getByLabel("Maximum drive time").selectOption("60");
   await selectRegion(page);
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Quick search" }).click();
 
   await expect.poll(() => harness.generationRequests.length).toBe(1);
   expect(harness.calls.some(({ pathname }) => pathname.includes("reachability"))).toBe(false);
-  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], durationMinutes: 30, origin: { label: "Castle Rock, California" } });
+  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], minDurationMinutes: 15, durationMinutes: 60, origin: { label: "Castle Rock, California" } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("button", { name: "Full search" }).click();
+  await expect(page.getByRole("dialog", { name: "Jobs" })).toBeVisible();
+  expect(harness.batchRequests[0]?.area).toEqual(harness.generationRequests[0]?.area);
+  await expect(page.getByText("15–60 min from Castle Rock, California")).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
@@ -99,6 +124,14 @@ test("Full search launches a persistent region-wide job without an origin and re
   await jobs.getByRole("button", { name: /View results for/ }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".route-card-select").nth(1).click();
+  const savedDownloadStarted = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export GPX" }).click();
+  const savedDownload = await savedDownloadStarted;
+  const savedXml = await readFile((await savedDownload.path())!, "utf8");
+  expect(savedXml).toContain("Route 2");
+  expect(savedXml).toContain("<trkpt");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

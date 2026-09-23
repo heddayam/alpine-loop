@@ -43,6 +43,7 @@ export type DriveTimeDraft = {
   originText: string;
   originSuggestions: Array<{ id: string; label: string; magicKey: string }>;
   origin?: Origin;
+  minDurationMinutes: number;
   durationMinutes: number;
   state: "idle" | "suggesting" | "resolving" | "error";
   error?: string;

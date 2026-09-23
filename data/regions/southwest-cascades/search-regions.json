@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:southwest-cascades",
+      "expectedName": "Southwest Cascades"
+    }
+  ]
+}

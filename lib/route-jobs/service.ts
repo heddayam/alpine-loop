@@ -179,15 +179,39 @@ export class RouteJobService {
       this.#store.initializeAccessPoints(id, ids);
       await yieldToEventLoop(signal);
 
-      for (;;) {
+      type Point = NonNullable<ReturnType<SQLiteRouteJobStore["nextAccessPoint"]>>;
+      const concurrency = Math.max(1, Math.min(8, Math.floor(session.concurrency ?? 1)));
+      const pending: Array<{
+        point: Point;
+        outcome: Promise<{ searched: Awaited<ReturnType<typeof session.searchAccessPoint>> } | { error: unknown }>;
+      }> = [];
+      const checkControl = () => {
         if (signal.aborted) throw signal.reason;
         const latest = this.#store.getControl(id);
         if (!latest || latest.cancelRequested || latest.deleteRequested) throw new DOMException("Cancelled", "AbortError");
-        const point = this.#store.nextAccessPoint(id);
-        if (!point) break;
-        try {
-          const searched = await session.searchAccessPoint(point.accessPointId, signal);
-          if (signal.aborted) throw signal.reason;
+      };
+      for (;;) {
+        checkControl();
+        // Claim at most one bounded window. Uncommitted running starts are
+        // reset to pending on restart, so a later completion cannot skip a gap.
+        while (pending.length < concurrency) {
+          const point = this.#store.nextAccessPoint(id);
+          if (!point) break;
+          pending.push({ point, outcome: session.searchAccessPoint(point.accessPointId, signal)
+            .then((searched) => ({ searched }), (error: unknown) => ({ error })) });
+        }
+        const task = pending.shift();
+        if (!task) break;
+        const outcome = await task.outcome;
+        checkControl();
+        const { point } = task;
+        // Commit in access ordinal order, including failures. Geometry dedup
+        // then chooses the same owner regardless of child completion order.
+        if ("error" in outcome) {
+          if (isCancellationError(outcome.error)) throw outcome.error;
+          this.#store.failAccessPoint(id, point.ordinal, errorMessage(outcome.error));
+        } else {
+          const { searched } = outcome;
           const results: RouteJobResult[] = searched.exact.slice(0, 10).map((route) => ({
             matchType: "exact", accessPointId: point.accessPointId, route,
           }));
@@ -195,13 +219,7 @@ export class RouteJobService {
             matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
           });
           this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
-        } catch (error) {
-          if (signal.aborted || isCancellationError(error)) throw error;
-          this.#store.failAccessPoint(id, point.ordinal, errorMessage(error));
         }
-        // The solver and SQLite checkpoints are local CPU/synchronous work.
-        // Yield between trailheads so progress polling and cancellation remain
-        // responsive while a long FIFO job is running.
         await yieldToEventLoop(signal);
       }
     } finally {

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "regions": [
+    {
+      "namedAreaId": "pack:rainier-goat-rocks",
+      "expectedName": "Rainier–Goat Rocks"
+    },
+    {
+      "namedAreaId": "osm:relation/6109916",
+      "expectedName": "William O. Douglas Wilderness"
+    },
+    {
+      "namedAreaId": "osm:relation/6109176",
+      "expectedName": "Goat Rocks Wilderness"
+    }
+  ]
+}

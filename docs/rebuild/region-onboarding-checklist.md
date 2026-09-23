@@ -483,8 +483,8 @@ at least one exact route for the plausible request, return no exact route and at
 least one explicitly violated close match for the impossible request, and have
 zero directed-validation rejections. Record wall time, eligible-start count,
 selected portal/distance, exact/close counts, and rejection diagnostics per
-scenario. Then manually spot-check Quick and Batch behavior across major
-clusters; Batch completeness means each eligible start was attempted, not that
+scenario. Then manually spot-check Quick and Full behavior across major
+clusters; Full completion means each eligible start was attempted, not that
 every possible closed walk was enumerated.
 
 ## 9. Activate only after approval
@@ -494,8 +494,8 @@ In one focused activation change:
 1. Add `"packId": "<pack-id>"` to the existing catalog entry in
    `data/regions/registry.json` without changing its ID/order.
 2. Update catalog expectations that enumerate linked/planned states, currently
-   `lib/contracts/regions.test.ts`, `app/api/packs/route.test.ts`, and
-   `lib/packs/pack-catalog.test.ts`.
+   `lib/contracts/regions.test.ts`, `lib/packs/pack-catalog.test.ts`, and
+   `lib/packs/management.test.ts`.
 3. Confirm the builder remains registered in `lib/data/regional-pack.ts` and
    covered by `lib/data/regional-pack.test.ts`.
 4. Update [status.md](status.md) with the exact boundary decision, schema/data
@@ -512,12 +512,11 @@ npm run test:browser
 npm run test:browser
 ```
 
-Then use the live local app with the installed pack to verify selection and URL
-state, map recentering/coverage, all reviewed-region choices, access previews,
-Quick search, Batch search and Jobs, cross-pack saved-Job restoration,
-stale-version labeling, keyboard use, narrow-screen pill scrolling, and zero
-browser console errors. Automated browser tests use committed fixtures and do
-not replace this real-pack inspection.
+Then use the live local app with the installed pack to verify exact coverage,
+all reviewed-region choices, access previews, Quick and Full search, saved-Job
+restoration, stale-version labeling, keyboard use, narrow-screen controls, and
+zero browser console errors. Automated browser tests use committed fixtures
+and do not replace this real-pack inspection.
 
 Finally, ensure generated artifacts remain ignored and only intended source,
 implementation, test, checkpoint, registry, and status files appear in

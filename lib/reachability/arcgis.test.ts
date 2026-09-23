@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import type { DriveTimeAreaRequest } from "./types";
 import { ArcGisClient, buildServiceAreaSubmitBody } from "./arcgis";
 import { TestClock } from "./test-helpers";
@@ -29,6 +30,36 @@ describe("ArcGIS client", () => {
     expect(body.get("polygon_detail")).toBe("Standard");
     expect(body.get("context")).toBe(JSON.stringify({ outSR: { wkid: 4326 } }));
     expect(body.has("time_of_day")).toBe(false);
+  });
+
+  it("requests separate rings for a nonzero minimum", () => {
+    const body = buildServiceAreaSubmitBody({ ...REQUEST, minDurationMinutes: 60 }, "secret");
+    expect(body.get("break_values")).toBe("60 300");
+    expect(body.get("polygon_overlap_type")).toBe("Rings");
+    expect(buildServiceAreaSubmitBody({ ...REQUEST, minDurationMinutes: 0 }, "secret").get("break_values")).toBe("300");
+  });
+
+  it("retrieves only the requested band and rejects an unmatched provider result", async () => {
+    const outer = [[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]];
+    const inner = [[2, 2], [8, 2], [8, 8], [2, 8], [2, 2]];
+    const features = [
+      { attributes: { FromBreak: 0, ToBreak: 60 }, geometry: { rings: [[...inner].reverse()] } },
+      { attributes: { FromBreak: 60, ToBreak: 300 }, geometry: { rings: [outer, inner] } },
+    ];
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(json({ jobStatus: "esriJobSucceeded" }))
+      .mockResolvedValueOnce(json({ value: { spatialReference: { wkid: 4326 }, features } }))
+      .mockResolvedValueOnce(json({ jobStatus: "esriJobSucceeded" }))
+      .mockResolvedValueOnce(json({ value: { features: [features[0]] } }));
+    const client = new ArcGisClient({ fetch: fetcher, clock: new TestClock(), routingApiKey: "key" });
+    const band = { ...REQUEST, minDurationMinutes: 60 as const };
+    const result = await client.pollServiceArea("provider-job", undefined, band);
+    expect(result).toEqual({ state: "complete", geometry: { type: "Polygon", coordinates: [outer, inner] } });
+    if (result.state !== "complete") throw new Error("Expected completed band");
+    expect(coordinateIsInsideArea([1, 1], result.geometry)).toBe(true);
+    expect(coordinateIsInsideArea([5, 5], result.geometry)).toBe(false);
+    expect(coordinateIsInsideArea([15, 15], result.geometry)).toBe(false);
+    await expect(client.pollServiceArea("bad-job", undefined, band)).rejects.toMatchObject({ code: "INVALID_PROVIDER_RESPONSE" });
   });
 
   it("normalizes suggest and resolve responses without exposing the key in output", async () => {
