@@ -9,7 +9,7 @@ export const NORTH_CASCADES_PACK_CONFIG: RegionalPackDefinition = {
   name: "North Cascades",
   dataVersionPrefix: "nc",
   compilerVersion: "basic-regional-pack-compiler-v1",
-  boundaryVersion: "north-cascades-boundary-v2",
+  boundaryVersion: "north-cascades-boundary-v3",
   regionRoot: NORTH_CASCADES_REGION_ROOT,
   display: { center: [-121.0, 48.53], zoom: 7.5 },
 };

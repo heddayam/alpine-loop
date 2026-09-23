@@ -3,7 +3,7 @@
   "properties": {
     "id": "north-cascades",
     "name": "North Cascades build boundary",
-    "boundaryVersion": "north-cascades-boundary-v2",
+    "boundaryVersion": "north-cascades-boundary-v3",
     "sourceNamedAreaIds": [
       "osm:relation/2421537",
       "osm:relation/2421484",
@@ -204,6 +204,38 @@
         ],
         [
           -119.78,
+          49.0
+        ],
+        [
+          -121.406,
+          49.0
+        ],
+        [
+          -121.406,
+          48.9992
+        ],
+        [
+          -121.409,
+          48.9992
+        ],
+        [
+          -121.409,
+          49.0
+        ],
+        [
+          -121.695,
+          49.0
+        ],
+        [
+          -121.695,
+          48.9975
+        ],
+        [
+          -121.815,
+          48.9975
+        ],
+        [
+          -121.815,
           49.0
         ],
         [

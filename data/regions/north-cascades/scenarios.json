@@ -6,29 +6,29 @@
       "id": "baker-lake",
       "cluster": "Baker Lake/Baker River",
       "referencePoint": {
-        "name": "Baker Lake Trailhead",
+        "name": "Bayview Loop Trail trailhead",
         "coordinates": [
-          -121.6748747,
-          48.645561
+          -121.6798848,
+          48.6785495
         ]
       },
       "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 75,
+      "maximumRepeatedTrailPct": 25,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 22
+          "min": 1,
+          "max": 3
         },
         "elevationGainFeet": {
           "min": 0,
-          "max": 8000
+          "max": 500
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 22
+          "min": 1,
+          "max": 3
         },
         "elevationGainFeet": {
           "min": 40000,
@@ -41,64 +41,29 @@
       "id": "hannegan-artist-point",
       "cluster": "Hannegan/Artist Point",
       "referencePoint": {
-        "name": "Bagley Lakes Trailhead",
+        "name": "Artist Point Trailhead",
         "coordinates": [
-          -121.6826218,
-          48.8614193
+          -121.6921444,
+          48.8464471
         ]
       },
       "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 65,
-      "exactExpectation": {
-        "distanceMiles": {
-          "min": 4,
-          "max": 18
-        },
-        "elevationGainFeet": {
-          "min": 300,
-          "max": 8000
-        },
-        "result": "at-least-one-exact"
-      },
-      "impossibleExpectation": {
-        "distanceMiles": {
-          "min": 4,
-          "max": 18
-        },
-        "elevationGainFeet": {
-          "min": 40000,
-          "max": 45000
-        },
-        "result": "near-miss-only"
-      }
-    },
-    {
-      "id": "cascade-pass",
-      "cluster": "Cascade Pass",
-      "referencePoint": {
-        "name": "Cascade Pass Trailhead",
-        "coordinates": [
-          -121.0751562,
-          48.4754883
-        ]
-      },
-      "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 80,
+      "maximumRepeatedTrailPct": 60,
       "exactExpectation": {
         "distanceMiles": {
           "min": 10,
-          "max": 30
+          "max": 15
         },
         "elevationGainFeet": {
           "min": 1000,
-          "max": 12000
+          "max": 6000
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
           "min": 10,
-          "max": 30
+          "max": 15
         },
         "elevationGainFeet": {
           "min": 40000,
@@ -111,29 +76,29 @@
       "id": "diablo-ross-lake",
       "cluster": "Diablo/Ross Lake",
       "referencePoint": {
-        "name": "East Bank Trailhead",
+        "name": "Happy Creek Trailhead",
         "coordinates": [
-          -120.9781021,
-          48.7081386
+          -121.055839,
+          48.7285621
         ]
       },
       "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 75,
+      "maximumRepeatedTrailPct": 25,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 0.2,
+          "max": 1
         },
         "elevationGainFeet": {
-          "min": 300,
-          "max": 9000
+          "min": 0,
+          "max": 300
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 0.2,
+          "max": 1
         },
         "elevationGainFeet": {
           "min": 40000,
@@ -216,29 +181,29 @@
       "id": "methow-twisp",
       "cluster": "Methow/Twisp River",
       "referencePoint": {
-        "name": "Twisp River Trail Trailhead",
+        "name": "Scatter Creek Trailhead",
         "coordinates": [
-          -120.3558833,
-          48.3509302
+          -120.5198575,
+          48.435146
         ]
       },
       "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 75,
+      "maximumRepeatedTrailPct": 60,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 18,
+          "max": 26
         },
         "elevationGainFeet": {
-          "min": 300,
+          "min": 3000,
           "max": 9000
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 18,
+          "max": 26
         },
         "elevationGainFeet": {
           "min": 40000,
@@ -286,29 +251,29 @@
       "id": "pasayten-east",
       "cluster": "Pasayten east approach",
       "referencePoint": {
-        "name": "Iron Gate Trailhead",
+        "name": "Chewuch Trail Q0 trailhead",
         "coordinates": [
-          -119.9040355,
-          48.9085424
+          -120.0196714,
+          48.8230506
         ]
       },
       "searchRegionId": "pack:north-cascades",
-      "maximumRepeatedTrailPct": 75,
+      "maximumRepeatedTrailPct": 60,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 20,
+          "max": 30
         },
         "elevationGainFeet": {
-          "min": 300,
-          "max": 9000
+          "min": 3000,
+          "max": 8000
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 5,
-          "max": 25
+          "min": 20,
+          "max": 30
         },
         "elevationGainFeet": {
           "min": 40000,

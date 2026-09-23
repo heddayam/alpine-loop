@@ -19,7 +19,7 @@ describe("North Cascades pack inputs", () => {
       name: "North Cascades",
       dataVersionPrefix: "nc",
       compilerVersion: "basic-regional-pack-compiler-v1",
-      boundaryVersion: "north-cascades-boundary-v2",
+      boundaryVersion: "north-cascades-boundary-v3",
       regionRoot: NORTH_CASCADES_REGION_ROOT,
     });
     expect(buildNorthCascadesPack).toEqual(expect.any(Function));
@@ -36,6 +36,11 @@ describe("North Cascades pack inputs", () => {
     // The southern lobe retains both legs of the PCT–South Fork Agnes cycle.
     expect(pointInArea([-120.95732, 48.24123], boundary.geometry)).toBe(true);
     expect(pointInArea([-120.93717, 48.21307], boundary.geometry)).toBe(true);
+    // Two short border insets exclude trails in the USGS 3DEP nodata fringe.
+    expect(pointInArea([-121.7735, 48.998], boundary.geometry)).toBe(false);
+    expect(pointInArea([-121.4077738, 48.9998624], boundary.geometry)).toBe(false);
+    expect(pointInArea([-121.7735, 48.9973], boundary.geometry)).toBe(true);
+    expect(pointInArea([-121.4077738, 48.9988], boundary.geometry)).toBe(true);
     expect(osm).toMatchObject({
       id: "geofabrik-washington-osm",
       version: "washington-260801",
@@ -60,7 +65,7 @@ describe("North Cascades pack inputs", () => {
     ]);
   });
 
-  it("keeps every provisional route anchor inside exact coverage", async () => {
+  it("keeps every measured route anchor inside exact coverage", async () => {
     const boundary = parseRegionalBoundary(
       NORTH_CASCADES_PACK_CONFIG,
       await readFile(path.join(NORTH_CASCADES_REGION_ROOT, "boundary.geojson"), "utf8"),
@@ -76,8 +81,8 @@ describe("North Cascades pack inputs", () => {
       }>;
     };
     expect(input.packId).toBe("north-cascades");
-    expect(input.scenarios).toHaveLength(9);
-    expect(new Set(input.scenarios.map(({ id }) => id)).size).toBe(9);
+    expect(input.scenarios).toHaveLength(8);
+    expect(new Set(input.scenarios.map(({ id }) => id)).size).toBe(8);
     for (const scenario of input.scenarios) {
       expect(pointInArea(scenario.referencePoint.coordinates, boundary.geometry), scenario.id).toBe(true);
       expect(scenario.searchRegionId).toBe("pack:north-cascades");
