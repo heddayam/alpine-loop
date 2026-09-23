@@ -7,7 +7,7 @@
 - Builder contract: schema 6, shared basic regional builder, prefix `cc`, and
   `officialAccess: false`.
 - Coverage contract: `boundary.geojson` version
-  `central-cascades-boundary-v1` is the exact hard route-geometry boundary.
+  `central-cascades-boundary-v2` is the exact hard route-geometry boundary.
   Search regions and drawn or drive-time areas filter eligible access points;
   they never clip route geometry.
 
@@ -33,12 +33,22 @@ Central Cascades keeps these connected systems and their public approaches:
 3. the complete Alpine Lakes Wilderness hiking network, including
    Leavenworth/Icicle/Enchantments, Snoqualmie, Middle Fork Snoqualmie, Cle
    Elum, Salmon la Sac, and Tucquala approaches; and
-4. Teanaway Community Forest and its public approach network.
+4. Teanaway Community Forest and its public approach network; and
+5. the Wild Sky and Henry M. Jackson wilderness connection, including West
+   Cady Ridge, the Pacific Crest Trail, Bald Eagle, and North Fork Skykomish
+   approaches.
 
-The committed concave polygon is the reviewed union of the three stable OSM
-named-area outlines with explicit approach corridors. Interior gaps produced
-by that union are filled so the hard boundary does not cut trail connections
-between included systems. Its exact bbox is:
+The committed `MultiPolygon` keeps the v1 concave coverage intact and adds the
+Wild Sky (`osm:relation/6114550`) and Henry M. Jackson
+(`osm:relation/3093637`) Wilderness outlines from the pinned OSM extract.
+Their rings were simplified at 25 m tolerance for build performance. The
+polygons overlap and the runtime treats them as a union. A small approach
+polygon at `[-121.2815, 47.9247, -121.2695, 47.9305]` covers the North Fork
+Skykomish trailhead and the short West Cady/North Fork/Forest Road 63
+connectors, whose mapped vertices lie 7–137 m outside the wilderness boundary.
+The approach polygon is a geometry allowance for the mapped access network,
+not an access or ownership assertion. The v1 interior connections remain
+covered. The exact bbox is unchanged:
 
 ```text
 [-121.73319523634241, 47.19654585917808, -120.5276988, 48.4758823]
@@ -48,6 +58,17 @@ This is not a county, watershed, national-forest administrative boundary, or
 rectangular download extent. Boundary-crossing trail edges, components,
 cycle-bearing portals, and neighboring-pack overlap must be reviewed before
 activation.
+
+On 2026-09-22, the eight pinned OSM ways forming the candidate West Cady Ridge
+cycle were checked against the v2 geometry with the repository's full-line
+coverage predicate: West Cady Ridge (`372537133`, `951045865`, `951045864`),
+Pacific Crest Trail (`1356527413`, `380422295`), Bald Eagle (`372497128`),
+North Fork Skykomish (`372538840`), and Forest Road 63 (`218617733`). All
+mapped line segments and the North Fork Skykomish trailhead point lie inside.
+The connected mapped circuit is about 23.93 miles and includes a 23 m
+`foot=unknown` track segment and two OSM ford nodes. These are map-data
+observations; a compiled route, access decision, and field conditions still
+require build and route QA.
 
 ## Explicit exclusions
 
@@ -76,11 +97,14 @@ and predate the configured 2026-08-01 Washington extract:
 | Alpine Lakes Wilderness | `relation/6112652` | version 19, `2025-02-03T23:34:11Z` | Retain with the same shared rule. Numerous default-eligible portals measured 91–489 m outside the legal boundary. |
 | Teanaway Community Forest | `relation/6437099` | version 17, `2023-08-04T01:35:02Z` | Retain: 22 default-eligible derived portals fall inside the polygon. |
 
-The v1 selectors are therefore the whole pack, Glacier Peak Wilderness, Alpine
+The reviewed selectors remain the whole pack, Glacier Peak Wilderness, Alpine
 Lakes Wilderness, and Teanaway Community Forest. The approach band is shared
 runtime behavior for every reviewed named region; it is not custom geometry or
 a Central Cascades exception. It applies only to derived trail portals and does
 not relax drawn-area or drive-time geometry.
+
+Wild Sky and Henry M. Jackson are boundary sources in v2, not newly published
+named search selectors. A selector requires its own portal and cycle review.
 
 This remains a measured limitation: straight-line proximity to a legal boundary
 does not prove that a portal's trail enters the named area, and a legitimate
