@@ -111,23 +111,26 @@ measured. A named area would filter starts only, never clip route geometry.
 
 `scenarios.json` records nine review anchors: Ape Canyon and June Lake for
 Loowit feeders, Norway Pass for Mount Margaret/Boundary Trail, Stagman Ridge
-and Killen Creek for Adams, Cody Day Use for the upper Cispus/Klickitat seam,
-Lemei for Indian Heaven, Big Hollow for Trapper Creek, and Rock Creek for Silver
-Star–Tarbell. Ape Canyon, June Lake, and Cody are actual OSM parking areas
-(`way/65069378`, `way/439071688`, `way/717051347`); the other anchors are
-named OSM trailheads. They create no independent starts. Each plausible exact
-and deliberately impossible gain request remains an **unverified checkpoint**
-until it resolves to a derived portal within 500 m and passes the route runner.
-At Cody, the parking polygon has a service-road node about 7 m away and a
-`foot=designated` Klickitat Loop Trail node about 10 m away in the pinned OSM
-snapshot. That trail belongs to a 23-way pedestrian component with cycle rank
-2, making Cody an evidence-backed portal candidate, not a guaranteed compiled
-portal or route. The previous Orr Creek Sno Park candidate had no pedestrian
-path within 1 km and was removed from the scenarios.
-The Blue Lake–Hamilton component itself has no confirmed derived portal yet;
-its newly covered cycles must be checked during compiled portal QA.
-The wider repeated-trail allowances in these backpacking-scale scenarios are
-explicit per-request test inputs, not changes to product defaults.
+and Killen Creek for Adams, Blue Lake ORV Trailhead for the upper Cispus
+network, Lemei for Indian Heaven, Big Hollow for Trapper Creek, and Rock Creek
+for Silver Star–Tarbell. Ape Canyon, June Lake, and Blue Lake are actual OSM
+parking areas (`way/65069378`, `way/439071688`, `way/716832243`); the other
+anchors are named OSM trailheads. They create no independent starts. The
+Blue Lake parking area is 110 m from the compiled public/medium Valley Trail
+`#270` portal `osm-node-5689711673`, which can reach a cycle. The
+[Forest Service Cat Creek map](https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd1046758.pdf)
+lists hiking as an allowable use on Valley Trail `#270`, despite the trailhead's
+ORV name. The exact route runner passes both the plausible and intentionally
+impossible requests from this portal.
+
+Cody Day Use parking `way/717051347` remains a real access candidate, but its
+nearby derived portal `osm-node-4104968385` cannot reach a compiled cycle.
+The nearest eligible cycle portal is 1,549 m away, so Cody is excluded from
+route checkpoints. This is a measured no-cycle outcome, not a source closure
+claim. The previous Orr Creek Sno Park candidate had no pedestrian path within
+1 km and was also removed. The wider repeated-trail allowances in these
+backpacking-scale scenarios are explicit per-request test inputs, not changes
+to product defaults.
 
 ## Pinned sources and licensing
 
@@ -149,28 +152,81 @@ boundary bbox, dataset `National Elevation Dataset (NED) 1/3 arc-second`, and
 `1 x 1 degree` product extent. Its 23 responses included historical revisions;
 the latest publication date for each intersecting tile was selected:
 
-| Tile | Publication date | Product ID |
-| --- | --- | --- |
-| `n46w122` | 2026-02-02 | `6981bb9ab66b0193caec85a4` |
-| `n46w123` | 2026-04-06 | `69e6dcc0b66b01f903b6a342` |
-| `n47w122` | 2025-08-13 | `689d4592d4be027ac1589946` |
-| `n47w123` | 2025-08-13 | `689d4592d4be027ac1589944` |
+| Tile | Publication date | Product ID | Download bytes | SHA-256 |
+| --- | --- | --- | ---: | --- |
+| `n46w122` | 2026-02-02 | `6981bb9ab66b0193caec85a4` | 448,644,793 | `a05756ba7ee345873528a9229d3df235239f6de245573425c72e5b6d127b9448` |
+| `n46w123` | 2026-04-06 | `69e6dcc0b66b01f903b6a342` | 489,178,893 | `7d759eb0fb49907748ab5305430bfd6d04a58902db5f869cc1d7a2fe5b707e9e` |
+| `n47w122` | 2025-08-13 | `689d4592d4be027ac1589946` | 455,225,246 | `a77505b9187d185eaebdb0abe71e7e3171ca00ad74363ce728de14b67d357bca` |
+| `n47w123` | 2025-08-13 | `689d4592d4be027ac1589944` | 484,854,229 | `ab4fb0a2afa65c49c41cb0c59c5ea102329b6e1e47425159b884d05f540c4bb5` |
 
 The configured resolution is 1/3 arc-second (nominal 10 m), horizontal datum
 NAD83, vertical datum NAVD88. USGS data is public domain. Catalog sizes are
 advisory; actual download bytes and hashes belong in immutable refresh receipts.
 Use `southwest-cascades-elevation` as the collection namespace while sharing
-identical raw tiles through the content-addressed cache. No tile has been
-downloaded as part of this boundary/config commit.
+identical raw tiles through the content-addressed cache. The deliberate source
+refresh on 2026-09-22 local time recorded all four receipts at
+`2026-09-23T04:35:25.464Z`; subsequent independent builds were offline.
+
+## Compiled validation, 2026-09-22
+
+One explicit source refresh and two independent offline preparations/builds
+produced the same schema-6 version, `swc-f877817cbcde78fe`. All three
+published sets are byte-identical:
+
+| File | SHA-256 |
+| --- | --- |
+| `manifest.json` | `cfb2469729f711837164b125c06073fffb80f6b42e355d28f14712db6a9a0e34` |
+| `pack.sqlite` | `e4fb757ab9c28bd7240ce4787f96b0aaa89f006c0a7df1b178ee0b34de895fa0` |
+| `audit.json` | `2a5ffc4ec46af5bba76a4ec27a13ade9efe74d7bd6e84a92c828891f72ab0b5f` |
+| `regional-audit.json` | `f7ff737571145e866821c51e5e58fb0c5ef798813e17c17a3b19f5e3cbc91290` |
+| `portal-audit.json` | `d1ccc1548b7d51e8399ba9edb4e0a10787b3373f53e1a8c284223285409e4084` |
+
+The compiled pack has 176,693 nodes, 352,490 directed trail edges, 839
+in-coverage access points, and 7,168 source building centroids. There are
+zero audit errors, source conflicts, isolated nodes, missing trail elevations,
+outside-coverage edges, unattributed records, unknown source references, or
+published context edges. SQLite integrity and foreign keys pass. The two
+topology profiles are `known` and `inclusive`; the runtime uses the
+`reachable-graph-fallback` mode, so compact decision-network tables are empty
+by design. There are 26 known and 325 inclusive cycle-feasible portals; 324
+inclusive portals pass the default building/access filter. Five portals exceed
+the 50-building threshold, all at the Silver Star/Vancouver fringe; Rock
+Creek's reviewed portal has 25 nearby buildings and remains eligible. The
+portal derivation report found 122 parking-evidenced candidates.
+
+The graph has 729 disconnected components and its largest component contains
+34.6% of nodes. These reflect the large multi-cluster boundary and trail
+islands, rather than a failed integrity gate. The build rejected 17,729 source
+edges at coverage/restriction processing. In particular, western Boundary
+Trail OSM ways `170400003` and `314513843` retain `access=no` as 88
+prohibited directed edges; Klickitat Connector `way/1079336009`, whose
+`foot=yes` overrides its generic `access=no`, remains public. The border
+and reservation exclusions still require periodic source review; neither an
+overlapping pack boundary nor a nearby OSM trail creates an authorized crossing.
+
+The initial Thorough checkpoint passed eight of nine scenarios; Cody failed
+the 500 m eligible-portal rule. After replacing that anchor with source-named
+Blue Lake parking, all nine final Thorough and Quick checkpoints pass. For each
+scenario, the impossible gain request yields zero exact routes and at least
+one explicitly violated close match. All 36 runs have zero directed-validation
+rejections.
+
+| Scenario | Selected portal distance | Thorough exact | Thorough impossible close | Quick exact |
+| --- | ---: | ---: | ---: | ---: |
+| Ape Canyon–Loowit | 120 m | 3 | 1 | 1 |
+| June Lake–Loowit | 9 m | 10 | 2 | 1 |
+| Mount Margaret–Boundary | 26 m | 4 | 1 | 4 |
+| Adams–Stagman | 16 m | 8 | 1 | 4 |
+| Adams–Killen | 0 m | 5 | 2 | 2 |
+| Upper Cispus–Blue Lake | 110 m | 10 | 1 | 10 |
+| Indian Heaven–Lemei | 0 m | 2 | 1 | 2 |
+| Trapper Creek–Big Hollow | 0 m | 6 | 2 | 6 |
+| Silver Star–Tarbell | 187 m | 10 | 2 | 10 |
 
 ## Activation blockers
 
-Before adding `packId` to the registry, inspect all compiled boundary-crossing
-hiking ways and upper Cispus/Goat Rocks seam components, including Blue
-Lake–Hamilton portal reachability; review Yakama edge proximity;
-perform one deliberate source refresh; produce two byte-identical offline
-schema-6 builds; pass portal/building/cycle, elevation, provenance, access, and
-route audits; verify every scenario's exact and labeled close outcome; then
-run application and browser checks. Trailhead names and OSM evidence do not
-guarantee that a portal or a viable circuit exists. Generated artifacts,
-downloads, receipts, and caches remain outside Git.
+Before adding `packId` to the registry, review route geometry in the
+application and run the integrator's cross-pack seam and browser checks. Trailhead names
+and OSM evidence do not guarantee a compiled portal or viable circuit, as Cody
+demonstrates. Generated artifacts, downloads, receipts, and caches remain
+outside Git.

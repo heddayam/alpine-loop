@@ -178,13 +178,13 @@
       }
     },
     {
-      "id": "upper-cispus-cody",
-      "cluster": "Upper Cispus–Klickitat/High Lakes seam",
+      "id": "upper-cispus-blue-lake",
+      "cluster": "Upper Cispus Blue Lake–Valley Trail loops",
       "referencePoint": {
-        "name": "Cody Day Use Trailhead parking way/717051347",
+        "name": "Blue Lake ORV Trailhead parking way/716832243",
         "coordinates": [
-          -121.565835,
-          46.364973
+          -121.73118,
+          46.396063
         ]
       },
       "searchRegionId": "pack:southwest-cascades",

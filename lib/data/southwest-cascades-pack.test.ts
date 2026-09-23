@@ -82,14 +82,14 @@ describe("Southwest Cascades pack wiring", () => {
       "mount-margaret-boundary",
       "adams-south-stagman",
       "adams-north-killen",
-      "upper-cispus-cody",
+      "upper-cispus-blue-lake",
       "indian-heaven-lemei",
       "trapper-creek-big-hollow",
       "silver-star-tarbell",
     ]);
-    expect(input.scenarios.find(({ id }) => id === "upper-cispus-cody")?.referencePoint).toEqual({
-      name: "Cody Day Use Trailhead parking way/717051347",
-      coordinates: [-121.565835, 46.364973],
+    expect(input.scenarios.find(({ id }) => id === "upper-cispus-blue-lake")?.referencePoint).toEqual({
+      name: "Blue Lake ORV Trailhead parking way/716832243",
+      coordinates: [-121.73118, 46.396063],
     });
     expect(input.scenarios.every((scenario) =>
       scenario.searchRegionId === "pack:southwest-cascades"
