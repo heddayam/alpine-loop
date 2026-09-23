@@ -10,20 +10,12 @@
       "expectedName": "Buckhorn Wilderness"
     },
     {
-      "namedAreaId": "osm:relation/6122370",
-      "expectedName": "Wonder Mountain Wilderness"
-    },
-    {
       "namedAreaId": "osm:relation/6122955",
       "expectedName": "Colonel Bob Wilderness"
     },
     {
       "namedAreaId": "osm:relation/6122367",
       "expectedName": "Mount Skokomish Wilderness"
-    },
-    {
-      "namedAreaId": "osm:relation/6122350",
-      "expectedName": "The Brothers Wilderness"
     }
   ]
 }

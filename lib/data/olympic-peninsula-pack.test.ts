@@ -42,10 +42,8 @@ describe("Olympic Peninsula pack inputs", () => {
     expect(searchRegions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual([
       "pack:olympic-peninsula",
       "osm:relation/6122342",
-      "osm:relation/6122370",
       "osm:relation/6122955",
       "osm:relation/6122367",
-      "osm:relation/6122350",
     ]);
     expect(buildOlympicPeninsulaPack).toEqual(expect.any(Function));
   });

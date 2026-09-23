@@ -96,14 +96,15 @@ target and reviewed authority evidence.
 The regional OSM preparation exported 12 named areas from this exact boundary.
 It did not retain the larger Olympic National Park, Olympic National Forest,
 or Daniel J. Evans Wilderness relations, which have members beyond the
-multipart extraction. The reviewed selector list therefore contains the
-whole pack and the five forest wildernesses that survived preparation:
-Buckhorn, Wonder Mountain, Colonel Bob, Mount Skokomish, and The Brothers.
-Retain each wilderness selector beyond preflight only if the compiled pack has
-useful default-eligible, cycle-bearing portals inside the polygon or shared
-500 m approach band. The band does not prove that a trail enters the named
-area. Park, forest, and Daniel J. Evans remain deferred selector candidates;
-their source polygons are not silently reconstructed from the pack boundary.
+multipart extraction. The reviewed selector list therefore contains the whole
+pack and three forest wildernesses with compiled default-eligible,
+cycle-bearing portals inside their polygons or the shared 500 m approach band:
+Buckhorn (7), Colonel Bob (1), and Mount Skokomish (2). Wonder Mountain and
+The Brothers survived area preparation but each matched zero eligible
+portals, so they are deferred. The approach band does not prove that a trail
+enters the named area. Park, forest, and Daniel J. Evans remain deferred
+selector candidates; their source polygons are not silently reconstructed
+from the pack boundary.
 
 Review Hurricane Ridge/Deer Park, Elwha, Lake Crescent, Sol Duc, Dungeness,
 Hoh, Bogachiel, Queets, Quinault/Graves Creek, Colonel Bob,
