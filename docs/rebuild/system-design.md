@@ -280,6 +280,19 @@ existing enumerate/search-start/close operations, using globally unique start
 IDs. The server composition owns the internal per-data sessions. Public jobs
 carry the request and area snapshot, not the internal plan.
 
+Drive-time requests retain `durationMinutes` as the maximum and add optional
+`minDurationMinutes`, defaulting to zero for older saved requests. The minimum
+must be less than the maximum. The resolved area is the driving band itself,
+including its interior holes, so map display and access-point eligibility use
+the same geometry. Neither contour clips hiking routes.
+
+Quick searches execute independent packs concurrently and combine them in
+catalog order. Full searches use a bounded pool across starting points, including
+within one pack, and commit results in start order. The pool defaults to at most
+two available CPUs; `ALPINE_SOLVER_WORKERS` permits 1–8 processes per search.
+The job coordinator remains FIFO, unfinished starts remain recoverable, and
+cancellation or deletion takes precedence over late worker results.
+
 The workspace renders a viewed snapshot with its own area and criteria. Editing
 the draft does not alter the meaning of already-saved results. The Jobs dialog
 emits a job ID, one view operation loads its results, and pagination uses that

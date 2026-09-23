@@ -1,7 +1,7 @@
 # Alpine Loop
 
 Alpine Loop generates loop hikes from local trail data. Choose a region, draw
-an area, or set a drive time; then specify distance, elevation, grade, and how
+an area, or set a minimum and maximum drive time; then specify distance, elevation, grade, and how
 much trail you are willing to repeat.
 
 - **Quick search** finds up to the number of alternatives you request.
@@ -121,8 +121,13 @@ flowchart LR
 ```
 
 The builder prepares and validates regional data before activating a pack.
-The app reads packs without modifying them; a separate local process performs
-route searches so the interface and cancellation remain responsive.
+The app reads packs without modifying them. A bounded pool of local processes
+runs Quick searches across packs and Full searches across trailheads, including
+within one pack, while keeping the interface and cancellation responsive.
+Quick search within a single pack retains its existing search budget.
+`ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs
+per search; additional workers use more memory. Set it in `.env` for native or
+Docker use. Saved Full searches remain FIFO, with ordered progress checkpoints.
 
 - `app/` and `components/` — API routes and map workspace.
 - `lib/solver/` and `lib/graph/` — route generation and graph reads.

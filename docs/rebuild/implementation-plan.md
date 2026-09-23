@@ -10,7 +10,8 @@ a catalog of known hikes. Users choose an area, physical route constraints,
 acceptable repetition, and whether unknown access is included.
 
 An area can be drawn, named, or based on typical driving time. Named regions
-may refine a driving area. A drawn boundary overrides those choices. These
+may refine a driving area. Driving time has a minimum (default zero) and a
+maximum; the band excludes starts within the minimum contour. A drawn boundary overrides those choices. These
 filters select eligible starting points; they never clip hiking routes. Exact
 installed coverage is the hard route boundary. Failed filters never silently
 broaden the area.
@@ -84,8 +85,9 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
   version-2 jobs. Public records contain intent and area, not internal plans.
 
 The route engine accepts prepared starts, criteria, graph context, and budget.
-A dedicated local process owns graph-reader lifetime so CPU work cannot block
-app status or cancellation. Quick and Full share execution primitives. Full
+A bounded pool of local processes owns graph-reader lifetime so CPU work cannot
+block app status or cancellation. Quick searches parallelize across packs; Full
+searches parallelize across trailheads, retaining ordered durable checkpoints. Quick and Full share execution primitives. Full
 preserves the union of Quick and Thorough candidates because the heuristic is
 not monotonic in its budget.
 
