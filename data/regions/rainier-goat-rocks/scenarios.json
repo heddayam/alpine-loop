@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "packId": "rainier-goat-rocks",
+  "scenarios": [
+    {
+      "id": "longmire-paradise",
+      "cluster": "Longmire–Paradise",
+      "referencePoint": {
+        "name": "Wonderland Trail: Longmire Trailhead",
+        "coordinates": [
+          -121.81253,
+          46.7501122
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 800,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "mowich-carbon",
+      "cluster": "Mowich–Carbon",
+      "referencePoint": {
+        "name": "Mowich Lake Trailhead",
+        "coordinates": [
+          -121.864831,
+          46.9332678
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 26
+        },
+        "elevationGainFeet": {
+          "min": 800,
+          "max": 11000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 26
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "sunrise-white-river",
+      "cluster": "Sunrise–White River",
+      "referencePoint": {
+        "name": "Sunrise Rim Trailhead",
+        "coordinates": [
+          -121.641863,
+          46.9140604
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 600,
+          "max": 8500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "ohanapecosh",
+      "cluster": "Ohanapecosh",
+      "referencePoint": {
+        "name": "Silver Falls Loop Trailhead",
+        "coordinates": [
+          -121.566791,
+          46.737104
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 300,
+          "max": 6500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "chinook-naches",
+      "cluster": "Chinook–Naches Pass",
+      "referencePoint": {
+        "name": "Naches Peak Loop Trailhead",
+        "coordinates": [
+          -121.517898,
+          46.8670056
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 300,
+          "max": 6500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "greenwater-norse-peak",
+      "cluster": "Greenwater–Norse Peak",
+      "referencePoint": {
+        "name": "Greenwater Lakes Trailhead",
+        "coordinates": [
+          -121.4750453,
+          47.1056817
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 700,
+          "max": 8500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 22
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "white-pass",
+      "cluster": "White Pass",
+      "referencePoint": {
+        "name": "White Pass Trailhead North",
+        "coordinates": [
+          -121.3822263,
+          46.6452556
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 700,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "goat-rocks-snowgrass",
+      "cluster": "Goat Rocks–Snowgrass",
+      "referencePoint": {
+        "name": "Snowgrass Hikers' Trailhead",
+        "coordinates": [
+          -121.518893,
+          46.4639429
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 900,
+          "max": 11000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "goat-rocks-walupt",
+      "cluster": "Goat Rocks–Walupt Lake",
+      "referencePoint": {
+        "name": "Walupt Lake Trailhead",
+        "coordinates": [
+          -121.4711144,
+          46.4229681
+        ]
+      },
+      "searchRegionId": "pack:rainier-goat-rocks",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 26
+        },
+        "elevationGainFeet": {
+          "min": 800,
+          "max": 11000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 6,
+          "max": 26
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}
