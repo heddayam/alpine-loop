@@ -110,27 +110,40 @@ function decomposePhysicalGraph(edges: readonly PhysicalEdge[]) {
     blocks.push({ edges: blockEdges, nodes, cycleRank: Math.max(0, blockEdges.size - nodes.size + 1) });
   };
 
-  const visit = (nodeId: string, parentEdgeIndex: number | null): void => {
+  for (const nodeId of [...adjacency.keys()].sort()) {
+    if (discovery.has(nodeId)) continue;
+    const frames: Array<{ nodeId: string; parentEdgeIndex: number | null; nextIndex: number }> = [
+      { nodeId, parentEdgeIndex: null, nextIndex: 0 },
+    ];
     discovery.set(nodeId, ++clock);
     low.set(nodeId, clock);
-    for (const adjacent of adjacency.get(nodeId) ?? []) {
-      if (adjacent.edgeIndex === parentEdgeIndex) continue;
+    while (frames.length > 0) {
+      const frame = frames.at(-1)!;
+      const neighbors = adjacency.get(frame.nodeId)!;
+      if (frame.nextIndex === neighbors.length) {
+        frames.pop();
+        const parent = frames.at(-1);
+        if (parent && frame.parentEdgeIndex !== null) {
+          const childLow = low.get(frame.nodeId)!;
+          low.set(parent.nodeId, Math.min(low.get(parent.nodeId)!, childLow));
+          if (childLow > discovery.get(parent.nodeId)!) bridges.add(frame.parentEdgeIndex);
+          if (childLow >= discovery.get(parent.nodeId)!) emitBlockThrough(frame.parentEdgeIndex);
+        }
+        continue;
+      }
+      const adjacent = neighbors[frame.nextIndex++]!;
+      if (adjacent.edgeIndex === frame.parentEdgeIndex) continue;
       const adjacentDiscovery = discovery.get(adjacent.nodeId);
       if (adjacentDiscovery === undefined) {
         edgeStack.push(adjacent.edgeIndex);
-        visit(adjacent.nodeId, adjacent.edgeIndex);
-        low.set(nodeId, Math.min(low.get(nodeId)!, low.get(adjacent.nodeId)!));
-        if (low.get(adjacent.nodeId)! > discovery.get(nodeId)!) bridges.add(adjacent.edgeIndex);
-        if (low.get(adjacent.nodeId)! >= discovery.get(nodeId)!) emitBlockThrough(adjacent.edgeIndex);
-      } else if (adjacentDiscovery < discovery.get(nodeId)!) {
+        discovery.set(adjacent.nodeId, ++clock);
+        low.set(adjacent.nodeId, clock);
+        frames.push({ nodeId: adjacent.nodeId, parentEdgeIndex: adjacent.edgeIndex, nextIndex: 0 });
+      } else if (adjacentDiscovery < discovery.get(frame.nodeId)!) {
         edgeStack.push(adjacent.edgeIndex);
-        low.set(nodeId, Math.min(low.get(nodeId)!, adjacentDiscovery));
+        low.set(frame.nodeId, Math.min(low.get(frame.nodeId)!, adjacentDiscovery));
       }
     }
-  };
-
-  for (const nodeId of [...adjacency.keys()].sort()) {
-    if (!discovery.has(nodeId)) visit(nodeId, null);
     if (edgeStack.length > 0) emitBlockThrough(edgeStack[0]!);
   }
   const cyclicBlocks = blocks.filter(({ cycleRank }) => cycleRank > 0);
