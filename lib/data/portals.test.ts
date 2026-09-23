@@ -177,7 +177,7 @@ describe("trailhead portal derivation", () => {
 
     const derived = deriveTrailheadPortals(topology(nodes, ways, portalEvidence));
 
-    expect(PORTAL_DERIVATION_VERSION).toBe("portal-derivation-v3");
+    expect(PORTAL_DERIVATION_VERSION).toBe("portal-derivation-v4");
     expect(PARKING_ROAD_CONTACT_DISTANCE_M).toBe(25);
     expect(derived.accessPoints).toHaveLength(1);
     expect(derived.accessPoints[0]).toMatchObject({
@@ -204,6 +204,80 @@ describe("trailhead portal derivation", () => {
       name: "Trail gate",
       portalRoadClass: "service-road",
     });
+  });
+
+  it("admits an exact OSM trailhead at a walkable track and separate path junction without road context", () => {
+    const nodes = [node("junction", 0), node("track-end", 300), node("path-end", -300)];
+    const track = {
+      ...way("track", ["junction", "track-end"], nodes, "trail", "unknown", "Forest Road 63"),
+      flags: ["osm-highway:track"],
+    };
+    const path = {
+      ...way("path", ["junction", "path-end"], nodes, "trail", "public", "West Cady Ridge Trail"),
+      flags: ["osm-highway:path"],
+    };
+    const marked = {
+      ...evidence("junction", "trailhead", [[nodes[0]!.lon, nodes[0]!.lat]], ["junction"], "West Cady Ridge Trailhead"),
+      externalId: nodes[0]!.externalId,
+    };
+
+    const forward = deriveTrailheadPortals(topology(nodes, [track, path], [marked])).accessPoints;
+    const reverse = deriveTrailheadPortals(topology([...nodes].reverse(), [path, track], [marked])).accessPoints;
+
+    expect(forward).toEqual(reverse);
+    expect(forward).toHaveLength(1);
+    expect(forward[0]).toMatchObject({
+      id: "portal:junction",
+      nodeId: "junction",
+      name: "West Cady Ridge Trailhead",
+      accessState: "unknown",
+      confidence: "high",
+      portalRoadClass: "service-road",
+    });
+  });
+
+  it("does not turn track-only contact or nearby and way-level markers into portals", () => {
+    const nodes = [
+      node("junction", 0), node("track-end", 300), node("path-end", -300),
+      node("other", 20), node("road-a", 2_000), node("road-b", 2_100),
+    ];
+    const track = { ...way("track", ["junction", "track-end"], nodes, "trail"), flags: ["osm-highway:track"] };
+    const secondTrack = { ...way("second-track", ["junction", "path-end"], nodes, "trail"), flags: ["osm-highway:track"] };
+    const path = { ...way("path", ["junction", "path-end"], nodes, "trail"), flags: ["osm-highway:path"] };
+    const road = way("road", ["road-a", "road-b"], nodes, "service-road");
+    const marked = {
+      ...evidence("junction", "trailhead", [[nodes[0]!.lon, nodes[0]!.lat]], ["junction"]),
+      externalId: nodes[0]!.externalId,
+    };
+    const offNode = {
+      ...evidence("other", "trailhead", [[nodes[0]!.lon, nodes[0]!.lat]], ["other"]),
+      externalId: nodes[3]!.externalId,
+    };
+    const wayMarker = {
+      ...evidence("way", "trailhead", [[nodes[0]!.lon, nodes[0]!.lat]], ["junction"]),
+      externalId: "way/marker",
+    };
+
+    expect(deriveTrailheadPortals(topology(nodes, [track, secondTrack, road], [marked])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [path, road], [marked])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [track, path, road])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [track, path, road], [offNode])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [track, path, road], [wayMarker])).accessPoints).toEqual([]);
+  });
+
+  it("requires nonrestrictive track, path and trailhead evidence at the exact junction", () => {
+    const nodes = [node("junction", 0), node("track-end", 300), node("path-end", -300), node("road-a", 2_000), node("road-b", 2_100)];
+    const track = { ...way("track", ["junction", "track-end"], nodes, "trail"), flags: ["osm-highway:track"] };
+    const path = { ...way("path", ["junction", "path-end"], nodes, "trail"), flags: ["osm-highway:path"] };
+    const road = way("road", ["road-a", "road-b"], nodes, "service-road");
+    const marked = {
+      ...evidence("junction", "trailhead", [[nodes[0]!.lon, nodes[0]!.lat]], ["junction"]),
+      externalId: nodes[0]!.externalId,
+    };
+
+    expect(deriveTrailheadPortals(topology(nodes, [{ ...track, accessState: "private" }, path, road], [marked])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [track, { ...path, accessState: "prohibited" }, road], [marked])).accessPoints).toEqual([]);
+    expect(deriveTrailheadPortals(topology(nodes, [track, path, road], [{ ...marked, accessState: "closed" }])).accessPoints).toEqual([]);
   });
 
   it("clusters deterministically and selects the strongest-evidence representative", () => {

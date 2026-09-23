@@ -740,6 +740,38 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     Basemap tile availability was not established in this local run. Generated
     packs, downloads, caches, receipts, and runtime databases remain ignored.
 
+- [x] Gate 17 — Central Cascades West Cady Ridge correction
+  - The prior hard boundary omitted every mapped West Cady Ridge Trail vertex,
+    and the generic portal rule omitted the mapped North Fork Skykomish
+    trailhead because its path meets a walkable OSM track rather than a
+    street/service-road context way. Central boundary v2 adds the pinned Wild
+    Sky and Henry M. Jackson wilderness outlines plus the measured trailhead
+    approach, preserving the original bbox and all original coverage. Generic
+    portal derivation v4 requires an exact OSM trailhead node at a usable
+    track/non-track trail junction; nearby markers and track-only contacts do
+    not create starts. The [Central charter](../../data/regions/central-cascades/charter.md#v2-west-cady-acceptance-2026-09-23)
+    records the review, source decisions, and all six artifact hashes.
+  - Two fresh, independent offline builds from the pinned August 1 Washington
+    OSM, existing 3DEP collection, and July USGS Trails source produced
+    byte-identical schema-6 `cc-d9160473291fdf6b` artifacts. Audit: 279,344
+    nodes, 555,865 directed edges, 573 persisted portals, 270 inclusive and
+    64 known cycle-feasible portals, 30 named areas, four reviewed search
+    regions, zero errors/conflicts, missing elevation, outside-coverage edges,
+    non-trail published edges, or SQLite integrity/foreign-key failures.
+    The North Fork Skykomish portal is 23.0 m from the mapped trailhead and is
+    high-confidence with unknown access (default included). All nine Thorough
+    scenario pairs passed exact and labeled-impossible close expectations with
+    zero directed-validation rejections. Direct result inspection confirmed a
+    23.92-mile simple loop with 8.05 miles of West Cady Ridge Trail, 7,697 ft
+    gain, and no repeated trail. Two mapped fords remain trip-time conditions.
+  - The locally activated pack's six files match the validated build hashes.
+    The live catalog lists Central Cascades; the live map API returns the
+    North Fork Skykomish trailhead and 12.96 km of named West Cady Ridge Trail
+    in its viewport. Two `npm run verify` runs each passed 556 offline tests in
+    88 files, lint, types, and production build; two `npm run test:browser`
+    runs each passed seven Chromium flows. The temporary boundary and portal
+    worktrees/branches were removed; generated packs and caches remain ignored.
+
 ## Post-gate fixes
 
 - 2026-08-10 — added the Central Cascades official-trail conflation pipeline,

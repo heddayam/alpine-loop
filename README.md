@@ -47,10 +47,12 @@ build downloads substantial source data and can take a while. Progress is
 shown with download counters and compiler substeps, and completed downloads are
 cached for reuse if you interrupt and retry.
 
-The current Central Cascades builder has completed a full build with Docker
-limited to 4 GiB RAM and swap disabled. See the
+An earlier Central Cascades boundary completed a full build with Docker
+limited to 4 GiB RAM and swap disabled. The current West Cady boundary has
+passed two independent offline builds; its 4 GiB memory limit has not been
+remeasured. See the
 [pack-build measurements](docs/rebuild/pack-build-audit.md#implementation-results)
-for the tested data and limits.
+for the earlier test.
 
 Once preparation finishes, start the app:
 
