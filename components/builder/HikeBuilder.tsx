@@ -58,7 +58,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const [catalogError, setCatalogError] = useState("");
   const [drawnBounds, setDrawnBounds] = useState<Bounds | null>(null);
   const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
-  const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({ originText: "", originSuggestions: [], durationMinutes: 30, state: "idle" });
+  const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({ originText: "", originSuggestions: [], minDurationMinutes: 0, durationMinutes: 30, state: "idle" });
   const preferences = usePreferences();
   const { settings: appSettings, loaded: settingsLoaded, error: settingsError } = preferences;
   const [draft, setValues] = useState<BuilderDraft>(DEFAULT_BUILDER_DRAFT);
@@ -239,8 +239,12 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       setValidationErrors(["Choose a suggested origin or clear the field to search named regions."]);
       return null;
     }
+    if (!drawnBounds && driveDraft.origin && driveDraft.minDurationMinutes >= driveDraft.durationMinutes) {
+      setValidationErrors(["Minimum drive time must be less than maximum drive time."]);
+      return null;
+    }
     const area = drawnBounds ? { mode: "drawn-area" as const, bbox: drawnBounds }
-      : driveDraft.origin ? { mode: "drive-time" as const, origin: driveDraft.origin, durationMinutes: driveDraft.durationMinutes, regionIds: selectedRegionIds }
+      : driveDraft.origin ? { mode: "drive-time" as const, origin: driveDraft.origin, minDurationMinutes: driveDraft.minDurationMinutes, durationMinutes: driveDraft.durationMinutes, regionIds: selectedRegionIds }
       : { mode: "named-regions" as const, regionIds: selectedRegionIds };
     const request = searchRequestSchema.safeParse({ area, criteria: parsed.criteria, limit: parsed.limit });
     if (!request.success) { setValidationErrors(["Choose named regions, resolve an origin, or draw a boundary."]); return null; }
@@ -325,8 +329,12 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
               </div>
 
               <div className="field-row">
-                <label htmlFor="drive-duration">Drive time</label>
-                <select id="drive-duration" className="control" aria-label="Typical drive time" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); setDriveDraft((current) => ({ ...current, durationMinutes })); editDraft(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
+                <label htmlFor="drive-min-duration">Minimum drive time</label>
+                <select id="drive-min-duration" className="control" value={driveDraft.minDurationMinutes} onChange={(event) => { const minDurationMinutes = Number(event.currentTarget.value); setDriveDraft((current) => ({ ...current, minDurationMinutes })); editDraft(); }}>{[0, ...DRIVE_TIME_DURATIONS_MINUTES].map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
+              </div>
+              <div className="field-row">
+                <label htmlFor="drive-duration">Maximum drive time</label>
+                <select id="drive-duration" className="control" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); setDriveDraft((current) => ({ ...current, durationMinutes })); editDraft(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
               </div>
 
               <RegionMultiSelect options={catalog?.regions ?? []} selected={selectedRegionIds} disabled={!catalog} onChange={(ids) => { setSelectedRegionIds(ids); editDraft(); }} />

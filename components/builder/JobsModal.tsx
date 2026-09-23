@@ -108,7 +108,7 @@ export function JobsModal({
             return (
               <article className="job-card" key={job.id} aria-labelledby={titleId} aria-describedby={stageId} aria-busy={busy || undefined}>
                 <header><div><strong id={titleId}>{job.area.label}</strong><small>{job.request.area.mode === "drive-time"
-                  ? `${job.request.area.durationMinutes} min from ${job.request.area.origin.label}`
+                  ? `${job.request.area.minDurationMinutes ?? 0}–${job.request.area.durationMinutes} min from ${job.request.area.origin.label}`
                   : job.request.area.mode === "drawn-area" ? "Drawn boundary" : "Named regions"}</small></div><span className={`job-status status-${pending ?? job.status}`}>{statusLabel}</span></header>
                 <p className="job-stage" id={stageId}>{stage(job, pending)}</p>
                 {determinate

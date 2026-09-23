@@ -100,7 +100,49 @@ describe("geographic workspace", () => {
     fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
     await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
     await screen.findByRole("heading", { name: "Exact matches" });
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: [], durationMinutes: 30, origin: { lon: -122.16, lat: 37.16 } });
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: [], minDurationMinutes: 0, durationMinutes: 30, origin: { lon: -122.16, lat: 37.16 } });
+  });
+  it("submits the same explicit driving range for Quick and Full search", async () => {
+    render(<HikeBuilder />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Quick search" })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
+    await userEvent.selectOptions(screen.getByLabelText("Minimum drive time"), "15");
+    await userEvent.selectOptions(screen.getByLabelText("Maximum drive time"), "60");
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    await screen.findByRole("heading", { name: "Exact matches" });
+    await userEvent.click(screen.getByRole("button", { name: "Plan" }));
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    const quick = vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search");
+    const full = vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
+    const area = JSON.parse(String(quick?.[1]?.body)).area;
+    expect(area).toMatchObject({ mode: "drive-time", minDurationMinutes: 15, durationMinutes: 60 });
+    expect(JSON.parse(String(full?.[1]?.body)).area).toEqual(area);
+  });
+  it.each(["30", "60"])("rejects equal or reversed drive ranges without changing either endpoint (minimum %s)", async (minimum) => {
+    render(<HikeBuilder />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Quick search" })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
+    await userEvent.selectOptions(screen.getByLabelText("Minimum drive time"), minimum);
+    for (const name of ["Quick search", "Full search"]) {
+      await userEvent.click(screen.getByRole("button", { name }));
+      expect(screen.getByText("Minimum drive time must be less than maximum drive time.")).toBeVisible();
+    }
+    expect(screen.getByLabelText("Minimum drive time")).toHaveValue(minimum);
+    expect(screen.getByLabelText("Maximum drive time")).toHaveValue("30");
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/search" || (url === "/api/route-jobs" && init?.method === "POST"))).toBe(false);
+    await userEvent.click(screen.getByText("Draw fixture area"));
+    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    await screen.findByRole("heading", { name: "Exact matches" });
+  });
+  it("opens older saved driving results with an omitted minimum", async () => {
+    vi.restoreAllMocks();
+    const legacyJob: RouteJobV2 = { ...job, request: { ...job.request, area: { mode: "drive-time", origin: { lon: -122.16, lat: 37.16, label: "Castle Rock" }, durationMinutes: 30, regionIds: [] } } };
+    mockBaseFetch((url) => url.includes("/results?") ? json({ ...savedPage, job: legacyJob }) : undefined);
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await screen.findByRole("heading", { name: "Exact matches" });
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.getByLabelText("Minimum drive time")).toHaveValue("0");
   });
   it("cancels stale Quick completion after drawing another area", async () => {
     vi.restoreAllMocks(); const pending = deferred<Response>(); let signal: AbortSignal | undefined;

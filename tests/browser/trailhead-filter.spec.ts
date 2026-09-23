@@ -8,7 +8,8 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
 
   await expect(page.getByRole("radio")).toHaveCount(0);
   await expect(page.getByLabel("Driving origin", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Typical drive time")).toHaveValue("30");
+  await expect(page.getByLabel("Minimum drive time")).toHaveValue("0");
+  await expect(page.getByLabel("Maximum drive time")).toHaveValue("30");
   await selectRegion(page);
   const regions = page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` });
   await expect(regions).toBeVisible();
@@ -64,19 +65,26 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("drive-time Quick search sends one geographic request with named refinements", async ({ page }) => {
+test("drive-time range sends Quick and Full requests with named refinements", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
   await selectTypedOrigin(page);
+  await page.getByLabel("Minimum drive time").selectOption("15");
+  await page.getByLabel("Maximum drive time").selectOption("60");
   await selectRegion(page);
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
   await page.getByRole("button", { name: "Quick search" }).click();
 
   await expect.poll(() => harness.generationRequests.length).toBe(1);
   expect(harness.calls.some(({ pathname }) => pathname.includes("reachability"))).toBe(false);
-  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], durationMinutes: 30, origin: { label: "Castle Rock, California" } });
+  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], minDurationMinutes: 15, durationMinutes: 60, origin: { label: "Castle Rock, California" } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("button", { name: "Full search" }).click();
+  await expect(page.getByRole("dialog", { name: "Jobs" })).toBeVisible();
+  expect(harness.batchRequests[0]?.area).toEqual(harness.generationRequests[0]?.area);
+  await expect(page.getByText("15–60 min from Castle Rock, California")).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
