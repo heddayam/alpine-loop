@@ -107,7 +107,9 @@ export function buildServiceAreaSubmitBody(
       attributes: { Name: "Origin" },
     }],
   }));
-  body.set("break_values", String(request.durationMinutes));
+  const minimum = request.minDurationMinutes ?? 0;
+  body.set("break_values", minimum > 0 ? `${minimum} ${request.durationMinutes}` : String(request.durationMinutes));
+  body.set("polygon_overlap_type", "Rings");
   body.set("break_units", "Minutes");
   body.set("travel_direction", "Away from Facility");
   body.set("impedance", "Minutes");
@@ -276,6 +278,7 @@ export class ArcGisClient implements ArcGisProvider {
   async pollServiceArea(
     providerJobId: string,
     signal?: AbortSignal,
+    request?: DriveTimeAreaRequest,
   ): Promise<
     | { state: "pending" }
     | { state: "failed"; message: string }
@@ -306,7 +309,7 @@ export class ArcGisClient implements ArcGisProvider {
       signal,
       true,
     );
-    const geometry = normalizeArcGisArea(resultFeatureSet(resultPayload));
+    const geometry = normalizeArcGisArea(resultFeatureSet(resultPayload), request);
     if (!geometry) throw invalidResponse("ArcGIS returned invalid service-area geometry.");
     return { state: "complete", geometry };
   }

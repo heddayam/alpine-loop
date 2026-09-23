@@ -78,7 +78,7 @@ export async function resolveSearchPlan(
   return {
     packs: selected.map(({ manifest: { id, dataVersion, builtAt } }) => ({ id, dataVersion, builtAt })),
     area: area.mode === "drive-time"
-      ? { label: `${area.durationMinutes} min from ${area.origin.label}${named ? ` · ${named.label}` : ""}`, ...(named ? { refinementGeometry: named.geometry } : {}) }
+      ? { label: `${area.minDurationMinutes ?? 0}–${area.durationMinutes} min from ${area.origin.label}${named ? ` · ${named.label}` : ""}`, ...(named ? { refinementGeometry: named.geometry } : {}) }
       : { label: area.mode === "drawn-area" ? "Drawn area" : named!.label, filterGeometry: geometry! },
   };
 }

@@ -67,6 +67,18 @@ describe("drive-time area resolution", () => {
     expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(3);
   });
 
+  it("caches each minimum separately and shares omitted and explicit zero minimum", async () => {
+    const context = setup();
+    await context.service.resolveArea({ ...REQUEST, durationMinutes: 90 }, signal());
+    await context.service.resolveArea({ ...REQUEST, minDurationMinutes: 0, durationMinutes: 90 }, signal());
+    const band = { ...REQUEST, minDurationMinutes: 30 as const, durationMinutes: 90 as const };
+    await context.service.resolveArea(band, signal());
+    await context.service.resolveArea(band, signal());
+    await context.service.resolveArea({ ...band, minDurationMinutes: 60 }, signal());
+    expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(3);
+    expect(context.provider.pollServiceArea).toHaveBeenCalledWith("provider-job", expect.any(AbortSignal), band);
+  });
+
   it("does not cache provider failures or expose unexpected provider details", async () => {
     const context = setup();
     vi.mocked(context.provider.pollServiceArea).mockResolvedValueOnce({ state: "failed", message: "No roads nearby." });
@@ -87,7 +99,7 @@ describe("drive-time area resolution", () => {
       return new Promise(() => undefined);
     });
     vi.mocked(context.provider.cancelServiceArea).mockImplementationOnce(async () => new Promise(() => undefined));
-    await expect(context.service.resolveArea(REQUEST, controller.signal)).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
+    await expect(context.service.resolveArea({ ...REQUEST, minDurationMinutes: 15 }, controller.signal)).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
     expect(context.provider.cancelServiceArea).toHaveBeenCalledWith("provider-job", expect.any(AbortSignal));
     await expect(context.service.resolveArea(REQUEST, signal())).resolves.toMatchObject({ geometry: GEOMETRY });
     expect(context.provider.submitServiceArea).toHaveBeenCalledTimes(2);
