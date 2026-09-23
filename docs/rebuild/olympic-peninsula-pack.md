@@ -1,9 +1,10 @@
 # Olympic Peninsula pack proposal
 
-Reviewed 2026-09-22. This is a **planning proposal** for catalog ID
-`olympic-peninsula`, not a committed boundary, pinned source inventory, built
-pack, or activation decision. Use the [region-onboarding
-checklist](region-onboarding-checklist.md) for those later gates. The pack would
+Reviewed 2026-09-22. This records the original planning decisions for catalog
+ID `olympic-peninsula`. The [pack charter](../../data/regions/olympic-peninsula/charter.md)
+records the exact boundary, pinned sources, build evidence, and current
+activation status. The [region-onboarding checklist](region-onboarding-checklist.md)
+defines the acceptance gate. The pack would
 generate closed hiking routes from eligible trail portals; a named area selects
 starts and never clips a route. Exact installed coverage would remain the hard
 geometry boundary. Unknown access would remain included by default, and exact
@@ -174,7 +175,6 @@ preflight.
    prescribed repeated verification passes may a separate focused change add
    the catalog `packId` and record acceptance evidence in `status.md`.
 
-There is presently **no exact boundary, Olympic source receipt or hash,
-reviewed OSM named-area ID, DEM product ID, preflight measurement, scenario
-result, or activation evidence** in this proposal. Those are explicit
-blockers, not implied by the geographic scope.
+The implementation evidence and remaining limits are maintained in the
+[pack charter](../../data/regions/olympic-peninsula/charter.md). This proposal
+is retained as the record of the initial scope and authority questions.
