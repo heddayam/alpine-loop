@@ -14,8 +14,11 @@ export const searchAreaSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("named-regions"), regionIds: regionIdsSchema.min(1) }).strict(),
   z.object({
     mode: z.literal("drive-time"), origin: originSchema, durationMinutes: driveTimeDurationSchema,
+    minDurationMinutes: z.union([z.literal(0), driveTimeDurationSchema]).optional(),
     regionIds: regionIdsSchema,
-  }).strict(),
+  }).strict().refine((area) => (area.minDurationMinutes ?? 0) < area.durationMinutes, {
+    message: "Minimum drive time must be less than maximum drive time", path: ["minDurationMinutes"],
+  }),
 ]);
 
 export const searchIntentSchema = z.object({ area: searchAreaSchema, criteria: routeCriteriaSchema }).strict();
