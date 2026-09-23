@@ -47,7 +47,7 @@
           47.95487
         ]
       },
-      "searchRegionId": "osm:relation/163769",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
@@ -82,7 +82,7 @@
           47.86047
         ]
       },
-      "searchRegionId": "osm:relation/163769",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
@@ -117,7 +117,7 @@
           47.5162
         ]
       },
-      "searchRegionId": "osm:relation/163769",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
@@ -187,7 +187,7 @@
           47.97661
         ]
       },
-      "searchRegionId": "osm:relation/163769",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
@@ -222,7 +222,7 @@
           47.96784
         ]
       },
-      "searchRegionId": "osm:relation/163769",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 60,
       "exactExpectation": {
         "distanceMiles": {

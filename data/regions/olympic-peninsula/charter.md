@@ -72,8 +72,19 @@ exact boundary bbox and 1-by-1-degree 1/3-arc-second products. Its 23 results
 included historical versions; `elevation-source.json` pins the latest 2024
 publication for each of six intersecting tiles: `n48w123`, `n48w124`,
 `n48w125`, `n49w123`, `n49w124`, and `n49w125`. USGS 3DEP is public domain.
-The actual TIFF byte counts and hashes must be captured by immutable refresh
-receipts; catalog sizes alone are not accepted build evidence.
+The deliberate 2026-09-23 refresh wrote immutable receipts for the six TIFFs:
+
+| Tile | Product ID | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| `n49w125` | `6604fa83d34e64ff154955d7` | 318,220,664 | `34b753c421a1f6a1d9983feca57222376bb1aca544bb5c77ed78dcec23544799` |
+| `n49w124` | `6604fa84d34e64ff154955d9` | 87,446,876 | `cbfc7a739df9eff5a089959d0ffe651644d298ba26d4b553d9c7c04c093292d6` |
+| `n49w123` | `6604fa86d34e64ff154955db` | 354,482,800 | `fec8c29431bf8ffa5e8a0f16288e906c571965f247038f6bd81805a9f3b0040d` |
+| `n48w125` | `6604fa88d34e64ff154955dd` | 189,214,139 | `88f011c61a723c0bf32867fea6d29bea3bd9352acc5b8aad6c64924f9e98ce4c` |
+| `n48w124` | `6604fa89d34e64ff154955df` | 489,343,591 | `eb714d6619e7dfa20541017af5897ce3a9670f75ebbd8aac784756bf327eb2b7` |
+| `n48w123` | `6604fa8bd34e64ff154955e1` | 415,454,931 | `aecc6ef7492509dfd11586ad7961b20d086475df5b91a9cc252217af021d2b16` |
+
+The collection retrieval timestamp is `2026-09-23T04:07:14.153Z`.
+Catalog sizes were advisory; the table records downloaded bytes and hashes.
 
 No official trail supplement, invented portal, or static temporary closure is
 part of v1. Agency pages and maps are geographic and access-review evidence,
@@ -82,11 +93,17 @@ target and reviewed authority evidence.
 
 ## Selectors and route checkpoints
 
-The initial candidate selectors are the whole pack, park, forest, Daniel J.
-Evans Wilderness, and the five named forest wildernesses found in the pinned
-OSM extract. Retain each beyond preflight only if the compiled pack has useful
-default-eligible, cycle-bearing portals inside the polygon or shared 500 m
-approach band. The band does not prove that a trail enters the named area.
+The regional OSM preparation exported 12 named areas from this exact boundary.
+It did not retain the larger Olympic National Park, Olympic National Forest,
+or Daniel J. Evans Wilderness relations, which have members beyond the
+multipart extraction. The reviewed selector list therefore contains the
+whole pack and the five forest wildernesses that survived preparation:
+Buckhorn, Wonder Mountain, Colonel Bob, Mount Skokomish, and The Brothers.
+Retain each wilderness selector beyond preflight only if the compiled pack has
+useful default-eligible, cycle-bearing portals inside the polygon or shared
+500 m approach band. The band does not prove that a trail enters the named
+area. Park, forest, and Daniel J. Evans remain deferred selector candidates;
+their source polygons are not silently reconstructed from the pack boundary.
 
 Review Hurricane Ridge/Deer Park, Elwha, Lake Crescent, Sol Duc, Dungeness,
 Hoh, Bogachiel, Queets, Quinault/Graves Creek, Dosewallips/Duckabush,
