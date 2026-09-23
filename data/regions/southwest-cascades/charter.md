@@ -21,7 +21,9 @@ exists between that lobe and the main polygon.
 
 The build boundary is not a forest, county, wilderness, or download boundary.
 Its concave main outline was reviewed against the named-area outlines and
-trail/approach anchors in the **2026-08-01 Washington OSM extract**. The small
+trail/approach anchors in the **2026-08-01 Washington OSM extract**. A northern
+extension includes the upper Cispus Blue Lake–Hamilton loops and the western
+Klickitat Trail continuation. The small
 Silver Star lobe keeps its connected trails without sweeping in the Columbia
 Gorge or Vancouver foothills. The Yakama Reservation area in that same extract
 was subtracted with an approximately 230–335 m coordinate buffer. That buffer
@@ -48,13 +50,23 @@ The OSM area relations are monument `relation/2455766`, Adams Wilderness
 | Yakama Reservation, Goat Rocks Wilderness | No area intersection with the Southwest boundary. |
 | Named Loowit, Silver Star, Tarbell OSM ways | All extracted segments with those exact names fall inside. |
 | Reviewed OSM anchors | Ape Canyon, June Lake, Norway Pass, Stagman Ridge, Killen Creek, Lemei, Big Hollow, and the in-boundary Rock Creek trailhead/parking features fall inside. |
+| Upper Cispus seam | The Blue Lake–Hamilton pedestrian component has 17 OSM ways and cycle rank 3. Its named trail ways now fall wholly inside Southwest coverage. Klickitat Trail `way/492282425` is fully inside Southwest and overlaps the Rainier candidate over its eastern 46.7%. |
 
-These are polygon and source-way checks, **not** a successful topology, legal
-access, portal, or cycle audit. The preflight intentionally keeps the Loowit
-circuit whole, including its south/east feeders. The north/east contour excludes
-the Goat Rocks core; the upper Cispus seam still needs boundary-crossing edge
-and adjacent-pack component inspection before either pack activates. No pack
-crossing is modeled as a connector merely because boundaries later overlap.
+These are source-geometry checks, **not** a successful legal-access, derived
+portal, or compiled-cycle audit. The preflight intentionally keeps the Loowit
+circuit whole, including its south/east feeders. Before the northern extension,
+23 named or referenced way segments in the upper Cispus study window had some
+geometry outside both Southwest and Rainier candidates; after it, all 23 fall
+inside their union. Two of those ways carry `access=no` and remain forbidden by
+the access adapter despite lying inside coverage. The extension keeps zero area
+intersection with the Goat Rocks Wilderness and Yakama Reservation OSM polygons;
+its closest coordinate gaps are about 0.00743 and 0.00281 degrees,
+respectively. The overlap with Rainier grows from 0.00148 to 0.01264 square
+degrees. PCT `way/550208972` remains shared at the seam, with about 61% of its
+geometry in Southwest and 49% in Rainier, including a deliberate overlap. No
+pack crossing is modeled as a connector merely because boundaries overlap.
+The full compiled boundary-crossing edge and route audits remain activation
+gates.
 
 ## Access, exclusions, and authorities
 
@@ -97,14 +109,17 @@ Star has no reviewed stable area polygon in the pinned inventory. These are
 candidate selectors, not published selectors, until the compiled pack is
 measured. A named area would filter starts only, never clip route geometry.
 
-`scenarios.json` records eight review anchors: Ape Canyon and June Lake for
+`scenarios.json` records nine review anchors: Ape Canyon and June Lake for
 Loowit feeders, Norway Pass for Mount Margaret/Boundary Trail, Stagman Ridge
-and Killen Creek for Adams, Lemei for Indian Heaven, Big Hollow for Trapper
-Creek, and Rock Creek for Silver Star–Tarbell. The first two are actual OSM
-parking areas (`way/65069378`, `way/439071688`), and the other anchors are
+and Killen Creek for Adams, Orr Creek for the upper Cispus/Klickitat seam,
+Lemei for Indian Heaven, Big Hollow for Trapper Creek, and Rock Creek for Silver
+Star–Tarbell. Ape Canyon, June Lake, and Orr Creek are actual OSM parking areas
+(`way/65069378`, `way/439071688`, `way/549242926`); the other anchors are
 named OSM trailheads. They create no independent starts. Each plausible exact
 and deliberately impossible gain request remains an **unverified checkpoint**
 until it resolves to a derived portal within 500 m and passes the route runner.
+The Blue Lake–Hamilton component itself has no confirmed derived portal yet;
+its newly covered cycles must be checked during compiled portal QA.
 The wider repeated-trail allowances in these backpacking-scale scenarios are
 explicit per-request test inputs, not changes to product defaults.
 
@@ -144,8 +159,9 @@ downloaded as part of this boundary/config commit.
 
 ## Activation blockers
 
-Before adding `packId` to the registry, inspect all boundary-crossing hiking
-ways and upper Cispus/Goat Rocks seam components; review Yakama edge proximity;
+Before adding `packId` to the registry, inspect all compiled boundary-crossing
+hiking ways and upper Cispus/Goat Rocks seam components, including Blue
+Lake–Hamilton portal reachability; review Yakama edge proximity;
 perform one deliberate source refresh; produce two byte-identical offline
 schema-6 builds; pass portal/building/cycle, elevation, provenance, access, and
 route audits; verify every scenario's exact and labeled close outcome; then

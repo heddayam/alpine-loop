@@ -31,6 +31,8 @@ describe("Southwest Cascades pack wiring", () => {
     expect(areaGeometryBounds(boundary.geometry)).toEqual([-122.51, 45.68, -121.434711, 46.51]);
     expect(pointInArea([-122.18, 46.2], boundary.geometry)).toBe(true); // Loowit circuit
     expect(pointInArea([-121.56, 46.25], boundary.geometry)).toBe(true); // Adams west
+    expect(pointInArea([-121.65, 46.42], boundary.geometry)).toBe(true); // Blue Lake–Hamilton
+    expect(pointInArea([-121.57, 46.47], boundary.geometry)).toBe(true); // Klickitat overlap
     expect(pointInArea([-122.24, 45.75], boundary.geometry)).toBe(true); // Silver Star
     expect(pointInArea([-121.45, 46.25], boundary.geometry)).toBe(false); // Yakama edge
     expect(pointInArea([-121.46, 46.5], boundary.geometry)).toBe(false); // Goat Rocks
@@ -62,7 +64,7 @@ describe("Southwest Cascades pack wiring", () => {
     }]);
   });
 
-  it("records plausible and impossible requests for all eight review clusters", async () => {
+  it("records plausible and impossible requests for all nine review clusters", async () => {
     const input = JSON.parse(await readFile(path.join(SOUTHWEST_CASCADES_REGION_ROOT, "scenarios.json"), "utf8")) as {
       packId: string;
       scenarios: Array<{
@@ -79,6 +81,7 @@ describe("Southwest Cascades pack wiring", () => {
       "mount-margaret-boundary",
       "adams-south-stagman",
       "adams-north-killen",
+      "upper-cispus-orr-creek",
       "indian-heaven-lemei",
       "trapper-creek-big-hollow",
       "silver-star-tarbell",

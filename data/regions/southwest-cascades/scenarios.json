@@ -178,6 +178,41 @@
       }
     },
     {
+      "id": "upper-cispus-orr-creek",
+      "cluster": "Upper Cispus–Klickitat/High Lakes seam",
+      "referencePoint": {
+        "name": "Orr Creek Sno Park parking way/549242926",
+        "coordinates": [
+          -121.597406,
+          46.351489
+        ]
+      },
+      "searchRegionId": "pack:southwest-cascades",
+      "maximumRepeatedTrailPct": 65,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 500,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 25
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
       "id": "indian-heaven-lemei",
       "cluster": "Indian Heaven Wilderness",
       "referencePoint": {
