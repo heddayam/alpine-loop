@@ -121,19 +121,19 @@
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 3,
-          "max": 18
+          "min": 18,
+          "max": 40
         },
         "elevationGainFeet": {
-          "min": 300,
-          "max": 6500
+          "min": 0,
+          "max": 12000
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 3,
-          "max": 18
+          "min": 18,
+          "max": 40
         },
         "elevationGainFeet": {
           "min": 15000,
@@ -248,6 +248,41 @@
       }
     },
     {
+      "id": "william-o-douglas-pear-butte",
+      "cluster": "William O. Douglas–Pear Butte",
+      "referencePoint": {
+        "name": "Pear Butte Trailhead",
+        "coordinates": [
+          -121.3064702,
+          46.8141079
+        ]
+      },
+      "searchRegionId": "osm:relation/6109916",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 700,
+          "max": 9000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 5,
+          "max": 24
+        },
+        "elevationGainFeet": {
+          "min": 15000,
+          "max": 16000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
       "id": "goat-rocks-snowgrass",
       "cluster": "Goat Rocks–Snowgrass",
       "referencePoint": {
@@ -257,7 +292,7 @@
           46.4639429
         ]
       },
-      "searchRegionId": "pack:rainier-goat-rocks",
+      "searchRegionId": "osm:relation/6109176",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
@@ -292,7 +327,7 @@
           46.4229681
         ]
       },
-      "searchRegionId": "pack:rainier-goat-rocks",
+      "searchRegionId": "osm:relation/6109176",
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {

@@ -74,7 +74,11 @@ describe("Rainier–Goat Rocks pack inputs", () => {
         "6604fa8bd34e64ff154955e1",
       ],
     });
-    expect(regions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual(["pack:rainier-goat-rocks"]);
+    expect(regions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual([
+      "pack:rainier-goat-rocks",
+      "osm:relation/6109916",
+      "osm:relation/6109176",
+    ]);
   });
 
   it("records exact and impossible checks for each reviewed OSM trailhead cluster", async () => {
@@ -92,17 +96,22 @@ describe("Rainier–Goat Rocks pack inputs", () => {
     expect(input.packId).toBe("rainier-goat-rocks");
     expect(input.scenarios.map(({ id }) => id)).toEqual([
       "longmire-paradise", "mowich-carbon", "sunrise-white-river", "ohanapecosh",
-      "chinook-naches", "greenwater-norse-peak", "white-pass", "goat-rocks-snowgrass",
-      "goat-rocks-walupt",
+      "chinook-naches", "greenwater-norse-peak", "white-pass",
+      "william-o-douglas-pear-butte", "goat-rocks-snowgrass", "goat-rocks-walupt",
     ]);
     expect(new Set(input.scenarios.map(({ cluster }) => cluster)).size).toBe(input.scenarios.length);
     const boundary = parseRegionalBoundary(
       RAINIER_GOAT_ROCKS_PACK_CONFIG,
       await readFile(path.join(RAINIER_GOAT_ROCKS_REGION_ROOT, "boundary.geojson"), "utf8"),
     );
+    const regionsForScenario: Record<string, string> = {
+      "william-o-douglas-pear-butte": "osm:relation/6109916",
+      "goat-rocks-snowgrass": "osm:relation/6109176",
+      "goat-rocks-walupt": "osm:relation/6109176",
+    };
     for (const scenario of input.scenarios) {
       expect(pointInArea(scenario.referencePoint.coordinates, boundary.geometry)).toBe(true);
-      expect(scenario.searchRegionId).toBe("pack:rainier-goat-rocks");
+      expect(regionsForScenario[scenario.id] ?? "pack:rainier-goat-rocks").toBe(scenario.searchRegionId);
       expect(scenario.exactExpectation.result).toBe("at-least-one-exact");
       expect(scenario.impossibleExpectation.result).toBe("near-miss-only");
     }
