@@ -194,9 +194,11 @@ pack contains 69 named areas and all three requested selectors. With the
 shared 500 m approach band, Mount Baker Wilderness has nine default-eligible,
 cycle-bearing portals (including Artist Point, Hannegan, Heliotrope Ridge,
 and Tomyhoi); Lake Chelan–Sawtooth Wilderness has one, the unknown-access,
-low-confidence Crescent Mine Trail trailhead. That latter selector is usable
-but thin and needs a map review before activation. The approach band does not
-prove that every selected portal's trail enters the named area.
+low-confidence Crescent Mine Trail trailhead. A read-only path check of the
+published graph followed Crescent Mine Trail and Twisp Pass Trail for 606 m
+from that portal into the source wilderness polygon. The selector is thin but
+its sole eligible approach reaches the intended area. The shared approach
+band alone would not have proved that connection.
 
 The v3 checkpoint retains eight loop-capable clusters: Baker Lake/Baker
 River; Artist Point/Hannegan; Diablo/Ross Lake; Rainy/Maple Pass; Stehekin
@@ -205,7 +207,10 @@ mapped Baker Lake Trailhead, Baker River, and Swift Creek starts returned no
 closed candidate under a broad 0.1–30 mi, 100% repeated-trail probe. The
 Bayview Loop Trail trailhead yields a genuine 1.24 mi simple loop on Baker
 Lake. The East Bank Trailhead by Ross Lake triggered a stack overflow in the
-pre-fix solver; the nearby Happy Creek Trailhead yields a 0.31 mi forest-walk
+pre-fix recursive route validator; the integration branch replaced that DFS
+with an iterative traversal. The original East Bank request then completed
+without an exception but found only labeled 40–41 mi close matches for its
+5–25 mi target. The nearby Happy Creek Trailhead yields a 0.31 mi forest-walk
 lollipop. These short routes are presented with their measured scale, rather
 than implying a long wilderness loop. Scatter Creek and Chewuch Trail Q0
 replace the initially selected Twisp and Iron Gate anchors because they have
@@ -322,13 +327,21 @@ combined measured solver wall time was 13.2 s. A full **Quick** checkpoint
 also passed all eight cases, with at least one exact and one labeled close
 match in each. These are empirical route outcomes, not a guarantee for every
 start. The east Pasayten broad search can also surface OSM segments named as
-forest road or abandoned Coleman Ridge/Fire Creek trails; inspect their
-mapped condition and access before activation. The South Fork Agnes ford
-uncertainty noted above also remains.
+forest road or abandoned Coleman Ridge/Fire Creek trails. Those mapped paths
+remain in the pack with their `trail-visibility:horrible` or other source
+condition flags and their original access states; no authority-backed exact-way
+restriction was established. The live Chewuch Quick result used Basin Creek,
+Cathedral Driveway, Chewuch, Windy Creek, and Windy Peak trails, without an
+abandoned segment, and carried its uncertain-access warning. The South Fork
+Agnes ford uncertainty noted above still needs on-the-ground judgment.
 
-Before catalog activation, complete application/browser verification and
-review the thin Lake Chelan–Sawtooth selector, disconnected components,
-border crossings, east Pasayten condition tags, and the South Creek closure
-lead. The Cascade Pass linear-trail limitation is explicit. Do not add a
-catalog `packId` until the remaining review passes. Keep raw downloads,
-generated packs, receipts, and audit databases out of Git.
+Catalog activation passed after the shared integration verification: two
+`npm run verify` runs each passed 553 tests, lint, types, and build; two
+`npm run test:browser` runs each passed seven Chromium flows. The live app
+listed North and its two named selectors, returned 103 trail features and five
+starts around Artist Point, and returned an exact 18.4 km Artist Point Quick
+route. A real Full-search persistence and mobile check used the installed
+Olympic pack in the same catalog. The Cascade Pass linear-trail limitation,
+border crossings, and South Creek closure lead remain explicit review items
+for a later source revision. Raw downloads, generated packs, receipts, and
+audit databases stay outside Git.

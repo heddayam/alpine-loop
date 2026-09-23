@@ -162,10 +162,15 @@ choice, working mobile map toggle, no horizontal overflow, and no page/console
 errors. Basemap tiles did not render in that local browser run, so that check
 does not establish live external-tile availability.
 
-Before committed catalog activation, finish the repeated full
-application/browser verification and record acceptance in `status.md`. The
-excluded crossing corridors above require new jurisdiction evidence and a
-boundary version before they can be claimed as complete routes. The Colonel Bob Peak
-Trailhead and some linear coast routes lack a qualifying closed-route portal,
-and live tide-aware passability remains deferred. Generated downloads, packs,
-receipts, caches, and databases stay outside Git.
+The final catalog links this verified pack. Two shared `npm run verify` runs
+each passed 553 tests, lint, types, and build; two browser runs each passed
+seven Chromium flows. A real installed-pack Full search near Ozette completed
+with one exact coastal route, restored after an app restart, and was labeled
+"Generated with older map data" when read against a separate empty pack root.
+All four new packs appeared in desktop and 390 px mobile region controls with
+no browser errors or horizontal overflow. The excluded crossing corridors
+above require new jurisdiction evidence and a boundary version before they can
+be claimed as complete routes. The Colonel Bob Peak Trailhead and some linear
+coast routes lack a qualifying closed-route portal, and live tide-aware
+passability remains deferred. Generated downloads, packs, receipts, caches,
+and databases stay outside Git.

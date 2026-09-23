@@ -223,10 +223,13 @@ rejections.
 | Trapper Creek–Big Hollow | 0 m | 6 | 2 | 6 |
 | Silver Star–Tarbell | 187 m | 10 | 2 | 10 |
 
-## Activation blockers
+## Activation and remaining limits
 
-Before adding `packId` to the registry, review route geometry in the
-application and run the integrator's cross-pack seam and browser checks. Trailhead names
-and OSM evidence do not guarantee a compiled portal or viable circuit, as Cody
-demonstrates. Generated artifacts, downloads, receipts, and caches remain
-outside Git.
+The catalog links this verified pack. Two shared `npm run verify` runs each
+passed 553 tests, lint, types, and build; two browser runs each passed seven
+Chromium flows. The live app returned 37 trail features and eight starts near
+Ape Canyon and an exact 22.88 km Blue Lake Quick route. At the Rainier seam,
+3,062 shared forward edge IDs (86.257 km) have identical compiled geometry
+and access states. Cody remains a measured no-cycle start; trailhead names and
+OSM evidence alone do not guarantee a viable circuit. Generated artifacts,
+downloads, receipts, and caches remain outside Git.

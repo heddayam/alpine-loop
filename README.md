@@ -35,7 +35,11 @@ the actual pack size for installed regions. Finished sizes exclude source caches
 ↑/↓ to move and Enter to toggle a region, then choose **Apply changes**.
 Installed packs start checked. Checked rows are green; pending installs and
 removals are labeled as you change the selection.
-Select **Central Cascades** for Glacier Peak, Alpine Lakes, and Teanaway.
+Washington choices include **North Cascades**, **Central Cascades**,
+**Rainier–Goat Rocks**, **Southwest Cascades**, and **Olympic Peninsula**.
+Olympic includes mapped beach trails such as the Ozette loop; check tides and
+current conditions yourself because route generation does not time beach
+passability.
 
 The script creates `.env` if needed and builds selected packs inside Docker;
 you do not need Node, Python, or geographic tools on your computer. The first

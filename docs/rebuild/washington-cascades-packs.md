@@ -1,13 +1,14 @@
 # Remaining Washington Cascades pack setup
 
-Planning review: **2026-09-22**. This is the charter and boundary-preflight brief
-for the three remaining packs in the [accepted four-pack Cascades
-family](regional-expansion-plan.md#washington-cascades-family). Central Cascades is
-already activated and [has an exact, versioned hard
-boundary](../../data/regions/central-cascades/charter.md). The three IDs below
-are planned catalog and future directory/build IDs; exact polygons, source
-pins, and activation remain separate onboarding decisions. Each pack serves
-route generation from a local trail graph, not a catalog of named hikes.
+Planning review: **2026-09-22**. This records the original scope and seam
+questions for the three later packs in the [accepted four-pack Cascades
+family](regional-expansion-plan.md#washington-cascades-family). Their current
+boundaries, source pins, build results, and activation evidence are in the
+[North](../../data/regions/north-cascades/charter.md),
+[Rainier–Goat Rocks](../../data/regions/rainier-goat-rocks/charter.md), and
+[Southwest](../../data/regions/southwest-cascades/charter.md) charters. The
+[Central charter](../../data/regions/central-cascades/charter.md) records the
+earlier pack. Each pack generates routes from a local trail graph.
 
 ## Scope and seam decisions to make before drawing polygons
 
@@ -120,7 +121,7 @@ pack seam. Inspect the OSM extract before freezing the polygon:
   connector.
 
 Then follow the [schema-6 onboarding checklist](region-onboarding-checklist.md)
-**one pack at a time**: commit boundary, source configs, reviewed selectors,
+for each pack: commit boundary, source configs, reviewed selectors,
 and scenarios; perform one deliberate network refresh into ignored immutable
 caches; build twice independently offline from the same pins; compare data
 version and byte hashes; require zero audit, integrity, missing trail-elevation,

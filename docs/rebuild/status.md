@@ -657,25 +657,88 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     506 offline tests in 82 files, lint, types, and production build; two
     `npm run test:browser` passes each pass seven offline flows. No exact new
     boundary, source pin, pack build, or activation is claimed.
-- [ ] Gate 13 — North Cascades regional pack
-  - Acceptance: complete the schema-6 onboarding protocol for Mount Baker,
-    Highway 20, the North Cascades complex, and Pasayten/Methow, including
-    explicit Central Cascades overlap review and activation only after two
-    independent byte-identical offline builds, audits, route checks, and app
-    verification.
-- [ ] Gate 14 — Rainier–Goat Rocks regional pack
-  - Acceptance: complete the same protocol for Mount Rainier, Naches/White
-    Pass, and Goat Rocks, with Central and Southwest seam review.
-- [ ] Gate 15 — Southwest Cascades regional pack
-  - Acceptance: complete the same protocol for Mount St. Helens, Mount Adams,
-    and the southern Gifford Pinchot hiking systems, with Rainier–Goat Rocks
-    seam and Washington/Oregon border review.
-- [ ] Gate 16 — Olympic Peninsula regional pack
-  - Acceptance: complete the same protocol for the reviewed Olympic mountain,
-    rainforest, and beach hiking systems, including Ozette's beach leg. Verify
-    park/forest and tribal-land access, coastal graph topology, and boundary
-    seams before activation. Record the lack of tide-aware passability as a
-    limitation for later work.
+- [x] Gate 13 — North Cascades regional pack
+  - Evidence: the [North charter](../../data/regions/north-cascades/charter.md)
+    records the v3 hard boundary around Baker, Highway 20, Stehekin, Methow,
+    and Pasayten; the deliberate Central PCT–South Fork Agnes overlap; and two
+    narrow 49°N insets where USGS 3DEP has no elevation data. The pinned August
+    1 Washington OSM snapshot is ODbL; four pinned USGS tiles are public
+    domain, with product IDs, bytes, and SHA-256 receipts in the charter.
+    Refresh plus two fresh offline builds produced identical schema-6
+    `nc-989d91f71a1d0be6` manifests, SQLite, and three audit files (all five
+    SHA-256 values in the charter). Audit: 224,334 nodes, 447,092 directed
+    trail edges, 631 portals, 38 built-up, 303 inclusive/42 known
+    cycle-feasible, 282 default-eligible, 625 components, zero errors,
+    outside edges, missing elevation, non-trail published edges, or SQLite
+    integrity/foreign-key issues. All eight Thorough and eight Quick scenario
+    pairs returned exact and labeled impossible-request close routes with zero
+    directed validation rejections; the final checkpoint was rerun from the
+    integration checkout after fixing long-route DFS stack overflow. Live
+    Artist Point Quick returned an exact 18.4 km route. Crescent Mine's sole
+    eligible selector portal reaches the Sawtooth polygon by 606 m of mapped
+    trail. Cascade Pass remains covered but cycle-poor, and a South Fork Agnes
+    ford and South Creek restriction lead remain explicit later reviews.
+- [x] Gate 14 — Rainier–Goat Rocks regional pack
+  - Evidence: the [Rainier charter](../../data/regions/rainier-goat-rocks/charter.md)
+    records the exact v1 park/wilderness and PCT approach envelope, all 76
+    mapped Wonderland ways, north overlap with Central, and the upper Cispus
+    overlap with Southwest. August 1 OSM ODbL and five public-domain USGS 3DEP
+    products are pinned with receipts. After one source refresh, two independent
+    offline builds produced byte-identical schema-6 `rgr-9037762d7a78ff57` outputs;
+    the charter has all five published-file SHA-256 values. Audit: 182,673
+    nodes, 364,899 edges, 853 portals, 28 built-up, 317 inclusive/69 known
+    cycle-feasible, 303 default-eligible, 749 components, zero errors,
+    outside edges, missing elevation, non-trail edges, or SQL integrity/foreign
+    key issues. Ten Thorough scenario pairs passed with zero directed
+    rejections; three Quick spots passed. William O. Douglas and Goat Rocks
+    selectors have reviewed trail entry; Rainier National Park and Norse Peak
+    selectors remain deferred for disconnected fringe starts. Live Pear Butte
+    Quick returned an exact 18.6 km route.
+- [x] Gate 15 — Southwest Cascades regional pack
+  - Evidence: the [Southwest charter](../../data/regions/southwest-cascades/charter.md)
+    records the v1 Mount St. Helens, Adams, Gifford Pinchot, upper Cispus, and
+    Silver Star–Tarbell coverage, excluding the Yakama Reservation and Oregon.
+    August 1 OSM ODbL and four public-domain USGS 3DEP products are pinned with
+    receipts. Refresh plus two fresh offline builds produced byte-identical
+    schema-6 `swc-f877817cbcde78fe` outputs; all five SHA-256 values are in
+    the charter. Audit: 176,693 nodes, 352,490 edges, 839 portals, five
+    built-up, 325 inclusive/26 known cycle-feasible, 324 default-eligible,
+    729 components, zero errors, outside edges, missing elevation, non-trail
+    edges, or SQL integrity/foreign-key issues. All nine Thorough and Quick
+    scenario pairs passed with zero directed rejections. Cody's nearest portal
+    is no-cycle; the source-backed Blue Lake start passed instead. Live Blue
+    Lake Quick returned an exact 22.88 km route. Rainier/Southwest share 3,062
+    forward edge IDs (86.257 km) with identical geometry and access state.
+- [x] Gate 16 — Olympic Peninsula regional pack
+  - Evidence: the [Olympic charter](../../data/regions/olympic-peninsula/charter.md)
+    records the four-part v1 park/forest hard boundary and reviewed mountain,
+    rainforest, and coastal systems. The mapped Ozette beach travelway and
+    inland arms form a compiled route; unreviewed tribal approaches and some
+    boundary-crossing coastal ways remain excluded. August 1 OSM ODbL and six
+    public-domain USGS 3DEP products are pinned with receipts. After one source
+    refresh, two fresh offline builds produced byte-identical schema-6
+    `op-34b052c73d4a5711` outputs; all five SHA-256 values are in the
+    charter. Audit: 128,029 nodes, 255,244 edges, 407 portals, one built-up,
+    128 inclusive/39 known cycle-feasible, 127 default-eligible, 446
+    components, zero errors, outside edges, missing elevation, non-trail
+    edges, or SQL integrity/foreign-key issues. All nine Thorough scenario
+    pairs passed with zero directed rejections. Live Ozette Quick returned a
+    14.25 km Cape Alava–beach–Sand Point route. A real Full search completed
+    with one exact route, restored after restart, and showed the older-map-data
+    label against a separate empty pack root. Tide and surf passability remain
+    unmodeled and require trip-time checking.
+  - Shared activation: catalog links and measured installer size metadata were
+    added for all four packs. Two `npm run verify` runs each passed 553 offline
+    tests in 88 files, lint, types, and production build; two corrected offline
+    `npm run test:browser` runs each passed seven Chromium flows. The first
+    browser invocation could not bind localhost inside the filesystem sandbox;
+    both full passes succeeded with local-server permission. The live catalog
+    listed every retained selector; four representative map windows returned
+    trails and starts, and all four real Quick API calls returned exact routes.
+    Desktop and 390 px mobile checks showed all four choices, keyboard Escape,
+    mobile map switching, no horizontal overflow, and zero browser/page errors.
+    Basemap tile availability was not established in this local run. Generated
+    packs, downloads, caches, receipts, and runtime databases remain ignored.
 
 ## Post-gate fixes
 

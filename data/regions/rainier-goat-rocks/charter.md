@@ -159,7 +159,7 @@ one; do not invent a point.
 
 ## Build and QA evidence
 
-The explicit 2026-09-23 source refresh and two independent fresh offline
+After the explicit 2026-09-23 source refresh, two independent fresh offline
 builds produced schema 6 data version `rgr-9037762d7a78ff57`. The offline
 builds used separate preparation and output directories and gave identical
 SHA-256 for every published output:
@@ -196,11 +196,15 @@ scenarios use their published named selectors, including a Pear Butte portal
 exactly at the OSM reference coordinate. Scenario inputs are checkpoint fixtures;
 they are not part of the compiled data fingerprint.
 
-## Activation blockers
+## Activation and remaining limits
 
-This pack is **not activated**. The integrator still owns shared catalog
-linkage, app and browser verification, and final cross-pack review. The
-PCT/upper Cispus overlap has been measured against the Southwest correction;
-retain it at integration. Disconnected trail islands and boundary-crossing
-ways remain visible in the audits rather than silently promoted to viable
-routes. Generated packs, raw downloads, caches, and databases remain ignored.
+The catalog links this verified pack. Two shared `npm run verify` runs each
+passed 553 tests, lint, types, and build; two browser runs each passed seven
+Chromium flows. The live app returned 52 trail features and five starts near
+Longmire and an exact 18.6 km Pear Butte Quick route. At the Southwest seam,
+3,062 shared forward edge IDs (86.257 km) have identical compiled geometry
+and access states; the PCT/upper Cispus overlap is retained. Disconnected
+trail islands and boundary-crossing ways remain visible in the audits rather
+than silently promoted to viable routes. Mount Rainier National Park and Norse
+Peak selectors remain deferred for their disconnected fringe portals. Generated
+packs, raw downloads, caches, and databases remain ignored.
