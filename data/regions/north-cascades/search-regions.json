@@ -6,16 +6,8 @@
       "expectedName": "North Cascades"
     },
     {
-      "namedAreaId": "osm:relation/2421537",
-      "expectedName": "North Cascades National Park"
-    },
-    {
       "namedAreaId": "osm:relation/6116357",
       "expectedName": "Mount Baker Wilderness"
-    },
-    {
-      "namedAreaId": "osm:relation/6116548",
-      "expectedName": "Pasayten Wilderness"
     },
     {
       "namedAreaId": "osm:relation/6116621",

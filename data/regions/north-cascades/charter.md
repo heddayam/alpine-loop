@@ -151,16 +151,25 @@ Never promote an unknown OSM way to public access from an agency trail line.
 
 ## Search regions and route-check candidates
 
-The current `search-regions.json` proposes the whole pack and four named
-areas verified in the pinned August 1 OSM extract: North Cascades National
-Park `relation/2421537`, Mount Baker Wilderness `relation/6116357`, Pasayten
-Wilderness `relation/6116548`, and Lake Chelan–Sawtooth Wilderness
-`relation/6116621`. Exact relation names and polygons were present, but these
-selectors remain **provisional until the compiled default-eligible,
-cycle-bearing portal distribution is reviewed**. Stephen Mather Wilderness
-`relation/16156374` and a narrower Methow or Highway 20 area are deferred;
-the latter need stable named polygons. The shared 500 m named-region approach
-band applies, but it does not prove a portal's trail enters that named area.
+The current `search-regions.json` proposes the whole pack, Mount Baker
+Wilderness `relation/6116357`, and Lake Chelan–Sawtooth Wilderness
+`relation/6116621`. A 2026-09-22 preflight used the exact v2 polygon and
+the builder's `osmium extract --strategy complete_ways`, named-area
+`tags-filter`, polygon `export --attributes=type,id`, and normalizer on the
+pinned August 1 Washington PBF. The export contained 73 polygon features;
+the normalizer retained 68 named areas, including those two relations with
+their exact names. North Cascades National Park `relation/2421537` and
+Pasayten Wilderness `relation/6116548` exist in the *statewide* snapshot
+but did **not** survive the regional extraction/export, so they are not
+published as selectors. The narrower North Cascades National Park South Unit
+relation does survive, but it cannot stand in for the whole park. The
+missing full-park and Pasayten selectors, Stephen Mather Wilderness, and
+narrower Methow/Highway 20 areas are deferred until a stable, complete
+polygon and useful derived portals can be reviewed. The hard coverage
+polygon still includes the intended park and Pasayten trails. Even the two
+retained named selectors remain provisional until compiled default-eligible,
+cycle-bearing portal distribution is checked. The shared 500 m named-region
+approach band does not prove a portal's trail enters that named area.
 
 Checkpoint clusters to prepare are Baker Lake/Baker River; Hannegan/Artist
 Point; Cascade Pass; Diablo/Ross Lake; Rainy/Maple Pass; Stehekin via a

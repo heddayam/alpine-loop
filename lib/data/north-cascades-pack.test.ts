@@ -55,9 +55,7 @@ describe("North Cascades pack inputs", () => {
     });
     expect(searchRegions.regions.map(({ namedAreaId }) => namedAreaId)).toEqual([
       "pack:north-cascades",
-      "osm:relation/2421537",
       "osm:relation/6116357",
-      "osm:relation/6116548",
       "osm:relation/6116621",
     ]);
   });
