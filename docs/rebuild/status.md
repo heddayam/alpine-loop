@@ -6,6 +6,23 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — completed a solver acceleration investigation without changing
+  production code or settings. The observed Full job completed 156 starts in
+  594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
+  loading, dominated by repeated exact coverage predicates. Across 17 isolated
+  eight-start fixed-work trials, exact/close payload fingerprints, ordering,
+  counts, and expanded states matched. A bounded exact-coverage-cache prototype
+  reduced two-worker median runtime from 47.82 to 25.10 seconds (1.91× throughput).
+  Cached two- and six-worker timings overlapped; larger pools used more memory
+  and uncached six-worker repeats varied substantially. Replaying all 156 start
+  durations predicts 11.1% more throughput from completion-driven scheduling at
+  two workers; this is a model, not an end-to-end measured gain. Prioritize exact
+  coverage caching, same-start reuse, first-free worker scheduling with ordered
+  checkpoints, then shared resource admission and broader worker-count tuning.
+  The prototype passed 57 existing offline tests and 48 direct geometry checks.
+  Its worktree/branch and benchmark container were removed; raw job/profile data
+  remains ignored. See [measurements and implementation requirements](solver-acceleration-audit.md).
+
 - [x] 2026-09-22 — added **Export GPX** in route details for Quick and saved
   Full-search results, including close matches. GPX 1.1 contains the complete
   ordered track (including retraced sections), a named starting waypoint,
