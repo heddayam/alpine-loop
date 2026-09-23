@@ -8,6 +8,18 @@ const criteria = {
 const area = { mode: "named-regions", regionIds: ["opaque-region"] };
 
 describe("geographic requests", () => {
+  it("accepts drive-time bands and preserves older zero-minimum requests", () => {
+    const drive = { mode: "drive-time", origin: { lon: -122, lat: 37, label: "Home" }, durationMinutes: 60, regionIds: [] };
+    expect(searchAreaSchema.parse(drive)).toEqual(drive);
+    for (const minDurationMinutes of [0, 5, 30, 55]) {
+      const band = { ...drive, minDurationMinutes };
+      expect(searchIntentSchema.parse({ area: band, criteria }).area).toEqual(band);
+      expect(searchRequestSchema.parse({ area: band, criteria }).area).toEqual(band);
+    }
+    for (const minDurationMinutes of [-5, 1, 7.5, 60, 75, 301]) {
+      expect(searchAreaSchema.safeParse({ ...drive, minDurationMinutes }).success).toBe(false);
+    }
+  });
   it("requires an unambiguous area and does not silently broaden invalid choices", () => {
     expect(searchAreaSchema.safeParse({ mode: "named-regions", regionIds: [] }).success).toBe(false);
     expect(searchAreaSchema.safeParse({ ...area, bbox: [-122, 37, -121, 38] }).success).toBe(false);
