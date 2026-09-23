@@ -6,6 +6,33 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — added minimum/maximum drive-time areas and bounded parallel
+  solving. The form defaults to 0–30 minutes, validates minimum < maximum for
+  Quick and Full, and retains the range in saved requests and Jobs labels.
+  Existing requests without a minimum still mean zero. ArcGIS returns a ring
+  between the requested breaks; positive-minimum responses must identify that
+  exact band, and the cache distinguishes both bounds. The band filters starts
+  without clipping hiking geometry. Quick searches independent packs in parallel;
+  Full searches independent trailheads, including within one pack. Lazy worker
+  slots default to at most two available CPUs per search, configurable through
+  `ALPINE_SOLVER_WORKERS` (1–8, CPU-capped). Ordered, bounded checkpoints preserve
+  deterministic deduplication, cancellation/deletion precedence, and restart
+  recovery without retaining a process for every installed pack.
+  Evidence: two `npm run verify` passes each passed 546 offline tests in 87
+  files, lint, types, and production build; two `npm run test:browser` passes
+  each passed seven flows, including Quick/Full 15–60 minute requests. New tests
+  cover invalid/legacy ranges, inner-contour exclusion, unclipped trails,
+  minimum-aware caching, reversed completion, interrupted parallel starts, and
+  late results after cancel/delete. Distinct child PIDs overlap synchronous
+  300 ms CPU fixtures by over 100 ms; serial/parallel Quick results are identical
+  on committed pack fixtures. Live in-app desktop and 390 px checks passed range
+  controls, map zoom/pan, panel scrolling, and mobile map switching without
+  browser errors. Compose configuration validates. An initial full run overlapped
+  another task's Olympic selector update; both final runs passed after its
+  matching test update. No live ArcGIS band call or regional throughput benchmark
+  was performed. No dependency or pack-schema change is required; this feature's
+  temporary worktrees and visual-check server were removed.
+
 - [x] 2026-09-22 — implemented the pack-build efficiency audit: prepare OSM
   once with boundary-aware child caches, stream hashes and OPL, share unchanged
   topology, bound temporary metric/sampling batches, and reduce persisted-audit
