@@ -19,7 +19,7 @@ describe("North Cascades pack inputs", () => {
       name: "North Cascades",
       dataVersionPrefix: "nc",
       compilerVersion: "basic-regional-pack-compiler-v1",
-      boundaryVersion: "north-cascades-boundary-v1",
+      boundaryVersion: "north-cascades-boundary-v2",
       regionRoot: NORTH_CASCADES_REGION_ROOT,
     });
     expect(buildNorthCascadesPack).toEqual(expect.any(Function));
@@ -33,6 +33,9 @@ describe("North Cascades pack inputs", () => {
     const boundary = parseRegionalBoundary(NORTH_CASCADES_PACK_CONFIG, contents);
     expect(boundary.geometry.type).toBe("Polygon");
     expect(areaGeometryBounds(boundary.geometry)).toEqual([-122.12, 48.015, -119.78, 49]);
+    // The southern lobe retains both legs of the PCT–South Fork Agnes cycle.
+    expect(pointInArea([-120.95732, 48.24123], boundary.geometry)).toBe(true);
+    expect(pointInArea([-120.93717, 48.21307], boundary.geometry)).toBe(true);
     expect(osm).toMatchObject({
       id: "geofabrik-washington-osm",
       version: "washington-260801",

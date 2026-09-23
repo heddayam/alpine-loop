@@ -7,7 +7,7 @@ passed.
 ## Identity and scope
 
 - Pack ID: `north-cascades`; display name: North Cascades.
-- Coverage input: `boundary.geojson`, version `north-cascades-boundary-v1`.
+- Coverage input: `boundary.geojson`, version `north-cascades-boundary-v2`.
   It is the **exact hard route-geometry boundary**. A named, drawn, or
   drive-time area selects starting portals and does not clip a route.
 - Intended users: hikers seeking locally generated closed routes across the
@@ -15,7 +15,7 @@ passed.
   Unknown access is included by default, and exact matches remain separate
   from labeled close matches.
 
-The v1 polygon keeps Mount Baker and Baker Lake/Baker River approaches,
+The v2 polygon keeps Mount Baker and Baker Lake/Baker River approaches,
 Artist Point/Hannegan and the northern NPS approaches, the Highway 20/Skagit
 and Cascade River corridors, all three units of the North Cascades National
 Park Service Complex, Pasayten west and east approaches, the Methow/Twisp
@@ -45,15 +45,16 @@ graph or used as the hard pack boundary.
 
 The concave single `Polygon` is a deliberately generalized envelope of the
 seven protected-area outlines named by `sourceNamedAreaIds` in the GeoJSON,
-plus public trail approach corridors. It has 26 unique vertices and bbox
+plus public trail approach corridors. It has 47 unique vertices and bbox
 `[-122.12, 48.015, -119.78, 49.0]`; its approximate spherical area is
-11,909 km². The northern edge stops at 49.0°N rather than following slight
+11,920 km². The northern edge stops at 49.0°N rather than following slight
 OSM border-line drift into British Columbia. Its western edge turns east
 around the Baker/Skagit foothills instead of including Bellingham and the
 Puget lowlands. The east and southeast edges turn west around Pasayten and
 the Lake Chelan–Sawtooth approaches instead of including the Okanogan basin.
-The southern edge bends north around the Glacier Peak core but leaves the
-Stehekin/Agnes Creek, Cascade Pass, and Sawtooth pedestrian connections whole.
+The southern edge bends north around the Glacier Peak core, with a narrow
+PCT–South Fork Agnes lobe, while retaining the Stehekin/Agnes Creek,
+Cascade Pass, and Sawtooth pedestrian connections.
 Roads inside the polygon remain build-only portal context, never published
 route edges.
 
@@ -76,32 +77,56 @@ not establish cycle reachability.
 The polygon intentionally intersects Central Cascades in a main
 Stehekin/Agnes Creek–southern park/Sawtooth area bounded by approximately
 `[-121.3699091, 48.1224299, -120.5276988, 48.4758823]`, plus a tiny
-western touch. The exact polygon intersection is 0.091656 square degrees,
-approximately 754 km². This keeps the pedestrian Stehekin approaches and
+western touch. The v2 polygon intersection is 0.092981 square degrees,
+approximately 765 km². This keeps the pedestrian Stehekin approaches and
 southern NPS trails from being severed by a pack seam; two packs may contain
 the same physical OSM ways, but a generated route cannot cross between their
 graphs mid-search. The existing Central pack remains responsible for Glacier
 Peak, Napeequa/Chiwawa, and the Alpine Lakes core. Before activation, inspect
 every North/Central boundary-crossing hiking way around Baker River, Cascade
-River, Stehekin/Agnes Creek and the PCT. Adjust the polygon if an included
-cycle or public approach is cut. No cross-boundary edge count or compiled
-portal count has yet been measured.
+River, Stehekin/Agnes Creek and the PCT. Adjust the polygon if another
+included cycle or public approach is cut. No compiled portal or cycle count
+has yet been measured.
 
 An August 1 OSM `osmium extract --strategy complete_ways` spike against this
-exact polygon retained 3,938 raw ways tagged `highway=path`, `footway`,
-`steps`, `pedestrian`, `track`, or `bridleway`: 3,831 lie wholly inside and
-107 cross the boundary (31 `path`, 76 `track`). This is an inventory of raw
+v2 polygon retained 3,947 raw ways tagged `highway=path`, `footway`,
+`steps`, `pedestrian`, `track`, or `bridleway`: 109 cross the boundary
+(33 `path`, 76 `track`). This is an inventory of raw
 tags, **not** normalized published hiking edges or a cycle/portal audit.
-The relevant southern path crossings include PCT `way/760899610` and South
-Fork Agnes Creek `way/1346658204` at the Stehekin/Agnes seam, Cloudy Pass
-`way/5838989`, and Emerald Park `way/387049074`. The PCT also crosses
+The relevant southern path crossings include PCT `way/760899610` at the new
+southern edge, Cloudy Pass `way/5838989`, and Emerald Park
+`way/387049074`. The PCT also crosses
 49°N at `way/350466146`; no Canadian continuation belongs in this pack.
 East-side crossings include North Summit `way/6089583`, Pearrygin Creek
 `way/427618491`, and Tiffany Lake `way/721319912`; west-side crossings
 include Cascade Trail `way/286337915`. Before activation, inspect the
 published segments and cycle-bearing components around these crossings.
-The southern PCT/Agnes and east Pasayten/Methow cuts are explicit unresolved
-seam decisions, not evidence that a route can cross between packs.
+The other southern and east Pasayten/Methow cuts remain review decisions,
+not evidence that a route can cross between packs.
+
+The v1 preflight found a specific loop severed near South Fork Agnes Creek.
+At its former boundary, PCT `way/760899610` and South Fork Agnes
+`way/1346658204` crossed within 0.96 km of trail connection *inside* North.
+Their exterior sides joined through 17.235 km of PCT
+`way/760899610`, PCT North Connector `way/1346658207`, and South Fork
+Agnes `way/1346658206`/`way/1346658204`, for an approximately 18.2 km
+raw OSM circuit. All 1,137 nodes of that exterior arc are within Central's
+exact boundary. The four ways have no restrictive OSM `foot` or `access`
+tags; the PCT has `foot=designated`. The v2 correction adds a locally
+simplified envelope about 400 m around that exterior arc, adding about
+10.9 km² and leaving every arc segment at least 319 m inside the new exact
+boundary. It does not remove any v1 coverage or broadly expand into the
+Glacier Peak core.
+`way/1346658204`, `way/1346658206`, and `way/1346658207` no longer cross
+the southern boundary; the PCT continues south and still crosses it. This
+is evidence of raw pedestrian topology, not a compiled route or access
+portal. The OSM `way/1346658204` also has `trail_visibility=bad`,
+`fixme=survey`, and a note questioning the ford location; the crossing and
+route must receive explicit QA before activation. The east-side crossing
+inspection found attached but separate
+inside trail components around North Summit, Bernhardt Mine, and Tiffany
+Lake; it did not establish a short cycle severed there. Retain the east
+edge pending compiled component and portal review.
 
 ## Explicit exclusions and access questions
 
