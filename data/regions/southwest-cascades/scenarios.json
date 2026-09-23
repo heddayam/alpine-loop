@@ -178,13 +178,13 @@
       }
     },
     {
-      "id": "upper-cispus-orr-creek",
+      "id": "upper-cispus-cody",
       "cluster": "Upper Cispus–Klickitat/High Lakes seam",
       "referencePoint": {
-        "name": "Orr Creek Sno Park parking way/549242926",
+        "name": "Cody Day Use Trailhead parking way/717051347",
         "coordinates": [
-          -121.597406,
-          46.351489
+          -121.565835,
+          46.364973
         ]
       },
       "searchRegionId": "pack:southwest-cascades",

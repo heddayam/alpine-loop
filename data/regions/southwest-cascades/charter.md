@@ -111,13 +111,19 @@ measured. A named area would filter starts only, never clip route geometry.
 
 `scenarios.json` records nine review anchors: Ape Canyon and June Lake for
 Loowit feeders, Norway Pass for Mount Margaret/Boundary Trail, Stagman Ridge
-and Killen Creek for Adams, Orr Creek for the upper Cispus/Klickitat seam,
+and Killen Creek for Adams, Cody Day Use for the upper Cispus/Klickitat seam,
 Lemei for Indian Heaven, Big Hollow for Trapper Creek, and Rock Creek for Silver
-Star–Tarbell. Ape Canyon, June Lake, and Orr Creek are actual OSM parking areas
-(`way/65069378`, `way/439071688`, `way/549242926`); the other anchors are
+Star–Tarbell. Ape Canyon, June Lake, and Cody are actual OSM parking areas
+(`way/65069378`, `way/439071688`, `way/717051347`); the other anchors are
 named OSM trailheads. They create no independent starts. Each plausible exact
 and deliberately impossible gain request remains an **unverified checkpoint**
 until it resolves to a derived portal within 500 m and passes the route runner.
+At Cody, the parking polygon has a service-road node about 7 m away and a
+`foot=designated` Klickitat Loop Trail node about 10 m away in the pinned OSM
+snapshot. That trail belongs to a 23-way pedestrian component with cycle rank
+2, making Cody an evidence-backed portal candidate, not a guaranteed compiled
+portal or route. The previous Orr Creek Sno Park candidate had no pedestrian
+path within 1 km and was removed from the scenarios.
 The Blue Lake–Hamilton component itself has no confirmed derived portal yet;
 its newly covered cycles must be checked during compiled portal QA.
 The wider repeated-trail allowances in these backpacking-scale scenarios are

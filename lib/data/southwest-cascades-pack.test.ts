@@ -70,6 +70,7 @@ describe("Southwest Cascades pack wiring", () => {
       scenarios: Array<{
         id: string;
         searchRegionId: string;
+        referencePoint: { name: string; coordinates: [number, number] };
         exactExpectation: { result: string };
         impossibleExpectation: { result: string };
       }>;
@@ -81,11 +82,15 @@ describe("Southwest Cascades pack wiring", () => {
       "mount-margaret-boundary",
       "adams-south-stagman",
       "adams-north-killen",
-      "upper-cispus-orr-creek",
+      "upper-cispus-cody",
       "indian-heaven-lemei",
       "trapper-creek-big-hollow",
       "silver-star-tarbell",
     ]);
+    expect(input.scenarios.find(({ id }) => id === "upper-cispus-cody")?.referencePoint).toEqual({
+      name: "Cody Day Use Trailhead parking way/717051347",
+      coordinates: [-121.565835, 46.364973],
+    });
     expect(input.scenarios.every((scenario) =>
       scenario.searchRegionId === "pack:southwest-cascades"
       && scenario.exactExpectation.result === "at-least-one-exact"
