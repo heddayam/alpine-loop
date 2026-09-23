@@ -3,7 +3,9 @@ import { regionRegistryV1Schema } from "@/lib/contracts";
 import { buildCentralCascadesPack } from "./central-cascades-pack";
 import { buildHenryCoePack } from "./henry-coe-pack";
 import { buildMontereyCarmelPack } from "./monterey-carmel-pack";
+import { buildNorthCascadesPack } from "./north-cascades-pack";
 import { buildOlympicPeninsulaPack } from "./olympic-peninsula-pack";
+import { buildRainierGoatRocksPack } from "./rainier-goat-rocks-pack";
 import { buildSantaCruzPack } from "./santa-cruz-pack";
 import { buildSouthernEastBayPack } from "./southern-east-bay-pack";
 import { buildSouthwestCascadesPack } from "./southwest-cascades-pack";
@@ -19,7 +21,9 @@ const builders = new Map<string, RegionalPackBuilder>([
   ["central-cascades", buildCentralCascadesPack],
   ["henry-coe", buildHenryCoePack],
   ["monterey-carmel", buildMontereyCarmelPack],
+  ["north-cascades", buildNorthCascadesPack],
   ["olympic-peninsula", buildOlympicPeninsulaPack],
+  ["rainier-goat-rocks", buildRainierGoatRocksPack],
   ["santa-cruz-mountains", buildSantaCruzPack],
   ["southern-east-bay", buildSouthernEastBayPack],
   ["southwest-cascades", buildSouthwestCascadesPack],
