@@ -9,7 +9,7 @@ export const CENTRAL_CASCADES_PACK_CONFIG: RegionalPackDefinition = {
   name: "Central Cascades",
   dataVersionPrefix: "cc",
   compilerVersion: "basic-regional-pack-compiler-v1",
-  boundaryVersion: "central-cascades-boundary-v1",
+  boundaryVersion: "central-cascades-boundary-v2",
   regionRoot: CENTRAL_CASCADES_REGION_ROOT,
   display: { center: [-121.2, 47.75], zoom: 7.5 },
   officialTrails: {

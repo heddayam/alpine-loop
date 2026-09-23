@@ -156,9 +156,9 @@ describe("regional preparation compatibility with dff1b43", () => {
       const seed = captured.options!.seed;
       expect(seed.closedRouteTopology.algorithmVersion).toBe(topologyVersion.value);
       expect(actual.dataVersion).not.toBe(old.dataVersion);
-      // Only the explicitly versioned feasibility compilation changes the seed;
-      // Regional inputs retain frozen expectations, updated explicitly when
-      // a source pin changes (Cascades moved to the retained August 1 snapshot).
+      // Regional inputs retain frozen expectations except for explicit source,
+      // boundary, and derivation revisions. Central Cascades now uses its v2
+      // Wild Sky boundary and v4 trailhead portal derivation.
       expect({ ...actual, dataVersion: old.dataVersion, seedHash: digest({ ...seed,
         dataVersion: old.dataVersion, closedRouteTopology: { ...seed.closedRouteTopology,
           algorithmVersion: "closed-route-safe-pruning-v1" } }) }).toEqual(old);

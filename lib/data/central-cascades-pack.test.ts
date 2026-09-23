@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { areaGeometryBounds } from "./area-geometry";
+import { areaGeometryBounds, pointInArea } from "./area-geometry";
 import { parseRegionalBoundary } from "./regional-builder";
 import {
   CENTRAL_CASCADES_PACK_CONFIG,
@@ -20,7 +20,7 @@ describe("Central Cascades pack wiring", () => {
       name: "Central Cascades",
       dataVersionPrefix: "cc",
       compilerVersion: "basic-regional-pack-compiler-v1",
-      boundaryVersion: "central-cascades-boundary-v1",
+      boundaryVersion: "central-cascades-boundary-v2",
       regionRoot: CENTRAL_CASCADES_REGION_ROOT,
       display: { center: [-121.2, 47.75], zoom: 7.5 },
       officialTrails: {
@@ -32,13 +32,20 @@ describe("Central Cascades pack wiring", () => {
 
     const boundaryContents = await readFile(path.join(CENTRAL_CASCADES_REGION_ROOT, "boundary.geojson"), "utf8");
     const boundary = parseRegionalBoundary(CENTRAL_CASCADES_PACK_CONFIG, boundaryContents);
-    expect(boundary.geometry.type).toBe("Polygon");
+    expect(boundary.geometry.type).toBe("MultiPolygon");
     expect(areaGeometryBounds(boundary.geometry)).toEqual([
       -121.73319523634241,
       47.19654585917808,
       -120.5276988,
       48.4758823,
     ]);
+    for (const point of [
+      [-121.2769283, 47.9267716], // North Fork Skykomish trailhead
+      [-121.23483, 47.90928], // West Cady Ridge
+      [-121.1850169, 47.9237065], // East end of mapped West Cady trail
+    ] as const) {
+      expect(pointInArea(point, boundary.geometry)).toBe(true);
+    }
 
     const [osm, elevation, searchRegions, officialTrails, conflationPolicy] = await Promise.all([
       readOsmSourceConfig(path.join(CENTRAL_CASCADES_REGION_ROOT, "osm-source.json")),
@@ -98,6 +105,7 @@ describe("Central Cascades pack wiring", () => {
       "east-glacier-peak-white-river",
       "chiwawa-spider-meadow",
       "west-glacier-peak-north-fork-sauk",
+      "west-cady-north-fork",
       "stevens-pass",
       "icicle-enchantments",
       "snoqualmie-alpine-lakes",

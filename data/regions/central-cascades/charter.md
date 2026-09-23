@@ -117,9 +117,10 @@ named polygon passes the same access and cycle checks.
 
 ## Representative scenario anchors
 
-`scenarios.json` covers eight required clusters: east Glacier Peak/White River,
-Chiwawa/Spider Meadow, west Glacier Peak, Stevens Pass, Icicle/Enchantments,
-Snoqualmie/Alpine Lakes, Cle Elum/Salmon la Sac, and Teanaway. Coordinates are OSM trailhead
+`scenarios.json` covers nine required clusters: east Glacier Peak/White River,
+Chiwawa/Spider Meadow, west Glacier Peak, West Cady Ridge/North Fork Skykomish,
+Stevens Pass, Icicle/Enchantments, Snoqualmie/Alpine Lakes, Cle Elum/Salmon la
+Sac, and Teanaway. Coordinates are OSM trailhead
 or trail-system review anchors, not independently created starts. Each must
 resolve to a generic derived portal within 500 m before activation. Every
 cluster has a broad plausible exact request and a deliberately impossible gain
@@ -211,3 +212,39 @@ scenario and an honestly labeled close match for its impossible scenario.
 
 Generated packs, raw downloads, caches, collection receipts, databases, and
 audit artifacts remain ignored and must never be committed.
+
+## V2 West Cady acceptance (2026-09-23)
+
+The pinned August 1 OSM snapshot and existing four 3DEP tiles cover the v2
+boundary without a wider download envelope. The July USGS trail supplement's
+pinned bbox also remains sufficient. Exact-node OSM trailhead evidence at a
+walkable track/path junction now creates a derived portal under generic portal
+derivation v4; a marker near a trail or a track by itself does not create one.
+The North Fork Skykomish portal is 23.0 m from its mapped trailhead, has high
+confidence and unknown access, and is included by the default access setting.
+Disabling unknown access excludes this start.
+
+Two independent fresh offline builds from the same pinned sources produced
+byte-identical schema-6 `cc-d9160473291fdf6b` artifacts:
+
+| File | SHA-256 |
+| --- | --- |
+| `manifest.json` | `41a898b1ed8cb916dcd0ba06b338396e64ceb5d1265f3a896e25ba630b17eaa1` |
+| `pack.sqlite` | `6b5b2cf857ff52ef09896856ce2587ff9bb2bd725ef343d899e639e363b0af7e` |
+| `audit.json` | `3087060441edc1122aabd840cfc43f3f30ee9d9cdd3f2da25ed9853add8781c6` |
+| `regional-audit.json` | `c92e832ece2a2f65c67c4badd828a17be0b17888da7056317d78f5af525dd2` |
+| `portal-audit.json` | `e1ec4e0909a6e5431b738b41b81caf4690b21f5fd0f8c4cbf770aa38e0a97349` |
+| `official-trail-conflation-audit.json` | `e04125dfeadd4af3fcf1a233313041dcab5e8ec0e8e32d0e1adf8fc3b8e934bc` |
+
+Audit: 279,344 nodes, 555,865 directed edges, 573 persisted portals, 30 named
+areas, four reviewed search regions, 270 inclusive and 64 known cycle-feasible
+portals, zero missing elevations, zero outside-coverage persisted edges, zero
+audit errors or conflicts, no non-trail published edges, and clean SQLite
+integrity and foreign-key checks. All nine Thorough scenario pairs returned an
+exact route and a labeled close match for their impossible request with zero
+directed-validation rejections. The West Cady scenario selected the portal
+23.0 m from its reference point and returned three exact routes. A direct
+result inspection found a 23.92-mile simple loop with 8.05 miles of West Cady
+Ridge Trail, 7,697 ft of gain, and no repeated trail. The mapped loop crosses
+two OSM ford nodes; these observations do not establish current passability.
+The locally installed artifact's six file hashes match the validated build.
