@@ -14,6 +14,11 @@ Areas select starting points; they do not clip hikes. Routes can extend beyond
 an area while staying inside installed data coverage. Results include route
 geometry, elevation profiles, repetition, and mapped trail conditions.
 
+Open a route in Results and choose **Export GPX** to download its full track
+and starting point. In [CalTopo](https://training.caltopo.com/all_users/import-export/import),
+choose **Import** and select the downloaded `.gpx` file. Export also works for
+saved Full-search results.
+
 ## Get started
 
 Install Git and Docker with Docker Compose, and make sure Docker is running. I personally use orbStack.

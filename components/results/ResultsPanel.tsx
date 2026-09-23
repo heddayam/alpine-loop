@@ -8,6 +8,7 @@ import type {
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
 import { routeStart } from "./route-start";
+import { routeGpx, routeGpxFilename } from "@/lib/export/route-gpx";
 
 export type ResultsStatus = "loading" | "done" | "error";
 
@@ -182,6 +183,18 @@ function RouteCard({
   const detailId = `route-detail-${route.id}`;
   const coordinates = trailheadCoordinates(route);
   const heading = routeHeading(route);
+  const exportGpx = () => {
+    const name = `Route ${routeNumber} · ${heading || "Alpine Loop"}`;
+    const url = URL.createObjectURL(new Blob([routeGpx(route, name)], { type: "application/gpx+xml;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = routeGpxFilename(name);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Let the browser start reading the download before releasing its bytes.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const coordinateCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coordinateCopyAttemptRef = useRef(0);
@@ -257,6 +270,7 @@ function RouteCard({
 
       {expanded ? (
         <div className="route-card-detail" id={detailId} role="region" aria-labelledby={`route-heading-${route.id}`}>
+          <button type="button" className="btn route-export" title="Download this route for import into CalTopo or another GPX app" onClick={exportGpx}>Export GPX</button>
           {route.warnings.length ? <ul className="route-warnings" aria-label="Route warnings">{route.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
           <ElevationProfile route={route} />
           <button

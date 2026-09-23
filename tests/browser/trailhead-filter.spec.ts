@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { ACCESS_POINTS, routeResponse } from "./fixtures";
 import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
 
@@ -31,6 +32,22 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("region", { name: "Trail segments" })).toHaveCount(0);
   await firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ }).click();
   await expect(firstCard.getByRole("region", { name: "Trail segments" })).toBeVisible();
+  const downloadStarted = page.waitForEvent("download");
+  await firstCard.getByRole("button", { name: "Export GPX" }).click();
+  const download = await downloadStarted;
+  expect(download.suggestedFilename()).toMatch(/\.gpx$/);
+  const xml = await readFile((await download.path())!, "utf8");
+  const exported = await page.evaluate((text) => {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    return {
+      errors: doc.querySelectorAll("parsererror").length,
+      namespace: doc.documentElement.namespaceURI,
+      points: Array.from(doc.querySelectorAll("trkpt"), (point) => [Number(point.getAttribute("lon")), Number(point.getAttribute("lat"))]),
+    };
+  }, xml);
+  expect(exported.errors).toBe(0);
+  expect(exported.namespace).toBe("http://www.topografix.com/GPX/1/1");
+  expect(exported.points).toEqual(routeResponse(harness.generationRequests[0]!).exact[0]!.geometry.coordinates);
   const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
   await firstSegment.hover();
   await expect(firstSegment).toHaveClass(/hovered/);
@@ -107,6 +124,14 @@ test("Full search launches a persistent region-wide job without an origin and re
   await jobs.getByRole("button", { name: /View results for/ }).click();
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await expect(page.locator(".route-card")).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".route-card-select").nth(1).click();
+  const savedDownloadStarted = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export GPX" }).click();
+  const savedDownload = await savedDownloadStarted;
+  const savedXml = await readFile((await savedDownload.path())!, "utf8");
+  expect(savedXml).toContain("Route 2");
+  expect(savedXml).toContain("<trkpt");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 

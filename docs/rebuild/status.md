@@ -6,6 +6,24 @@ the evidence line.
 
 ## Active system design revision
 
+- [x] 2026-09-22 — added **Export GPX** in route details for Quick and saved
+  Full-search results, including close matches. GPX 1.1 contains the complete
+  ordered track (including retraced sections), a named starting waypoint,
+  source provenance, and warnings. Downloads use safe filenames and release
+  browser object URLs. Elevations are omitted because profile samples are not
+  paired with geometry vertices. CalTopo's documented GPX import is linked in
+  the README; no live CalTopo upload was performed.
+  Evidence: two `npm run verify` passes each passed 552 offline tests in 88
+  files, lint, types, and production build. Two `npm run test:browser` passes
+  each passed seven flows, including parsing a real Quick-result download and
+  comparing every coordinate, plus a saved-result download at 390 px. Focused
+  tests cover XML escaping, Unicode, legacy geometry, repeated paths, close
+  match export, and download cleanup. Live in-app checks with a saved Sunol
+  route passed desktop/mobile layout, map zoom/pan, mobile segment scrolling,
+  and zero console errors. No dependency, API, or pack-schema changes. The
+  temporary GPX worktree/branch and preview server were removed; unrelated
+  regional-pack and solver work remains in progress in the shared workspace.
+
 - [x] 2026-09-22 — added minimum/maximum drive-time areas and bounded parallel
   solving. The form defaults to 0–30 minutes, validates minimum < maximum for
   Quick and Full, and retains the range in saved requests and Jobs labels.
