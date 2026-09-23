@@ -126,7 +126,7 @@
         },
         "elevationGainFeet": {
           "min": 100,
-          "max": 4500
+          "max": 6500
         },
         "result": "at-least-one-exact"
       },
@@ -156,8 +156,8 @@
       "maximumRepeatedTrailPct": 55,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 2,
-          "max": 18
+          "min": 0.5,
+          "max": 10
         },
         "elevationGainFeet": {
           "min": 100,
@@ -213,13 +213,13 @@
       }
     },
     {
-      "id": "elwha-whiskey-bend",
+      "id": "elwha-olympic-hot-springs-road",
       "cluster": "Elwha",
       "referencePoint": {
-        "name": "Whiskey Bend",
+        "name": "Olympic Hot Springs Road trailhead",
         "coordinates": [
-          -123.58248,
-          47.96784
+          -123.60052,
+          48.00286
         ]
       },
       "searchRegionId": "pack:olympic-peninsula",
@@ -283,32 +283,32 @@
       }
     },
     {
-      "id": "colonel-bob",
-      "cluster": "Colonel Bob",
+      "id": "quinault-kestner-homestead",
+      "cluster": "Quinault Kestner Homestead",
       "referencePoint": {
-        "name": "Colonel Bob Peak Trailhead",
+        "name": "Kestner Homestead trailhead",
         "coordinates": [
-          -123.79357,
-          47.49669
+          -123.81765,
+          47.50864
         ]
       },
-      "searchRegionId": "osm:relation/6122955",
+      "searchRegionId": "pack:olympic-peninsula",
       "maximumRepeatedTrailPct": 65,
       "exactExpectation": {
         "distanceMiles": {
-          "min": 4,
-          "max": 20
+          "min": 0.5,
+          "max": 10
         },
         "elevationGainFeet": {
-          "min": 800,
-          "max": 6500
+          "min": 0,
+          "max": 3000
         },
         "result": "at-least-one-exact"
       },
       "impossibleExpectation": {
         "distanceMiles": {
-          "min": 4,
-          "max": 20
+          "min": 0.5,
+          "max": 10
         },
         "elevationGainFeet": {
           "min": 30000,

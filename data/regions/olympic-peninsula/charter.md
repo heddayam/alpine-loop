@@ -106,12 +106,15 @@ area. Park, forest, and Daniel J. Evans remain deferred selector candidates;
 their source polygons are not silently reconstructed from the pack boundary.
 
 Review Hurricane Ridge/Deer Park, Elwha, Lake Crescent, Sol Duc, Dungeness,
-Hoh, Bogachiel, Queets, Quinault/Graves Creek, Dosewallips/Duckabush,
-Staircase, Ozette, Rialto, and the South Coast. These are validation clusters,
-not preloaded hikes. A linear coast trail may be represented without yielding
-an exact closed result. Each retained route checkpoint must resolve to a
-derived portal and pass a plausible exact request plus a deliberately
-impossible request with a labeled close result.
+Hoh, Bogachiel, Queets, Quinault/Graves Creek, Colonel Bob,
+Dosewallips/Duckabush, Staircase, Ozette, Rialto, and the South Coast.
+These are validation clusters, not preloaded hikes. A linear coast trail may
+be represented without yielding an exact closed result. The pinned Colonel
+Bob Peak Trailhead has no derived eligible portal within 500 m under the
+shared trail/road-contact rule; it remains a recorded access gap, while the
+nearby Kestner Homestead loop is a separate passing checkpoint. Each retained
+route checkpoint must resolve to a derived portal and pass a plausible exact
+request plus a deliberately impossible request with a labeled close result.
 
 ## Activation gate
 
