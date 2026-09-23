@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "usgs-3dep-13-arc-second",
+  "cacheNamespace": "olympic-peninsula-elevation",
+  "authority": "U.S. Geological Survey",
+  "dataset": "National Elevation Dataset (NED) 1/3 arc-second",
+  "catalogId": "USGS:3a81321b-c153-416f-98b7-cc8e5f0e17c3",
+  "version": "olympic-peninsula-3dep-pinned-2026-09-22-v1",
+  "endpoint": "https://tnmaccess.nationalmap.gov/api/v1/products",
+  "bbox": [-124.7425886, 47.2992132, -122.8837697, 48.2752636],
+  "productExtent": "1 x 1 degree",
+  "expectedProductIds": [
+    "6604fa8bd34e64ff154955e1",
+    "6604fa89d34e64ff154955df",
+    "6604fa88d34e64ff154955dd",
+    "6604fa86d34e64ff154955db",
+    "6604fa84d34e64ff154955d9",
+    "6604fa83d34e64ff154955d7"
+  ],
+  "resolution": "1/3 arc-second (nominal 10 m)",
+  "horizontalDatum": "NAD83",
+  "verticalDatum": "NAVD88",
+  "license": "U.S. public domain; https://www.usa.gov/publicdomain/label/1.0/"
+}

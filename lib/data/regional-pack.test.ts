@@ -7,14 +7,18 @@ describe("regional pack builder registry", () => {
       "central-cascades",
       "henry-coe",
       "monterey-carmel",
+      "olympic-peninsula",
       "santa-cruz-mountains",
       "southern-east-bay",
+      "southwest-cascades",
     ]);
     expect(requireRegionalPackBuilder("central-cascades")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("henry-coe")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("monterey-carmel")).toEqual(expect.any(Function));
+    expect(requireRegionalPackBuilder("olympic-peninsula")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("santa-cruz-mountains")).toEqual(expect.any(Function));
     expect(requireRegionalPackBuilder("southern-east-bay")).toEqual(expect.any(Function));
+    expect(requireRegionalPackBuilder("southwest-cascades")).toEqual(expect.any(Function));
   });
 
   it("distinguishes planned regions from unknown pack ids", () => {
@@ -22,8 +26,6 @@ describe("regional pack builder registry", () => {
       "marin-mount-tam",
       "north-cascades",
       "rainier-goat-rocks",
-      "southwest-cascades",
-      "olympic-peninsula",
     ]) {
       expect(() => requireRegionalPackBuilder(id)).toThrow(/planned.*does not have a pack builder/i);
     }

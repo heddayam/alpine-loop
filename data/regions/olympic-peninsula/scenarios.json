@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "packId": "olympic-peninsula",
+  "scenarios": [
+    {
+      "id": "ozette-triangle",
+      "cluster": "Ozette beach-and-boardwalk triangle",
+      "referencePoint": {
+        "name": "Ozette trail parking",
+        "coordinates": [
+          -124.66889,
+          48.15519
+        ]
+      },
+      "searchRegionId": "pack:olympic-peninsula",
+      "maximumRepeatedTrailPct": 40,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 0,
+          "max": 2500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "sol-duc-lovers-lane",
+      "cluster": "Sol Duc",
+      "referencePoint": {
+        "name": "Sol Duc Trailhead",
+        "coordinates": [
+          -123.83487,
+          47.95487
+        ]
+      },
+      "searchRegionId": "osm:relation/163769",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 300,
+          "max": 4500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "hoh-rainforest",
+      "cluster": "Hoh rainforest",
+      "referencePoint": {
+        "name": "Hoh River Trailhead",
+        "coordinates": [
+          -123.93439,
+          47.86047
+        ]
+      },
+      "searchRegionId": "osm:relation/163769",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 1,
+          "max": 14
+        },
+        "elevationGainFeet": {
+          "min": 0,
+          "max": 3500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 1,
+          "max": 14
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "staircase-rapids",
+      "cluster": "Staircase",
+      "referencePoint": {
+        "name": "Staircase Rapids Trailhead",
+        "coordinates": [
+          -123.33099,
+          47.5162
+        ]
+      },
+      "searchRegionId": "osm:relation/163769",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 16
+        },
+        "elevationGainFeet": {
+          "min": 100,
+          "max": 4500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 16
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "quinault-rainforest",
+      "cluster": "Quinault rainforest",
+      "referencePoint": {
+        "name": "Quinault Rain Forest Trailhead",
+        "coordinates": [
+          -123.86198,
+          47.45988
+        ]
+      },
+      "searchRegionId": "pack:olympic-peninsula",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 100,
+          "max": 5000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 18
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "hurricane-ridge",
+      "cluster": "Hurricane Ridge",
+      "referencePoint": {
+        "name": "Hurricane Hill Trailhead",
+        "coordinates": [
+          -123.51782,
+          47.97661
+        ]
+      },
+      "searchRegionId": "osm:relation/163769",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 14
+        },
+        "elevationGainFeet": {
+          "min": 200,
+          "max": 5000
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 2,
+          "max": 14
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "elwha-whiskey-bend",
+      "cluster": "Elwha",
+      "referencePoint": {
+        "name": "Whiskey Bend",
+        "coordinates": [
+          -123.58248,
+          47.96784
+        ]
+      },
+      "searchRegionId": "osm:relation/163769",
+      "maximumRepeatedTrailPct": 60,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 300,
+          "max": 6500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 3,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "buckhorn-mount-townsend",
+      "cluster": "Buckhorn",
+      "referencePoint": {
+        "name": "Mount Townsend Upper Trailhead",
+        "coordinates": [
+          -123.0357,
+          47.85615
+        ]
+      },
+      "searchRegionId": "osm:relation/6122342",
+      "maximumRepeatedTrailPct": 65,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 800,
+          "max": 6500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    },
+    {
+      "id": "colonel-bob",
+      "cluster": "Colonel Bob",
+      "referencePoint": {
+        "name": "Colonel Bob Peak Trailhead",
+        "coordinates": [
+          -123.79357,
+          47.49669
+        ]
+      },
+      "searchRegionId": "osm:relation/6122955",
+      "maximumRepeatedTrailPct": 65,
+      "exactExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 800,
+          "max": 6500
+        },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": {
+          "min": 4,
+          "max": 20
+        },
+        "elevationGainFeet": {
+          "min": 30000,
+          "max": 35000
+        },
+        "result": "near-miss-only"
+      }
+    }
+  ]
+}
