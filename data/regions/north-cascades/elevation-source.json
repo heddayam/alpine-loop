@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "usgs-3dep-13-arc-second",
+  "cacheNamespace": "north-cascades-elevation",
+  "authority": "U.S. Geological Survey",
+  "dataset": "National Elevation Dataset (NED) 1/3 arc-second",
+  "catalogId": "USGS:3a81321b-c153-416f-98b7-cc8e5f0e17c3",
+  "version": "north-cascades-3dep-pinned-2026-09-22-v1",
+  "endpoint": "https://tnmaccess.nationalmap.gov/api/v1/products",
+  "bbox": [-122.12, 48.015, -119.78, 49.0],
+  "productExtent": "1 x 1 degree",
+  "expectedProductIds": [
+    "689d4591d4be027ac158993c",
+    "689d4591d4be027ac158993a",
+    "689d4590d4be027ac1589938",
+    "6604fa86d34e64ff154955db"
+  ],
+  "resolution": "1/3 arc-second (nominal 10 m)",
+  "horizontalDatum": "NAD83",
+  "verticalDatum": "NAVD88",
+  "license": "U.S. public domain; https://www.usa.gov/publicdomain/label/1.0/"
+}

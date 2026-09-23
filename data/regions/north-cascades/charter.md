@@ -126,16 +126,16 @@ Never promote an unknown OSM way to public access from an agency trail line.
 
 ## Search regions and route-check candidates
 
-Candidate selectors are the whole pack; Mount Baker Wilderness; Pasayten
-Wilderness; Lake Chelan–Sawtooth Wilderness; and the North Cascades NPS
-complex/Stephen Mather Wilderness if the pinned named-area geometry and
-derived portal distribution support a useful selector. A narrower Methow or
-Highway 20 area requires a stable named polygon and the same portal review.
-Only candidates present in the pinned OSM named-area inventory with useful
-default-eligible, cycle-bearing portals may be committed to
-`search-regions.json`. The shared 500 m named-region approach band applies;
-it does not prove a portal's trail enters that named area. No selector is
-approved by this charter alone.
+The current `search-regions.json` proposes the whole pack and four named
+areas verified in the pinned August 1 OSM extract: North Cascades National
+Park `relation/2421537`, Mount Baker Wilderness `relation/6116357`, Pasayten
+Wilderness `relation/6116548`, and Lake Chelan–Sawtooth Wilderness
+`relation/6116621`. Exact relation names and polygons were present, but these
+selectors remain **provisional until the compiled default-eligible,
+cycle-bearing portal distribution is reviewed**. Stephen Mather Wilderness
+`relation/16156374` and a narrower Methow or Highway 20 area are deferred;
+the latter need stable named polygons. The shared 500 m named-region approach
+band applies, but it does not prove a portal's trail enters that named area.
 
 Checkpoint clusters to prepare are Baker Lake/Baker River; Hannegan/Artist
 Point; Cascade Pass; Diablo/Ross Lake; Rainy/Maple Pass; Stehekin via a
@@ -143,8 +143,13 @@ pedestrian approach; Methow/Twisp; and Pasayten west and east approaches.
 Each retained cluster needs a reference coordinate within 500 m of a **derived
 OSM portal**, a plausible exact route request, and a deliberately impossible
 request that yields an honestly labeled close match. Boat-only access cannot
-be counted as a route start. The representative OSM anchors above are
-geographic checks only, not accepted checkpoint starts.
+be counted as a route start. `scenarios.json` now has nine provisional OSM
+trailhead anchors from the same pinned extract, one for each cluster (Pasayten
+has separate west/east cases). War Creek is the Stehekin *foot-approach*
+anchor; a Stehekin landing or water taxi is not used as a start. Every anchor
+lies inside the hard polygon, but none has passed the derived-portal distance,
+cycle, exact-route, or close-match checkpoint yet. Scenario ranges and
+repetition caps are inputs for that empirical review, not promises of routes.
 
 ## Sources, license, and remaining gate
 
@@ -160,10 +165,28 @@ before release. This pinned PBF supplies trail topology, access tags,
 portal/building evidence, and named areas. An August 6 cache exists, but no
 measurement above relies on it.
 
-Query [USGS 3DEP 1/3 arc-second](https://www.usgs.gov/3d-elevation-program/about-3dep-products-services)
-against this exact boundary and pin each intersecting product, version,
-datum, hash, and receipt in a region-unique collection. USGS elevation is
-U.S. public-domain data with attribution. [USFS wilderness boundary
+The official [USGS National Map product catalog](https://tnmaccess.nationalmap.gov/api/v1/products)
+was queried on 2026-09-22 for the exact bbox
+`[-122.12, 48.015, -119.78, 49.0]`, dataset `National Elevation Dataset
+(NED) 1/3 arc-second`, and extent `1 x 1 degree`. The response had 24
+historical/current records. `elevation-source.json` pins the newest published
+GeoTIFF revision for each of the **four tiles with positive area** inside
+the boundary:
+
+| Tile | Pinned product ID | Publication date | Catalog byte count (advisory) |
+| --- | --- | --- | ---: |
+| `n49w120` | `689d4591d4be027ac158993c` | 2025-08-13 | 455,715,088 |
+| `n49w121` | `689d4591d4be027ac158993a` | 2025-08-13 | 460,254,841 |
+| `n49w122` | `689d4590d4be027ac1589938` | 2025-08-13 | 479,441,377 |
+| `n49w123` | `6604fa86d34e64ff154955db` | 2024-03-27 | 354,482,800 |
+
+The catalog also returns `n50` tiles touching the top edge at 49.0°N; they
+have no positive-area intersection with this Washington-only polygon and are
+not pinned. The `north-cascades-elevation` namespace is region-unique; shared
+raw tile caches may be reused. Product downloads, actual byte counts,
+SHA-256 receipts, NAD83/NAVD88 validation, and coverage/elevation audits
+remain to be done. USGS elevation is U.S. public-domain data with
+attribution. [USFS wilderness boundary
 documentation](https://data.fs.usda.gov/geodata/other_fs/wilderness/stateMap.php?stateID=WA),
 USFS maps, and NPS pages are review-only inputs for this charter. No USFS or
 NPS line, point, map image, or terms-sensitive material is imported or
@@ -171,10 +194,10 @@ redistributed as a pack source by this commit. Any future official trail
 supplement must meet the shared licensed, connected-gap conflation rules.
 
 Before builder activation, complete the schema-6 onboarding gate: review
-boundary-crossing trail ways and disconnected components; select exact 3DEP
-tiles and any durable exact-way restrictions; commit validated source configs,
-search regions, and scenarios; derive and audit portals, buildings, and cycles;
-build twice independently offline with byte-identical outputs; run the
+boundary-crossing trail ways and disconnected components; determine any
+durable exact-way restrictions; validate the provisional selectors and
+scenarios against compiled portals and routes; derive and audit buildings
+and cycles; build twice independently offline with byte-identical outputs; run the
 representative exact/close route checks and application/browser verification.
 Do not add a catalog `packId` until those checks pass. Keep raw downloads,
 generated packs, receipts, and audit databases out of Git.
