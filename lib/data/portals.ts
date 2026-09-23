@@ -12,7 +12,7 @@ import type {
 export const PORTAL_CLUSTER_DISTANCE_M = 150;
 export const PORTAL_EVIDENCE_DISTANCE_M = 250;
 export const PARKING_ROAD_CONTACT_DISTANCE_M = 25;
-export const PORTAL_DERIVATION_VERSION = "portal-derivation-v3";
+export const PORTAL_DERIVATION_VERSION = "portal-derivation-v4";
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const RESTRICTIVE_ACCESS = new Set<AccessState>(["private", "closed", "prohibited"]);
@@ -139,6 +139,31 @@ function coordinateForNode(node: NormalizedNode): Coordinate {
 
 function nonRestrictive(way: NormalizedWay): boolean {
   return !RESTRICTIVE_ACCESS.has(way.accessState);
+}
+
+function isOsmTrailHighway(way: NormalizedWay, highway: string): boolean {
+  return way.externalId.startsWith("way/") && way.flags.includes(`osm-highway:${highway}`);
+}
+
+function isOsmNonTrackTrail(way: NormalizedWay): boolean {
+  return way.externalId.startsWith("way/")
+    && way.flags.some((flag) => flag.startsWith("osm-highway:") && flag !== "osm-highway:track");
+}
+
+function hasExactTrackTrailheadEvidence(
+  node: NormalizedNode,
+  incidentTrails: readonly NormalizedWay[],
+  evidence: readonly NormalizedPortalEvidence[],
+): boolean {
+  if (!node.externalId.startsWith("node/")) return false;
+  if (!evidence.some((item) => item.kind === "trailhead"
+    && item.externalId === node.externalId
+    && item.nodeIds.length === 1
+    && item.nodeIds[0] === node.id
+    && !RESTRICTIVE_ACCESS.has(item.accessState))) return false;
+  const usable = incidentTrails.filter(nonRestrictive);
+  return usable.some((track) => isOsmTrailHighway(track, "track")
+    && usable.some((other) => other.id !== track.id && isOsmNonTrackTrail(other)));
 }
 
 function accessStateForIncidentTrails(ways: readonly NormalizedWay[]): AccessState {
@@ -325,7 +350,7 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
   const streetWays = topology.ways.filter(({ edgeClass }) => edgeClass === "street");
   const parkingRoadWays = topology.ways.filter(({ edgeClass }) =>
     edgeClass === "street" || edgeClass === "service-road");
-  if (trailWays.length === 0 || parkingRoadWays.length === 0) {
+  if (trailWays.length === 0) {
     throw new Error("Portal derivation requires classified trail and road ways");
   }
 
@@ -348,6 +373,15 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
     for (const coordinate of evidenceCoordinates(item, nodesById)) evidenceGrid.add({ coordinate, value: item });
   }
 
+  const exactTrailheadEvidenceByNode = new Map<string, NormalizedPortalEvidence[]>();
+  for (const item of evidence) {
+    if (item.kind !== "trailhead" || item.nodeIds.length !== 1) continue;
+    const nodeId = item.nodeIds[0]!;
+    const matches = exactTrailheadEvidenceByNode.get(nodeId);
+    if (matches) matches.push(item);
+    else exactTrailheadEvidenceByNode.set(nodeId, [item]);
+  }
+
   const candidateKinds = new Map<string, {
     directStreetIntersection: boolean;
     roadClass: "street" | "service-road";
@@ -362,7 +396,19 @@ export function deriveTrailheadPortals(topology: NormalizedTopology): Normalized
       if (node && nearbyEvidenceForCandidate(coordinateForNode(node), evidenceGrid).length > 0) {
         candidateKinds.set(nodeId, { directStreetIntersection: true, roadClass: "service-road" });
       }
+      continue;
     }
+    const node = nodesById.get(nodeId);
+    if (node && hasExactTrackTrailheadEvidence(
+      node, trailsByNode.get(nodeId) ?? [], exactTrailheadEvidenceByNode.get(nodeId) ?? [],
+    )) {
+      // A mapped track is retained as a walkable trail; the portal road-class
+      // contract represents its access contact with the service-road value.
+      candidateKinds.set(nodeId, { directStreetIntersection: false, roadClass: "service-road" });
+    }
+  }
+  if (parkingRoadWays.length === 0 && candidateKinds.size === 0) {
+    throw new Error("Portal derivation requires classified trail and road ways");
   }
 
   const parkingRoadGrid = new SpatialGrid<"street" | "service-road">(PARKING_ROAD_CONTACT_DISTANCE_M);
