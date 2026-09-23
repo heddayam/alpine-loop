@@ -24,8 +24,15 @@ describe("regional pack catalog contracts", () => {
       expect.objectContaining({ id: "monterey-carmel", packId: "monterey-carmel" }),
       expect.objectContaining({ id: "henry-coe", packId: "henry-coe" }),
       expect.objectContaining({ id: "central-cascades", packId: "central-cascades" }),
+      expect.objectContaining({ id: "north-cascades", packId: "north-cascades" }),
+      expect.objectContaining({ id: "rainier-goat-rocks", packId: "rainier-goat-rocks" }),
+      expect.objectContaining({ id: "southwest-cascades", packId: "southwest-cascades" }),
+      expect.objectContaining({ id: "olympic-peninsula", packId: "olympic-peninsula" }),
     ]);
-    expect(parsed.regions.slice(7).every(({ packId }) => packId === undefined)).toBe(true);
+    expect(parsed.regions.filter(({ packId }) => !packId).map(({ id }) => id)).toEqual([
+      "marin-mount-tam",
+      "tahoe-eldorado",
+    ]);
   });
 
   it("rejects duplicate ids, duplicate display orders, and invalid slugs", () => {
