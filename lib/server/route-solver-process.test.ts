@@ -61,6 +61,21 @@ describe("RouteSolverProcess", () => {
     }
   });
 
+  it("overlaps synchronous CPU work in distinct child processes", async () => {
+    const signal = new AbortController().signal;
+    const sessions = await Promise.all(Array.from({ length: 2 }, () => RouteSolverProcess.open(input, signal, {
+      modulePath: resolve(process.cwd(), "lib/server/__fixtures__/route-solver-fixture-child.ts"),
+      env: { ALPINE_TEST_SOLVE_MS: "300" },
+    })));
+    try {
+      const results = await Promise.all(sessions.map((session) => session.searchAccessPoint("slow-access", signal)));
+      const intervals = results.map(({ diagnostics }) => diagnostics as { pid: number; startedAt: number; finishedAt: number });
+      expect(new Set(intervals.map(({ pid }) => pid)).size).toBe(2);
+      const overlap = Math.min(...intervals.map(({ finishedAt }) => finishedAt)) - Math.max(...intervals.map(({ startedAt }) => startedAt));
+      expect(overlap).toBeGreaterThan(100);
+    } finally { await Promise.all(sessions.map((session) => session.close())); }
+  });
+
   it("boots the production child entrypoint and reports pinned-pack initialization errors", async () => {
     await expect(RouteSolverProcess.open({
       ...input,

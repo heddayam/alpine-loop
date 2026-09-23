@@ -14,6 +14,8 @@ export type AccessPointSearchResult = {
 };
 
 export type RouteJobSearchSession = {
+  /** Number of independent CPU workers; sessions without a pool remain serial. */
+  concurrency?: number;
   enumerateEligibleAccessPointIds(signal: AbortSignal): Promise<readonly string[]>;
   searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<AccessPointSearchResult>;
   close(): Promise<void>;
