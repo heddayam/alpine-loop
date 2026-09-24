@@ -129,11 +129,13 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       for (const reference of applicable) references.push(await auditOfficialTrailReferences({ osm: raw, coverage: requestedCoverage, installedCoverage: geometry, officialSnapshot: reference.snapshot, sourceEnvelope: reference.envelope }));
     }
     const frontierCount = inventory.reduce((count, item) => count + item.frontierCount, 0);
+    const crossingCount = inventory.reduce((count, item) => count + item.crossingSegmentCount, 0);
     const referenceGaps = references.reduce((count, item) => count + item.unresolved.length, 0);
     const unsupportedContext = inventory.reduce((count,item) => count + item.dispositions.reduce((sum,row) => sum + (row.disposition === "unsupported" ? Number(row.count) : 0),0),0);
     next.limitations = [...next.limitations,
       ...(unsupportedContext ? [`The source inventory contains ${unsupportedContext} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []),
       ...(frontierCount ? [`${frontierCount} mapped trail connections reach uninstalled coverage. Their source identities and locations are recorded in the coverage inventory.`] : []),
+      ...(crossingCount ? [`${crossingCount} source trail segments cross the installed boundary and are not yet routable in full. Their locations are recorded in the coverage inventory.`] : []),
       ...(referenceGaps ? [`${referenceGaps} independent reference features have unresolved source coverage differences; installation completeness does not resolve these source limitations.`] : []),
       ...(references.some(item => item.status !== "audited") ? ["Independent reference data does not cover the entire installed area."] : []),
     ];
@@ -192,7 +194,11 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       const raw = new CoverageSourceStore(path.join(root, `source-${input.contentHash.slice(7)}.sqlite`), input);
       rawStores.push(raw);
       await report(`Inventorying ${source.config.dataset}`);
-      await raw.import(check);
+      await raw.import(check, { onStage: async (stage) => {
+        const label = stage === "context-promotion" ? "Resolving connected trail context"
+          : stage === "integrity-check" ? "Verifying source inventory" : "Verifying source checkpoints";
+        await report(`${label}: ${source.config.dataset}`);
+      } });
     }
     const pinnedDem = await elevationPinsFingerprint(cacheRoot(), metricArea(rawStores, requestedCoverage) ?? requestedCoverage, demCache);
     const durable = (source: SourceSnapshot) => {
@@ -200,15 +206,18 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       delete (record as Partial<SourceSnapshot>).localPath;
       return record;
     };
-    inputFingerprint = contentId({
+    const sourceIdentity = {
       version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION, topologyVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION,
       osm: rawStores.map((raw) => durable(raw.source)).sort((a, b) => a.id.localeCompare(b.id)),
       sourceCoverage: configuredSources.map((source) => [source.config, source.geometry]).sort((a, b) => JSON.stringify(a[0]).localeCompare(JSON.stringify(b[0]))),
       exclusions,
       restrictions: restrictions.map((item) => durable(item.snapshot)).sort((a, b) => a.id.localeCompare(b.id)),
       references: referenceSources.map((item) => durable(item.snapshot)).sort((a, b) => a.id.localeCompare(b.id)),
-      pinnedDem,
-    });
+    };
+    // Cache metrics by their own inputs, so adding distant DEM pins can rebuild
+    // staging without recalculating unchanged source segments.
+    const metricSourceFingerprint = contentId(sourceIdentity);
+    inputFingerprint = contentId({ ...sourceIdentity, pinnedDem });
     let installedGeneration: {inputFingerprint:string;demFingerprint:string;stageKey:string} | null = null;
     if (snapshot) {
       const installed = await loadInstalledPack(COVERAGE_PACK_ID);
@@ -261,7 +270,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       const elevation = requiredDem ? await elevationFor({...unit,geometry:requiredDem}, cacheRoot(), root, plan.request.offline, demCache) : null;
       if (elevation) store.putSource(elevation.source);
       const fingerprint = contentId({ inputFingerprint, elevation: elevation?.productFingerprint ?? "no-trail-metrics", unit: unit.id });
-      const metricFingerprint = contentId({ inputFingerprint, elevation: elevation?.productFingerprint ?? "no-trail-metrics" });
+      const metricFingerprint = contentId({ source: metricSourceFingerprint, elevation: elevation?.productFingerprint ?? "no-trail-metrics" });
       if (receipt) {
         // A receipt covers metric edges. Re-read cheap source context so missing
         // or conflicting ways, nodes, buildings, and evidence cannot be hidden.
@@ -351,9 +360,10 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     await publish();
     return { snapshot, units, completedUnits: units.filter((unit) => unit.status === "installed").length, status: context.publishOnly ? "paused" : "completed" };
   } catch (error) {
-    if (!(error instanceof ChangedMetricInputs) || snapshot || !retryChangedMetrics) throw error;
-    // Only an unpublished stage is discarded. Verified source and metric caches
-    // survive, so unchanged work is reused while changed dependencies replay.
+    if (!(error instanceof ChangedMetricInputs) || !retryChangedMetrics) throw error;
+    // Staging is disposable; immutable published generations stay active. A
+    // missing stage makes the retry rebuild the installed union before activation.
+    // Verified source and metric caches retain unchanged work.
     close(); await resources.stop();
     for (const suffix of ["","-wal","-shm"]) await rm(path.join(root,`${stageKey}.sqlite${suffix}`),{force:true});
     await context.report({stage:"Elevation inputs changed; replaying affected preparation"});

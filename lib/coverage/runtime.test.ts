@@ -12,7 +12,7 @@ import * as publisher from "@/lib/data/progressive/publish";
 import { CoverageResourceGuard } from "./resources";
 
 vi.mock("@/lib/data/osm/source", () => ({ readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
-vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: async () => "fixture-pins" }));
+vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: vi.fn(async () => "fixture-pins") }));
 vi.mock("./collections", async (importOriginal) => ({
   ...await importOriginal<typeof import("./collections")>(), coverageExclusions: async () => [],
   legacyRegionIds: [], collections: async () => [],
@@ -29,7 +29,8 @@ beforeEach(async () => {
   vi.stubEnv("ALPINE_ROUTE_JOBS_DB", path.join(root, "absent-route-jobs.sqlite"));
   const { readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
   vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(source);
-  const { elevationFor, describeCanonicalElevation } = await import("./elevation");
+  const { elevationFor, describeCanonicalElevation, elevationPinsFingerprint } = await import("./elevation");
+  vi.mocked(elevationPinsFingerprint).mockResolvedValue("fixture-pins");
   vi.mocked(elevationFor).mockResolvedValue({ source: { ...source, id: "dem" }, productFingerprint: "fixture-dem", sampler: { algorithmVersion: "fixture", sample: async (coordinates) => coordinates.map(() => 100) } } as Awaited<ReturnType<typeof elevationFor>>);
   vi.mocked(describeCanonicalElevation).mockImplementation(async geometry => elevationFor({id:"publication",geometry,status:"pending"},"","",true));
   const fixture = (await readFile(source.localPath, "utf8")).trim().split("\n");
@@ -52,6 +53,20 @@ it("expands separate requests into the same graph without losing their crossing 
   expect(expanded.snapshot!.unitIds.length).toBeGreaterThan(first.snapshot!.unitIds.length);
   expect(await edges(expanded.snapshot!.dataVersion)).toHaveLength(6);
   expect(await edges(first.snapshot!.dataVersion)).toHaveLength(2);
+});
+
+it("reuses verified segment metrics when expansion adds unrelated elevation pins", async () => {
+  const { elevationFor, elevationPinsFingerprint } = await import("./elevation");
+  const sample = vi.fn(async (coordinates: readonly unknown[]) => coordinates.map(() => 100));
+  const initial = await elevationFor((await request(-121.27,-121.25)).units[0]!,"","",true);
+  vi.mocked(elevationFor).mockResolvedValue({...initial,sampler:{algorithmVersion:"fixture",sample}});
+  await run(await request(-121.27,-121.25),context());
+  expect(sample).toHaveBeenCalled();
+  sample.mockClear();
+  vi.mocked(elevationPinsFingerprint).mockResolvedValue("expanded-pin-set");
+  const expanded = await run(await request(-121.25,-121.23),context());
+  expect(sample).not.toHaveBeenCalled();
+  expect(await edges(expanded.snapshot!.dataVersion)).toHaveLength(6);
 });
 it("resumes a stopped metric transaction to the same final graph", async () => {
   const installation = await request(-121.27,-121.23);
@@ -158,6 +173,27 @@ it("replays an unpublished preparation automatically after its DEM inputs change
   vi.mocked(elevationFor).mockResolvedValue({source:{...source,id:"new-dem"},productFingerprint:"replacement-tile",
     sampler:{algorithmVersion:"fixture",sample:async coordinates=>coordinates.map(()=>110)}});
   const result = await run(pending,context());
+  expect(result.status).toBe("completed");
+  expect(await edges(result.snapshot!.dataVersion)).toHaveLength(6);
+});
+
+it("recovers a paused expansion when only its new area's elevation input changes", async () => {
+  const first = await run(await request(-121.27,-121.25),context());
+  const expansion = await request(-121.25,-121.23);
+  await expect(run(expansion,{...context(),report:async ({stage})=>{if(stage?.startsWith("Prepared"))throw new Error("pause expansion");}})).rejects.toThrow("pause expansion");
+  const {elevationFor} = await import("./elevation");
+  const original = await elevationFor(expansion.units[0]!,"","",true);
+  vi.mocked(elevationFor).mockImplementation(async unit => unit.id === expansion.units[0]!.id
+    ? {...original,source:{...original.source,id:"replacement-dem"},productFingerprint:"replacement-tile"} : original);
+  let replayed = false;
+  const result = await run(expansion,{...context(),report:async ({stage})=>{
+    if (stage?.startsWith("Elevation inputs changed")) {
+      replayed = true;
+      expect((await installedSnapshot())?.dataVersion).toBe(first.snapshot!.dataVersion);
+      expect(await edges(first.snapshot!.dataVersion)).toHaveLength(2);
+    }
+  }});
+  expect(replayed).toBe(true);
   expect(result.status).toBe("completed");
   expect(await edges(result.snapshot!.dataVersion)).toHaveLength(6);
 });
