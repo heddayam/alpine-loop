@@ -85,7 +85,8 @@ function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive"):{con
 }
 function rankComponents(db:DatabaseSync,profile:"known"|"inclusive"):void {
   db.exec(`CREATE TEMP TABLE rank_${profile}(id TEXT PRIMARY KEY,parent TEXT NOT NULL,rank INTEGER NOT NULL DEFAULT 0) STRICT;
-    INSERT INTO rank_${profile}(id,parent) SELECT id,id FROM portal_components;`);
+    INSERT INTO rank_${profile}(id,parent) SELECT id,id FROM portal_components;
+    CREATE INDEX rank_${profile}_parent ON rank_${profile}(parent);`);
   const union=new DiskUnion(db,`rank_${profile}`);
   const condition=profile==="known"?"e.access_state='public'":"e.access_state IN ('public','unknown')";
   for(const edge of rows(db,`SELECT e.from_node,e.to_node FROM edges e JOIN selected_edges s ON s.id=e.id WHERE ${condition}`))
@@ -140,24 +141,36 @@ export function deriveProgressivePortals(store:ProgressiveGraphStore,coverage:Ar
     if(item.nodeIds.length!==1)continue;
     const nodeId=item.nodeIds[0]!;if(!one(db,"SELECT 1 FROM portal_components WHERE id=?",nodeId))continue;
     const node=one(db,"SELECT record FROM nodes WHERE id=?",nodeId);
-    if(!node || (JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
+    if(!node || !item.externalId.startsWith("node/") || item.accessState==="private" || item.accessState==="closed" || item.accessState==="prohibited" || (JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
     const incident=waysAt(db,nodeId).filter((way)=>!(["private","closed","prohibited"].includes(way.accessState)));
     if(incident.some((way)=>way.flags.includes("osm-highway:track"))&&incident.some((way)=>way.flags.some((flag)=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track")))addCandidate(nodeId,"service-road",false);
   }
-  // Parking POIs can snap to a trail within 250m if they contact a mapped road within 25m.
-  for(const point of rows(db,"SELECT p.lon,p.lat FROM evidence_points p JOIN evidence e ON e.id=p.evidence_id WHERE e.kind='parking'")) {
-    const lon=Number(point.lon),lat=Number(point.lat),[minLon,maxLon,minLat,maxLat]=box(lon,lat,250);
+  // One parking feature creates at most one snapped candidate, even when its area has many vertices.
+  for(const evidenceRow of rows(db,"SELECT id,record FROM evidence WHERE kind='parking'")) {
+    const item=JSON.parse(String(evidenceRow.record)) as NormalizedPortalEvidence;
+    const coordinates=[...rows(db,"SELECT lon,lat FROM evidence_points WHERE evidence_id=?",String(evidenceRow.id))]
+      .map(({lon,lat})=>[Number(lon),Number(lat)] as [number,number]);
     let roadClass:"street"|"service-road"|null=null;
-    for(const road of rows(db,`SELECT n.lon,n.lat,r.road_class FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN road_nodes r ON r.node_id=n.id
-      WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,...box(lon,lat,25))) {
-      if(distance([lon,lat],[Number(road.lon),Number(road.lat)])<=25){roadClass=road.road_class==="street"?"street":"service-road";if(roadClass==="street")break;}
+    for(const nodeId of item.nodeIds) {
+      const contact=one(db,"SELECT road_class FROM road_nodes WHERE node_id=?",nodeId);
+      if(contact?.road_class==="street"){roadClass="street";break;}
+      if(contact?.road_class==="service-road")roadClass="service-road";
+    }
+    if(!roadClass) for(const [lon,lat] of coordinates) {
+      for(const road of rows(db,`SELECT n.lon,n.lat,r.road_class FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN road_nodes r ON r.node_id=n.id
+        WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,...box(lon,lat,25))) {
+        if(distance([lon,lat],[Number(road.lon),Number(road.lat)])<=25){roadClass=road.road_class==="street"?"street":"service-road";if(roadClass==="street")break;}
+      }
+      if(roadClass==="street")break;
     }
     if(!roadClass)continue;
     let nearest:{id:string;distance:number}|null=null;
-    for(const trail of rows(db,`SELECT n.id,n.lon,n.lat FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN portal_components c ON c.id=n.id
-      WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,minLon,maxLon,minLat,maxLat)) {
-      const measured=distance([lon,lat],[Number(trail.lon),Number(trail.lat)]);
-      if(measured<=250&&(!nearest||measured<nearest.distance||(measured===nearest.distance&&String(trail.id)<nearest.id)))nearest={id:String(trail.id),distance:measured};
+    for(const [lon,lat] of coordinates) {
+      for(const trail of rows(db,`SELECT n.id,n.lon,n.lat FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN portal_components c ON c.id=n.id
+        WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,...box(lon,lat,250))) {
+        const measured=distance([lon,lat],[Number(trail.lon),Number(trail.lat)]);
+        if(measured<=250&&(!nearest||measured<nearest.distance||(measured===nearest.distance&&String(trail.id)<nearest.id)))nearest={id:String(trail.id),distance:measured};
+      }
     }
     if(nearest)addCandidate(nearest.id,roadClass,false);
   }

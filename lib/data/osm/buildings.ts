@@ -19,7 +19,7 @@ export const BUILDINGS_ADAPTER_VERSION = "osmium-buildings-v1";
 
 export type BuildingCentroid = readonly [lon: number, lat: number];
 
-function centroidOf(geometry: unknown): BuildingCentroid | null {
+export function buildingCentroidOf(geometry: unknown): BuildingCentroid | null {
   if (typeof geometry !== "object" || geometry === null) return null;
   const shape = geometry as { type?: unknown; coordinates?: unknown };
   const ring = shape.type === "Point"
@@ -58,7 +58,7 @@ export function parseBuildingCentroids(geojsonSeq: string): BuildingCentroid[] {
     const line = record.trim();
     if (line.length === 0) continue;
     const feature = JSON.parse(line) as { geometry?: unknown };
-    const centroid = centroidOf(feature.geometry);
+    const centroid = buildingCentroidOf(feature.geometry);
     if (centroid) centroids.push(centroid);
   }
   return centroids;

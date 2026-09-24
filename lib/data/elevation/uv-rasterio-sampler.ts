@@ -6,6 +6,7 @@ export type UvRasterioOptions = {
   projectPath?: string;
   scriptPath?: string;
   runner?: CommandRunner;
+  tileOwnership?: boolean;
 };
 
 function resolvedOptions(options: UvRasterioOptions = {}) {
@@ -14,6 +15,7 @@ function resolvedOptions(options: UvRasterioOptions = {}) {
     projectPath,
     scriptPath: path.resolve(options.scriptPath ?? path.join(projectPath, "sample_dem.py")),
     runner: options.runner ?? runCommand,
+    tileOwnership: options.tileOwnership ?? false,
   };
 }
 
@@ -33,14 +35,16 @@ export async function validateUvRasterioPrerequisites(options: UvRasterioOptions
 }
 
 export const DEM_METRIC_ALGORITHM_VERSION = "usgs-3dep-13as-rasterio-bilinear+metrics-v3";
+export const PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION = "usgs-3dep-13as-rasterio-tile-owner+metrics-v4";
 export class UvRasterioThreeDepElevationSampler implements ElevationSampler {
-  readonly algorithmVersion = DEM_METRIC_ALGORITHM_VERSION;
+  readonly algorithmVersion: string;
   readonly #collectionPath: string;
   readonly #options: ReturnType<typeof resolvedOptions>;
 
   constructor(collectionPath: string, options: UvRasterioOptions = {}) {
     this.#collectionPath = path.resolve(collectionPath);
     this.#options = resolvedOptions(options);
+    this.algorithmVersion = this.#options.tileOwnership ? PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION : DEM_METRIC_ALGORITHM_VERSION;
   }
 
   async sample(coordinates: ReadonlyArray<readonly [number, number]>): Promise<Array<number | null>> {
@@ -48,6 +52,7 @@ export class UvRasterioThreeDepElevationSampler implements ElevationSampler {
     const result = await this.#options.runner("uv", [
       "run", "--offline", "--frozen", "--project", this.#options.projectPath,
       "python", this.#options.scriptPath, "--collection", this.#collectionPath,
+      ...(this.#options.tileOwnership ? ["--tile-owner"] : []),
     ], { stdin: `${coordinates.map(([lon, lat]) => `${lon} ${lat}`).join("\n")}\n` });
     const lines = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0);
     if (lines.length !== coordinates.length) {

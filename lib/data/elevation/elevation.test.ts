@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandRunner } from "../osm/command";
 import { queryThreeDepProducts, threeDepQueryUrl } from "./products";
-import { UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
+import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION, UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
 
 const query = {
   endpoint: "https://tnmaccess.nationalmap.gov/api/v1/products",
@@ -63,5 +63,15 @@ describe("uv-managed Rasterio elevation sampling", () => {
       uv: "uv 0.9.0",
       rasterio: "rasterio 1.4.3; GDAL 3.9.3",
     });
+  });
+
+  it("passes deterministic tile ownership only for progressive sampling", async () => {
+    const runner: CommandRunner = vi.fn(async (_command, arguments_) => {
+      expect(arguments_).toContain("--tile-owner");
+      return { stdout: "200\n", stderr: "" };
+    });
+    const sampler = new UvRasterioThreeDepElevationSampler("/fixture/collection.json", { tileOwnership: true, runner });
+    expect(sampler.algorithmVersion).toBe(PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION);
+    await expect(sampler.sample([[-121.9, 48]])).resolves.toEqual([200]);
   });
 });

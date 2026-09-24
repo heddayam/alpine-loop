@@ -17,6 +17,8 @@ export type ProgressivePublishOptions = {
   namedAreas: NormalizedNamedArea[];
   searchRegions: NormalizedSearchRegion[];
   beforePublish?: (result: PackBuildResult) => void | Promise<void>;
+  /** Serialize the final pointer switch with a caller-owned job-control transaction. */
+  commitPublication?: (activate: () => Promise<void>) => Promise<void>;
   onProgress?: (stage: string) => void;
 };
 
@@ -40,8 +42,11 @@ export function selectProgressiveEdges(store: ProgressiveGraphStore, coverage: A
   return rejected;
 }
 
-function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string): {nodeCount:number;edgeCount:number;accessCount:number} {
+function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>): {nodeCount:number;edgeCount:number;accessCount:number} {
   const stage=store.database;
+  const assertRefs=(refs:readonly string[],id:string)=>{
+    for(const sourceId of refs)if(!sourceIds.has(sourceId))throw new Error(`Unknown source ${sourceId} on ${id}`);
+  };
   output.exec("BEGIN IMMEDIATE");
   try {
     const selected=stage.prepare("SELECT s.record FROM edges s JOIN selected_edges x ON x.id=s.id ORDER BY s.id").iterate() as Iterable<{record:string}>;
@@ -55,6 +60,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     for (const row of stage.prepare("SELECT n.record FROM nodes n JOIN used_nodes u ON u.id=n.id ORDER BY n.id").iterate() as Iterable<{record:string}>) {
       const node=JSON.parse(row.record) as NormalizedNode;
       if (node.elevationM===null) throw new Error(`Missing elevation for published node ${node.id}`);
+      assertRefs(node.sourceRefs,node.id);
       insertNode.run(node.id,++nodeCount,node.lon,node.lat,node.elevationM,JSON.stringify(node.flags));
       spatialNode.run(nodeCount,node.lon,node.lon,node.lat,node.lat);
     }
@@ -87,7 +93,19 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     let edgeCount=0;
     for (const row of selected) {
       const edge=JSON.parse(row.record) as CompiledEdge;
-      if (!edge.edgeClass || !edge.elevationProfile || edge.gainM===null || edge.lossM===null) throw new Error(`Trail edge ${edge.id} lacks complete elevation metrics`);
+      const metricValues=[edge.lengthM,edge.gainM,edge.lossM,edge.maxElevationM];
+      if (!edge.edgeClass || !edge.elevationProfile || edge.elevationProfile.length<2 || metricValues.some((value)=>value===null||!Number.isFinite(value)) ||
+        edge.lengthM<0 || edge.gainM!<0 || edge.lossM!<0 || (edge.maxSustainedGradePct!==null && !Number.isFinite(edge.maxSustainedGradePct)))
+        throw new Error(`Trail edge ${edge.id} lacks complete elevation metrics`);
+      const from=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?").get(edge.fromNode) as {lon:number;lat:number;elevation_m:number}|undefined;
+      const to=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?").get(edge.toNode) as {lon:number;lat:number;elevation_m:number}|undefined;
+      const first=edge.geometry[0],last=edge.geometry.at(-1),firstElevation=edge.elevationProfile[0],lastElevation=edge.elevationProfile.at(-1);
+      if(!from||!to||!first||!last||!firstElevation||!lastElevation||
+        Math.abs(first[0]-from.lon)>1e-10||Math.abs(first[1]-from.lat)>1e-10||Math.abs(last[0]-to.lon)>1e-10||Math.abs(last[1]-to.lat)>1e-10||
+        Math.abs(firstElevation.distanceMeters)>1e-6||Math.abs(lastElevation.distanceMeters-edge.lengthM)>1e-6||
+        Math.abs(firstElevation.elevationMeters-from.elevation_m)>1e-6||Math.abs(lastElevation.elevationMeters-to.elevation_m)>1e-6)
+        throw new Error(`Trail edge ${edge.id} disagrees with endpoint geometry or elevation`);
+      assertRefs(edge.sourceRefs,edge.id);
       const physical=physicalKey.get(edge.stablePhysicalId) as {physical_edge_key:number}|undefined;
       if (!physical) throw new Error(`Missing physical key for ${edge.id}`);
       insertEdge.run(edge.id,++edgeCount,physical.physical_edge_key,edge.fromNode,edge.toNode,JSON.stringify(edge.geometry),edge.lengthM,
@@ -105,6 +123,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     for (const row of accessRows as Iterable<{record:string}>) {
       const point=JSON.parse(row.record) as NormalizedAccessPoint;
       if (!(stage.prepare("SELECT 1 FROM used_nodes WHERE id=?").get(point.nodeId))) continue;
+      assertRefs(point.sourceRefs,point.id);
       const fields=[point.knownConnectivity,point.inclusiveConnectivity,point.knownOutDegree,point.inclusiveOutDegree,point.nearbyBuildingCount,point.reachableTrailKm,point.trailComponentId,point.portalRoadClass];
       if (fields.some((value)=>value===undefined||value===null)) throw new Error(`Access point ${point.id} is missing ranking or portal fields`);
       insertAccess.run(point.id,point.nodeId,point.name,point.kind,point.accessState,point.confidence,point.parkingEvidence,JSON.stringify(point.sourceRefs),
@@ -141,16 +160,60 @@ function insertMetadata(db:DatabaseSync,manifest:PackManifest,areas:NormalizedNa
   } catch(error) {db.exec("ROLLBACK");throw error;}
 }
 
+function verifyStagedSources(store:ProgressiveGraphStore,manifest:PackManifest):void {
+  const staged=[...store.database.prepare("SELECT record FROM sources ORDER BY id").iterate() as Iterable<{record:string}>]
+    .map(({record})=>JSON.parse(record) as PackManifest["sources"][number]);
+  const pinned=[...manifest.sources].sort((a,b)=>a.id.localeCompare(b.id));
+  if(staged.length!==pinned.length)throw new Error("Staged source inventory differs from publication manifest");
+  for(let index=0;index<pinned.length;index++){
+    const actual=staged[index]!,expected=pinned[index]!;
+    for(const key of ["id","authority","dataset","version","retrievedAt","url","license","contentHash"] as const)
+      if(actual[key]!==expected[key])throw new Error(`Staged source ${actual.id} differs from publication manifest: ${key}`);
+  }
+}
+
+async function activate(packRoot:string,dataVersion:string):Promise<void> {
+  const pointer=path.join(packRoot,`.current-${randomUUID()}.json`);
+  await writeFile(pointer,`${JSON.stringify({dataVersion,path:`${dataVersion}/manifest.json`},null,2)}\n`);
+  await rename(pointer,path.join(packRoot,"current.json"));
+}
+
+async function commitActivation(options:ProgressivePublishOptions,packRoot:string,dataVersion:string):Promise<void> {
+  let started=false,finished=false;
+  const activateOnce=async()=>{
+    if(started)throw new Error("Publication pointer activation was attempted twice");
+    started=true;
+    await activate(packRoot,dataVersion);
+    finished=true;
+  };
+  if(options.commitPublication)await options.commitPublication(activateOnce);
+  else await activateOnce();
+  if(!finished)throw new Error("Publication commit hook returned without activating the pointer");
+}
+
 export async function publishProgressiveGraph(store:ProgressiveGraphStore,options:ProgressivePublishOptions):Promise<PackBuildResult> {
   const manifest=packManifestSchema.parse(options.manifest);
+  verifyStagedSources(store,manifest);
   const packRoot=path.join(options.outputRoot,manifest.id),finalDir=path.join(packRoot,manifest.dataVersion);
   await mkdir(packRoot,{recursive:true});
-  try {
-    const existing=JSON.parse(await readFile(path.join(finalDir,"manifest.json"),"utf8")) as PackManifest;
-    if(JSON.stringify(existing)!==JSON.stringify(manifest)) throw new Error(`Immutable pack version ${manifest.dataVersion} already differs`);
+  let existingText:string|undefined;
+  try {existingText=await readFile(path.join(finalDir,"manifest.json"),"utf8");}
+  catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  if(existingText!==undefined){
+    const existing=packManifestSchema.parse(JSON.parse(existingText));
+    if(JSON.stringify(existing)!==JSON.stringify(manifest))throw new Error(`Immutable pack version ${manifest.dataVersion} already differs`);
     const audit=JSON.parse(await readFile(path.join(finalDir,"audit.json"),"utf8")) as PackAudit;
+    if(audit.packId!==manifest.id||audit.dataVersion!==manifest.dataVersion)throw new Error("Existing pack audit identity differs");
+    const db=new DatabaseSync(path.join(finalDir,"pack.sqlite"),{readOnly:true});
+    try {
+      const integrity=db.prepare("PRAGMA integrity_check").get() as {integrity_check:string};
+      if(integrity.integrity_check!=="ok")throw new Error(`Existing pack integrity failed: ${integrity.integrity_check}`);
+      const meta=db.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as {value:string}|undefined;
+      if(!meta||meta.value!==audit.topologyContentHash)throw new Error("Existing pack topology hash differs from audit");
+    } finally {db.close();}
+    await commitActivation(options,packRoot,manifest.dataVersion);
     return {packDirectory:finalDir,databasePath:path.join(finalDir,"pack.sqlite"),manifestPath:path.join(finalDir,"manifest.json"),auditPath:path.join(finalDir,"audit.json"),audit,reusedExisting:true};
-  } catch(error) {if(error instanceof Error && error.message.startsWith("Immutable pack version")) throw error;}
+  }
   const staging=path.join(packRoot,`.staging-${manifest.dataVersion}-${randomUUID()}`);
   await mkdir(staging);
   const databasePath=path.join(staging,"pack.sqlite");
@@ -158,17 +221,19 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
     options.onProgress?.("Select covered graph segments");
     const rejected=selectProgressiveEdges(store,manifest.coverage.boundary);
     const sourceIds=new Set(manifest.sources.map(({id})=>id));
-    const areas=validateAndSortNamedAreas([{id:`pack:${manifest.id}`,name:manifest.name,kind:"pack",aliases:[],bbox:areaGeometryBounds(manifest.coverage.boundary),geometry:manifest.coverage.boundary,sourceIds:[manifest.sources[0]!.id]},...options.namedAreas],sourceIds);
+    const packArea={id:`pack:${manifest.id}`,name:manifest.name,kind:"pack" as const,aliases:[],bbox:areaGeometryBounds(manifest.coverage.boundary),geometry:manifest.coverage.boundary,sourceIds:[manifest.sources[0]!.id]};
+    const providedAreas=options.namedAreas.some(({id})=>id===packArea.id)?options.namedAreas:[packArea,...options.namedAreas];
+    const areas=validateAndSortNamedAreas(providedAreas,sourceIds);
     const areaIds=new Set(areas.map(({id})=>id));
     if(!options.searchRegions.length||options.searchRegions.some(({namedAreaId,displayOrder},i)=>!areaIds.has(namedAreaId)||displayOrder!==i)) throw new Error("Invalid ordered search regions");
     const db=new DatabaseSync(databasePath);
     let graph:{nodeCount:number;edgeCount:number;accessCount:number};
     let topology:ReturnType<typeof writeProgressiveTopology>;
     try {
-      db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE;");
+      db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;");
       createPackSchema(db);
       options.onProgress?.("Write covered graph");
-      graph=insertGraph(store,db,topologySha256(manifest.coverage.boundary));
+      graph=insertGraph(store,db,topologySha256(manifest.coverage.boundary),sourceIds);
       options.onProgress?.("Derive global cycle feasibility");
       topology=writeProgressiveTopology(db,manifest);
       insertMetadata(db,manifest,areas,options.searchRegions,topology.hash);
@@ -186,9 +251,7 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
     const result={packDirectory:staging,databasePath,manifestPath:path.join(staging,"manifest.json"),auditPath:path.join(staging,"audit.json"),audit,reusedExisting:false};
     await options.beforePublish?.(result);
     await rename(staging,finalDir);
-    const pointer=path.join(packRoot,`.current-${randomUUID()}.json`);
-    await writeFile(pointer,`${JSON.stringify({dataVersion:manifest.dataVersion,path:`${manifest.dataVersion}/manifest.json`},null,2)}\n`);
-    await rename(pointer,path.join(packRoot,"current.json"));
+    await commitActivation(options,packRoot,manifest.dataVersion);
     return {...result,packDirectory:finalDir,databasePath:path.join(finalDir,"pack.sqlite"),manifestPath:path.join(finalDir,"manifest.json"),auditPath:path.join(finalDir,"audit.json")};
   } catch(error) {await rm(staging,{recursive:true,force:true});throw error;}
 }

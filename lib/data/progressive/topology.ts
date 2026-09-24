@@ -159,6 +159,7 @@ export function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifes
     db.exec(`INSERT INTO work_edges SELECT e.edge_key,e.physical_edge_key,n1.node_key,n2.node_key,e.length_m FROM edges e JOIN nodes n1 ON n1.id=e.from_node JOIN nodes n2 ON n2.id=e.to_node WHERE e.edge_class='trail' AND ${accessClause};
       INSERT INTO work_physical SELECT p.physical_edge_key,p.from_node_key,p.to_node_key FROM physical_edges p WHERE p.physical_edge_key IN (SELECT physical_edge_key FROM work_edges);`);
     scc(db);
+    db.exec("CREATE INDEX work_nodes_scc ON work_nodes(scc,k);");
     const physical = number(one(db, "SELECT count(*) AS n FROM work_physical"), "n");
     db.exec(`DELETE FROM work_physical WHERE (SELECT scc FROM work_nodes WHERE k=from_key)<>(SELECT scc FROM work_nodes WHERE k=to_key);`);
     seedCycles(db);
