@@ -146,6 +146,7 @@ describe("SQLiteGraphRepository", () => {
     const query = { startNodeId: "s", maximumDistanceMeters: 10_000, maximumDirectedEdges: 10, includeUncertainAccess: true, coverage };
     const reachable = await repository.getReachableGraph(query);
     expect(reachable.graph.edges.map(({ id }) => id)).toEqual(["one-way", "unknown"]);
+    expect(reachable.graph.accessPoints).toEqual([]); // The solver supplies the selected start.
     expect(reachable.graph.edges.some(({ toNodeId }) => toNodeId === "s")).toBe(false);
     expect(reachable.truncated).toBe(false);
     expect((await repository.getReachableGraph({ ...query, maximumDirectedEdges: 1 })).truncated).toBe(true);

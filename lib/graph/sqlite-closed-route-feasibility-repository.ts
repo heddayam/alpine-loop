@@ -196,11 +196,19 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
       const batch = uniqueIds.slice(index, index + BATCH_SIZE);
       const placeholders = batch.map(() => "?").join(", ");
       const rows = this.#database.prepare(`
-        SELECT * FROM access_topology
-        WHERE profile = ? AND access_point_id IN (${placeholders})
+        SELECT access_points.id AS requested_access_point_id, access_topology.*
+        FROM access_points LEFT JOIN access_topology
+          ON access_topology.access_point_id = access_points.id AND access_topology.profile = ?
+        WHERE access_points.id IN (${placeholders})
       `).all(profile, ...batch) as SqliteRow[];
       for (const row of rows) {
+        const requestedId = requiredString(row, "requested_access_point_id");
+        if (row.profile === null) throw corruption(`missing ${profile} access topology for ${requestedId}`);
         const parsed = freezeAccessTopology(row);
+        if (parsed.accessPointId !== requestedId) throw corruption(`${profile} access topology references unknown access point ${parsed.accessPointId}`);
+        if (parsed.connectorDecisionEdgeIds.length !== 0) {
+          throw corruption(`${profile} access ${parsed.accessPointId} contains primitive connector edges`);
+        }
         if (byId.has(parsed.accessPointId)) {
           throw corruption(`duplicate ${profile} access topology for ${parsed.accessPointId}`);
         }
@@ -266,36 +274,9 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     }
 
     const profiles = this.#validateProfiles();
-    const accessTopology = this.#validateAccessTopology();
     const profileHashes = PROFILES.map((profile) => {
       const row = profiles.get(profile)!;
-      const contentHash = topologySha256({
-        profile,
-        formatVersion: requiredInteger(row, "format_version"),
-        nodeCount: requiredInteger(row, "node_count"),
-        physicalEdgeCount: requiredInteger(row, "physical_edge_count"),
-        decisionNodeCount: requiredInteger(row, "decision_node_count"),
-        decisionEdgeCount: requiredInteger(row, "decision_edge_count"),
-        nodes: [],
-        decisionEdges: [],
-        blocks: [],
-        blockLinks: [],
-        networks: [],
-        accessTopology: accessTopology.filter((access) => access.profile === profile).map((access) => ({
-          accessPointId: access.accessPointId,
-          attachmentDecisionNodeId: access.attachmentDecisionNodeId,
-          cycleNetworkId: access.cycleNetworkId,
-          connectorKey: access.connectorKey,
-          connectorDecisionEdgeIds: [...access.connectorDecisionEdgeIds],
-          portalDecisionNodeId: access.portalDecisionNodeId,
-          minimumStemDistanceM: access.minimumStemDistanceMeters,
-          canReachCycle: access.canReachCycle,
-        })),
-      });
-      if (contentHash !== requiredString(row, "content_hash")) {
-        throw corruption(`${profile} profile content hash mismatch`);
-      }
-      return { profile, contentHash };
+      return { profile, contentHash: requiredString(row, "content_hash") };
     });
     const combinedHash = topologySha256({
       runtimeMode: this.#manifest.closedRouteTopology.runtimeMode,
@@ -341,41 +322,4 @@ export class SQLiteClosedRouteFeasibilityRepository implements ClosedRouteFeasib
     return byProfile;
   }
 
-  #validateAccessTopology(): AccessTopology[] {
-    const accessPointRows = this.#database.prepare("SELECT id FROM access_points ORDER BY id").all() as SqliteRow[];
-    const accessPointIds = new Set<string>();
-    for (const row of accessPointRows) {
-      const id = requiredString(row, "id");
-      if (accessPointIds.has(id)) throw corruption(`duplicate access point ${id}`);
-      accessPointIds.add(id);
-    }
-
-    const rows = this.#database.prepare(
-      "SELECT * FROM access_topology ORDER BY profile, access_point_id",
-    ).all() as SqliteRow[];
-    const seen = new Set<string>();
-    for (const row of rows) {
-      const access = freezeAccessTopology(row);
-      if (access.connectorDecisionEdgeIds.length !== 0) {
-        throw corruption(`${access.profile} access ${access.accessPointId} contains primitive connector edges`);
-      }
-      if (!accessPointIds.has(access.accessPointId)) {
-        throw corruption(`${access.profile} access topology references unknown access point ${access.accessPointId}`);
-      }
-      const key = `${access.profile}\u0000${access.accessPointId}`;
-      if (seen.has(key)) {
-        throw corruption(`duplicate ${access.profile} access topology for ${access.accessPointId}`);
-      }
-      seen.add(key);
-    }
-
-    for (const profile of PROFILES) {
-      for (const accessPointId of accessPointIds) {
-        if (!seen.has(`${profile}\u0000${accessPointId}`)) {
-          throw corruption(`missing ${profile} access topology for ${accessPointId}`);
-        }
-      }
-    }
-    return rows.map(freezeAccessTopology);
-  }
 }

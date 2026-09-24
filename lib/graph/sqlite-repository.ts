@@ -404,11 +404,9 @@ export class SQLiteGraphRepository implements GraphRepository {
       }
       if (truncated) break;
     }
-    const accessRows = this.#database.prepare("SELECT * FROM access_points ORDER BY id").all() as SqliteRow[];
-    const accessPoints = accessRows.map((row) => parseAccessPoint(row)).filter(
-      (point) => nodes.has(point.nodeId) && accessPointIsEligible(point, query.includeUncertainAccess),
-    );
-    return { graph: { nodes, edges, accessPoints }, truncated };
+    // The selected start is already supplied by the solver. Loading every pack
+    // access point here would repeat an unbounded scan for each candidate start.
+    return { graph: { nodes, edges, accessPoints: [] }, truncated };
   }
 
   async close(): Promise<void> {
