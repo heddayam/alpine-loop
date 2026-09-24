@@ -8,10 +8,12 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export function assertLocalMutation(request: Request): void {
   const url = new URL(request.url);
   const hostHeader = request.headers.get("host");
-  const host = hostHeader ? new URL(`http://${hostHeader}`).hostname : url.hostname;
+  // Next.js may use the container's bind address in request.url. The Host
+  // authority is the browser-facing origin, including its mapped port.
+  const target = hostHeader ? new URL(`${url.protocol}//${hostHeader}`) : url;
   const origin = request.headers.get("origin");
-  if (!LOOPBACK.has(url.hostname) || !LOOPBACK.has(host)
-    || (origin && origin !== url.origin)
+  if (!LOOPBACK.has(target.hostname) || target.username || target.password
+    || (origin && origin !== target.origin)
     || request.headers.get("sec-fetch-site") === "cross-site") {
     throw new CoverageJobStateError(403, "Coverage changes require a same-origin local request");
   }

@@ -84,6 +84,18 @@ describe("coverage source staging", () => {
     expect(store.receipt(`raw-batch-v1:${fixtures.length}`)).toBeDefined();
   });
 
+  it("leaves a legacy raw prefix uncertified when verification is interrupted, then resumes", async () => {
+    const store = make();
+    await expect(store.import(async () => { throw new Error("paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("paused");
+    store.db.prepare("DELETE FROM receipts WHERE key LIKE 'raw-batch-v1:%'").run();
+    await expect(store.import(async () => { throw new Error("verification paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("verification paused");
+    expect(store.receipt("raw-batch-v1:4")).toBeUndefined();
+    expect(store.receipt("import-lines-v2")).toBe("4");
+    await store.import(async () => {}, { lines: lines(), batchSize: 4 });
+    expect(JSON.parse(store.receipt("raw-batch-v1:4")!)?.legacyBaseline).toBe(true);
+    expect(store.receipt("import-v2")).toBe("complete");
+  });
+
   it("counts a relation-only building assembled from reversed outer way fragments", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines() });
@@ -127,5 +139,25 @@ describe("coverage source staging", () => {
     store.db.prepare("INSERT INTO metrics VALUES('10:0','new-algorithm','{}')").run();
     store.db.prepare("UPDATE inventory SET disposition='covered' WHERE id='way/10'").run();
     await expect(store.import(async () => {})).resolves.toBeUndefined();
+  });
+
+  it("does not certify an interrupted completed-cache verification", async () => {
+    const store = make();
+    await store.import(async () => {}, { lines: lines() });
+    store.db.prepare("DELETE FROM receipts WHERE key IN ('normalized-seal-v1','unsupported-inventory-seal-v1')").run();
+    let checks = 0;
+    await expect(store.import(async () => { if (++checks === 3) throw new Error("verification paused"); })).rejects.toThrow("verification paused");
+    expect(store.receipt("normalized-seal-v1")).toBeUndefined();
+    expect(store.receipt("unsupported-inventory-seal-v1")).toBeUndefined();
+    await store.import(async () => {});
+    expect(store.receipt("normalized-seal-v1")).toBeDefined();
+    expect(store.receipt("unsupported-inventory-seal-v1")).toBeDefined();
+  });
+
+  it("detects changes to immutable unsupported source-context inventory", async () => {
+    const store = make();
+    await store.import(async () => {}, { lines: lines([...fixtures.slice(0, 6), "r30 Ttype=multipolygon,building=yes Mw999@outer"]) });
+    store.db.prepare("UPDATE inventory SET reason='silently lost' WHERE id='relation/30'").run();
+    await expect(store.import(async () => {})).rejects.toThrow("unsupported inventory failed seal verification");
   });
 });

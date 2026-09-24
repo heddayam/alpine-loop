@@ -38,3 +38,13 @@ it("rejects cross-origin and non-loopback mutations before storing plans or jobs
   expect(blocked.status).toBe(403);
   expect(value.get(job.id)?.status).toBe("queued");
 });
+
+it("uses the loopback browser authority behind a Docker port mapping", async () => {
+  const value = service();
+  const post = (host: string, origin: string) => handleCoveragePlan(new Request("http://0.0.0.0:3000/api/coverage/plan", {
+    method: "POST", headers: { host, origin }, body: JSON.stringify(request),
+  }), value);
+  expect((await post("localhost:3105", "http://localhost:3105")).status).toBe(200);
+  expect((await post("localhost:3105", "http://localhost:3000")).status).toBe(403);
+  expect((await post("evil.example:3105", "http://evil.example:3105")).status).toBe(403);
+});

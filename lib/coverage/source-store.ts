@@ -13,8 +13,10 @@ import { areaBounds } from "@/lib/graph/geometry";
 type Row = { id: string; refs: string; tags: string; kind: string; promoted: number; coordinates: string };
 type Node = { id: string; lon: number; lat: number; tags: string };
 const NORMALIZED_SEAL_KEY = "normalized-seal-v1";
+const UNSUPPORTED_SEAL_KEY = "unsupported-inventory-seal-v1";
 const NORMALIZATION_VERSION = "source-normalization-v2";
 const RAW_BATCH_PREFIX = "raw-batch-v1:";
+const CHECKPOINT_ROWS = 10_000;
 const RAW_COLUMNS = { nodes: "id,lon,lat,tags", source_ways: "id,refs",
   ways: "id,refs,tags,kind,coordinates,minx,maxx,miny,maxy", refs: "way,node",
   relation_buildings: "id,lon,lat" } as const;
@@ -94,20 +96,22 @@ export class CoverageSourceStore {
     return Object.fromEntries(Object.keys(RAW_COLUMNS).map((table) => [table,
       Number((this.db.prepare(`SELECT coalesce(max(rowid),0) AS n FROM ${table}`).get() as {n:number}).n)])) as RawMaxima;
   }
-  private rawBatch(fromLine:number,toLine:number,from:RawMaxima,to:RawMaxima,legacyBaseline=false): RawBatchSeal {
+  private async rawBatch(fromLine:number,toLine:number,from:RawMaxima,to:RawMaxima,checkpoint:()=>Promise<void>,legacyBaseline=false,verifying=false): Promise<RawBatchSeal> {
     const rows = {} as RawBatchSeal["rows"];
     for (const [table,columns] of Object.entries(RAW_COLUMNS) as [RawTable,string][]) {
       const hash=createHash("sha256"); let count=0;
       hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${table}\0${fromLine}:${toLine}\0`);
       for (const row of this.db.prepare(`SELECT ${columns} FROM ${table} WHERE rowid>? AND rowid<=? ORDER BY rowid`).iterate(from[table],to[table]) as Iterable<Record<string,unknown>>) {
         const record=JSON.stringify(Object.values(row)); hash.update(`${Buffer.byteLength(record)}:`); hash.update(record); count++;
+        if (count%CHECKPOINT_ROWS===0) await checkpoint();
       }
       rows[table]={from:from[table],to:to[table],count,checksum:`sha256:${hash.digest("hex")}`};
+      if (verifying) await checkpoint();
     }
     return {sourceHash:this.source.contentHash,algorithmVersion:NORMALIZATION_VERSION,fromLine,toLine,
       ...(legacyBaseline?{legacyBaseline:true}:{}),rows};
   }
-  private verifyRawBatches(): {committed:number;maxima:RawMaxima} {
+  private async verifyRawBatches(checkpoint:()=>Promise<void>): Promise<{committed:number;maxima:RawMaxima}> {
     const rawCounter=this.receipt("import-lines-v2"),committed=rawCounter===undefined?0:Number(rawCounter);
     if (!Number.isSafeInteger(committed)||committed<0) throw new Error("Staged source raw line counter is invalid");
     let line=0,maxima=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,seen=false;
@@ -119,61 +123,88 @@ export class CoverageSourceStore {
         throw new Error("Staged source raw batch line receipt failed verification");
       const to=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,seal.rows?.[table as RawTable]?.to])) as RawMaxima;
       if (Object.values(to).some((value)=>!Number.isSafeInteger(value)||value<0)) throw new Error("Staged source raw batch row range is invalid");
-      const expected=this.rawBatch(line,seal.toLine,maxima,to,Boolean(seal.legacyBaseline));
+      const expected=await this.rawBatch(line,seal.toLine,maxima,to,checkpoint,Boolean(seal.legacyBaseline),true);
       if (JSON.stringify(seal)!==JSON.stringify(expected)) throw new Error("Staged source raw batch records failed checksum verification");
       line=seal.toLine;maxima=to;seen=true;
+      await checkpoint();
     }
+    let baseline:RawBatchSeal|undefined;
     if (!seen&&committed>0) {
       // Old in-progress caches have only a line counter. Seal the existing
       // committed prefix once; its history before this baseline is unverifiable.
-      maxima=this.rawMaxima();this.mark(`${RAW_BATCH_PREFIX}${committed}`,JSON.stringify(this.rawBatch(0,committed,
-        Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,maxima,true)));
+      maxima=this.rawMaxima();baseline=await this.rawBatch(0,committed,
+        Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,maxima,checkpoint,true,true);
       line=committed;
     }
     if (line!==committed||Object.entries(this.rawMaxima()).some(([table,max])=>max!==maxima[table as RawTable]))
       throw new Error("Staged source raw batch counter or row range failed verification");
+    if (committed>0) await checkpoint();
+    if (baseline) this.mark(`${RAW_BATCH_PREFIX}${committed}`,JSON.stringify(baseline));
     return {committed,maxima};
   }
-  private normalizedSeal(): NormalizedSeal {
+  private async normalizedSeal(checkpoint:()=>Promise<void>): Promise<NormalizedSeal> {
+    await checkpoint();
     const integrity = this.db.prepare("PRAGMA quick_check").get() as {quick_check:string}|undefined;
     if (integrity?.quick_check !== "ok") throw new Error(`Staged source failed SQLite quick_check: ${integrity?.quick_check ?? "no result"}`);
+    await checkpoint();
     const hash = createHash("sha256");
     hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0`);
     const counts = { ways: 0, taggedNodes: 0, relationBuildings: 0 };
-    const scan = (kind: keyof typeof counts, sql: string) => {
+    const scan = async (kind: keyof typeof counts, sql: string) => {
       hash.update(`${kind}\0`);
       for (const row of this.db.prepare(sql).iterate() as Iterable<Record<string,unknown>>) {
         const record = JSON.stringify(Object.values(row));
         hash.update(`${Buffer.byteLength(record)}:`);
         hash.update(record);
         counts[kind]++;
+        if (counts[kind]%CHECKPOINT_ROWS===0) await checkpoint();
       }
       hash.update("\0");
+      await checkpoint();
     };
     // These are the immutable rows read by ways(), evidence(), and buildings().
     // Metrics and inventory dispositions are intentionally mutable and excluded.
-    scan("ways", "SELECT id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id");
-    scan("taggedNodes", "SELECT id,lon,lat,tags FROM nodes WHERE tags!='' ORDER BY id");
-    scan("relationBuildings", "SELECT id,lon,lat FROM relation_buildings ORDER BY id");
+    await scan("ways", "SELECT id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id");
+    await scan("taggedNodes", "SELECT id,lon,lat,tags FROM nodes WHERE tags!='' ORDER BY id");
+    await scan("relationBuildings", "SELECT id,lon,lat FROM relation_buildings ORDER BY id");
     return { sourceHash: this.source.contentHash, algorithmVersion: NORMALIZATION_VERSION, counts, contentHash: `sha256:${hash.digest("hex")}` };
   }
-  private verifyCompletedImport(): void {
-    const expected = this.normalizedSeal();
+  private async unsupportedSeal(checkpoint:()=>Promise<void>): Promise<string> {
+    const hash=createHash("sha256"); let count=0;
+    hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0unsupported-inventory\0`);
+    for (const row of this.db.prepare("SELECT id,reason FROM inventory WHERE disposition='unsupported' ORDER BY id").iterate() as Iterable<Record<string,unknown>>) {
+      const record=JSON.stringify(Object.values(row)); hash.update(`${Buffer.byteLength(record)}:`); hash.update(record);
+      if (++count%CHECKPOINT_ROWS===0) await checkpoint();
+    }
+    await checkpoint();
+    return JSON.stringify({sourceHash:this.source.contentHash,algorithmVersion:NORMALIZATION_VERSION,count,contentHash:`sha256:${hash.digest("hex")}`});
+  }
+  private async verifyCompletedImport(checkpoint:()=>Promise<void>): Promise<void> {
+    const expected = await this.normalizedSeal(checkpoint);
     const saved = this.receipt(NORMALIZED_SEAL_KEY);
     if (saved) {
       let actual: NormalizedSeal;
       try { actual = JSON.parse(saved) as NormalizedSeal; }
       catch { throw new Error("Staged source normalized seal is malformed"); }
       if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("Staged source normalized records failed seal verification");
-    } else {
-      // Older completed caches predate sealing. Their current immutable rows
-      // become the baseline once; past provenance cannot be reconstructed here.
-      this.mark(NORMALIZED_SEAL_KEY, JSON.stringify(expected));
+    }
+    const unsupported=await this.unsupportedSeal(checkpoint),savedUnsupported=this.receipt(UNSUPPORTED_SEAL_KEY);
+    if (savedUnsupported && savedUnsupported!==unsupported) throw new Error("Staged source unsupported inventory failed seal verification");
+    if (!saved || !savedUnsupported) {
+      // Older completed caches predate these seals. Certify both baselines
+      // atomically only after every verification scan and checkpoint succeeds.
+      await checkpoint();
+      this.db.exec("BEGIN IMMEDIATE");
+      try {
+        if (!saved) this.mark(NORMALIZED_SEAL_KEY,JSON.stringify(expected));
+        if (!savedUnsupported) this.mark(UNSUPPORTED_SEAL_KEY,unsupported);
+        this.db.exec("COMMIT");
+      } catch (error) { this.db.exec("ROLLBACK"); throw error; }
     }
   }
   async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number } = {}) {
-    if (this.receipt("import-v2")) { this.verifyCompletedImport(); return; }
-    const verified=this.verifyRawBatches();
+    if (this.receipt("import-v2")) { await this.verifyCompletedImport(checkpoint); return; }
+    const verified=await this.verifyRawBatches(checkpoint);
     if (!this.receipt("raw-import-v2")) {
       const putNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
       const getNode = this.db.prepare("SELECT * FROM nodes WHERE id=?");
@@ -247,7 +278,7 @@ export class CoverageSourceStore {
           }
           if (count % batchSize === 0) {
             const endRows=this.rawMaxima();
-            this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(this.rawBatch(sealedLine,count,startRows,endRows)));
+            this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(await this.rawBatch(sealedLine,count,startRows,endRows,checkpoint)));
             this.mark("import-lines-v2", String(count));
             this.db.exec("COMMIT");
             sealedLine=count;startRows=endRows;
@@ -258,7 +289,7 @@ export class CoverageSourceStore {
         if (count < committed) throw new Error("Source stream is shorter than its committed checkpoint");
         if (count>sealedLine) {
           const endRows=this.rawMaxima();
-          this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(this.rawBatch(sealedLine,count,startRows,endRows)));
+          this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(await this.rawBatch(sealedLine,count,startRows,endRows,checkpoint)));
         }
         this.mark("import-lines-v2", String(count));
         this.mark("raw-import-v2");
@@ -277,7 +308,11 @@ export class CoverageSourceStore {
       WHERE id IN (SELECT 'way/'||id FROM ways WHERE kind='ambiguous' AND promoted=1)`);
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      this.mark(NORMALIZED_SEAL_KEY, JSON.stringify(this.normalizedSeal()));
+      const normalized=await this.normalizedSeal(checkpoint);
+      const unsupported=await this.unsupportedSeal(checkpoint);
+      await checkpoint();
+      this.mark(NORMALIZED_SEAL_KEY, JSON.stringify(normalized));
+      this.mark(UNSUPPORTED_SEAL_KEY, unsupported);
       this.mark("import-v2");
       this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
