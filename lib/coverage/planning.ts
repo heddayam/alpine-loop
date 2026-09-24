@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { coverageRequestSchema, coverageSnapshotSchema, type CoverageCatalog, type CoveragePlan, type CoverageRequest, type CoverageUnit, type CoverageSnapshot } from "@/lib/contracts";
 import { loadInstalledPack } from "@/lib/packs/installed-pack";
+import { discoverCatalogPacks, legacyRoutingNeedsReview } from "@/lib/packs/pack-catalog";
 import { readPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, unionCoverage } from "./geometry";
@@ -45,9 +46,12 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
     catch { return 0; }
   }))).reduce((sum,size)=>sum+size,0);
   const upstreamBytes = sources.reduce((sum,{config})=>sum+config.expectedByteLength,0);
+  const retainedLegacy = [...(await discoverCatalogPacks()).values()].filter((pack) => pack.manifest.id !== COVERAGE_PACK_ID
+    && intersectCoverage(pack.manifest.coverage.boundary, geometry) && legacyRoutingNeedsReview(pack));
   return { id: contentId({ request, sources: sources.map(({ config }) => config), version: COVERAGE_BUILD_VERSION }), request, geometry, units, sourceIds,
     estimates: { downloadBytes: null, temporaryBytes: null, reusableBytes },
     warnings: [...new Set(selected.flatMap((item) => item.limitations)),
+      ...retainedLegacy.map((pack) => `${pack.manifest.name} contains supplemental or unverified routing data. Its legacy installation remains available until replacement trail coverage is verified; this build does not complete its migration.`),
       `${Math.ceil((upstreamBytes-reusableBytes)/1024**2)} MiB of configured OSM downloads remain; ${Math.ceil(reusableBytes/1024**2)} MiB is verified in the source cache.`,
       "A small area may require the full upstream source download. Additional elevation downloads and disk estimates remain unknown until acquisition."] };
 }
