@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import {
   coverageActionSchema, coverageRequestSchema, type CoverageAction,
   type CoverageCatalog, type CoverageJob, type CoveragePlan, type CoverageRequest,
@@ -8,16 +9,57 @@ import {
 import { CoverageJobStateError, SQLiteCoverageJobStore } from "./store";
 import type { CoverageRuntime } from "./types";
 
+/** Bind shared graph and installation roots to one queue, even with custom paths. */
+export function bindCoverageWriter(dbPath: string, roots: string[]): void {
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const canonicalDatabase = existsSync(dbPath) ? realpathSync(dbPath) : join(realpathSync(dirname(dbPath)), basename(dbPath));
+  for (const root of roots) {
+    mkdirSync(root, { recursive: true });
+    const marker = join(realpathSync(root), ".coverage-writer-database");
+    try { writeFileSync(marker, canonicalDatabase, { flag: "wx" }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    if (readFileSync(marker, "utf8") !== canonicalDatabase) {
+      throw new Error(`Coverage root ${root} is bound to a different jobs database; use its existing ALPINE_COVERAGE_JOBS_DB`);
+    }
+  }
+}
+
 export function coverageJobDatabasePath(): string {
-  return resolve(process.env.ALPINE_COVERAGE_JOBS_DB ?? ".local-data/runtime/coverage-jobs.sqlite");
+  const dbPath = resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_JOBS_DB ?? ".local-data/runtime/coverage-jobs.sqlite");
+  bindCoverageWriter(dbPath, [
+    resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage"),
+    resolve(/* turbopackIgnore: true */ process.env.ALPINE_PACK_ROOT ?? ".local-data/packs"),
+  ]);
+  return dbPath;
 }
 
 /** The build runs in a detached local process, independent of an HTTP request. */
 export function startCoverageWorker(dbPath: string): void {
-  const child = spawn(process.execPath, ["--import", "tsx", resolve(process.cwd(), "lib/coverage-jobs/worker.ts"), dbPath], {
-    cwd: process.cwd(), detached: true, stdio: "ignore", env: process.env,
-  });
-  child.unref();
+  const store = new SQLiteCoverageJobStore(dbPath);
+  const queued = store.listJobs().filter(({ status }) => status === "queued").map(({ id }) => id);
+  store.close();
+  if (!queued.length) return;
+  const failed = (error: unknown) => {
+    const jobs = new SQLiteCoverageJobStore(dbPath);
+    try { jobs.failUnstarted(queued, error); }
+    finally { jobs.close(); }
+  };
+  try {
+    const child = spawn(process.execPath, ["--import", "tsx", resolve(process.cwd(), "lib/coverage-jobs/worker.ts"), dbPath], {
+      cwd: process.cwd(), detached: true, stdio: ["ignore", "ignore", "ignore", "ipc"], env: process.env,
+    });
+    child.once("error", failed);
+    child.once("exit", (code, signal) => {
+      if (code !== 0) failed(new Error(`Coverage worker exited before starting queued work (${signal ?? code}); check the local Node.js and tsx installation`));
+    });
+    // Keep short-lived CLI callers alive until imports succeeded or startup failed.
+    child.once("message", (message) => {
+      if (message === "coverage-worker-ready") {
+        child.disconnect();
+        child.unref();
+      }
+    });
+  } catch (error) { failed(error); }
 }
 
 export class CoverageJobService {
@@ -36,8 +78,16 @@ export class CoverageJobService {
     this.#runtime = options.runtime;
     this.#startWorker = options.startWorker ?? startCoverageWorker;
     this.#store = new SQLiteCoverageJobStore(options.dbPath, options.now);
+    this.#store.recoverStaleLease();
+    if (this.#store.listJobs().some(({ status }) => status === "queued")) this.#wakeWorker();
   }
   close(): void { this.#store.close(); }
+  #wakeWorker(): void {
+    try { this.#startWorker(this.#dbPath); }
+    catch (error) {
+      this.#store.failUnstarted(this.#store.listJobs().filter(({ status }) => status === "queued").map(({ id }) => id), error);
+    }
+  }
 
   async catalog(): Promise<CoverageCatalog> {
     this.#store.recoverStaleLease();
@@ -51,8 +101,8 @@ export class CoverageJobService {
   build(planId: string): CoverageJob {
     if (!this.#store.getPlan(planId)) throw new CoverageJobStateError(404, "Coverage plan was not found");
     const job = this.#store.createJob(planId, randomUUID());
-    this.#startWorker(this.#dbPath);
-    return job;
+    this.#wakeWorker();
+    return this.#store.getJob(job.id)!;
   }
   list(): CoverageJob[] {
     this.#store.recoverStaleLease();
@@ -65,7 +115,7 @@ export class CoverageJobService {
   action(id: string, action: CoverageAction): CoverageJob {
     const parsed = coverageActionSchema.parse(action);
     const job = this.#store.action(id, parsed);
-    if (parsed === "resume" || parsed === "publish") this.#startWorker(this.#dbPath);
-    return job;
+    if (parsed === "resume" || parsed === "publish") this.#wakeWorker();
+    return this.#store.getJob(job.id)!;
   }
 }

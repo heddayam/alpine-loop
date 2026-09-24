@@ -1,5 +1,6 @@
 import type { SearchIntent, SearchRequest, SearchResult } from "@/lib/contracts";
-import { loadInstalledPackVersion } from "@/lib/packs/installed-pack";
+import { loadInstalledPackVersion, localPackRoot } from "@/lib/packs/installed-pack";
+import { StaleGenerationError, withGenerationPins } from "@/lib/packs/generation-pins";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import { namespacedId, namespaceRoute, splitNamespacedId } from "@/lib/search/identity";
 import { combineRoutes } from "@/lib/search/routes";
@@ -33,7 +34,16 @@ async function openPack(request: SearchIntent, plan: SearchPlan, pack: SearchPla
 }
 
 export async function generateSearch(request: SearchRequest, signal: AbortSignal): Promise<SearchResult> {
-  const plan = await resolveSearchPlan(request, signal);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const plan = await resolveSearchPlan(request, signal);
+    const versions = plan.packs.filter((pack) => pack.id === "local-coverage").map((pack) => pack.dataVersion);
+    try { return await withGenerationPins(localPackRoot(), versions, () => generateWithPlan(request, signal, plan)); }
+    catch (error) { if (!(error instanceof StaleGenerationError) || attempt) throw error; }
+  }
+  throw new Error("Local coverage changed during search planning");
+}
+
+async function generateWithPlan(request: SearchRequest, signal: AbortSignal, plan: SearchPlan): Promise<SearchResult> {
   if (request.area.mode === "drive-time") {
     const resolved = await defaultReachabilityService().resolveArea(request.area, signal);
     plan.area.filterGeometry = resolved.geometry;
@@ -53,6 +63,7 @@ export async function generateSearch(request: SearchRequest, signal: AbortSignal
           nearMisses: result.nearMisses.map((route) => namespaceRoute(route, pack.id, opened!.label)),
         },
         incomplete: result.diagnostics.hardTruncationReasons.length > 0,
+        noCycle: result.diagnostics.noCycleAccessPointCount > 0,
       };
     } catch {
       if (signal.aborted) throw signal.reason;
@@ -67,6 +78,7 @@ export async function generateSearch(request: SearchRequest, signal: AbortSignal
   for (const outcome of outcomes) {
     if (!outcome) continue;
     if (outcome.routes) groups.push(outcome.routes);
+    if ("noCycle" in outcome && outcome.noCycle) messages.add("Some starts have no cycle in installed coverage. Expanding coverage may change this.");
     if (outcome.incomplete) {
       incomplete = true;
       messages.add(outcome.routes
@@ -76,6 +88,7 @@ export async function generateSearch(request: SearchRequest, signal: AbortSignal
   }
   if (!groups.length && incomplete) throw new ServerApiError("SEARCH_UNAVAILABLE", "No eligible area could be searched. Check the selected area and installed data.", 503);
   const routes = combineRoutes(groups, request.limit);
+  if (plan.packs.some((pack) => pack.id === "local-coverage")) messages.add("Search is limited to installed coverage. Source-data uncertainty is separate from installation completeness.");
   if (!routes.exact.length) messages.add("No routes matched all criteria. Close matches, when available, are listed separately.");
   return { request, area: plan.area, ...routes, incomplete, messages: [...messages] };
 }

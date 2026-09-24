@@ -114,6 +114,27 @@ export class SQLiteCoverageJobStore {
     if (this.#lease()?.token !== token) throw new Error("Coverage writer lease was lost");
   }
 
+  /** The callback may only switch the prepared filesystem pointer, never call this store. */
+  async commitPublication(id: string, token: string, activate: () => Promise<void>): Promise<void> {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const control = this.checkpoint(id, token);
+      if (control === "cancel" || control === "pause") throw new Error("Coverage publication stopped by user");
+      await activate();
+      this.#db.exec("COMMIT");
+    } catch (error) { this.#db.exec("ROLLBACK"); throw error; }
+  }
+
+  failUnstarted(ids: string[], error: unknown): void {
+    this.#tx(() => {
+      this.#recoverStaleLocked();
+      if (this.#lease()) return; // A competing worker successfully owns this queue.
+      const message = error instanceof Error ? error.message : String(error);
+      const update = this.#db.prepare("UPDATE coverage_jobs SET status='failed',stage='Worker failed to start',error=?,updated_at=? WHERE id=? AND status='queued'");
+      for (const id of ids) update.run(message, this.#iso(), id);
+    });
+  }
+
   savePlan(plan: CoveragePlan): CoveragePlan {
     const value = coveragePlanSchema.parse(plan);
     const payload = JSON.stringify(value);
@@ -183,12 +204,12 @@ export class SQLiteCoverageJobStore {
     const row = this.#db.prepare("SELECT * FROM coverage_jobs WHERE id=?").get(id) as Row | undefined;
     if (!row || !["running","pausing"].includes(requiredString(row,"status"))) throw new Error("Coverage job is not running");
     const stage = update.stage ?? requiredString(row,"stage");
-    const units = update.units === undefined ? parseJson(row.units_json) : coverageUnitSchema.array().parse(update.units);
+    const units = coverageUnitSchema.array().parse(update.units ?? parseJson(row.units_json));
     const completed = update.completedUnits ?? requiredInteger(row,"completed_units");
-    if (!Number.isSafeInteger(completed) || completed < 0 || completed > requiredInteger(row,"total_units")) throw new Error("Invalid completed unit count");
+    if (!Number.isSafeInteger(completed) || completed < 0 || completed > units.length) throw new Error("Invalid completed unit count");
     const snapshot = update.snapshot === undefined ? row.snapshot_json : update.snapshot === null ? null : JSON.stringify(coverageSnapshotSchema.parse(update.snapshot));
-    this.#db.prepare("UPDATE coverage_jobs SET stage=?,completed_units=?,units_json=?,snapshot_json=?,updated_at=? WHERE id=?")
-      .run(stage,completed,JSON.stringify(units),snapshot as string|null,this.#iso(),id);
+    this.#db.prepare("UPDATE coverage_jobs SET stage=?,completed_units=?,total_units=?,units_json=?,snapshot_json=?,updated_at=? WHERE id=?")
+      .run(stage,completed,units.length,JSON.stringify(units),snapshot as string|null,this.#iso(),id);
   }
   finish(id: string, token: string, result: CoverageRunResult): CoverageJob {
     return this.#tx(() => {
@@ -197,10 +218,10 @@ export class SQLiteCoverageJobStore {
       const row = this.#db.prepare("SELECT mode,snapshot_json,total_units FROM coverage_jobs WHERE id=?").get(id) as Row;
       const status = control === "cancel" ? "cancelled" : control === "pause" || row.mode === "publish" ? "paused" : result.status;
       const units = coverageUnitSchema.array().parse(result.units);
-      if (!Number.isSafeInteger(result.completedUnits) || result.completedUnits < 0 || result.completedUnits > requiredInteger(row,"total_units")) throw new Error("Invalid completed unit count");
+      if (!Number.isSafeInteger(result.completedUnits) || result.completedUnits < 0 || result.completedUnits > units.length) throw new Error("Invalid completed unit count");
       const snapshot = result.snapshot === null ? row.snapshot_json : JSON.stringify(coverageSnapshotSchema.parse(result.snapshot));
-      this.#db.prepare(`UPDATE coverage_jobs SET status=?,stage=?,completed_units=?,units_json=?,snapshot_json=?,control_action=NULL,error=NULL,updated_at=? WHERE id=?`)
-        .run(status,status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : "Paused",result.completedUnits,JSON.stringify(units),snapshot as string|null,this.#iso(),id);
+      this.#db.prepare(`UPDATE coverage_jobs SET status=?,stage=?,completed_units=?,total_units=?,units_json=?,snapshot_json=?,control_action=NULL,error=NULL,updated_at=? WHERE id=?`)
+        .run(status,status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : "Paused",result.completedUnits,units.length,JSON.stringify(units),snapshot as string|null,this.#iso(),id);
       return this.getJob(id)!;
     });
   }

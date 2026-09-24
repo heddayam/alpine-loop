@@ -1,15 +1,17 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchIntent, SearchRoute } from "@/lib/contracts";
+import { cleanupCoverageGenerations } from "@/lib/coverage/retention";
+import { fixturePackSeed } from "@/lib/data/fixture-pack";
 import { createRouteJobCancelHandler, createRouteJobCollectionHandlers } from "./http";
 import { RouteJobService, decodeResultCursor, encodeResultCursor } from "./service";
 import { SQLiteRouteJobStore } from "./store";
 import type { RouteJobRunnerDependencies } from "./types";
 
 const temporary: string[] = [];
-afterEach(() => temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
+afterEach(() => { vi.unstubAllEnvs(); temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 const request: SearchIntent = {
   area: { mode: "drive-time", origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30, regionIds: ["fixture-pack::pack:fixture-pack"] },
@@ -59,10 +61,51 @@ function harness(overrides: Partial<RouteJobRunnerDependencies> = {}) {
   };
   const ids = ["00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000011"];
   const service = new RouteJobService({ store, dependencies, id: () => ids.shift()! });
-  return { store, service, dependencies };
+  return { store, service, dependencies, directory };
+}
+
+function installLocal(packRoot: string, version: string): void {
+  const directory = join(packRoot, "local-coverage", version);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "pack.sqlite"), "fixture");
+  writeFileSync(join(directory, "manifest.json"), JSON.stringify({
+    ...fixturePackSeed, id: "local-coverage", dataVersion: version,
+    builtAt: "2026-09-24T00:00:00Z", metricAlgorithmVersion: "test",
+    sources: [{ id: "test", authority: "test", dataset: "test", version: "1",
+      retrievedAt: "2026-09-24T00:00:00Z", url: "https://example.com", license: "test",
+      contentHash: `sha256:${"a".repeat(64)}` }],
+  }));
 }
 
 describe("RouteJobService", () => {
+  it("replans if cleanup removes a generation before its job plan is saved", async () => {
+    let resolveFirst!: () => void;
+    let releaseFirst!: () => void;
+    const firstChosen = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    let calls = 0;
+    const { service, store, directory } = harness({
+      resolveJob: vi.fn(async () => {
+        if (++calls === 1) { resolveFirst(); await gate; }
+        return { packs: [{ id: "local-coverage", dataVersion: calls === 1 ? "old" : "active", builtAt: "2026-09-24T00:00:00Z" }], area: { label: "Local" } };
+      }),
+      currentDataVersion: vi.fn(async () => "active"),
+    });
+    const packRoot = join(directory, "packs");
+    installLocal(packRoot, "old"); installLocal(packRoot, "active");
+    writeFileSync(join(packRoot, "local-coverage", "current.json"), JSON.stringify({ dataVersion: "active", path: "active/manifest.json" }));
+    vi.stubEnv("ALPINE_PACK_ROOT", packRoot);
+    const creating = service.create(drawnAreaRequest);
+    await firstChosen;
+    await cleanupCoverageGenerations({ packRoot, routeJobsDb: join(directory, "jobs.sqlite"), deleteEligible: true });
+    releaseFirst();
+    const job = await creating;
+    expect(calls).toBe(2);
+    expect(store.getStored(job.id)?.plan.packs[0]?.dataVersion).toBe("active");
+    await service.waitUntilIdle();
+    store.close();
+  });
+
   it("runs a drawn-area job with its resolved geographic plan", async () => {
     const { service, dependencies, store } = harness({
       resolveJob: vi.fn(async () => ({

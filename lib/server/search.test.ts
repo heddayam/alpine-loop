@@ -1,11 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchCatalogSchema, searchResultSchema, type SearchRequest } from "@/lib/contracts";
 import { compilePack } from "@/lib/data/compiler";
+import * as namedAreaCatalog from "@/lib/data/named-area-catalog";
 import { fixtureCompileOptions, fixturePackSeed } from "@/lib/data/fixture-pack";
 import { loadInstalledPack, type InstalledPack } from "@/lib/packs/installed-pack";
+import { withGenerationLock } from "@/lib/packs/generation-pins";
 import { POST } from "@/app/api/search/route";
 import { SQLiteGraphRepository } from "@/lib/graph";
 import { mapData } from "./map";
@@ -30,6 +33,17 @@ const request: SearchRequest = {
 };
 let root: string;
 let installed: Map<string, InstalledPack>;
+let localInstalled: InstalledPack | undefined;
+
+async function localPack(): Promise<InstalledPack> {
+  if (localInstalled) return localInstalled;
+  await compilePack(await fixtureCompileOptions(root, undefined, undefined, undefined, {
+    seed: { ...fixturePackSeed, id: "local-coverage", name: "Local coverage" },
+    searchRegions: { version: 1, regions: [{ namedAreaId: "osm:relation/1001", expectedName: "Redwood Preserve" }] },
+  }));
+  localInstalled = (await loadInstalledPack("local-coverage", root))!;
+  return localInstalled;
+}
 
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "alpine-geographic-"));
@@ -86,6 +100,71 @@ describe("geographic search with production storage and compute", () => {
     vi.stubEnv("ALPINE_SOLVER_WORKERS", "1");
     expect(await generateSearch(request, signal())).toEqual(parallel);
     vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+  });
+
+  it("pins local coverage while a Quick search reads its generation", async () => {
+    const local = await localPack();
+    fixtures.packs = new Map([["local-coverage", local]]);
+    const original = RouteSolverProcess.prototype.generate;
+    let started!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const generate = vi.spyOn(RouteSolverProcess.prototype, "generate").mockImplementation(async function (this: RouteSolverProcess, ...args) {
+      started();
+      await gate;
+      return original.apply(this, args);
+    });
+    const running = generateSearch(request, signal());
+    try {
+      await entered;
+      const live = await withGenerationLock(root, (lock) => lock.liveVersions());
+      expect(live.has(local.manifest.dataVersion)).toBe(true);
+    } finally { release(); generate.mockRestore(); }
+    await running;
+    expect((await withGenerationLock(root, (lock) => lock.liveVersions())).size).toBe(0);
+  });
+
+  it("pins local coverage while resolving a named region", async () => {
+    const local = await localPack();
+    fixtures.packs = new Map([["local-coverage", local]]);
+    const original = namedAreaCatalog.getSearchRegion;
+    let sawPin = false;
+    const lookup = vi.spyOn(namedAreaCatalog, "getSearchRegion").mockImplementation((...args) => {
+      const db = new DatabaseSync(join(root, "local-coverage", "generation-pins.sqlite"), { readOnly: true });
+      try {
+        const row = db.prepare("SELECT count(*) AS count FROM generation_pins WHERE version = ?").get(local.manifest.dataVersion) as { count: number };
+        sawPin = row.count > 0;
+      } finally { db.close(); }
+      return original(...args);
+    });
+    try {
+      await resolveSearchPlan({ ...request, area: { mode: "named-regions", regionIds: ["local-coverage::osm:relation/1001"] } }, signal());
+      expect(sawPin).toBe(true);
+    } finally { lookup.mockRestore(); }
+  });
+
+  it("pins local coverage through map database reads and catalogs its regions", async () => {
+    const local = await localPack();
+    fixtures.packs = new Map([["local-coverage", local]]);
+    const original = SQLiteGraphRepository.prototype.getAccessPointCandidates;
+    let started!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const candidates = vi.spyOn(SQLiteGraphRepository.prototype, "getAccessPointCandidates").mockImplementation(async function (this: SQLiteGraphRepository, ...args) {
+      started();
+      await gate;
+      return original.apply(this, args);
+    });
+    const running = mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`));
+    try {
+      await Promise.race([entered, running.then(() => { throw new Error("Map finished before database read"); })]);
+      expect((await withGenerationLock(root, (lock) => lock.liveVersions())).has(local.manifest.dataVersion)).toBe(true);
+    } finally { release(); candidates.mockRestore(); }
+    await running;
+    expect((await withGenerationLock(root, (lock) => lock.liveVersions())).size).toBe(0);
+    expect((await searchCatalog()).regions.some(({ id }) => id.startsWith("local-coverage::"))).toBe(true);
   });
 
   it("uses two independent Full workers within one pack and closes all readers", async () => {

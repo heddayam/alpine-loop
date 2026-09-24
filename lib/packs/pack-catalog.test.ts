@@ -18,21 +18,21 @@ async function emptyRoot(): Promise<string> {
   return root;
 }
 
-async function installSantaCruz(root: string): Promise<void> {
-  const directory = path.join(root, "santa-cruz-mountains", "scm-test");
+async function installPack(root: string, id: string, dataVersion: string, boundary: { type: "Polygon" | "MultiPolygon"; coordinates: unknown }): Promise<void> {
+  const directory = path.join(root, id, dataVersion);
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, "pack.sqlite"), "fixture");
   await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
     schemaVersion: "6",
-    id: "santa-cruz-mountains",
-    name: "Santa Cruz Mountains",
-    dataVersion: "scm-test",
+    id,
+    name: id,
+    dataVersion,
     builtAt: "2026-08-06T00:00:00Z",
     compilerVersion: "test",
     metricAlgorithmVersion: "test",
     coverage: {
       bbox: [-122.55, 36.95, -121.75, 37.55],
-      boundary: { type: "Polygon", coordinates: [[[-122.55, 36.95], [-121.75, 36.95], [-121.75, 37.55], [-122.55, 37.55], [-122.55, 36.95]]] },
+      boundary,
     },
     display: { center: [-122.15, 37.25], zoom: 9 },
     capabilities: { elevation: true, officialAccess: true, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
@@ -44,11 +44,14 @@ async function installSantaCruz(root: string): Promise<void> {
       contentHash: `sha256:${"a".repeat(64)}`,
     }],
   }));
-  await writeFile(path.join(root, "santa-cruz-mountains", "current.json"), JSON.stringify({
-    dataVersion: "scm-test",
-    path: "scm-test/manifest.json",
+  await writeFile(path.join(root, id, "current.json"), JSON.stringify({
+    dataVersion,
+    path: `${dataVersion}/manifest.json`,
   }));
 }
+
+const santaCruz = { type: "Polygon" as const, coordinates: [[[-122.55, 36.95], [-121.75, 36.95], [-121.75, 37.55], [-122.55, 37.55], [-122.55, 36.95]]] };
+async function installSantaCruz(root: string): Promise<void> { return installPack(root, "santa-cruz-mountains", "scm-test", santaCruz); }
 
 describe("catalog-linked pack discovery", () => {
   it("returns no installations when linked data is absent", async () => {
@@ -70,6 +73,32 @@ describe("catalog-linked pack discovery", () => {
     const catalog = await discoverCatalogPacks(root);
     expect(catalog.size).toBe(0);
     await expect(loadInstalledPack("santa-cruz-mountains", root)).rejects.toThrow();
+  });
+
+  it("discovers local coverage and hides a legacy pack only after exact full coverage", async () => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    await installPack(root, "local-coverage", "coverage-test", santaCruz);
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["local-coverage"]);
+  });
+
+  it("retains legacy data under partial local coverage even when bounding boxes match", async () => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    const leftAndRight = { type: "MultiPolygon" as const, coordinates: [
+      [[[-122.55,36.95],[-122.2,36.95],[-122.2,37.55],[-122.55,37.55],[-122.55,36.95]]],
+      [[[-122.1,36.95],[-121.75,36.95],[-121.75,37.55],[-122.1,37.55],[-122.1,36.95]]],
+    ] };
+    await installPack(root, "local-coverage", "coverage-test", leftAndRight);
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["santa-cruz-mountains", "local-coverage"]);
+  });
+
+  it("keeps a valid legacy pack when the local pointer is invalid", async () => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    await mkdir(path.join(root, "local-coverage"), { recursive: true });
+    await writeFile(path.join(root, "local-coverage", "current.json"), "invalid");
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["santa-cruz-mountains"]);
   });
 
 });

@@ -1,4 +1,6 @@
 import { areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } from "@/lib/contracts";
+import { StaleGenerationError, withGenerationLock } from "@/lib/packs/generation-pins";
+import { localPackRoot } from "@/lib/packs/installed-pack";
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
 import { SQLiteRouteJobStore, type ResultCursor, type StoredJob } from "./store";
 import type { RouteJobRunnerDependencies, RouteJob, RouteJobResultsPage, RouteJobResult } from "./types";
@@ -77,19 +79,28 @@ export class RouteJobService {
         issues: parsed.error.issues.map(({ path, message }) => ({ path: path.map(String).join("."), message })),
       });
     }
-    let resolved;
-    try {
-      resolved = await this.#dependencies.resolveJob(parsed.data, signal);
-    } catch (error) {
-      if (error instanceof ServerApiError) throw error;
-      if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
-      throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
-    }
-    if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
     const id = this.#id();
-    this.#store.create(id, parsed.data, resolved);
-    this.start();
-    return (await this.get(id))!;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let resolved;
+      try { resolved = await this.#dependencies.resolveJob(parsed.data, signal); }
+      catch (error) {
+        if (error instanceof ServerApiError) throw error;
+        if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
+        throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
+      }
+      if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
+      const versions = resolved.packs.filter((pack) => pack.id === "local-coverage").map((pack) => pack.dataVersion);
+      try {
+        if (versions.length) await withGenerationLock(localPackRoot(), async (lock) => {
+          await lock.requireVersions(versions);
+          this.#store.create(id, parsed.data, resolved);
+        });
+        else this.#store.create(id, parsed.data, resolved);
+        this.start();
+        return (await this.get(id))!;
+      } catch (error) { if (!(error instanceof StaleGenerationError) || attempt) throw error; }
+    }
+    throw new Error("Local coverage changed during route-job planning");
   }
 
   async list(): Promise<RouteJob[]> {

@@ -13,6 +13,8 @@ export type CoverageRunnerContext = {
   signal: AbortSignal;
   publishOnly: boolean;
   report(update: CoverageProgressUpdate): Promise<void>;
+  /** Serialize the atomic active-pointer switch with pause/cancel. No reporting inside activate. */
+  commitPublication?(activate: () => Promise<void>): Promise<void>;
   checkpoint(): Promise<"continue" | "pause" | "cancel" | "publish">;
 };
 

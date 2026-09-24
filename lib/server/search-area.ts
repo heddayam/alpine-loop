@@ -1,10 +1,12 @@
 import type { SearchArea, SearchAreaSnapshot, SearchCatalog, SearchIntent } from "@/lib/contracts";
 import { getSearchRegion, listSearchRegions } from "@/lib/data/named-area-catalog";
 import { areaBounds } from "@/lib/graph";
-import { loadInstalledPackVersion, type InstalledPack } from "@/lib/packs/installed-pack";
+import { loadInstalledPackVersion, localPackRoot, type InstalledPack } from "@/lib/packs/installed-pack";
+import { StaleGenerationError, withGenerationPins } from "@/lib/packs/generation-pins";
 import { discoverCatalogPacks } from "@/lib/packs/pack-catalog";
 import { PORTAL_NAMED_REGION_TOLERANCE_M } from "@/lib/solver";
 import { namespacedId, splitNamespacedId } from "@/lib/search/identity";
+import { coverageRegionAlias } from "@/lib/coverage/named-areas";
 import { ServerApiError } from "./api-error";
 import type { SearchPlan } from "./search-plan";
 
@@ -38,15 +40,28 @@ export async function installedSearchPacks(): Promise<ReadonlyMap<string, Instal
   return await discoverCatalogPacks();
 }
 
+/** Hold the selected local generation while a catalog or map reader uses it. */
+export async function withPinnedSearchPacks<T>(read: (packs: ReadonlyMap<string, InstalledPack>) => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const packs = await installedSearchPacks();
+    const local = packs.get("local-coverage");
+    try { return await withGenerationPins(localPackRoot(), local ? [local.manifest.dataVersion] : [], () => read(packs)); }
+    catch (error) { if (!(error instanceof StaleGenerationError) || attempt) throw error; }
+  }
+  throw new Error("Local coverage changed during catalog reading");
+}
+
 export async function searchCatalog(): Promise<SearchCatalog> {
-  const packs = [...(await installedSearchPacks()).values()];
-  return {
-    regions: packs.flatMap(({ manifest, databasePath }) => listSearchRegions(databasePath).map(({ id, name }) => ({
-      id: namespacedId(manifest.id, id), name,
-    }))),
-    coverages: packs.map(({ manifest }) => manifest.coverage.boundary),
-    display: packs[0]?.manifest.display ?? { center: [-122, 38], zoom: 7 },
-  };
+  return withPinnedSearchPacks(async (installed) => {
+    const packs = [...installed.values()];
+    return {
+      regions: packs.flatMap(({ manifest, databasePath }) => listSearchRegions(databasePath).map(({ id, name }) => ({
+        id: namespacedId(manifest.id, id), name,
+      }))),
+      coverages: packs.map(({ manifest }) => manifest.coverage.boundary),
+      display: packs[0]?.manifest.display ?? { center: [-122, 38], zoom: 7 },
+    };
+  });
 }
 
 async function namedArea(regionIds: string[], packs: ReadonlyMap<string, InstalledPack>) {
@@ -55,7 +70,9 @@ async function namedArea(regionIds: string[], packs: ReadonlyMap<string, Install
     try { identity = splitNamespacedId(id); }
     catch { throw new ServerApiError("REGION_NOT_FOUND", "The selected region is unavailable.", 404); }
     const pack = packs.get(identity[0]);
-    const region = pack ? getSearchRegion(pack.databasePath, identity[1]) : null;
+    const local = packs.get("local-coverage");
+    const region = (pack ? getSearchRegion(pack.databasePath, identity[1]) : null)
+      ?? (local ? coverageRegionAlias(local.databasePath, id) : null);
     if (!region) throw new ServerApiError("REGION_NOT_FOUND", "The selected region is unavailable.", 404);
     return region;
   });
@@ -65,8 +82,11 @@ async function namedArea(regionIds: string[], packs: ReadonlyMap<string, Install
 export async function resolveSearchPlan(
   request: SearchIntent,
   signal: AbortSignal,
-  packs = installedSearchPacks(),
+  packs?: Promise<ReadonlyMap<string, InstalledPack>>,
 ): Promise<SearchPlan> {
+  // Production discovery and named-region reads share one generation pin. The
+  // optional pack set is used by fixture callers that provide their own DBs.
+  if (!packs) return withPinnedSearchPacks((installed) => resolveSearchPlan(request, signal, Promise.resolve(installed)));
   if (signal.aborted) throw signal.reason;
   const installed = await packs;
   if (!installed.size) throw new ServerApiError("DATA_UNAVAILABLE", "Install regional data before searching.", 503);

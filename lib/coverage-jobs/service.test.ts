@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Worker } from "node:worker_threads";
+import { once } from "node:events";
 import { afterEach, expect, it } from "vitest";
 import type { CoverageCatalog, CoveragePlan, CoverageSnapshot } from "@/lib/contracts/coverage";
-import { CoverageJobService } from "./service";
+import { bindCoverageWriter, CoverageJobService } from "./service";
 import { SQLiteCoverageJobStore } from "./store";
 
 const area: CoveragePlan["geometry"] = { type: "Polygon", coordinates: [[[0,0],[1,0],[1,1],[0,1],[0,0]]] };
@@ -99,4 +101,83 @@ it("queues publish for paused work and rejects simultaneous publish", () => {
   store.finish("job-1","writer",{ snapshot, completedUnits: 1, units: [{ ...plan.units[0]!, status: "installed" }], status: "completed" });
   expect(store.getJob("job-1")?.status).toBe("paused");
   store.releaseLease("writer"); store.close();
+});
+
+it("tracks the larger installed union when an expansion must rebuild changed inputs", () => {
+  const store = new SQLiteCoverageJobStore(dbPath());
+  try {
+    store.savePlan(plan); store.createJob(plan.id,"rebuild");
+    store.acquireLease("writer",process.pid); store.claimNext("writer");
+    const units = ["old-a","old-b","new"].map(id => ({ ...plan.units[0]!, id, status: "prepared" as const }));
+    store.report("rebuild","writer",{ stage:"Rebuilding installed coverage",units,completedUnits:2 });
+    expect(store.getJob("rebuild")).toMatchObject({totalUnits:3,completedUnits:2});
+    store.finish("rebuild","writer",{snapshot,units,completedUnits:3,status:"completed"});
+    expect(store.getJob("rebuild")).toMatchObject({status:"completed",totalUnits:3,completedUnits:3});
+    store.releaseLease("writer");
+  } finally { store.close(); }
+});
+
+
+it("restarts persisted queued work and records a synchronous startup failure", async () => {
+  const file = dbPath();
+  const setup = new SQLiteCoverageJobStore(file);
+  setup.savePlan(plan); setup.createJob(plan.id,"queued"); setup.close();
+  let starts = 0;
+  const service = new CoverageJobService({ dbPath:file, runtime:{catalog:async()=>catalog,plan:async()=>plan}, startWorker:()=>{ starts++; throw new Error("spawn denied"); } });
+  expect(starts).toBe(1);
+  expect(service.get("queued")).toMatchObject({status:"failed",error:"spawn denied"});
+  expect(service.action("queued","resume")).toMatchObject({status:"failed"});
+  expect(starts).toBe(2);
+  service.close();
+});
+
+it("rejects a second jobs database for either shared installation root", () => {
+  const file = dbPath(), shared = join(file,"..","graph"), packs = join(file,"..","packs");
+  bindCoverageWriter(file,[shared,packs]);
+  expect(()=>bindCoverageWriter(file,[shared,packs])).not.toThrow();
+  expect(()=>bindCoverageWriter(join(file,"..","other.sqlite"),[shared])).toThrow(/different jobs database/);
+  expect(()=>bindCoverageWriter(join(file,"..","other.sqlite"),[packs])).toThrow(/different jobs database/);
+});
+
+it("prevents cancelled publication and preserves already committed publication", async () => {
+  const store = new SQLiteCoverageJobStore(dbPath());
+  try {
+    store.savePlan(plan); store.createJob(plan.id,"job"); store.acquireLease("writer",process.pid); store.claimNext("writer");
+    let activations = 0;
+    await store.commitPublication("job","writer",async()=>{ activations++; });
+    store.action("job","cancel");
+    await expect(store.commitPublication("job","writer",async()=>{ activations++; })).rejects.toThrow(/stopped by user/);
+    expect(activations).toBe(1);
+    store.finishStopped("job","writer");
+    expect(store.getJob("job")?.status).toBe("cancelled");
+    store.releaseLease("writer");
+  } finally { store.close(); }
+});
+
+
+it("serializes cancellation from another process after atomic activation", async () => {
+  const file = dbPath(), store = new SQLiteCoverageJobStore(file);
+  let canceller: Worker | undefined;
+  try {
+    store.savePlan(plan); store.createJob(plan.id,"job"); store.acquireLease("writer",process.pid); store.claimNext("writer");
+    let cancelled = false;
+    await store.commitPublication("job","writer", async () => {
+      canceller = new Worker(`
+        const {parentPort,workerData}=require('node:worker_threads');
+        const {DatabaseSync}=require('node:sqlite');
+        const db=new DatabaseSync(workerData); db.exec('PRAGMA busy_timeout=5000');
+        parentPort.postMessage('ready');
+        db.exec("BEGIN IMMEDIATE; UPDATE coverage_jobs SET status='pausing',control_action='cancel' WHERE id='job'; COMMIT");
+        db.close(); parentPort.postMessage('cancelled');
+      `, {eval:true,workerData:file});
+      canceller.on("message",message=>{if(message==="cancelled")cancelled=true;});
+      await once(canceller,"message");
+      await new Promise(resolve=>setTimeout(resolve,20));
+      expect(cancelled).toBe(false);
+    });
+    await once(canceller!,"exit");
+    expect(cancelled).toBe(true);
+    expect(store.checkpoint("job","writer")).toBe("cancel");
+    store.finishStopped("job","writer"); store.releaseLease("writer");
+  } finally {await canceller?.terminate();store.close();}
 });

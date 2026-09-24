@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { hasQueuedCoverageJobs, SQLiteCoverageJobStore } from "./store";
-import { startCoverageWorker } from "./service";
+import { coverageJobDatabasePath, startCoverageWorker } from "./service";
 import type { CoverageRuntime } from "./types";
 
 /** A single process lease serializes every CLI and UI build on this installation. */
@@ -12,7 +12,9 @@ export async function runCoverageWorker(dbPath: string, runtime: Pick<CoverageRu
   let normalExit = false;
   let activeAbort: AbortController | undefined;
   let activeJobId: string | undefined;
+  let committing = false;
   const heartbeat = setInterval(() => {
+    if (committing) return;
     try {
       if (!store.heartbeat(token)) activeAbort?.abort(new Error("Coverage writer lease lost"));
       if (activeJobId && ["pause", "cancel"].includes(store.checkpoint(activeJobId, token))) {
@@ -33,6 +35,11 @@ export async function runCoverageWorker(dbPath: string, runtime: Pick<CoverageRu
           publishOnly: job.mode === "publish",
           report: async (update) => { store.report(job.id, token, update); },
           checkpoint: async () => store.checkpoint(job.id, token),
+          commitPublication: async (activate) => {
+            committing = true;
+            try { await store.commitPublication(job.id, token, activate); }
+            finally { committing = false; }
+          },
         });
         store.finish(job.id, token, result);
       } catch (error) {
@@ -58,6 +65,8 @@ export async function runCoverageWorker(dbPath: string, runtime: Pick<CoverageRu
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dbPath = process.argv[2];
   if (!dbPath) throw new Error("Coverage worker requires a database path");
+  if (coverageJobDatabasePath() !== dbPath) throw new Error("Coverage worker database differs from the configured installation");
   const runtime = await import("@/lib/coverage/runtime") as Pick<CoverageRuntime, "run">;
+  process.send?.("coverage-worker-ready");
   await runCoverageWorker(dbPath, runtime);
 }
