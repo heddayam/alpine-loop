@@ -106,6 +106,11 @@ builder computes metrics and feasibility, writes SQLite, audits the artifact,
 and activates it only after acceptance. Failed builds leave the previous
 artifact and current pointer intact. Downloads are immutable and cached.
 
+The accepted [progressive coverage revision](progressive-coverage.md) adds
+preclip inventory, resumable installation units, and a coherent combined graph.
+It preserves the solver and selection invariants above. Its gates in status
+must pass before large-region feasibility or migration is declared complete.
+
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
 internal plan pins contributing data versions. One FIFO coordinator resumes
 interrupted work from its first unfinished start while the pinned data remains

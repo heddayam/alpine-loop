@@ -6,6 +6,43 @@ the evidence line.
 
 ## Active system design revision
 
+### Progressive coverage — implementation in progress
+
+- [x] **A — Contracts and baseline.** Version-1 coverage plans, jobs, snapshots,
+  and catalog contracts; schema-6 routing compatibility retained. Baseline
+  regional disk footprint and unchanged bounded solver behavior documented in
+  [progressive coverage](progressive-coverage.md).
+- [x] **B — Resumable builder.** Disk-backed inventory, indexed context frontier,
+  streaming publisher, global topology, receipts, source reconciliation, input
+  invalidation, and deterministic DEM sampling pass offline regressions.
+- [x] **C — Progressive installation.** Cross-unit cycles, opposite installation
+  orders, overlap, interruption, changed-input replay, atomic activation, and
+  live/saved generation retention pass integrated tests.
+- [x] **D — App and CLI.** Shared job service, controls, aliases, recovery, and
+  main-map coverage panel implemented. Coverage sits beside Settings; installation
+  drawing preserves the separate search draft and results.
+- [ ] **E — Scale and migration.** Real-source 4 GiB/swap-disabled container
+  measurement is in progress. Cascades-sized and second-geography acceptance,
+  expansion/resume timings, and final search measurements remain unproven.
+
+Evidence (2026-09-24): two final `npm run verify` passes each passed 666 tests
+in 105 files, lint, types, and production build. Two `npm run test:browser`
+passes each passed nine desktop/mobile flows (38.7 s and 37.0 s). Live Docker
+preview checks passed collection focus, exact status overlays, zoom/pan,
+installation drawing, restoration of untouched search bounds, panel scrolling,
+and mobile map/panel switching; no browser console errors. App and CLI both
+launched persistent workers; the isolated cached-only request recorded the
+expected missing-source failure. Docker runtime includes osmium and Rasterio
+1.4.3/GDAL 3.6.2; Compose configuration validates.
+
+The real-source trial imported 54.3 million Washington records, recovered after
+an unsupported building-relation failure, and exposed repeated full-table
+context scans. Those scans now use an indexed disk frontier; the durable source
+inventory is being reused in the 4 GiB/swap-disabled trial. This remains Gate E
+work, not a successful Cascades-sized build. Current work is on
+`codex/progressive-coverage`; it is not ready to merge. No production installation
+has been replaced by the benchmark.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
