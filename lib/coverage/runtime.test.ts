@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -269,3 +269,56 @@ it("publishes West Cady, wholly omitted Pilchuck, and the formerly cut road appr
   for (const id of [372537133,951045864,951045865,37583693,218617733])
     expect(published.some(row=>String(row.id).startsWith(`osm-way-${id}:`))).toBe(true);
 },30_000);
+
+
+it.each(["roads", "buildings", "evidence"])("pauses during large %s context ingestion and resumes without a premature unit receipt", async kind => {
+  const installation = await request(-121.27,-121.25);
+  const first = await run(installation,context());
+  const fixture = (await readFile(source.localPath,"utf8")).trim().split("\n");
+  for (let i=0;i<1501;i++) {
+    const id=1000+i, lon=-121.26+(kind==="buildings"?i%100*0.00002:i*0.000001);
+    const lat=47.52+(kind==="buildings"?Math.floor(i/100)*0.00002:0);
+    fixture.push(`n${id} T${kind==="buildings"?"building=yes":kind==="evidence"?"amenity=parking":""} x${lon} y${lat}`);
+  }
+  if (kind==="roads") for (let i=0;i<1500;i++) fixture.push(`w${1000+i} Thighway=residential Nn${1000+i},n${1001+i}`);
+  const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,contentHash:`sha256:${"4".repeat(64)}`});
+  vi.mocked(CoverageSourceStore.prototype.import).mockImplementation(function(this:CoverageSourceStore,check) {
+    async function* lines(){yield* fixture;}
+    return importSource.call(this,check,{lines:lines()});
+  });
+  const table=kind==="roads"?"ways":kind;
+  const where=kind==="roads"?" WHERE external_id GLOB 'way/1[0-9][0-9][0-9]' OR external_id GLOB 'way/2[0-9][0-9][0-9]'":"";
+  let preparing=false,interruptedRows=0,interruptedStage="";
+  await expect(run(installation,{...context(),report:async({stage})=>{preparing=stage?.startsWith("Preparing installation unit")??false;},checkpoint:async()=>{
+    if(!preparing)return "continue";
+    for(const name of await readdir(path.join(root,"stage"))) {
+      if(!name.endsWith(".sqlite")||name.startsWith("source-"))continue;
+      const file=path.join(root,"stage",name),db=new DatabaseSync(file,{readOnly:true});
+      try {
+        const count=Number(db.prepare(`SELECT count(*) AS n FROM ${table}${where}`).get()!.n);
+        if(!count)continue;
+        expect(count).toBeLessThan(1500);
+        expect(db.prepare("SELECT stage FROM receipts WHERE stage LIKE 'unit:%'").all()).toEqual([]);
+        interruptedRows=count;interruptedStage=file;
+        return "pause";
+      } finally {db.close();}
+    }
+    return "continue";
+  }})).rejects.toThrow("checkpoint");
+  expect(interruptedRows).toBeGreaterThan(0);
+  expect((await installedSnapshot())!.dataVersion).toBe(first.snapshot!.dataVersion);
+  const resumed=await run(installation,context());
+  const actual=await edges(resumed.snapshot!.dataVersion);
+  const staged=new DatabaseSync(interruptedStage,{readOnly:true});
+  try {
+    expect(Number(staged.prepare(`SELECT count(*) AS n FROM ${table}${where}`).get()!.n)).toBe(kind==="roads"?1500:1501);
+    expect(staged.prepare("SELECT stage FROM receipts WHERE stage LIKE 'unit:%'").all()).toHaveLength(1);
+  } finally {staged.close();}
+  vi.stubEnv("ALPINE_COVERAGE_ROOT",path.join(root,"uninterrupted-stage"));
+  vi.stubEnv("ALPINE_PACK_ROOT",path.join(root,"uninterrupted-packs"));
+  const uninterrupted=await run(installation,context());
+  const db=new DatabaseSync(path.join(root,"uninterrupted-packs/local-coverage",uninterrupted.snapshot!.dataVersion,"pack.sqlite"),{readOnly:true});
+  try {expect(db.prepare("SELECT id,from_node,to_node,length_m FROM edges ORDER BY id").all()).toEqual(actual);}
+  finally {db.close();}
+});
