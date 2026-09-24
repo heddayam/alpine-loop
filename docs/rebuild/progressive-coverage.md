@@ -121,7 +121,7 @@ The first real Washington import processed 54.3 million source records. It
 exposed unsupported building relation geometry and a repeated full-inventory
 scan during connected-footpath classification. Unsupported context is now
 accounted for explicitly; classification uses an indexed disk-backed frontier.
-The checkpointed source inventory is being reused for continued measurements.
+The checkpointed source inventory was reused for continued measurements.
 These observations are not a successful large-region acceptance result.
 
 Resume validation exposed per-row temporary-index commits. In an isolated
@@ -133,6 +133,21 @@ joins took 2.7, 6.1, and 11.9 ms with the same rows. These isolate the query cos
 they are not end-to-end build speedup claims.
 The subsequent real 18-unit publication wrote its graph in 6.30 seconds with the
 indexed join. The complete collection build remains the acceptance target.
+
+Dense-unit profiling then found per-record context commits. Shared bounded
+transactions reduced an isolated 3,000-row write from 608 to 159 ms for ways and
+469 to 30 ms for buildings. Context commits before metric work and checkpoints;
+one source way larger than the 1,000-node batch target remains indivisible.
+
+Real-source regression inspection found a separate decoder defect: valid OPL
+`Forest%20%Road%20%63` became `Forest Road c`. The decoder now follows the
+[OPL Unicode escape format](https://osmcode.org/opl-file-format/#3-encoding),
+consuming both delimiters and rejecting malformed escapes. Normalization v3
+versions source-cache paths, receipts, progressive graph identities, and legacy
+preparation inputs. The constrained trial restarted its normalized import using
+the existing verified downloads; the previously published graph remains active
+until its full installed area has been rebuilt and audited. Measurements below
+predate this correction and are not final acceptance of the corrected graph.
 
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted

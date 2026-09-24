@@ -25,9 +25,9 @@ the evidence line.
   measurement is in progress. Cascades-sized and second-geography acceptance,
   expansion/resume timings, and final search measurements remain unproven.
 
-Evidence (2026-09-24): two final `npm run verify` passes each passed 693 tests
+Evidence (2026-09-24): two final `npm run verify` passes each passed 704 tests
 in 105 files, lint, types, and production build. Two `npm run test:browser`
-passes each passed nine desktop/mobile flows (31.4 s and 28.6 s). Live Docker
+passes each passed nine desktop/mobile flows (35.2 s and 28.6 s). Live Docker
 preview checks passed collection focus, exact status overlays, zoom/pan,
 installation drawing, restoration of untouched search bounds, panel scrolling,
 and mobile map/panel switching; no browser console errors. App and CLI both
@@ -85,6 +85,17 @@ trial paused cleanly with 24 prepared units and resumed in the same constrained
 container, preserving the active 18-unit snapshot and verified caches. Isolated
 3,000-row writes improved from 608 to 159 ms for ways and 469 to 30 ms for
 buildings; end-to-end improvement remains under measurement.
+
+Real source checks found all five West Cady/Pilchuck/approach regression ways
+inside supported Cascades coverage, but also exposed incorrect OPL escape
+decoding of numeric names (Forest Road 63 became Forest Road c). The smaller
+decoder now consumes delimited Unicode escapes correctly. Versioned source
+paths and build identities invalidate affected preparation and graph caches;
+the corrected import is running under the same hard limits with the old
+snapshot retained until replacement passes audit. The 704-test verification,
+both browser passes, and runtime image above include this fix. Earlier partial
+build measurements predate the decoder correction and do not establish final
+acceptance. Original downloads and elevation data remain reusable.
 
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
