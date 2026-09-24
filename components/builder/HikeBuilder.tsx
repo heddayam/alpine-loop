@@ -9,6 +9,7 @@ import { HikeMap } from "../map/HikeMap";
 import { ResultsPanel } from "../results/ResultsPanel";
 import type { RouteResults } from "../results/types";
 import { routeStart } from "../results/route-start";
+import { CoverageModal } from "./CoverageModal";
 import { JobsModal } from "./JobsModal";
 import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
@@ -27,7 +28,7 @@ type Workspace = { status: "idle" } | { status: "done"; results: RouteResults } 
   message?: string;
 };
 
-function boundsGeometry([west, south, east, north]: Bounds): Polygon {
+function boundsGeometry([west, south, east, north]: Bounds): Polygon & { coordinates: [number, number][][] } {
   return { type: "Polygon", coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
 }
 function patchRange(setValues: React.Dispatch<React.SetStateAction<BuilderDraft>>, key: keyof Pick<BuilderDraft, "distanceMiles" | "elevationGainFeet" | "maximumElevationFeet">, next: RangeField) {
@@ -78,6 +79,19 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const batchLaunchRef = useRef(false);
   const [launchMessage, setLaunchMessage] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
+  const closeCoverage = useCallback(() => setCoverageOpen(false), []);
+  const coverageCatalogRequest = useRef<AbortController | null>(null);
+  const refreshCoverageCatalog = useCallback(() => {
+    coverageCatalogRequest.current?.abort();
+    const controller = new AbortController();
+    coverageCatalogRequest.current = controller;
+    void requestJson("/api/search/catalog", { signal: controller.signal }).then((raw) => {
+      const next = searchCatalogSchema.parse(raw);
+      if (!controller.signal.aborted) { setCatalog(next); setCatalogError(""); }
+    }).catch((error: unknown) => { if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Map data is unavailable."); });
+  }, []);
+  useEffect(() => () => coverageCatalogRequest.current?.abort(), []);
   const [panel, setPanel] = useState<"plan" | "results" | "route">("plan");
   const [mapExpanded, setMapExpanded] = useState(false);
   const operation = useRef<AbortController | null>(null);
@@ -292,12 +306,14 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
             Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
           </button>
+          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={coverageOpen} onClick={() => setCoverageOpen(true)}>Coverage</button>
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} disabled={!settingsLoaded} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
         <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
         {settingsError ? <p className="settings-error-banner" role="alert">{settingsError}</p> : null}
       </header>
 
+      {coverageOpen ? <CoverageModal open onClose={closeCoverage} onChanged={refreshCoverageCatalog} geometry={drawnBounds ? boundsGeometry(drawnBounds) : undefined} /> : null}
       {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
       <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" && workspace.kind === "saved" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" && workspace.kind === "saved" ? workspace.jobId : undefined} onClose={closeJobs} />
 

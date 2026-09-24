@@ -696,3 +696,23 @@ details.result-section[open] > summary::before { content: "▾"; }
 
 .start-filter { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s3); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); }
 .start-filter .btn-link { flex: 0 0 auto; }
+
+.coverage-modal { width: min(42rem, 100%); }
+.coverage-content { display: grid; gap: var(--s4); font-size: var(--fs-sm); line-height: 1.5; }
+.coverage-content section, .coverage-content fieldset { display: grid; gap: var(--s2); min-width: 0; }
+.coverage-content fieldset { padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius); }
+.coverage-content legend, .coverage-content h3 { font-weight: 700; }
+.coverage-content ul { padding-left: 1.2rem; }
+.coverage-choice { display: flex; align-items: flex-start; gap: var(--s2); padding-block: var(--s1); }
+.coverage-choice input { flex: 0 0 auto; margin-top: .3rem; }
+.coverage-choice small { display: block; color: var(--ink-3); }
+.coverage-memory { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.coverage-memory input { width: 7rem; }
+.coverage-plan { padding: var(--s3); background: var(--surface-2); border-radius: var(--radius); }
+.coverage-plan dl > div { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: space-between; }
+.coverage-plan dd { margin: 0; }
+.coverage-units { overflow-wrap: anywhere; }
+.coverage-units summary { cursor: pointer; color: var(--accent); }
+.coverage-units ul { max-height: 12rem; overflow: auto; }
+.coverage-content .job-card footer { flex-wrap: wrap; }
+.coverage-content .hint, .coverage-content .error-state { overflow-wrap: anywhere; }
