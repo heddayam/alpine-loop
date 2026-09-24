@@ -216,7 +216,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     };
     // Cache metrics by their own inputs, so adding distant DEM pins can rebuild
     // staging without recalculating unchanged source segments.
-    const metricSourceFingerprint = contentId(sourceIdentity);
+    const metricSourceFingerprint = contentId({ version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION,
+      osm: sourceIdentity.osm, restrictions: sourceIdentity.restrictions });
     inputFingerprint = contentId({ ...sourceIdentity, pinnedDem });
     let installedGeneration: {inputFingerprint:string;demFingerprint:string;stageKey:string} | null = null;
     if (snapshot) {
