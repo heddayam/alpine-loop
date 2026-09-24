@@ -30,6 +30,8 @@ retain the shared source adapters, metrics, SQLite reader, and hike solver.
   exclusions. They select work, not separate routing graphs.
 - Source inventory is recorded before installation clipping. Every covered
   source trail segment must be accounted for before publication.
+  Intended uninstalled trails and explicit policy exclusions are classified
+  once per source import; publication reconciles only the installed subset.
 - Runtime coverage is the exact installed union. Shared OSM identities connect
   adjacent areas; coordinate proximity never creates a graph connection.
 - The independent USGS comparison is a diagnostic reference inventory.
@@ -105,12 +107,25 @@ RSS where available, cgroup memory, and temporary disk usage. Large-region
 acceptance requires successful completion in a 4 GiB, swap-disabled environment,
 plus search latency, expansion, resume, and a second geography.
 
+Linux measurements include allocated blocks in unlinked temporary files held
+by the process tree, deduplicated by device and inode. Periodic sampling retains
+the disk peak between reported stages. External cached downloads are excluded
+from the working-disk total; downloads owned by the work root are included.
+
 The first real Washington import processed 54.3 million source records. It
 exposed unsupported building relation geometry and a repeated full-inventory
 scan during connected-footpath classification. Unsupported context is now
 accounted for explicitly; classification uses an indexed disk-backed frontier.
 The checkpointed source inventory is being reused for continued measurements.
 These observations are not a successful large-region acceptance result.
+
+Resume validation exposed per-row temporary-index commits. In an isolated
+100,000-row SQLite measurement, bounded batches reduced insertion from
+5.95–6.64 seconds to 0.53–0.78 seconds while preserving interruption/replay.
+Publication also exposed a quadratic physical-member selection query: 1,000,
+3,000, and 6,000 physical groups took 248, 2,184, and 9,009 ms. Indexed membership
+joins took 2.7, 6.1, and 11.9 ms with the same rows. These isolate the query costs;
+they are not end-to-end build speedup claims.
 
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted
@@ -125,6 +140,28 @@ Cascades-sized and second-geography measurements remain outstanding. A later
 real integrity-check pause completed in 0.60 s; the integrity child was stopped
 and the published snapshot remained active. File-backed integrity scans now run
 in a child process so the build worker can service pause/cancel checkpoints.
+
+After publishing ten units with metric algorithm v5, the same known trailhead
+returned one exact loop and one close match in 783 ms while construction
+continued in the constrained container. Solver-budget truncation remained
+explicit. A different first eligible start returned no routes in 780 ms with
+the same truncation disclosure; neither sample establishes broad search recall.
+
+An isolated read-only migration check used the nine actual legacy installations.
+Both reviewed selectors intersecting the current partial publication retained
+their geometry, and all nine legacy packs correctly remained visible. A
+metadata-only union of the actual legacy boundaries preserved all 35 reviewed
+selectors and hid eight pure-OSM packs only once fully contained. Central
+Cascades remains available: its legacy graph includes 83 supplemental ways
+from 72 official source features, totaling 116.85 km of at-risk routing
+contributions. The broader OSM inventory may represent some of that geometry,
+but reference-source presence alone cannot prove replacement. Legacy proximity
+attachments are not imported into the combined graph. A conservative indexed
+provenance check prevents geometry-only retirement of supplemental routing.
+All 17 saved jobs,
+894 saved result payloads, and their pinned legacy versions remained readable.
+This establishes metadata and saved-data compatibility, not acceptance of a
+fully rebuilt routing graph; production data was unchanged.
 
 The durable gate checklist and exact verification evidence are in
 [status](status.md). Generated measurements, caches, and databases stay out of

@@ -25,9 +25,9 @@ the evidence line.
   measurement is in progress. Cascades-sized and second-geography acceptance,
   expansion/resume timings, and final search measurements remain unproven.
 
-Evidence (2026-09-24): two final `npm run verify` passes each passed 668 tests
+Evidence (2026-09-24): two final `npm run verify` passes each passed 691 tests
 in 105 files, lint, types, and production build. Two `npm run test:browser`
-passes each passed nine desktop/mobile flows (36.6 s and 42.4 s). Live Docker
+passes each passed nine desktop/mobile flows (28.8 s and 27.8 s). Live Docker
 preview checks passed collection focus, exact status overlays, zoom/pan,
 installation drawing, restoration of untouched search bounds, panel scrolling,
 and mobile map/panel switching; no browser console errors. App and CLI both
@@ -46,6 +46,27 @@ completed in 0.60 s; the kernel limits were verified as 4 GiB memory and zero
 swap. See the measurement notes in progressive-coverage.md. Current work is on
 `codex/progressive-coverage`; it is not ready to merge. No production installation
 has been replaced by the benchmark.
+
+The latest runtime image builds successfully. Source lookups now use a verified
+temporary spatial index and per-component envelopes; context ingestion and
+publication yield at bounded checkpoints. Disk measurement includes unlinked
+SQLite temporary files. Real Rasterio tests verify deterministic north-west DEM
+tile ownership, and metric/topology versions participate in snapshot identity.
+The full build is running with these fixes; previous partial timings are not
+final large-region acceptance. A read-only migration audit preserved 35 region
+selectors and 17 saved jobs containing 894 results. Central Cascades contains
+supplemental official routing whose replacement is unverified, so its legacy
+installation is explicitly retained even when coverage geometry is contained.
+
+The final review fixed collection-plus-drawing selection, classified intended
+and intentionally excluded source trails, batched temporary-index writes, and
+replaced a quadratic physical-member export query with indexed joins. The v5
+ten-unit snapshot published successfully before resuming with those query
+improvements. A real search against that snapshot while the builder ran took
+783 ms and returned one exact loop and one close match with budget truncation
+explicitly reported. The current full-region trial retains verified work;
+large-region completion is still required. Download and disk preview totals
+remain unknown beyond the configured OSM download/cache sizes.
 
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
