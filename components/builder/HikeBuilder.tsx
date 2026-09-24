@@ -5,11 +5,11 @@ import type { Polygon } from "geojson";
 import { useRouter } from "next/navigation";
 import { DRIVE_TIME_DURATIONS_MINUTES, originSchema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
 import { searchCatalogSchema, searchResultSchema, searchRequestSchema, routeJobV2Schema, routeJobResultsPageV2Schema, type SearchCatalog, type SearchRequest } from "@/lib/contracts/search";
-import { HikeMap } from "../map/HikeMap";
+import { HikeMap, type CoverageOverlay } from "../map/HikeMap";
 import { ResultsPanel } from "../results/ResultsPanel";
 import type { RouteResults } from "../results/types";
 import { routeStart } from "../results/route-start";
-import { CoverageModal } from "./CoverageModal";
+import { CoveragePanel } from "./CoveragePanel";
 import { JobsModal } from "./JobsModal";
 import { GradePresetInput } from "./GradePresetInput";
 import { RangeInput } from "./RangeInput";
@@ -80,7 +80,9 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const [launchMessage, setLaunchMessage] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
-  const closeCoverage = useCallback(() => setCoverageOpen(false), []);
+  const openCoverage = () => { setSettingsOpen(false); setCoverageOpen(true); setMapExpanded(false); };
+  const [coverageBounds, setCoverageBounds] = useState<Bounds | null>(null);
+  const [coverageOverlay, setCoverageOverlay] = useState<CoverageOverlay>({features:{type:"FeatureCollection",features:[]},focus:null});
   const coverageCatalogRequest = useRef<AbortController | null>(null);
   const refreshCoverageCatalog = useCallback(() => {
     coverageCatalogRequest.current?.abort();
@@ -306,24 +308,24 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={jobsOpen} aria-label={activeJobCount ? `Jobs (${activeJobCount})` : "Jobs"} onClick={() => { setJobsOpen(true); void refreshJobs(true); }}>
             Jobs{activeJobCount ? <span className="chip-count" aria-hidden="true">{activeJobCount}</span> : null}
           </button>
-          <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={coverageOpen} onClick={() => setCoverageOpen(true)}>Coverage</button>
+          <button type="button" className="chip-button" aria-pressed={coverageOpen} aria-expanded={coverageOpen} onClick={openCoverage}>Coverage</button>
           <button type="button" className="chip-button" aria-haspopup="dialog" aria-expanded={settingsOpen} disabled={!settingsLoaded} onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
         <p className="visually-hidden" role="status" aria-live="polite">{jobsAnnouncement}</p>
         {settingsError ? <p className="settings-error-banner" role="alert">{settingsError}</p> : null}
       </header>
 
-      {coverageOpen ? <CoverageModal open onClose={closeCoverage} onChanged={refreshCoverageCatalog} geometry={drawnBounds ? boundsGeometry(drawnBounds) : undefined} /> : null}
       {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
       <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" && workspace.kind === "saved" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" && workspace.kind === "saved" ? workspace.jobId : undefined} onClose={closeJobs} />
 
       <div className={mapExpanded ? "workspace map-expanded" : "workspace"}>
         <section className="workspace-panel" aria-label="Route planner">
-          <nav className="panel-nav" aria-label="Workspace panels">
+          <nav hidden={coverageOpen} className="panel-nav" aria-label="Workspace panels">
             <button type="button" aria-pressed={panel === "plan"} onClick={() => changePanel("plan")}>Plan</button>
-            <button type="button" aria-pressed={panel !== "plan"} disabled={!hasResultsPanel} onClick={() => changePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
+            <button type="button" aria-pressed={panel === "results" || panel === "route"} disabled={!hasResultsPanel} onClick={() => changePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
           </nav>
-          <aside className="builder-panel" hidden={panel !== "plan"} aria-labelledby="builder-title">
+          <CoveragePanel open={coverageOpen} onClose={() => setCoverageOpen(false)} geometry={coverageBounds ? boundsGeometry(coverageBounds) : undefined} onChanged={refreshCoverageCatalog} onMapChange={setCoverageOverlay} />
+          <aside className="builder-panel" hidden={coverageOpen || panel !== "plan"} aria-labelledby="builder-title">
           <div className="builder-scroll">
             <h2 id="builder-title" className="visually-hidden">Plan</h2>
 
@@ -416,7 +418,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </div>
 
           <footer className="builder-action-footer">
-            {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. Install regional data to search.</p> : null}
+            {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. <button className="btn-link" type="button" onClick={openCoverage}>Install coverage</button> to search.</p> : null}
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
             <div className="search-count"><label htmlFor="route-count">Routes to find</label><select id="route-count" className="control" value={appSettings.quickSearchRouteCount} disabled={!settingsLoaded} onChange={(event) => { const quickSearchRouteCount = Number(event.currentTarget.value); void preferences.change((current) => ({ ...current, quickSearchRouteCount })); editDraft(); }}>{Array.from({ length: 20 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select><span>Quick search</span></div>
             <div className="builder-action-buttons">
@@ -427,12 +429,12 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}
           </footer>
         </aside>
-        <div className="results-panel-container" hidden={panel === "plan"}>
-          {hasResultsPanel ? <ResultsPanel previewsEnabled={panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
+        <div className="results-panel-container" hidden={panel === "plan" || coverageOpen}>
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
         </div>
         </section>
 
-        {catalog ? <HikeMap coverages={catalog.coverages} display={catalog.display} drawBounds={viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={mappedRoutes} selectedRouteId={panel === "route" ? selectedRouteId : undefined} hoveredRouteId={hoveredRouteId} selectedSegmentId={panel === "route" ? selectedSegmentId : undefined} hoveredSegmentId={panel === "route" ? hoveredSegmentId : undefined} onBoundsChange={changeDrawnBounds} selectedStartKey={focus.startKey} onStartSelect={selectStart} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
+        {catalog ? <HikeMap coverage={coverageOpen ? coverageOverlay : undefined} coverages={catalog.coverages} display={catalog.display} drawBounds={coverageOpen ? coverageBounds : viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={coverageOpen ? coverageBounds ? boundsGeometry(coverageBounds) : undefined : viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={coverageOpen ? undefined : viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={coverageOpen ? [] : mappedRoutes} selectedRouteId={!coverageOpen && panel === "route" ? selectedRouteId : undefined} hoveredRouteId={hoveredRouteId} selectedSegmentId={!coverageOpen && panel === "route" ? selectedSegmentId : undefined} hoveredSegmentId={panel === "route" ? hoveredSegmentId : undefined} onBoundsChange={coverageOpen ? setCoverageBounds : changeDrawnBounds} selectedStartKey={coverageOpen ? undefined : focus.startKey} onStartSelect={coverageOpen ? () => {} : selectStart} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
         <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => { setFocus((current) => ({ ...current, hoveredRouteId: undefined, hoveredSegmentId: undefined })); setMapExpanded((current) => !current); }}>{mapExpanded ? "Show panel" : "Show map"}</button>
       </div>

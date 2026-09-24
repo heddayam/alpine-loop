@@ -56,7 +56,8 @@ export function useCoverage(open: boolean) {
     setCatalog((current) => current ? { ...current, installed: job.snapshot ?? current.installed, jobs: [job, ...current.jobs.filter((item) => item.id !== job.id)] } : current);
     setPlan(undefined);
   });
-  return { catalog, plan, busy, error, refresh, clearPlan: () => setPlan(undefined), preview,
+  const clearPlan = useCallback(() => setPlan(undefined), []);
+  return { catalog, plan, busy, error, refresh, clearPlan, preview,
     start: () => plan ? update("/api/coverage/jobs", { planId: plan.id }) : Promise.resolve(),
     act: (id: string, action: CoverageAction) => update(`/api/coverage/jobs/${encodeURIComponent(id)}/${action}`, {}),
   };

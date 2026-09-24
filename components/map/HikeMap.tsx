@@ -10,7 +10,11 @@ import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { routeStart } from "../results/route-start";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 
+export type CoverageOverlay = { features: FeatureCollection<Polygon | MultiPolygon>; focus: Bounds | null };
+const coverageColors = { pending: "#2563eb", processing: "#b77900", prepared: "#7c3aed", installed: "#166534", unavailable: "#b91c1c" };
+
 type HikeMapProps = {
+  coverage?: CoverageOverlay;
   drawBounds: Bounds | null;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
@@ -302,6 +306,7 @@ export function routeStartFeatures(routes: GeneratedClosedRouteV3[]): FeatureCol
 }
 
 export function HikeMap({
+  coverage,
   drawBounds: bounds,
   filterGeometry,
   refinementGeometry,
@@ -324,6 +329,9 @@ export function HikeMap({
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const initialDisplay = useRef(display);
+  const coverageCamera = useRef<{center:[number,number];zoom:number;bearing:number;pitch:number} | null>(null);
+  const coverageFocus = useRef("");
   const fittedRouteSetRef = useRef<string>(undefined);
   const onRouteHoverRef = useRef(onRouteHover);
   const onStartSelectRef = useRef(onStartSelect);
@@ -350,6 +358,14 @@ export function HikeMap({
     drawingRef.current = active;
     setDrawing(active);
   }, []);
+  const coverageMode = Boolean(coverage);
+  const [drawingMode, setDrawingMode] = useState(coverageMode);
+  if (drawingMode !== coverageMode) { setDrawingMode(coverageMode); setDrawing(false); }
+  useEffect(() => {
+    drawingRef.current = false;
+    startRef.current = null;
+    draftBoundsRef.current = null;
+  }, [coverageMode]);
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
   const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
   const [mapCopyFeedback, setMapCopyFeedback] = useState<MapCopyFeedback>();
@@ -425,8 +441,8 @@ export function HikeMap({
       setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
       map = new Map({
         container: containerRef.current,
-        center: display.center,
-        zoom: display.zoom,
+        center: initialDisplay.current.center,
+        zoom: initialDisplay.current.zoom,
         attributionControl: { compact: true },
         style: {
           version: 8,
@@ -893,7 +909,7 @@ export function HikeMap({
       fittedRouteSetRef.current = undefined;
       setMapReady(false);
     };
-  }, [closeContextMenu, display.center, display.zoom, previewRoute]);
+  }, [closeContextMenu, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -999,6 +1015,34 @@ export function HikeMap({
     if (view.contains([target[0], target[1]]) && view.contains([target[2], target[3]])) return;
     map.fitBounds([[target[0], target[1]], [target[2], target[3]]], { padding: 72, maxZoom: 15, duration: 450 });
   }, [mapReady, routes, selectedRouteId]);
+
+  const coverageData = coverage ? JSON.stringify(coverage.features) : "";
+  const coverageBounds = coverage?.focus ? JSON.stringify(coverage.focus) : "";
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!map.getSource("installation-coverage")) {
+      map.addSource("installation-coverage", {type:"geojson",data:{type:"FeatureCollection",features:[]}});
+      for (const [status,color] of Object.entries(coverageColors)) {
+        const filter: FilterSpecification = ["==",["get","status"],status];
+        map.addLayer({id:`installation-${status}-fill`,type:"fill",source:"installation-coverage",filter,paint:{"fill-color":color,"fill-opacity":.17}});
+        map.addLayer({id:`installation-${status}-line`,type:"line",source:"installation-coverage",filter,paint:{"line-color":color,"line-width":2,...(["pending","prepared","unavailable"].includes(status)?{"line-dasharray":status==="prepared"?[1,2]:[3,2]}:{})}});
+      }
+    }
+    (map.getSource("installation-coverage") as GeoJSONSource).setData(coverageData ? JSON.parse(coverageData) : {type:"FeatureCollection",features:[]});
+    if (coverageData) {
+      coverageCamera.current ??= {center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()};
+      if (coverageBounds && coverageBounds !== coverageFocus.current) {
+        const [w,s,e,n] = JSON.parse(coverageBounds);
+        map.fitBounds([[w,s],[e,n]],{padding:48,maxZoom:12,duration:0});
+        coverageFocus.current = coverageBounds;
+      }
+    } else if (coverageCamera.current) {
+      map.jumpTo(coverageCamera.current);
+      coverageCamera.current = null;
+      coverageFocus.current = "";
+    }
+  }, [coverageData, coverageBounds, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1117,7 +1161,7 @@ export function HikeMap({
         <button
           type="button"
           className={`map-tool map-tool-draw${drawing ? " active" : ""}`}
-          aria-label={bounds ? "Redraw trailhead filter" : "Draw trailhead filter"}
+          aria-label={coverage ? bounds ? "Redraw installation area" : "Draw installation area" : bounds ? "Redraw trailhead filter" : "Draw trailhead filter"}
           aria-pressed={drawing}
           onClick={() => {
             closeContextMenu();
@@ -1127,7 +1171,7 @@ export function HikeMap({
         >
           {bounds ? "Redraw" : "Draw area"}
         </button>
-        <button type="button" className="map-tool map-tool-clear" aria-label="Clear trailhead filter" disabled={!bounds} onClick={() => onBoundsChange(null)}>
+        <button type="button" className="map-tool map-tool-clear" aria-label={coverage ? "Clear installation area" : "Clear trailhead filter"} disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
       </div>
@@ -1177,7 +1221,7 @@ export function HikeMap({
         </div>
       </details>
       {drawing || hoveredMapFeature ? <p className={`map-hint${hoveredMapFeature && !drawing ? " map-trail-label" : ""}${activeMapCopyFeedback ? ` ${activeMapCopyFeedback.status}` : ""}`} role="status" aria-live="polite">
-        {drawing ? "Draw a trailhead filter. It may extend beyond installed coverage." : <>
+        {drawing ? coverage ? "Draw an installation area. Your search boundary stays unchanged." : "Draw a trailhead filter. It may extend beyond installed coverage." : <>
           {hoveredAccessPoint ? <>
             {activeAccessPointCopyFeedback ? (
               <span className={`map-trail-distance map-trail-copy-feedback ${activeAccessPointCopyFeedback.status}`}>

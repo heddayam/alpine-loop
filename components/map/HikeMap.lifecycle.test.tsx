@@ -33,6 +33,10 @@ class RecordingMap {
   setLayoutProperty = vi.fn();
   getCanvas() { return this.canvas; }
   getZoom() { return 13; }
+  getCenter() { return {toArray:()=>[-122,37]}; }
+  getBearing() { return 0; }
+  getPitch() { return 0; }
+  jumpTo = vi.fn();
   getBounds() { return { getWest: () => -123, getSouth: () => 36, getEast: () => -120, getNorth: () => 39, contains: () => true }; }
   fitBounds = vi.fn();
   easeTo = vi.fn();
@@ -371,4 +375,24 @@ describe("MapLibre workspace lifecycle", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+});
+
+
+it("shares one map for coverage overlays, preserves holes, and restores the planning camera",async()=>{
+  const initial=props([]),view=render(<HikeMap {...initial}/>),map=await loadMap();
+  const geometry={type:"Polygon" as const,coordinates:[[[-122,47],[-121,47],[-121,48],[-122,48],[-122,47]],[[-121.8,47.2],[-121.6,47.2],[-121.6,47.4],[-121.8,47.4],[-121.8,47.2]]]};
+  const coverage={features:{type:"FeatureCollection" as const,features:["pending","processing","prepared","installed","unavailable"].map(status=>({type:"Feature" as const,geometry,properties:{status}}))},focus:[-122,47,-121,48] as [number,number,number,number]};
+  view.rerender(<HikeMap {...initial} coverage={coverage}/>);
+  expect(recording.maps).toHaveLength(1);
+  expect(map.getSource("installation-coverage")?.data).toEqual(coverage.features);
+  expect(map.fitBounds).toHaveBeenLastCalledWith([[-122,47],[-121,48]],expect.anything());
+  const fits=map.fitBounds.mock.calls.length;
+  view.rerender(<HikeMap {...initial} coverage={structuredClone(coverage)}/>);
+  expect(map.fitBounds).toHaveBeenCalledTimes(fits);
+  fireEvent.click(screen.getByRole("button",{name:"Draw installation area"}));
+  view.rerender(<HikeMap {...initial}/>);
+  expect(screen.getByRole("button",{name:"Draw trailhead filter"}).getAttribute("aria-pressed")).toBe("false");
+  expect(map.getSource("installation-coverage")?.data.features).toHaveLength(0);
+  expect(map.jumpTo).toHaveBeenCalledWith({center:[-122,37],zoom:13,bearing:0,pitch:0});
+  expect(map.remove).not.toHaveBeenCalled();
 });

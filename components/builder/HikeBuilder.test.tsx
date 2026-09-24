@@ -403,3 +403,25 @@ it("loads jobs after StrictMode cancels the initial mount request", async () => 
   await waitFor(() => expect(result.current.loadState).toBe("ready"));
   expect(result.current.jobs.map(({ id }) => id)).toEqual([job.id]);
 });
+
+
+it("opens coverage beside Settings and preserves search drawing, draft, and route results",async()=>{
+  mockBaseFetch((url)=>url==="/api/coverage"?json({collections:[],installed:null,jobs:[],prerequisites:[]}):undefined);
+  render(<HikeBuilder/>);
+  await userEvent.click(await screen.findByText("Draw fixture area"));
+  fireEvent.change(screen.getByLabelText("Distance minimum"),{target:{value:"2"}});
+  await userEvent.click(screen.getByRole("button",{name:"Quick search"}));
+  await waitFor(()=>expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route"));
+  const before=screen.getByLabelText("Map context").textContent;
+  await userEvent.click(screen.getByRole("button",{name:"Coverage"}));
+  await screen.findByRole("complementary",{name:"Manage coverage"});
+  expect(screen.queryByRole("dialog",{name:"Settings"})).not.toBeInTheDocument();
+  await userEvent.click(screen.getByText("Change fixture area"));
+  expect(screen.getByLabelText(/Use drawn area/)).toBeChecked();
+  await userEvent.click(screen.getByRole("button",{name:/Back to planning/}));
+  expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+  expect(screen.getByLabelText("Map context").textContent).toBe(before);
+  await userEvent.click(screen.getByRole("button",{name:"Plan"}));
+  expect(screen.getByLabelText("Distance minimum")).toHaveValue(2);
+  expect(screen.getByText("Using your drawn area")).toHaveAttribute("data-bounds","-122.18,37.15,-122.13,37.18");
+});

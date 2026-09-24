@@ -19,7 +19,7 @@ for (const width of [1280, 390]) test(`coverage can be planned and paused at ${w
   await page.goto("/");
   const trigger = page.getByRole("button", { name: "Coverage", exact: true });
   await trigger.click();
-  const dialog = page.getByRole("dialog", { name: "Manage coverage" });
+  const dialog = page.getByRole("complementary", { name: "Manage coverage" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Washington Cascades").check();
   await dialog.getByRole("button", { name: "Preview installation" }).click();
@@ -28,8 +28,8 @@ for (const width of [1280, 390]) test(`coverage can be planned and paused at ${w
   await dialog.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Resume" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Back to planning" }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(trigger).toBeFocused();
+  await expect(page.getByRole("button", { name: "Plan", exact: true })).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
 });

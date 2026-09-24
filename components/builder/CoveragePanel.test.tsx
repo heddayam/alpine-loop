@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CoverageCatalog, CoverageJob, CoveragePlan } from "@/lib/contracts/coverage";
-import { CoverageModal } from "./CoverageModal";
+import { CoveragePanel } from "./CoveragePanel";
 
 const geometry: CoveragePlan["geometry"] = { type: "Polygon" as const, coordinates: [[[-122, 47], [-121, 47], [-121, 48], [-122, 48], [-122, 47]]] };
 const plan: CoveragePlan = { id: "plan", request: { collectionIds: ["cascades"], memoryLimitMiB: 4096, offline: false }, geometry, sourceIds: ["osm"], units: [{ id: "unit", geometry, status: "pending" }], estimates: { downloadBytes: null, temporaryBytes: null, reusableBytes: 0 }, warnings: ["Estimates are not available yet."] };
@@ -16,10 +16,8 @@ it("previews drawn coverage with the memory budget, shows unknown estimates, and
   // Request arguments are captured to verify the submitted installation contract.
   const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/plan") ? plan : url.endsWith("/jobs") ? job : catalog));
   vi.stubGlobal("fetch", fetcher);
-  render(<CoverageModal open onClose={() => {}} geometry={geometry} />);
+  render(<CoveragePanel open geometry={geometry} />);
   await screen.findByLabelText("Washington Cascades");
-  expect(screen.getByRole("button", { name: "Preview installation" })).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Use drawn area/));
   fireEvent.click(screen.getByLabelText(/Use cached sources only/));
   fireEvent.click(screen.getByRole("button", { name: "Preview installation" }));
   await screen.findByText("Installation preview");
@@ -33,7 +31,7 @@ it("previews drawn coverage with the memory budget, shows unknown estimates, and
 
 it("invalidates a reviewed plan when its inputs change", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/plan") ? plan : catalog)));
-  render(<CoverageModal open onClose={() => {}} />);
+  render(<CoveragePanel open />);
   fireEvent.click(await screen.findByLabelText("Washington Cascades"));
   fireEvent.click(screen.getByRole("button", { name: "Preview installation" }));
   await screen.findByText("Installation preview");
@@ -48,13 +46,13 @@ it("aborts a pending preview on close and ignores its late response", async () =
     if (url.endsWith("/plan")) { previewSignal = init?.signal as AbortSignal; return new Promise((done) => { resolve = done; }); }
     return response(catalog);
   }));
-  const view = render(<CoverageModal open onClose={() => {}} />);
+  const view = render(<CoveragePanel open />);
   fireEvent.click(await screen.findByLabelText("Washington Cascades"));
   fireEvent.click(screen.getByRole("button", { name: "Preview installation" }));
-  view.rerender(<CoverageModal open={false} onClose={() => {}} />);
+  view.rerender(<CoveragePanel open={false} />);
   expect(previewSignal?.aborted).toBe(true);
   await act(async () => resolve(response(plan)));
-  view.rerender(<CoverageModal open onClose={() => {}} />);
+  view.rerender(<CoveragePanel open />);
   await screen.findByLabelText("Washington Cascades");
   expect(screen.queryByText("Installation preview")).not.toBeInTheDocument();
 });
@@ -64,7 +62,7 @@ it("offers publish only for paused prepared units, resumes failures, and announc
   const snapshot = { schemaVersion: 1, id: "snapshot", dataVersion: "version", geometry, unitIds: ["unit"], createdAt: job.createdAt, sourceFingerprint: "source", auditStatus: "passed", limitations: [] };
   const changed = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/publish") ? { ...prepared, status: "completed", snapshot, plan: { ...plan, units: [{ ...plan.units[0], status: "installed" }] } } : { ...catalog, jobs: [prepared, { ...job, id: "failed", status: "failed" }] })));
-  render(<CoverageModal open onClose={() => {}} onChanged={changed} />);
+  render(<CoveragePanel open onChanged={changed} />);
   await screen.findByRole("button", { name: "Install ready sections" });
   expect(screen.getAllByRole("button", { name: "Resume" })).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "Install ready sections" }));
@@ -84,8 +82,7 @@ it("does not let an old poll overwrite a pause and stops polling while closed", 
     return response({ ...catalog, jobs: [job] });
   });
   vi.stubGlobal("fetch", fetcher);
-  const close = vi.fn();
-  const view = render(<CoverageModal open onClose={close} />);
+  const view = render(<CoveragePanel open />);
   await act(async () => { await Promise.resolve(); });
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   fireEvent.click(screen.getByRole("button", { name: "Pause" }));
@@ -93,7 +90,7 @@ it("does not let an old poll overwrite a pause and stops polling while closed", 
   expect(pollSignal?.aborted).toBe(true);
   await act(async () => releasePoll(response({ ...catalog, jobs: [job] })));
   expect(screen.getByRole("button", { name: "Resume" })).toBeVisible();
-  view.rerender(<CoverageModal open={false} onClose={close} />);
+  view.rerender(<CoveragePanel open={false} />);
   await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
   expect(catalogReads).toBe(2);
 });
@@ -104,19 +101,15 @@ it("shows selected coverage spatially and distinguishes unavailable, processing,
     { id: "working", geometry, status: "processing" },
     { id: "missing", geometry: { ...geometry, coordinates: [...geometry.coordinates, [[-121.9,47.1],[-121.8,47.1],[-121.8,47.2],[-121.9,47.2],[-121.9,47.1]]] }, status: "unavailable", reason: "outside-configured-source-coverage" },
   ] };
+  const onMapChange = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/plan") ? splitPlan : { ...catalog, installed })));
-  render(<CoverageModal open onClose={() => {}} />);
+  render(<CoveragePanel open onMapChange={onMapChange} />);
   fireEvent.click(await screen.findByLabelText("Washington Cascades"));
-  let preview = screen.getByRole("img", { name: "Coverage map preview" });
-  expect(preview.querySelector('[data-status="pending"]')).not.toBeNull();
-  expect(preview.querySelector('[data-status="installed"]')).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Preview installation" }));
   await screen.findByText("Installation preview");
-  preview = screen.getByRole("img", { name: "Coverage map preview" });
-  expect(preview.querySelector('[data-status="processing"]')).not.toBeNull();
-  const unavailable = preview.querySelector('[data-status="unavailable"]')!;
-  expect(unavailable).toHaveAttribute("fill-rule", "evenodd");
-  expect(unavailable.getAttribute("d")?.match(/M/g)).toHaveLength(2);
+  const features = onMapChange.mock.lastCall![0].features.features;
+  expect(features.map((item: {properties:{status:string}}) => item.properties.status)).toEqual(expect.arrayContaining(["pending", "processing", "installed", "unavailable"]));
+  expect(features.find((item: {properties:{status:string}}) => item.properties.status === "unavailable").geometry.coordinates).toHaveLength(2);
   expect(screen.getByText(/Map sources can omit trails/)).toBeVisible();
   expect(screen.getByText(/Requested and processing areas are not available/)).toBeVisible();
   fireEvent.click(screen.getByText("Coverage status (2 sections)"));
@@ -129,9 +122,9 @@ it("refreshes the search catalog when a partial publication advances the same co
   const after = { ...before, dataVersion: "after", unitIds: ["old", "new"] };
   const changed = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/publish") ? { ...paused, snapshot: after, status: "completed", plan: { ...plan, units: [{ ...plan.units[0], status: "installed" }] } } : { ...catalog, installed: before, jobs: [paused] })));
-  render(<CoverageModal open onClose={() => {}} onChanged={changed} />);
+  render(<CoveragePanel open onChanged={changed} />);
   fireEvent.click(await screen.findByRole("button", { name: "Install ready sections" }));
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());
   expect(screen.getByText(/2 sections installed/)).toBeVisible();
-  expect(screen.getByRole("img", { name: "Coverage map preview" }).querySelector('[data-status="prepared"]')).toBeNull();
+
 });
