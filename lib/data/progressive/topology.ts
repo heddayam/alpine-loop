@@ -1,13 +1,22 @@
 import { createHash } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import type { PackManifest } from "@/lib/contracts";
 
 type Row = Record<string, string | number | null>;
-const one = (db: DatabaseSync, sql: string, ...args: Array<string | number>) => db.prepare(sql).get(...args) as Row | undefined;
+// Fixed SQL only; each invocation owns its cache. Iterators remain uncached.
+const statementCaches = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+function statement(db: DatabaseSync, sql: string): StatementSync {
+  const cache = statementCaches.get(db)!;
+  let prepared = cache.get(sql);
+  if (!prepared) { prepared = db.prepare(sql); cache.set(sql, prepared); }
+  return prepared;
+}
+
+const one = (db: DatabaseSync, sql: string, ...args: Array<string | number>) => statement(db, sql).get(...args) as Row | undefined;
 const rows = (db: DatabaseSync, sql: string, ...args: Array<string | number>) => db.prepare(sql).iterate(...args) as Iterable<Row>;
-const run = (db: DatabaseSync, sql: string, ...args: Array<string | number | null>) => db.prepare(sql).run(...args);
+const run = (db: DatabaseSync, sql: string, ...args: Array<string | number | null>) => statement(db, sql).run(...args);
 const number = (row: Row | undefined, key: string) => Number(row?.[key] ?? 0);
 
 async function scc(db: DatabaseSync, checkpoint: () => Promise<void>): Promise<void> {
@@ -167,6 +176,8 @@ async function connectorHash(db: DatabaseSync, start: number, portal: number, ch
 /** Publish scratch work in bounded transactions, never across an async checkpoint. */
 export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}): ReturnType<typeof deriveTopology> {
   if (db.isTransaction) throw new Error("Topology derivation requires no active transaction");
+  if (statementCaches.has(db)) throw new Error("Topology derivation is already running");
+  statementCaches.set(db, new Map());
   const nextBatch = async () => {
     if (db.isTransaction) db.exec("COMMIT");
     await checkpoint();
@@ -179,7 +190,7 @@ export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackM
   } catch (error) {
     if (db.isTransaction) db.exec("ROLLBACK");
     throw error;
-  }
+  } finally { statementCaches.delete(db); }
 }
 
 async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void>): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {

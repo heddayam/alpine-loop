@@ -2,7 +2,7 @@ import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { packManifestSchema } from "@/lib/contracts";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import { SQLiteClosedRouteFeasibilityRepository } from "@/lib/graph/sqlite-closed-route-feasibility-repository";
@@ -65,6 +65,8 @@ describe("progressive schema-6 publisher",()=>{
       const failedPath=path.join(directory,"failed-topology.sqlite");
       copyFileSync(path.join(options.outputRoot,version.id,version.dataVersion,"pack.sqlite"),failedPath);
       const failed=new DatabaseSync(failedPath);
+      const preparation=vi.spyOn(failed,"prepare");
+      const seenPreparations=()=>preparation.mock.calls.filter(([sql])=>sql==="SELECT seen FROM work_nodes WHERE k=?").length;
       try {
         failed.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
         let checks=0;
@@ -75,6 +77,7 @@ describe("progressive schema-6 publisher",()=>{
             BEGIN SELECT RAISE(ABORT,'injected traversal failure'); END`);
         })).rejects.toThrow("injected traversal failure");
         expect(checks).toBe(2);
+        expect(seenPreparations()).toBe(1);
         expect(failed.isTransaction).toBe(false);
         expect(Number(failed.prepare("SELECT count(*) AS n FROM work_nodes WHERE seen=1").get()!.n)).toBe(0);
         // Reject caller-owned transactions without committing or rolling them back.
@@ -82,15 +85,16 @@ describe("progressive schema-6 publisher",()=>{
         await expect(writeProgressiveTopology(failed,version)).rejects.toThrow("no active transaction");
         expect(failed.isTransaction).toBe(true);
         failed.exec("ROLLBACK");
-      } finally {failed.close();}
-      copyFileSync(path.join(options.outputRoot,version.id,version.dataVersion,"pack.sqlite"),failedPath);
-      const retried=new DatabaseSync(failedPath);
-      try {
-        retried.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
-        const result=await writeProgressiveTopology(retried,version,async()=>{expect(retried.isTransaction).toBe(false);});
-        expect(retried.isTransaction).toBe(false);
+        // Reuse this connection after clearing failed scratch work; no stale cache survives.
+        failed.exec("DROP TABLE work_physical; DROP TABLE work_edges; DROP TABLE work_nodes");
+        const result=await writeProgressiveTopology(failed,version,async()=>{expect(failed.isTransaction).toBe(false);});
+        expect(failed.isTransaction).toBe(false);
         expect(result.hash).toBe(baseline.audit.topologyContentHash);
-      } finally {retried.close();}
+        expect(seenPreparations()).toBe(2);
+        failed.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
+        expect((await writeProgressiveTopology(failed,version)).hash).toBe(result.hash);
+        expect(seenPreparations()).toBe(3);
+      } finally {preparation.mockRestore();failed.close();}
 
       for(const target of ["Write covered graph","Derive global cycle feasibility"]) {
         let stage="",checks=0;
