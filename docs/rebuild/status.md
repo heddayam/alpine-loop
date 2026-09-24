@@ -106,6 +106,16 @@ the full Cascades and Olympic acceptance runs remain unfinished and Gate E stays
 open. The updated preview at localhost:3105 is healthy and retains its local
 settings and saved job. Production data remains unchanged.
 
+The corrected trial published 42 units with no audit failure, then paused and
+resumed to apply bounded topology transactions. The prior cycle pass took 441 s;
+an isolated 15,000-node ring improved from 11.44 to 5.06 s with identical hashes.
+Checkpoints run outside transactions and interrupted batches roll back. Two
+full verification passes each passed 704 tests, lint, types, and production
+build; two browser passes each passed nine flows (24.0 s and 25.1 s), and the
+runtime image built. Independent review found no transaction/publication blocker.
+The fixed eight-unit publication policy remains unchanged. Full Cascades and
+Olympic measurements are still required; Gate E remains open.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph

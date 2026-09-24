@@ -160,6 +160,15 @@ compared with 470 and 376 s before the context batching change; these are observ
 unit timings, not a controlled full-build comparison. The full collection and
 second-geography acceptance remain in progress.
 
+The corrected trial subsequently published 42 units; cycle feasibility took
+441 s and measured process-tree RSS peaked at 1.29 GiB. Review found individual
+traversal writes were committing separately. Topology now commits bounded work
+before existing asynchronous checkpoints and rolls back incomplete batches on
+failure. A file-backed 15,000-node ring took 5.06 s versus 11.44 s with identical
+topology hashes; this is an isolated measurement. The real trial paused cleanly
+after publication and resumed with the change. Publication remains every eight
+units after the initial snapshot.
+
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted
 source inventory, it took 17 min 46 s; its first audited publication was at
