@@ -46,6 +46,40 @@ describe("coverage source staging", () => {
     expect(store.receipt("import-v2")).toBe("complete");
   });
 
+  it("promotes branched footway chains but leaves disconnected footways and explicit sidewalks alone", async () => {
+    const store=make();
+    const network=[
+      ...Array.from({length:9},(_,index)=>`n${index+1} T x${index} y0`),
+      "w10 Thighway=path Nn1,n2", "w11 Thighway=footway Nn2,n3",
+      "w12 Thighway=footway Nn3,n4", "w13 Thighway=footway Nn3,n5",
+      "w14 Thighway=footway Nn8,n9", "w15 Thighway=footway,footway=sidewalk Nn2,n6",
+    ];
+    await store.import(async()=>{}, {lines:lines(network)});
+    expect(store.db.prepare("SELECT id FROM ways WHERE kind='ambiguous' AND promoted=1 ORDER BY id").all().map((row)=>row.id)).toEqual(["11","12","13"]);
+    expect(store.db.prepare("SELECT promoted FROM ways WHERE id='14'").get()?.promoted).toBe(0);
+    expect(store.db.prepare("SELECT promoted FROM ways WHERE id='15'").get()?.promoted).toBe(0);
+  });
+
+  it("resumes promotion from persisted ways after a frontier checkpoint interruption", async () => {
+    const store=make();
+    const network=[
+      ...Array.from({length:7},(_,index)=>`n${index+1} T x${index} y0`),
+      "w10 Thighway=path Nn1,n2", "w11 Thighway=footway Nn2,n3",
+      "w12 Thighway=footway Nn3,n4", "w13 Thighway=footway Nn4,n5",
+      "w14 Thighway=footway Nn6,n7",
+    ];
+    let promoting=false;
+    await expect(store.import(async()=>{
+      if (promoting && Number(store.db.prepare("SELECT count(*) AS n FROM ways WHERE kind='ambiguous' AND promoted=1").get()?.n)>0)
+        throw new Error("promotion paused");
+    }, {lines:lines(network),onStage:async(stage)=>{if(stage==="context-promotion") promoting=true;}})).rejects.toThrow("promotion paused");
+    expect(store.receipt("raw-import-v2")).toBe("complete");
+    expect(store.receipt("import-v2")).toBeUndefined();
+    await store.import(async()=>{}, {lines:lines(network)});
+    expect(store.db.prepare("SELECT id FROM ways WHERE kind='ambiguous' AND promoted=1 ORDER BY id").all().map((row)=>row.id)).toEqual(["11","12","13"]);
+    expect(store.receipt("import-v2")).toBe("complete");
+  });
+
   it("rolls back uncommitted rows and resumes cleanly after a source stream error", async () => {
     const store = make();
     async function* failed() { yield* fixtures.slice(0, 6); throw new Error("stream failure"); }

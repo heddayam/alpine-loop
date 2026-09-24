@@ -202,8 +202,58 @@ export class CoverageSourceStore {
       } catch (error) { this.db.exec("ROLLBACK"); throw error; }
     }
   }
-  async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number } = {}) {
-    if (this.receipt("import-v2")) { await this.verifyCompletedImport(checkpoint); return; }
+  private async promoteContextualWays(checkpoint:()=>Promise<void>): Promise<void> {
+    this.db.exec(`CREATE TEMP TABLE IF NOT EXISTS promotion_frontier(node TEXT PRIMARY KEY) WITHOUT ROWID;
+      CREATE TEMP TABLE IF NOT EXISTS promotion_found(way TEXT PRIMARY KEY) WITHOUT ROWID;
+      DELETE FROM promotion_frontier; DELETE FROM promotion_found;
+      UPDATE ways SET promoted=1 WHERE kind='trail' AND promoted=0`);
+    // Seed from every already promoted way so a pause after any wave can resume.
+    const maxRow=Number((this.db.prepare("SELECT coalesce(max(rowid),0) AS n FROM ways").get() as {n:number}).n);
+    const seed=this.db.prepare(`INSERT OR IGNORE INTO promotion_frontier
+      SELECT r.node FROM ways w JOIN refs r ON r.way=w.id WHERE w.rowid>? AND w.rowid<=? AND w.promoted=1`);
+    for(let from=0;from<maxRow;from+=CHECKPOINT_ROWS) {
+      seed.run(from,from+CHECKPOINT_ROWS);
+      await checkpoint();
+    }
+    const page=this.db.prepare("SELECT node FROM promotion_frontier WHERE node>? ORDER BY node LIMIT ?");
+    const adjacent=this.db.prepare(`INSERT OR IGNORE INTO promotion_found
+      SELECT b.way FROM promotion_frontier f CROSS JOIN refs b INDEXED BY refs_node ON b.node=f.node
+      JOIN ways w ON w.id=b.way WHERE f.node>? AND f.node<=? AND w.kind='ambiguous' AND w.promoted=0`);
+    const promote=this.db.prepare("UPDATE ways SET promoted=1 WHERE id IN (SELECT way FROM promotion_found)");
+    const foundPage=this.db.prepare("SELECT way FROM promotion_found WHERE way>? ORDER BY way LIMIT ?");
+    const next=this.db.prepare(`INSERT OR IGNORE INTO promotion_frontier
+      SELECT r.node FROM promotion_found p CROSS JOIN refs r ON r.way=p.way WHERE p.way>? AND p.way<=?`);
+    for (;;) {
+      this.db.exec("DELETE FROM promotion_found");
+      let cursor="",added=0;
+      for (;;) {
+        const rows=page.all(cursor,CHECKPOINT_ROWS) as {node:string}[];
+        if (!rows.length) break;
+        const end=rows.at(-1)!.node;
+        added+=Number(adjacent.run(cursor,end).changes);
+        cursor=end;
+        await checkpoint();
+      }
+      if (!added) break;
+      promote.run();
+      await checkpoint();
+      this.db.exec("DELETE FROM promotion_frontier");
+      cursor="";
+      for (;;) {
+        const rows=foundPage.all(cursor,CHECKPOINT_ROWS) as {way:string}[];
+        if (!rows.length) break;
+        const end=rows.at(-1)!.way;
+        next.run(cursor,end);
+        cursor=end;
+        await checkpoint();
+      }
+    }
+    this.db.exec("DELETE FROM promotion_frontier; DELETE FROM promotion_found");
+  }
+  async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number;
+    onStage?: (stage:"checkpoint-verification"|"context-promotion"|"integrity-check")=>Promise<void> } = {}) {
+    if (this.receipt("import-v2")) { await options.onStage?.("integrity-check"); await this.verifyCompletedImport(checkpoint); return; }
+    if (this.receipt("import-lines-v2")) await options.onStage?.("checkpoint-verification");
     const verified=await this.verifyRawBatches(checkpoint);
     if (!this.receipt("raw-import-v2")) {
       const putNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
@@ -297,15 +347,11 @@ export class CoverageSourceStore {
         await checkpoint();
       } catch (cause) { if (this.db.isTransaction) this.db.exec("ROLLBACK"); throw cause; }
     }
-    this.db.exec("UPDATE ways SET promoted=1 WHERE kind='trail'");
-    for (;;) {
-      const result = this.db.prepare(`UPDATE ways SET promoted=1 WHERE kind='ambiguous' AND promoted=0 AND EXISTS
-        (SELECT 1 FROM refs a JOIN refs b ON a.node=b.node JOIN ways w ON w.id=b.way WHERE a.way=ways.id AND w.promoted=1)`).run();
-      await checkpoint();
-      if (result.changes === 0) break;
-    }
+    await options.onStage?.("context-promotion");
+    await this.promoteContextualWays(checkpoint);
     this.db.exec(`UPDATE inventory SET disposition='candidate',reason='connected-trail-footway'
       WHERE id IN (SELECT 'way/'||id FROM ways WHERE kind='ambiguous' AND promoted=1)`);
+    await options.onStage?.("integrity-check");
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const normalized=await this.normalizedSeal(checkpoint);
