@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import type { Stats } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 
@@ -14,6 +15,8 @@ export type CoverageResourceSample = {
   cgroupPeakBytes: number | null;
   measuredMemoryBytes: number;
   diskBytes: number | null;
+  /** Allocated unlinked files, already included in diskBytes; Linux only. */
+  unlinkedDiskBytes?: number | null;
 };
 
 /** ps RSS is in KiB; sum only this process and its descendants. */
@@ -78,11 +81,49 @@ async function diskUsage(paths: readonly string[]): Promise<number | null> {
   return total;
 }
 
+/** SQLite unlinks spill files while they are open, so directory scans cannot see them. */
+export async function linuxUnlinkedDiskBytes(procRoot = "/proc", rootPid = process.pid,
+  inspect: (file: string) => Promise<Pick<Stats,"isFile"|"nlink"|"dev"|"ino"|"blocks">> = stat): Promise<number | null> {
+  const parents = new Map<number, number>();
+  const vanished = (error: unknown) => ["ENOENT","ESRCH"].includes((error as NodeJS.ErrnoException).code ?? "");
+  try {
+    for (const pid of await readdir(procRoot)) {
+      if (!/^\d+$/.test(pid)) continue;
+      try {
+        const parent = /^PPid:\s+(\d+)/m.exec(await readFile(`${procRoot}/${pid}/status`, "utf8"))?.[1];
+        if (parent) parents.set(Number(pid), Number(parent));
+      } catch (error) { if (!vanished(error)) throw error; }
+    }
+    const included = new Set([rootPid]);
+    for (const pid of included) for (const [child,parent] of parents) if (parent === pid) included.add(child);
+    const seen = new Set<string>();
+    let total = 0;
+    for (const pid of included) {
+      const directory = `${procRoot}/${pid}/fd`;
+      let descriptors: string[];
+      try { descriptors = await readdir(directory); }
+      catch (error) { if (vanished(error)) continue; throw error; }
+      for (const fd of descriptors) {
+        try {
+          const item = await inspect(`${directory}/${fd}`);
+          const identity = `${item.dev}:${item.ino}`;
+          if (item.isFile() && item.nlink === 0 && !seen.has(identity)) {
+            seen.add(identity); total += item.blocks * 512;
+          }
+        } catch (error) { if (!vanished(error)) throw error; }
+      }
+    }
+    return total;
+  } catch { return null; }
+}
+
 async function probe(paths: readonly string[], includeDisk: boolean): Promise<CoverageResourceSample> {
-  const [processTreeRssBytes, cgroupMemoryBytes, cgroupPeakBytes, diskBytes] = await Promise.all([
+  const [processTreeRssBytes, cgroupMemoryBytes, cgroupPeakBytes, namedDiskBytes, unlinkedDiskBytes] = await Promise.all([
     treeRss(), cgroupValue("memory.current"), cgroupValue("memory.peak"), includeDisk ? diskUsage(paths) : Promise.resolve(null),
+    includeDisk && process.platform === "linux" ? linuxUnlinkedDiskBytes() : Promise.resolve(undefined),
   ]);
-  return { at: new Date().toISOString(), processTreeRssBytes, cgroupMemoryBytes, cgroupPeakBytes,
+  const diskBytes = namedDiskBytes === null || unlinkedDiskBytes === null ? null : namedDiskBytes + (unlinkedDiskBytes ?? 0);
+  return { at: new Date().toISOString(), ...(unlinkedDiskBytes === undefined ? {} : {unlinkedDiskBytes}), processTreeRssBytes, cgroupMemoryBytes, cgroupPeakBytes,
     measuredMemoryBytes: processTreeRssBytes ?? process.memoryUsage.rss(), diskBytes };
 }
 
@@ -97,9 +138,12 @@ export class CoverageResourceGuard {
   #lastAt = 0;
   #peak = 0;
   #cgroupPeak = 0;
+  #peakDisk: number | null = null;
+  readonly #sampleDiskPeriodically: boolean;
 
-  constructor(options: { memoryLimitBytes?: number; diskPaths?: readonly string[];
+  constructor(options: { memoryLimitBytes?: number; diskPaths?: readonly string[]; sampleDiskPeriodically?: boolean;
     probe?: (paths: readonly string[], disk: boolean) => Promise<CoverageResourceSample> } = {}) {
+    this.#sampleDiskPeriodically = options.sampleDiskPeriodically ?? false;
     this.#limit = options.memoryLimitBytes ?? COVERAGE_MEMORY_TARGET_BYTES;
     this.#paths = options.diskPaths ?? [];
     this.#probe = options.probe ?? probe;
@@ -108,6 +152,7 @@ export class CoverageResourceGuard {
 
   get peakMemoryBytes(): number { return this.#peak; }
   get cgroupPeakBytes(): number { return this.#cgroupPeak; }
+  get peakDiskBytes(): number | null { return this.#peakDisk; }
   start(): void {
     if (this.#timer) return;
     this.#timer = setInterval(() => { void this.#memorySample().catch(() => undefined); }, 1000);
@@ -115,10 +160,11 @@ export class CoverageResourceGuard {
   }
   async #memorySample(): Promise<CoverageResourceSample> {
     if (this.#pending) return this.#pending;
-    this.#pending = this.#probe(this.#paths, false).then((sample) => {
+    this.#pending = this.#probe(this.#paths, this.#sampleDiskPeriodically).then((sample) => {
       this.#last = sample;
       this.#lastAt = Date.now();
       this.#peak = Math.max(this.#peak, sample.measuredMemoryBytes);
+      if (sample.diskBytes !== null) this.#peakDisk = Math.max(this.#peakDisk ?? 0, sample.diskBytes);
       this.#cgroupPeak = Math.max(this.#cgroupPeak, sample.cgroupPeakBytes ?? sample.cgroupMemoryBytes ?? 0);
       return sample;
     }).finally(() => { this.#pending = undefined; });
@@ -129,6 +175,7 @@ export class CoverageResourceGuard {
     this.#last = measured;
     this.#lastAt = Date.now();
     this.#peak = Math.max(this.#peak, measured.measuredMemoryBytes);
+    if (measured.diskBytes !== null) this.#peakDisk = Math.max(this.#peakDisk ?? 0, measured.diskBytes);
     this.#cgroupPeak = Math.max(this.#cgroupPeak, measured.cgroupPeakBytes ?? measured.cgroupMemoryBytes ?? 0);
     return stage ? { ...measured, stage } : measured;
   }
