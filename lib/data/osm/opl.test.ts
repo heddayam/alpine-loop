@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { describe, expect, it } from "vitest";
-import { normalizeOsmOpl, readAndNormalizeOsmOpl } from "./opl";
+import { normalizeOsmOpl, parseOplTags, readAndNormalizeOsmOpl } from "./opl";
 
 describe("OSM OPL normalization", () => {
   it("reports empty and malformed streamed extracts with their original line numbers", async () => {
@@ -63,12 +63,12 @@ describe("OSM OPL normalization", () => {
     ]);
   });
 
-  it("decodes hexadecimal, UTF-8, and single-character OPL escapes", () => {
+  it("decodes delimited Unicode OPL escapes", () => {
     const topology = normalizeOsmOpl([
       'n1 v1 dV c0 t2026-01-01T00:00:00Z i0 u Tnote=Track%20%beyond%20%gate x-122.2 y37.2',
       'n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2',
       'w1 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,name=Track%20%beyond%20%gate Nn1,n2',
-      'w2 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,name=Caf%C3%A9 Nn2,n1',
+      'w2 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,name=Caf%e9% Nn2,n1',
       'w3 v1 dV c0 t2026-01-01T00:00:00Z i0 u Thighway=path,name=Sierra%20%Azul%2c%%20%Kennedy Nn1,n2',
     ].join("\n"), "osm-fixture");
     expect(topology.ways.map(({ name }) => name)).toEqual(["Track beyond gate", "Café", "Sierra Azul, Kennedy"]);
@@ -160,3 +160,26 @@ describe("OSM OPL normalization", () => {
     ]);
   });
 });
+
+
+it("consumes both escape delimiters before hexadecimal-looking names and references", () => {
+  expect(parseOplTags("name=Forest%20%Road%20%63,ref=FS%20%6300,oneway%3a%foot=-1")).toEqual({
+    name: "Forest Road 63", ref: "FS 6300", "oneway:foot": "-1",
+  });
+  expect(parseOplTags("name=West%20%Cady%20%Ridge%20%Trail").name).toBe("West Cady Ridge Trail");
+});
+
+it("decodes Unicode scalar values and escaped punctuation exactly once", () => {
+  expect(parseOplTags("name=Café%20%%1F3D4%%fe0f%,note=%a%%2C%%3d%%40%%25%20%25%")).toEqual({
+    name: "Café 🏔️", note: "\n,=@%20%",
+  });
+  expect(parseOplTags("name=%0000e9%").name).toBe("é");
+  expect(parseOplTags("name=Caf%C3%A9").name).toBe("CafÃA9");
+});
+
+it.each(["%", "%20", "%gg%", "%%", "%1234567%", "%110000%", "%d800%", "%DFFF%"])(
+  "rejects malformed OPL escape %s", (value) => {
+    expect(() => parseOplTags(`name=${value}`)).toThrow(/Invalid OPL/);
+    expect(() => parseOplTags(`${value}=name`)).toThrow(/Invalid OPL/);
+  },
+);

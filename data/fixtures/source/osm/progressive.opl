@@ -3,5 +3,5 @@ n2 T x-121.24 y47.51
 n3 T x-121.25 y47.54
 n4 T x-121.265 y47.505
 n5 T x-121.27 y47.505
-w101 Thighway=path,foot=yes,name=Cross-unit%20loop Nn1,n2,n3,n1
-w102 Thighway=residential,access=yes,name=Access%20road Nn5,n4,n1
+w101 Thighway=path,foot=yes,name=Cross-unit%20%loop Nn1,n2,n3,n1
+w102 Thighway=residential,access=yes,name=Access%20%road Nn5,n4,n1
