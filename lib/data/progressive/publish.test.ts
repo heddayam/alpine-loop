@@ -99,6 +99,11 @@ describe("progressive schema-6 publisher",()=>{
       try {
         expect((firstDb.prepare("SELECT count(*) AS n FROM physical_edges").get() as {n:number}).n).toBe(4);
         expect((secondDb.prepare("SELECT count(*) AS n FROM physical_edges").get() as {n:number}).n).toBe(5);
+        expect(firstDb.prepare(`SELECT p.stable_physical_id AS id,count(*) AS members FROM physical_edges p
+          JOIN edges e ON e.physical_edge_key=p.physical_edge_key GROUP BY p.stable_physical_id ORDER BY p.stable_physical_id`).all())
+          .toEqual(["ab","bc","ca","stem"].map(id=>({id,members:2})));
+        expect(secondDb.prepare("SELECT stable_physical_id AS id FROM physical_edges ORDER BY stable_physical_id").all())
+          .toEqual(["ab","bc","ca","island","stem"].map(id=>({id})));
         expect((firstDb.prepare("SELECT can_reach_cycle AS yes FROM access_topology WHERE profile='known' AND access_point_id='portal:a'").get() as {yes:number}).yes).toBe(1);
         expect((firstDb.prepare("SELECT can_reach_cycle AS yes FROM access_topology WHERE profile='known' AND access_point_id='portal:stem'").get() as {yes:number}).yes).toBe(0);
         expect((secondDb.prepare("SELECT minimum_stem_distance_m AS m FROM access_topology WHERE profile='inclusive' AND access_point_id='portal:stem'").get() as {m:number}).m).toBe(100);

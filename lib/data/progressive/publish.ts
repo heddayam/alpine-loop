@@ -74,10 +74,12 @@ async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, c
     }
     const nodeKey=output.prepare("SELECT node_key FROM nodes WHERE id=?");
     const insertPhysical=output.prepare("INSERT INTO physical_edges VALUES (?,?,?,?,?)");
+    // Find one physical edge first, then probe installed membership per member.
+    const physicalMembers=stage.prepare("SELECT e.record FROM edges e CROSS JOIN selected_edges s ON s.id=e.id WHERE e.stable_physical_id=? ORDER BY e.id");
     let physicalCount=0;
     for (const row of stage.prepare("SELECT DISTINCT stable_physical_id AS id FROM edges WHERE id IN (SELECT id FROM selected_edges) ORDER BY stable_physical_id").iterate() as Iterable<{id:string}>) {
       if (++work%1000===0) await checkpoint();
-      const members=stage.prepare("SELECT record FROM edges WHERE stable_physical_id=? AND id IN (SELECT id FROM selected_edges) ORDER BY id").iterate(row.id) as Iterable<{record:string}>;
+      const members=physicalMembers.iterate(row.id) as Iterable<{record:string}>;
       let first: CompiledEdge|undefined, firstGeometry="", reverse="", firstKey=0,lastKey=0;
       for (const member of members) {
         if (++work%1000===0) await checkpoint();
