@@ -44,6 +44,7 @@ async function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["g
   const bounds=areaBounds(geometry);
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity, steps=0;
   for (const raw of raws) for (const {way} of raw.ways(geometry)) {
+    if (++steps % 1000 === 0) await checkpoint();
     if (way.edgeClass !== "trail") continue;
     for (let index=1;index<way.coordinates.length;index++) {
       if (++steps % 1000 === 0) await checkpoint();
@@ -132,10 +133,11 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       capabilities: { elevation: true, officialAccess: false, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
       fieldConfidence: { topology: "high", access: "medium", elevation: "high" }, sources,
       closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, policyVersion: "closed-route-decision-graph-v1", profiles: ["known", "inclusive"] } };
-    await report("Auditing and publishing installed coverage");
+    await report("Reconciling source inventory");
     const inventory: Awaited<ReturnType<typeof reconcileInventory>>[] = [];
     for (const raw of rawStores) inventory.push(await reconcileInventory(raw, store!, geometry, check));
     const references: OfficialReferenceAudit[] = [];
+    await report("Comparing independent reference inventories");
     for (const raw of rawStores) {
       const applicable = referenceSources.filter((reference) => reference.osmId === raw.source.id && intersectCoverage(requestedCoverage, rectangle(reference.envelope)));
       if (!applicable.length) references.push(await auditOfficialTrailReferences({ checkpoint: check, osm: raw, coverage: requestedCoverage, installedCoverage: geometry }));
@@ -285,6 +287,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       if (snapshot?.unitIds.includes(unit.id)) { unit.status = "installed"; continue; }
       const receipt = store.getReceipt(`unit:${unit.id}`);
       if (context.publishOnly && !receipt) continue;
+      let contextRows = 0;
       const unitBounds = areaBounds(unit.geometry);
       const requiredDem = supportedCoverage ? await metricArea(rawStores,unit.geometry,supportedCoverage,check) : null;
       const elevation = requiredDem ? await elevationFor({...unit,geometry:requiredDem}, cacheRoot(), root, plan.request.offline, demCache) : null;
@@ -295,8 +298,12 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         // A receipt covers metric edges. Re-read cheap source context so missing
         // or conflicting ways, nodes, buildings, and evidence cannot be hidden.
         for (const raw of rawStores) {
-          for (const building of raw.buildings(unit.geometry)) store.putBuilding(building);
+          for (const building of raw.buildings(unit.geometry)) {
+            store.putBuilding(building);
+            if (++contextRows % 1000 === 0) await check();
+          }
           for (const item of raw.ways(unit.geometry)) {
+            if (++contextRows % 1000 === 0) await check();
             let way = item.way;
             for (const source of restrictions) {
               const restriction = source.restrictions.find((entry) => entry.externalId === way.externalId);
@@ -304,7 +311,10 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
             }
             store.transaction(() => { for (const node of item.nodes) store.putNode(node); store.putWay(way); });
           }
-          for (const evidence of raw.evidence(unit.geometry)) store.putPortalEvidence(evidence);
+          for (const evidence of raw.evidence(unit.geometry)) {
+            store.putPortalEvidence(evidence);
+            if (++contextRows % 1000 === 0) await check();
+          }
         }
         const actual = await unitContents(unit.id);
         if (receipt.rowCount !== actual.rowCount || receipt.contentHash !== actual.contentHash) {
@@ -318,7 +328,10 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         unit.status = "processing";
         await report(`Preparing installation unit ${unit.id}`);
         for (const raw of rawStores) {
-          for (const building of raw.buildings(unit.geometry)) store.putBuilding(building);
+          for (const building of raw.buildings(unit.geometry)) {
+            store.putBuilding(building);
+            if (++contextRows % 1000 === 0) await check();
+          }
           let pending: { way: NormalizedWay; segment: number; geometry: Coordinate[] }[] = [];
           const flush = async () => {
             if (!pending.length) return;
@@ -350,6 +363,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
             await check();
           };
           for (const item of raw.ways(unit.geometry)) {
+            if (++contextRows % 1000 === 0) await check();
             let way = item.way;
             for (const source of restrictions) {
               const restriction = source.restrictions.find((entry) => entry.externalId === way.externalId);
@@ -366,7 +380,10 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
             }
           }
           await flush();
-          for (const evidence of raw.evidence(unit.geometry)) store.putPortalEvidence(evidence);
+          for (const evidence of raw.evidence(unit.geometry)) {
+            store.putPortalEvidence(evidence);
+            if (++contextRows % 1000 === 0) await check();
+          }
         }
         store.putReceipt({ stage: `unit:${unit.id}`, fingerprint, ...await unitContents(unit.id) });
         unit.status = "prepared"; prepared.push(unit);

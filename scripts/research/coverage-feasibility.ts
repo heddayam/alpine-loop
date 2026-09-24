@@ -53,7 +53,7 @@ if (option("--source-cache")) await seedSourceCache(option("--source-cache")!, s
 process.env.ALPINE_SOURCE_CACHE = sourceRoot;
 process.env.ALPINE_ROUTE_JOBS_DB = path.join(workRoot, "route-jobs.sqlite");
 new SQLiteRouteJobStore(process.env.ALPINE_ROUTE_JOBS_DB).close();
-const guard = new CoverageResourceGuard({ diskPaths: [coverageRoot, packRoot, sourceRoot] });
+const guard = new CoverageResourceGuard({ diskPaths: [coverageRoot, packRoot, sourceRoot], sampleDiskPeriodically: true });
 const samples: CoverageResourceSample[] = [];
 const started = Date.now();
 const stageTimings: { stage: string; elapsedMs: number; durationMs: number }[] = [];
@@ -76,6 +76,7 @@ async function writeProgress(): Promise<void> {
   const report = { schemaVersion: 1, status, error, planId, workRoot, currentStage,
     elapsedMs: Date.now() - started, completedUnits, newlyCompletedUnits,
     peakMeasuredMemoryBytes: guard.peakMemoryBytes,
+    peakDiskBytes: guard.peakDiskBytes,
     cgroupPeakBytes: guard.cgroupPeakBytes,
     cgroupAvailable: samples.some((sample) => sample.cgroupMemoryBytes !== null),
     stageTimings, samples, search };
