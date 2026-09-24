@@ -106,6 +106,20 @@ accounted for explicitly; classification uses an indexed disk-backed frontier.
 The checkpointed source inventory is being reused for continued measurements.
 These observations are not a successful large-region acceptance result.
 
+The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
+completed in the 4 GiB/swap-disabled container. Starting from the interrupted
+source inventory, it took 17 min 46 s; its first audited publication was at
+14 min 42 s. Peak measured process-tree RSS was 1,143,009,280 bytes, and final
+working-disk usage was 10,028,093,440 bytes (including source staging, excluding
+the externally cached downloads). Cgroup peak, including reclaimable file
+cache, reached the 4 GiB allowance without OOM. A one-start Quick search took
+670 ms and returned one exact loop plus one close match, while explicitly
+reporting solver-budget truncation. This is a small-installation result only;
+Cascades-sized and second-geography measurements remain outstanding. A later
+real integrity-check pause completed in 0.60 s; the integrity child was stopped
+and the published snapshot remained active. File-backed integrity scans now run
+in a child process so the build worker can service pause/cancel checkpoints.
+
 The durable gate checklist and exact verification evidence are in
 [status](status.md). Generated measurements, caches, and databases stay out of
 Git. Automated tests use committed offline fixtures.

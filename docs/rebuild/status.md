@@ -25,9 +25,9 @@ the evidence line.
   measurement is in progress. Cascades-sized and second-geography acceptance,
   expansion/resume timings, and final search measurements remain unproven.
 
-Evidence (2026-09-24): two final `npm run verify` passes each passed 666 tests
+Evidence (2026-09-24): two final `npm run verify` passes each passed 668 tests
 in 105 files, lint, types, and production build. Two `npm run test:browser`
-passes each passed nine desktop/mobile flows (38.7 s and 37.0 s). Live Docker
+passes each passed nine desktop/mobile flows (36.6 s and 42.4 s). Live Docker
 preview checks passed collection focus, exact status overlays, zoom/pan,
 installation drawing, restoration of untouched search bounds, panel scrolling,
 and mobile map/panel switching; no browser console errors. App and CLI both
@@ -39,7 +39,11 @@ The real-source trial imported 54.3 million Washington records, recovered after
 an unsupported building-relation failure, and exposed repeated full-table
 context scans. Those scans now use an indexed disk frontier; the durable source
 inventory is being reused in the 4 GiB/swap-disabled trial. This remains Gate E
-work, not a successful Cascades-sized build. Current work is on
+work, not a successful Cascades-sized build. The two-unit real-source build
+completed in 17 min 46 s, with 1.06 GiB peak measured process-tree RSS and a
+670 ms Quick search returning an exact loop. A later real integrity-check pause
+completed in 0.60 s; the kernel limits were verified as 4 GiB memory and zero
+swap. See the measurement notes in progressive-coverage.md. Current work is on
 `codex/progressive-coverage`; it is not ready to merge. No production installation
 has been replaced by the benchmark.
 
