@@ -84,6 +84,11 @@ writer lease. A native CLI installation uses its own configured job store.
 Unknown download and temporary-disk estimates are displayed as unknown.
 A small area can require a whole upstream OSM extract. Resource monitoring is
 cooperative outside a container; the memory setting is not an OS hard limit.
+Preview reads source receipt metadata and file sizes, including existing source
+staging, without hashing large downloads. Cached bytes are availability evidence;
+the worker verifies their contents and checkpoints before reuse. Configured OSM
+downloads are quantified separately because required elevation/reference inputs
+and peak working disk cannot yet be estimated reliably from this metadata.
 
 ## Acceptance and measurements
 
@@ -126,6 +131,8 @@ Publication also exposed a quadratic physical-member selection query: 1,000,
 3,000, and 6,000 physical groups took 248, 2,184, and 9,009 ms. Indexed membership
 joins took 2.7, 6.1, and 11.9 ms with the same rows. These isolate the query costs;
 they are not end-to-end build speedup claims.
+The subsequent real 18-unit publication wrote its graph in 6.30 seconds with the
+indexed join. The complete collection build remains the acceptance target.
 
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted

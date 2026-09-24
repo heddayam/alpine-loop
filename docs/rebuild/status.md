@@ -25,9 +25,9 @@ the evidence line.
   measurement is in progress. Cascades-sized and second-geography acceptance,
   expansion/resume timings, and final search measurements remain unproven.
 
-Evidence (2026-09-24): two final `npm run verify` passes each passed 691 tests
+Evidence (2026-09-24): two final `npm run verify` passes each passed 693 tests
 in 105 files, lint, types, and production build. Two `npm run test:browser`
-passes each passed nine desktop/mobile flows (28.8 s and 27.8 s). Live Docker
+passes each passed nine desktop/mobile flows (31.4 s and 28.6 s). Live Docker
 preview checks passed collection focus, exact status overlays, zoom/pan,
 installation drawing, restoration of untouched search bounds, panel scrolling,
 and mobile map/panel switching; no browser console errors. App and CLI both
@@ -67,6 +67,13 @@ improvements. A real search against that snapshot while the builder ran took
 explicitly reported. The current full-region trial retains verified work;
 large-region completion is still required. Download and disk preview totals
 remain unknown beyond the configured OSM download/cache sizes.
+
+Preview now reads receipt metadata and file sizes without hashing whole OSM
+downloads. It reports cached source/preparation bytes and explicitly defers
+content/checkpoint verification to the worker. Exclusion classification uses
+conservative bounds before exact predicates. The larger 18-unit graph export
+took 6.30 s after the indexed-join fix; this is a publication substage, not the
+full build. The Cascades trial remains active and Gate E remains open.
 
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
