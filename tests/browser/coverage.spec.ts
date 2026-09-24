@@ -23,7 +23,7 @@ for (const width of [1280, 390]) test(`coverage can be planned and paused at ${w
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Washington Cascades").check();
   await dialog.getByRole("button", { name: "Preview installation" }).click();
-  await expect(dialog.getByText("Unknown until sources are checked")).toHaveCount(2);
+  await expect(dialog.getByText("Not yet estimated")).toHaveCount(2);
   await dialog.getByRole("button", { name: "Start installation" }).click();
   await dialog.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Resume" })).toBeVisible();
