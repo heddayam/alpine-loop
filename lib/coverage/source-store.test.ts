@@ -56,6 +56,34 @@ describe("coverage source staging", () => {
     expect(store.db.prepare("SELECT count(*) AS count FROM nodes").get()?.count).toBe(6);
   });
 
+  it("rejects a changed raw line counter before skipping committed input", async () => {
+    const store = make();
+    await expect(store.import(async () => { throw new Error("paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("paused");
+    store.mark("import-lines-v2", "5");
+    async function* forbidden(): AsyncGenerator<string> { throw new Error("source stream was opened"); }
+    await expect(store.import(async () => {}, { lines: forbidden() })).rejects.toThrow("raw batch counter or row range failed verification");
+  });
+
+  it("rejects a deleted or modified committed raw node before replay", async () => {
+    const store = make();
+    await expect(store.import(async () => { throw new Error("paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("paused");
+    store.db.prepare("UPDATE nodes SET lon=99 WHERE id='1'").run();
+    await expect(store.import(async () => {}, { lines: lines() })).rejects.toThrow("raw batch records failed checksum verification");
+    store.db.prepare("UPDATE nodes SET lon=0 WHERE id='1'").run();
+    store.db.prepare("DELETE FROM nodes WHERE id='1'").run();
+    await expect(store.import(async () => {}, { lines: lines() })).rejects.toThrow("raw batch records failed checksum verification");
+  });
+
+  it("baselines an old committed prefix without changing its line checkpoint", async () => {
+    const store = make();
+    await expect(store.import(async () => { throw new Error("paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("paused");
+    store.db.prepare("DELETE FROM receipts WHERE key LIKE 'raw-batch-v1:%'").run();
+    await store.import(async () => {}, { lines: lines(), batchSize: 4 });
+    expect(store.receipt("import-lines-v2")).toBe(String(fixtures.length));
+    expect(JSON.parse(store.receipt("raw-batch-v1:4")!)?.legacyBaseline).toBe(true);
+    expect(store.receipt(`raw-batch-v1:${fixtures.length}`)).toBeDefined();
+  });
+
   it("counts a relation-only building assembled from reversed outer way fragments", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines() });
@@ -64,11 +92,12 @@ describe("coverage source staging", () => {
     expect(store.db.prepare("SELECT name FROM sqlite_master WHERE name='nodes_location'").get()?.name).toBe("nodes_location");
   });
 
-  it("does not certify an import that silently drops an incomplete building relation", async () => {
+  it("records malformed source building geometry as unsupported without silently dropping it", async () => {
     const store = make();
-    await expect(store.import(async () => {}, { lines: lines([...fixtures.slice(0, 6), "r30 Ttype=multipolygon,building=yes Mw999@outer"]) })).rejects.toThrow("missing way/999");
-    expect(store.receipt("import-v2")).toBeUndefined();
-    expect(store.receipt("raw-import-v2")).toBeUndefined();
+    await store.import(async () => {}, { lines: lines([...fixtures.slice(0, 6), "r30 Ttype=multipolygon,building=yes Mw999@outer", "r31 Ttype=multipolygon,building=yes M"]) });
+    expect(store.db.prepare("SELECT disposition,reason FROM inventory WHERE id='relation/30'").get()).toEqual({disposition:"unsupported",reason:"building-geometry:Building relation/30 references missing way/999"});
+    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/31'").get()?.disposition).toBe("unsupported");
+    expect(store.receipt("import-v2")).toBe("complete");
   });
 
   it("counts buildings mapped as nodes using the existing centroid rounding", async () => {

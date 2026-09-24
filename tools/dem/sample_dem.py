@@ -53,6 +53,7 @@ def coordinates() -> list[tuple[float, float]]:
 def sample(collection_path: Path, tile_owner: bool = False) -> None:
     points = coordinates()
     with ExitStack() as stack:
+        stack.enter_context(rasterio.Env(GDAL_CACHEMAX=64 * 1024 * 1024))
         datasets = []
         tile_datasets = {}
         for file, tile in collection_products(collection_path):

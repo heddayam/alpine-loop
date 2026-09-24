@@ -14,6 +14,14 @@ type Row = { id: string; refs: string; tags: string; kind: string; promoted: num
 type Node = { id: string; lon: number; lat: number; tags: string };
 const NORMALIZED_SEAL_KEY = "normalized-seal-v1";
 const NORMALIZATION_VERSION = "source-normalization-v2";
+const RAW_BATCH_PREFIX = "raw-batch-v1:";
+const RAW_COLUMNS = { nodes: "id,lon,lat,tags", source_ways: "id,refs",
+  ways: "id,refs,tags,kind,coordinates,minx,maxx,miny,maxy", refs: "way,node",
+  relation_buildings: "id,lon,lat" } as const;
+type RawTable = keyof typeof RAW_COLUMNS;
+type RawMaxima = Record<RawTable,number>;
+type RawBatchSeal = { sourceHash:string; algorithmVersion:string; fromLine:number; toLine:number; legacyBaseline?:boolean;
+  rows: Record<RawTable,{from:number;to:number;count:number;checksum:string}> };
 type NormalizedSeal = {
   sourceHash: string; algorithmVersion: string;
   counts: { ways: number; taggedNodes: number; relationBuildings: number };
@@ -33,6 +41,8 @@ async function* sourceLines(file: string): AsyncGenerator<string> {
   finally { child.kill(); lines.close(); await ended.catch(() => undefined); }
 }
 
+class UnsupportedBuildingGeometry extends Error {}
+
 /** Join outer member fragments by OSM node identity, preserving closed-ring centroid semantics. */
 function outerRings(parts: string[][]): string[][] {
   const pending = parts.map((part) => [...part]);
@@ -41,15 +51,15 @@ function outerRings(parts: string[][]): string[][] {
     const ring = pending.pop()!;
     while (ring.at(-1) !== ring[0]) {
       const index = pending.findIndex((part) => part[0] === ring.at(-1) || part.at(-1) === ring.at(-1));
-      if (index < 0) throw new Error("Building relation has an incomplete outer ring");
+      if (index < 0) throw new UnsupportedBuildingGeometry("Building relation has an incomplete outer ring");
       const next = pending.splice(index, 1)[0]!;
       if (next[0] !== ring.at(-1)) next.reverse();
       ring.push(...next.slice(1));
     }
-    if (ring.length < 4) throw new Error("Building relation has a degenerate outer ring");
+    if (ring.length < 4) throw new UnsupportedBuildingGeometry("Building relation has a degenerate outer ring");
     rings.push(ring);
   }
-  if (!rings.length) throw new Error("Building relation has no outer ways");
+  if (!rings.length) throw new UnsupportedBuildingGeometry("Building relation has no outer ways");
   return rings;
 }
 
@@ -80,6 +90,50 @@ export class CoverageSourceStore {
   receipt(key: string): string | undefined { return (this.db.prepare("SELECT value FROM receipts WHERE key=?").get(key) as {value:string}|undefined)?.value; }
   mark(key: string, value = "complete") { this.db.prepare("INSERT OR REPLACE INTO receipts VALUES(?,?)").run(key,value); }
   close() { this.db.close(); }
+  private rawMaxima(): RawMaxima {
+    return Object.fromEntries(Object.keys(RAW_COLUMNS).map((table) => [table,
+      Number((this.db.prepare(`SELECT coalesce(max(rowid),0) AS n FROM ${table}`).get() as {n:number}).n)])) as RawMaxima;
+  }
+  private rawBatch(fromLine:number,toLine:number,from:RawMaxima,to:RawMaxima,legacyBaseline=false): RawBatchSeal {
+    const rows = {} as RawBatchSeal["rows"];
+    for (const [table,columns] of Object.entries(RAW_COLUMNS) as [RawTable,string][]) {
+      const hash=createHash("sha256"); let count=0;
+      hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${table}\0${fromLine}:${toLine}\0`);
+      for (const row of this.db.prepare(`SELECT ${columns} FROM ${table} WHERE rowid>? AND rowid<=? ORDER BY rowid`).iterate(from[table],to[table]) as Iterable<Record<string,unknown>>) {
+        const record=JSON.stringify(Object.values(row)); hash.update(`${Buffer.byteLength(record)}:`); hash.update(record); count++;
+      }
+      rows[table]={from:from[table],to:to[table],count,checksum:`sha256:${hash.digest("hex")}`};
+    }
+    return {sourceHash:this.source.contentHash,algorithmVersion:NORMALIZATION_VERSION,fromLine,toLine,
+      ...(legacyBaseline?{legacyBaseline:true}:{}),rows};
+  }
+  private verifyRawBatches(): {committed:number;maxima:RawMaxima} {
+    const rawCounter=this.receipt("import-lines-v2"),committed=rawCounter===undefined?0:Number(rawCounter);
+    if (!Number.isSafeInteger(committed)||committed<0) throw new Error("Staged source raw line counter is invalid");
+    let line=0,maxima=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,seen=false;
+    for (const row of this.db.prepare("SELECT key,value FROM receipts WHERE key LIKE 'raw-batch-v1:%' ORDER BY CAST(substr(key,14) AS INTEGER)").iterate() as Iterable<{key:string;value:string}>) {
+      let seal:RawBatchSeal;
+      try {seal=JSON.parse(row.value) as RawBatchSeal;} catch {throw new Error("Staged source raw batch receipt is malformed");}
+      if (seal.fromLine!==line||!Number.isSafeInteger(seal.toLine)||seal.toLine<=line||seal.toLine>committed||
+        row.key!==`${RAW_BATCH_PREFIX}${seal.toLine}`||seal.sourceHash!==this.source.contentHash||seal.algorithmVersion!==NORMALIZATION_VERSION)
+        throw new Error("Staged source raw batch line receipt failed verification");
+      const to=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,seal.rows?.[table as RawTable]?.to])) as RawMaxima;
+      if (Object.values(to).some((value)=>!Number.isSafeInteger(value)||value<0)) throw new Error("Staged source raw batch row range is invalid");
+      const expected=this.rawBatch(line,seal.toLine,maxima,to,Boolean(seal.legacyBaseline));
+      if (JSON.stringify(seal)!==JSON.stringify(expected)) throw new Error("Staged source raw batch records failed checksum verification");
+      line=seal.toLine;maxima=to;seen=true;
+    }
+    if (!seen&&committed>0) {
+      // Old in-progress caches have only a line counter. Seal the existing
+      // committed prefix once; its history before this baseline is unverifiable.
+      maxima=this.rawMaxima();this.mark(`${RAW_BATCH_PREFIX}${committed}`,JSON.stringify(this.rawBatch(0,committed,
+        Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,maxima,true)));
+      line=committed;
+    }
+    if (line!==committed||Object.entries(this.rawMaxima()).some(([table,max])=>max!==maxima[table as RawTable]))
+      throw new Error("Staged source raw batch counter or row range failed verification");
+    return {committed,maxima};
+  }
   private normalizedSeal(): NormalizedSeal {
     const integrity = this.db.prepare("PRAGMA quick_check").get() as {quick_check:string}|undefined;
     if (integrity?.quick_check !== "ok") throw new Error(`Staged source failed SQLite quick_check: ${integrity?.quick_check ?? "no result"}`);
@@ -119,6 +173,7 @@ export class CoverageSourceStore {
   }
   async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number } = {}) {
     if (this.receipt("import-v2")) { this.verifyCompletedImport(); return; }
+    const verified=this.verifyRawBatches();
     if (!this.receipt("raw-import-v2")) {
       const putNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
       const getNode = this.db.prepare("SELECT * FROM nodes WHERE id=?");
@@ -127,7 +182,8 @@ export class CoverageSourceStore {
       const putWay = this.db.prepare("INSERT OR REPLACE INTO ways(id,refs,tags,kind,coordinates,minx,maxx,miny,maxy) VALUES(?,?,?,?,?,?,?,?,?)");
       const putRef = this.db.prepare("INSERT OR IGNORE INTO refs VALUES(?,?)");
       const inventory = this.db.prepare("INSERT OR REPLACE INTO inventory VALUES(?,?,?)");
-      const committed = Number(this.receipt("import-lines-v2") ?? 0);
+      const committed = verified.committed;
+      let sealedLine=committed, startRows=verified.maxima;
       const batchSize = options.batchSize ?? 10_000;
       if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid import batch size");
       const coordinates = (refs: string[]) => refs.map((ref): [number, number] => {
@@ -164,33 +220,46 @@ export class CoverageSourceStore {
           } else if (type === "r") {
             const tags = parseOplTags(field("T"));
             if (tags.building && tags.building !== "no" && tags.type === "multipolygon") {
-              const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
-              const parts = outer.map((member) => {
-                const wayId = member.slice(1).split("@")[0]!;
-                const way = getSourceWay.get(wayId) as { refs: string } | undefined;
-                if (!way) throw new Error(`Building relation/${id} references missing way/${wayId}`);
-                return JSON.parse(way.refs) as string[];
-              });
-              const rings = outerRings(parts);
-              // Match the existing building normalizer: each polygon contributes its outer-ring centroid.
-              rings.forEach((ring, index) => {
-                const [center] = parseBuildingCentroids(JSON.stringify({ geometry: { type: "Polygon", coordinates: [coordinates(ring)] } }));
-                if (!center) throw new Error(`Invalid building relation/${id}`);
-                this.db.prepare("INSERT OR REPLACE INTO relation_buildings VALUES(?,?,?)").run(`${id}:${index}`, ...center);
-              });
-              inventory.run(`relation/${id}`, "context", "building");
+              try {
+                const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
+                const parts = outer.map((member) => {
+                  const wayId = member.slice(1).split("@")[0]!;
+                  const way = getSourceWay.get(wayId) as { refs: string } | undefined;
+                  if (!way) throw new UnsupportedBuildingGeometry(`Building relation/${id} references missing way/${wayId}`);
+                  return JSON.parse(way.refs) as string[];
+                });
+                const rings = outerRings(parts);
+                // Match the existing building normalizer: each polygon contributes its outer-ring centroid.
+                const centers = rings.map((ring) => {
+                  const [center] = parseBuildingCentroids(JSON.stringify({ geometry: { type: "Polygon", coordinates: [coordinates(ring)] } }));
+                  if (!center) throw new UnsupportedBuildingGeometry(`Invalid building relation/${id}`);
+                  return center;
+                });
+                centers.forEach((center,index) => this.db.prepare("INSERT OR REPLACE INTO relation_buildings VALUES(?,?,?)").run(`${id}:${index}`, ...center));
+                inventory.run(`relation/${id}`, "context", "building");
+              } catch (error) {
+                if (!(error instanceof UnsupportedBuildingGeometry)) throw error;
+                inventory.run(`relation/${id}`, "unsupported", `building-geometry:${error.message}`);
+              }
             } else if (tags.name && (tags.boundary || tags.protect_class || tags.leisure === "nature_reserve" || tags.leisure === "park")) {
               inventory.run(`relation/${id}`, "excluded", "named-area-geometry-not-imported");
             }
           }
           if (count % batchSize === 0) {
+            const endRows=this.rawMaxima();
+            this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(this.rawBatch(sealedLine,count,startRows,endRows)));
             this.mark("import-lines-v2", String(count));
             this.db.exec("COMMIT");
+            sealedLine=count;startRows=endRows;
             await checkpoint();
             this.db.exec("BEGIN");
           }
         }
         if (count < committed) throw new Error("Source stream is shorter than its committed checkpoint");
+        if (count>sealedLine) {
+          const endRows=this.rawMaxima();
+          this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(this.rawBatch(sealedLine,count,startRows,endRows)));
+        }
         this.mark("import-lines-v2", String(count));
         this.mark("raw-import-v2");
         this.db.exec("COMMIT");

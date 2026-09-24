@@ -130,7 +130,9 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     }
     const frontierCount = inventory.reduce((count, item) => count + item.frontierCount, 0);
     const referenceGaps = references.reduce((count, item) => count + item.unresolved.length, 0);
+    const unsupportedContext = inventory.reduce((count,item) => count + item.dispositions.reduce((sum,row) => sum + (row.disposition === "unsupported" ? Number(row.count) : 0),0),0);
     next.limitations = [...next.limitations,
+      ...(unsupportedContext ? [`The source inventory contains ${unsupportedContext} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []),
       ...(frontierCount ? [`${frontierCount} mapped trail connections reach uninstalled coverage. Their source identities and locations are recorded in the coverage inventory.`] : []),
       ...(referenceGaps ? [`${referenceGaps} independent reference features have unresolved source coverage differences; installation completeness does not resolve these source limitations.`] : []),
       ...(references.some(item => item.status !== "audited") ? ["Independent reference data does not cover the entire installed area."] : []),
