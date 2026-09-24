@@ -97,6 +97,15 @@ both browser passes, and runtime image above include this fix. Earlier partial
 build measurements predate the decoder correction and do not establish final
 acceptance. Original downloads and elevation data remain reusable.
 
+The corrected run has now published 26 units with 289,041 nodes and 578,733
+directed edges. A real search against its first corrected 18-unit snapshot
+returned one exact route and one close match in 580 ms while construction ran,
+with budget and partial-coverage limits explicit. Dense-unit preparation fell
+from 470/376 s in earlier runs to 105/107 s. These are partial-build results;
+the full Cascades and Olympic acceptance runs remain unfinished and Gate E stays
+open. The updated preview at localhost:3105 is healthy and retains its local
+settings and saved job. Production data remains unchanged.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph

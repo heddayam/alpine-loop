@@ -146,8 +146,19 @@ consuming both delimiters and rejecting malformed escapes. Normalization v3
 versions source-cache paths, receipts, progressive graph identities, and legacy
 preparation inputs. The constrained trial restarted its normalized import using
 the existing verified downloads; the previously published graph remains active
-until its full installed area has been rebuilt and audited. Measurements below
-predate this correction and are not final acceptance of the corrected graph.
+until its full installed area has been rebuilt and audited. The earlier two-unit
+and ten-unit measurements below predate this correction.
+
+The corrected run imported all 54,331,217 records in 33 min 14 s, resolved
+connected context in 93 s, and verified the completed inventory in 304 s.
+Its first corrected 18-unit snapshot published after 52 min 27 s; a concurrent
+known-start search returned one exact and one close route in 580 ms, disclosing
+budget truncation and installed-coverage limits. The next publication contains
+26 units, 289,041 nodes, 578,733 directed edges, and 3,429 access points. Its
+cycle-feasibility stage took 171 s. Two dense units prepared in 105 and 107 s,
+compared with 470 and 376 s before the context batching change; these are observed
+unit timings, not a controlled full-build comparison. The full collection and
+second-geography acceptance remain in progress.
 
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted
