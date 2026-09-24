@@ -67,7 +67,7 @@ function field(tokens: readonly string[], prefix: string): string | undefined {
   return tokens.find((token) => token.startsWith(prefix))?.slice(prefix.length);
 }
 
-function parseTags(value: string | undefined): Record<string, string> {
+export function parseOplTags(value: string | undefined): Record<string, string> {
   if (!value) return {};
   const result: Record<string, string> = {};
   for (const pair of value.split(",")) {
@@ -89,11 +89,11 @@ function parseOplLine(nodes: Map<string, OplNode>, inputWays: OplWay[], rawLine:
     if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
       throw new Error(`OSM OPL node has invalid coordinates at line ${index + 1}`);
     }
-    nodes.set(object.slice(1), { id: object.slice(1), lon: longitude, lat: latitude, tags: parseTags(field(tokens, "T")) });
+    nodes.set(object.slice(1), { id: object.slice(1), lon: longitude, lat: latitude, tags: parseOplTags(field(tokens, "T")) });
   } else if (object.startsWith("w")) {
     const refs = field(tokens, "N")?.split(",").filter(Boolean).map((ref) => ref.replace(/^n/, "")) ?? [];
     if (refs.length < 2) throw new Error(`OSM OPL way has fewer than two nodes at line ${index + 1}`);
-    inputWays.push({ id: object.slice(1), nodeIds: refs, tags: parseTags(field(tokens, "T")) });
+    inputWays.push({ id: object.slice(1), nodeIds: refs, tags: parseOplTags(field(tokens, "T")) });
   }
 }
 

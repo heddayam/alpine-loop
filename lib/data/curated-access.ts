@@ -111,7 +111,7 @@ function validatedRestrictions(restrictions: readonly CuratedAccessRestriction[]
   return normalizeRestrictions(z.array(curatedAccessRestrictionSchema).min(1).parse(restrictions));
 }
 
-function applyRestriction(
+export function applyRestriction(
   way: NormalizedWay,
   restriction: CuratedAccessRestriction,
   sourceId: string,

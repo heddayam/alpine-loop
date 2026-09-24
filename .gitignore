@@ -5,7 +5,7 @@ node_modules/
 .next-playwright/
 next-env.d.ts
 out/
-coverage/
+/coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo

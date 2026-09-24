@@ -13,6 +13,7 @@ import type {
   SourceSnapshot,
 } from "./adapters";
 import { reconcileAccess } from "./access";
+import { compiledEdgesForSegment } from "./compiled-edges";
 import { calculateEdgeMetricsBatch, distanceMeters, MAX_ELEVATION_BATCH_COORDINATES, sampleElevations } from "./metrics";
 import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
 import { validateAndSortNamedAreas } from "./named-areas";
@@ -133,42 +134,9 @@ async function compileGraph(
         maxSustainedGradePct: null,
         elevationProfile: null,
       };
-      const common = {
-        lengthM: metrics.lengthM,
-        maxElevationM: metrics.maxElevationM,
-        maxSustainedGradePct: metrics.maxSustainedGradePct,
-        accessState: resolution.state,
-        edgeClass: way.edgeClass ?? "trail",
-        sourceRefs,
-        flags: [...way.flags, ...(way.name ? [`trail-name:${way.name}`] : [])],
-      };
-      edges.push({
-        id: `${way.id}:${segment}:forward`,
-        stablePhysicalId: `${way.id}:${segment}`,
-        fromNode: way.nodeIds[segment],
-        toNode: way.nodeIds[segment + 1],
-        geometry,
-        gainM: metrics.gainM,
-        lossM: metrics.lossM,
-        elevationProfile: metrics.elevationProfile,
-        ...common,
-      });
-      if (way.bidirectional) {
-        edges.push({
-          id: `${way.id}:${segment}:reverse`,
-          stablePhysicalId: `${way.id}:${segment}`,
-          fromNode: way.nodeIds[segment + 1],
-          toNode: way.nodeIds[segment],
-          geometry: [...geometry].reverse(),
-          gainM: metrics.lossM,
-          lossM: metrics.gainM,
-          elevationProfile: metrics.elevationProfile?.map(({ distanceMeters, elevationMeters }) => ({
-            distanceMeters: metrics.lengthM - distanceMeters,
-            elevationMeters,
-          })).reverse() ?? null,
-          ...common,
-        });
-      }
+      edges.push(...compiledEdgesForSegment(way, segment, geometry, metrics, {
+        accessState: resolution.state, sourceRefs,
+      }));
     }
     segmentPlans = [];
   };

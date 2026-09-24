@@ -17,6 +17,7 @@
     "verify": "npm run maplibre:check && npm run lint && npm run typecheck && npm test && npm run build",
     "maplibre:check": "node scripts/maplibre-assets.mjs --check",
     "maplibre:sync": "node scripts/maplibre-assets.mjs --sync",
+    "coverage": "tsx scripts/coverage.ts",
     "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
     "pack:checkpoint": "node --import tsx scripts/research/regional-pack-checkpoint.ts"
   },
@@ -26,6 +27,7 @@
   "dependencies": {
     "maplibre-gl": "^6.1.0",
     "next": "^16.3.0",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"

@@ -20,14 +20,8 @@ function geometryBounds(geometry: CompiledEdge["geometry"]): [number, number, nu
   return [Math.min(...lons), Math.max(...lons), Math.min(...lats), Math.max(...lats)];
 }
 
-export function writePackDatabase(path: string, contents: DatabaseContents): void {
-  if (contents.metadata.schemaVersion !== "6") throw new Error("Unsupported pack schema version");
-  if (!contents.namedAreas) throw new Error("Schema 6 database requires named areas");
-  if (!contents.closedRouteTopology) throw new Error("Schema 6 database requires closed-route topology");
-  if (!contents.searchRegions) throw new Error("Schema 6 database requires search regions");
-  const database = new DatabaseSync(path);
-  try {
-    database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;");
+/** Shared schema for batch and streaming writers. */
+export function createPackSchema(database: DatabaseSync): void {
     database.exec(`
       CREATE TABLE nodes (
         id TEXT PRIMARY KEY, node_key INTEGER NOT NULL UNIQUE, lon REAL NOT NULL, lat REAL NOT NULL,
@@ -179,6 +173,18 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
       ) STRICT;
       CREATE INDEX access_topology_network ON access_topology(profile, cycle_network_id, portal_decision_node_id);
     `);
+
+}
+
+export function writePackDatabase(path: string, contents: DatabaseContents): void {
+  if (contents.metadata.schemaVersion !== "6") throw new Error("Unsupported pack schema version");
+  if (!contents.namedAreas) throw new Error("Schema 6 database requires named areas");
+  if (!contents.closedRouteTopology) throw new Error("Schema 6 database requires closed-route topology");
+  if (!contents.searchRegions) throw new Error("Schema 6 database requires search regions");
+  const database = new DatabaseSync(path);
+  try {
+    database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;");
+    createPackSchema(database);
 
     const insertNode = database.prepare(
       `INSERT INTO nodes(id, node_key, lon, lat, elevation_m, flags) VALUES (?, ?, ?, ?, ?, ?)`,

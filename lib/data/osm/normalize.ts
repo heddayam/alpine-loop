@@ -29,7 +29,7 @@ function hasTrailContext(values: Record<string, string>): boolean {
     || /(?:^|\s)(trail|path)(?:\s|$)/i.test(values.name ?? "");
 }
 
-function needsTrailContext(values: Record<string, string>): boolean {
+export function needsTrailContext(values: Record<string, string>): boolean {
   return (values.highway === "footway" || values.highway === "pedestrian")
     && !SIDEWALK_SUBTAGS.has(values.footway ?? "")
     && !hasTrailContext(values);
