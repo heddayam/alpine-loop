@@ -13,6 +13,13 @@ import { areaBounds } from "@/lib/graph/geometry";
 
 type Row = { id: string; refs: string; tags: string; kind: string; promoted: number; coordinates: string };
 type Node = { id: string; lon: number; lat: number; tags: string };
+function componentBounds(area: AreaGeometry, context: number): string {
+  const polygons=area.type==="Polygon"?[area.coordinates]:area.coordinates;
+  return JSON.stringify(polygons.map(coordinates=>{
+    const [w,s,e,n]=areaBounds({type:"Polygon",coordinates});
+    return [e+context,w-context,n+context,s-context];
+  }));
+}
 const NORMALIZED_SEAL_KEY = "normalized-seal-v1";
 const UNSUPPORTED_SEAL_KEY = "unsupported-inventory-seal-v1";
 const NORMALIZATION_VERSION = "source-normalization-v2";
@@ -374,13 +381,24 @@ export class CoverageSourceStore {
   }
   private *nearbyWays(area: AreaGeometry, contextDegrees=0.01): Generator<Row> {
     if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
-    const [w,s,e,n]=areaBounds(area), bounds=[e+contextDegrees,w-contextDegrees,n+contextDegrees,s-contextDegrees];
-    // CROSS JOIN keeps the spatial lookup first; exact bounds remove RTree
-    // float32 rounding false positives without changing source-boundary behavior.
-    yield* this.db.prepare(`SELECT w.* FROM ways_spatial s CROSS JOIN ways w ON w.rowid=s.id
-      WHERE s.minx<=? AND s.maxx>=? AND s.miny<=? AND s.maxy>=?
-        AND w.minx<=? AND w.maxx>=? AND w.miny<=? AND w.maxy>=? ORDER BY w.id`).iterate(...bounds,...bounds) as Iterable<Row>;
+    // IN deduplicates identities when component envelopes overlap. CROSS JOIN
+    // keeps spatial lookup first; exact bounds remove RTree rounding false positives.
+    yield* this.db.prepare(`SELECT w.* FROM ways w WHERE w.rowid IN (
+      SELECT candidate.rowid FROM json_each(?) b CROSS JOIN ways_spatial s CROSS JOIN ways candidate ON candidate.rowid=s.id
+      WHERE s.minx<=json_extract(b.value,'$[0]') AND s.maxx>=json_extract(b.value,'$[1]')
+        AND s.miny<=json_extract(b.value,'$[2]') AND s.maxy>=json_extract(b.value,'$[3]')
+        AND candidate.minx<=json_extract(b.value,'$[0]') AND candidate.maxx>=json_extract(b.value,'$[1]')
+        AND candidate.miny<=json_extract(b.value,'$[2]') AND candidate.maxy>=json_extract(b.value,'$[3]'))
+      ORDER BY w.id`).iterate(componentBounds(area,contextDegrees)) as Iterable<Row>;
   }
+  private *nearbyPoints(table: "nodes" | "relation_buildings", area: AreaGeometry): Generator<Node> {
+    yield* this.db.prepare(`SELECT p.* FROM ${table} p WHERE p.rowid IN (
+      SELECT candidate.rowid FROM json_each(?) b CROSS JOIN ${table} candidate
+      WHERE candidate.lon BETWEEN json_extract(b.value,'$[1]') AND json_extract(b.value,'$[0]')
+        AND candidate.lat BETWEEN json_extract(b.value,'$[3]') AND json_extract(b.value,'$[2]')
+        ${table==="nodes"?"AND candidate.tags!=''":""}) ORDER BY p.id`).iterate(componentBounds(area,0.01)) as Iterable<Node>;
+  }
+
   *ways(area: AreaGeometry, contextDegrees=0.01): Generator<{way:NormalizedWay; nodes:NormalizedNode[]}> {
     for(const raw of this.nearbyWays(area,contextDegrees)) {
       const row=raw as Row;
@@ -393,9 +411,8 @@ export class CoverageSourceStore {
     }
   }
   *evidence(area: AreaGeometry): Generator<NormalizedPortalEvidence> {
-    const [w,s,e,n]=areaBounds(area);
     // OSM node tags are compact OPL strings; coordinates filter the local context first.
-    for(const raw of this.db.prepare("SELECT * FROM nodes WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ? AND tags!=''").iterate(w-.01,e+.01,s-.01,n+.01)) {
+    for(const raw of this.nearbyPoints("nodes",area)) {
       const row=raw as Node,tags=parseOplTags(row.tags);
       for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-node-${row.id}`,externalId:`node/${row.id}`,kind,name:tags.name??null,nodeIds:[`osm-node-${row.id}`],coordinates:[[row.lon,row.lat]],accessState:osmAccessState(tags),sourceRefs:[this.source.id]};
     }
@@ -405,13 +422,12 @@ export class CoverageSourceStore {
     }
   }
   *buildings(area: AreaGeometry): Generator<readonly [number,number]> {
-    const [w,s,e,n]=areaBounds(area);
-    for (const raw of this.db.prepare("SELECT lon,lat,tags FROM nodes WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ? AND tags!=''").iterate(w-.01,e+.01,s-.01,n+.01)) {
+    for (const raw of this.nearbyPoints("nodes",area)) {
       if (!parseOplTags(String(raw.tags)).building) continue;
       const centroid = buildingCentroidOf({ type: "Point", coordinates: [Number(raw.lon), Number(raw.lat)] });
       if (centroid) yield centroid;
     }
-    for (const row of this.db.prepare("SELECT lon,lat FROM relation_buildings WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?").iterate(w-.01,e+.01,s-.01,n+.01)) yield [Number(row.lon), Number(row.lat)];
+    for (const row of this.nearbyPoints("relation_buildings",area)) yield [Number(row.lon), Number(row.lat)];
     for(const raw of this.nearbyWays(area)) {
       if(!JSON.parse(String(raw.tags)).building) continue;
       const points=JSON.parse(String(raw.coordinates)) as [number,number][];

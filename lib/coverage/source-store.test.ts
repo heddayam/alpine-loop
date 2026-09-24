@@ -7,7 +7,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import { CoverageSourceStore } from "./source-store";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import { rectangle } from "./geometry";
+import { rectangle, unionCoverage } from "./geometry";
 
 vi.mock("node:child_process", async (original) => {
   const actual = await original<typeof import("node:child_process")>();
@@ -51,6 +51,37 @@ describe("coverage source staging", () => {
       WHERE s.minx<=? AND s.maxx>=? AND s.miny<=? AND s.maxy>=? ORDER BY w.id`).all(-121,-122,49,47);
     expect(plan[0]?.detail).toContain("VIRTUAL TABLE INDEX");
     expect(plan[1]?.detail).toContain("INTEGER PRIMARY KEY");
+  });
+
+  it("queries disconnected component envelopes without gap-only source context or duplicate rows",async()=>{
+    const store=make();
+    await store.import(async()=>{}, {lines:lines([
+      "n1 Thighway=trailhead x0 y0", "n2 T x0.1 y0", "n3 T x10 y0", "n4 T x10.1 y0",
+      "n5 T x5 y0", "n6 T x5.1 y0", "n7 T x-0.009 y0", "n8 T x-0.002 y0",
+      "n9 Tbuilding=yes x5 y0.05", "n10 Thighway=trailhead x5 y0.06",
+      "n11 T x5.1 y0.1", "n12 T x5 y0.1", "n13 T x0.1 y0.1", "n14 T x0 y0.1",
+      "w10 Thighway=path Nn1,n2", "w20 Thighway=path Nn3,n4", "w30 Thighway=path Nn5,n6",
+      "w40 Thighway=path Nn2,n3", "w50 Thighway=path Nn7,n8",
+      "w60 Tamenity=parking Nn5,n6", "w61 Tbuilding=yes Nn5,n6,n11,n12,n5",
+      "w62 Tbuilding=yes Nn1,n2,n13,n14,n1", "w63 Tamenity=parking Nn1,n2",
+      "r70 Ttype=multipolygon,building=yes Mw61@outer",
+    ])});
+    const coverage=unionCoverage([rectangle([0,-0.1,0.1,0.1]),rectangle([10,-0.1,10.1,0.1])]);
+    const ids=(context:number)=>[...store.ways(coverage,context)].map(({way})=>way.externalId);
+    expect(ids(0)).toEqual(["way/10","way/20","way/40"]);
+    expect(ids(0.01)).toEqual(["way/10","way/20","way/40","way/50"]);
+    expect([...store.evidence(coverage)].map(item=>item.externalId)).toEqual(["node/1","way/63"]);
+    expect([...store.buildings(coverage)].every(([lon])=>lon<1)).toBe(true);
+    expect([...store.buildings(coverage)]).toHaveLength(1);
+    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='way/30'").get()?.disposition).toBe("candidate");
+    // Context envelopes overlap even though the two drawn polygons do not.
+    const overlapping=unionCoverage([rectangle([-0.002,-0.001,0.002,0.001]),rectangle([0.008,-0.001,0.012,0.001])]);
+    const expected=[...store.ways(overlapping)].map(({way})=>way.externalId);
+    expect(expected).toEqual(["way/10","way/50"]);
+    const iterator=store.ways(coverage),first=iterator.next().value!.way.externalId;
+    expect([...store.ways(overlapping)].map(({way})=>way.externalId)).toEqual(expected);
+    expect([first,...[...iterator].map(({way})=>way.externalId)]).toEqual(ids(0.01));
+    expect([...store.evidence(overlapping)].map(item=>item.externalId)).toEqual(["node/1","way/63"]);
   });
 
   it("rebuilds interrupted and damaged derived spatial state without changing sealed source results", async () => {
