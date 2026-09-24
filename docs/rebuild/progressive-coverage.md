@@ -169,6 +169,13 @@ topology hashes; this is an isolated measurement. The real trial paused cleanly
 after publication and resumed with the change. Publication remains every eight
 units after the initial snapshot.
 
+Scalar SQL statements are also reused within each topology invocation; streaming
+iterators stay independent and the bounded cache clears on success or failure.
+On the same fixture this reduced batched execution from 4.86 to 1.44 s, with
+identical hashes, and SQL preparations from 1,410,018 to 60,038. This additional
+change passed same-connection failure/replay checks; real-build impact remains
+under measurement.
+
 The two-unit real-source request at `[-121.3,47.9,-121.1,48.0]` subsequently
 completed in the 4 GiB/swap-disabled container. Starting from the interrupted
 source inventory, it took 17 min 46 s; its first audited publication was at

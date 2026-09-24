@@ -116,6 +116,14 @@ runtime image built. Independent review found no transaction/publication blocker
 The fixed eight-unit publication policy remains unchanged. Full Cascades and
 Olympic measurements are still required; Gate E remains open.
 
+The subsequent bounded scalar-statement cache reduced the same batched fixture
+from 4.86 to 1.44 s without changing its hash. Streaming statements remain
+independent, and caches clear after success/failure. Both final verification
+passes again passed 704 tests and builds; browser passes passed nine flows each
+(29.1 s and 24.4 s), and the runtime image built. The real trial has prepared
+50 units and is publishing them; its running worker currently uses transaction
+batching and will pick up the statement cache at the next publication restart.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
