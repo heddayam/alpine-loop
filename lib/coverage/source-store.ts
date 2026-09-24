@@ -164,17 +164,31 @@ export class CoverageSourceStore {
     const counts = { ways: 0, taggedNodes: 0, relationBuildings: 0 };
     const scan = async (kind: keyof typeof counts, sql: string) => {
       hash.update(`${kind}\0`);
-      for (const row of this.db.prepare(sql).iterate() as Iterable<Record<string,unknown>>) {
-        const { spatialRow, ...values } = row;
-        if (kind === "ways") spatial.run(Number(spatialRow), Number(row.minx), Number(row.maxx), Number(row.miny), Number(row.maxy));
-        const record = JSON.stringify(Object.values(values));
-        hash.update(`${Buffer.byteLength(record)}:`);
-        hash.update(record);
-        counts[kind]++;
-        if (counts[kind]%CHECKPOINT_ROWS===0) await checkpoint();
+      // Bound TEMP journaling as well as pause latency; savepoints also nest
+      // inside the first import's source-seal transaction.
+      const indexing = kind === "ways";
+      if (indexing) this.db.exec("SAVEPOINT coverage_spatial_batch");
+      try {
+        for (const row of this.db.prepare(sql).iterate() as Iterable<Record<string,unknown>>) {
+          const { spatialRow, ...values } = row;
+          if (kind === "ways") spatial.run(Number(spatialRow), Number(row.minx), Number(row.maxx), Number(row.miny), Number(row.maxy));
+          const record = JSON.stringify(Object.values(values));
+          hash.update(`${Buffer.byteLength(record)}:`);
+          hash.update(record);
+          counts[kind]++;
+          if (counts[kind]%CHECKPOINT_ROWS===0) {
+            await checkpoint();
+            if (indexing) this.db.exec("RELEASE coverage_spatial_batch; SAVEPOINT coverage_spatial_batch");
+          }
+        }
+        hash.update("\0");
+        await checkpoint();
+      } catch (error) {
+        if (indexing) this.db.exec("ROLLBACK TO coverage_spatial_batch");
+        throw error;
+      } finally {
+        if (indexing) this.db.exec("RELEASE coverage_spatial_batch");
       }
-      hash.update("\0");
-      await checkpoint();
     };
     // These are the immutable rows read by ways(), evidence(), and buildings().
     // Metrics and inventory dispositions are intentionally mutable and excluded.

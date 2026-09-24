@@ -105,6 +105,27 @@ describe("coverage source staging", () => {
     expect(results()).toEqual(before);
   });
 
+  it("rolls back only the unfinished spatial batch and replays the same source seal",async()=>{
+    const store=make();
+    const input=["n1 T x0 y0","n2 T x0.001 y0",
+      ...Array.from({length:10_002},(_,index)=>`w${index+1} Thighway=path Nn1,n2`)];
+    await store.import(async()=>{}, {lines:lines(input)});
+    const seal=store.receipt("normalized-seal-v1");
+    const ids=[...store.ways(area)].map(({way})=>way.id);
+    store.db.exec("DROP TABLE temp.ways_spatial");
+    await expect(store.import(async()=>{
+      if(store.db.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='ways_spatial'").get() &&
+        Number(store.db.prepare("SELECT count(*) AS n FROM ways_spatial").get()?.n)>10_000)
+        throw new Error("pause final spatial batch");
+    })).rejects.toThrow("pause final spatial batch");
+    expect(store.db.prepare("SELECT count(*) AS n FROM ways_spatial").get()?.n).toBe(10_000);
+    expect(store.db.isTransaction).toBe(false);
+    expect(()=>[...store.ways(area)]).toThrow("completed verified import");
+    await store.import(async()=>{});
+    expect(store.receipt("normalized-seal-v1")).toBe(seal);
+    expect([...store.ways(area)].map(({way})=>way.id)).toEqual(ids);
+  });
+
   it("interrupts a file-backed integrity child and resumes the source seal", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "coverage-quick-check-"));
     directories.push(directory);
