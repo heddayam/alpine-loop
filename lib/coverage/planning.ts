@@ -32,7 +32,7 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
     if (!collection) throw new Error(`Unknown collection: ${id}`);
     return collection;
   });
-  const geometry = request.geometry ?? unionCoverage(selected.map((item) => item.geometry));
+  const geometry = unionCoverage([...selected.map((item) => item.geometry), ...(request.geometry ? [request.geometry] : [])]);
   const sources = (await coverageSources()).filter((source) => intersectCoverage(source.geometry, geometry));
   if (!sources.length) throw new Error("No configured source covers this installation area");
   const installed = await installedSnapshot();

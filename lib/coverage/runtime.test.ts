@@ -21,7 +21,7 @@ vi.mock("@/lib/data/osm/source", () => ({ readPinnedOsmSnapshot: vi.fn(), refres
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: vi.fn(async () => "fixture-pins") }));
 vi.mock("./collections", async (importOriginal) => ({
   ...await importOriginal<typeof import("./collections")>(), coverageExclusions: async () => [],
-  legacyRegionIds: [], collections: async () => [],
+  legacyRegionIds: [], collections: vi.fn(async () => []),
   coverageSources: async () => [{ config: { id: "fixture", dataset: "Offline fixture", expectedByteLength: 100 }, geometry: { type: "Polygon", coordinates: [[[-122,47],[-121,47],[-121,49],[-122,49],[-122,47]]] } }],
 }));
 const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", dataset: "Synthetic progressive loop", version: "1", retrievedAt: "2026-09-24T00:00:00Z", url: "https://example.invalid/progressive", license: "CC0-1.0", contentHash: `sha256:${"1".repeat(64)}`, localPath: path.resolve("data/fixtures/source/osm/progressive.opl") };
@@ -60,6 +60,15 @@ it("expands separate requests into the same graph without losing their crossing 
   expect(expanded.snapshot!.unitIds.length).toBeGreaterThan(first.snapshot!.unitIds.length);
   expect(await edges(expanded.snapshot!.dataVersion)).toHaveLength(6);
   expect(await edges(first.snapshot!.dataVersion)).toHaveLength(2);
+});
+
+it("plans every selected collection and the drawing together without filling the space between them", async () => {
+  const { collections } = await import("./collections");
+  vi.mocked(collections).mockResolvedValueOnce([{ id: "fixture-area", name: "Fixture area", geometry: rectangle([-121.9,47.5,-121.8,47.6]), sourceIds: ["fixture"], limitations: [] }]);
+  const combined = await plan({ collectionIds: ["fixture-area"], geometry: rectangle([-121.3,47.5,-121.2,47.6]), memoryLimitMiB: 4096, offline: true });
+  expect(areaBounds(combined.geometry)).toEqual([-121.9,47.5,-121.2,47.6]);
+  expect(combined.geometry.type).toBe("MultiPolygon");
+  expect(combined.units).toHaveLength(3);
 });
 
 it("reuses verified segment metrics when expansion adds unrelated elevation pins", async () => {
