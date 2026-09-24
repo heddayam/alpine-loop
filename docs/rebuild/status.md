@@ -75,6 +75,17 @@ conservative bounds before exact predicates. The larger 18-unit graph export
 took 6.30 s after the indexed-join fix; this is a publication substage, not the
 full build. The Cascades trial remains active and Gate E remains open.
 
+The next measured bottleneck was per-record context commits in dense units.
+Shared context ingestion now commits batches of up to 1,000 node records or
+building centroids, with a single larger source way kept intact. Transactions
+close before metric work and pause checkpoints. All 22 runtime regressions pass;
+two subsequent full verification passes again passed 693 tests, and both browser
+passes passed nine flows (35.2 s and 26.0 s). The runtime image builds. The real
+trial paused cleanly with 24 prepared units and resumed in the same constrained
+container, preserving the active 18-unit snapshot and verified caches. Isolated
+3,000-row writes improved from 608 to 159 ms for ways and 469 to 30 ms for
+buildings; end-to-end improvement remains under measurement.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
