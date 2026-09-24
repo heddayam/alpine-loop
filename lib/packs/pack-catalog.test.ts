@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadInstalledPack } from "./installed-pack";
-import { discoverCatalogPacks } from "./pack-catalog";
+import { discoverCatalogPacks, legacyRoutingNeedsReview } from "./pack-catalog";
 
 const temporaryRoots: string[] = [];
 
@@ -21,7 +22,10 @@ async function emptyRoot(): Promise<string> {
 async function installPack(root: string, id: string, dataVersion: string, boundary: { type: "Polygon" | "MultiPolygon"; coordinates: unknown }): Promise<void> {
   const directory = path.join(root, id, dataVersion);
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, "pack.sqlite"), "fixture");
+  const database = new DatabaseSync(path.join(directory, "pack.sqlite"));
+  database.exec("CREATE TABLE edges (id TEXT PRIMARY KEY, source_refs TEXT NOT NULL, flags TEXT NOT NULL)");
+  database.prepare("INSERT INTO edges VALUES(?,?,?)").run("osm-way-1:0:forward", '["source"]', '["osm-feature:way/1"]');
+  database.close();
   await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
     schemaVersion: "6",
     id,
@@ -99,6 +103,44 @@ describe("catalog-linked pack discovery", () => {
     await mkdir(path.join(root, "local-coverage"), { recursive: true });
     await writeFile(path.join(root, "local-coverage", "current.json"), "invalid");
     expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["santa-cruz-mountains"]);
+  });
+
+  it.each([true, false])("checks actual supplemental routing (%s) when both manifests list its reference source", async (supplemental) => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    await installPack(root, "local-coverage", "coverage-test", santaCruz);
+    for (const [id, version] of [["santa-cruz-mountains", "scm-test"], ["local-coverage", "coverage-test"]]) {
+      const file = path.join(root, id!, version!, "manifest.json");
+      const manifest = JSON.parse(await readFile(file, "utf8"));
+      manifest.sources.push({ ...manifest.sources[0], id: "usgs-national-digital-trails" });
+      await writeFile(file, JSON.stringify(manifest));
+    }
+    const pack = (await loadInstalledPack("santa-cruz-mountains", root))!;
+    const database = new DatabaseSync(pack.databasePath);
+    if (supplemental) database.prepare("INSERT INTO edges VALUES(?,?,?)").run("official-gap-abc:0:forward", '["usgs-national-digital-trails"]', '["official-gap-id:official-gap-abc"]');
+    database.close();
+    expect(legacyRoutingNeedsReview(pack)).toBe(supplemental);
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(supplemental ? ["santa-cruz-mountains", "local-coverage"] : ["local-coverage"]);
+  });
+
+  it.each(["county-trail-1:forward", "supplemental-trail-1:forward"])("retains unknown supplemental identity %s", async (id) => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    await installPack(root, "local-coverage", "coverage-test", santaCruz);
+    const pack = (await loadInstalledPack("santa-cruz-mountains", root))!;
+    const database = new DatabaseSync(pack.databasePath);
+    database.prepare("INSERT INTO edges VALUES(?,?,?)").run(id, '["county"]', '[]');
+    database.close();
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["santa-cruz-mountains", "local-coverage"]);
+  });
+
+  it("retains legacy data when routing provenance cannot be read", async () => {
+    const root = await emptyRoot();
+    await installSantaCruz(root);
+    await installPack(root, "local-coverage", "coverage-test", santaCruz);
+    const pack = (await loadInstalledPack("santa-cruz-mountains", root))!;
+    await writeFile(pack.databasePath, "unreadable fixture");
+    expect([...((await discoverCatalogPacks(root)).keys())]).toEqual(["santa-cruz-mountains", "local-coverage"]);
   });
 
 });
