@@ -17,6 +17,12 @@ Coverage metadata has its own version-1 contract. Routing databases remain
 schema 6, so existing graph readers and saved route geometry stay compatible.
 Legacy databases supply selection metadata and aliases, never graph edges.
 
+Legacy packs are a migration bridge. Rebuild their coverage from pinned source
+inputs, validate the replacement, and only then hide fully superseded packs.
+Keep generations referenced by running or saved jobs. Once migration is proven,
+retire the old pack-specific build commands and redundant compatibility code;
+retain the shared source adapters, metrics, SQLite reader, and hike solver.
+
 ## Boundaries and evidence
 
 - Collections are independent review envelopes. Quarter-degree units are
