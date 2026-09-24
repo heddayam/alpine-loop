@@ -1,11 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { coverageRequestSchema, coverageSnapshotSchema, type CoverageCatalog, type CoveragePlan, type CoverageRequest, type CoverageUnit, type CoverageSnapshot } from "@/lib/contracts";
 import { loadInstalledPack } from "@/lib/packs/installed-pack";
 import { discoverCatalogPacks, legacyRoutingNeedsReview } from "@/lib/packs/pack-catalog";
-import { readPinnedOsmSnapshot } from "@/lib/data/osm/source";
+import { inspectPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, unionCoverage } from "./geometry";
 
@@ -41,10 +41,20 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   }));
   const sourceIds = [...new Set(sources.map((source) => source.config.id))].sort();
   const cache = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
-  const reusableBytes = (await Promise.all(sources.map(async ({config}) => {
-    try { await readPinnedOsmSnapshot(cache,config); return config.expectedByteLength; }
-    catch { return 0; }
-  }))).reduce((sum,size)=>sum+size,0);
+  const preparationRoot = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage");
+  const cached = await Promise.all(sources.map(async ({config}) => {
+    try {
+      const snapshot = await inspectPinnedOsmSnapshot(cache,config);
+      const file = path.join(preparationRoot, `source-${snapshot.contentHash.slice(7)}.sqlite`);
+      const preparationBytes = (await Promise.all(["", "-wal", "-shm"].map(async (suffix) => {
+        try { return (await stat(`${file}${suffix}`)).size; } catch { return 0; }
+      }))).reduce((sum, size) => sum + size, 0);
+      return { sourceBytes: config.expectedByteLength, preparationBytes };
+    } catch { return { sourceBytes: 0, preparationBytes: 0 }; }
+  }));
+  const cachedSourceBytes = cached.reduce((sum, item) => sum + item.sourceBytes, 0);
+  const cachedPreparationBytes = cached.reduce((sum, item) => sum + item.preparationBytes, 0);
+  const reusableBytes = cachedSourceBytes + cachedPreparationBytes;
   const upstreamBytes = sources.reduce((sum,{config})=>sum+config.expectedByteLength,0);
   const retainedLegacy = [...(await discoverCatalogPacks()).values()].filter((pack) => pack.manifest.id !== COVERAGE_PACK_ID
     && intersectCoverage(pack.manifest.coverage.boundary, geometry) && legacyRoutingNeedsReview(pack));
@@ -52,6 +62,7 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
     estimates: { downloadBytes: null, temporaryBytes: null, reusableBytes },
     warnings: [...new Set(selected.flatMap((item) => item.limitations)),
       ...retainedLegacy.map((pack) => `${pack.manifest.name} contains supplemental or unverified routing data. Its legacy installation remains available until replacement trail coverage is verified; this build does not complete its migration.`),
-      `${Math.ceil((upstreamBytes-reusableBytes)/1024**2)} MiB of configured OSM downloads remain; ${Math.ceil(reusableBytes/1024**2)} MiB is verified in the source cache.`,
+      `${Math.ceil((upstreamBytes-cachedSourceBytes)/1024**2)} MiB of configured OSM downloads remain; ${Math.ceil(cachedSourceBytes/1024**2)} MiB is present in the source cache.`,
+      `${Math.ceil(cachedPreparationBytes/1024**2)} MiB of cached source preparation found. Cached data and checkpoints are verified when installation starts; reuse is not guaranteed by this preview.`,
       "A small area may require the full upstream source download. Additional elevation downloads and disk estimates remain unknown until acquisition."] };
 }

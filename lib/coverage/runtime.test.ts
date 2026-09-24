@@ -17,7 +17,7 @@ vi.mock("@/lib/data/elevation/uv-rasterio-sampler",async importOriginal=>{
   const actual=await importOriginal<typeof import("@/lib/data/elevation/uv-rasterio-sampler")>();
   return {...actual,get PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION(){return algorithms.metricVersion??actual.PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION;}};
 });
-vi.mock("@/lib/data/osm/source", () => ({ readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
+vi.mock("@/lib/data/osm/source", () => ({ inspectPinnedOsmSnapshot: vi.fn(), readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: vi.fn(async () => "fixture-pins") }));
 vi.mock("./collections", async (importOriginal) => ({
   ...await importOriginal<typeof import("./collections")>(), coverageExclusions: async () => [],
@@ -34,7 +34,8 @@ beforeEach(async () => {
   vi.stubEnv("ALPINE_COVERAGE_ROOT", path.join(root, "stage"));
   vi.stubEnv("ALPINE_PACK_ROOT", path.join(root, "packs"));
   vi.stubEnv("ALPINE_ROUTE_JOBS_DB", path.join(root, "absent-route-jobs.sqlite"));
-  const { readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
+  const { inspectPinnedOsmSnapshot, readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
+  vi.mocked(inspectPinnedOsmSnapshot).mockResolvedValue(source);
   vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(source);
   const { elevationFor, describeCanonicalElevation, elevationPinsFingerprint } = await import("./elevation");
   vi.mocked(elevationPinsFingerprint).mockResolvedValue("fixture-pins");
@@ -69,6 +70,8 @@ it("plans every selected collection and the drawing together without filling the
   expect(areaBounds(combined.geometry)).toEqual([-121.9,47.5,-121.2,47.6]);
   expect(combined.geometry.type).toBe("MultiPolygon");
   expect(combined.units).toHaveLength(3);
+  const { readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
+  expect(readPinnedOsmSnapshot).not.toHaveBeenCalled();
 });
 
 it("reuses verified segment metrics when expansion adds unrelated elevation pins", async () => {

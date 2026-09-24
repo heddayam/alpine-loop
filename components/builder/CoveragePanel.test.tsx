@@ -22,7 +22,7 @@ it("previews drawn coverage with the memory budget, shows unknown estimates, and
   fireEvent.click(screen.getByRole("button", { name: "Preview installation" }));
   await screen.findByText("Installation preview");
   expect(JSON.parse(fetcher.mock.calls.find(([url]) => url.endsWith("/plan"))![1]?.body as string)).toEqual({ collectionIds: [], geometry, memoryLimitMiB: 4096, offline: true });
-  expect(screen.getAllByText("Unknown until sources are checked")).toHaveLength(2);
+  expect(screen.getAllByText("Not yet estimated")).toHaveLength(2);
   expect(screen.getByText(/Missing: osmium/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Start installation" }));
   await screen.findByText(/Preparing trails/);
