@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { type CoveragePlan, type CoverageSnapshot, type CoverageUnit, type PackManifest } from "@/lib/contracts";
-import { areaBounds } from "@/lib/graph/geometry";
+import { areaBounds, lineIsInsideArea } from "@/lib/graph/geometry";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import { loadInstalledPack, localPackRoot } from "@/lib/packs/installed-pack";
 import { withGenerationLock } from "@/lib/packs/generation-pins";
@@ -38,15 +38,15 @@ function segmentTouches(line: Coordinate[], [west,south,east,north]: readonly nu
     && Math.max(line[0]![1],line[1]![1]) >= south! && Math.min(line[0]![1],line[1]![1]) <= north!;
 }
 
-/** Full source segments, including the context needed beyond an installation seam. */
-function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["geometry"]): CoverageUnit["geometry"] | null {
+/** Whole eligible segments can cross installation seams but not the supported outer boundary. */
+function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["geometry"], eligible: CoverageUnit["geometry"]): CoverageUnit["geometry"] | null {
   const bounds=areaBounds(geometry);
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   for (const raw of raws) for (const {way} of raw.ways(geometry)) {
     if (way.edgeClass !== "trail") continue;
     for (let index=1;index<way.coordinates.length;index++) {
       const line=way.coordinates.slice(index-1,index+1);
-      if (!segmentTouches(line,bounds)) continue;
+      if (!segmentTouches(line,bounds) || !lineIsInsideArea(line,eligible)) continue;
       for (const [x,y] of line) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y); }
     }
   }
@@ -104,7 +104,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     const geometry = unionCoverage([...(snapshot ? [snapshot.geometry] : []), ...prepared.map((unit) => unit.geometry)]);
     await report("Recomputing combined trailheads and connectivity");
     store!.derivePortals(geometry);
-    const finalElevation = await describeCanonicalElevation(metricArea(rawStores,geometry) ?? geometry, cacheRoot(), root, demCache);
+    const publishedMetricArea = metricArea(rawStores,geometry,geometry);
+    const finalElevation = publishedMetricArea ? await describeCanonicalElevation(publishedMetricArea, cacheRoot(), root, demCache) : null;
     demFingerprint = finalElevation?.productFingerprint ?? "no-trail-metrics";
     if (finalElevation) store!.putSource(finalElevation.source);
     // A DEM mosaic supersedes earlier mosaics; graph records refer to OSM
@@ -176,6 +177,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     }
     const configuredSources = (await coverageSources()).filter((source) => intersectCoverage(source.geometry, requestedCoverage));
     const exclusions = await coverageExclusions();
+    const coveragePlan = planCoverageGeometry(requestedCoverage, configuredSources, exclusions);
+    const supportedCoverage = coveragePlan.supported;
     for (const region of legacyRegionIds) {
       let config;
       try { config = await readOfficialTrailSourceConfig(path.resolve(`data/regions/${region}/official-trail-source.json`)); }
@@ -207,7 +210,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         await report(`${label}: ${source.config.dataset}`);
       } });
     }
-    const pinnedDem = await elevationPinsFingerprint(cacheRoot(), metricArea(rawStores, requestedCoverage) ?? requestedCoverage, demCache);
+    const requestedMetricArea = supportedCoverage ? metricArea(rawStores, supportedCoverage, supportedCoverage) : null;
+    const pinnedDem = requestedMetricArea ? await elevationPinsFingerprint(cacheRoot(), requestedMetricArea, demCache) : "no-trail-metrics";
     const durable = (source: SourceSnapshot) => {
       const record = { ...source };
       delete (record as Partial<SourceSnapshot>).localPath;
@@ -236,8 +240,9 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
           installedGeneration = { inputFingerprint: marker.inputFingerprint, demFingerprint: marker.demFingerprint, stageKey: marker.stageKey };
       } catch { /* Older or invalid metadata requires rebuilding the installed union. */ }
     }
+    const priorMetricArea = snapshot ? metricArea(rawStores,snapshot.geometry,snapshot.geometry) : null;
     const priorDemFingerprint = snapshot
-      ? (await describeCanonicalElevation(metricArea(rawStores,snapshot.geometry) ?? snapshot.geometry, cacheRoot(), root, demCache))?.productFingerprint ?? "no-trail-metrics"
+      ? priorMetricArea ? (await describeCanonicalElevation(priorMetricArea, cacheRoot(), root, demCache))?.productFingerprint ?? "no-trail-metrics" : "no-trail-metrics"
       : null;
     let stagePresent = false;
     if (installedGeneration) {
@@ -250,12 +255,11 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       : `graph-${inputFingerprint}`;
     if (snapshot && !compatible) {
       const oldGeometry = snapshot.geometry;
-      const coverage = planCoverageGeometry(requestedCoverage, configuredSources, exclusions);
-      if (!coverage.supported || subtractCoverage(oldGeometry, coverage.supported))
+      if (!supportedCoverage || subtractCoverage(oldGeometry, supportedCoverage))
         throw new Error("Changed source coverage cannot rebuild every installed area; existing installation remains active");
-      const oldUnits = coverage.units.filter((unit) => unit.status !== "unavailable" && intersectCoverage(unit.geometry, oldGeometry));
+      const oldUnits = coveragePlan.units.filter((unit) => unit.status !== "unavailable" && intersectCoverage(unit.geometry, oldGeometry));
       requiredOldUnits = new Set(oldUnits.map((unit) => unit.id));
-      units = [...oldUnits, ...coverage.units.filter((unit) => !requiredOldUnits.has(unit.id))];
+      units = [...oldUnits, ...coveragePlan.units.filter((unit) => !requiredOldUnits.has(unit.id))];
       snapshot = null;
       rebuilding = true;
       await report("Source inputs changed; rebuilding installed coverage before activation");
@@ -277,7 +281,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       const receipt = store.getReceipt(`unit:${unit.id}`);
       if (context.publishOnly && !receipt) continue;
       const unitBounds = areaBounds(unit.geometry);
-      const requiredDem = metricArea(rawStores,unit.geometry);
+      const requiredDem = supportedCoverage ? metricArea(rawStores,unit.geometry,supportedCoverage) : null;
       const elevation = requiredDem ? await elevationFor({...unit,geometry:requiredDem}, cacheRoot(), root, plan.request.offline, demCache) : null;
       if (elevation) store.putSource(elevation.source);
       const fingerprint = contentId({ inputFingerprint, elevation: elevation?.productFingerprint ?? "no-trail-metrics", unit: unit.id });
@@ -351,7 +355,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
             for (let segment = 0; segment < way.nodeIds.length - 1; segment++) {
               const geometry = way.coordinates.slice(segment, segment + 2);
               // Keep complete source segments spanning adjacent units. Publication applies the installed union.
-              if (!segmentTouches(geometry,unitBounds)) continue;
+              if (!supportedCoverage || !segmentTouches(geometry,unitBounds) || !lineIsInsideArea(geometry,supportedCoverage)) continue;
               pending.push({ way, segment, geometry });
               if (pending.length >= 500) await flush();
             }

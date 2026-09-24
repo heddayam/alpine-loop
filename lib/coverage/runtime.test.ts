@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { areaBounds } from "@/lib/graph/geometry";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { CoverageRunnerContext } from "@/lib/coverage-jobs/types";
 import { CoverageSourceStore } from "./source-store";
@@ -57,16 +58,45 @@ it("expands separate requests into the same graph without losing their crossing 
 
 it("reuses verified segment metrics when expansion adds unrelated elevation pins", async () => {
   const { elevationFor, elevationPinsFingerprint } = await import("./elevation");
-  const sample = vi.fn(async (coordinates: readonly unknown[]) => coordinates.map(() => 100));
+  const sample = vi.fn(async (coordinates: ReadonlyArray<readonly [number,number]>) => coordinates.map(() => 100));
   const initial = await elevationFor((await request(-121.27,-121.25)).units[0]!,"","",true);
   vi.mocked(elevationFor).mockResolvedValue({...initial,sampler:{algorithmVersion:"fixture",sample}});
   await run(await request(-121.27,-121.25),context());
-  expect(sample).toHaveBeenCalled();
+  const oldSegmentInterior = ([lon,lat]: readonly [number,number]) => lon < -121.25001 && lon > -121.25999 && lat > 47.51001 && lat < 47.53999;
+  expect(sample.mock.calls.flatMap(([coordinates]) => coordinates).some(oldSegmentInterior)).toBe(true);
   sample.mockClear();
   vi.mocked(elevationPinsFingerprint).mockResolvedValue("expanded-pin-set");
   const expanded = await run(await request(-121.25,-121.23),context());
-  expect(sample).not.toHaveBeenCalled();
+  expect(sample).toHaveBeenCalled(); // Newly eligible outer segments now need metrics.
+  expect(sample.mock.calls.flatMap(([coordinates]) => coordinates).some(oldSegmentInterior)).toBe(false);
   expect(await edges(expanded.snapshot!.dataVersion)).toHaveLength(6);
+});
+
+it("does not request border-external DEM for source segments excluded by the supported outer boundary", async () => {
+  const fixture = [
+    "n1 T x-121.55 y48.99", "n2 T x-121.45 y48.995", "n3 T x-121.4 y49.0019851",
+    "w101 Thighway=path,name=Border%20trail Nn1,n2,n3",
+  ];
+  vi.mocked(CoverageSourceStore.prototype.import).mockImplementation(function (this:CoverageSourceStore,check) {
+    async function* lines() { yield* fixture; }
+    return importSource.call(this,check,{lines:lines()});
+  });
+  const { elevationFor, elevationPinsFingerprint } = await import("./elevation");
+  const base = await elevationFor((await request(-121.6,-121.3)).units[0]!,"","",true);
+  const sample = vi.fn(async (coordinates:ReadonlyArray<readonly[number,number]>) => {
+    expect(coordinates.every(([,lat]) => lat <= 49)).toBe(true);
+    return coordinates.map(() => 100);
+  });
+  vi.mocked(elevationFor).mockImplementation(async (unit) => {
+    expect(areaBounds(unit.geometry)[3]).toBeLessThanOrEqual(49);
+    return {...base,sampler:{algorithmVersion:"fixture",sample}};
+  });
+  const result = await run(await plan({collectionIds:[],geometry:rectangle([-121.6,48.98,-121.3,49]),memoryLimitMiB:4096,offline:true}),context());
+  expect(sample).toHaveBeenCalled();
+  expect(vi.mocked(elevationPinsFingerprint).mock.calls.every(([,geometry]) => areaBounds(geometry)[3] <= 49)).toBe(true);
+  expect(await edges(result.snapshot!.dataVersion)).toHaveLength(2);
+  const inventory = JSON.parse(await readFile(path.join(root,"packs/local-coverage",result.snapshot!.dataVersion,"coverage-inventory.json"),"utf8")) as {crossingSegmentCount:number}[];
+  expect(inventory[0]?.crossingSegmentCount).toBe(1);
 });
 it("resumes a stopped metric transaction to the same final graph", async () => {
   const installation = await request(-121.27,-121.23);
