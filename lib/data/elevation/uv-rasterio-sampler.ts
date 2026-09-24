@@ -35,7 +35,7 @@ export async function validateUvRasterioPrerequisites(options: UvRasterioOptions
 }
 
 export const DEM_METRIC_ALGORITHM_VERSION = "usgs-3dep-13as-rasterio-bilinear+metrics-v3";
-export const PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION = "usgs-3dep-13as-rasterio-tile-owner+metrics-v4";
+export const PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION = "usgs-3dep-13as-rasterio-tile-owner+metrics-v5";
 export class UvRasterioThreeDepElevationSampler implements ElevationSampler {
   readonly algorithmVersion: string;
   readonly #collectionPath: string;

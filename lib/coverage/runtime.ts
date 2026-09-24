@@ -53,7 +53,7 @@ async function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["g
       for (const [x,y] of line) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y); }
     }
   }
-  return Number.isFinite(minX) ? rectangle([Math.floor(minX),Math.floor(minY),Math.floor(maxX)+1,Math.floor(maxY)+1]) : null;
+  return Number.isFinite(minX) ? rectangle([Math.floor(minX),Math.ceil(minY)-1,Math.floor(maxX)+1,Math.ceil(maxY)]) : null;
 }
 
 /** The same durable runner is used by the app and CLI; publication alone changes the active graph. */
@@ -121,7 +121,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     const metadata = await coverageNamedAreas({ geometry, collections: await collections(), sources: currentSources });
     const sources = metadata.sources;
     for (const source of sources) store!.putSource({ ...source, contentHash: source.contentHash as `sha256:${string}`, localPath: "" });
-    const sourceFingerprint = contentId({ sources, version: BUILD_VERSION });
+    const sourceFingerprint = contentId({ sources, version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION, topologyVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION });
     const unitIds = [...new Set([...(snapshot?.unitIds ?? []), ...prepared.map((unit) => unit.id)])].sort();
     const dataVersion = `coverage-${contentId({ geometry, sourceFingerprint, unitIds, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions }).slice(0, 24)}`;
     const createdAt = sources.map((source) => source.retrievedAt).sort().at(-1)!;

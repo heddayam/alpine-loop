@@ -124,26 +124,35 @@ it("uses the same raster identity when adjacent tiles arrive in reverse order", 
 });
 
 const rasterPython = path.resolve("tools/dem/.venv/bin/python");
-it.skipIf(!existsSync(rasterPython))("samples overlapping real rasters by half-open tile ownership, regardless of collection order", async () => {
+it.skipIf(!existsSync(rasterPython))("samples exact seams by north-west tile ownership, regardless of product order", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "coverage-dem-overlap-")); dirs.push(root);
+  const tiles=[
+    {name:"south",title:"n48w122",west:-122,north:48,value:100},
+    {name:"north",title:"n49w122",west:-122,north:49,value:200},
+    {name:"west",title:"n48w123",west:-123,north:48,value:300},
+    {name:"equator",title:"n00w122",west:-122,north:0,value:400},
+    {name:"negative",title:"s01w122",west:-122,north:-1,value:500},
+  ];
   execFileSync(rasterPython, ["-c", `
-import sys
+import sys, json
 import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
-for name, value in (("south", 100), ("north", 200)):
-    with rasterio.open(f"{sys.argv[1]}/{name}.tif", "w", driver="GTiff", width=40, height=40, count=1,
-                       dtype="float32", crs="EPSG:4326", transform=from_bounds(-122.5, 47.5, -121.5, 48.5, 40, 40)) as output:
-        output.write(np.full((40, 40), value, dtype="float32"), 1)
-`, root]);
-  const south = { title: "USGS 1/3 Arc Second n48w122 20260101", filePath: "south.tif" };
-  const north = { title: "USGS 1/3 Arc Second n49w122 20260101", filePath: "north.tif" };
-  const points = "-121.9 47.9\n-121.9 48.1\n-121.9 48.0\n";
-  for (const products of [[south, north], [north, south]]) {
-    const file = path.join(root, "collection.json");
-    await writeFile(file, JSON.stringify({ products }));
-    const output = execFileSync(rasterPython, [path.resolve("tools/dem/sample_dem.py"), "--collection", file, "--tile-owner"],
-      { input: points, encoding: "utf8" });
-    expect(output.trim().split("\n").map(Number)).toEqual([100, 200, 200]);
+for tile in json.loads(sys.argv[2]):
+    west, north = tile["west"], tile["north"]
+    with rasterio.open(f"{sys.argv[1]}/{tile['name']}.tif", "w", driver="GTiff", width=40, height=40, count=1,
+                       dtype="float32", crs="EPSG:4326", transform=from_bounds(west - .1, north - 1.1, west + 1.1, north + .1, 40, 40)) as output:
+        output.write(np.full((40, 40), tile["value"], dtype="float32"), 1)
+`, root, JSON.stringify(tiles)]);
+  const products=tiles.map(tile=>({title:`USGS 1/3 Arc Second ${tile.title} 20260101`,filePath:`${tile.name}.tif`}));
+  const points="-121.9 47.9\n-121.9 48.1\n-121.9 48\n-121.9 49\n-122.000001 47.9\n-122 47.9\n-121.9 0\n-121.9 -1\n-121.9 -0.999999\n-121.9 -1.000001\n";
+  const file=path.join(root,"collection.json");
+  const sample=(input:string)=>execFileSync(rasterPython,[path.resolve("tools/dem/sample_dem.py"),"--collection",file,"--tile-owner"],{input,encoding:"utf8"}).trim().split("\n");
+  for (const ordered of [products,[...products].reverse()]) {
+    await writeFile(file,JSON.stringify({products:ordered}));
+    expect(sample(points).map(Number)).toEqual([100,200,100,200,300,100,400,500,400,500]);
   }
+  // The n49 tile owns latitude49; its overlap at latitude48 cannot replace n48.
+  await writeFile(file,JSON.stringify({products:[products[1]]}));
+  expect(sample("-121.9 48\n-121.9 49\n")).toEqual(["nan","200.000000"]);
 });

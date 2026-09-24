@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandRunner } from "../osm/command";
 import { queryThreeDepProducts, threeDepQueryUrl } from "./products";
-import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION, UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
+import { DEM_METRIC_ALGORITHM_VERSION, PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION, UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
 
 const query = {
   endpoint: "https://tnmaccess.nationalmap.gov/api/v1/products",
@@ -52,6 +52,8 @@ describe("uv-managed Rasterio elevation sampling", () => {
       scriptPath: "/fixture/tools/dem/sample_dem.py",
       runner,
     });
+    expect(sampler.algorithmVersion).toBe(DEM_METRIC_ALGORITHM_VERSION);
+    expect(DEM_METRIC_ALGORITHM_VERSION).toContain("metrics-v3");
     await expect(sampler.sample([[-122.2, 37.2], [-122.1, 37.1]])).resolves.toEqual([314.25, null]);
   });
 

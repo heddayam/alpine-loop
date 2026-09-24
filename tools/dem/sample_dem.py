@@ -68,11 +68,11 @@ def sample(collection_path: Path, tile_owner: bool = False) -> None:
                 tile_datasets[tile] = dataset
         values: list[float | None] = [None] * len(points)
         if tile_owner:
-            # Half-open tile ownership assigns exact integer seams to the
-            # northern/eastern tile. Never use a neighboring raster as an
-            # order-dependent fallback.
+            # North-west raster origins own longitude [west, east) and latitude
+            # (south, north], including an exact northern coverage boundary.
+            # Never use a neighboring raster as an order-dependent fallback.
             for index, (lon, lat) in enumerate(points):
-                dataset = tile_datasets.get((math.floor(lon), math.floor(lat)))
+                dataset = tile_datasets.get((math.floor(lon), math.ceil(lat) - 1))
                 if dataset is None:
                     continue
                 bounds = dataset.bounds

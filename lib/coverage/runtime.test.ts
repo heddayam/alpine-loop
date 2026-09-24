@@ -12,6 +12,11 @@ import { installedSnapshot, plan, run } from "./runtime";
 import * as publisher from "@/lib/data/progressive/publish";
 import { CoverageResourceGuard } from "./resources";
 
+const algorithms=vi.hoisted(()=>({metricVersion:undefined as string|undefined}));
+vi.mock("@/lib/data/elevation/uv-rasterio-sampler",async importOriginal=>{
+  const actual=await importOriginal<typeof import("@/lib/data/elevation/uv-rasterio-sampler")>();
+  return {...actual,get PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION(){return algorithms.metricVersion??actual.PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION;}};
+});
 vi.mock("@/lib/data/osm/source", () => ({ readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: vi.fn(async () => "fixture-pins") }));
 vi.mock("./collections", async (importOriginal) => ({
@@ -23,6 +28,7 @@ const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", datase
 let root: string;
 const importSource = CoverageSourceStore.prototype.import;
 beforeEach(async () => {
+  algorithms.metricVersion=undefined;
   vi.clearAllMocks();
   root = await mkdtemp(path.join(tmpdir(), "coverage-runtime-"));
   vi.stubEnv("ALPINE_COVERAGE_ROOT", path.join(root, "stage"));
@@ -72,10 +78,27 @@ it("reuses verified segment metrics when expansion adds unrelated elevation pins
   expect(await edges(expanded.snapshot!.dataVersion)).toHaveLength(6);
 });
 
+it("publishes a fresh immutable generation when only the metric algorithm changes",async()=>{
+  algorithms.metricVersion="usgs-3dep-13as-rasterio-tile-owner+metrics-v4";
+  const installation=await request(-121.27,-121.23);
+  const before=await run(installation,context());
+  const previousEdges=await edges(before.snapshot!.dataVersion);
+  const manifestFor=async(version:string)=>JSON.parse(await readFile(path.join(root,"packs/local-coverage",version,"manifest.json"),"utf8"));
+  expect((await manifestFor(before.snapshot!.dataVersion)).metricAlgorithmVersion).toContain("metrics-v4");
+  algorithms.metricVersion=undefined;
+  const after=await run(installation,context());
+  expect(after.snapshot!.dataVersion).not.toBe(before.snapshot!.dataVersion);
+  expect(after.snapshot!.sourceFingerprint).not.toBe(before.snapshot!.sourceFingerprint);
+  expect((await manifestFor(after.snapshot!.dataVersion)).metricAlgorithmVersion).toContain("metrics-v5");
+  expect(await edges(after.snapshot!.dataVersion)).toEqual(previousEdges);
+});
+
 it("does not request border-external DEM for source segments excluded by the supported outer boundary", async () => {
   const fixture = [
     "n1 T x-121.55 y48.99", "n2 T x-121.45 y48.995", "n3 T x-121.4 y49.0019851",
+    "n4 T x-121.35 y49",
     "w101 Thighway=path,name=Border%20trail Nn1,n2,n3",
+    "w102 Thighway=path,name=Exact%20border%20endpoint Nn2,n4",
   ];
   vi.mocked(CoverageSourceStore.prototype.import).mockImplementation(function (this:CoverageSourceStore,check) {
     async function* lines() { yield* fixture; }
@@ -94,7 +117,8 @@ it("does not request border-external DEM for source segments excluded by the sup
   const result = await run(await plan({collectionIds:[],geometry:rectangle([-121.6,48.98,-121.3,49]),memoryLimitMiB:4096,offline:true}),context());
   expect(sample).toHaveBeenCalled();
   expect(vi.mocked(elevationPinsFingerprint).mock.calls.every(([,geometry]) => areaBounds(geometry)[3] <= 49)).toBe(true);
-  expect(await edges(result.snapshot!.dataVersion)).toHaveLength(2);
+  expect(sample.mock.calls.flatMap(([coordinates])=>coordinates).some(([,lat])=>lat===49)).toBe(true);
+  expect(await edges(result.snapshot!.dataVersion)).toHaveLength(4);
   const inventory = JSON.parse(await readFile(path.join(root,"packs/local-coverage",result.snapshot!.dataVersion,"coverage-inventory.json"),"utf8")) as {crossingSegmentCount:number}[];
   expect(inventory[0]?.crossingSegmentCount).toBe(1);
 });
