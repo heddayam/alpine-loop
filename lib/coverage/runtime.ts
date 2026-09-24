@@ -21,7 +21,7 @@ import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverag
 import { CoverageSourceStore } from "./source-store";
 import { describeCanonicalElevation, elevationCache, elevationFor, elevationPinsFingerprint } from "./elevation";
 import { cleanupCoverageGenerations } from "./retention";
-import { reconcileInventory } from "./inventory";
+import { classifyIntendedInventory, reconcileInventory } from "./inventory";
 import { coverageNamedAreas } from "./named-areas";
 import { CoverageResourceGuard } from "./resources";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as DEM_METRIC_ALGORITHM_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
@@ -216,6 +216,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
           : stage === "integrity-check" ? "Verifying source inventory" : "Verifying source checkpoints";
         await report(`${label}: ${source.config.dataset}`);
       } });
+      await report(`Classifying intended coverage: ${source.config.dataset}`);
+      await classifyIntendedInventory(raw, requestedCoverage, exclusions, check);
     }
     const requestedMetricArea = supportedCoverage ? await metricArea(rawStores, supportedCoverage, supportedCoverage, check) : null;
     const pinnedDem = requestedMetricArea ? await elevationPinsFingerprint(cacheRoot(), requestedMetricArea, demCache) : "no-trail-metrics";
