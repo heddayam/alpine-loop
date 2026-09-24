@@ -151,7 +151,7 @@ export class ProgressiveGraphStore {
     this.assertOpen();
     for (const row of this.database.prepare("SELECT record FROM edges ORDER BY id").iterate() as Iterable<{record:string}>) yield JSON.parse(row.record) as CompiledEdge;
   }
-  derivePortals(coverage: AreaGeometry): number { return deriveProgressivePortals(this,coverage); }
+  derivePortals(coverage: AreaGeometry, checkpoint?: () => Promise<void>): Promise<number> { return deriveProgressivePortals(this,coverage,checkpoint); }
   getReceipt(stage: string): StageReceipt | null {
     this.assertOpen();
     const row=this.database.prepare("SELECT stage,fingerprint,row_count AS rowCount,content_hash AS contentHash FROM receipts WHERE stage=?").get(stage);

@@ -34,6 +34,48 @@ function fixture() {
 }
 
 describe("progressive schema-6 publisher",()=>{
+  it("interrupts bounded portal, export, and traversal work, then replays without changing the active graph",async()=>{
+    const directory=mkdtempSync(path.join(tmpdir(),"progressive-interrupt-"));
+    const store=openProgressiveGraphStore({stagingPath:path.join(directory,"stage.sqlite"),buildIdentity:"interrupt-v1"});
+    try {
+      const {nodes,edges,points}=fixture();
+      stageSource(store);
+      store.transaction(()=>{
+        nodes.forEach(node=>store.putNode(node));edges.forEach(edge=>store.putEdge(edge));points.forEach(point=>store.putAccessPoint(point));
+        for(let index=0;index<=1100;index++) {
+          const id=`chain-${index}`,lon=index/100000;
+          store.putNode({...nodes[0]!,id,externalId:id,lon,lat:0.01});
+          if(index) for(const reverse of [false,true]) {
+            const from=`chain-${index-1}`,geometry:[number,number][]=[[(index-1)/100000,0.01],[lon,0.01]];
+            store.putEdge({...edges[0]!,id:`chain-edge-${index}-${reverse}`,stablePhysicalId:`chain-edge-${index}`,
+              fromNode:reverse?id:from,toNode:reverse?from:id,geometry:reverse?geometry.reverse():geometry});
+          }
+        }
+      });
+      const version=manifest("baseline",0.02),options={outputRoot:path.join(directory,"packs"),namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]};
+      await expect(store.derivePortals(version.coverage.boundary,async()=>{
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='trail_links'").get() &&
+          Number(store.database.prepare("SELECT count(*) AS n FROM trail_links").get()?.n)>0) throw new Error("pause portals");
+      })).rejects.toThrow("pause portals");
+      expect(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='portal_components'").get()).toBeUndefined();
+      await store.derivePortals(version.coverage.boundary);
+      const baseline=await publishProgressiveGraph(store,{...options,manifest:version});
+      const pointer=path.join(options.outputRoot,version.id,"current.json"),before=readFileSync(pointer,"utf8");
+      for(const target of ["Write covered graph","Derive global cycle feasibility"]) {
+        let stage="",checks=0;
+        await expect(publishProgressiveGraph(store,{...options,manifest:manifest("replacement",0.02),
+          onProgress:async value=>{await Promise.resolve();stage=value;},checkpoint:async()=>{
+            if(stage===target && ++checks===(target==="Derive global cycle feasibility"?3:2)) throw new Error(`pause ${target}`);
+          }})).rejects.toThrow(`pause ${target}`);
+        expect(readFileSync(pointer,"utf8")).toBe(before);
+        expect(readdirSync(path.dirname(pointer)).some(name=>name.startsWith(".staging-"))).toBe(false);
+      }
+      const replay=await publishProgressiveGraph(store,{...options,manifest:manifest("replacement",0.02)});
+      expect(replay.audit.topologyContentHash).toBe(baseline.audit.topologyContentHash);
+      expect(replay.audit.directedEdgeCount).toBe(baseline.audit.directedEdgeCount);
+    } finally {store.close();rmSync(directory,{recursive:true,force:true});}
+  });
+
   it("resumes a source union and recomputes cross-unit cycle access for expanded coverage",async()=>{
     const directory=mkdtempSync(path.join(tmpdir(),"progressive-pack-"));
     try {
@@ -118,7 +160,7 @@ describe("progressive schema-6 publisher",()=>{
       store.putWay({id:"street",externalId:"way/street",nodeIds:["road","a"],coordinates:[[0,-0.001],[0,0]],name:"Access Road",accessState:"public",bidirectional:true,edgeClass:"street",sourceRefs:["fixture"],flags:[]});
       store.putBuilding([0.0001,0]);
       const version=manifest("portal-v1",0.002);
-      expect(store.derivePortals(version.coverage.boundary)).toBe(1);
+      expect(await store.derivePortals(version.coverage.boundary)).toBe(1);
       const result=await publishProgressiveGraph(store,{outputRoot:path.join(directory,"packs"),manifest:version,
         namedAreas:[{id:"pack:progressive-fixture",name:version.name,kind:"pack",aliases:["Accessible pack"],bbox:version.coverage.bbox,geometry:version.coverage.boundary,sourceIds:["fixture"]}],
         searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]});
@@ -151,9 +193,9 @@ describe("progressive schema-6 publisher",()=>{
         store.putWay(roadWay);
         const outputRoot=path.join(root,"packs"),options={outputRoot,namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]};
         const firstManifest=manifest("partial",0.0015),secondManifest=manifest("complete",0.003);
-        expect(store.derivePortals(firstManifest.coverage.boundary)).toBe(1);
+        expect(await store.derivePortals(firstManifest.coverage.boundary)).toBe(1);
         const first=await publishProgressiveGraph(store,{...options,manifest:firstManifest});
-        expect(store.derivePortals(secondManifest.coverage.boundary)).toBe(1);
+        expect(await store.derivePortals(secondManifest.coverage.boundary)).toBe(1);
         const second=await publishProgressiveGraph(store,{...options,manifest:secondManifest});
         const firstDb=new DatabaseSync(first.databasePath,{readOnly:true}),secondDb=new DatabaseSync(second.databasePath,{readOnly:true});
         try {
@@ -187,10 +229,10 @@ describe("progressive schema-6 publisher",()=>{
       store.putWay({id:"island-street",externalId:"way/island-street",nodeIds:["island-road","island"],coordinates:[[0.005,-0.001],[0.005,0]],name:"Road",accessState:"public",bidirectional:true,edgeClass:"street",sourceRefs:["fixture"],flags:[]});
       const outputRoot=path.join(directory,"packs"),options={outputRoot,namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]};
       const firstManifest=manifest("without-island",0.002),secondManifest=manifest("with-island",0.006);
-      expect(store.derivePortals(firstManifest.coverage.boundary)).toBe(0);
+      expect(await store.derivePortals(firstManifest.coverage.boundary)).toBe(0);
       const first=await publishProgressiveGraph(store,{...options,manifest:firstManifest});
       expect(first.audit.accessPointCount).toBe(0);
-      expect(store.derivePortals(secondManifest.coverage.boundary)).toBe(1);
+      expect(await store.derivePortals(secondManifest.coverage.boundary)).toBe(1);
       const second=await publishProgressiveGraph(store,{...options,manifest:secondManifest});
       const db=new DatabaseSync(second.databasePath,{readOnly:true});
       try {
@@ -254,7 +296,7 @@ describe("progressive schema-6 publisher",()=>{
       const store=openProgressiveGraphStore({stagingPath:path.join(directory,"stage.sqlite"),buildIdentity:"fixture-v1"});
       stageSource(store);
       const version=manifest("empty-v1",0.002);
-      expect(store.derivePortals(version.coverage.boundary)).toBe(0);
+      expect(await store.derivePortals(version.coverage.boundary)).toBe(0);
       const result=await publishProgressiveGraph(store,{outputRoot:path.join(directory,"packs"),manifest:version,namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]});
       expect(result.audit).toMatchObject({nodeCount:0,directedEdgeCount:0,accessPointCount:0});
       const reader=new SQLiteClosedRouteFeasibilityRepository({databasePath:result.databasePath,manifest:version});

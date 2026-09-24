@@ -10,6 +10,7 @@ import { createPackSchema } from "../sqlite-writer";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNamedArea, NormalizedNode, NormalizedSearchRegion, PackAudit, PackBuildResult } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 import { writeProgressiveTopology } from "./topology";
+import { checkSQLiteIntegrity } from "../sqlite-integrity";
 
 export type ProgressivePublishOptions = {
   outputRoot: string;
@@ -19,7 +20,8 @@ export type ProgressivePublishOptions = {
   beforePublish?: (result: PackBuildResult) => void | Promise<void>;
   /** Serialize the final pointer switch with a caller-owned job-control transaction. */
   commitPublication?: (activate: () => Promise<void>) => Promise<void>;
-  onProgress?: (stage: string) => void;
+  onProgress?: (stage: string) => void | Promise<void>;
+  checkpoint?: () => Promise<void>;
 };
 
 function bounds(geometry: CompiledEdge["geometry"]): [number,number,number,number] {
@@ -29,12 +31,15 @@ function bounds(geometry: CompiledEdge["geometry"]): [number,number,number,numbe
 }
 
 /** Selects whole directed segments; the source union in the staging DB is never clipped. */
-export function selectProgressiveEdges(store: ProgressiveGraphStore, coverage: AreaGeometry): number {
+export async function selectProgressiveEdges(store: ProgressiveGraphStore, coverage: AreaGeometry, checkpoint: () => Promise<void> = async () => {}): Promise<number> {
+  let work=0;
+  await checkpoint();
   const db=store.database;
   db.exec("DROP TABLE IF EXISTS temp.selected_edges; CREATE TEMP TABLE selected_edges(id TEXT PRIMARY KEY) STRICT;");
   const add=db.prepare("INSERT INTO selected_edges VALUES (?)");
   let rejected=0;
   for (const edge of store.iterateEdges()) {
+    if (++work%1000===0) await checkpoint();
     if (edge.edgeClass !== "trail") continue;
     if (edgeInsideCoverage(edge,coverage)) add.run(edge.id);
     else rejected++;
@@ -42,7 +47,9 @@ export function selectProgressiveEdges(store: ProgressiveGraphStore, coverage: A
   return rejected;
 }
 
-function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>): {nodeCount:number;edgeCount:number;accessCount:number} {
+async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
+  let work=0;
+  await checkpoint();
   const stage=store.database;
   const assertRefs=(refs:readonly string[],id:string)=>{
     for(const sourceId of refs)if(!sourceIds.has(sourceId))throw new Error(`Unknown source ${sourceId} on ${id}`);
@@ -58,6 +65,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     const spatialNode=output.prepare("INSERT INTO node_spatial VALUES (?,?,?,?,?)");
     let nodeCount=0;
     for (const row of stage.prepare("SELECT n.record FROM nodes n JOIN used_nodes u ON u.id=n.id ORDER BY n.id").iterate() as Iterable<{record:string}>) {
+      if (++work%1000===0) await checkpoint();
       const node=JSON.parse(row.record) as NormalizedNode;
       if (node.elevationM===null) throw new Error(`Missing elevation for published node ${node.id}`);
       assertRefs(node.sourceRefs,node.id);
@@ -68,9 +76,11 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     const insertPhysical=output.prepare("INSERT INTO physical_edges VALUES (?,?,?,?,?)");
     let physicalCount=0;
     for (const row of stage.prepare("SELECT DISTINCT stable_physical_id AS id FROM edges WHERE id IN (SELECT id FROM selected_edges) ORDER BY stable_physical_id").iterate() as Iterable<{id:string}>) {
+      if (++work%1000===0) await checkpoint();
       const members=stage.prepare("SELECT record FROM edges WHERE stable_physical_id=? AND id IN (SELECT id FROM selected_edges) ORDER BY id").iterate(row.id) as Iterable<{record:string}>;
       let first: CompiledEdge|undefined, firstGeometry="", reverse="", firstKey=0,lastKey=0;
       for (const member of members) {
+        if (++work%1000===0) await checkpoint();
         const edge=JSON.parse(member.record) as CompiledEdge;
         const geometry=canonicalTopologyJson(edge.geometry);
         if (!first) {
@@ -92,6 +102,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
     const spatialEdge=output.prepare("INSERT INTO edge_spatial VALUES (?,?,?,?,?)");
     let edgeCount=0;
     for (const row of selected) {
+      if (++work%1000===0) await checkpoint();
       const edge=JSON.parse(row.record) as CompiledEdge;
       const metricValues=[edge.lengthM,edge.gainM,edge.lossM,edge.maxElevationM];
       if (!edge.edgeClass || !edge.elevationProfile || edge.elevationProfile.length<2 || metricValues.some((value)=>value===null||!Number.isFinite(value)) ||
@@ -121,6 +132,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
       ? stage.prepare("SELECT record FROM derived_portals WHERE coverage_hash=? ORDER BY id").iterate(coverageHash)
       : stage.prepare("SELECT record FROM access_points ORDER BY id").iterate();
     for (const row of accessRows as Iterable<{record:string}>) {
+      if (++work%1000===0) await checkpoint();
       const point=JSON.parse(row.record) as NormalizedAccessPoint;
       if (!(stage.prepare("SELECT 1 FROM used_nodes WHERE id=?").get(point.nodeId))) continue;
       assertRefs(point.sourceRefs,point.id);
@@ -130,6 +142,7 @@ function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverag
         point.knownConnectivity!,point.inclusiveConnectivity!,point.knownOutDegree!,point.inclusiveOutDegree!,point.nearbyBuildingCount!,point.reachableTrailKm!,point.trailComponentId!,point.portalRoadClass!,point.parkingDistanceM??null);
       accessCount++;
     }
+    await checkpoint();
     output.exec("COMMIT");
     return {nodeCount,edgeCount,accessCount};
   } catch(error) { output.exec("ROLLBACK");throw error; }
@@ -192,6 +205,8 @@ async function commitActivation(options:ProgressivePublishOptions,packRoot:strin
 }
 
 export async function publishProgressiveGraph(store:ProgressiveGraphStore,options:ProgressivePublishOptions):Promise<PackBuildResult> {
+  const checkpoint=options.checkpoint ?? (async () => {});
+  await checkpoint();
   const manifest=packManifestSchema.parse(options.manifest);
   verifyStagedSources(store,manifest);
   const packRoot=path.join(options.outputRoot,manifest.id),finalDir=path.join(packRoot,manifest.dataVersion);
@@ -206,11 +221,11 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
     if(audit.packId!==manifest.id||audit.dataVersion!==manifest.dataVersion)throw new Error("Existing pack audit identity differs");
     const db=new DatabaseSync(path.join(finalDir,"pack.sqlite"),{readOnly:true});
     try {
-      const integrity=db.prepare("PRAGMA integrity_check").get() as {integrity_check:string};
-      if(integrity.integrity_check!=="ok")throw new Error(`Existing pack integrity failed: ${integrity.integrity_check}`);
+      await checkSQLiteIntegrity(path.join(finalDir,"pack.sqlite"),db,checkpoint,"integrity_check");
       const meta=db.prepare("SELECT value FROM metadata WHERE key='topologyContentHash'").get() as {value:string}|undefined;
       if(!meta||meta.value!==audit.topologyContentHash)throw new Error("Existing pack topology hash differs from audit");
     } finally {db.close();}
+    await checkpoint();
     await commitActivation(options,packRoot,manifest.dataVersion);
     return {packDirectory:finalDir,databasePath:path.join(finalDir,"pack.sqlite"),manifestPath:path.join(finalDir,"manifest.json"),auditPath:path.join(finalDir,"audit.json"),audit,reusedExisting:true};
   }
@@ -218,8 +233,8 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
   await mkdir(staging);
   const databasePath=path.join(staging,"pack.sqlite");
   try {
-    options.onProgress?.("Select covered graph segments");
-    const rejected=selectProgressiveEdges(store,manifest.coverage.boundary);
+    await options.onProgress?.("Select covered graph segments");
+    const rejected=await selectProgressiveEdges(store,manifest.coverage.boundary,checkpoint);
     const sourceIds=new Set(manifest.sources.map(({id})=>id));
     const packArea={id:`pack:${manifest.id}`,name:manifest.name,kind:"pack" as const,aliases:[],bbox:areaGeometryBounds(manifest.coverage.boundary),geometry:manifest.coverage.boundary,sourceIds:[manifest.sources[0]!.id]};
     const providedAreas=options.namedAreas.some(({id})=>id===packArea.id)?options.namedAreas:[packArea,...options.namedAreas];
@@ -228,17 +243,17 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
     if(!options.searchRegions.length||options.searchRegions.some(({namedAreaId,displayOrder},i)=>!areaIds.has(namedAreaId)||displayOrder!==i)) throw new Error("Invalid ordered search regions");
     const db=new DatabaseSync(databasePath);
     let graph:{nodeCount:number;edgeCount:number;accessCount:number};
-    let topology:ReturnType<typeof writeProgressiveTopology>;
+    let topology:Awaited<ReturnType<typeof writeProgressiveTopology>>;
     try {
       db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;");
       createPackSchema(db);
-      options.onProgress?.("Write covered graph");
-      graph=insertGraph(store,db,topologySha256(manifest.coverage.boundary),sourceIds);
-      options.onProgress?.("Derive global cycle feasibility");
-      topology=writeProgressiveTopology(db,manifest);
+      await options.onProgress?.("Write covered graph");
+      graph=await insertGraph(store,db,topologySha256(manifest.coverage.boundary),sourceIds,checkpoint);
+      await options.onProgress?.("Derive global cycle feasibility");
+      topology=await writeProgressiveTopology(db,manifest,checkpoint);
       insertMetadata(db,manifest,areas,options.searchRegions,topology.hash);
-      const integrity=db.prepare("PRAGMA integrity_check").get() as {integrity_check:string};
-      if(integrity.integrity_check!=="ok") throw new Error(`SQLite integrity check failed: ${integrity.integrity_check}`);
+      await options.onProgress?.("Verify SQLite integrity");
+      await checkSQLiteIntegrity(databasePath,db,checkpoint,"integrity_check");
       const foreign=db.prepare("PRAGMA foreign_key_check").get();
       if(foreign) throw new Error("Published graph has broken foreign keys");
     } finally {db.close();}
@@ -251,6 +266,7 @@ export async function publishProgressiveGraph(store:ProgressiveGraphStore,option
     const result={packDirectory:staging,databasePath,manifestPath:path.join(staging,"manifest.json"),auditPath:path.join(staging,"audit.json"),audit,reusedExisting:false};
     await options.beforePublish?.(result);
     await rename(staging,finalDir);
+    await checkpoint();
     await commitActivation(options,packRoot,manifest.dataVersion);
     return {...result,packDirectory:finalDir,databasePath:path.join(finalDir,"pack.sqlite"),manifestPath:path.join(finalDir,"manifest.json"),auditPath:path.join(finalDir,"audit.json")};
   } catch(error) {await rm(staging,{recursive:true,force:true});throw error;}
