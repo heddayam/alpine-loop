@@ -96,6 +96,22 @@ Keys stay on the server. Apply changes with
 Trail and elevation data are local; map tiles, place suggestions, and drive-time
 filters use online services.
 
+### Progressive coverage
+
+Open **Coverage** next to **Settings** to select a collection or install a drawn area. Builds
+run in the background; you can pause, resume, cancel, or publish prepared
+sections while continuing to search the current installation. Adjacent sections
+share one routing graph. Named regions and drawn search areas still filter
+trailheads, rather than clipping routes.
+
+The Docker app includes the build tools and persists preparation in its runtime
+volume. Use `docker compose exec app npm run coverage -- catalog` for its CLI;
+native development uses `npm run coverage -- catalog`. Use the same app
+environment for builds and CLI controls so they share one writer and job store.
+See [coverage commands and acceptance status](docs/rebuild/progressive-coverage.md).
+Large-region feasibility is still under validation; the default 4 GiB setting
+is a monitored memory target, not a native OS limit.
+
 The app binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to change
 the port, or `ALPINE_BIND_ADDRESS=0.0.0.0` to allow access from your local network.
 
@@ -131,8 +147,9 @@ flowchart LR
     App --> Jobs["Saved searches · SQLite"]
 ```
 
-The builder prepares and validates regional data before activating a pack.
-The app reads packs without modifying them. A bounded pool of local processes
+The builder prepares and validates coverage before activating an immutable
+routing snapshot. Searches retain that snapshot while new coverage builds.
+A bounded pool of local processes
 runs Quick searches across packs and Full searches across trailheads, including
 within one pack, while keeping the interface and cancellation responsive.
 Quick search within a single pack retains its existing search budget.

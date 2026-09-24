@@ -54,16 +54,27 @@ ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     PORT=3000
 
+RUN apt-get update && apt-get install -y --no-install-recommends osmium-tool libgdal32 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=packs /usr/local/bin/uv /usr/local/bin/uv
+COPY --from=packs /opt/dem /opt/dem
+COPY --from=packs /opt/python /opt/python
+ENV UV_PROJECT_ENVIRONMENT=/opt/dem \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_NO_SYNC=1
+
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/data ./data
 COPY --from=build --chown=node:node /app/lib ./lib
+COPY --from=build --chown=node:node /app/scripts ./scripts
+COPY --from=build --chown=node:node /app/tools/dem ./tools/dem
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json /app/tsconfig.json ./
 
-RUN mkdir -p .local-data/packs .local-data/runtime \
-    && chown -R node:node .local-data
+RUN mkdir -p .local-data/packs .local-data/runtime .local-data/coverage .cache/sources \
+    && chown -R node:node .local-data .cache
 
 USER node
 

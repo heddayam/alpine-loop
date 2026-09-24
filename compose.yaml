@@ -32,9 +32,13 @@ services:
       ALPINE_PACK_ROOT: /app/.local-data/packs
       ALPINE_PROVIDER_USAGE_DB: /app/.local-data/runtime/provider-usage.sqlite
       ALPINE_ROUTE_JOBS_DB: /app/.local-data/runtime/route-jobs.sqlite
+      ALPINE_COVERAGE_ROOT: /app/.local-data/runtime/coverage
+      ALPINE_COVERAGE_JOBS_DB: /app/.local-data/runtime/coverage-jobs.sqlite
+      ALPINE_SOURCE_CACHE: /app/.cache/sources
     volumes:
-      - ./.local-data/packs:/app/.local-data/packs:ro
+      - ./.local-data/packs:/app/.local-data/packs
       - alpine-runtime:/app/.local-data/runtime
+      - ./.cache/sources:/app/.cache/sources
 
 volumes:
   alpine-runtime:
