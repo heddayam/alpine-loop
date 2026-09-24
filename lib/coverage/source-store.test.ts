@@ -1,7 +1,18 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { spawn, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { PassThrough } from "node:stream";
 import { CoverageSourceStore } from "./source-store";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import { rectangle } from "./geometry";
+
+vi.mock("node:child_process", async (original) => {
+  const actual = await original<typeof import("node:child_process")>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid/fixture", license: "fixture", contentHash: `sha256:${"1".repeat(64)}`, localPath: "/offline-fixture.osm.pbf" };
 const fixtures = [
@@ -17,10 +28,33 @@ const fixtures = [
 async function* lines(input = fixtures) { yield* input; }
 const stores: CoverageSourceStore[] = [];
 const make = () => { const store = new CoverageSourceStore(":memory:", source); stores.push(store); return store; };
-afterEach(() => { stores.splice(0).forEach((store) => store.close()); });
+const directories: string[] = [];
+afterEach(async () => {
+  stores.splice(0).forEach((store) => store.close());
+  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
 const area = rectangle([-1, -1, 4, 2]);
 
 describe("coverage source staging", () => {
+  it("interrupts a file-backed integrity child and resumes the source seal", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "coverage-quick-check-"));
+    directories.push(directory);
+    const store = new CoverageSourceStore(path.join(directory, "source.sqlite"), source);
+    stores.push(store);
+    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn() });
+    child.kill.mockImplementation(() => { queueMicrotask(() => child.emit("close", null, "SIGKILL")); return true; });
+    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ChildProcess);
+    let checking = false, checks = 0;
+    await expect(store.import(async () => {
+      if (checking && ++checks === 2) throw new Error("pause integrity check");
+    }, { lines: lines(), onStage: async (stage) => { if (stage === "integrity-check") checking = true; } })).rejects.toThrow("pause integrity check");
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+    expect(store.db.isTransaction).toBe(false);
+    expect(store.receipt("import-v2")).toBeUndefined();
+    await store.import(async () => {}, { lines: lines() });
+    expect(store.receipt("import-v2")).toBe("complete");
+  });
+
   it("resumes committed rows without rewriting them and preserves contextual trail/access rules", async () => {
     const store = make();
     await expect(store.import(async () => { throw new Error("paused"); }, { lines: lines(), batchSize: 4 })).rejects.toThrow("paused");

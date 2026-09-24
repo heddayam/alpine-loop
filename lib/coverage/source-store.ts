@@ -29,6 +29,40 @@ type NormalizedSeal = {
   counts: { ways: number; taggedNodes: number; relationBuildings: number };
   contentHash: string;
 };
+const SQLITE_CHECK = `const {DatabaseSync}=require("node:sqlite");
+const db=new DatabaseSync(process.argv[1],{readOnly:true});
+try { db.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
+  process.stdout.write(String(db.prepare("PRAGMA quick_check").get()?.quick_check ?? "no result")); }
+finally { db.close(); }`;
+
+/** Keep the worker responsive while SQLite scans a large, file-backed source. */
+async function quickCheck(file: string, db: DatabaseSync, checkpoint: () => Promise<void>): Promise<void> {
+  if (file === ":memory:") {
+    const result = db.prepare("PRAGMA quick_check").get() as { quick_check: string } | undefined;
+    if (result?.quick_check !== "ok") throw new Error(`Staged source failed SQLite quick_check: ${result?.quick_check ?? "no result"}`);
+    return;
+  }
+  const child = spawn(process.execPath, ["-e", SQLITE_CHECK, file], { stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "", stderr = "";
+  child.stdout!.on("data", (chunk: Buffer) => { stdout = (stdout + chunk.toString()).slice(-4096); });
+  child.stderr!.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-4096); });
+  let childError: Error | undefined;
+  let outcome: { code: number | null; reason: string } | undefined;
+  const ended = new Promise<void>((resolve) => {
+    child.once("error", (error) => { childError = error; });
+    child.once("close", (code, signal) => { outcome = { code, reason: childError?.message ?? signal ?? stderr.trim() }; resolve(); });
+  });
+  try {
+    while (!outcome) {
+      await checkpoint();
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    }
+    if (outcome.code !== 0) throw new Error(`Staged source SQLite quick_check failed: ${outcome.reason || `exit ${outcome.code}`}`);
+    if (stdout.trim() !== "ok") throw new Error(`Staged source failed SQLite quick_check: ${stdout.trim() || "no result"}`);
+  } finally {
+    if (!outcome) { child.kill("SIGKILL"); await ended; }
+  }
+}
 async function* sourceLines(file: string): AsyncGenerator<string> {
   const child = spawn("osmium", ["cat", file, "-f", "opl"], { stdio: ["ignore", "pipe", "pipe"] });
   let error = "";
@@ -144,8 +178,7 @@ export class CoverageSourceStore {
   }
   private async normalizedSeal(checkpoint:()=>Promise<void>): Promise<NormalizedSeal> {
     await checkpoint();
-    const integrity = this.db.prepare("PRAGMA quick_check").get() as {quick_check:string}|undefined;
-    if (integrity?.quick_check !== "ok") throw new Error(`Staged source failed SQLite quick_check: ${integrity?.quick_check ?? "no result"}`);
+    await quickCheck(this.path, this.db, checkpoint);
     await checkpoint();
     const hash = createHash("sha256");
     hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0`);
