@@ -18,7 +18,7 @@ import type { NormalizedWay, NormalizedNode, Coordinate } from "@/lib/data/types
 import type { CoverageRunnerContext, CoverageRunResult } from "@/lib/coverage-jobs/types";
 import { collections, coverageExclusions, coverageSources, legacyRegionIds, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
-import { CoverageSourceStore } from "./source-store";
+import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
 import { describeCanonicalElevation, elevationCache, elevationFor, elevationPinsFingerprint } from "./elevation";
 import { cleanupCoverageGenerations } from "./retention";
 import { classifyIntendedInventory, reconcileInventory } from "./inventory";
@@ -208,7 +208,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         if (plan.request.offline) throw error;
         return (await refreshPinnedOsmSnapshot(cacheRoot(), source.config)).snapshot;
       });
-      const raw = new CoverageSourceStore(path.join(root, `source-${input.contentHash.slice(7)}.sqlite`), input);
+      const raw = new CoverageSourceStore(path.join(root, sourceStoreFileName(input)), input);
       rawStores.push(raw);
       await report(`Inventorying ${source.config.dataset}`);
       await raw.import(check, { onStage: async (stage) => {

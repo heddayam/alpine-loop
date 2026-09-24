@@ -8,9 +8,10 @@ import { discoverCatalogPacks, legacyRoutingNeedsReview } from "@/lib/packs/pack
 import { inspectPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, unionCoverage } from "./geometry";
+import { NORMALIZATION_VERSION, sourceStoreFileName } from "./source-store";
 
 export const COVERAGE_PACK_ID = "local-coverage";
-export const COVERAGE_BUILD_VERSION = "progressive-v1";
+export const COVERAGE_BUILD_VERSION = `progressive-v1:${NORMALIZATION_VERSION}`;
 const exec = promisify(execFile);
 
 export async function installedSnapshot(): Promise<CoverageSnapshot | null> {
@@ -45,7 +46,7 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const cached = await Promise.all(sources.map(async ({config}) => {
     try {
       const snapshot = await inspectPinnedOsmSnapshot(cache,config);
-      const file = path.join(preparationRoot, `source-${snapshot.contentHash.slice(7)}.sqlite`);
+      const file = path.join(preparationRoot, sourceStoreFileName(snapshot));
       const preparationBytes = (await Promise.all(["", "-wal", "-shm"].map(async (suffix) => {
         try { return (await stat(`${file}${suffix}`)).size; } catch { return 0; }
       }))).reduce((sum, size) => sum + size, 0);

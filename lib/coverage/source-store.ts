@@ -22,7 +22,8 @@ function componentBounds(area: AreaGeometry, context: number): string {
 }
 const NORMALIZED_SEAL_KEY = "normalized-seal-v1";
 const UNSUPPORTED_SEAL_KEY = "unsupported-inventory-seal-v1";
-const NORMALIZATION_VERSION = "source-normalization-v2";
+export const NORMALIZATION_VERSION = "source-normalization-v3";
+export const sourceStoreFileName = (source: SourceSnapshot) => `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}.sqlite`;
 const RAW_BATCH_PREFIX = "raw-batch-v1:";
 const CHECKPOINT_ROWS = 10_000;
 const RAW_COLUMNS = { nodes: "id,lon,lat,tags", source_ways: "id,refs",

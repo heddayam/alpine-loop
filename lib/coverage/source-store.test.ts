@@ -281,7 +281,7 @@ describe("coverage source staging", () => {
     await store.import(async () => {}, { lines: lines() });
     const seal = JSON.parse(store.receipt("normalized-seal-v1")!) as {sourceHash:string;algorithmVersion:string;counts:{ways:number}};
     expect(seal.sourceHash).toBe(source.contentHash);
-    expect(seal.algorithmVersion).toBe("source-normalization-v2");
+    expect(seal.algorithmVersion).toBe("source-normalization-v3");
     expect(seal.counts.ways).toBeGreaterThan(0);
     store.db.prepare("UPDATE ways SET coordinates=? WHERE id='10'").run("[[99,99],[100,100]]");
     async function* forbidden(): AsyncGenerator<string> { throw new Error("raw import replayed"); }

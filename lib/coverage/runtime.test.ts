@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -64,6 +64,18 @@ it("expands separate requests into the same graph without losing their crossing 
   expect(await edges(first.snapshot!.dataVersion)).toHaveLength(2);
 });
 
+it("rebuilds source preparation under the new decoder without trusting or overwriting the old cache", async () => {
+  const stage = path.join(root, "stage");
+  await mkdir(stage, { recursive: true });
+  const oldCache = path.join(stage, `source-${source.contentHash.slice(7)}.sqlite`);
+  await writeFile(oldCache, "obsolete decoded records");
+  const result = await run(await request(-121.27, -121.23), context());
+  expect(result.status).toBe("completed");
+  expect(await edges(result.snapshot!.dataVersion)).toHaveLength(6);
+  expect(await readFile(oldCache, "utf8")).toBe("obsolete decoded records");
+  expect((await readdir(stage)).some(name => name.startsWith("source-source-normalization-v3-"))).toBe(true);
+});
+
 it("plans every selected collection and the drawing together without filling the space between them", async () => {
   const { collections } = await import("./collections");
   vi.mocked(collections).mockResolvedValueOnce([{ id: "fixture-area", name: "Fixture area", geometry: rectangle([-121.9,47.5,-121.8,47.6]), sourceIds: ["fixture"], limitations: [] }]);
@@ -110,8 +122,8 @@ it("does not request border-external DEM for source segments excluded by the sup
   const fixture = [
     "n1 T x-121.55 y48.99", "n2 T x-121.45 y48.995", "n3 T x-121.4 y49.0019851",
     "n4 T x-121.35 y49",
-    "w101 Thighway=path,name=Border%20trail Nn1,n2,n3",
-    "w102 Thighway=path,name=Exact%20border%20endpoint Nn2,n4",
+    "w101 Thighway=path,name=Border%20%trail Nn1,n2,n3",
+    "w102 Thighway=path,name=Exact%20%border%20%endpoint Nn2,n4",
   ];
   vi.mocked(CoverageSourceStore.prototype.import).mockImplementation(function (this:CoverageSourceStore,check) {
     async function* lines() { yield* fixture; }
