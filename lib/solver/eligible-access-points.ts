@@ -13,6 +13,7 @@ export type EligibleAccessPointQuery = {
   repository: GraphRepository;
   accessFilter: ResolvedAccessFilterContext;
   includeUncertainAccess: boolean;
+  startAccessPointId?: string;
   signal?: AbortSignal;
 };
 
@@ -89,11 +90,27 @@ export async function listEligibleAccessPointCandidates(
   matchedFilters: AccessPointCandidate[];
   noCycleExcluded: number;
 }> {
-  const all = await query.repository.getAccessPointCandidates({
-    bbox: areaBounds(query.accessFilter.coverage),
+  const coverageBounds = areaBounds(query.accessFilter.coverage);
+  const bbox = [...coverageBounds] as [number,number,number,number];
+  query.accessFilter.predicates.forEach((geometry,index) => {
+    const bounds=areaBounds(geometry);
+    const dy=index===query.accessFilter.namedRegionPredicateIndex ? PORTAL_NAMED_REGION_TOLERANCE_M/110_000 : 0;
+    const dx=dy/Math.max(0.00001,Math.cos(Math.min(90,Math.max(Math.abs(bounds[1]),Math.abs(bounds[3]))+dy)*Math.PI/180));
+    bbox[0]=Math.max(bbox[0],bounds[0]-dx);bbox[1]=Math.max(bbox[1],bounds[1]-dy);
+    bbox[2]=Math.min(bbox[2],bounds[2]+dx);bbox[3]=Math.min(bbox[3],bounds[3]+dy);
+  });
+  const all = bbox[0]>bbox[2] || bbox[1]>bbox[3] ? [] : await query.repository.getAccessPointCandidates({
+    bbox,
     includeUncertainAccess: true,
     signal: query.signal,
   });
+  // Preserve the distinction between a missing selected start and one outside
+  // the filter without loading every other start in the installed graph.
+  if (query.startAccessPointId && !all.some(point=>point.id===query.startAccessPointId)) {
+    const selected = await query.repository.getAccessPointCandidates({bbox:coverageBounds,accessPointId:query.startAccessPointId,includeUncertainAccess:true,signal:query.signal});
+    const point=selected.find(point=>point.id===query.startAccessPointId);
+    if(point)all.push(point);
+  }
   const matchedFilters = all
     .filter((candidate) => accessPointMatchesResolvedFilter(candidate, query.accessFilter))
     .filter((candidate) => accessPointIsEligible(candidate, query.includeUncertainAccess))

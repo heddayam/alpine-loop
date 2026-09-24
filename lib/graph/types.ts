@@ -31,6 +31,7 @@ export type AccessPointCandidate = GraphAccessPoint & {
 
 export type AccessPointCandidateQuery = {
   bbox: BoundingBox;
+  accessPointId?: string;
   includeUncertainAccess: boolean;
   signal?: AbortSignal;
 };

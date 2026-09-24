@@ -143,6 +143,7 @@ describe("SQLiteGraphRepository", () => {
     const repository = open();
     const candidates = await repository.getAccessPointCandidates({ bbox: [-0.001, -0.001, 0.001, 0.001], includeUncertainAccess: true });
     expect(candidates.map(({ id }) => id)).toEqual(["public-start"]);
+    expect((await repository.getAccessPointCandidates({bbox,includeUncertainAccess:true,accessPointId:"unknown-start"})).map(point=>point.id)).toEqual(["unknown-start"]);
     const query = { startNodeId: "s", maximumDistanceMeters: 10_000, maximumDirectedEdges: 10, includeUncertainAccess: true, coverage };
     const reachable = await repository.getReachableGraph(query);
     expect(reachable.graph.edges.map(({ id }) => id)).toEqual(["one-way", "unknown"]);

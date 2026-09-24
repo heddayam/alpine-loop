@@ -334,8 +334,9 @@ export class SQLiteGraphRepository implements GraphRepository {
        LEFT JOIN access_topology ON access_topology.access_point_id = access_points.id AND access_topology.profile = 'inclusive'
        WHERE node_spatial.min_lon <= ? AND node_spatial.max_lon >= ?
          AND node_spatial.min_lat <= ? AND node_spatial.max_lat >= ?
+         ${query.accessPointId === undefined ? "" : "AND access_points.id = ?"}
        ORDER BY access_points.id`,
-    ).all(east, west, north, south) as SqliteRow[];
+    ).all(east, west, north, south, ...(query.accessPointId === undefined ? [] : [query.accessPointId])) as SqliteRow[];
     return rows.flatMap((row) => {
       assertNotAborted(query.signal);
       const point = parseAccessPoint(row);

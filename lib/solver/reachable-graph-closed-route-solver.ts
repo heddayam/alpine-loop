@@ -331,6 +331,7 @@ export class ReachableGraphClosedRouteSolver {
       repository: context.repository,
       accessFilter: context.accessFilter,
       includeUncertainAccess: request.includeUncertainAccess,
+      startAccessPointId,
       signal: context.signal,
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
