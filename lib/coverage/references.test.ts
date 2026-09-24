@@ -91,3 +91,36 @@ it("keeps source-represented trails pending beyond the installed subset",async()
     expect(partial.installedLengthM+partial.pendingLengthM).toBeCloseTo(audit.installedLengthM+audit.pendingLengthM,6);
   } finally {rmSync(directory,{recursive:true,force:true});}
 });
+
+it.each(["index", "samples", "candidates"])("interrupts within reference %s work and replays without leaving temporary tables", async (phase) => {
+  const store=new CoverageSourceStore(":memory:",source);stores.push(store);
+  async function* lines() {
+    if(phase==="candidates") {
+      yield "n1 T x0 y0";yield "n2 T x0.002 y0.002";
+      for(let i=1;i<=1200;i++)yield `w${i} Thighway=path Nn1,n2`;
+      return;
+    }
+    const count=phase==="index"?1501:2;
+    for(let i=0;i<count;i++)yield `n${i+1} T x${i*0.000001} y0`;
+    yield `w1 Thighway=path N${Array.from({length:count},(_,i)=>`n${i+1}`).join(",")}`;
+  }
+  await store.import(async()=>{}, {lines:lines()});
+  const directory=mkdtempSync(path.join(tmpdir(),"reference-pause-"));
+  try {
+    const officialPath=path.join(directory,"reference.geojson");
+    writeFileSync(officialPath,JSON.stringify({type:"FeatureCollection",features:[{type:"Feature",properties:{permanentidentifier:"long",trailtype:"Terra Trail",hikerpedestrian:"Y"},geometry:{type:"LineString",coordinates:phase==="candidates"?[[0,0.0018],[0.000001,0.0018]]:[[0,0],[0.03,0]]}}]}));
+    const options={osm:store,coverage:rectangle([-0.1,-0.1,0.1,0.1]),officialSnapshot:{...source,id:"official",localPath:officialPath},sourceEnvelope:[-0.1,-0.1,0.1,0.1] as const,sampleStepM:1};
+    const expected=await auditOfficialTrailReferences(options);
+    let checks=0;
+    await expect(auditOfficialTrailReferences({...options,checkpoint:async()=>{
+      if(++checks===1)return;
+      const indexed=Number(store.db.prepare("SELECT count(*) AS n FROM reference_segments").get()!.n);
+      if(phase==="candidates"&&indexed<1200)return;
+      if(phase==="index"){expect(indexed).toBeGreaterThan(0);expect(indexed).toBeLessThan(1000);}
+      else expect(indexed).toBe(phase==="candidates"?1200:1);
+      throw new Error("pause");
+    }})).rejects.toThrow("pause");
+    expect(store.db.prepare("SELECT name FROM sqlite_temp_master WHERE name LIKE 'reference_%'").all()).toEqual([]);
+    expect(await auditOfficialTrailReferences(options)).toEqual(expected);
+  } finally {rmSync(directory,{recursive:true,force:true});}
+});
