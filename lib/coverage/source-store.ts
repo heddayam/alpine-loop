@@ -102,6 +102,7 @@ function outerRings(parts: string[][]): string[][] {
 /** Source inventory precedes installation clipping. One raw record at a time, with all reference joins on disk. */
 export class CoverageSourceStore {
   readonly db: DatabaseSync;
+  private spatialReady = false;
   constructor(readonly path: string, readonly source: SourceSnapshot) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
@@ -180,13 +181,19 @@ export class CoverageSourceStore {
     await checkpoint();
     await quickCheck(this.path, this.db, checkpoint);
     await checkpoint();
+    // Derived spatial state is rebuilt with the mandatory seal scan. A paused
+    // or corrupt cache cannot leave a trusted but incomplete persisted index.
+    this.db.exec("DROP TABLE IF EXISTS temp.ways_spatial; CREATE VIRTUAL TABLE temp.ways_spatial USING rtree(id,minx,maxx,miny,maxy)");
+    const spatial = this.db.prepare("INSERT INTO ways_spatial VALUES(?,?,?,?,?)");
     const hash = createHash("sha256");
     hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0`);
     const counts = { ways: 0, taggedNodes: 0, relationBuildings: 0 };
     const scan = async (kind: keyof typeof counts, sql: string) => {
       hash.update(`${kind}\0`);
       for (const row of this.db.prepare(sql).iterate() as Iterable<Record<string,unknown>>) {
-        const record = JSON.stringify(Object.values(row));
+        const { spatialRow, ...values } = row;
+        if (kind === "ways") spatial.run(Number(spatialRow), Number(row.minx), Number(row.maxx), Number(row.miny), Number(row.maxy));
+        const record = JSON.stringify(Object.values(values));
         hash.update(`${Buffer.byteLength(record)}:`);
         hash.update(record);
         counts[kind]++;
@@ -197,7 +204,7 @@ export class CoverageSourceStore {
     };
     // These are the immutable rows read by ways(), evidence(), and buildings().
     // Metrics and inventory dispositions are intentionally mutable and excluded.
-    await scan("ways", "SELECT id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id");
+    await scan("ways", "SELECT rowid AS spatialRow,id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id");
     await scan("taggedNodes", "SELECT id,lon,lat,tags FROM nodes WHERE tags!='' ORDER BY id");
     await scan("relationBuildings", "SELECT id,lon,lat FROM relation_buildings ORDER BY id");
     return { sourceHash: this.source.contentHash, algorithmVersion: NORMALIZATION_VERSION, counts, contentHash: `sha256:${hash.digest("hex")}` };
@@ -285,7 +292,8 @@ export class CoverageSourceStore {
   }
   async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number;
     onStage?: (stage:"checkpoint-verification"|"context-promotion"|"integrity-check")=>Promise<void> } = {}) {
-    if (this.receipt("import-v2")) { await options.onStage?.("integrity-check"); await this.verifyCompletedImport(checkpoint); return; }
+    this.spatialReady = false;
+    if (this.receipt("import-v2")) { await options.onStage?.("integrity-check"); await this.verifyCompletedImport(checkpoint); this.spatialReady = true; return; }
     if (this.receipt("import-lines-v2")) await options.onStage?.("checkpoint-verification");
     const verified=await this.verifyRawBatches(checkpoint);
     if (!this.receipt("raw-import-v2")) {
@@ -395,10 +403,19 @@ export class CoverageSourceStore {
       this.mark("import-v2");
       this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
+    this.spatialReady = true;
+  }
+  private *nearbyWays(area: AreaGeometry, contextDegrees=0.01): Generator<Row> {
+    if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
+    const [w,s,e,n]=areaBounds(area), bounds=[e+contextDegrees,w-contextDegrees,n+contextDegrees,s-contextDegrees];
+    // CROSS JOIN keeps the spatial lookup first; exact bounds remove RTree
+    // float32 rounding false positives without changing source-boundary behavior.
+    yield* this.db.prepare(`SELECT w.* FROM ways_spatial s CROSS JOIN ways w ON w.rowid=s.id
+      WHERE s.minx<=? AND s.maxx>=? AND s.miny<=? AND s.maxy>=?
+        AND w.minx<=? AND w.maxx>=? AND w.miny<=? AND w.maxy>=? ORDER BY w.id`).iterate(...bounds,...bounds) as Iterable<Row>;
   }
   *ways(area: AreaGeometry, contextDegrees=0.01): Generator<{way:NormalizedWay; nodes:NormalizedNode[]}> {
-    const [w,s,e,n]=areaBounds(area);
-    for(const raw of this.db.prepare("SELECT * FROM ways WHERE minx<=? AND maxx>=? AND miny<=? AND maxy>=? ORDER BY id").iterate(e+contextDegrees,w-contextDegrees,n+contextDegrees,s-contextDegrees)) {
+    for(const raw of this.nearbyWays(area,contextDegrees)) {
       const row=raw as Row;
       if(["building","evidence"].includes(row.kind)) continue;
       const tags=JSON.parse(row.tags) as Record<string,string>,direction=osmFootDirection(tags);
@@ -415,7 +432,7 @@ export class CoverageSourceStore {
       const row=raw as Node,tags=parseOplTags(row.tags);
       for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-node-${row.id}`,externalId:`node/${row.id}`,kind,name:tags.name??null,nodeIds:[`osm-node-${row.id}`],coordinates:[[row.lon,row.lat]],accessState:osmAccessState(tags),sourceRefs:[this.source.id]};
     }
-    for(const raw of this.db.prepare("SELECT * FROM ways WHERE minx<=? AND maxx>=? AND miny<=? AND maxy>=?").iterate(e+.01,w-.01,n+.01,s-.01)) {
+    for(const raw of this.nearbyWays(area)) {
       const row=raw as Row,tags=JSON.parse(row.tags) as Record<string,string>;
       for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-way-${row.id}`,externalId:`way/${row.id}`,kind,name:tags.name??null,nodeIds:(JSON.parse(row.refs) as string[]).map((id)=>`osm-node-${id}`),coordinates:JSON.parse(row.coordinates),accessState:osmAccessState(tags),sourceRefs:[this.source.id]};
     }
@@ -428,7 +445,7 @@ export class CoverageSourceStore {
       if (centroid) yield centroid;
     }
     for (const row of this.db.prepare("SELECT lon,lat FROM relation_buildings WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?").iterate(w-.01,e+.01,s-.01,n+.01)) yield [Number(row.lon), Number(row.lat)];
-    for(const raw of this.db.prepare("SELECT coordinates,tags FROM ways WHERE minx<=? AND maxx>=? AND miny<=? AND maxy>=?").iterate(e+.01,w-.01,n+.01,s-.01)) {
+    for(const raw of this.nearbyWays(area)) {
       if(!JSON.parse(String(raw.tags)).building) continue;
       const points=JSON.parse(String(raw.coordinates)) as [number,number][];
       const centroid = buildingCentroidOf({ type: "LineString", coordinates: points });

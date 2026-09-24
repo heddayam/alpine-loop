@@ -36,6 +36,44 @@ afterEach(async () => {
 const area = rectangle([-1, -1, 4, 2]);
 
 describe("coverage source staging", () => {
+  it("uses exact source bounds after spatial lookup, including boundary contacts and context", async () => {
+    const store = make();
+    await store.import(async () => {}, { lines: lines([
+      "n1 T x-121.0000001 y48", "n2 T x-120.9999999 y48",
+      "n3 T x-120.9999998 y48", "n4 T x-120.9999997 y48",
+      "n5 T x-121.009 y48", "n6 T x-121.008 y48",
+      "w30 Thighway=path Nn3,n4", "w10 Thighway=path Nn1,n2", "w20 Thighway=path Nn5,n6",
+    ]) });
+    const bounds = rectangle([-121.0000001,47.9,-120.9999999,48.1]);
+    expect([...store.ways(bounds,0)].map(({way})=>way.externalId)).toEqual(["way/10"]);
+    expect([...store.ways(bounds)].map(({way})=>way.externalId)).toEqual(["way/10","way/20","way/30"]);
+    const plan=store.db.prepare(`EXPLAIN QUERY PLAN SELECT w.id FROM ways_spatial s CROSS JOIN ways w ON w.rowid=s.id
+      WHERE s.minx<=? AND s.maxx>=? AND s.miny<=? AND s.maxy>=? ORDER BY w.id`).all(-121,-122,49,47);
+    expect(plan[0]?.detail).toContain("VIRTUAL TABLE INDEX");
+    expect(plan[1]?.detail).toContain("INTEGER PRIMARY KEY");
+  });
+
+  it("rebuilds interrupted and damaged derived spatial state without changing sealed source results", async () => {
+    const store = make();
+    await store.import(async () => {}, { lines: lines([...fixtures,
+      "w40 Tbuilding=yes Nn1,n2,n3,n4,n1", "w41 Tamenity=parking Nn1,n2,n3,n4,n1",
+    ]) });
+    const results=()=>({ways:[...store.ways(area)],buildings:[...store.buildings(area)],evidence:[...store.evidence(area)]});
+    const before=results(), seal=store.receipt("normalized-seal-v1");
+    store.db.exec("DROP TABLE temp.ways_spatial");
+    await expect(store.import(async()=>{
+      if (store.db.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='ways_spatial'").get() &&
+        Number(store.db.prepare("SELECT count(*) AS n FROM ways_spatial").get()?.n)>0) throw new Error("spatial initialization paused");
+    })).rejects.toThrow("spatial initialization paused");
+    expect(()=>[...store.ways(area)]).toThrow("completed verified import");
+    await store.import(async()=>{});
+    expect(results()).toEqual(before);
+    expect(store.receipt("normalized-seal-v1")).toBe(seal);
+    store.db.exec("DELETE FROM ways_spatial WHERE id=(SELECT min(id) FROM ways_spatial)");
+    await store.import(async()=>{});
+    expect(results()).toEqual(before);
+  });
+
   it("interrupts a file-backed integrity child and resumes the source seal", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "coverage-quick-check-"));
     directories.push(directory);
