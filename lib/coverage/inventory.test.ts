@@ -132,3 +132,37 @@ it("accounts for intended pending trails and policy exclusions separately from p
     });
   } finally { raw.close(); graph.close(); rmSync(directory, {recursive:true,force:true}); }
 });
+
+it("preserves exact exclusion boundaries, holes, and crossings across disjoint exclusion envelopes",async()=>{
+  const source:SourceSnapshot={id:"fixture",authority:"fixture",dataset:"fixture",version:"1",retrievedAt:"2026-09-24",url:"https://example.invalid",license:"CC0",localPath:"unused",contentHash:`sha256:${"1".repeat(64)}`};
+  const raw=new CoverageSourceStore(":memory:",source);
+  try {
+    const segments=[
+      [[2,0.2],[2,0.8]], // Boundary overlap.
+      [[1.5,0.5],[3.5,0.5]], // Both endpoints outside; segment crosses exclusion.
+      [[2-1e-11,0.2],[2-1e-11,0.8]], // Retain the exact predicate's boundary tolerance.
+      [[20.2,0.5],[20.8,0.5]], // A separate exclusion outside the intended area.
+      [[-1,0.5],[-0.5,0.5]], // Distant from all exclusions.
+      [[2.3,0.5],[2.7,0.5]], // Inside a hole, despite overlapping the envelope.
+    ];
+    async function* lines(){
+      for(let index=0;index<segments.length;index++) {
+        for(let end=0;end<2;end++) {const [x,y]=segments[index]![end]!;yield `n${index*2+end+1} T x${x} y${y}`;}
+        yield `w${index+1} Thighway=path Nn${index*2+1},n${index*2+2}`;
+      }
+    }
+    await raw.import(async()=>{}, {lines:lines()});
+    const holed=rectangle([2,0,3,1]);
+    if(holed.type!=="Polygon")throw new Error("Expected fixture polygon");
+    holed.coordinates.push([[2.25,0.25],[2.25,0.75],[2.75,0.75],[2.75,0.25],[2.25,0.25]]);
+    await classifyIntendedInventory(raw,rectangle([-2,-1,4,2]),[{id:"near",geometry:holed},{id:"far",geometry:rectangle([20,0,21,1])}]);
+    expect(raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all()).toEqual([
+      {id:"way/1",disposition:"excluded",reason:"intentionally-excluded:near"},
+      {id:"way/2",disposition:"pending",reason:"partially-intentionally-excluded"},
+      {id:"way/3",disposition:"excluded",reason:"intentionally-excluded:near"},
+      {id:"way/4",disposition:"excluded",reason:"intentionally-excluded:far"},
+      {id:"way/5",disposition:"pending",reason:"pending-installation"},
+      {id:"way/6",disposition:"pending",reason:"pending-installation"},
+    ]);
+  } finally {raw.close();}
+});

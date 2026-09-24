@@ -1,8 +1,15 @@
-import { areaBounds, coordinateIsInsideArea, lineIsInsideArea, segmentIntersectsArea } from "@/lib/graph/geometry";
+import { areaBounds, coordinateIsInsideArea, lineIsInsideArea, segmentIntersectsArea, type BoundingBox } from "@/lib/graph/geometry";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { ProgressiveGraphStore } from "@/lib/data/progressive/store";
 import type { CoverageSourceStore } from "./source-store";
 import { unionCoverage } from "./geometry";
+
+/** Keep exact predicates near boundaries; reject only clearly disjoint envelopes. */
+function mayIntersect(from: readonly [number,number], to: readonly [number,number], bounds: BoundingBox): boolean {
+  const padding=0.0001;
+  return Math.max(from[0],to[0])>=bounds[0]-padding && Math.min(from[0],to[0])<=bounds[2]+padding
+    && Math.max(from[1],to[1])>=bounds[1]-padding && Math.min(from[1],to[1])<=bounds[3]+padding;
+}
 
 /** Classify the broader request once per source import, not once per publication. */
 export async function classifyIntendedInventory(raw: CoverageSourceStore, intended: AreaGeometry,
@@ -11,6 +18,7 @@ export async function classifyIntendedInventory(raw: CoverageSourceStore, intend
   let steps = 0;
   const queried = exclusions.length ? unionCoverage([intended, ...exclusions.map((item) => item.geometry)]) : intended;
   const excluded = exclusions.length ? unionCoverage(exclusions.map((item) => item.geometry)) : null;
+  const boundedExclusions=exclusions.map(item=>({...item,bounds:areaBounds(item.geometry)}));
   const record = raw.db.prepare("UPDATE inventory SET disposition=?,reason=? WHERE id=?");
   for (const {way} of raw.ways(queried, 0)) {
     if (++steps % 1000 === 0) await checkpoint();
@@ -22,8 +30,13 @@ export async function classifyIntendedInventory(raw: CoverageSourceStore, intend
       const line = way.coordinates.slice(segment - 1, segment + 1);
       intendedIntersection ||= segmentIntersectsArea(line[0]!, line[1]!, intended);
       if (excluded) {
-        for (const item of exclusions) if (segmentIntersectsArea(line[0]!, line[1]!, item.geometry)) exclusionIds.add(item.id);
-        whollyExcluded &&= lineIsInsideArea(line, excluded);
+        let nearExclusion=false;
+        for (const item of boundedExclusions) {
+          if (!mayIntersect(line[0]!,line[1]!,item.bounds)) continue;
+          nearExclusion=true;
+          if (segmentIntersectsArea(line[0]!,line[1]!,item.geometry)) exclusionIds.add(item.id);
+        }
+        whollyExcluded &&= nearExclusion && lineIsInsideArea(line, excluded);
       }
     }
     if (whollyExcluded) record.run("excluded", `intentionally-excluded:${[...exclusionIds].sort().join(",")}`, way.externalId);
