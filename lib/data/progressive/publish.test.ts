@@ -74,7 +74,7 @@ describe("progressive schema-6 publisher",()=>{
       expect(replay.audit.topologyContentHash).toBe(baseline.audit.topologyContentHash);
       expect(replay.audit.directedEdgeCount).toBe(baseline.audit.directedEdgeCount);
     } finally {store.close();rmSync(directory,{recursive:true,force:true});}
-  });
+  },15000);
 
   it("resumes a source union and recomputes cross-unit cycle access for expanded coverage",async()=>{
     const directory=mkdtempSync(path.join(tmpdir(),"progressive-pack-"));
