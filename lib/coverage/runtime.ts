@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { setImmediate } from "node:timers/promises";
 import { type CoveragePlan, type CoverageSnapshot, type CoverageUnit, type PackManifest } from "@/lib/contracts";
 import { areaBounds, lineIsInsideArea } from "@/lib/graph/geometry";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
@@ -39,12 +40,13 @@ function segmentTouches(line: Coordinate[], [west,south,east,north]: readonly nu
 }
 
 /** Whole eligible segments can cross installation seams but not the supported outer boundary. */
-function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["geometry"], eligible: CoverageUnit["geometry"]): CoverageUnit["geometry"] | null {
+async function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["geometry"], eligible: CoverageUnit["geometry"], checkpoint: () => Promise<void>): Promise<CoverageUnit["geometry"] | null> {
   const bounds=areaBounds(geometry);
-  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity, steps=0;
   for (const raw of raws) for (const {way} of raw.ways(geometry)) {
     if (way.edgeClass !== "trail") continue;
     for (let index=1;index<way.coordinates.length;index++) {
+      if (++steps % 1000 === 0) await checkpoint();
       const line=way.coordinates.slice(index-1,index+1);
       if (!segmentTouches(line,bounds) || !lineIsInsideArea(line,eligible)) continue;
       for (const [x,y] of line) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y); }
@@ -65,11 +67,12 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
   let inputFingerprint = "";
   let stageKey = "";
   let demFingerprint = "";
-  const unitContents = (id: string) => {
+  const unitContents = async (id: string) => {
     const hash = createHash("sha256");
     let rowCount = 0;
     for (const row of store!.database.prepare("SELECT e.id,e.record FROM edges e JOIN unit_edges u ON u.edge=e.id WHERE u.unit=? ORDER BY e.id").iterate(id) as Iterable<{id:string;record:string}>) {
       hash.update(`${row.id.length}:${row.id}${row.record.length}:${row.record}`); rowCount++;
+      if (rowCount % 1000 === 0) await check();
     }
     return { rowCount, contentHash: hash.digest("hex") };
   };
@@ -87,6 +90,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
   const resources = new CoverageResourceGuard({ memoryLimitBytes: plan.request.memoryLimitMiB * 1024 ** 2, diskPaths: [root, localPackRoot()] });
   resources.start();
   const check = async () => {
+    await setImmediate();
     await resources.checkpoint();
     const control = await context.checkpoint();
     if (context.signal.aborted || control === "pause" || control === "cancel") throw new Error("Coverage build interrupted at a checkpoint");
@@ -103,8 +107,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     await check();
     const geometry = unionCoverage([...(snapshot ? [snapshot.geometry] : []), ...prepared.map((unit) => unit.geometry)]);
     await report("Recomputing combined trailheads and connectivity");
-    store!.derivePortals(geometry);
-    const publishedMetricArea = metricArea(rawStores,geometry,geometry);
+    await store!.derivePortals(geometry, check);
+    const publishedMetricArea = await metricArea(rawStores,geometry,geometry,check);
     const finalElevation = publishedMetricArea ? await describeCanonicalElevation(publishedMetricArea, cacheRoot(), root, demCache) : null;
     demFingerprint = finalElevation?.productFingerprint ?? "no-trail-metrics";
     if (finalElevation) store!.putSource(finalElevation.source);
@@ -129,12 +133,13 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       fieldConfidence: { topology: "high", access: "medium", elevation: "high" }, sources,
       closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, policyVersion: "closed-route-decision-graph-v1", profiles: ["known", "inclusive"] } };
     await report("Auditing and publishing installed coverage");
-    const inventory = rawStores.map((raw) => reconcileInventory(raw, store!, geometry));
+    const inventory: Awaited<ReturnType<typeof reconcileInventory>>[] = [];
+    for (const raw of rawStores) inventory.push(await reconcileInventory(raw, store!, geometry, check));
     const references: OfficialReferenceAudit[] = [];
     for (const raw of rawStores) {
       const applicable = referenceSources.filter((reference) => reference.osmId === raw.source.id && intersectCoverage(requestedCoverage, rectangle(reference.envelope)));
-      if (!applicable.length) references.push(await auditOfficialTrailReferences({ osm: raw, coverage: requestedCoverage, installedCoverage: geometry }));
-      for (const reference of applicable) references.push(await auditOfficialTrailReferences({ osm: raw, coverage: requestedCoverage, installedCoverage: geometry, officialSnapshot: reference.snapshot, sourceEnvelope: reference.envelope }));
+      if (!applicable.length) references.push(await auditOfficialTrailReferences({ checkpoint: check, osm: raw, coverage: requestedCoverage, installedCoverage: geometry }));
+      for (const reference of applicable) references.push(await auditOfficialTrailReferences({ checkpoint: check, osm: raw, coverage: requestedCoverage, installedCoverage: geometry, officialSnapshot: reference.snapshot, sourceEnvelope: reference.envelope }));
     }
     const frontierCount = inventory.reduce((count, item) => count + item.frontierCount, 0);
     const crossingCount = inventory.reduce((count, item) => count + item.crossingSegmentCount, 0);
@@ -147,7 +152,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       ...(referenceGaps ? [`${referenceGaps} independent reference features have unresolved source coverage differences; installation completeness does not resolve these source limitations.`] : []),
       ...(references.some(item => item.status !== "audited") ? ["Independent reference data does not cover the entire installed area."] : []),
     ];
-    await publishProgressiveGraph(store!, { outputRoot: localPackRoot(), manifest, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions,
+    await publishProgressiveGraph(store!, { checkpoint: check, onProgress: report, outputRoot: localPackRoot(), manifest, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions,
       commitPublication: async (activate) => {
         await check();
         const lockedActivate = () => withGenerationLock(localPackRoot(), async () => { await activate(); });
@@ -210,7 +215,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         await report(`${label}: ${source.config.dataset}`);
       } });
     }
-    const requestedMetricArea = supportedCoverage ? metricArea(rawStores, supportedCoverage, supportedCoverage) : null;
+    const requestedMetricArea = supportedCoverage ? await metricArea(rawStores, supportedCoverage, supportedCoverage, check) : null;
     const pinnedDem = requestedMetricArea ? await elevationPinsFingerprint(cacheRoot(), requestedMetricArea, demCache) : "no-trail-metrics";
     const durable = (source: SourceSnapshot) => {
       const record = { ...source };
@@ -240,7 +245,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
           installedGeneration = { inputFingerprint: marker.inputFingerprint, demFingerprint: marker.demFingerprint, stageKey: marker.stageKey };
       } catch { /* Older or invalid metadata requires rebuilding the installed union. */ }
     }
-    const priorMetricArea = snapshot ? metricArea(rawStores,snapshot.geometry,snapshot.geometry) : null;
+    const priorMetricArea = snapshot ? await metricArea(rawStores,snapshot.geometry,snapshot.geometry,check) : null;
     const priorDemFingerprint = snapshot
       ? priorMetricArea ? (await describeCanonicalElevation(priorMetricArea, cacheRoot(), root, demCache))?.productFingerprint ?? "no-trail-metrics" : "no-trail-metrics"
       : null;
@@ -268,7 +273,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     store.database.exec("CREATE TABLE IF NOT EXISTS unit_edges(unit TEXT NOT NULL,edge TEXT NOT NULL,PRIMARY KEY(unit,edge)) STRICT");
     if (compatible && snapshot) for (const id of snapshot.unitIds) {
       const receipt = store.getReceipt(`unit:${id}`);
-      const actual = unitContents(id);
+      const actual = await unitContents(id);
       if (!receipt || receipt.rowCount !== actual.rowCount || receipt.contentHash !== actual.contentHash)
         throw new Error(`Installed staging checkpoint ${id} failed verification; active coverage remains unchanged`);
     }
@@ -281,7 +286,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       const receipt = store.getReceipt(`unit:${unit.id}`);
       if (context.publishOnly && !receipt) continue;
       const unitBounds = areaBounds(unit.geometry);
-      const requiredDem = supportedCoverage ? metricArea(rawStores,unit.geometry,supportedCoverage) : null;
+      const requiredDem = supportedCoverage ? await metricArea(rawStores,unit.geometry,supportedCoverage,check) : null;
       const elevation = requiredDem ? await elevationFor({...unit,geometry:requiredDem}, cacheRoot(), root, plan.request.offline, demCache) : null;
       if (elevation) store.putSource(elevation.source);
       const fingerprint = contentId({ inputFingerprint, elevation: elevation?.productFingerprint ?? "no-trail-metrics", unit: unit.id });
@@ -301,7 +306,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
           }
           for (const evidence of raw.evidence(unit.geometry)) store.putPortalEvidence(evidence);
         }
-        const actual = unitContents(unit.id);
+        const actual = await unitContents(unit.id);
         if (receipt.rowCount !== actual.rowCount || receipt.contentHash !== actual.contentHash) {
           throw new Error(`Installation checkpoint ${unit.id} failed verification`);
         }
@@ -363,7 +368,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
           await flush();
           for (const evidence of raw.evidence(unit.geometry)) store.putPortalEvidence(evidence);
         }
-        store.putReceipt({ stage: `unit:${unit.id}`, fingerprint, ...unitContents(unit.id) });
+        store.putReceipt({ stage: `unit:${unit.id}`, fingerprint, ...await unitContents(unit.id) });
         unit.status = "prepared"; prepared.push(unit);
         await report(`Prepared ${unit.id}`);
       }
