@@ -9,6 +9,7 @@ import type { CoverageRunnerContext } from "@/lib/coverage-jobs/types";
 import { CoverageSourceStore } from "./source-store";
 import { rectangle, subtractCoverage } from "./geometry";
 import { installedSnapshot, plan, run } from "./runtime";
+import { ProgressiveGraphStore } from "@/lib/data/progressive/store";
 import * as publisher from "@/lib/data/progressive/publish";
 import { CoverageResourceGuard } from "./resources";
 
@@ -310,6 +311,17 @@ it("publishes West Cady, wholly omitted Pilchuck, and the formerly cut road appr
 it.each(["roads", "buildings", "evidence"])("pauses during large %s context ingestion and resumes without a premature unit receipt", async kind => {
   const installation = await request(-121.27,-121.25);
   const first = await run(installation,context());
+  const nodeWrites=vi.spyOn(ProgressiveGraphStore.prototype,"putNode");
+  const buildingWrites=vi.spyOn(ProgressiveGraphStore.prototype,"putBuilding");
+  const transaction=ProgressiveGraphStore.prototype.transaction;
+  const contextBatches:number[]=[];
+  vi.spyOn(ProgressiveGraphStore.prototype,"transaction").mockImplementation(function<T>(this:ProgressiveGraphStore,action:()=>T):T {
+    const before=nodeWrites.mock.calls.length+buildingWrites.mock.calls.length;
+    const result=transaction.call(this,action) as T;
+    const writes=nodeWrites.mock.calls.length+buildingWrites.mock.calls.length-before;
+    if(writes)contextBatches.push(writes);
+    return result;
+  });
   const fixture = (await readFile(source.localPath,"utf8")).trim().split("\n");
   for (let i=0;i<1501;i++) {
     const id=1000+i, lon=-121.26+(kind==="buildings"?i%100*0.00002:i*0.000001);
@@ -343,6 +355,11 @@ it.each(["roads", "buildings", "evidence"])("pauses during large %s context inge
     return "continue";
   }})).rejects.toThrow("checkpoint");
   expect(interruptedRows).toBeGreaterThan(0);
+  if(kind!=="evidence") {
+    expect(contextBatches.some(count=>count>1)).toBe(true);
+    expect(Math.max(...contextBatches)).toBeLessThanOrEqual(1000);
+    expect(contextBatches.reduce((sum,count)=>sum+count,0)).toBe(nodeWrites.mock.calls.length+buildingWrites.mock.calls.length);
+  }
   expect((await installedSnapshot())!.dataVersion).toBe(first.snapshot!.dataVersion);
   const resumed=await run(installation,context());
   const actual=await edges(resumed.snapshot!.dataVersion);

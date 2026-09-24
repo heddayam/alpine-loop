@@ -14,7 +14,7 @@ import { publishProgressiveGraph } from "@/lib/data/progressive/publish";
 import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics";
 import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import { applyRestriction, readCuratedAccessFile } from "@/lib/data/curated-access";
-import type { NormalizedWay, Coordinate } from "@/lib/data/types";
+import type { NormalizedWay, NormalizedNode, Coordinate } from "@/lib/data/types";
 import type { CoverageRunnerContext, CoverageRunResult } from "@/lib/coverage-jobs/types";
 import { collections, coverageExclusions, coverageSources, legacyRegionIds, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
@@ -177,7 +177,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     catch (error) { await report(`Old generations retained: ${(error as Error).message}`); }
   };
   try {
-    const restrictions = [];
+    const restrictions: Awaited<ReturnType<typeof readCuratedAccessFile>>[] = [];
     for (const region of legacyRegionIds) {
       try { restrictions.push(await readCuratedAccessFile(path.resolve(`data/regions/${region}/access-restrictions.json`))); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
@@ -290,6 +290,44 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       const receipt = store.getReceipt(`unit:${unit.id}`);
       if (context.publishOnly && !receipt) continue;
       let contextRows = 0;
+      const stageBuildings = async (raw: CoverageSourceStore) => {
+        const buildings = raw.buildings(unit.geometry);
+        let next = buildings.next();
+        while (!next.done) {
+          store!.transaction(() => {
+            for (let count = 0; count < 1000 && !next.done; count++) {
+              store!.putBuilding(next.value);
+              next = buildings.next();
+            }
+          });
+          await check();
+        }
+      };
+      const stageWays = async function* (raw: CoverageSourceStore) {
+        const ways = raw.ways(unit.geometry);
+        let next = ways.next();
+        while (!next.done) {
+          const batch: {way: NormalizedWay; nodes: NormalizedNode[]}[] = [];
+          let nodes = 0;
+          do {
+            const item = next.value;
+            let way = item.way;
+            for (const source of restrictions) {
+              const restriction = source.restrictions.find((entry) => entry.externalId === way.externalId);
+              if (restriction) way = applyRestriction(way, restriction, source.snapshot.id);
+            }
+            batch.push({way, nodes: item.nodes});
+            nodes += Math.max(1, item.nodes.length);
+            next = ways.next();
+          } while (!next.done && nodes + Math.max(1, next.value.nodes.length) <= 1000);
+          store!.transaction(() => {
+            for (const item of batch) { for (const node of item.nodes) store!.putNode(node); store!.putWay(item.way); }
+          });
+          await check();
+          // Commit context before yielding: metric flushes open their own transactions.
+          for (const item of batch) yield item.way;
+        }
+      };
       const unitBounds = areaBounds(unit.geometry);
       const requiredDem = supportedCoverage ? await metricArea(rawStores,unit.geometry,supportedCoverage,check) : null;
       const elevation = requiredDem ? await elevationFor({...unit,geometry:requiredDem}, cacheRoot(), root, plan.request.offline, demCache) : null;
@@ -300,19 +338,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         // A receipt covers metric edges. Re-read cheap source context so missing
         // or conflicting ways, nodes, buildings, and evidence cannot be hidden.
         for (const raw of rawStores) {
-          for (const building of raw.buildings(unit.geometry)) {
-            store.putBuilding(building);
-            if (++contextRows % 1000 === 0) await check();
-          }
-          for (const item of raw.ways(unit.geometry)) {
-            if (++contextRows % 1000 === 0) await check();
-            let way = item.way;
-            for (const source of restrictions) {
-              const restriction = source.restrictions.find((entry) => entry.externalId === way.externalId);
-              if (restriction) way = applyRestriction(way, restriction, source.snapshot.id);
-            }
-            store.transaction(() => { for (const node of item.nodes) store.putNode(node); store.putWay(way); });
-          }
+          await stageBuildings(raw);
+          for await (const way of stageWays(raw)) { void way; }
           for (const evidence of raw.evidence(unit.geometry)) {
             store.putPortalEvidence(evidence);
             if (++contextRows % 1000 === 0) await check();
@@ -330,10 +357,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         unit.status = "processing";
         await report(`Preparing installation unit ${unit.id}`);
         for (const raw of rawStores) {
-          for (const building of raw.buildings(unit.geometry)) {
-            store.putBuilding(building);
-            if (++contextRows % 1000 === 0) await check();
-          }
+          await stageBuildings(raw);
           let pending: { way: NormalizedWay; segment: number; geometry: Coordinate[] }[] = [];
           const flush = async () => {
             if (!pending.length) return;
@@ -364,14 +388,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
             pending = [];
             await check();
           };
-          for (const item of raw.ways(unit.geometry)) {
-            if (++contextRows % 1000 === 0) await check();
-            let way = item.way;
-            for (const source of restrictions) {
-              const restriction = source.restrictions.find((entry) => entry.externalId === way.externalId);
-              if (restriction) way = applyRestriction(way, restriction, source.snapshot.id);
-            }
-            store.transaction(() => { for (const node of item.nodes) store.putNode(node); store.putWay(way); });
+          for await (const way of stageWays(raw)) {
             if (way.edgeClass !== "trail") continue;
             for (let segment = 0; segment < way.nodeIds.length - 1; segment++) {
               const geometry = way.coordinates.slice(segment, segment + 2);
