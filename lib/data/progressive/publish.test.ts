@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,6 +10,7 @@ import { buildClosedRouteTopology } from "../topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import { openProgressiveGraphStore, type ProgressiveGraphStore } from "./store";
 import { publishProgressiveGraph } from "./publish";
+import { writeProgressiveTopology } from "./topology";
 
 const builtAt="2026-01-01T00:00:00.000Z";
 function stageSource(store:ProgressiveGraphStore){store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:"fixture"});}
@@ -61,6 +62,36 @@ describe("progressive schema-6 publisher",()=>{
       await store.derivePortals(version.coverage.boundary);
       const baseline=await publishProgressiveGraph(store,{...options,manifest:version});
       const pointer=path.join(options.outputRoot,version.id,"current.json"),before=readFileSync(pointer,"utf8");
+      const failedPath=path.join(directory,"failed-topology.sqlite");
+      copyFileSync(path.join(options.outputRoot,version.id,version.dataVersion,"pack.sqlite"),failedPath);
+      const failed=new DatabaseSync(failedPath);
+      try {
+        failed.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
+        let checks=0;
+        await expect(writeProgressiveTopology(failed,version,async()=>{
+          expect(failed.isTransaction).toBe(false);
+          if(++checks===2) failed.exec(`CREATE TEMP TRIGGER fail_traversal BEFORE UPDATE OF seen ON work_nodes
+            WHEN NEW.seen=1 AND (SELECT count(*) FROM work_nodes WHERE seen=1)=9
+            BEGIN SELECT RAISE(ABORT,'injected traversal failure'); END`);
+        })).rejects.toThrow("injected traversal failure");
+        expect(checks).toBe(2);
+        expect(failed.isTransaction).toBe(false);
+        expect(Number(failed.prepare("SELECT count(*) AS n FROM work_nodes WHERE seen=1").get()!.n)).toBe(0);
+        // Reject caller-owned transactions without committing or rolling them back.
+        failed.exec("BEGIN");
+        await expect(writeProgressiveTopology(failed,version)).rejects.toThrow("no active transaction");
+        expect(failed.isTransaction).toBe(true);
+        failed.exec("ROLLBACK");
+      } finally {failed.close();}
+      copyFileSync(path.join(options.outputRoot,version.id,version.dataVersion,"pack.sqlite"),failedPath);
+      const retried=new DatabaseSync(failedPath);
+      try {
+        retried.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
+        const result=await writeProgressiveTopology(retried,version,async()=>{expect(retried.isTransaction).toBe(false);});
+        expect(retried.isTransaction).toBe(false);
+        expect(result.hash).toBe(baseline.audit.topologyContentHash);
+      } finally {retried.close();}
+
       for(const target of ["Write covered graph","Derive global cycle feasibility"]) {
         let stage="",checks=0;
         await expect(publishProgressiveGraph(store,{...options,manifest:manifest("replacement",0.02),

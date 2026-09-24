@@ -164,7 +164,25 @@ async function connectorHash(db: DatabaseSync, start: number, portal: number, ch
   return `sha256:${hash.digest("hex")}`;
 }
 
-export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {
+/** Publish scratch work in bounded transactions, never across an async checkpoint. */
+export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}): ReturnType<typeof deriveTopology> {
+  if (db.isTransaction) throw new Error("Topology derivation requires no active transaction");
+  const nextBatch = async () => {
+    if (db.isTransaction) db.exec("COMMIT");
+    await checkpoint();
+    db.exec("BEGIN IMMEDIATE");
+  };
+  try {
+    const result = await deriveTopology(db, manifest, nextBatch);
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    if (db.isTransaction) db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void>): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {
   let work = 0;
   const summaries: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> = [];
   for (const profile of ["known", "inclusive"] as const) {
