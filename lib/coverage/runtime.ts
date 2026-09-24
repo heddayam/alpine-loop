@@ -77,6 +77,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
   let snapshot = await installedSnapshot();
   const previousSnapshot = snapshot;
   let rebuilding = false;
+  let requiredOldUnits = new Set<string>();
   const requestedCoverage = snapshot ? unionCoverage([snapshot.geometry, plan.geometry]) : plan.geometry;
   const prepared: CoverageUnit[] = [];
   const rawStores: CoverageSourceStore[] = [];
@@ -91,6 +92,12 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     if (context.signal.aborted || control === "pause" || control === "cancel") throw new Error("Coverage build interrupted at a checkpoint");
   };
   const report = (stage: string) => context.report({ stage, units, completedUnits: units.filter((unit) => ["prepared", "installed"].includes(unit.status)).length, snapshot });
+  const oldAreaReady = () => {
+    if (!rebuilding || requiredOldUnits.size) return false;
+    if (!prepared.length || subtractCoverage(previousSnapshot!.geometry, unionCoverage(prepared.map((unit) => unit.geometry))))
+      throw new Error("Rebuilt units do not cover all previously installed coverage; active installation remains unchanged");
+    return true;
+  };
   const publish = async () => {
     if (!prepared.length) return;
     await check();
@@ -242,10 +249,13 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       ? `graph-${inputFingerprint}-${contentId(priorDemFingerprint).slice(0,16)}`
       : `graph-${inputFingerprint}`;
     if (snapshot && !compatible) {
+      const oldGeometry = snapshot.geometry;
       const coverage = planCoverageGeometry(requestedCoverage, configuredSources, exclusions);
-      if (!coverage.supported || subtractCoverage(snapshot.geometry, coverage.supported))
+      if (!coverage.supported || subtractCoverage(oldGeometry, coverage.supported))
         throw new Error("Changed source coverage cannot rebuild every installed area; existing installation remains active");
-      units = coverage.units;
+      const oldUnits = coverage.units.filter((unit) => unit.status !== "unavailable" && intersectCoverage(unit.geometry, oldGeometry));
+      requiredOldUnits = new Set(oldUnits.map((unit) => unit.id));
+      units = [...oldUnits, ...coverage.units.filter((unit) => !requiredOldUnits.has(unit.id))];
       snapshot = null;
       rebuilding = true;
       await report("Source inputs changed; rebuilding installed coverage before activation");
@@ -353,9 +363,12 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         unit.status = "prepared"; prepared.push(unit);
         await report(`Prepared ${unit.id}`);
       }
-      if (!rebuilding && !context.publishOnly && (!snapshot || prepared.length >= 8)) await publish();
+      if (rebuilding) {
+        if (unit.status === "prepared") requiredOldUnits.delete(unit.id);
+        if (!context.publishOnly && oldAreaReady()) { await publish(); rebuilding = false; }
+      } else if (!context.publishOnly && (!snapshot || prepared.length >= 8)) await publish();
     }
-    if (rebuilding && units.some((unit) => !["prepared", "unavailable"].includes(unit.status))) {
+    if (rebuilding && !oldAreaReady()) {
       return { snapshot: previousSnapshot, units, completedUnits: units.filter((unit) => unit.status === "prepared").length, status: "paused" };
     }
     await publish();

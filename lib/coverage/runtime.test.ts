@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { CoverageRunnerContext } from "@/lib/coverage-jobs/types";
 import { CoverageSourceStore } from "./source-store";
-import { rectangle } from "./geometry";
+import { rectangle, subtractCoverage } from "./geometry";
 import { installedSnapshot, plan, run } from "./runtime";
 import * as publisher from "@/lib/data/progressive/publish";
 import { CoverageResourceGuard } from "./resources";
@@ -92,6 +92,36 @@ it("keeps the old pointer while a changed source rebuild pauses, then publishes 
   const completed = await run(expanded, context());
   expect(completed.snapshot!.dataVersion).not.toBe(first.snapshot!.dataVersion);
   expect(await edges(completed.snapshot!.dataVersion)).toHaveLength(6);
+});
+
+it("publishes reconciled old coverage before finishing a large changed-source expansion", async () => {
+  const first = await run(await request(-121.49,-121.23), context());
+  expect(first.snapshot!.unitIds).toHaveLength(2);
+  const { readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({ ...source, contentHash: `sha256:${"2".repeat(64)}` });
+  const expanded = await plan({ collectionIds: [], geometry: rectangle([-121.99,47.01,-121.01,47.99]), memoryLimitMiB: 4096, offline: true });
+  let prepared = 0;
+  await expect(run(expanded, { ...context(), report: async ({stage}) => {
+    if (stage?.startsWith("Prepared") && ++prepared === 1) throw new Error("pause during old-area rebuild");
+  } })).rejects.toThrow("pause during old-area rebuild");
+  expect((await installedSnapshot())?.dataVersion).toBe(first.snapshot!.dataVersion);
+  const publishOnly = await run(expanded, { ...context(), publishOnly: true });
+  expect(publishOnly.status).toBe("paused");
+  expect((await installedSnapshot())?.dataVersion).toBe(first.snapshot!.dataVersion);
+  let rebuiltOldArea = false;
+  await expect(run(expanded, { ...context(), report: async ({stage,snapshot}) => {
+    if (stage === "Coverage published" && snapshot?.dataVersion !== first.snapshot!.dataVersion) {
+      expect(subtractCoverage(first.snapshot!.geometry,snapshot!.geometry)).toBeNull();
+      expect(snapshot!.unitIds.length).toBeLessThan(expanded.units.length);
+      rebuiltOldArea = true;
+    }
+    if (rebuiltOldArea && stage?.startsWith("Preparing installation unit")) throw new Error("pause after old-area publication");
+  } })).rejects.toThrow("pause after old-area publication");
+  expect(rebuiltOldArea).toBe(true);
+  const active = await installedSnapshot();
+  expect(active?.dataVersion).not.toBe(first.snapshot!.dataVersion);
+  expect(subtractCoverage(first.snapshot!.geometry,active!.geometry)).toBeNull();
+  expect(active!.unitIds.length).toBeLessThan(expanded.units.length);
 });
 
 it("rebuilds the installed union if the DEM choice for old coverage changes", async () => {
