@@ -2,9 +2,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { coverageRequestSchema, coverageSnapshotSchema, type CoverageCatalog, type CoveragePlan, type CoverageRequest, type CoverageUnit, type CoverageSnapshot } from "@/lib/contracts";
+import { coverageRequestSchema, coverageSnapshotSchema, type CoverageCatalog, type CoveragePlan, type CoverageRequest, type CoverageSnapshot } from "@/lib/contracts";
 import { loadInstalledPack } from "@/lib/packs/installed-pack";
-import { discoverCatalogPacks, legacyRoutingNeedsReview } from "@/lib/packs/pack-catalog";
 import { inspectPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, unionCoverage } from "./geometry";
@@ -36,10 +35,7 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const geometry = unionCoverage([...selected.map((item) => item.geometry), ...(request.geometry ? [request.geometry] : [])]);
   const sources = (await coverageSources()).filter((source) => intersectCoverage(source.geometry, geometry));
   if (!sources.length) throw new Error("No configured source covers this installation area");
-  const installed = await installedSnapshot();
-  const units = planCoverageGeometry(geometry, sources, await coverageExclusions()).units.map((unit): CoverageUnit => ({ ...unit,
-    status: installed?.unitIds.includes(unit.id) ? "installed" : unit.status,
-  }));
+  const units = planCoverageGeometry(geometry, sources, await coverageExclusions()).units;
   const sourceIds = [...new Set(sources.map((source) => source.config.id))].sort();
   const cache = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
   const preparationRoot = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage");
@@ -57,12 +53,9 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const cachedPreparationBytes = cached.reduce((sum, item) => sum + item.preparationBytes, 0);
   const reusableBytes = cachedSourceBytes + cachedPreparationBytes;
   const upstreamBytes = sources.reduce((sum,{config})=>sum+config.expectedByteLength,0);
-  const retainedLegacy = [...(await discoverCatalogPacks()).values()].filter((pack) => pack.manifest.id !== COVERAGE_PACK_ID
-    && intersectCoverage(pack.manifest.coverage.boundary, geometry) && legacyRoutingNeedsReview(pack));
   return { id: contentId({ request, sources: sources.map(({ config }) => config), version: COVERAGE_BUILD_VERSION }), request, geometry, units, sourceIds,
     estimates: { downloadBytes: null, temporaryBytes: null, reusableBytes },
     warnings: [...new Set(selected.flatMap((item) => item.limitations)),
-      ...retainedLegacy.map((pack) => `${pack.manifest.name} contains supplemental or unverified routing data. Its legacy installation remains available until replacement trail coverage is verified; this build does not complete its migration.`),
       `${Math.ceil((upstreamBytes-cachedSourceBytes)/1024**2)} MiB of configured OSM downloads remain; ${Math.ceil(cachedSourceBytes/1024**2)} MiB is present in the source cache.`,
       `${Math.ceil(cachedPreparationBytes/1024**2)} MiB of cached source preparation found. Cached data and checkpoints are verified when installation starts; reuse is not guaranteed by this preview.`,
       "A small area may require the full upstream source download. Additional elevation downloads and disk estimates remain unknown until acquisition."] };

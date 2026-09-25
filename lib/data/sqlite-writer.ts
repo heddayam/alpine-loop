@@ -176,6 +176,17 @@ export function createPackSchema(database: DatabaseSync): void {
 
 }
 
+/** Prepared sections carry graph records and compact release-wide cycle bounds only. */
+export function createPreparedSchema(database: DatabaseSync): void {
+  createPackSchema(database);
+  database.exec(`DROP TABLE access_topology;
+    DROP TABLE topology_block_edges; DROP TABLE topology_block_nodes; DROP TABLE topology_block_links;
+    DROP TABLE topology_blocks; DROP TABLE topology_decision_edge_members; DROP TABLE topology_decision_edges;
+    DROP TABLE topology_nodes; DROP TABLE topology_networks; DROP TABLE topology_profiles;
+    ALTER TABLE access_points ADD COLUMN known_minimum_stem_m REAL CHECK(known_minimum_stem_m IS NULL OR known_minimum_stem_m>=0);
+    ALTER TABLE access_points ADD COLUMN inclusive_minimum_stem_m REAL CHECK(inclusive_minimum_stem_m IS NULL OR inclusive_minimum_stem_m>=0);`);
+}
+
 export function writePackDatabase(path: string, contents: DatabaseContents): void {
   if (contents.metadata.schemaVersion !== "6") throw new Error("Unsupported pack schema version");
   if (!contents.namedAreas) throw new Error("Schema 6 database requires named areas");

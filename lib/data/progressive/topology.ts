@@ -174,7 +174,7 @@ async function connectorHash(db: DatabaseSync, start: number, portal: number, ch
 }
 
 /** Publish scratch work in bounded transactions, never across an async checkpoint. */
-export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}): ReturnType<typeof deriveTopology> {
+export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}, compact = false): ReturnType<typeof deriveTopology> {
   if (db.isTransaction) throw new Error("Topology derivation requires no active transaction");
   if (statementCaches.has(db)) throw new Error("Topology derivation is already running");
   statementCaches.set(db, new Map());
@@ -184,7 +184,7 @@ export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackM
     db.exec("BEGIN IMMEDIATE");
   };
   try {
-    const result = await deriveTopology(db, manifest, nextBatch);
+    const result = await deriveTopology(db, manifest, nextBatch, compact);
     db.exec("COMMIT");
     return result;
   } catch (error) {
@@ -193,7 +193,7 @@ export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackM
   } finally { statementCaches.delete(db); }
 }
 
-async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void>): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {
+async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void>, compact: boolean): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {
   let work = 0;
   const summaries: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> = [];
   for (const profile of ["known", "inclusive"] as const) {
@@ -213,6 +213,17 @@ async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoi
     db.exec(`DELETE FROM work_physical WHERE (SELECT scc FROM work_nodes WHERE k=from_key)<>(SELECT scc FROM work_nodes WHERE k=to_key);`);
     await seedCycles(db,checkpoint);
     await distances(db,checkpoint);
+    if (compact) {
+      let feasible=0;
+      for(const access of rows(db, "SELECT a.id,w.dist FROM access_points a JOIN nodes n ON n.id=a.node_id JOIN work_nodes w ON w.k=n.node_key ORDER BY a.id")) {
+        if(++work%1000===0) await checkpoint();
+        if(access.dist!==null) feasible++;
+        run(db, `UPDATE access_points SET ${profile}_minimum_stem_m=? WHERE id=?`, access.dist, String(access.id));
+      }
+      summaries.push({profile,hash:"",feasible,physical});
+      db.exec("DROP TABLE seeds; DROP TABLE bridges; DROP TABLE work_physical; DROP TABLE work_edges; DROP TABLE work_nodes;");
+      continue;
+    }
     // The schema-6 fallback stores only access feasibility; all primitive topology tables remain empty.
     run(db, "INSERT INTO topology_profiles VALUES (?,?,?,?,?,?,?,?)", profile, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION, 0, physical, 0, 0, manifest.builtAt, "pending");
     const hash = createHash("sha256");
@@ -240,6 +251,7 @@ async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoi
     summaries.push({ profile, hash: contentHash, feasible, physical });
     db.exec("DROP TABLE seeds; DROP TABLE bridges; DROP TABLE work_physical; DROP TABLE work_edges; DROP TABLE work_nodes;");
   }
+  if(compact) {await checkpoint(); return {hash:"",profiles:summaries};}
   const combined = topologySha256({ runtimeMode: "reachable-graph-fallback", algorithmVersion: manifest.closedRouteTopology.algorithmVersion, policyVersion: manifest.closedRouteTopology.policyVersion, profiles: summaries.map(({ profile, hash }) => ({ profile, contentHash: hash })) });
   await checkpoint();
   return { hash: combined, profiles: summaries };

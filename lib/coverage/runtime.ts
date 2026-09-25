@@ -1,37 +1,40 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { type CoveragePlan, type CoverageSnapshot, type CoverageUnit, type PackManifest } from "@/lib/contracts";
 import { areaBounds, lineIsInsideArea } from "@/lib/graph/geometry";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
-import { loadInstalledPack, localPackRoot } from "@/lib/packs/installed-pack";
-import { withGenerationLock } from "@/lib/packs/generation-pins";
+import { DatabaseSync } from "node:sqlite";
+import { createPreparedSchema } from "@/lib/data/sqlite-writer";
+import { exportPreparedRelease, preparedReleaseId } from "@/lib/data/prepared-release";
+import { writeProgressiveTopology } from "@/lib/data/progressive/topology";
+import { topologySha256 } from "@/lib/graph/topology-hash";
 import { readOsmSourceConfig, readPinnedOsmSnapshot, refreshPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
-import { publishProgressiveGraph } from "@/lib/data/progressive/publish";
+import { insertGraph, selectProgressiveEdges } from "@/lib/data/progressive/publish";
 import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics";
 import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import { applyRestriction, readCuratedAccessFile } from "@/lib/data/curated-access";
 import type { NormalizedWay, NormalizedNode, Coordinate } from "@/lib/data/types";
-import type { CoverageRunnerContext, CoverageRunResult } from "@/lib/coverage-jobs/types";
-import { collections, coverageExclusions, coverageSources, legacyRegionIds, planCoverageGeometry } from "./collections";
-import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import type { CoverageRunnerContext, CoverageRunResult } from "./types";
+import { coverageExclusions, coverageSources, legacyRegionIds, planCoverageGeometry } from "./collections";
+import { contentId, intersectCoverage, rectangle, unionCoverage } from "./geometry";
 import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
 import { describeCanonicalElevation, elevationCache, elevationFor, elevationPinsFingerprint } from "./elevation";
-import { cleanupCoverageGenerations } from "./retention";
 import { classifyIntendedInventory, reconcileInventory } from "./inventory";
-import { coverageNamedAreas } from "./named-areas";
+import { preparedNamedAreas } from "./named-areas";
 import { CoverageResourceGuard } from "./resources";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as DEM_METRIC_ALGORITHM_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import { readOfficialTrailSourceConfig, readPinnedOfficialTrailSnapshot, refreshPinnedOfficialTrailSnapshot } from "@/lib/data/official-trails/source";
 import { auditOfficialTrailReferences, officialSourceEnvelope, type OfficialReferenceAudit } from "./references";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 
-import { COVERAGE_PACK_ID, COVERAGE_BUILD_VERSION as BUILD_VERSION, installedSnapshot } from "./planning";
+import { COVERAGE_PACK_ID, COVERAGE_BUILD_VERSION as BUILD_VERSION } from "./planning";
 export { COVERAGE_PACK_ID, installedSnapshot, catalog, plan } from "./planning";
 const preparationRoot = () => path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage");
+const releaseRoot = () => path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared");
 const cacheRoot = () => path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
 
 function segmentTouches(line: Coordinate[], [west,south,east,north]: readonly number[]): boolean {
@@ -56,7 +59,7 @@ async function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["g
   return Number.isFinite(minX) ? rectangle([Math.floor(minX),Math.ceil(minY)-1,Math.floor(maxX)+1,Math.ceil(maxY)]) : null;
 }
 
-/** The same durable runner is used by the app and CLI; publication alone changes the active graph. */
+/** Developer-only resumable build; a release appears only after every unit completes. */
 export async function run(plan: CoveragePlan, context: CoverageRunnerContext): Promise<CoverageRunResult> {
   return runAttempt(plan,context,true);
 }
@@ -67,7 +70,6 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
   let store!: ReturnType<typeof openProgressiveGraphStore>;
   let inputFingerprint = "";
   let stageKey = "";
-  let demFingerprint = "";
   const unitContents = async (id: string) => {
     const hash = createHash("sha256");
     let rowCount = 0;
@@ -77,18 +79,15 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     }
     return { rowCount, contentHash: hash.digest("hex") };
   };
-  let units = structuredClone(plan.units);
-  let snapshot = await installedSnapshot();
-  const previousSnapshot = snapshot;
-  let rebuilding = false;
-  let requiredOldUnits = new Set<string>();
-  const requestedCoverage = snapshot ? unionCoverage([snapshot.geometry, plan.geometry]) : plan.geometry;
+  const units = structuredClone(plan.units);
+  let snapshot: CoverageSnapshot | null = null;
+  const requestedCoverage = plan.geometry;
   const prepared: CoverageUnit[] = [];
   const rawStores: CoverageSourceStore[] = [];
   const close = () => { for (const raw of rawStores.splice(0)) raw.close(); store?.close(); store=undefined!; };
   const referenceSources: { snapshot: SourceSnapshot; osmId: string; envelope: readonly [number, number, number, number] }[] = [];
   const demCache = elevationCache();
-  const resources = new CoverageResourceGuard({ memoryLimitBytes: plan.request.memoryLimitMiB * 1024 ** 2, diskPaths: [root, localPackRoot()] });
+  const resources = new CoverageResourceGuard({ memoryLimitBytes: plan.request.memoryLimitMiB * 1024 ** 2, diskPaths: [root, releaseRoot()] });
   resources.start();
   const check = async () => {
     await setImmediate();
@@ -97,32 +96,25 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     if (context.signal.aborted || control === "pause" || control === "cancel") throw new Error("Coverage build interrupted at a checkpoint");
   };
   const report = (stage: string) => context.report({ stage, units, completedUnits: units.filter((unit) => ["prepared", "installed"].includes(unit.status)).length, snapshot });
-  const oldAreaReady = () => {
-    if (!rebuilding || requiredOldUnits.size) return false;
-    if (!prepared.length || subtractCoverage(previousSnapshot!.geometry, unionCoverage(prepared.map((unit) => unit.geometry))))
-      throw new Error("Rebuilt units do not cover all previously installed coverage; active installation remains unchanged");
-    return true;
-  };
   const publish = async () => {
     if (!prepared.length) return;
     await check();
-    const geometry = unionCoverage([...(snapshot ? [snapshot.geometry] : []), ...prepared.map((unit) => unit.geometry)]);
+    const geometry = unionCoverage(prepared.map((unit) => unit.geometry));
     await report("Recomputing combined trailheads and connectivity");
     await store!.derivePortals(geometry, check);
     const publishedMetricArea = await metricArea(rawStores,geometry,geometry,check);
     const finalElevation = publishedMetricArea ? await describeCanonicalElevation(publishedMetricArea, cacheRoot(), root, demCache) : null;
-    demFingerprint = finalElevation?.productFingerprint ?? "no-trail-metrics";
     if (finalElevation) store!.putSource(finalElevation.source);
     // A DEM mosaic supersedes earlier mosaics; graph records refer to OSM
     // sources, so only the final raster receipt belongs in the publication.
     store!.database.prepare("DELETE FROM sources WHERE id LIKE 'usgs-dem-%' AND id<>?").run(finalElevation?.source.id ?? "");
     const currentSources = [...store!.database.prepare("SELECT record FROM sources ORDER BY id").iterate()]
       .map((row) => JSON.parse(String(row.record)) as PackManifest["sources"][number]);
-    const metadata = await coverageNamedAreas({ geometry, collections: await collections(), sources: currentSources });
+    const metadata = await preparedNamedAreas({ geometry, sources: currentSources, snapshots: rawStores.map(raw=>raw.source), preparationRoot: root });
     const sources = metadata.sources;
     for (const source of sources) store!.putSource({ ...source, contentHash: source.contentHash as `sha256:${string}`, localPath: "" });
     const sourceFingerprint = contentId({ sources, version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION, topologyVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION });
-    const unitIds = [...new Set([...(snapshot?.unitIds ?? []), ...prepared.map((unit) => unit.id)])].sort();
+    const unitIds = [...new Set([...([]), ...prepared.map((unit) => unit.id)])].sort();
     const dataVersion = `coverage-${contentId({ geometry, sourceFingerprint, unitIds, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions }).slice(0, 24)}`;
     const createdAt = sources.map((source) => source.retrievedAt).sort().at(-1)!;
     const next: CoverageSnapshot = { schemaVersion: 1, id: COVERAGE_PACK_ID, dataVersion, geometry, unitIds, createdAt, sourceFingerprint, auditStatus: "passed", limitations: plan.warnings };
@@ -154,27 +146,33 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       ...(referenceGaps ? [`${referenceGaps} independent reference features have unresolved source coverage differences; installation completeness does not resolve these source limitations.`] : []),
       ...(references.some(item => item.status !== "audited") ? ["Independent reference data does not cover the entire installed area."] : []),
     ];
-    await publishProgressiveGraph(store!, { checkpoint: check, onProgress: report, outputRoot: localPackRoot(), manifest, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions,
-      commitPublication: async (activate) => {
-        await check();
-        const lockedActivate = () => withGenerationLock(localPackRoot(), async () => { await activate(); });
-        if (context.commitPublication) await context.commitPublication(lockedActivate);
-        else await lockedActivate();
-      },
-      beforePublish: async (result) => {
-        await check();
-        await writeJsonAtomically(path.join(result.packDirectory, "coverage-snapshot.json"), next);
-        await writeJsonAtomically(path.join(result.packDirectory, "coverage-generation.json"), { inputFingerprint, demFingerprint, stageKey });
-        await writeJsonAtomically(path.join(result.packDirectory, "coverage-inventory.json"), inventory);
-        await writeJsonAtomically(path.join(result.packDirectory, "coverage-references.json"), references);
-      },
-    });
-    snapshot = next;
-    for (const unit of prepared) unit.status = "installed";
-    prepared.length = 0;
-    await report("Coverage published");
-    try { await cleanupCoverageGenerations({ deleteEligible: true }); }
-    catch (error) { await report(`Old generations retained: ${(error as Error).message}`); }
+    const outputRoot=releaseRoot();
+    await mkdir(outputRoot,{recursive:true});
+    const databasePath=path.join(root,`${stageKey}-complete.sqlite`);
+    const selectedRegions=new Set(metadata.searchRegions.map(item=>item.namedAreaId));
+    const exportOptions={databasePath,outputRoot,geometry,sources,
+      regions:metadata.namedAreas.filter(area=>selectedRegions.has(area.id)).map(({id,name,geometry,aliases,sourceIds})=>({id,name,geometry,aliases,sourceIds})),
+      builtAt:createdAt,compilerVersion:`prepared-v1:${BUILD_VERSION}`,metricAlgorithmVersion:DEM_METRIC_ALGORITHM_VERSION,limitations:next.limitations,checkpoint:check};
+    await rm(databasePath,{force:true});
+    const db=new DatabaseSync(databasePath);
+    try {
+      db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
+      createPreparedSchema(db);
+      await selectProgressiveEdges(store!,geometry,check);
+      await insertGraph(store!,db,topologySha256(geometry),new Set(sources.map(source=>source.id)),check);
+      await writeProgressiveTopology(db,manifest,check,true);
+      db.prepare("INSERT INTO metadata VALUES ('schemaVersion','7')").run();
+      db.prepare("INSERT INTO metadata VALUES ('releaseId',?)").run(preparedReleaseId(exportOptions));
+      const add=db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)");
+      for(const source of sources) add.run(source.id,source.authority,source.dataset,source.version,source.retrievedAt,source.url,source.license,source.contentHash);
+    } finally {db.close();}
+    await writeJsonAtomically(path.join(outputRoot,"inventory.json"),inventory);
+    await writeJsonAtomically(path.join(outputRoot,"references.json"),references);
+    const release=await exportPreparedRelease(exportOptions);
+    snapshot={...next,dataVersion:release.id};
+    for(const unit of prepared) unit.status="installed";
+    prepared.length=0;
+    await report("Coherent release exported");
   };
   try {
     const restrictions: Awaited<ReturnType<typeof readCuratedAccessFile>>[] = [];
@@ -239,56 +237,15 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     const metricSourceFingerprint = contentId({ version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION,
       osm: sourceIdentity.osm, restrictions: sourceIdentity.restrictions });
     inputFingerprint = contentId({ ...sourceIdentity, pinnedDem });
-    let installedGeneration: {inputFingerprint:string;demFingerprint:string;stageKey:string} | null = null;
-    if (snapshot) {
-      const installed = await loadInstalledPack(COVERAGE_PACK_ID);
-      try {
-        const marker = JSON.parse(await readFile(path.join(installed!.directory, "coverage-generation.json"), "utf8")) as Record<string,unknown>;
-        if (typeof marker.inputFingerprint === "string" && typeof marker.demFingerprint === "string" &&
-          typeof marker.stageKey === "string" && /^graph-[a-f0-9-]+$/.test(marker.stageKey))
-          installedGeneration = { inputFingerprint: marker.inputFingerprint, demFingerprint: marker.demFingerprint, stageKey: marker.stageKey };
-      } catch { /* Older or invalid metadata requires rebuilding the installed union. */ }
-    }
-    const priorMetricArea = snapshot ? await metricArea(rawStores,snapshot.geometry,snapshot.geometry,check) : null;
-    const priorDemFingerprint = snapshot
-      ? priorMetricArea ? (await describeCanonicalElevation(priorMetricArea, cacheRoot(), root, demCache))?.productFingerprint ?? "no-trail-metrics" : "no-trail-metrics"
-      : null;
-    let stagePresent = false;
-    if (installedGeneration) {
-      try { stagePresent = (await stat(path.join(root, `${installedGeneration.stageKey}.sqlite`))).isFile(); }
-      catch { /* The published pack is complete; a missing stage is rebuilt. */ }
-    }
-    const compatible = snapshot && stagePresent && installedGeneration?.inputFingerprint === inputFingerprint && installedGeneration.demFingerprint === priorDemFingerprint;
-    stageKey = compatible ? installedGeneration!.stageKey : snapshot
-      ? `graph-${inputFingerprint}-${contentId(priorDemFingerprint).slice(0,16)}`
-      : `graph-${inputFingerprint}`;
-    if (snapshot && !compatible) {
-      const oldGeometry = snapshot.geometry;
-      if (!supportedCoverage || subtractCoverage(oldGeometry, supportedCoverage))
-        throw new Error("Changed source coverage cannot rebuild every installed area; existing installation remains active");
-      const oldUnits = coveragePlan.units.filter((unit) => unit.status !== "unavailable" && intersectCoverage(unit.geometry, oldGeometry));
-      requiredOldUnits = new Set(oldUnits.map((unit) => unit.id));
-      units = [...oldUnits, ...coveragePlan.units.filter((unit) => !requiredOldUnits.has(unit.id))];
-      snapshot = null;
-      rebuilding = true;
-      await report("Source inputs changed; rebuilding installed coverage before activation");
-    }
+    stageKey = `graph-${inputFingerprint}`;
     store = openProgressiveGraphStore({ stagingPath: path.join(root, `${stageKey}.sqlite`), buildIdentity: stageKey });
     store.database.exec("CREATE TABLE IF NOT EXISTS unit_edges(unit TEXT NOT NULL,edge TEXT NOT NULL,PRIMARY KEY(unit,edge)) STRICT");
-    if (compatible && snapshot) for (const id of snapshot.unitIds) {
-      const receipt = store.getReceipt(`unit:${id}`);
-      const actual = await unitContents(id);
-      if (!receipt || receipt.rowCount !== actual.rowCount || receipt.contentHash !== actual.contentHash)
-        throw new Error(`Installed staging checkpoint ${id} failed verification; active coverage remains unchanged`);
-    }
     for (const restriction of restrictions) store.putSource(restriction.snapshot);
     for (const reference of referenceSources) store.putSource(reference.snapshot);
     for (const raw of rawStores) store.putSource(raw.source);
     for (const unit of units) {
       if (unit.status === "unavailable") continue;
-      if (snapshot?.unitIds.includes(unit.id)) { unit.status = "installed"; continue; }
       const receipt = store.getReceipt(`unit:${unit.id}`);
-      if (context.publishOnly && !receipt) continue;
       let contextRows = 0;
       const stageBuildings = async (raw: CoverageSourceStore) => {
         const buildings = raw.buildings(unit.geometry);
@@ -352,7 +309,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         if (receipt.fingerprint !== fingerprint) throw new ChangedMetricInputs(`Elevation inputs changed for ${unit.id}`);
         unit.status = "prepared"; prepared.push(unit);
       }
-      else if (!context.publishOnly) {
+      else {
         await check();
         unit.status = "processing";
         await report(`Preparing installation unit ${unit.id}`);
@@ -408,16 +365,9 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         unit.status = "prepared"; prepared.push(unit);
         await report(`Prepared ${unit.id}`);
       }
-      if (rebuilding) {
-        if (unit.status === "prepared") requiredOldUnits.delete(unit.id);
-        if (!context.publishOnly && oldAreaReady()) { await publish(); rebuilding = false; }
-      } else if (!context.publishOnly && (!snapshot || prepared.length >= 8)) await publish();
-    }
-    if (rebuilding && !oldAreaReady()) {
-      return { snapshot: previousSnapshot, units, completedUnits: units.filter((unit) => unit.status === "prepared").length, status: "paused" };
     }
     await publish();
-    return { snapshot, units, completedUnits: units.filter((unit) => unit.status === "installed").length, status: context.publishOnly ? "paused" : "completed" };
+    return { snapshot, units, completedUnits: units.filter((unit) => unit.status === "installed").length, status: "completed" };
   } catch (error) {
     if (!(error instanceof ChangedMetricInputs) || !retryChangedMetrics) throw error;
     // Staging is disposable; immutable published generations stay active. A

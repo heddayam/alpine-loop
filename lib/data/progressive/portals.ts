@@ -201,28 +201,9 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     run(db,"DELETE FROM derived_portals WHERE coverage_hash=?",coverageHash);
     return 0;
   }
-  db.exec("CREATE TEMP TABLE clusters(id TEXT PRIMARY KEY,parent TEXT NOT NULL,rank INTEGER NOT NULL DEFAULT 0) STRICT; INSERT INTO clusters(id,parent) SELECT node_id,node_id FROM portal_candidates;");
-  const clusters=new DiskUnion(db,"clusters");
-  for(const candidate of rows(db,"SELECT c.rid,c.node_id,n.lon,n.lat FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.rid")) {
-    if (++work%1000===0) await checkpoint();
-    const lon=Number(candidate.lon),lat=Number(candidate.lat);
-    for(const neighbor of rows(db,`SELECT c.node_id,n.lon,n.lat FROM candidate_spatial s JOIN portal_candidates c ON c.rid=s.rid JOIN nodes n ON n.id=c.node_id
-      WHERE c.rid<? AND s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,Number(candidate.rid),...box(lon,lat,150)))
-      { if (++work%1000===0) await checkpoint(); if(distance([lon,lat],[Number(neighbor.lon),Number(neighbor.lat)])<=150)clusters.union(String(candidate.node_id),String(neighbor.node_id)); }
-  }
-  db.exec("CREATE TEMP TABLE representatives(cluster TEXT PRIMARY KEY,node_id TEXT NOT NULL,length_m REAL NOT NULL,quality INTEGER NOT NULL) STRICT;");
-  for(const candidate of rows(db,"SELECT c.node_id,n.lon,n.lat FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id")) {
-    if (++work%1000===0) await checkpoint();
-    const nodeId=String(candidate.node_id),component=union.find(nodeId),length=Number(one(db,"SELECT length_m FROM component_stats WHERE root=?",component)?.length_m);
-    const evidence=await evidenceNear(db,Number(candidate.lon),Number(candidate.lat),250,checkpoint);
-    const quality=evidence.some(({item})=>item.kind==="trailhead")?5:evidence.some(({item})=>item.kind==="information")?4:evidence.some(({item})=>item.kind==="gate")?3:evidence.some(({item})=>item.kind==="parking")?2:1;
-    const cluster=clusters.find(nodeId),prior=one(db,"SELECT node_id,length_m,quality FROM representatives WHERE cluster=?",cluster);
-    if(!prior||length>Number(prior.length_m)||(length===Number(prior.length_m)&&(quality>Number(prior.quality)||(quality===Number(prior.quality)&&nodeId<String(prior.node_id)))))
-      run(db,"INSERT INTO representatives VALUES (?,?,?,?) ON CONFLICT(cluster) DO UPDATE SET node_id=excluded.node_id,length_m=excluded.length_m,quality=excluded.quality",cluster,nodeId,length,quality);
-  }
   run(db,"DELETE FROM derived_portals WHERE coverage_hash=?",coverageHash);
   let count=0;
-  for(const row of rows(db,"SELECT r.node_id,c.road_class,c.direct,n.record FROM representatives r JOIN portal_candidates c ON c.node_id=r.node_id JOIN nodes n ON n.id=r.node_id ORDER BY r.node_id")) {
+  for(const row of rows(db,"SELECT c.node_id,c.road_class,c.direct,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id")) {
     if (++work%1000===0) await checkpoint();
     const node=JSON.parse(String(row.record)) as NormalizedNode,nodeId=node.id,incident=waysAt(db,nodeId),evidence=await evidenceNear(db,node.lon,node.lat,250,checkpoint);
     const component=one(db,"SELECT min_id,length_m FROM component_stats WHERE root=?",union.find(nodeId))!;

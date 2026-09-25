@@ -9,7 +9,9 @@ import { SQLiteClosedRouteFeasibilityRepository } from "@/lib/graph/sqlite-close
 import { buildClosedRouteTopology } from "../topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import { openProgressiveGraphStore, type ProgressiveGraphStore } from "./store";
-import { publishProgressiveGraph } from "./publish";
+import { insertGraph, selectProgressiveEdges, publishProgressiveGraph } from "./publish";
+import { createPreparedSchema } from "../sqlite-writer";
+import { topologySha256 } from "@/lib/graph/topology-hash";
 import { writeProgressiveTopology } from "./topology";
 
 const builtAt="2026-01-01T00:00:00.000Z";
@@ -233,9 +235,9 @@ describe("progressive schema-6 publisher",()=>{
         store.putWay(roadWay);
         const outputRoot=path.join(root,"packs"),options={outputRoot,namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]};
         const firstManifest=manifest("partial",0.0015),secondManifest=manifest("complete",0.003);
-        expect(await store.derivePortals(firstManifest.coverage.boundary)).toBe(1);
+        expect(await store.derivePortals(firstManifest.coverage.boundary)).toBe(2);
         const first=await publishProgressiveGraph(store,{...options,manifest:firstManifest});
-        expect(await store.derivePortals(secondManifest.coverage.boundary)).toBe(1);
+        expect(await store.derivePortals(secondManifest.coverage.boundary)).toBe(3);
         const second=await publishProgressiveGraph(store,{...options,manifest:secondManifest});
         const firstDb=new DatabaseSync(first.databasePath,{readOnly:true}),secondDb=new DatabaseSync(second.databasePath,{readOnly:true});
         try {
@@ -243,8 +245,8 @@ describe("progressive schema-6 publisher",()=>{
           expect((secondDb.prepare("SELECT can_reach_cycle AS yes FROM access_topology WHERE profile='known'").get() as {yes:number}).yes).toBe(1);
           expect((firstDb.prepare("SELECT count(*) AS n FROM physical_edges").get() as {n:number}).n).toBe(1);
           expect((secondDb.prepare("SELECT count(*) AS n FROM physical_edges").get() as {n:number}).n).toBe(3);
-          expect((firstDb.prepare("SELECT count(*) AS n FROM access_points").get() as {n:number}).n).toBe(1);
-          expect((secondDb.prepare("SELECT count(*) AS n FROM access_points").get() as {n:number}).n).toBe(1);
+          expect((firstDb.prepare("SELECT count(*) AS n FROM access_points").get() as {n:number}).n).toBe(2);
+          expect((secondDb.prepare("SELECT count(*) AS n FROM access_points").get() as {n:number}).n).toBe(3);
           const firstPortal=firstDb.prepare("SELECT id,reachable_trail_km AS km FROM access_points").get() as {id:string;km:number};
           const secondPortal=secondDb.prepare("SELECT id,reachable_trail_km AS km FROM access_points").get() as {id:string;km:number};
           expect(firstPortal.id).toBe("portal:a");
@@ -345,4 +347,24 @@ describe("progressive schema-6 publisher",()=>{
     } finally {rmSync(directory,{recursive:true,force:true});}
   });
 
+});
+
+
+it("writes only compact known/inclusive cycle bounds without connector exports",async()=>{
+  const directory=mkdtempSync(path.join(tmpdir(),"prepared-hints-"));
+  const store=openProgressiveGraphStore({stagingPath:path.join(directory,"stage.sqlite"),buildIdentity:"hints"});
+  const db=new DatabaseSync(path.join(directory,"prepared.sqlite"));
+  try {
+    const {nodes,edges,points}=fixture();stageSource(store);
+    nodes.forEach(node=>store.putNode(node));edges.forEach(edge=>store.putEdge(edge));points.forEach(point=>store.putAccessPoint(point));
+    createPreparedSchema(db);const version=manifest("hints",0.02);
+    await selectProgressiveEdges(store,version.coverage.boundary);
+    await insertGraph(store,db,topologySha256(version.coverage.boundary),new Set(["fixture"]),async()=>{});
+    await writeProgressiveTopology(db,version,async()=>{},true);
+    expect(db.prepare("SELECT id,known_minimum_stem_m,inclusive_minimum_stem_m FROM access_points ORDER BY id").all()).toEqual([
+      {id:"portal:a",known_minimum_stem_m:0,inclusive_minimum_stem_m:0},
+      {id:"portal:stem",known_minimum_stem_m:null,inclusive_minimum_stem_m:100},
+    ]);
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'topology_%' OR name='access_topology'").all()).toEqual([]);
+  } finally {db.close();store.close();rmSync(directory,{recursive:true,force:true});}
 });

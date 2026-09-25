@@ -47,7 +47,7 @@ export async function selectProgressiveEdges(store: ProgressiveGraphStore, cover
   return rejected;
 }
 
-async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
+export async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
   let work=0;
   await checkpoint();
   const stage=store.database;
@@ -127,7 +127,7 @@ async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, c
         edge.accessState,edge.edgeClass,JSON.stringify(edge.sourceRefs),JSON.stringify(edge.flags));
       spatialEdge.run(edgeCount,...bounds(edge.geometry));
     }
-    const insertAccess=output.prepare("INSERT INTO access_points VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    const insertAccess=output.prepare("INSERT INTO access_points(id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     let accessCount=0;
     const derived=Number((stage.prepare("SELECT count(*) AS n FROM derived_portals WHERE coverage_hash=?").get(coverageHash) as {n:number}).n);
     const accessRows=derived
