@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { loadInstallation, withInstallationPins } from "@/lib/coverage-install";
+import { loadInstallation, withInstallationPins, cleanupInstallations } from "@/lib/coverage-install";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import { RouteJobService, SQLiteRouteJobStore, type RouteJobRunnerDependencies } from "@/lib/route-jobs";
 import { resolveSearchPlan } from "./search-area";
@@ -17,6 +17,7 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
     async currentInstallationId() {
       return (await loadInstallation())?.installation.id ?? null;
     },
+    cleanupInstallations: async () => { await cleanupInstallations(); },
     pinInstallation: (id, action) => withInstallationPins([id], action),
     openSearchSession,
   };

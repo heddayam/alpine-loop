@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { downloadRequestSchema, type DownloadRequest, type DownloadPlan, type DataRelease, type DownloadCatalog } from '@/lib/contracts/releases';
 import { Store, DownloadError } from './store';
-import { activate, atomicJson, coverageRoot, loadInstallation, selection, withPublicationLock } from './index';
-import { downloadArtifact, DownloadStopped, loadRelease, requireDisk, verifyArtifact, size } from './download';
+import { activate, cleanupInstallations, publishInstallation, coverageRoot, loadInstallation, selection, withPublicationLock } from './index';
+import { downloadArtifact, DownloadStopped, loadRelease, requireDisk, verifyArtifact, verifyCompressedArtifact } from './download';
 export type Options = {
     root?: string;
+    routeJobsDb?: string;
     source?: string;
     fetcher?: typeof fetch;
     startWorker?: (root: string) => void;
@@ -77,9 +78,10 @@ export class DownloadService {
         catch (e) {
             error = e instanceof Error ? e.message : String(e);
         }
-        return { release, installed: (await loadInstallation(this.root))?.installation ?? null, jobs: this.store.list(), error };
+        const installed = await loadInstallation(this.root);
+        return { release: release ?? installed?.release ?? null, installed: installed?.installation ?? null, jobs: this.store.list(), error };
     }
-    async makePlan(input: DownloadRequest, release: DataRelease): Promise<DownloadPlan> {
+    async makePlan(input: DownloadRequest, release: DataRelease, checkpoint: () => void = () => {}): Promise<DownloadPlan> {
         const request = downloadRequestSchema.parse(input);
         if (request.releaseId !== release.id)
             throw new DownloadError(409, 'Catalog release changed; review the current catalog');
@@ -90,10 +92,10 @@ export class DownloadService {
         const artifacts = release.artifacts.filter(a => selected.artifactIds.includes(a.id));
         let reusableBytes = 0, downloadBytes = 0, additionalBytes = 0;
         for (const artifact of artifacts) {
-            if (await verifyArtifact(join(this.root, 'artifacts', `${artifact.id}.sqlite`), artifact, release.id))
+            if (await verifyArtifact(join(this.root, 'artifacts', `${artifact.id}.sqlite`), artifact, release.id, checkpoint))
                 reusableBytes += artifact.bytes;
             else {
-                const retainedCompressed = await size(join(this.root, 'downloads', `${artifact.id}.gz`)) === artifact.compressedBytes;
+                const retainedCompressed = await verifyCompressedArtifact(join(this.root, 'downloads', `${artifact.id}.gz`), artifact, checkpoint);
                 downloadBytes += retainedCompressed ? 0 : artifact.compressedBytes;
                 additionalBytes += artifact.bytes + (retainedCompressed ? 0 : artifact.compressedBytes);
             }
@@ -107,7 +109,7 @@ export class DownloadService {
         const release = await this.release();
         const plan = await this.makePlan(input, release);
         await requireDisk(this.root, plan.additionalBytes, this.options.available);
-        const job = this.store.create(release, this.source, plan.sectionIds, plan.downloadBytes);
+        const job = await withPublicationLock(this.root, store => store.create(release, this.source, plan.sectionIds, plan.downloadBytes));
         this.wake();
         return job;
     }
@@ -121,8 +123,9 @@ export class DownloadService {
             this.wake();
         return job;
     }
+    async cleanup() { return cleanupInstallations(this.root, undefined, this.options.routeJobsDb); }
     async remove(sectionIds: string[]) {
-        return withPublicationLock(this.root, async (store) => {
+        const removed = await withPublicationLock(this.root, async (store) => {
             if (store.list().some(j => ['queued', 'running', 'pausing'].includes(j.status)))
                 throw new DownloadError(409, 'Pause active downloads before removing sections');
             const installed = await loadInstallation(this.root);
@@ -132,11 +135,13 @@ export class DownloadService {
                 throw new DownloadError(400, 'Cannot remove an uninstalled section');
             const keep = installed.installation.sectionIds.filter(id => !sectionIds.includes(id));
             if (!keep.length) {
-                await atomicJson(join(this.root, 'current.json'), { installationId: null });
+                publishInstallation(this.root, null);
                 return null;
             }
             return activate(this.root, installed.release, keep);
         });
+        await this.cleanup();
+        return removed;
     }
 }
 export async function runDownloadWorker(options: Options = {}) {
@@ -169,7 +174,7 @@ export async function runDownloadWorker(options: Options = {}) {
                     throw new DownloadStopped();
             };
             try {
-                const plan = await service.makePlan({ releaseId: release.id, sectionIds: job.sectionIds }, release);
+                const plan = await service.makePlan({ releaseId: release.id, sectionIds: job.sectionIds }, release, checkpoint);
                 await requireDisk(service.root, plan.additionalBytes, options.available);
                 for (const artifact of release.artifacts.filter(a => plan.artifactIds.includes(a.id))) {
                     checkpoint();
@@ -187,18 +192,20 @@ export async function runDownloadWorker(options: Options = {}) {
                     const current = await loadInstallation(service.root);
                     if (current?.installation.sectionIds.some(id => !job.sectionIds.includes(id)))
                         throw new DownloadError(409, 'Installed sections changed while downloading; review selection');
-                    const installation = await activate(service.root, release, job.sectionIds);
-                    const latest = locked.get(job.id);
-                    latest.status = 'completed';
-                    latest.stage = 'Completed';
-                    latest.installation = installation;
-                    latest.downloadedBytes = latest.totalBytes;
-                    locked.save(latest);
+                    await activate(service.root, release, job.sectionIds, installation => locked.tx(() => {
+                        const latest = locked.get(job.id);
+                        if (latest.status === 'pausing' || latest.status === 'cancelled') throw new DownloadStopped();
+                        publishInstallation(service.root, installation);
+                        latest.status = 'completed'; latest.stage = 'Completed'; latest.installation = installation;
+                        latest.downloadedBytes = latest.totalBytes; locked.save(latest);
+                    }));
                 });
+                await service.cleanup();
             }
             catch (error) {
                 store.tx(() => {
                     const current = store.get(job.id);
+                    if (current.status === 'completed') return;
                     current.status = current.stage === 'Cancelling' ? 'cancelled' : error instanceof DownloadStopped ? 'paused' : 'failed';
                     current.stage = current.status;
                     current.error = current.status === 'failed' ? (error instanceof Error ? error.message : String(error)) : null;

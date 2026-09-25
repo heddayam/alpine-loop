@@ -7,7 +7,7 @@ import { gzipSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 import type { DataRelease } from '@/lib/contracts/releases';
 import { DownloadService, runDownloadWorker } from './service';
-import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady } from './index';
+import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
 import { Store } from './store';
 const paths: string[] = [];
@@ -208,4 +208,61 @@ describe('prepared coverage installation', () => {
         }
         expect(status).toBe('completed');
     });
+    it('retains saved installations across release updates and offline removal, then reclaims after deletion', async () => {
+        const old = await fixture(); await install(old, ['a', 'b']);
+        const initial = (await loadInstallation(old.root))!.installation;
+        const jobs = join(old.source, '..', 'saved-jobs.sqlite');
+        const db = new DatabaseSync(jobs); db.exec('CREATE TABLE route_jobs(plan_json TEXT)');
+        db.prepare('INSERT INTO route_jobs VALUES(?)').run(JSON.stringify({ installationId: initial.id, area: { label: 'Saved' } }));
+        const update = await fixture('r2');
+        const options = { ...old.options, source: update.source, routeJobsDb: jobs };
+        const service = new DownloadService(options);
+        try {
+            await expect(service.create({releaseId:'r2',sectionIds:['a']})).rejects.toThrow('Remove them explicitly');
+            const job = await service.create({releaseId:'r2',sectionIds:['a','b']});
+            await runDownloadWorker(options); expect(service.get(job.id).status).toBe('completed');
+            expect((await loadInstallation(old.root, initial.id))!.installation).toEqual(initial);
+            const offline = new DownloadService({...options, source:'https://example.com/release.json', fetcher:async()=>{throw new Error('Offline');}});
+            try {
+                expect(await offline.catalog()).toMatchObject({release:{id:'r2'},error:'Offline'});
+                await offline.remove(['a','b']); expect(await loadInstallation(old.root)).toBeNull();
+            } finally { offline.close(); }
+            expect((await loadInstallation(old.root, initial.id))!.installation).toEqual(initial);
+            db.exec('DELETE FROM route_jobs'); expect(await service.cleanup()).toEqual([initial.id]);
+            await expect(stat(join(old.root,'artifacts',`${old.artifact.id}.sqlite`))).rejects.toThrow();
+        } finally { service.close(); db.close(); }
+    });
+    it('retains everything for malformed or legacy saved reference history', async () => {
+        const f=await fixture(); await install(f); await install(f,['a','b']);
+        const jobs=join(f.source,'..','saved-jobs.sqlite');const db=new DatabaseSync(jobs);db.exec('CREATE TABLE route_jobs(plan_json TEXT)');
+        for(const payload of ['bad-json',JSON.stringify({packs:[]}),JSON.stringify({installationId:null}),JSON.stringify({installationId:'valid'})]) {
+            db.exec('DELETE FROM route_jobs');db.prepare('INSERT INTO route_jobs VALUES(?)').run(payload);
+            expect(await cleanupInstallations(f.root,undefined,jobs)).toEqual([]);
+        } db.close();
+    });
+    it('does not block ordinary job mutations while publication awaits filesystem work', async () => {
+        const f=await fixture();const service=new DownloadService(f.options);const job=await service.create({releaseId:'r1',sectionIds:['a']});
+        await withPublicationLock(f.root,async()=>{
+            await new Promise(resolve=>setImmediate(resolve));
+            expect(service.action(job.id,'pause').status).toBe('paused');
+        }); service.close();
+    });
+    it('rejects finite-domain and profile-order corruption in checksummed hint rows', async()=>{
+        const f=await fixture();const file=join(f.source,'..','tiny.sqlite');const db=new DatabaseSync(file);
+        for(const values of [[-1,0],[2,3],[2,null],[Infinity,0]]) {
+            db.exec('DELETE FROM access_points');db.prepare('INSERT INTO access_points VALUES(?,?,?)').run('bad',...values);
+            const bytes=await readFile(file);const artifact={...f.artifact,id:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};
+            await expect(verifyArtifact(file,artifact,'r1')).rejects.toThrow('minimum-stem hints');
+        } db.close();
+    });
+
+    it('retains verified cancelled artifacts and resumes them without downloading', async()=>{
+        const f=await fixture();const service=new DownloadService(f.options);const job=await service.create({releaseId:'r1',sectionIds:['a']});
+        await downloadArtifact({...f,releaseId:'r1',checkpoint(){},progress(){}});
+        service.action(job.id,'cancel');await cleanupInstallations(f.root,[]);
+        expect((await stat(join(f.root,'artifacts',`${f.artifact.id}.sqlite`))).size).toBe(f.artifact.bytes);
+        await rm(join(f.source,f.artifact.path));service.action(job.id,'resume');await runDownloadWorker(f.options);
+        expect(service.get(job.id).status).toBe('completed');service.close();
+    });
+
 });

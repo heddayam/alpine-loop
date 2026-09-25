@@ -128,6 +128,7 @@ export class RouteJobService {
     const outcome = this.#store.requestDelete(id);
     if (outcome === "missing") throw new ServerApiError("ROUTE_JOB_NOT_FOUND", "That batch route job was not found.", 404);
     if (outcome === "requested" && this.#active?.id === id) this.#active.controller.abort(new DOMException("Deleted", "AbortError"));
+    await this.#dependencies.cleanupInstallations?.();
   }
 
   async results(id: string, cursorText?: string): Promise<RouteJobResultsPage> {
@@ -162,6 +163,7 @@ export class RouteJobService {
         this.#store.finish(job.id, controller.signal.aborted || isCancellationError(error) ? "cancelled" : "failed", errorMessage(error));
       } finally {
         this.#active = undefined;
+        await this.#dependencies.cleanupInstallations?.();
       }
     }
   }

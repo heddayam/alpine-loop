@@ -25,6 +25,7 @@ export class Store {
         this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;
       CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, payload TEXT NOT NULL, release TEXT NOT NULL, source TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS publication_lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS pins(token TEXT, pid INTEGER, installation TEXT, PRIMARY KEY(token,installation));`);
     }
     close() {

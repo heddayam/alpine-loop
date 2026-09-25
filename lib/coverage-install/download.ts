@@ -51,6 +51,11 @@ export async function verifyArtifact(file: string, artifact: ReleaseArtifact, re
         for (const field of ['known_minimum_stem_m', 'inclusive_minimum_stem_m'])
             if (!columns.has(field))
                 throw new Error(`Artifact lacks ${field}`);
+        for (const row of db.prepare('SELECT known_minimum_stem_m AS known, inclusive_minimum_stem_m AS inclusive FROM access_points').iterate()) {
+            checkpoint();
+            for (const value of [row.known, row.inclusive]) if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) throw new Error('Artifact has invalid minimum-stem hints');
+            if (row.known !== null && (row.inclusive === null || Number(row.inclusive) > Number(row.known))) throw new Error('Artifact has inconsistent minimum-stem hints');
+        }
         if (db.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok')
             throw new Error('Artifact SQLite integrity check failed');
         return true;
@@ -58,6 +63,21 @@ export async function verifyArtifact(file: string, artifact: ReleaseArtifact, re
     finally {
         db.close();
     }
+}
+export async function verifyCompressedArtifact(file: string, artifact: ReleaseArtifact, checkpoint: () => void = () => {}): Promise<boolean> {
+    if (await size(file) !== artifact.compressedBytes) return false;
+    const hash = createHash('sha256'); let bytes = 0;
+    try {
+        await pipeline(createReadStream(file), createGunzip(), new Transform({
+            transform(chunk, _encoding, callback) {
+                try { checkpoint(); } catch (error) { callback(error as Error); return; }
+                bytes += chunk.length;
+                if (bytes > artifact.bytes) { callback(new Error('Artifact exceeds declared size')); return; }
+                hash.update(chunk); callback();
+            },
+        }));
+        return bytes === artifact.bytes && hash.digest('hex') === artifact.id;
+    } catch (error) { if (error instanceof DownloadStopped) throw error; return false; }
 }
 export async function requireDisk(root: string, bytes: number, available?: () => Promise<number>) {
     const free = available ? await available() : await statfs(root).then(s => s.bavail * s.bsize);
@@ -84,8 +104,10 @@ export async function downloadArtifact(options: {
     const compressed = join(root, 'downloads', `${artifact.id}.gz`), partial = `${compressed}.partial`, raw = `${target}.partial`;
     await rm(raw, { force: true });
     await rm(partial, { force: true });
-    await requireDisk(root, artifact.bytes + (await size(compressed) === artifact.compressedBytes ? 0 : artifact.compressedBytes), options.available);
-    if (await size(compressed) !== artifact.compressedBytes) {
+    const retainedCompressed = await verifyCompressedArtifact(compressed, artifact, checkpoint);
+    if (!retainedCompressed) await rm(compressed, { force: true });
+    await requireDisk(root, artifact.bytes + (retainedCompressed ? 0 : artifact.compressedBytes), options.available);
+    if (!retainedCompressed) {
         checkpoint();
         let input: Readable;
         let lastActivity = Date.now();
