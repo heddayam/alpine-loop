@@ -135,6 +135,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     const referenceGaps = references.reduce((count, item) => count + item.unresolved.length, 0);
     const unsupportedContext = inventory.reduce((count,item) => count + item.dispositions.reduce((sum,row) => sum + (row.disposition === "unsupported" ? Number(row.count) : 0),0),0);
     next.limitations = [...next.limitations,
+      ...(referenceSources.length ? ["Official trail inventories are used for coverage comparison only. Agency trails absent from OpenStreetMap are not included as routing edges."] : []),
       ...(unsupportedContext ? [`The source inventory contains ${unsupportedContext} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []),
       ...(frontierCount ? [`${frontierCount} mapped trail connections reach uninstalled coverage. Their source identities and locations are recorded in the coverage inventory.`] : []),
       ...(crossingCount ? [`${crossingCount} source trail segments cross the installed boundary and are not yet routable in full. Their locations are recorded in the coverage inventory.`] : []),
