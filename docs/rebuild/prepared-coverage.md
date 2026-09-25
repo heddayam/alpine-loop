@@ -93,7 +93,7 @@ and route equivalence, boundary and corner contacts, partial coverage, corrupt
 metadata, download recovery, atomic activation, retention, and solver rules.
 
 Real-data acceptance separately measures developer build memory/disk/time,
-resume cost, installation and expansion time/storage, and Quick/Full search
+resume cost, installation and expansion time/storage, and Full search
 behavior. West Cady, Pilchuck, and the cut approach remain explicit geographic
 regressions. A fixture pass does not establish Cascades-sized feasibility.
 
@@ -115,8 +115,8 @@ they do not establish acceptance of the complete Cascades collection.
 | Native installer peak RSS | 239,714,304 bytes |
 | App HTTP download/activation in a 512 MiB swap-disabled container | 18.01 seconds; zero OOM events |
 
-The app smoke test used the detached production worker and returned two exact
-Quick-search routes. Its image contains no Python, GDAL, osmium, source caches,
+The app smoke test used the detached production download worker. Its image
+contains no Python, GDAL, osmium, source caches,
 or compiler runtime. Installation timings above use local delivery and include
 verification; HTTPS time additionally depends on network throughput.
 
@@ -124,7 +124,38 @@ A copy of the real saved-job database retained all 17 jobs and 894 results,
 with identical SHA-256 of the ordered result payloads after opening with the
 new store. The original database and legacy pack files were not modified.
 
-Quick/Full comparisons initially found matching outputs but a material reader
-latency regression. Bounded statement reuse and candidate query improvements
-are being measured before this gate can pass. Full collection builds, second
-geography, final source comparison, and production reinstall remain pending.
+A Full-only comparison matched all nine route/graph outputs. A three-start
+session, including one-time preparation, took a median 2,096 ms for the legacy
+reader and 2,308 ms for prepared files. Preparation was 22 ms versus 65 ms and
+is reused across starts. The reader remained within eight connections. Full
+collection builds, second geography, final source comparison, and production
+reinstall remain pending.
+
+The production app image is 232,272,093 bytes with developer dependencies and
+Next build caches excluded. Cleanup retired duplicate validation outputs and
+superseded staging, retained reports, and shared 21 byte-identical immutable
+source files through hard links. Host free space increased from about 9 GiB to
+31 GiB; installed packs and saved results were retained. Future validation uses
+one shared source cache and retires superseded outputs instead of accumulating
+per-run copies.
+
+Migration must disclose that official agency inventories currently serve as
+reference audits, not additional routing edges. In particular, legacy Central
+Cascades contains about 116.85 km of official supplemental edges whose absence
+must be reported in the replacement comparison. Proximity-based legacy joins
+are not restored to hide this source difference.
+
+
+## Full-only search revision
+
+Quick search is removed from the app, HTTP endpoints, settings, worker protocol,
+and solver policy. Full search uses one prepared session per worker and one
+bounded solve per start. The former internal two-mode union is removed as well.
+Saved geometry and job results remain readable. Search comparisons for new
+acceptance runs measure this single production path and report preparation cost
+separately from per-start work.
+
+The final image returned HTTP 404 for the removed endpoint and completed a
+real one-start Full job with five exact routes in 2.17 seconds under a 512 MiB,
+swap-disabled limit, with no OOM events. Two full verification passes each
+passed 597 tests; two browser passes each passed nine desktop/mobile flows.

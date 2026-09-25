@@ -6,6 +6,23 @@ the evidence line.
 
 ## Active system design revision
 
+### Full-only search — active user revision
+
+- [x] Remove foreground search UI, endpoint, settings, and worker protocol.
+- [x] Remove the internal alternative solver pass and effort modes.
+- [x] Verify persistent searches, saved results, desktop/mobile flows, and final deletion inventory.
+
+Evidence: two `npm run verify` passes each passed 597 tests in 86 files, lint,
+types, and production build. Two browser passes each passed nine flows (27.1 s
+and 30.2 s). The 232,272,093-byte production image returned 404 for the removed
+endpoint and completed a real one-start Full job with five exact routes in
+2.17 s under a 512 MiB swap-disabled limit, with no OOM events. Full-only reader
+comparison matched all nine cases; three-start session medians were 2.10 s for
+the monolithic baseline and 2.31 s for prepared files, including preparation.
+The current revision removes 225 production-source lines relative to 04e2544
+(excluding tests, fixtures, and documentation). Completed agent worktrees were
+removed; the integration branch remains unmerged.
+
 ### Developer builds and downloadable coverage — active
 
 This revision supersedes app-driven progressive compilation below. Users select
@@ -17,10 +34,22 @@ coherent release. The existing branch and draft PR remain the integration path.
   113 graph/solver/server tests passed in 17 files, including actual child-process
   search, cross-file routes, partial coverage, seam/corner contacts, and bounded
   connection eviction. Integrated commits f0d0d61 and e92491c.
-- [ ] Developer-only coherent builds, compact feasibility hints, release export.
-- [ ] Download lifecycle and clickable coverage sections on the shared map.
+- [x] Developer-only coherent builds, compact feasibility hints, release export.
+  Evidence: offline end-to-end compiler/export/inventory regressions pass in the
+  final 597-test suite. Large-source acceptance remains a separate gate below.
+- [x] Download lifecycle and clickable coverage sections on the shared map.
+  Evidence: final installer corruption/recovery/retention regressions, two
+  desktop/mobile browser passes, and real 26-section download/activation.
 - [ ] Real-data build/install/search measurements, including the 4 GiB gate.
 - [ ] Verified one-time reinstall, saved-result preservation, and legacy deletion.
+
+Latest constrained build stopped safely after 55 prepared units because source
+way/1186146299 has missing elevation samples. No release was activated. Verified
+source/metric caches and completed receipts remain available; diagnose the missing
+samples before resuming. The 4 GiB gate remains open. Disk cleanup retired old
+validation outputs and a superseded stage, consolidated identical raw downloads,
+and increased host free space from about 9 GiB to 31 GiB while retaining installed
+packs and all saved results.
 
 Preserve existing generated data until replacement is verified. Earlier partial
 scale measurements remain diagnostic evidence, not acceptance of this revision.

@@ -4,7 +4,6 @@ Alpine Loop generates loop hikes from local trail data. Choose a region, draw
 an area, or set a minimum and maximum drive time; then specify distance, elevation, grade, and how
 much trail you are willing to repeat.
 
-- **Quick search** finds up to the number of alternatives you request.
 - **Full search** works through every eligible trailhead and saves its progress
   and results. You can cancel it and keep the routes found so far.
 - **Exact and close matches stay separate.** Constraints are never relaxed
@@ -108,7 +107,9 @@ Automated tests do not fetch trail data or call external providers.
 
 One CLI handles `build`, `inspect`, and `export`. Recipes specify intended
 coverage, pinned sources, exclusions, and resource settings. Interrupted builds
-resume verified staging and metric caches. A release is exported only after the
+resume verified staging and metric caches. Reuse one `ALPINE_SOURCE_CACHE` across
+recipes; developer inventories and staging can occupy tens of GB. Retire
+superseded validation outputs after recording their audits. A release is exported only after the
 complete graph and source inventory pass audit.
 
 ```sh
@@ -150,8 +151,8 @@ flowchart LR
 ```
 
 There is no merged local routing database. Files share release-wide source
-identities, and routes can cross installed section boundaries. Quick search
-uses one coherent graph; Full search distributes starts among bounded workers.
+identities, and routes can cross installed section boundaries. Full search
+uses one coherent graph and distributes starts among bounded workers.
 `ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs.
 Saved Full searches remain FIFO with ordered checkpoints.
 
