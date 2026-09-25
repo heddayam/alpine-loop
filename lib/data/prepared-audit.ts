@@ -19,19 +19,22 @@ export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRele
     WHERE s.row_id IS NULL OR s.min_lon>n.lon OR s.max_lon<n.lon OR s.min_lat>n.lat OR s.max_lat<n.lat LIMIT 1`).get()) throw new Error("Incomplete node spatial inventory");
   let work=0;
   const finite=(value:unknown)=>typeof value==="number"&&Number.isFinite(value);
-  for(const node of db.prepare("SELECT id,lon,lat,elevation_m FROM nodes ORDER BY node_key").iterate()) {
+  for(const node of db.prepare("SELECT id,node_key,lon,lat,elevation_m FROM nodes ORDER BY node_key").iterate()) {
     if(++work%1000===0) await checkpoint();
-    if(!finite(node.lon)||!finite(node.lat)||!finite(node.elevation_m)) throw new Error(`Missing node coordinates/elevation: ${node.id}`);
+    if(!Number.isSafeInteger(node.node_key)||Number(node.node_key)<1||!finite(node.lon)||!finite(node.lat)||!finite(node.elevation_m)) throw new Error(`Missing node coordinates/elevation: ${node.id}`);
   }
   for(const access of db.prepare("SELECT id,known_minimum_stem_m AS known,inclusive_minimum_stem_m AS inclusive FROM access_points ORDER BY id").iterate()) {
     if(++work%1000===0) await checkpoint();
     if([access.known,access.inclusive].some(value=>value!==null&&(!finite(value)||Number(value)<0)) || (access.known!==null&&(access.inclusive===null||Number(access.inclusive)>Number(access.known)))) throw new Error(`Invalid compact feasibility hints: ${access.id}`);
   }
   let prior:{key:number;from:string;to:string;length:number;gain:number;loss:number}|undefined;
-  for(const edge of db.prepare(`SELECT e.*,a.lon AS a_lon,a.lat AS a_lat,a.elevation_m AS a_elevation,b.lon AS b_lon,b.lat AS b_lat,b.elevation_m AS b_elevation,p.geometry_hash,p.from_node_key,p.to_node_key,a.node_key AS a_key,b.node_key AS b_key
-    FROM edges e LEFT JOIN nodes a ON a.id=e.from_node LEFT JOIN nodes b ON b.id=e.to_node LEFT JOIN physical_edges p ON p.physical_edge_key=e.physical_edge_key ORDER BY e.physical_edge_key,e.edge_key`).iterate()) {
+  for(const edge of db.prepare(`SELECT e.*,s.min_lon AS spatial_w,s.max_lon AS spatial_e,s.min_lat AS spatial_s,s.max_lat AS spatial_n,a.lon AS a_lon,a.lat AS a_lat,a.elevation_m AS a_elevation,b.lon AS b_lon,b.lat AS b_lat,b.elevation_m AS b_elevation,p.geometry_hash,p.from_node_key,p.to_node_key,a.node_key AS a_key,b.node_key AS b_key
+    FROM edges e LEFT JOIN edge_spatial s ON s.row_id=e.edge_key LEFT JOIN nodes a ON a.id=e.from_node LEFT JOIN nodes b ON b.id=e.to_node LEFT JOIN physical_edges p ON p.physical_edge_key=e.physical_edge_key ORDER BY e.physical_edge_key,e.edge_key`).iterate()) {
     if(++work%1000===0) await checkpoint();
     const geometry=JSON.parse(String(edge.geometry)) as Coordinate[];
+    if(!Number.isSafeInteger(edge.edge_key)||Number(edge.edge_key)<1||!Number.isSafeInteger(edge.physical_edge_key)||Number(edge.physical_edge_key)<1 ||
+      [edge.spatial_w,edge.spatial_e,edge.spatial_s,edge.spatial_n].some(value=>!finite(value)) ||
+      geometry.some(([lon,lat])=>lon<Number(edge.spatial_w)||lon>Number(edge.spatial_e)||lat<Number(edge.spatial_s)||lat>Number(edge.spatial_n))) throw new Error(`Incomplete edge spatial inventory: ${edge.id}`);
     const profile=JSON.parse(String(edge.elevation_profile)) as number[][];
     const equal=(a:unknown,b:unknown)=>finite(a)&&finite(b)&&Math.abs(Number(a)-Number(b))<=1e-6;
     if(edge.edge_class!=="trail" || !geometry.length || !lineIsInsideArea(geometry,expected.geometry) || !equal(geometry[0]?.[0],edge.a_lon)||!equal(geometry[0]?.[1],edge.a_lat)||!equal(geometry.at(-1)?.[0],edge.b_lon)||!equal(geometry.at(-1)?.[1],edge.b_lat)) throw new Error(`Invalid complete edge geometry/endpoints: ${edge.id}`);

@@ -50,7 +50,7 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
-const context = (): CoverageRunnerContext => ({ signal: new AbortController().signal, publishOnly: false, checkpoint: async () => "continue", report: async () => {} });
+const context = (): CoverageRunnerContext => ({ signal: new AbortController().signal, checkpoint: async () => "continue", report: async () => {} });
 const request = (west: number, east: number) => plan({ collectionIds: [], geometry: rectangle([west,47.50,east,47.55]), memoryLimitMiB: 4096, offline: true });
 async function release(): Promise<DataRelease> {return JSON.parse(await readFile(path.join(root,"release/release.json"),"utf8"));}
 async function pieces() {
@@ -174,6 +174,7 @@ it("rejects missing elevation, invalid hints and inconsistent physical direction
   const original=path.join(root,"stage",(await readdir(path.join(root,"stage"))).find(file=>file.endsWith("-complete.sqlite"))!);
   const {geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations}=manifest;
   const corruptions=[
+    ["UPDATE edge_spatial SET min_lon=0,max_lon=0,min_lat=0,max_lat=0", "spatial inventory"],
     ["UPDATE nodes SET elevation_m=NULL WHERE node_key=(SELECT min(node_key) FROM nodes)","elevation"],
     ["UPDATE access_points SET inclusive_minimum_stem_m=1e999","compact feasibility"],
     ["UPDATE edges SET gain_m=gain_m+1 WHERE edge_key=(SELECT min(edge_key) FROM edges)","metrics/directions"],

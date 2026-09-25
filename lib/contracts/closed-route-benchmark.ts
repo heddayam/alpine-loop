@@ -19,8 +19,6 @@ export const closedRouteBenchmarkCaseResultSchema = z.object({
   timeToFirstExactMs: z.number().finite().nonnegative().optional(),
   expandedStates: z.number().int().nonnegative(),
   directedValidationRejectionCount: z.number().int().nonnegative(),
-  attachmentGroupCount: z.number().int().nonnegative(),
-  probedAttachmentGroupCount: z.number().int().nonnegative(),
   topologyKinds: z.array(closedRouteTopologyV3Schema.shape.kind),
   routeIds: z.array(z.string().min(1)),
   truncationReasons: z.array(z.string()),

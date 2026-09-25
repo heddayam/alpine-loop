@@ -10,7 +10,7 @@ try {
   if(command==="build") {
     const controller=new AbortController();
     const stop=()=>controller.abort(); process.once("SIGINT",stop); process.once("SIGTERM",stop);
-    try {result=await buildRelease(await readBuildRecipe(file),{signal:controller.signal,publishOnly:false,checkpoint:async()=>"continue",report:async update=>{process.stderr.write(`${update.stage ?? "Building"}\n`);}});}
+    try {result=await buildRelease(await readBuildRecipe(file),{signal:controller.signal,checkpoint:async()=>"continue",report:async update=>{process.stderr.write(`${update.stage ?? "Building"}\n`);}});}
     finally {process.removeListener("SIGINT",stop);process.removeListener("SIGTERM",stop);}
   } else if(command==="inspect") result=await inspectPreparedRelease(file);
   else if(command==="export") result=await exportPreparedRelease(input as PreparedReleaseOptions);

@@ -52,7 +52,8 @@ const moduleUrl = (path: string): string => pathToFileURL(join(solverRoot, path)
 const { searchPenalizedClosedRoutes } = await import(moduleUrl("lib/solver/penalized-closed-route-search.ts")) as typeof import("../../lib/solver/penalized-closed-route-search");
 const { ReachableGraphClosedRouteSolver } = await import(moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")) as typeof import("../../lib/solver/reachable-graph-closed-route-solver");
 const { CLOSED_ROUTE_EFFORT_BUDGETS } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
-const { SQLiteGraphRepository, SQLiteClosedRouteFeasibilityRepository, distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
+const { distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
+const { SQLiteGraphRepository } = await import(moduleUrl("lib/graph/sqlite-repository.ts")) as typeof import("../../lib/graph/sqlite-repository");
 const contractionPath = "lib/solver/contract-corridors.ts";
 const contraction = existsSync(join(solverRoot, contractionPath)) ? await import(moduleUrl(contractionPath)) as {
   contractCorridors: (edges: EdgeTraversal[], startNodeId: string) => EdgeTraversal[][];
@@ -124,7 +125,6 @@ async function measure(id: string, target: RouteSearchRequest, run: () => Promis
 type PreparedCase = BenchmarkCase & {
   manifest: PackManifest;
   repository: InstanceType<typeof SQLiteGraphRepository>;
-  topologyRepository: InstanceType<typeof SQLiteClosedRouteFeasibilityRepository>;
   accessFilter: ResolvedAccessFilterContext;
 };
 
@@ -144,7 +144,7 @@ async function runCase(item: PreparedCase) {
   if (layer !== "raw") {
     const solver = new ReachableGraphClosedRouteSolver({ pack: item.manifest });
     runs.push(await measure(`${item.id}/pipeline`, target, () => solver.generate(target, {
-      repository: item.repository, topologyRepository: item.topologyRepository, accessFilter: item.accessFilter, budget, now,
+      repository: item.repository, accessFilter: item.accessFilter, budget, now,
     })));
   }
   return { id: item.id, inputFingerprint, pack: { id: item.manifest.id, dataVersion: item.manifest.dataVersion },
@@ -161,12 +161,10 @@ try {
     const databasePath = join(directory, `fixture-${index}.sqlite`);
     const manifest = writeGraphFixture(databasePath, item.graph, [item.start]);
     const repository = new SQLiteGraphRepository(databasePath, manifest.id);
-    const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
     try {
-      cases.push(await runCase({ ...item, manifest, repository, topologyRepository,
+      cases.push(await runCase({ ...item, manifest, repository,
         accessFilter: { predicates: [manifest.coverage.boundary], coverage: manifest.coverage.boundary } }));
     } finally {
-      await topologyRepository.close();
       await repository.close();
     }
   }
@@ -179,7 +177,6 @@ try {
     const manifest = packManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
     const databasePath = join(dirname(manifestPath), "pack.sqlite");
     const repository = new SQLiteGraphRepository(databasePath, packId);
-    const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
     try {
       const scenariosPath = join(ownRoot, "data/regions", packId, "scenarios.json");
       const scenario = existsSync(scenariosPath) ? (JSON.parse(readFileSync(scenariosPath, "utf8")) as { scenarios: Array<{
@@ -207,10 +204,9 @@ try {
         const { graph, truncated } = await repository.getReachableGraph({ startNodeId: start.nodeId,
           maximumDistanceMeters: target.distanceMiles.max * 1609.344, maximumDirectedEdges: budget.maximumDirectedEdges,
           includeUncertainAccess: true, coverage: manifest.coverage.boundary });
-        cases.push(await runCase({ id, graph, graphTruncated: truncated, start, request: target, manifest, repository, topologyRepository, accessFilter }));
+        cases.push(await runCase({ id, graph, graphTruncated: truncated, start, request: target, manifest, repository, accessFilter }));
       }
     } finally {
-      await topologyRepository.close();
       await repository.close();
     }
   }

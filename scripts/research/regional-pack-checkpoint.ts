@@ -1,3 +1,4 @@
+import { SQLiteGraphRepository } from "@/lib/graph/sqlite-repository";
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
@@ -9,8 +10,6 @@ import {
 import { getSearchRegion } from "@/lib/data/named-area-catalog";
 import {
   distanceMetersBetween,
-  SQLiteClosedRouteFeasibilityRepository,
-  SQLiteGraphRepository,
   type AccessPointCandidate,
 } from "@/lib/graph";
 import {
@@ -113,7 +112,6 @@ async function runExpectation(options: {
   startAccessPointId: string;
   effort: SearchEffortV3;
   graphRepository: SQLiteGraphRepository;
-  topologyRepository: SQLiteClosedRouteFeasibilityRepository;
   accessFilter: ResolvedAccessFilterContext;
 }) {
   const validationRejections: Record<string, number> = {};
@@ -144,7 +142,6 @@ async function runExpectation(options: {
   const startedAt = performance.now();
   const response = await solver.generate(request, {
     repository: options.graphRepository,
-    topologyRepository: options.topologyRepository,
     budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[options.effort] },
     accessFilter: options.accessFilter,
   });
@@ -191,10 +188,8 @@ const scenarioFile = scenarioFileSchema.parse(JSON.parse(await readFile(scenario
 const graphRepository = new SQLiteGraphRepository(databasePath, manifest.id);
 const runs: Array<Record<string, unknown>> = [];
 const failures: string[] = [];
-let topologyRepository: SQLiteClosedRouteFeasibilityRepository | undefined;
 
 try {
-  topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
   for (const scenario of scenarioFile.scenarios) {
     try {
       const region = getSearchRegion(databasePath, scenario.searchRegionId);
@@ -225,7 +220,6 @@ try {
         startAccessPointId: selected.candidate.id,
         effort,
         graphRepository,
-        topologyRepository,
         accessFilter,
       });
       const impossible = await runExpectation({
@@ -236,7 +230,6 @@ try {
         startAccessPointId: selected.candidate.id,
         effort,
         graphRepository,
-        topologyRepository,
         accessFilter,
       });
       if (!exact.passed) failures.push(`${scenario.id}: exact expectation returned no exact route`);
@@ -272,7 +265,6 @@ try {
     }
   }
 } finally {
-  if (topologyRepository) await topologyRepository.close();
   await graphRepository.close();
 }
 

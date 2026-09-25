@@ -7,7 +7,7 @@ export const coverageRequestSchema = z.object({
   memoryLimitMiB: z.number().int().min(512).max(65536).default(4096),
   offline: z.boolean().default(false),
 }).strict().refine((value) => value.collectionIds.length > 0 || value.geometry !== undefined, {
-  message: "Choose a collection or draw an installation area",
+  message: "Provide intended coverage geometry or a configured research collection",
 });
 export const coverageUnitSchema = z.object({
   id: z.string(), geometry: areaGeometrySchema,
@@ -45,10 +45,8 @@ export type CoverageProgressUpdate = {
 
 export type CoverageRunnerContext = {
   signal: AbortSignal;
-  /** Deprecated research-script input; coherent builds never publish partial data. */
-  publishOnly?: boolean;
   report(update: CoverageProgressUpdate): Promise<void>;
-  checkpoint(): Promise<"continue" | "pause" | "cancel" | "publish">;
+  checkpoint(): Promise<"continue" | "pause" | "cancel">;
 };
 
 export type CoverageRunResult = {
