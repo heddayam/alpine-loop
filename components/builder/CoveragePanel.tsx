@@ -29,6 +29,7 @@ export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange
   }, [catalog, onChanged]);
   const sections = release?.sections ?? [];
   const installedIds = new Set(installed?.sectionIds ?? []);
+  const additionalCount = sections.filter(({ id }) => !installedIds.has(id)).length;
   const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id));
   const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
   const desired = [...new Set([...installedIds, ...selectedIds])].sort();
@@ -50,17 +51,19 @@ export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange
     <div className="builder-scroll coverage-content">
       {onClose ? <button type="button" className="btn-link" onClick={onClose}>← Back to planning</button> : null}
       <h2 id="coverage-title">Manage coverage</h2>
-      <p>Download prepared hiking data. Select sections on the map; your search area stays unchanged.</p>
+      <p>Download prepared hiking data. Managing coverage keeps your search area unchanged.</p>
       <p className="coverage-caveat">Mapped trails can be incomplete. Installed coverage does not confirm current access or trail conditions.</p>
       {error || catalog?.error ? <div role="alert" className="error-state">{error ?? catalog?.error} <button type="button" className="btn" disabled={busy} onClick={() => void resource.refresh()}>Retry</button></div> : null}
       {!catalog && !error ? <p role="status">Loading coverage…</p> : null}
+      {release?.limitations.length ? <section className="coverage-caveat" aria-labelledby="coverage-limits"><h3 id="coverage-limits">Coverage limits</h3><ul>{release.limitations.map((text) => <li key={text}>{text}</li>)}</ul></section> : null}
       <ul className="coverage-legend" aria-label="Coverage map legend">{Object.entries(labels).map(([status,label]) => <li key={status}><span className={`coverage-swatch coverage-${status}`} />{label}</li>)}</ul>
       {catalog ? <>
         <p>{installed ? `${installed.sectionIds.length} ${installed.sectionIds.length === 1 ? "section" : "sections"} installed` : "No prepared coverage installed."}</p>
         {release ? <>
+          <p role="status"><strong>{additionalCount ? `${additionalCount} additional ${additionalCount === 1 ? "section" : "sections"} available in this catalog.` : "No additional coverage is available in this catalog."}</strong></p>
+          <p>{additionalCount ? "Click available sections on the map or choose them from the list below, then select Preview download." : "All sections in this catalog are installed. Select installed sections on the map or in the list below to remove coverage."}</p>
           <p className="hint">Data release: {new Date(release.builtAt).toLocaleDateString(undefined, { timeZone: "UTC" })}</p>
           <details><summary>Sources and attribution</summary><ul>{release.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer">{source.authority} · {source.dataset}</a><small> {source.version} · {source.license}</small></li>)}</ul></details>
-          {release.limitations.map((text) => <p className="hint" key={text}>{text}</p>)}
           <p role="status">{selectedIds.size} {selectedIds.size === 1 ? "section" : "sections"} selected · {bytes(selectedBytes)} packaged download</p>
           <div className="action-row">
             <button type="button" className="btn" disabled={busy || !downloadable} onClick={() => request && void resource.preview(request)}>Preview download</button>

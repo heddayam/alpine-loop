@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { catalog, plan, request, job, installation } from "../../tests/fixtures/coverage/catalog";
 import { CoveragePanel } from "./CoveragePanel";
@@ -101,4 +101,33 @@ it("requires explicit removal when a new catalog drops previously installed sect
   expect(await screen.findByRole("button", { name: "Preview update" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Remove unavailable sections" })).toBeEnabled();
   expect(screen.getByText(/Your existing coverage is retained/)).toBeVisible();
+});
+
+
+it("counts only additional catalog sections and explains map or list selection", async () => {
+  const base = catalog.release!;
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...base, sections: [...base.sections, { ...base.sections[0], id: "next" }, { ...base.sections[0], id: "farther" }] } })));
+  render(<CoveragePanel {...props} selected={["next"]} />);
+  expect(await screen.findByText("2 additional sections available in this catalog.")).toBeVisible();
+  expect(screen.getByText("Click available sections on the map or choose them from the list below, then select Preview download.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Preview download" })).toBeEnabled();
+});
+
+it("explains that a fully installed catalog has no additional coverage while retaining update and removal", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "older" } })));
+  render(<CoveragePanel {...props} />);
+  expect(await screen.findByText("No additional coverage is available in this catalog.")).toBeVisible();
+  expect(screen.getByText("All sections in this catalog are installed. Select installed sections on the map or in the list below to remove coverage.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Preview update" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Remove selected coverage" })).toBeEnabled();
+});
+
+it("keeps partial benchmark limitations prominent even when every catalog section is installed", async () => {
+  const limitation = "Partial benchmark coverage only; the full region is not available in this release.";
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...catalog.release!, limitations: [limitation] } })));
+  render(<CoveragePanel {...props} />);
+  const limits = await screen.findByRole("region", { name: "Coverage limits" });
+  expect(within(limits).getByText(limitation)).toBeVisible();
+  expect(screen.getByText("No additional coverage is available in this catalog.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Preview download" })).toBeDisabled();
 });
