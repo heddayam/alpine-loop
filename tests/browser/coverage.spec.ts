@@ -18,15 +18,16 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   await trigger.click();
   const dialog = page.getByRole("complementary", { name: "Manage coverage" });
   await expect(dialog).toBeVisible();
-  await dialog.getByText("Select sections from a list").click();
-  const section = dialog.getByRole("checkbox");
-  if (width > 600) {
-    await expect(async () => {
-      if (!await section.isChecked()) await page.locator(".maplibregl-canvas").click();
-      await expect(section).toBeChecked();
-    }).toPass({ timeout: 10000 });
-    await expect(page.getByRole("button", { name: "Draw trailhead filter" })).not.toBeVisible();
-  } else await section.check();
+  if (width <= 600) await page.getByRole("button", { name: "Show map", exact: true }).click();
+  const canvas = page.locator(".maplibregl-canvas");
+  await expect(async () => {
+    await canvas.hover();
+    await expect(canvas).toHaveCSS("cursor", "pointer");
+  }).toPass({ timeout: 10000 });
+  await canvas.click();
+  if (width <= 600) await page.getByRole("button", { name: "Show panel", exact: true }).click();
+  await expect(dialog.getByText(/1 section selected/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Draw trailhead filter" })).not.toBeVisible();
   await dialog.getByRole("button", { name: "Preview download" }).click();
   await expect(dialog.getByText("1.3 MiB")).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("coverage.png") });

@@ -8,7 +8,7 @@ import { processingCoverage, useCoverage } from "./useCoverage";
 function bytes(value: number) { return value < 1024 * 1024 ? `${Math.round(value / 1024)} KiB` : `${(value / 1024 / 1024).toFixed(1)} MiB`; }
 
 export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose }: {
-  open: boolean; selected: string[]; onToggle: (id: string) => void; onClose?: () => void;
+  open: boolean; selected: string[]; onClose?: () => void;
   onChanged?: () => void; onMapChange?: (overlay: CoverageOverlay) => void;
 }) {
   const resource = useCoverage(open);
@@ -73,7 +73,6 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
           {["paused","failed"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id,"resume")}>Resume</button> : null}
           <button className="btn" disabled={busy} onClick={() => void resource.act(job.id,"cancel")}>Cancel download</button></footer>
         </article>)}</section> : null}
-        {release ? <footer className="coverage-sources">{release.sources.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noreferrer">{source.authority} · {source.license}</a>)}</footer> : null}
       </> : null}
       {busy ? <span role="status">Updating…</span> : null}
     </div>

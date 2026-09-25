@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { catalog, plan, request, job, installation } from "../../tests/fixtures/coverage/catalog";
 import { CoveragePanel } from "./CoveragePanel";
 const response = (body: unknown) => ({ ok: true, json: async () => body });
-const props = { open: true, selected: ["section"], onToggle: vi.fn() };
+const props = { open: true, selected: ["section"] };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it("reviews actual download and disk sizes, then submits the selected release sections", async () => {
@@ -133,5 +133,4 @@ it("labels partial releases without warning prose or completed download history"
   expect(screen.queryByText(limitation)).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Active downloads" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Preview download" })).toBeDisabled();
-  expect(screen.getByRole("link", { name: /OpenStreetMap contributors/ })).toHaveAttribute("href", "https://www.openstreetmap.org");
 });

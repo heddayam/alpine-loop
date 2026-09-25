@@ -392,6 +392,10 @@ it("shares one map for coverage overlays, preserves holes, and restores the plan
   expect(map.fitBounds).toHaveBeenCalledTimes(fits);
   expect(screen.queryByRole("button",{name:"Draw trailhead filter"})).toBeNull();
   map.queryRenderedFeatures.mockReturnValueOnce([{properties:{sectionId:"selected"}}]);
+  act(()=>map.emit("mousemove"));
+  expect(map.getCanvas().style.cursor).toBe("pointer");
+  expect(map.setFilter).toHaveBeenCalledWith("installation-hover",["==",["get","sectionId"],"selected"]);
+  map.queryRenderedFeatures.mockReturnValueOnce([{properties:{sectionId:"selected"}}]);
   act(()=>map.emit("click"));
   expect(onSelect).toHaveBeenCalledWith("selected");
   act(()=>map.emit("click",{id:"hidden-route"},"route-line"));

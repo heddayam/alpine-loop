@@ -317,7 +317,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
             <button type="button" aria-pressed={panel === "plan"} onClick={() => changePanel("plan")}>Plan</button>
             <button type="button" aria-pressed={panel === "results" || panel === "route"} disabled={!hasResultsPanel} onClick={() => changePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
           </nav>
-          <CoveragePanel open={coverageOpen} onClose={() => setCoverageOpen(false)} selected={coverageSelection} onToggle={toggleCoverageSection} onChanged={refreshCoverageCatalog} onMapChange={setCoverageOverlay} />
+          <CoveragePanel open={coverageOpen} onClose={() => setCoverageOpen(false)} selected={coverageSelection} onChanged={refreshCoverageCatalog} onMapChange={setCoverageOverlay} />
           <aside className="builder-panel" hidden={coverageOpen || panel !== "plan"} aria-labelledby="builder-title">
           <div className="builder-scroll">
             <h2 id="builder-title" className="visually-hidden">Plan</h2>

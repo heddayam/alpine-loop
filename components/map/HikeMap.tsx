@@ -447,7 +447,7 @@ export function HikeMap({
         container: containerRef.current,
         center: initialDisplay.current.center,
         zoom: initialDisplay.current.zoom,
-        attributionControl: { compact: true },
+        attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>' },
         style: {
           version: 8,
           sources: {
@@ -925,14 +925,14 @@ export function HikeMap({
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
-    const accessPoints = mapData.accessPoints.filter((point) => includeUncertainAccess || point.accessState !== "unknown");
+    const accessPoints = (coverageMode ? [] : mapData.accessPoints).filter((point) => includeUncertainAccess || point.accessState !== "unknown");
     (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes)));
-  }, [includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
+  }, [coverageMode, includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
 
   useEffect(() => {
     if (!mapReady) return;
-    (mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined)?.setData(mapData.trailNetwork);
-  }, [mapData.trailNetwork, mapReady]);
+    (mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined)?.setData(coverageMode ? EMPTY_POINTS : mapData.trailNetwork);
+  }, [coverageMode, mapData.trailNetwork, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1029,10 +1029,11 @@ export function HikeMap({
       map.addSource("installation-coverage", {type:"geojson",data:{type:"FeatureCollection",features:[]}});
       for (const [status,color] of Object.entries(coverageColors)) {
         const filter: FilterSpecification = ["==",["get","status"],status];
-        map.addLayer({id:`installation-${status}-fill`,type:"fill",source:"installation-coverage",filter,paint:{"fill-color":color,"fill-opacity":.17}});
-        map.addLayer({id:`installation-${status}-line`,type:"line",source:"installation-coverage",filter,paint:{"line-color":color,"line-width":status === "selected" ? 2 : 1}});
+        map.addLayer({id:`installation-${status}-fill`,type:"fill",source:"installation-coverage",filter,paint:{"fill-color":color,"fill-opacity":status === "selected" ? .32 : .12}});
+        map.addLayer({id:`installation-${status}-line`,type:"line",source:"installation-coverage",filter,paint:{"line-color":color,"line-width":status === "selected" ? 3 : 1.5}});
       }
     }
+    if (!map.getLayer("installation-hover")) map.addLayer({id:"installation-hover",type:"line",source:"installation-coverage",filter:["==",["get","sectionId"],""],paint:{"line-color":"#2563eb","line-width":3}});
     (map.getSource("installation-coverage") as GeoJSONSource).setData(coverageData ? JSON.parse(coverageData) : {type:"FeatureCollection",features:[]});
     if (coverageData) {
       coverageCamera.current ??= {center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()};
@@ -1051,14 +1052,22 @@ export function HikeMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !coverage || !onCoverageSectionSelect) return;
-    const click = (event: MapMouseEvent) => {
+    const sectionAt = (event: MapMouseEvent) => {
       const layers = Object.keys(coverageColors).map((status) => `installation-${status}-fill`).filter((id) => map.getLayer(id));
-      const feature = layers.length ? map.queryRenderedFeatures(event.point, { layers })[0] : undefined;
-      const id = feature?.properties?.sectionId;
+      return layers.length ? map.queryRenderedFeatures(event.point, { layers })[0]?.properties?.sectionId : undefined;
+    };
+    const click = (event: MapMouseEvent) => {
+      const id = sectionAt(event);
       if (typeof id === "string") onCoverageSectionSelect(id);
     };
+    const hover = (event: MapMouseEvent) => {
+      const id = sectionAt(event);
+      map.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
+      map.setFilter("installation-hover", ["==",["get","sectionId"],typeof id === "string" ? id : ""]);
+    };
     map.on("click", click);
-    return () => { map.off("click", click); };
+    map.on("mousemove", hover);
+    return () => { map.off("click", click); map.off("mousemove", hover); map.getCanvas().style.cursor = ""; map.setFilter("installation-hover", ["==",["get","sectionId"],""]); };
   }, [coverage, mapReady, onCoverageSectionSelect]);
 
   useEffect(() => {

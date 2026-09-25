@@ -696,7 +696,7 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-heading, .coverage-download header { justify-content: space-between; }
 .coverage-counts { gap: var(--s4); }
 .coverage-limited { color: var(--warn); font-size: var(--fs-xs); white-space: nowrap; }
-.coverage-selection, .coverage-sources { color: var(--ink-3); font-size: var(--fs-xs); }
+.coverage-selection { color: var(--ink-3); font-size: var(--fs-xs); }
 .coverage-plan { padding: var(--s3); background: var(--surface-2); border-radius: var(--radius); }
 .coverage-plan dl > div { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: space-between; }
 .coverage-plan dd { margin: 0; }
@@ -704,7 +704,6 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-download progress { width: 100%; height: .4rem; }
 .coverage-content .action-row { flex-wrap: wrap; }
 .coverage-content .error-state { overflow-wrap: anywhere; }
-.coverage-sources { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
 .coverage-panel .coverage-content { padding: var(--s4); }
 .coverage-panel h2 { font-size: var(--fs-lg); }
 .coverage-installed { fill: #a7d7b5; stroke: #166534; background: #a7d7b5; border-color: #166534; }
