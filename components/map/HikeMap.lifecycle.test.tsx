@@ -381,15 +381,21 @@ describe("MapLibre workspace lifecycle", () => {
 it("shares one map for coverage overlays, preserves holes, and restores the planning camera",async()=>{
   const initial=props([]),view=render(<HikeMap {...initial}/>),map=await loadMap();
   const geometry={type:"Polygon" as const,coordinates:[[[-122,47],[-121,47],[-121,48],[-122,48],[-122,47]],[[-121.8,47.2],[-121.6,47.2],[-121.6,47.4],[-121.8,47.4],[-121.8,47.2]]]};
-  const coverage={features:{type:"FeatureCollection" as const,features:["pending","processing","prepared","installed","unavailable"].map(status=>({type:"Feature" as const,geometry,properties:{status}}))},focus:[-122,47,-121,48] as [number,number,number,number]};
-  view.rerender(<HikeMap {...initial} coverage={coverage}/>);
+  const coverage={features:{type:"FeatureCollection" as const,features:["available","selected","downloading","installed"].map(status=>({type:"Feature" as const,geometry,properties:{status,sectionId:status}}))},focus:[-122,47,-121,48] as [number,number,number,number]};
+  const onSelect=vi.fn();
+  view.rerender(<HikeMap {...initial} coverage={coverage} onCoverageSectionSelect={onSelect}/>);
   expect(recording.maps).toHaveLength(1);
   expect(map.getSource("installation-coverage")?.data).toEqual(coverage.features);
   expect(map.fitBounds).toHaveBeenLastCalledWith([[-122,47],[-121,48]],expect.anything());
   const fits=map.fitBounds.mock.calls.length;
-  view.rerender(<HikeMap {...initial} coverage={structuredClone(coverage)}/>);
+  view.rerender(<HikeMap {...initial} coverage={structuredClone(coverage)} onCoverageSectionSelect={onSelect}/>);
   expect(map.fitBounds).toHaveBeenCalledTimes(fits);
-  fireEvent.click(screen.getByRole("button",{name:"Draw installation area"}));
+  expect(screen.queryByRole("button",{name:"Draw trailhead filter"})).toBeNull();
+  map.queryRenderedFeatures.mockReturnValueOnce([{properties:{sectionId:"selected"}}]);
+  act(()=>map.emit("click"));
+  expect(onSelect).toHaveBeenCalledWith("selected");
+  act(()=>map.emit("click",{id:"hidden-route"},"route-line"));
+  expect(initial.onRouteSelect).not.toHaveBeenCalled();
   view.rerender(<HikeMap {...initial}/>);
   expect(screen.getByRole("button",{name:"Draw trailhead filter"}).getAttribute("aria-pressed")).toBe("false");
   expect(map.getSource("installation-coverage")?.data.features).toHaveLength(0);

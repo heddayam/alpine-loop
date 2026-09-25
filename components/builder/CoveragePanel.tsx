@@ -1,84 +1,91 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { CoverageRequest, CoverageUnit } from "@/lib/contracts/coverage";
+import { useEffect, useRef } from "react";
+import type { ReleaseSection } from "@/lib/contracts/releases";
+import { areaBounds } from "@/lib/graph/geometry";
 import type { CoverageOverlay } from "../map/HikeMap";
 import { processingCoverage, useCoverage } from "./useCoverage";
 
-type Geometry = NonNullable<CoverageRequest["geometry"]>;
-const unitLabels: Record<CoverageUnit["status"], string> = { pending: "Requested", processing: "Processing", prepared: "Ready to install", installed: "Installed", unavailable: "Unavailable" };
-function bytes(value: number | null) { return value === null ? "Not yet estimated" : value < 1024 * 1024 ? `${Math.round(value / 1024)} KiB` : `${(value / 1024 / 1024).toFixed(1)} MiB`; }
-function extent(geometry: Geometry) {
-  const points = geometry.type === "Polygon" ? geometry.coordinates.flat() : geometry.coordinates.flat(2);
-  const bounds = points.reduce(([west, south, east, north], [lon, lat]) => [Math.min(west, lon), Math.min(south, lat), Math.max(east, lon), Math.max(north, lat)], [Infinity, Infinity, -Infinity, -Infinity]);
-  return bounds.map((value) => value.toFixed(3)).join(", ");
+const labels = { available: "Available", selected: "Selected", downloading: "Downloading", installed: "Installed" };
+function bytes(value: number) { return value < 1024 * 1024 ? `${Math.round(value / 1024)} KiB` : `${(value / 1024 / 1024).toFixed(1)} MiB`; }
+export function sectionLabel(section: ReleaseSection) {
+  const [w,s,e,n] = areaBounds(section.geometry), lat=(s+n)/2, lon=(w+e)/2;
+  return `${Math.abs(lat).toFixed(3)}° ${lat < 0 ? "S" : "N"}, ${Math.abs(lon).toFixed(3)}° ${lon < 0 ? "W" : "E"}`;
 }
 
-export function CoveragePanel({ open, geometry, onChanged, onMapChange, onClose }: { open: boolean; onClose?: () => void; geometry?: Geometry; onChanged?: () => void; onMapChange?: (overlay: CoverageOverlay) => void }) {
+export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange, onClose }: {
+  open: boolean; selected: string[]; onToggle: (id: string) => void; onClose?: () => void;
+  onChanged?: () => void; onMapChange?: (overlay: CoverageOverlay) => void;
+}) {
   const resource = useCoverage(open);
-  const [collectionIds, setCollectionIds] = useState<string[]>([]);
-  const [useDrawn, setUseDrawn] = useState(true);
-  const [memory, setMemory] = useState("4096");
-  const [offline, setOffline] = useState(false);
-  const { catalog, plan, busy, error } = resource;
-  const previousSnapshot = useRef<string | null | undefined>(undefined);
+  const { catalog, busy, error } = resource;
+  const release = catalog?.release, installed = catalog?.installed;
+  const previous = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!catalog) return;
-    const next = catalog.installed ? `${catalog.installed.id}:${catalog.installed.dataVersion}` : null;
-    if (previousSnapshot.current !== undefined && next !== previousSnapshot.current) onChanged?.();
-    previousSnapshot.current = next;
+    const next = catalog.installed?.id ?? null;
+    if (previous.current !== undefined && next !== previous.current) onChanged?.();
+    previous.current = next;
   }, [catalog, onChanged]);
-  const validMemory = Number.isInteger(Number(memory)) && Number(memory) >= 512 && Number(memory) <= 65536;
-  const requestReady = validMemory && (collectionIds.length > 0 || (useDrawn && Boolean(geometry)));
-  const requested = plan ? [plan.geometry] : [...(catalog?.collections ?? []).filter((item) => collectionIds.includes(item.id)).map((item) => item.geometry), ...(useDrawn && geometry ? [geometry] : [])];
-  const units = plan?.units ?? (catalog?.jobs.find(processingCoverage) ?? catalog?.jobs[0])?.plan.units ?? [];
-  const focus = requested.length ? requested : catalog?.installed ? [catalog.installed.geometry] : (catalog?.collections ?? []).slice(0,1).map((item) => item.geometry);
-  const points = focus.flatMap((item) => item.type === "Polygon" ? item.coordinates.flat() : item.coordinates.flat(2));
-  const mapKey = JSON.stringify({ features: { type: "FeatureCollection", features: [
-    ...requested.map((geometry) => ({ geometry, status: "pending" })),
-    ...(catalog?.installed ? [{ geometry: catalog.installed.geometry, status: "installed" }] : []), ...units,
-  ].map(({geometry,status}) => ({type:"Feature",geometry,properties:{status}})) },
-    focus: points.length ? points.reduce(([w,s,e,n],[x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]) : null });
+  const sections = release?.sections ?? [];
+  const installedIds = new Set(installed?.sectionIds ?? []);
+  const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
+  const desired = [...new Set([...installedIds, ...selectedIds])].sort();
+  const removable = [...selectedIds].filter((id) => installedIds.has(id));
+  const updating = Boolean(installed && release && installed.releaseId !== release.id);
+  const downloadable = selectedIds.size > 0 && (updating || [...selectedIds].some((id) => !installedIds.has(id)));
+  const request = release ? { releaseId: release.id, sectionIds: desired } : null;
+  const plan = resource.plan && resource.plan.releaseId === release?.id && JSON.stringify([...resource.plan.sectionIds].sort()) === JSON.stringify(desired) ? resource.plan : undefined;
+  const downloading = new Set(catalog?.jobs.filter(processingCoverage).flatMap((job) => job.sectionIds) ?? []);
+  const mapKey = JSON.stringify({
+    features: { type: "FeatureCollection", features: sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
+      properties: { sectionId: section.id, status: selectedIds.has(section.id) ? "selected" : downloading.has(section.id) ? "downloading" : installedIds.has(section.id) ? "installed" : "available" } })) },
+    focus: installed ? areaBounds(installed.geometry) : release ? areaBounds(release.geometry) : null,
+  });
   useEffect(() => { onMapChange?.(JSON.parse(mapKey)); }, [mapKey, onMapChange]);
-  const geometryKey = JSON.stringify(geometry);
-  const {clearPlan} = resource;
-  useEffect(() => { clearPlan(); }, [geometryKey, clearPlan]);
+  const selectedArtifacts = new Set(sections.filter(({id}) => selectedIds.has(id)).flatMap(({artifactIds}) => artifactIds));
+  const selectedBytes = release?.artifacts.filter(({id}) => selectedArtifacts.has(id)).reduce((sum, file) => sum + file.compressedBytes, 0) ?? 0;
   return <aside className="builder-panel coverage-panel" hidden={!open} aria-labelledby="coverage-title">
-      <div className="builder-scroll coverage-content">
-        {onClose ? <button type="button" className="btn-link" onClick={onClose}>← Back to planning</button> : null}
-        <h2 id="coverage-title">Manage coverage</h2>
-        <p id="coverage-description">Prepare hiking coverage on this device. Routes use installed coverage; choosing an area here does not change your search.</p>
-        <p className="coverage-caveat">Coverage may be partial. Map sources can omit trails and do not confirm current access or trail conditions.</p>
-        {error ? <div role="alert" className="error-state">{error} <button type="button" className="btn" disabled={busy} onClick={() => void resource.refresh()}>Retry</button></div> : null}
-        {!catalog && !error ? <p role="status">Loading coverage…</p> : null}
-        {catalog ? <>
-          <ul className="coverage-legend" aria-label="Coverage map legend">{Object.entries(unitLabels).map(([status,label]) => <li key={status}><span className={`coverage-swatch coverage-${status}`} aria-hidden="true" />{label}</li>)}</ul>
-          <p className="hint">Use the map to draw installation coverage. Requested and processing areas are not available for routes yet. Ready sections become available after installation.</p>
-          <section aria-labelledby="installed-title"><h3 id="installed-title">Installed</h3>{catalog.installed ? <><p>{catalog.installed.unitIds.length} sections installed · {new Date(catalog.installed.createdAt).toLocaleDateString()}</p><p className="hint">Extent (west, south, east, north): {extent(catalog.installed.geometry)}</p>{catalog.installed.limitations.map((text) => <p className="hint" key={text}>{text}</p>)}</> : <p>No new coverage installed yet. Existing regional coverage remains available.</p>}</section>
-          <form onSubmit={(event) => { event.preventDefault(); if (requestReady) void resource.preview({ collectionIds, ...(useDrawn && geometry ? { geometry } : {}), memoryLimitMiB: Number(memory), offline }); }}>
-            <fieldset disabled={busy}><legend>Choose coverage</legend>
-              {catalog.collections.map((collection) => <label className="coverage-choice" key={collection.id}><input type="checkbox" checked={collectionIds.includes(collection.id)} onChange={(event) => { const checked = event.currentTarget.checked; setCollectionIds((current) => checked ? [...current, collection.id] : current.filter((id) => id !== collection.id)); resource.clearPlan(); }} /><span>{collection.name}{collection.limitations.map((text) => <small key={text}>{text}</small>)}</span></label>)}
-              <label className="coverage-choice"><input type="checkbox" checked={useDrawn} disabled={!geometry} onChange={(event) => { setUseDrawn(event.currentTarget.checked); resource.clearPlan(); }} /><span>Use drawn area<small>{geometry ? `Extent: ${extent(geometry)}` : "Draw an area on the map first."}</small></span></label>
-              <label className="coverage-memory" htmlFor="coverage-memory">Memory budget (MiB)<input id="coverage-memory" className="control" type="number" min="512" max="65536" step="1" value={memory} onChange={(event) => { setMemory(event.currentTarget.value); resource.clearPlan(); }} /></label>
-              <label className="coverage-choice"><input type="checkbox" checked={offline} onChange={(event) => { setOffline(event.currentTarget.checked); resource.clearPlan(); }} /><span>Use cached sources only<small>Missing downloads will be reported as unavailable.</small></span></label>
-              <button type="submit" className="btn" disabled={!requestReady}>Preview installation</button>
-            </fieldset>
-          </form>
-          {catalog.prerequisites.length ? <section aria-labelledby="prerequisites-title"><h3 id="prerequisites-title">Requirements</h3><ul>{catalog.prerequisites.map((item) => <li key={item.id}><strong>{item.available ? "Ready" : "Missing"}: {item.id}</strong> — {item.instructions}</li>)}</ul></section> : null}
-          {plan ? <section className="coverage-plan" aria-labelledby="coverage-plan-title"><h3 id="coverage-plan-title">Installation preview</h3><p>{plan.units.length} requested sections · {plan.request.memoryLimitMiB} MiB memory budget</p><p className="hint">Extent: {extent(plan.geometry)}</p><dl><div><dt>Download</dt><dd>{bytes(plan.estimates.downloadBytes)}</dd></div><div><dt>Temporary space</dt><dd>{bytes(plan.estimates.temporaryBytes)}</dd></div><div><dt>Cached data</dt><dd>{bytes(plan.estimates.reusableBytes)}</dd></div></dl>{plan.warnings.map((warning) => <p className="job-note" key={warning}>{warning}</p>)}<UnitSummary units={plan.units} /><button type="button" className="btn" disabled={busy || plan.units.length === 0 || plan.units.every((unit) => unit.status === "unavailable")} onClick={() => void resource.start()}>Start installation</button></section> : null}
-          <section aria-labelledby="coverage-jobs-title"><h3 id="coverage-jobs-title">Installations</h3>{catalog.jobs.length === 0 ? <p>No installations requested yet.</p> : catalog.jobs.map((job) => <article className="job-card" key={job.id} aria-label={`Installation ${job.id}`}><header><strong>{job.plan.request.collectionIds.map((id) => catalog.collections.find((collection) => collection.id === id)?.name ?? id).join(", ") || "Drawn area"}</strong><span className="job-status">{job.status}</span></header><p role="status">{job.stage} · {job.completedUnits} of {job.totalUnits} sections ready</p><progress value={job.completedUnits} max={Math.max(1, job.totalUnits)} aria-label="Coverage preparation progress" /><UnitSummary units={job.plan.units} />{job.error ? <p className="error-state">{job.error}</p> : null}<footer>{["queued", "running"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id, "pause")}>Pause</button> : null}{["paused", "failed"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id, "resume")}>Resume</button> : null}{processingCoverage(job) || job.status === "paused" ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id, "cancel")}>Cancel installation</button> : null}{job.status === "paused" && job.plan.units.some((unit) => unit.status === "prepared") ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id, "publish")}>Install ready sections</button> : null}</footer>{job.snapshot ? <p className="hint">Installed {job.snapshot.unitIds.length} sections.</p> : null}</article>)}</section>
-        </> : null}
-        {busy ? <p role="status">Updating coverage…</p> : null}
-      </div>
+    <div className="builder-scroll coverage-content">
+      {onClose ? <button type="button" className="btn-link" onClick={onClose}>← Back to planning</button> : null}
+      <h2 id="coverage-title">Manage coverage</h2>
+      <p>Download prepared hiking data. Select sections on the map; your search area stays unchanged.</p>
+      <p className="coverage-caveat">Mapped trails can be incomplete. Installed coverage does not confirm current access or trail conditions.</p>
+      {error || catalog?.error ? <div role="alert" className="error-state">{error ?? catalog?.error} <button type="button" className="btn" disabled={busy} onClick={() => void resource.refresh()}>Retry</button></div> : null}
+      {!catalog && !error ? <p role="status">Loading coverage…</p> : null}
+      <ul className="coverage-legend" aria-label="Coverage map legend">{Object.entries(labels).map(([status,label]) => <li key={status}><span className={`coverage-swatch coverage-${status}`} />{label}</li>)}</ul>
+      {catalog ? <>
+        <p>{installed ? `${installed.sectionIds.length} ${installed.sectionIds.length === 1 ? "section" : "sections"} installed` : "No prepared coverage installed."}</p>
+        {release ? <>
+          <p className="hint">Data release: {new Date(release.builtAt).toLocaleDateString()}</p>
+          <details><summary>Sources and attribution</summary><ul>{release.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer">{source.authority} · {source.dataset}</a><small> {source.version} · {source.license}</small></li>)}</ul></details>
+          {release.limitations.map((text) => <p className="hint" key={text}>{text}</p>)}
+          <p role="status">{selectedIds.size} sections selected · {bytes(selectedBytes)} packaged download</p>
+          <div className="action-row">
+            <button type="button" className="btn" disabled={busy || !downloadable} onClick={() => request && void resource.preview(request)}>Preview download</button>
+            {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
+            {updating ? <button type="button" className="btn" disabled={busy} onClick={() => request && void resource.preview(request)}>Preview update</button> : null}
+          </div>
+          {updating ? <p className="hint">An update replaces all installed sections together. Current coverage stays available until the update is ready.</p> : null}
+          <details className="coverage-units"><summary>Select sections from a list</summary><fieldset disabled={busy}>{sections.map((section) => <label className="coverage-choice" key={section.id}><input type="checkbox" checked={selectedIds.has(section.id)} onChange={() => onToggle(section.id)} /><span>{sectionLabel(section)}{installedIds.has(section.id) ? <small>Installed</small> : null}</span></label>)}</fieldset></details>
+        </> : !catalog.error ? <p>No download catalog is configured.</p> : null}
+        {plan ? <section className="coverage-plan" aria-labelledby="download-preview"><h3 id="download-preview">Download preview</h3><dl>
+          <div><dt>Download remaining</dt><dd>{bytes(plan.downloadBytes)}</dd></div>
+          <div><dt>Installed data</dt><dd>{bytes(plan.installedBytes)}</dd></div>
+          <div><dt>Additional disk required</dt><dd>{bytes(plan.additionalBytes)}</dd></div>
+          <div><dt>Reusable data</dt><dd>{bytes(plan.reusableBytes)}</dd></div>
+        </dl><button type="button" className="btn" disabled={busy} onClick={() => request && void resource.start(request)}>Download coverage</button></section> : null}
+        <section aria-labelledby="coverage-downloads"><h3 id="coverage-downloads">Downloads</h3>{catalog.jobs.length ? catalog.jobs.map((job) => <article className="job-card" key={job.id} aria-label={`Download ${job.id}`}>
+          <header><strong>{job.sectionIds.length} sections</strong><span className="job-status">{job.status}</span></header>
+          <p role="status">{job.stage} · {bytes(job.downloadedBytes)} / {bytes(job.totalBytes)}</p>
+          <progress value={job.downloadedBytes} max={Math.max(1,job.totalBytes)} aria-label="Download progress" />
+          {job.error ? <p className="error-state">{job.error}</p> : null}
+          <footer>{["queued","running"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id,"pause")}>Pause</button> : null}
+          {["paused","failed"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id,"resume")}>Resume</button> : null}
+          {processingCoverage(job) || ["paused","failed"].includes(job.status) ? <button className="btn" disabled={busy} onClick={() => void resource.act(job.id,"cancel")}>Cancel download</button> : null}</footer>
+        </article>) : <p>No downloads yet.</p>}</section>
+      </> : null}
+      {busy ? <p role="status">Updating coverage…</p> : null}
+    </div>
   </aside>;
 }
-function UnitSummary({ units }: { units: CoverageUnit[] }) {
-  return <details className="coverage-units"><summary>Coverage status ({units.length} sections)</summary><ul>{units.map((unit, index) => <li key={unit.id}><strong>{unitLabels[unit.status]}</strong> · Section {index + 1}{unit.reason ? ` — ${coverageReason(unit.reason)}` : ""}</li>)}</ul></details>;
-}
-
-function coverageReason(reason: string) {
-  if (reason === "outside-configured-source-coverage") return "No map source covers this area.";
-  if (reason === "intentionally-excluded:yakama-reservation") return "Yakama Reservation is excluded from coverage.";
-  return reason;
-}
-

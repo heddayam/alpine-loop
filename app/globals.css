@@ -705,8 +705,6 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-choice { display: flex; align-items: flex-start; gap: var(--s2); padding-block: var(--s1); }
 .coverage-choice input { flex: 0 0 auto; margin-top: .3rem; }
 .coverage-choice small { display: block; color: var(--ink-3); }
-.coverage-memory { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-.coverage-memory input { width: 7rem; }
 .coverage-plan { padding: var(--s3); background: var(--surface-2); border-radius: var(--radius); }
 .coverage-plan dl > div { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: space-between; }
 .coverage-plan dd { margin: 0; }
@@ -718,13 +716,11 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-caveat { padding: var(--s2) var(--s3); background: var(--surface-2); border-left: 3px solid var(--warn); }
 .coverage-panel .coverage-content { padding: var(--s4); }
 .coverage-panel h2 { font-size: var(--fs-lg); }
-.coverage-pending { fill: #bfdbfe; stroke: #2563eb; stroke-dasharray: 5 3; background: #bfdbfe; border-color: #2563eb; border-style: dashed; }
-.coverage-processing { fill: #fcd34d; stroke: #92400e; background: #fcd34d; border-color: #92400e; }
-.coverage-prepared { fill: #ddd6fe; stroke: #6d28d9; stroke-dasharray: 2 2; background: #ddd6fe; border-color: #6d28d9; border-style: dotted; }
 .coverage-installed { fill: #a7d7b5; stroke: #166534; background: #a7d7b5; border-color: #166534; }
-.coverage-unavailable { color: #b91c1c; stroke: #b91c1c; background: repeating-linear-gradient(135deg, transparent 0 4px, #efb5b5 4px 5px); border-color: #b91c1c; }
 .coverage-legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); padding: var(--s2) 0 !important; list-style: none; font-size: var(--fs-xs); }
 .coverage-legend li { display: flex; align-items: center; gap: var(--s1); }
 .coverage-swatch { display: inline-block; width: 1rem; height: .7rem; border-width: 1.4px; border-style: solid; }
-.coverage-swatch.coverage-pending { border-style: dashed; }
-.coverage-swatch.coverage-prepared { border-style: dotted; }
+.coverage-available { background: #e5e7eb; border-color: #6b7280; }
+.coverage-selected { background: #bfdbfe; border-color: #2563eb; }
+.coverage-downloading { background: #fcd34d; border-color: #b77900; }
+.coverage-units fieldset { max-height: 16rem; overflow: auto; border: 0; padding: var(--s2) 0; }

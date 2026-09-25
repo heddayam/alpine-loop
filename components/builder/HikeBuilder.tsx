@@ -81,7 +81,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
   const openCoverage = () => { setSettingsOpen(false); setCoverageOpen(true); setMapExpanded(false); };
-  const [coverageBounds, setCoverageBounds] = useState<Bounds | null>(null);
+  const [coverageSelection, setCoverageSelection] = useState<string[]>([]);
+  const toggleCoverageSection = useCallback((id: string) => setCoverageSelection((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]), []);
   const [coverageOverlay, setCoverageOverlay] = useState<CoverageOverlay>({features:{type:"FeatureCollection",features:[]},focus:null});
   const coverageCatalogRequest = useRef<AbortController | null>(null);
   const refreshCoverageCatalog = useCallback(() => {
@@ -324,7 +325,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
             <button type="button" aria-pressed={panel === "plan"} onClick={() => changePanel("plan")}>Plan</button>
             <button type="button" aria-pressed={panel === "results" || panel === "route"} disabled={!hasResultsPanel} onClick={() => changePanel("results")}>Results{routeResults ? ` (${generatedRoutes.length})` : ""}</button>
           </nav>
-          <CoveragePanel open={coverageOpen} onClose={() => setCoverageOpen(false)} geometry={coverageBounds ? boundsGeometry(coverageBounds) : undefined} onChanged={refreshCoverageCatalog} onMapChange={setCoverageOverlay} />
+          <CoveragePanel open={coverageOpen} onClose={() => setCoverageOpen(false)} selected={coverageSelection} onToggle={toggleCoverageSection} onChanged={refreshCoverageCatalog} onMapChange={setCoverageOverlay} />
           <aside className="builder-panel" hidden={coverageOpen || panel !== "plan"} aria-labelledby="builder-title">
           <div className="builder-scroll">
             <h2 id="builder-title" className="visually-hidden">Plan</h2>
@@ -434,7 +435,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
         </div>
         </section>
 
-        {catalog ? <HikeMap coverage={coverageOpen ? coverageOverlay : undefined} coverages={catalog.coverages} display={catalog.display} drawBounds={coverageOpen ? coverageBounds : viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={coverageOpen ? coverageBounds ? boundsGeometry(coverageBounds) : undefined : viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={coverageOpen ? undefined : viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={coverageOpen ? [] : mappedRoutes} selectedRouteId={!coverageOpen && panel === "route" ? selectedRouteId : undefined} hoveredRouteId={hoveredRouteId} selectedSegmentId={!coverageOpen && panel === "route" ? selectedSegmentId : undefined} hoveredSegmentId={panel === "route" ? hoveredSegmentId : undefined} onBoundsChange={coverageOpen ? setCoverageBounds : changeDrawnBounds} selectedStartKey={coverageOpen ? undefined : focus.startKey} onStartSelect={coverageOpen ? () => {} : selectStart} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
+        {catalog ? <HikeMap coverage={coverageOpen ? coverageOverlay : undefined} onCoverageSectionSelect={toggleCoverageSection} coverages={catalog.coverages} display={catalog.display} drawBounds={coverageOpen ? null : viewedRequest ? viewedRequest.area.mode === "drawn-area" ? viewedRequest.area.bbox : null : drawnBounds} filterGeometry={coverageOpen ? undefined : viewedArea?.filterGeometry ?? (!routeResults && drawnBounds ? boundsGeometry(drawnBounds) : undefined)} refinementGeometry={coverageOpen ? undefined : viewedArea?.refinementGeometry} showRegionBoundaries={appSettings.showRegionBoundaries} includeUncertainAccess={viewedRequest?.criteria.includeUncertainAccess ?? values.includeUncertainAccess} routes={coverageOpen ? [] : mappedRoutes} selectedRouteId={!coverageOpen && panel === "route" ? selectedRouteId : undefined} hoveredRouteId={hoveredRouteId} selectedSegmentId={!coverageOpen && panel === "route" ? selectedSegmentId : undefined} hoveredSegmentId={panel === "route" ? hoveredSegmentId : undefined} onBoundsChange={changeDrawnBounds} selectedStartKey={coverageOpen ? undefined : focus.startKey} onStartSelect={coverageOpen ? () => {} : selectStart} onRouteSelect={selectRoute} onRouteHover={setHoveredRouteId} onSegmentSelect={setSelectedSegmentId} onSegmentHover={setHoveredSegmentId} /> : <div className="map-shell" role="status">{catalogError || "Loading map data…"}</div>}
 
         <button type="button" className="map-panel-toggle btn" aria-expanded={mapExpanded} onClick={() => { setFocus((current) => ({ ...current, hoveredRouteId: undefined, hoveredSegmentId: undefined })); setMapExpanded((current) => !current); }}>{mapExpanded ? "Show panel" : "Show map"}</button>
       </div>

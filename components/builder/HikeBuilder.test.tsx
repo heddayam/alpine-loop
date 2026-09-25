@@ -406,7 +406,7 @@ it("loads jobs after StrictMode cancels the initial mount request", async () => 
 
 
 it("opens coverage beside Settings and preserves search drawing, draft, and route results",async()=>{
-  mockBaseFetch((url)=>url==="/api/coverage"?json({collections:[],installed:null,jobs:[],prerequisites:[]}):undefined);
+  mockBaseFetch((url)=>url==="/api/coverage"?json({release:null,installed:null,jobs:[],error:null}):undefined);
   render(<HikeBuilder/>);
   await userEvent.click(await screen.findByText("Draw fixture area"));
   fireEvent.change(screen.getByLabelText("Distance minimum"),{target:{value:"2"}});
@@ -416,8 +416,7 @@ it("opens coverage beside Settings and preserves search drawing, draft, and rout
   await userEvent.click(screen.getByRole("button",{name:"Coverage"}));
   await screen.findByRole("complementary",{name:"Manage coverage"});
   expect(screen.queryByRole("dialog",{name:"Settings"})).not.toBeInTheDocument();
-  await userEvent.click(screen.getByText("Change fixture area"));
-  expect(screen.getByLabelText(/Use drawn area/)).toBeChecked();
+  expect(screen.queryByLabelText(/Use drawn area/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button",{name:/Back to planning/}));
   expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
   expect(screen.getByLabelText("Map context").textContent).toBe(before);
