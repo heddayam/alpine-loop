@@ -32,7 +32,9 @@ map selection, hover/pointer feedback, selected-tile emphasis, and no section
 list or explanatory paragraphs. Actual desktop/mobile canvas selection passes
 the two focused offline browser flows; the deployed localhost:3000 was visually
 checked and a real tile selected without browser errors. Ten panel and fourteen
-map lifecycle tests pass. Attribution lives on the map.
+map lifecycle tests pass. Attribution lives on the map. Download starts directly without a preview step;
+the partial-release label was removed at the user’s request. Nine final panel
+tests and two direct-download browser flows pass.
 
 The production build failure on BR717 way/1186146299 was traced to an approximate
 country boundary: all forty source nodes lie in Canada according to the pinned

@@ -57,10 +57,10 @@ collection acceptance requires an actual successful constrained build.
 
 ## User workflow
 
-Coverage sits beside Settings on the shared map. Select sections by clicking
-or through the accessible section list. Preview remaining download bytes,
-installed size, reusable work, and additional disk requirements. Pause, resume,
-cancel, update, and remove use the same installation service.
+Coverage sits beside Settings on the shared map. Click sections to select them;
+the panel shows selection size and starts installation with one Download action.
+Disk-space checks run before creating the job. Pause, resume, cancel, update,
+and remove use the same installation service.
 
 `ALPINE_COVERAGE_CATALOG` is a static HTTPS release.json URL or local release
 directory. `ALPINE_COVERAGE_ROOT` defaults to `.local-data/coverage` for the app.

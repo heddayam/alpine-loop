@@ -31,7 +31,6 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
   const updating = Boolean(installed && release && installed.releaseId !== release.id);
   const downloadable = !unavailableInstalled.length && selectedIds.size > 0 && (updating || [...selectedIds].some((id) => !installedIds.has(id)));
   const request = release ? { releaseId: release.id, sectionIds: desired } : null;
-  const plan = resource.plan && resource.plan.releaseId === release?.id && JSON.stringify([...resource.plan.sectionIds].sort()) === JSON.stringify(desired) ? resource.plan : undefined;
   const downloading = new Set(catalog?.jobs.filter(processingCoverage).flatMap((job) => job.sectionIds) ?? []);
   const mapKey = JSON.stringify({
     features: { type: "FeatureCollection", features: [...(installed && unavailableInstalled.length ? [{ type: "Feature", geometry: installed.geometry, properties: { status: "installed" } }] : []), ...sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
@@ -39,14 +38,13 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
     focus: release ? areaBounds(release.geometry) : installed ? areaBounds(installed.geometry) : null,
   });
   useEffect(() => { onMapChange?.(JSON.parse(mapKey)); }, [mapKey, onMapChange]);
-  const selectedArtifacts = new Set(sections.filter(({id}) => selectedIds.has(id)).flatMap(({artifactIds}) => artifactIds));
-  const selectedBytes = release?.artifacts.filter(({id}) => selectedArtifacts.has(id)).reduce((sum, file) => sum + file.compressedBytes, 0) ?? 0;
+  const selectedArtifacts = new Set(sections.filter(({id}) => updating ? desired.includes(id) : selectedIds.has(id)).flatMap(({artifactIds}) => artifactIds));
+  const selectedBytes = release?.artifacts.filter(({id}) => selectedArtifacts.has(id) && !(installed?.releaseId === release?.id && installed.artifactIds.includes(id))).reduce((sum, file) => sum + file.compressedBytes, 0) ?? 0;
   const activeJobs = catalog?.jobs.filter((job) => processingCoverage(job) || ["paused", "failed"].includes(job.status)) ?? [];
-  const limited = release?.limitations.some((text) => /partial|benchmark|limited coverage/i.test(text));
   return <aside className="builder-panel coverage-panel" hidden={!open} aria-labelledby="coverage-title">
     <div className="builder-scroll coverage-content">
       {onClose ? <button type="button" className="btn-link" onClick={onClose}>← Back to planning</button> : null}
-      <header className="coverage-heading"><h2 id="coverage-title">Manage coverage</h2>{limited ? <span className="coverage-limited">Limited coverage</span> : null}</header>
+      <header className="coverage-heading"><h2 id="coverage-title">Manage coverage</h2></header>
       {error || catalog?.error ? <div role="alert" className="error-state">{error ?? catalog?.error} <button type="button" className="btn" disabled={busy} onClick={() => void resource.refresh()}>Retry</button></div> : null}
       {!catalog && !error ? <span role="status">Loading coverage…</span> : null}
       {catalog ? <>
@@ -54,16 +52,11 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
         {release ? <>
           <div className="coverage-selection" role="status">{selectedIds.size} {selectedIds.size === 1 ? "section" : "sections"} selected · {bytes(selectedBytes)}</div>
           <div className="action-row">
-            <button type="button" className="btn" disabled={busy || !downloadable} onClick={() => request && void resource.preview(request)}>Preview download</button>
+            <button type="button" className="btn" disabled={busy || (updating ? unavailableInstalled.length > 0 : !downloadable)} onClick={() => request && void resource.start(request)}>{updating ? "Update" : "Download"}</button>
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
-            {updating ? <button type="button" className="btn" disabled={busy || unavailableInstalled.length > 0} onClick={() => request && void resource.preview(request)}>Preview update</button> : null}
             {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable sections ({unavailableInstalled.length})</button> : null}
           </div>
         </> : !catalog.error ? <span>No catalog configured</span> : null}
-        {plan ? <section className="coverage-plan" aria-labelledby="download-preview"><h3 id="download-preview">Download preview</h3><dl>
-          <div><dt>Download remaining</dt><dd>{bytes(plan.downloadBytes)}</dd></div>
-          <div><dt>Additional disk required</dt><dd>{bytes(plan.additionalBytes)}</dd></div>
-        </dl><button type="button" className="btn" disabled={busy} onClick={() => request && void resource.start(request)}>Download coverage</button></section> : null}
         {activeJobs.length ? <section className="coverage-downloads" aria-label="Active downloads">{activeJobs.map((job) => <article key={job.id} className="coverage-download" aria-label={`Download ${job.id}`}>
           <header><strong>{job.sectionIds.length} {job.sectionIds.length === 1 ? "section" : "sections"}</strong><span>{job.status}</span></header>
           <div role="status">{bytes(job.downloadedBytes)} / {bytes(job.totalBytes)}</div>

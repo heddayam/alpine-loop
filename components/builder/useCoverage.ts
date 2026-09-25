@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { downloadCatalogSchema, downloadJobSchema, downloadPlanSchema, type DownloadCatalog, type DownloadJob, type DownloadPlan, type DownloadRequest } from "@/lib/contracts/releases";
+import { downloadCatalogSchema, downloadJobSchema, type DownloadCatalog, type DownloadJob, type DownloadRequest } from "@/lib/contracts/releases";
 
 export const processingCoverage = (job: DownloadJob) => ["queued", "running", "pausing"].includes(job.status);
 async function json(url: string, signal: AbortSignal, body?: unknown, method = "POST") {
@@ -14,7 +14,6 @@ async function json(url: string, signal: AbortSignal, body?: unknown, method = "
 /** One cancellation scope prevents old polls from overwriting a download action. */
 export function useCoverage(open: boolean) {
   const [catalog, setCatalog] = useState<DownloadCatalog>();
-  const [plan, setPlan] = useState<DownloadPlan>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const controller = useRef<AbortController | null>(null);
@@ -47,20 +46,14 @@ export function useCoverage(open: boolean) {
     const job = downloadJobSchema.parse(await json(url, signal, body));
     if (signal.aborted) return;
     setCatalog((current) => current ? { ...current, installed: job.installation ?? current.installed, jobs: [job, ...current.jobs.filter((item) => item.id !== job.id)] } : current);
-    setPlan(undefined);
   });
-  return { catalog, plan, busy, error, refresh,
-    preview: (request: DownloadRequest) => run(async (signal) => {
-      setPlan(undefined);
-      const next = downloadPlanSchema.parse(await json("/api/coverage/plan", signal, request));
-      if (!signal.aborted) setPlan(next);
-    }),
+  return { catalog, busy, error, refresh,
     start: (request: DownloadRequest) => update("/api/coverage/jobs", request),
     act: (id: string, action: "pause" | "resume" | "cancel") => update(`/api/coverage/jobs/${encodeURIComponent(id)}/${action}`, {}),
     remove: (sectionIds: string[]) => run(async (signal) => {
       await json("/api/coverage", signal, { sectionIds }, "DELETE");
       const next = downloadCatalogSchema.parse(await json("/api/coverage", signal));
-      if (!signal.aborted) { setCatalog(next); setPlan(undefined); }
+      if (!signal.aborted) setCatalog(next);
     }),
   };
 }

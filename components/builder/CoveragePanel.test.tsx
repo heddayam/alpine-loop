@@ -2,50 +2,30 @@
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { catalog, plan, request, job, installation } from "../../tests/fixtures/coverage/catalog";
+import { catalog, request, job, installation } from "../../tests/fixtures/coverage/catalog";
 import { CoveragePanel } from "./CoveragePanel";
 const response = (body: unknown) => ({ ok: true, json: async () => body });
 const props = { open: true, selected: ["section"] };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-it("reviews actual download and disk sizes, then submits the selected release sections", async () => {
-  const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/plan") ? plan : url.endsWith("/jobs") ? job : catalog));
+it("downloads selected sections directly without a preview request", async () => {
+  const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/jobs") ? job : catalog));
   vi.stubGlobal("fetch", fetcher);
   render(<CoveragePanel {...props} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Preview download" }));
-  await screen.findByText("Download preview");
-  expect(JSON.parse(fetcher.mock.calls.find(([url]) => url.endsWith("/plan"))![1]?.body as string)).toEqual(request);
-  expect(screen.getByText("Additional disk required")).toBeVisible();
-  expect(screen.getByText("1.3 MiB")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Download coverage" }));
+  expect(await screen.findByText("1 section selected · 256 KiB")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Download", exact: true }));
   await screen.findByRole("button", { name: "Pause" });
   expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) }));
+  expect(fetcher.mock.calls.some(([url]) => url.endsWith("/plan"))).toBe(false);
 });
 
-it("invalidates the preview when section selection changes", async () => {
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/plan") ? plan : catalog)));
-  const view = render(<CoveragePanel {...props} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Preview download" }));
-  await screen.findByText("Download preview");
-  view.rerender(<CoveragePanel {...props} selected={[]} />);
-  expect(screen.queryByRole("button", { name: "Download coverage" })).not.toBeInTheDocument();
-});
-
-it("aborts a pending preview on close and ignores its late response", async () => {
-  let resolve!: (value: unknown) => void;
-  let previewSignal: AbortSignal | undefined;
-  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.endsWith("/plan")) { previewSignal = init?.signal as AbortSignal; return new Promise((done) => { resolve = done; }); }
-    return response(catalog);
-  }));
-  const view = render(<CoveragePanel {...props} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Preview download" }));
-  view.rerender(<CoveragePanel {...props} open={false} />);
-  expect(previewSignal?.aborted).toBe(true);
-  await act(async () => resolve(response(plan)));
-  view.rerender(<CoveragePanel {...props} />);
-  await screen.findByRole("button", { name: "Preview download" });
-  expect(screen.queryByText("Download preview")).not.toBeInTheDocument();
+it("shows a disk-space failure from the direct download request", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/jobs")
+    ? { ok: false, json: async () => ({error:"Not enough disk space"}) } : response(catalog)));
+  render(<CoveragePanel {...props} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Download", exact: true }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Not enough disk space");
+  expect(screen.getByRole("button", { name: "Download", exact: true })).toBeEnabled();
 });
 
 it("resumes downloads and refreshes search only after atomic activation", async () => {
@@ -98,7 +78,7 @@ it("removes selected installed sections explicitly and announces the change", as
 it("requires explicit removal when a new catalog drops previously installed sections", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "old", sectionIds: ["retired"] } })));
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByRole("button", { name: "Preview update" })).toBeDisabled();
+  expect(await screen.findByRole("button", { name: "Update" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Remove unavailable sections (1)" })).toBeEnabled();
 });
 
@@ -111,8 +91,8 @@ it("shows concise available and installed counts for map selection", async () =>
   const view = render(<CoveragePanel {...props} selected={["next"]} onMapChange={onMapChange} />);
   expect(await screen.findByText("2 available")).toBeVisible();
   expect(screen.getByText("1 installed")).toBeVisible();
-  expect(screen.getByText("1 section selected · 256 KiB")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Preview download" })).toBeEnabled();
+  expect(screen.getByText("1 section selected · 0 KiB")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
   expect(onMapChange.mock.lastCall![0].focus).toEqual([-123,46,-120,49]);
   expect(view.container.querySelector("details, summary, select, p")).toBeNull();
 });
@@ -121,16 +101,17 @@ it("keeps update and removal controls when all catalog sections are installed", 
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "older" } })));
   render(<CoveragePanel {...props} />);
   expect(await screen.findByText("0 available")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Preview update" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Remove selected coverage" })).toBeEnabled();
 });
 
-it("labels partial releases without warning prose or completed download history", async () => {
+it("keeps release caveats and completed history out of the panel", async () => {
   const limitation = "Partial benchmark coverage only; the full region is not available in this release.";
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...catalog.release!, limitations: [limitation] }, jobs: [{ ...job, status: "completed", installation }] })));
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByText("Limited coverage")).toBeVisible();
+  await screen.findByText("1 installed");
+  expect(screen.queryByText("Limited coverage")).not.toBeInTheDocument();
   expect(screen.queryByText(limitation)).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Active downloads" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Preview download" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();
 });

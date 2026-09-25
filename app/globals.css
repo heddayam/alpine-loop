@@ -695,11 +695,7 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-heading, .coverage-counts, .coverage-counts > span, .coverage-download header { display: flex; align-items: center; gap: var(--s2); }
 .coverage-heading, .coverage-download header { justify-content: space-between; }
 .coverage-counts { gap: var(--s4); }
-.coverage-limited { color: var(--warn); font-size: var(--fs-xs); white-space: nowrap; }
 .coverage-selection { color: var(--ink-3); font-size: var(--fs-xs); }
-.coverage-plan { padding: var(--s3); background: var(--surface-2); border-radius: var(--radius); }
-.coverage-plan dl > div { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: space-between; }
-.coverage-plan dd { margin: 0; }
 .coverage-download { display: grid; gap: var(--s2); padding-block: var(--s3); border-top: 1px solid var(--line); }
 .coverage-download progress { width: 100%; height: .4rem; }
 .coverage-content .action-row { flex-wrap: wrap; }
