@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { areaBounds, coordinateIsInsideArea, coordinateIsInsideBbox, edgeIsInsideBbox, lineIsInsideArea, type AreaGeometry, type BoundingBox } from "./geometry";
 import { accessPointIsEligible, edgeIsTraversable } from "./policy";
 import { assertNotAborted, DistanceQueue, parseAccessPoint, parseEdge, parseMinimumStem, parseNode, requiredNumber, type SqliteRow } from "./sqlite-records";
@@ -13,6 +13,10 @@ export type PreparedGraphDescriptor = {
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
 const MAXIMUM_CONNECTIONS = 8;
 const BATCH_SIZE = 256;
+const MAXIMUM_STATEMENTS_PER_CONNECTION = 6;
+const EDGE_COLUMNS = ["id", "edge_key", "physical_edge_key", "from_node", "to_node", "geometry", "length_m", "gain_m", "loss_m",
+  "max_elevation_m", "max_sustained_grade_pct", "elevation_profile", "access_state", "edge_class", "source_refs", "flags"] as const;
+const FIRST_DEPARTURE_COLUMNS = EDGE_COLUMNS.map(column => `departure.${column} AS departure_${column}`).join(", ");
 
 // SQLite BINARY compares UTF-8 bytes; locale collation can reorder stable IDs.
 const compareIds = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
@@ -39,6 +43,8 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly releaseId: string;
   readonly #artifacts: Artifact[];
   readonly #coverage: AreaGeometry;
+  readonly #coverageJson: string;
+  readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
   readonly #pool = new Map<string, DatabaseSync>();
   #closed = false;
   #peakConnections = 0;
@@ -48,6 +54,7 @@ export class PreparedGraphRepository implements GraphRepository {
     this.packId = descriptor.installationId;
     this.releaseId = descriptor.releaseId;
     this.#coverage = structuredClone(descriptor.coverage);
+    this.#coverageJson = JSON.stringify(this.#coverage);
     this.#artifacts = descriptor.artifacts.map(artifact => ({
       ...structuredClone(artifact), bounds: areaBounds(artifact.geometry),
     })).sort((a, b) => a.path.localeCompare(b.path));
@@ -67,6 +74,7 @@ export class PreparedGraphRepository implements GraphRepository {
     }
     if (this.#pool.size === MAXIMUM_CONNECTIONS) {
       const [oldest, database] = this.#pool.entries().next().value!;
+      this.#statements.delete(database);
       database.close();
       this.#pool.delete(oldest);
     }
@@ -86,6 +94,18 @@ export class PreparedGraphRepository implements GraphRepository {
     return database;
   }
 
+  /** Fixed SQL only, at most six cached statements per live connection. */
+  #statement(path: string, sql: string): StatementSync {
+    const database = this.#database(path);
+    let statements = this.#statements.get(database);
+    if (!statements) { statements = new Map(); this.#statements.set(database, statements); }
+    const cached = statements.get(sql);
+    if (cached) return cached;
+    const statement = database.prepare(sql);
+    if (statements.size < MAXIMUM_STATEMENTS_PER_CONNECTION) statements.set(sql, statement);
+    return statement;
+  }
+
   #at(coordinate: readonly [number, number]): Artifact[] {
     return this.#artifacts.filter(artifact => coordinateIsInsideBbox(coordinate, artifact.bounds)
       && coordinateIsInsideArea(coordinate, artifact.geometry));
@@ -93,7 +113,7 @@ export class PreparedGraphRepository implements GraphRepository {
 
   #hasInstalledDeparture(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean, signal?: AbortSignal): boolean {
     for (const artifact of this.#at(coordinate)) {
-      const rows = this.#database(artifact.path).prepare("SELECT * FROM edges WHERE from_node = ?").iterate(id);
+      const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ?").iterate(id);
       for (const row of rows) {
         assertNotAborted(signal);
         const edge = parseEdge(row);
@@ -111,9 +131,10 @@ export class PreparedGraphRepository implements GraphRepository {
       let after = "";
       while (true) {
         assertNotAborted(query.signal);
-        const rows = this.#database(artifact.path).prepare(`SELECT a.*, n.lon AS candidate_lon, n.lat AS candidate_lat
+        const rows = this.#statement(artifact.path, `SELECT a.*, n.lon AS candidate_lon, n.lat AS candidate_lat, ${FIRST_DEPARTURE_COLUMNS}
           FROM access_points a JOIN nodes n ON n.id = a.node_id
           JOIN node_spatial s ON s.row_id = n.node_key
+          LEFT JOIN edges departure ON departure.id = (SELECT id FROM edges WHERE from_node = a.node_id ORDER BY id LIMIT 1)
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
             AND a.id > ? ${query.accessPointId === undefined ? "" : "AND a.id = ?"}
           ORDER BY a.id LIMIT ?`).all(west, east, south, north, after,
@@ -128,8 +149,14 @@ export class PreparedGraphRepository implements GraphRepository {
           }
           if (!coordinateIsInsideBbox([lon, lat], query.bbox)
             || !coordinateIsInsideArea([lon, lat], this.#coverage)
-            || !accessPointIsEligible(point, query.includeUncertainAccess)
-            || !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal)) continue;
+            || !accessPointIsEligible(point, query.includeUncertainAccess)) continue;
+          const departure = row.departure_id === null ? undefined
+            : parseEdge(Object.fromEntries(EDGE_COLUMNS.map(column => [column, row[`departure_${column}`]!])));
+          // Usually the first departure is installed. Read it in the candidate
+          // query instead of crossing the JS/SQLite boundary for every point.
+          if (!(departure && edgeIsTraversable(departure, query.includeUncertainAccess)
+            && lineIsInsideArea(departure.coordinates, this.#coverage))
+            && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal)) continue;
           insertConsistent(points, point.id, {
             ...point, lon, lat, knownMinimumStemMeters, inclusiveMinimumStemMeters,
             canReachCycle: inclusiveMinimumStemMeters !== null,
@@ -163,7 +190,7 @@ export class PreparedGraphRepository implements GraphRepository {
       let after = "";
       while (true) {
         assertNotAborted(query.signal);
-        const rows = this.#database(artifact.path).prepare(`SELECT e.* FROM edges e
+        const rows = this.#statement(artifact.path, `SELECT e.* FROM edges e
           JOIN edge_spatial s ON s.row_id = e.edge_key
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
           AND e.id > ? ORDER BY e.id LIMIT ?`).all(west, east, south, north, after, BATCH_SIZE) as SqliteRow[];
@@ -206,7 +233,7 @@ export class PreparedGraphRepository implements GraphRepository {
   #node(id: string, artifacts: readonly Artifact[]): GraphNode | undefined {
     let found: GraphNode | undefined;
     for (const artifact of artifacts) {
-      const row = this.#database(artifact.path).prepare("SELECT * FROM nodes WHERE id = ?").get(id) as SqliteRow | undefined;
+      const row = this.#statement(artifact.path, "SELECT * FROM nodes WHERE id = ?").get(id) as SqliteRow | undefined;
       if (row) {
         const node = parseNode(row);
         if (found && JSON.stringify(node) !== JSON.stringify(found)) throw new Error(`Graph database corruption: conflicting node ${id}`);
@@ -227,6 +254,7 @@ export class PreparedGraphRepository implements GraphRepository {
     nodes.set(start.id, start);
     const pending = new DistanceQueue(), distances = new Map([[start.id, 0]]);
     pending.push({ nodeId: start.id, distance: 0 });
+    const sameCoverage = JSON.stringify(query.coverage) === this.#coverageJson;
     let visited = 0, truncated = false;
     search: while (pending.size) {
       if (++visited % 128 === 0) await new Promise<void>(resolve => setImmediate(resolve));
@@ -236,7 +264,7 @@ export class PreparedGraphRepository implements GraphRepository {
       const node = nodes.get(current.nodeId)!;
       const adjacency = new Map<string, GraphEdge>();
       for (const artifact of this.#at([node.lon, node.lat])) {
-        const rows = this.#database(artifact.path).prepare("SELECT * FROM edges WHERE from_node = ? ORDER BY id").iterate(node.id);
+        const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ? ORDER BY id").iterate(node.id);
         let eligibleInArtifact = 0;
         for (const row of rows) {
           assertNotAborted(query.signal);
@@ -244,9 +272,8 @@ export class PreparedGraphRepository implements GraphRepository {
           if (!edgeIsTraversable(edge, query.includeUncertainAccess)
             || current.distance + edge.lengthMeters > query.maximumDistanceMeters
             || !lineIsInsideArea(edge.coordinates, this.#coverage)
-            || !lineIsInsideArea(edge.coordinates, query.coverage)) continue;
+            || (!sameCoverage && !lineIsInsideArea(edge.coordinates, query.coverage))) continue;
           insertConsistent(adjacency, edge.id, edge);
-          // At most one extra eligible edge is needed to prove truncation.
           if (++eligibleInArtifact > query.maximumDirectedEdges) break;
         }
         if (adjacency.size > query.maximumDirectedEdges + 1) {
@@ -275,7 +302,7 @@ export class PreparedGraphRepository implements GraphRepository {
   }
 
   async close(): Promise<void> {
-    for (const database of this.#pool.values()) database.close();
+    for (const database of this.#pool.values()) { this.#statements.delete(database); database.close(); }
     this.#pool.clear();
     this.#closed = true;
   }

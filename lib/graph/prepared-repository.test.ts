@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { PreparedGraphRepository } from "./prepared-repository";
 import { SQLiteGraphRepository } from "./sqlite-repository";
 import { writeGraphFixture, promoteGraphFixture, GRAPH_FIXTURE_IDENTITY } from "./test-helpers";
@@ -242,4 +242,45 @@ test("budgeted adjacency keeps SQLite BINARY ID order for mixed IDs and reversed
     const actual = await open(order).getReachableGraph(bounded);
     expect(actual).toEqual(expected);
   }
+});
+
+test("reuses fixed SQL statements across reachable reads and closes them with connections", async () => {
+  const { prepared, open } = fixture();
+  const repository = open([{ path: prepared, geometry: full }]);
+  const prepare = vi.spyOn(DatabaseSync.prototype, "prepare");
+  try {
+    const first = await repository.getReachableGraph(query);
+    const initial = prepare.mock.calls.length;
+    expect(initial).toBeGreaterThan(0);
+    expect(await repository.getReachableGraph(query)).toEqual(first);
+    expect(prepare.mock.calls).toHaveLength(initial);
+    await repository.close();
+    await expect(repository.getReachableGraph(query)).rejects.toThrow("closed");
+  } finally { prepare.mockRestore(); }
+});
+
+test("retains exact query coverage when it differs from installation coverage", async () => {
+  const { open } = fixture();
+  const repository = open();
+  const unrestricted = await repository.getReachableGraph(query);
+  const narrow = await repository.getReachableGraph({ ...query, coverage: rectangle(-0.0001, -0.0001, 0.0001, 0.0001) });
+  expect(unrestricted.graph.edges.length).toBeGreaterThan(0);
+  expect(narrow.graph.edges).toEqual([]);
+  expect(await repository.getReachableGraph(query)).toEqual(unrestricted);
+});
+
+
+test("candidate batching falls back from an ineligible first departure and validates its records", async () => {
+  const { prepared, open } = fixture();
+  const db = new DatabaseSync(prepared);
+  db.exec("UPDATE edges SET access_state='private' WHERE id='s-a'");
+  db.close();
+  const repository = open([{ path: prepared, geometry: full }]);
+  const candidates = { bbox: [-1, -1, 1, 1] as const, includeUncertainAccess: true };
+  expect(await repository.getAccessPointCandidates(candidates)).toHaveLength(1);
+  await repository.close();
+  const corrupt = new DatabaseSync(prepared);
+  corrupt.exec("PRAGMA foreign_keys=OFF; UPDATE edges SET physical_edge_key=-1 WHERE id='s-a'");
+  corrupt.close();
+  await expect(open([{ path: prepared, geometry: full }]).getAccessPointCandidates(candidates)).rejects.toThrow("physical_edge_key");
 });
