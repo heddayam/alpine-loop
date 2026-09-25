@@ -61,7 +61,7 @@ export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange
         <p>{installed ? `${installed.sectionIds.length} ${installed.sectionIds.length === 1 ? "section" : "sections"} installed` : "No prepared coverage installed."}</p>
         {release ? <>
           <p role="status"><strong>{additionalCount ? `${additionalCount} additional ${additionalCount === 1 ? "section" : "sections"} available in this catalog.` : "No additional coverage is available in this catalog."}</strong></p>
-          <p>{additionalCount ? "Click available sections on the map or choose them from the list below, then select Preview download." : "All sections in this catalog are installed. Select installed sections on the map or in the list below to remove coverage."}</p>
+          <p>{additionalCount ? "Click outlined available sections on the map or choose them from the list below, then select Preview download. Areas without sections are not published yet." : "All sections in this catalog are installed. Select installed sections on the map or in the list below to remove coverage."}</p>
           <p className="hint">Data release: {new Date(release.builtAt).toLocaleDateString(undefined, { timeZone: "UTC" })}</p>
           <details><summary>Sources and attribution</summary><ul>{release.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer">{source.authority} · {source.dataset}</a><small> {source.version} · {source.license}</small></li>)}</ul></details>
           <p role="status">{selectedIds.size} {selectedIds.size === 1 ? "section" : "sections"} selected · {bytes(selectedBytes)} packaged download</p>

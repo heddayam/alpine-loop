@@ -109,7 +109,7 @@ it("counts only additional catalog sections and explains map or list selection",
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...base, sections: [...base.sections, { ...base.sections[0], id: "next" }, { ...base.sections[0], id: "farther" }] } })));
   render(<CoveragePanel {...props} selected={["next"]} />);
   expect(await screen.findByText("2 additional sections available in this catalog.")).toBeVisible();
-  expect(screen.getByText("Click available sections on the map or choose them from the list below, then select Preview download.")).toBeVisible();
+  expect(screen.getByText("Click outlined available sections on the map or choose them from the list below, then select Preview download. Areas without sections are not published yet.")).toBeVisible();
   expect(screen.getByRole("button", { name: "Preview download" })).toBeEnabled();
 });
 
