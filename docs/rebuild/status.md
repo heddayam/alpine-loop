@@ -25,6 +25,27 @@ removed; the integration branch remains unmerged.
 
 ### Developer builds and downloadable coverage — active
 
+2026-09-25 repair in progress: the default Docker app had no published catalog;
+the retained 26-section benchmark was temporarily connected and installed, but
+this is not regional acceptance. The Coverage panel is now minimal, with direct
+map selection, hover/pointer feedback, selected-tile emphasis, and no section
+list or explanatory paragraphs. Actual desktop/mobile canvas selection passes
+the two focused offline browser flows; the deployed localhost:3000 was visually
+checked and a real tile selected without browser errors. Ten panel and fourteen
+map lifecycle tests pass. Attribution lives on the map.
+
+The production build failure on BR717 way/1186146299 was traced to an approximate
+country boundary: all forty source nodes lie in Canada according to the pinned
+IBC mapping boundary. The provider north edge is corrected and the Cascades
+intent includes US slivers above latitude 49. Focused border/elevation/compiler
+tests pass (30 tests); acquisition now filters nominal DEM tiles before download.
+The same retained 4 GiB, swap-disabled container is producing one coherent
+Cascades/Olympics release using the existing normalized inventory and metric
+cache. Current benchmark coverage and saved results remain active until a
+replacement is verified. Per user instruction, validation uses small offline
+tests and targeted checks; no repeated regional builds are run as tests.
+
+
 This revision supersedes app-driven progressive compilation below. Users select
 map sections and install immutable prepared data; developer tooling builds one
 coherent release. The existing branch and draft PR remain the integration path.
