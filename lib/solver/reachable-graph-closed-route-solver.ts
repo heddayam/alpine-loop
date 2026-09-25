@@ -5,15 +5,13 @@ import type {
 } from "@/lib/contracts";
 import {
   type AccessPointCandidate,
-  type AccessTopology,
-  type ClosedRouteFeasibilityRepository as GraphFeasibilityRepository,
   type EdgeTraversal,
   type GraphEdge,
   type GraphRepository,
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
 
-import { CLOSED_ROUTE_EFFORT_BUDGETS, type SolverBudget } from "./budget";
+import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
 import {
   validateReconstructedClosedRoute,
   type ValidatedClosedRoute,
@@ -33,11 +31,8 @@ const METERS_PER_FOOT = 0.3048;
 const MAXIMUM_ALLOWED_OVERLAP = 0.8;
 const FIRST_PASS_ROUTES_PER_START = 2;
 
-type ClosedRouteFeasibilityRepository = Omit<GraphFeasibilityRepository, "close">;
-
 export type ReachableGraphClosedRouteContext = {
   repository: GraphRepository;
-  topologyRepository: ClosedRouteFeasibilityRepository;
   accessFilter: ResolvedAccessFilterContext;
   budget: SolverBudget;
   signal?: AbortSignal;
@@ -70,8 +65,6 @@ export type ReachableGraphClosedRouteSolverOptions = {
 
 type FeasibleStart = {
   start: AccessPointCandidate;
-  topology: AccessTopology;
-  groupKey: string;
 };
 
 type RankedClosedRoute = ValidatedClosedRoute & {
@@ -80,38 +73,26 @@ type RankedClosedRoute = ValidatedClosedRoute & {
   score: number;
 };
 
-type SearchRound = {
-  deep: boolean;
-};
-
-function effectiveBudget(request: RouteSearchRequest, supplied: SolverBudget): SolverBudget {
-  const effort = CLOSED_ROUTE_EFFORT_BUDGETS[request.searchEffort];
+function effectiveBudget(supplied: SolverBudget): SolverBudget {
   return {
-    maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, effort.maximumDirectedEdges),
-    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, effort.maximumExpandedStates),
-    deadlineMs: Math.min(supplied.deadlineMs, effort.deadlineMs),
-    maximumRawCandidates: Math.min(supplied.maximumRawCandidates, effort.maximumRawCandidates),
+    maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, CLOSED_ROUTE_BUDGET.maximumDirectedEdges),
+    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, CLOSED_ROUTE_BUDGET.maximumExpandedStates),
+    deadlineMs: Math.min(supplied.deadlineMs, CLOSED_ROUTE_BUDGET.deadlineMs),
+    maximumRawCandidates: Math.min(supplied.maximumRawCandidates, CLOSED_ROUTE_BUDGET.maximumRawCandidates),
   };
 }
 
 function safeFeasibility(
-  topology: AccessTopology,
+  stem: number | null,
   maximumDistanceMeters: number,
   maximumRepeatedFraction: number,
   maximumSharedStemMeters: number | undefined,
 ): boolean {
-  if (!topology.canReachCycle || topology.cycleNetworkId === null) return false;
-  const stem = topology.minimumStemDistanceMeters;
-  if (stem === null) return true;
+  if (stem === null) return false;
   if (stem * 2 > maximumDistanceMeters) return false;
   if (stem > maximumDistanceMeters * maximumRepeatedFraction) return false;
   if (maximumSharedStemMeters !== undefined && stem > maximumSharedStemMeters) return false;
   return true;
-}
-
-function groupKey(topology: AccessTopology): string {
-  const connector = topology.connectorKey ?? topology.connectorDecisionEdgeIds.join(",");
-  return `${topology.profile}|${topology.cycleNetworkId}|${topology.portalDecisionNodeId}|${connector}`;
 }
 
 function edgePhysicalKey(edge: GraphEdge): number | null {
@@ -319,18 +300,15 @@ export class ReachableGraphClosedRouteSolver {
     context: RouteGraphContext,
     startAccessPointId?: string,
   ): Promise<PreparedStarts> {
-    if (context.repository.packId !== this.options.pack.id
-      || context.topologyRepository.packId !== this.options.pack.id) {
+    if (context.repository.packId !== this.options.pack.id) {
       throw new Error(`Closed-route solver pack mismatch for ${this.options.pack.id}`);
-    }
-    if (context.topologyRepository.dataVersion !== this.options.pack.dataVersion) {
-      throw new Error(`Closed-route topology data version mismatch for ${this.options.pack.id}`);
     }
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const { all: allCandidates, eligible, matchedFilters, noCycleExcluded } = await listEligibleAccessPointCandidates({
       repository: context.repository,
       accessFilter: context.accessFilter,
       includeUncertainAccess: request.includeUncertainAccess,
+      startAccessPointId,
       signal: context.signal,
     });
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
@@ -352,16 +330,18 @@ export class ReachableGraphClosedRouteSolver {
       starts = eligible;
     }
 
-    // This single batched lookup is intentionally performed for every eligible
-    // filtered start before any reachable graph is loaded.
-    const profile = request.includeUncertainAccess ? "inclusive" : "known";
-    const topologies = await context.topologyRepository.getAccessTopology(profile, starts.map(({ id }) => id));
-    if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
-    const topologyByStart = new Map(topologies.map((topology) => [topology.accessPointId, topology]));
-    // Starts that cannot close a loop are normally removed before this point,
-    // so the count has two sources: those excluded by the candidate filter, and
-    // an explicitly chosen start, which bypasses that filter.
-    const noCycleStartIds = new Set(starts.filter(({ id }) => !topologyByStart.get(id)?.canReachCycle).map(({ id }) => id));
+    // Deleting edges cannot create a cycle or shorten a path to one. Release
+    // hints therefore remain conservative for any installed subset with the
+    // same access profile, identities, and edge lengths. A finite hint does not
+    // prove that the installed subset still contains a cycle.
+    const stemFor = (start: AccessPointCandidate): number | null => {
+      const stem = request.includeUncertainAccess ? start.inclusiveMinimumStemMeters : start.knownMinimumStemMeters;
+      if (stem === undefined || (stem !== null && (!Number.isFinite(stem) || stem < 0))) {
+        throw new Error(`Graph database corruption: missing or invalid feasibility hint for ${start.id}`);
+      }
+      return stem;
+    };
+    const noCycleStartIds = new Set(starts.filter(start => stemFor(start) === null).map(({ id }) => id));
     const maximumDistanceMeters = request.distanceMiles.max * METERS_PER_MILE;
     const maximumRepeatedFraction = request.closedRoute.maximumRepeatedTrailPct / 100;
     const maximumSharedStemMeters = request.closedRoute.maximumSharedStemMiles === undefined
@@ -369,14 +349,13 @@ export class ReachableGraphClosedRouteSolver {
       : request.closedRoute.maximumSharedStemMiles * METERS_PER_MILE;
     const feasible: FeasibleStart[] = [];
     for (const start of starts) {
-      const topology = topologyByStart.get(start.id);
-      if (!topology || !safeFeasibility(
-        topology,
+      if (!safeFeasibility(
+        stemFor(start),
         maximumDistanceMeters,
         maximumRepeatedFraction,
         maximumSharedStemMeters,
       )) continue;
-      feasible.push({ start, topology, groupKey: groupKey(topology) });
+      feasible.push({ start });
     }
 
     return {
@@ -392,7 +371,7 @@ export class ReachableGraphClosedRouteSolver {
   ): Promise<RouteSearchResult> {
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const now = context.now ?? Date.now;
-    const budget = effectiveBudget(request, context.budget);
+    const budget = effectiveBudget(context.budget);
     const deadlineAt = startedAt + budget.deadlineMs;
     const hardTruncationReasons = new Set<string>();
     const nonBudgetShortfallReasons = new Set<string>();
@@ -410,17 +389,9 @@ export class ReachableGraphClosedRouteSolver {
     let directedValidationRejectionCount = 0;
     let timeToFirstExactMs: number | undefined;
     const searchedStarts = new Set<string>();
-    const probedGroups = new Set<string>();
-    const deeplySearchedGroups = new Set<string>();
     const candidates = new Map<string, RankedClosedRoute>();
-    const rounds: SearchRound[] = [{
-      deep: false,
-    }];
-    if (request.searchEffort === "thorough") rounds.push({
-      deep: true,
-    });
-
-    search: for (const round of rounds) {
+    const rounds = 2;
+    search: for (let round = 0; round < rounds; round++) {
       for (const [startIndex, feasibleStart] of feasible.entries()) {
         if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
         const remainingTime = deadlineAt - now();
@@ -462,6 +433,7 @@ export class ReachableGraphClosedRouteSolver {
           searchedStarts.add(feasibleStart.start.id);
           reachable = await context.repository.getReachableGraph({
             startNodeId: feasibleStart.start.nodeId,
+            startCoordinates: [feasibleStart.start.lon, feasibleStart.start.lat],
             maximumDistanceMeters,
             maximumDirectedEdges: budget.maximumDirectedEdges,
             includeUncertainAccess: request.includeUncertainAccess,
@@ -482,7 +454,6 @@ export class ReachableGraphClosedRouteSolver {
         this.options.onPhaseTiming?.("graph", Math.max(0, now() - graphStartedAt));
         maximumLoadedDirectedEdges = Math.max(maximumLoadedDirectedEdges, reachable.graph.edges.length);
         if (reachable.truncated) hardTruncationReasons.add("maximum-directed-edges");
-        if (!round.deep) probedGroups.add(feasibleStart.groupKey);
 
         const graphWithSelectedStart = reachable.graph.accessPoints.some(({ id }) => id === feasibleStart.start.id)
           ? reachable.graph
@@ -510,9 +481,6 @@ export class ReachableGraphClosedRouteSolver {
         repairedCandidateCount += generated.diagnostics.repairAccepted;
         assemblyCandidateCount += generated.diagnostics.assemblyAccepted;
         for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
-        if (round.deep && !generated.diagnostics.truncationReasons.includes("deadline")) {
-          deeplySearchedGroups.add(feasibleStart.groupKey);
-        }
         const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].sort((left, right) =>
           left.score - right.score
           || left.id.localeCompare(right.id));
@@ -573,9 +541,6 @@ export class ReachableGraphClosedRouteSolver {
     if (feasible.length === 0 && starts.length > noCycleStartCount) {
       nonBudgetShortfallReasons.add("topology-constraints-infeasible");
     }
-    if (request.searchEffort === "quick" && probedGroups.size > 0) {
-      nonBudgetShortfallReasons.add("quick-groups-not-deeply-searched");
-    }
     const ranked = [...candidates.values()].sort(compareRanked);
     const exact = selectDiverse(ranked.filter(({ exact: isExact }) => isExact), request.limit);
     const nearMisses = selectDiverse(ranked.filter(({ exact: isExact }) => !isExact), 3, exact);
@@ -595,9 +560,6 @@ export class ReachableGraphClosedRouteSolver {
         maximumLoadedDirectedEdges,
         noCycleAccessPointCount,
         feasibleAccessPointCount: feasible.length,
-        attachmentGroupCount: new Set(feasible.map(({ groupKey: key }) => key)).size,
-        probedAttachmentGroupCount: probedGroups.size,
-        deeplySearchedAttachmentGroupCount: deeplySearchedGroups.size,
         composedCandidateCount,
         repairedCandidateCount,
         directedValidationRejectionCount,

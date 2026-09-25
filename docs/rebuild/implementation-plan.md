@@ -1,5 +1,8 @@
 # Alpine Loop implementation plan
 
+Coverage delivery now follows [developer builds and downloadable coverage](prepared-coverage.md).
+That revision supersedes previous runtime pack/build workflows.
+
 The [system design revision](system-design.md) records the current design and
 its acceptance evidence. [Status](status.md) is the execution resume point.
 
@@ -16,8 +19,6 @@ filters select eligible starting points; they never clip hiking routes. Exact
 installed coverage is the hard route boundary. Failed filters never silently
 broaden the area.
 
-- Quick search returns up to the requested number of alternatives across the
-  eligible data. The count ranges from 1 through 20 and defaults to 10.
 - Full search attempts every eligible trailhead and retains up to ten exact
   routes per start, or one close match if no exact route was found there.
   One request creates one saved job regardless of internal data partitions.
@@ -38,9 +39,9 @@ relative size rule preserves intentionally short hikes and substantial chains.
 A persistent map shares the workspace with one panel for Plan, Results, and
 selected-route details. Mobile switches between the panel and the full map
 without remounting either. The visual language remains compact, neutral, and
-utilitarian. Route count is directly available beside the search actions.
+utilitarian. Full search is the sole search action.
 
-One editable form supplies both search actions. The viewed result has its own
+One editable form supplies the search intent. The viewed result has its own
 area and criteria snapshot; editing the form does not change the meaning of
 saved results. Search, opening saved work, and paging share one cancellation
 scope and reject stale completion. Closing a pending saved view cancels it.
@@ -77,19 +78,15 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 
 - `GET /api/search/catalog` provides named regions, installed coverage, and the
   initial map view. No installed coverage means data is unavailable.
-- `POST /api/search` accepts one area, route criteria, and the global count.
-  The application resolves driving time, selects data, executes bounded work,
-  namespaces identities, and combines results.
 - `GET /api/map?bbox=...` supplies viewport access points and trails.
 - `/api/route-jobs` and its detail, cancel, delete, and results operations retain
   version-2 jobs. Public records contain intent and area, not internal plans.
 
 The route engine accepts prepared starts, criteria, graph context, and budget.
 A bounded pool of local processes owns graph-reader lifetime so CPU work cannot
-block app status or cancellation. Quick searches parallelize across packs; Full
-searches parallelize across trailheads, retaining ordered durable checkpoints. Quick and Full share execution primitives. Full
-preserves the union of Quick and Thorough candidates because the heuristic is
-not monotonic in its budget.
+block app status or cancellation. Full searches read one pinned installation and parallelize across trailheads,
+retaining ordered durable checkpoints. Each start uses one solver path and one
+bounded budget.
 
 Provider submission, polling, deadlines, and cancellation stay inside driving
 area resolution. Completed contours are cached for 30 minutes. Credentials
@@ -97,14 +94,20 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 
 ## Local data and preparation
 
-Schema 6 is the supported graph representation. Pack selection, storage paths,
-version pinning, and provider jobs are backend details. Saved result geometry
-remains readable independently of graph-format support.
+Schema 7 is the prepared graph representation. A release maps selectable map
+sections to immutable SQLite artifacts. Installation references select files
+from one release, and one bounded graph reader deduplicates their identities.
+Saved result geometry remains readable independently of graph-format support.
 
-Preparation converts pinned sources into normalized records. The artifact
-builder computes metrics and feasibility, writes SQLite, audits the artifact,
-and activates it only after acceptance. Failed builds leave the previous
-artifact and current pointer intact. Downloads are immutable and cached.
+Developers prepare pinned source inventories, metrics, and release-wide cycle
+hints through the build/inspect/export CLI. The completed graph must pass audit
+before export. Users download and verify artifacts without source processing or
+graph compilation. Atomic installation changes preserve the previous coverage
+until the entire request is ready. Running and saved jobs retain referenced data.
+
+The [prepared coverage revision](prepared-coverage.md) defines the release,
+installation, download, and migration contracts. Its acceptance gates in status
+must pass before large-region feasibility or migration is declared complete.
 
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
 internal plan pins contributing data versions. One FIFO coordinator resumes

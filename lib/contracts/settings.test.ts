@@ -14,7 +14,6 @@ describe("AppSettingsV1", () => {
       schemaVersion: 1,
       includeUncertainAccess: true,
       showRegionBoundaries: false,
-      quickSearchRouteCount: 10,
       gradeConstraintEnabled: false,
       selectedGradePreset: "moderate",
       loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },

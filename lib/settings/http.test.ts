@@ -39,7 +39,7 @@ describe("settings HTTP handlers", () => {
 
     const invalid = await handlers.PUT(new Request("http://local/api/settings", {
       method: "PUT",
-      body: JSON.stringify({ ...defaultAppSettings(), quickSearchRouteCount: 100 }),
+      body: JSON.stringify({ ...defaultAppSettings(), includeUncertainAccess: "invalid" }),
     }));
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toMatchObject({ error: "Invalid settings" });

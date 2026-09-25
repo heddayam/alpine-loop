@@ -4,7 +4,6 @@ Alpine Loop generates loop hikes from local trail data. Choose a region, draw
 an area, or set a minimum and maximum drive time; then specify distance, elevation, grade, and how
 much trail you are willing to repeat.
 
-- **Quick search** finds up to the number of alternatives you request.
 - **Full search** works through every eligible trailhead and saves its progress
   and results. You can cancel it and keep the routes found so far.
 - **Exact and close matches stay separate.** Constraints are never relaxed
@@ -30,53 +29,39 @@ cd alpine-loop
 ./alpine.sh
 ```
 
-The interactive selector shows estimated download and finished pack sizes, or
-the actual pack size for installed regions. Finished sizes exclude source caches. Use
-↑/↓ to move and Enter to toggle a region, then choose **Apply changes**.
-Installed packs start checked. Checked rows are green; pending installs and
-removals are labeled as you change the selection.
-Washington choices include **North Cascades**, **Central Cascades**,
-**Rainier–Goat Rocks**, **Southwest Cascades**, and **Olympic Peninsula**.
-Olympic includes mapped beach trails such as the Ozette loop; check tides and
-current conditions yourself because route generation does not time beach
-passability.
+Open [localhost:3000](http://localhost:3000). In **Coverage**, beside Settings,
+select map sections, review their download and disk sizes, and download them.
+You can pause or resume downloads and keep searching the current installation.
+The whole selection activates after verification. Named hiking regions remain
+search filters; they are separate from download sections.
 
-The script creates `.env` if needed and builds selected packs inside Docker;
-you do not need Node, Python, or geographic tools on your computer. The first
-build downloads substantial source data and can take a while. Progress is
-shown with download counters and compiler substeps, and completed downloads are
-cached for reuse if you interrupt and retry.
+Set `ALPINE_COVERAGE_CATALOG` to a maintained HTTPS `release.json` URL, or use a
+local developer release. Docker defaults to `.local-data/releases/prepared`.
+A public catalog is not bundled with the repository. Without a configured
+release, Coverage explains that data is unavailable.
 
-The current Central Cascades builder has completed a full build with Docker
-limited to 4 GiB RAM and swap disabled. See the
-[pack-build measurements](docs/rebuild/pack-build-audit.md#implementation-results)
-for the tested data and limits.
-
-Once preparation finishes, start the app:
-
-```sh
-docker compose up --build
-```
-
-Open [localhost:3000](http://localhost:3000). Stop with Ctrl+C; start again with
-`docker compose up`. Use `--build` after updating the application code.
+The app downloads prepared SQLite data. It does not run Python, GDAL, osmium,
+or source compilation. Mapped beach trails are supported; tide timing is not
+modeled.
 
 ### Manage your data
 
-Stop the app and rerun `./alpine.sh` to add or remove regions. Removals require
-confirmation and are blocked while unfinished saved searches depend on the
-pack. Completed saved routes are retained. Source caches remain available for
-future builds.
+Use Coverage to add, update, or remove sections. Updates replace all selected
+coverage with one compatible release. Verified downloads survive interruption;
+running and saved searches retain their referenced installation. Previously
+built regional packs require a one-time reinstall. Saved route geometry,
+metadata, and GPX exports remain readable; legacy files are preserved until
+replacement coverage has been verified.
 
 | Data | Location |
 | --- | --- |
-| Installed regional packs | `.local-data/packs/` |
-| Download and build caches | `.cache/` |
-| Docker saved searches and settings | `alpine-runtime` Docker volume |
+| Native installed artifacts and download jobs | `.local-data/coverage/` |
+| Developer release output | `.local-data/releases/prepared/` |
+| Developer sources and staging | `.cache/` or configured build root |
+| Docker coverage, searches, and settings | `alpine-runtime` Docker volume |
 
-These survive app restarts and rebuilds and stay out of Git. `docker compose
-down` also preserves them; `docker compose down -v` deletes Docker's saved
-runtime data.
+`docker compose down` preserves runtime data; `docker compose down -v` deletes
+that volume. Restart with `./alpine.sh` or `docker compose up -d app`.
 
 ### Optional settings
 
@@ -95,11 +80,11 @@ Trail and elevation data are local; map tiles, place suggestions, and drive-time
 filters use online services.
 
 The app binds to localhost by default. Set `ALPINE_PORT=8080` in `.env` to change
-the port, or `ALPINE_BIND_ADDRESS=0.0.0.0` to allow access from your local network.
+the port, or `ALPINE_BIND_ADDRESS=0.0.0.0` to allow local-network access.
 
 ## Develop
 
-Install packs with `./alpine.sh`, stop the Docker app, then use Node.js 24:
+Use Node.js 24:
 
 ```sh
 npm ci
@@ -107,8 +92,8 @@ npm run dev
 ```
 
 Open [localhost:3000](http://localhost:3000). Changes reload automatically. Local
-development reads the same packs and stores its own saved searches and settings
-in `.local-data/runtime/`. Set `ALPINE_PACK_ROOT` to use a different pack folder.
+development stores saved searches and settings in `.local-data/runtime/`.
+Set `ALPINE_COVERAGE_CATALOG` to the release directory used by your build.
 
 ```sh
 npm run verify                  # Lint, types, unit tests, production build
@@ -118,51 +103,74 @@ npm run test:browser             # Browser flows using committed fixtures
 
 Automated tests do not fetch trail data or call external providers.
 
+### Developer data builds
+
+One CLI handles `build`, `inspect`, `export`, and `status`. Recipes specify intended
+coverage, pinned sources, exclusions, and resource settings. Interrupted builds
+resume verified staging and metric caches. Reuse one `ALPINE_SOURCE_CACHE` across
+recipes; developer inventories and staging can occupy tens of GB. Retire
+superseded validation outputs after recording their audits. A release is exported only after the
+complete graph and source inventory pass audit.
+
+```sh
+npm run data -- build data/coverage/recipes/cascades.json
+# In another terminal:
+npm run data -- status --watch
+npm run data -- inspect .local-data/releases/prepared/release.json
+npm run data -- export /absolute/path/export-options.json
+```
+
+Build status is saved in `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
+`status` prints one snapshot; `status --watch` refreshes every five seconds.
+An explicit report path can be supplied with `status /path/to/report.json --watch`.
+The display includes the phase, elapsed time, prepared/total sections, remaining
+sections, unfinished stages, and report age. Section ETA is a rough range from
+recent completed sections; it excludes final graph validation/export and is
+withheld when the current work outgrows that timing sample. A stale report is not a live heartbeat; Ctrl+C stops the viewer only.
+
+Native builds need `osmium-tool`, `uv`, and the locked DEM environment:
+
+```sh
+uv sync --frozen --project tools/dem --python 3.12
+```
+
+Example recipes cover the Cascades and Olympic Peninsula. To use the separate
+Docker tooling:
+
+```sh
+docker compose run --rm data scripts/data.ts build data/coverage/recipes/cascades.json
+```
+
+The separate Docker `data` service includes these tools and applies a 4 GiB
+memory limit with swap disabled. The ordinary `app` image excludes them.
+See [prepared coverage](docs/rebuild/prepared-coverage.md) for contracts,
+configuration, and acceptance evidence. Large-region feasibility remains
+unproven until the measured build gate passes.
+
 ### How it fits together
 
 ```mermaid
 flowchart LR
-    Sources["Pinned trail + elevation sources"] --> Builder["Pack builder"]
-    Builder --> Packs["Validated SQLite packs"]
-    Packs --> App["Next.js app + route solver"]
-    App --> Map["React + MapLibre"]
-    App --> Jobs["Saved searches · SQLite"]
+    Sources["Pinned trails and elevation"] --> Builder["Developer build and audit"]
+    Builder --> Release["Static catalog + compressed SQLite files"]
+    Release --> Download["Verify and activate installation"]
+    Download --> Reader["One bounded graph reader"]
+    Reader --> Solver["Existing hike solver"]
+    Solver --> Map["Next.js + MapLibre"]
+    Solver --> Jobs["Saved searches"]
 ```
 
-The builder prepares and validates regional data before activating a pack.
-The app reads packs without modifying them. A bounded pool of local processes
-runs Quick searches across packs and Full searches across trailheads, including
-within one pack, while keeping the interface and cancellation responsive.
-Quick search within a single pack retains its existing search budget.
-`ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs
-per search; additional workers use more memory. Set it in `.env` for native or
-Docker use. Saved Full searches remain FIFO, with ordered progress checkpoints.
+There is no merged local routing database. Files share release-wide source
+identities, and routes can cross installed section boundaries. Full search
+uses one coherent graph and distributes starts among bounded workers.
+`ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs.
+Saved Full searches remain FIFO with ordered checkpoints.
 
 - `app/` and `components/` — API routes and map workspace.
-- `lib/solver/` and `lib/graph/` — route generation and graph reads.
-- `lib/data/` and `data/regions/` — pack compilation and regional definitions.
+- `lib/solver/` and `lib/graph/` — route generation and bounded graph reads.
+- `lib/data/` and `lib/coverage/` — developer compilation and audits.
+- `lib/coverage-install/` — prepared downloads, installations, and retention.
 - `lib/route-jobs/` — saved search execution and persistence.
-
-<details>
-<summary>Build packs directly without Docker</summary>
-
-With Node dependencies installed, install `osmium-tool` and
-[uv](https://docs.astral.sh/uv/), then prepare the locked Python environment:
-
-```sh
-uv sync --frozen --project tools/dem --python 3.12
-npm run pack:bootstrap -- --pack=central-cascades --progress
-```
-
-Builds reuse verified local sources and download missing inputs. Add `--offline`
-to prohibit source acquisition, or `--refresh` to explicitly rediscover pinned
-sources. An unchanged pack is revalidated and reused before graph preparation.
-The source cache works across Docker and native builds; moving the checkout does
-not require downloading the sources again. The default output is `.local-data/packs/`.
-For data audits, representative route checks,
-and adding a region, follow the [regional checklist](docs/rebuild/region-onboarding-checklist.md).
-
-</details>
 
 ## Further reading
 

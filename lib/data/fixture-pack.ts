@@ -1,7 +1,7 @@
 import path from "node:path";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import type { SourceSnapshot } from "./adapters";
-import type { CompilePackOptions, PackSeed } from "./compiler";
+import type { CompilePackOptions, PackSeed } from "./testing/compiler";
 import { FixtureElevationSampler } from "./fixture-elevation-sampler";
 import { FixtureNamedAreaAdapter } from "./fixture-named-area-adapter";
 import { FixtureOfficialAccessAdapter } from "./fixture-official-access-adapter";

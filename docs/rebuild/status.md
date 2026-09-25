@@ -6,6 +6,199 @@ the evidence line.
 
 ## Active system design revision
 
+### Full-only search — active user revision
+
+- [x] Remove foreground search UI, endpoint, settings, and worker protocol.
+- [x] Remove the internal alternative solver pass and effort modes.
+- [x] Verify persistent searches, saved results, desktop/mobile flows, and final deletion inventory.
+
+Evidence: two `npm run verify` passes each passed 597 tests in 86 files, lint,
+types, and production build. Two browser passes each passed nine flows (27.1 s
+and 30.2 s). The 232,272,093-byte production image returned 404 for the removed
+endpoint and completed a real one-start Full job with five exact routes in
+2.17 s under a 512 MiB swap-disabled limit, with no OOM events. Full-only reader
+comparison matched all nine cases; three-start session medians were 2.10 s for
+the monolithic baseline and 2.31 s for prepared files, including preparation.
+The current revision removes 225 production-source lines relative to 04e2544
+(excluding tests, fixtures, and documentation). Completed agent worktrees were
+removed; the integration branch remains unmerged.
+
+### Developer builds and downloadable coverage — active
+
+2026-09-25 repair in progress: the default Docker app had no published catalog;
+the retained 26-section benchmark was temporarily connected and installed, but
+this is not regional acceptance. The Coverage panel is now minimal, with direct
+map selection, hover/pointer feedback, selected-tile emphasis, and no section
+list or explanatory paragraphs. Actual desktop/mobile canvas selection passes
+the two focused offline browser flows; the deployed localhost:3000 was visually
+checked and a real tile selected without browser errors. Ten panel and fourteen
+map lifecycle tests pass. Attribution lives on the map. Download starts directly without a preview step;
+the partial-release label was removed at the user’s request. Nine final panel
+tests and two direct-download browser flows pass.
+
+The production build failure on BR717 way/1186146299 was traced to an approximate
+country boundary: all forty source nodes lie in Canada according to the pinned
+IBC mapping boundary. The provider north edge is corrected and the Cascades
+intent includes US slivers above latitude 49. Focused border/elevation/compiler
+tests pass (30 tests); acquisition now filters nominal DEM tiles before download.
+The same retained 4 GiB, swap-disabled container is producing one coherent
+Cascades/Olympics release using the existing normalized inventory and metric
+cache. Current benchmark coverage and saved results remain active until a
+replacement is verified. Per user instruction, validation uses small offline
+tests and targeted checks; no repeated regional builds are run as tests.
+`npm run data -- status --watch` now reads the active report through the local
+`.cache/build/status.json` link. Future CLI builds persist their own status there
+(or under `ALPINE_COVERAGE_ROOT`), including failure and pause state. Two tiny
+status-format tests, lint, and type checking pass.
+
+
+This revision supersedes app-driven progressive compilation below. Users select
+map sections and install immutable prepared data; developer tooling builds one
+coherent release. The existing branch and draft PR remain the integration path.
+
+- [x] Graph-reading proof and release/installation/download contracts.
+  Evidence: schema-7 prepared reader versus schema-6 monolithic offline fixtures;
+  113 graph/solver/server tests passed in 17 files, including actual child-process
+  search, cross-file routes, partial coverage, seam/corner contacts, and bounded
+  connection eviction. Integrated commits f0d0d61 and e92491c.
+- [x] Developer-only coherent builds, compact feasibility hints, release export.
+  Evidence: offline end-to-end compiler/export/inventory regressions pass in the
+  final 597-test suite. Large-source acceptance remains a separate gate below.
+- [x] Download lifecycle and clickable coverage sections on the shared map.
+  Evidence: final installer corruption/recovery/retention regressions, two
+  desktop/mobile browser passes, and real 26-section download/activation.
+- [ ] Real-data build/install/search measurements, including the 4 GiB gate.
+- [ ] Verified one-time reinstall, saved-result preservation, and legacy deletion.
+
+Latest constrained build stopped safely after 55 prepared units because source
+way/1186146299 has missing elevation samples. No release was activated. Verified
+source/metric caches and completed receipts remain available; diagnose the missing
+samples before resuming. The 4 GiB gate remains open. Disk cleanup retired old
+validation outputs and a superseded stage, consolidated identical raw downloads,
+and increased host free space from about 9 GiB to 31 GiB while retaining installed
+packs and all saved results.
+
+Preserve existing generated data until replacement is verified. Earlier partial
+scale measurements remain diagnostic evidence, not acceptance of this revision.
+
+### Progressive coverage — implementation in progress
+
+- [x] **A — Contracts and baseline.** Version-1 coverage plans, jobs, snapshots,
+  and catalog contracts; schema-6 routing compatibility retained. Baseline
+  regional disk footprint and unchanged bounded solver behavior documented in
+  [progressive coverage](progressive-coverage.md).
+- [x] **B — Resumable builder.** Disk-backed inventory, indexed context frontier,
+  streaming publisher, global topology, receipts, source reconciliation, input
+  invalidation, and deterministic DEM sampling pass offline regressions.
+- [x] **C — Progressive installation.** Cross-unit cycles, opposite installation
+  orders, overlap, interruption, changed-input replay, atomic activation, and
+  live/saved generation retention pass integrated tests.
+- [x] **D — App and CLI.** Shared job service, controls, aliases, recovery, and
+  main-map coverage panel implemented. Coverage sits beside Settings; installation
+  drawing preserves the separate search draft and results.
+- [ ] **E — Scale and migration.** Real-source 4 GiB/swap-disabled container
+  measurement is in progress. Cascades-sized and second-geography acceptance,
+  expansion/resume timings, and final search measurements remain unproven.
+
+Evidence (2026-09-24): two final `npm run verify` passes each passed 704 tests
+in 105 files, lint, types, and production build. Two `npm run test:browser`
+passes each passed nine desktop/mobile flows (35.2 s and 28.6 s). Live Docker
+preview checks passed collection focus, exact status overlays, zoom/pan,
+installation drawing, restoration of untouched search bounds, panel scrolling,
+and mobile map/panel switching; no browser console errors. App and CLI both
+launched persistent workers; the isolated cached-only request recorded the
+expected missing-source failure. Docker runtime includes osmium and Rasterio
+1.4.3/GDAL 3.6.2; Compose configuration validates.
+
+The real-source trial imported 54.3 million Washington records, recovered after
+an unsupported building-relation failure, and exposed repeated full-table
+context scans. Those scans now use an indexed disk frontier; the durable source
+inventory is being reused in the 4 GiB/swap-disabled trial. This remains Gate E
+work, not a successful Cascades-sized build. The two-unit real-source build
+completed in 17 min 46 s, with 1.06 GiB peak measured process-tree RSS and a
+670 ms Quick search returning an exact loop. A later real integrity-check pause
+completed in 0.60 s; the kernel limits were verified as 4 GiB memory and zero
+swap. See the measurement notes in progressive-coverage.md. Current work is on
+`codex/progressive-coverage`; it is not ready to merge. No production installation
+has been replaced by the benchmark.
+
+The latest runtime image builds successfully. Source lookups now use a verified
+temporary spatial index and per-component envelopes; context ingestion and
+publication yield at bounded checkpoints. Disk measurement includes unlinked
+SQLite temporary files. Real Rasterio tests verify deterministic north-west DEM
+tile ownership, and metric/topology versions participate in snapshot identity.
+The full build is running with these fixes; previous partial timings are not
+final large-region acceptance. A read-only migration audit preserved 35 region
+selectors and 17 saved jobs containing 894 results. Central Cascades contains
+supplemental official routing whose replacement is unverified, so its legacy
+installation is explicitly retained even when coverage geometry is contained.
+
+The final review fixed collection-plus-drawing selection, classified intended
+and intentionally excluded source trails, batched temporary-index writes, and
+replaced a quadratic physical-member export query with indexed joins. The v5
+ten-unit snapshot published successfully before resuming with those query
+improvements. A real search against that snapshot while the builder ran took
+783 ms and returned one exact loop and one close match with budget truncation
+explicitly reported. The current full-region trial retains verified work;
+large-region completion is still required. Download and disk preview totals
+remain unknown beyond the configured OSM download/cache sizes.
+
+Preview now reads receipt metadata and file sizes without hashing whole OSM
+downloads. It reports cached source/preparation bytes and explicitly defers
+content/checkpoint verification to the worker. Exclusion classification uses
+conservative bounds before exact predicates. The larger 18-unit graph export
+took 6.30 s after the indexed-join fix; this is a publication substage, not the
+full build. The Cascades trial remains active and Gate E remains open.
+
+The next measured bottleneck was per-record context commits in dense units.
+Shared context ingestion now commits batches of up to 1,000 node records or
+building centroids, with a single larger source way kept intact. Transactions
+close before metric work and pause checkpoints. All 22 runtime regressions pass;
+two subsequent full verification passes again passed 693 tests, and both browser
+passes passed nine flows (35.2 s and 26.0 s). The runtime image builds. The real
+trial paused cleanly with 24 prepared units and resumed in the same constrained
+container, preserving the active 18-unit snapshot and verified caches. Isolated
+3,000-row writes improved from 608 to 159 ms for ways and 469 to 30 ms for
+buildings; end-to-end improvement remains under measurement.
+
+Real source checks found all five West Cady/Pilchuck/approach regression ways
+inside supported Cascades coverage, but also exposed incorrect OPL escape
+decoding of numeric names (Forest Road 63 became Forest Road c). The smaller
+decoder now consumes delimited Unicode escapes correctly. Versioned source
+paths and build identities invalidate affected preparation and graph caches;
+the corrected import is running under the same hard limits with the old
+snapshot retained until replacement passes audit. The 704-test verification,
+both browser passes, and runtime image above include this fix. Earlier partial
+build measurements predate the decoder correction and do not establish final
+acceptance. Original downloads and elevation data remain reusable.
+
+The corrected run has now published 26 units with 289,041 nodes and 578,733
+directed edges. A real search against its first corrected 18-unit snapshot
+returned one exact route and one close match in 580 ms while construction ran,
+with budget and partial-coverage limits explicit. Dense-unit preparation fell
+from 470/376 s in earlier runs to 105/107 s. These are partial-build results;
+the full Cascades and Olympic acceptance runs remain unfinished and Gate E stays
+open. The updated preview at localhost:3105 is healthy and retains its local
+settings and saved job. Production data remains unchanged.
+
+The corrected trial published 42 units with no audit failure, then paused and
+resumed to apply bounded topology transactions. The prior cycle pass took 441 s;
+an isolated 15,000-node ring improved from 11.44 to 5.06 s with identical hashes.
+Checkpoints run outside transactions and interrupted batches roll back. Two
+full verification passes each passed 704 tests, lint, types, and production
+build; two browser passes each passed nine flows (24.0 s and 25.1 s), and the
+runtime image built. Independent review found no transaction/publication blocker.
+The fixed eight-unit publication policy remains unchanged. Full Cascades and
+Olympic measurements are still required; Gate E remains open.
+
+The subsequent bounded scalar-statement cache reduced the same batched fixture
+from 4.86 to 1.44 s without changing its hash. Streaming statements remain
+independent, and caches clear after success/failure. Both final verification
+passes again passed 704 tests and builds; browser passes passed nine flows each
+(29.1 s and 24.4 s), and the runtime image built. The real trial has prepared
+50 units and is publishing them; its running worker currently uses transaction
+batching and will pick up the statement cache at the next publication restart.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
@@ -739,6 +932,38 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     mobile map switching, no horizontal overflow, and zero browser/page errors.
     Basemap tile availability was not established in this local run. Generated
     packs, downloads, caches, receipts, and runtime databases remain ignored.
+
+- [x] Gate 17 — Central Cascades West Cady Ridge correction
+  - The prior hard boundary omitted every mapped West Cady Ridge Trail vertex,
+    and the generic portal rule omitted the mapped North Fork Skykomish
+    trailhead because its path meets a walkable OSM track rather than a
+    street/service-road context way. Central boundary v2 adds the pinned Wild
+    Sky and Henry M. Jackson wilderness outlines plus the measured trailhead
+    approach, preserving the original bbox and all original coverage. Generic
+    portal derivation v4 requires an exact OSM trailhead node at a usable
+    track/non-track trail junction; nearby markers and track-only contacts do
+    not create starts. The [Central charter](../../data/regions/central-cascades/charter.md#v2-west-cady-acceptance-2026-09-23)
+    records the review, source decisions, and all six artifact hashes.
+  - Two fresh, independent offline builds from the pinned August 1 Washington
+    OSM, existing 3DEP collection, and July USGS Trails source produced
+    byte-identical schema-6 `cc-d9160473291fdf6b` artifacts. Audit: 279,344
+    nodes, 555,865 directed edges, 573 persisted portals, 270 inclusive and
+    64 known cycle-feasible portals, 30 named areas, four reviewed search
+    regions, zero errors/conflicts, missing elevation, outside-coverage edges,
+    non-trail published edges, or SQLite integrity/foreign-key failures.
+    The North Fork Skykomish portal is 23.0 m from the mapped trailhead and is
+    high-confidence with unknown access (default included). All nine Thorough
+    scenario pairs passed exact and labeled-impossible close expectations with
+    zero directed-validation rejections. Direct result inspection confirmed a
+    23.92-mile simple loop with 8.05 miles of West Cady Ridge Trail, 7,697 ft
+    gain, and no repeated trail. Two mapped fords remain trip-time conditions.
+  - The locally activated pack's six files match the validated build hashes.
+    The live catalog lists Central Cascades; the live map API returns the
+    North Fork Skykomish trailhead and 12.96 km of named West Cady Ridge Trail
+    in its viewport. Two `npm run verify` runs each passed 556 offline tests in
+    88 files, lint, types, and production build; two `npm run test:browser`
+    runs each passed seven Chromium flows. The temporary boundary and portal
+    worktrees/branches were removed; generated packs and caches remain ignored.
 
 ## Post-gate fixes
 

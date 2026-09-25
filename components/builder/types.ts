@@ -36,7 +36,6 @@ export type BuilderValues = {
   selectedGradePreset: GradePresetId;
   gradePresets: GradePresets;
   includeUncertainAccess: boolean;
-  limit: string;
 };
 
 export type DriveTimeDraft = {
@@ -62,7 +61,6 @@ export function builderValues(settings: AppSettingsV1, draft: BuilderDraft): Bui
   return {
     ...draft,
     includeUncertainAccess: settings.includeUncertainAccess,
-    limit: String(settings.quickSearchRouteCount),
     gradeConstraintEnabled: settings.gradeConstraintEnabled,
     selectedGradePreset: settings.selectedGradePreset,
     gradePresets: settings.gradePresets,

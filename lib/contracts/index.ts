@@ -8,3 +8,4 @@ export * from "./route-jobs";
 export * from "./settings";
 
 export * from "./search";
+export * from "./releases";

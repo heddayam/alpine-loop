@@ -10,7 +10,12 @@ import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { routeStart } from "../results/route-start";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 
+export type CoverageOverlay = { features: FeatureCollection<Polygon | MultiPolygon>; focus: Bounds | null };
+const coverageColors = { available: "#6b7280", selected: "#2563eb", downloading: "#b77900", installed: "#166534" };
+
 type HikeMapProps = {
+  coverage?: CoverageOverlay;
+  onCoverageSectionSelect?: (id: string) => void;
   drawBounds: Bounds | null;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
@@ -302,6 +307,8 @@ export function routeStartFeatures(routes: GeneratedClosedRouteV3[]): FeatureCol
 }
 
 export function HikeMap({
+  coverage,
+  onCoverageSectionSelect,
   drawBounds: bounds,
   filterGeometry,
   refinementGeometry,
@@ -324,6 +331,11 @@ export function HikeMap({
 }: HikeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const initialDisplay = useRef(display);
+  const coverageModeRef = useRef(Boolean(coverage));
+  useEffect(() => { coverageModeRef.current = Boolean(coverage); }, [coverage]);
+  const coverageCamera = useRef<{center:[number,number];zoom:number;bearing:number;pitch:number} | null>(null);
+  const coverageFocus = useRef("");
   const fittedRouteSetRef = useRef<string>(undefined);
   const onRouteHoverRef = useRef(onRouteHover);
   const onStartSelectRef = useRef(onStartSelect);
@@ -350,6 +362,14 @@ export function HikeMap({
     drawingRef.current = active;
     setDrawing(active);
   }, []);
+  const coverageMode = Boolean(coverage);
+  const [drawingMode, setDrawingMode] = useState(coverageMode);
+  if (drawingMode !== coverageMode) { setDrawingMode(coverageMode); setDrawing(false); }
+  useEffect(() => {
+    drawingRef.current = false;
+    startRef.current = null;
+    draftBoundsRef.current = null;
+  }, [coverageMode]);
   const [hoveredTrail, setHoveredTrail] = useState<HoveredTrail>();
   const [hoveredAccessPoint, setHoveredAccessPoint] = useState<HoveredAccessPoint>();
   const [mapCopyFeedback, setMapCopyFeedback] = useState<MapCopyFeedback>();
@@ -425,9 +445,9 @@ export function HikeMap({
       setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
       map = new Map({
         container: containerRef.current,
-        center: display.center,
-        zoom: display.zoom,
-        attributionControl: { compact: true },
+        center: initialDisplay.current.center,
+        zoom: initialDisplay.current.zoom,
+        attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>' },
         style: {
           version: 8,
           sources: {
@@ -660,7 +680,7 @@ export function HikeMap({
         // mouseup. The next pointer press releases that completed gesture.
         const onFeature = (type: "click" | "mousemove" | "mouseenter" | "mouseleave", layer: string, handle: (event: MapLayerMouseEvent) => void) => {
           map?.on(type, layer, (event) => {
-            if (drawingRef.current || (type === "click" && drawingClickRef.current) || (moving && (type === "mousemove" || type === "mouseenter"))) return;
+            if (coverageModeRef.current || drawingRef.current || (type === "click" && drawingClickRef.current) || (moving && (type === "mousemove" || type === "mouseenter"))) return;
             handle(event);
           });
         };
@@ -893,7 +913,7 @@ export function HikeMap({
       fittedRouteSetRef.current = undefined;
       setMapReady(false);
     };
-  }, [closeContextMenu, display.center, display.zoom, previewRoute]);
+  }, [closeContextMenu, previewRoute]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -905,14 +925,14 @@ export function HikeMap({
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
-    const accessPoints = mapData.accessPoints.filter((point) => includeUncertainAccess || point.accessState !== "unknown");
+    const accessPoints = (coverageMode ? [] : mapData.accessPoints).filter((point) => includeUncertainAccess || point.accessState !== "unknown");
     (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes)));
-  }, [includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
+  }, [coverageMode, includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
 
   useEffect(() => {
     if (!mapReady) return;
-    (mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined)?.setData(mapData.trailNetwork);
-  }, [mapData.trailNetwork, mapReady]);
+    (mapRef.current?.getSource("trail-network") as GeoJSONSource | undefined)?.setData(coverageMode ? EMPTY_POINTS : mapData.trailNetwork);
+  }, [coverageMode, mapData.trailNetwork, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -999,6 +1019,56 @@ export function HikeMap({
     if (view.contains([target[0], target[1]]) && view.contains([target[2], target[3]])) return;
     map.fitBounds([[target[0], target[1]], [target[2], target[3]]], { padding: 72, maxZoom: 15, duration: 450 });
   }, [mapReady, routes, selectedRouteId]);
+
+  const coverageData = coverage ? JSON.stringify(coverage.features) : "";
+  const coverageBounds = coverage?.focus ? JSON.stringify(coverage.focus) : "";
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!map.getSource("installation-coverage")) {
+      map.addSource("installation-coverage", {type:"geojson",data:{type:"FeatureCollection",features:[]}});
+      for (const [status,color] of Object.entries(coverageColors)) {
+        const filter: FilterSpecification = ["==",["get","status"],status];
+        map.addLayer({id:`installation-${status}-fill`,type:"fill",source:"installation-coverage",filter,paint:{"fill-color":color,"fill-opacity":status === "selected" ? .32 : .12}});
+        map.addLayer({id:`installation-${status}-line`,type:"line",source:"installation-coverage",filter,paint:{"line-color":color,"line-width":status === "selected" ? 3 : 1.5}});
+      }
+    }
+    if (!map.getLayer("installation-hover")) map.addLayer({id:"installation-hover",type:"line",source:"installation-coverage",filter:["==",["get","sectionId"],""],paint:{"line-color":"#2563eb","line-width":3}});
+    (map.getSource("installation-coverage") as GeoJSONSource).setData(coverageData ? JSON.parse(coverageData) : {type:"FeatureCollection",features:[]});
+    if (coverageData) {
+      coverageCamera.current ??= {center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()};
+      if (coverageBounds && coverageBounds !== coverageFocus.current) {
+        const [w,s,e,n] = JSON.parse(coverageBounds);
+        map.fitBounds([[w,s],[e,n]],{padding:48,maxZoom:12,duration:0});
+        coverageFocus.current = coverageBounds;
+      }
+    } else if (coverageCamera.current) {
+      map.jumpTo(coverageCamera.current);
+      coverageCamera.current = null;
+      coverageFocus.current = "";
+    }
+  }, [coverageData, coverageBounds, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !coverage || !onCoverageSectionSelect) return;
+    const sectionAt = (event: MapMouseEvent) => {
+      const layers = Object.keys(coverageColors).map((status) => `installation-${status}-fill`).filter((id) => map.getLayer(id));
+      return layers.length ? map.queryRenderedFeatures(event.point, { layers })[0]?.properties?.sectionId : undefined;
+    };
+    const click = (event: MapMouseEvent) => {
+      const id = sectionAt(event);
+      if (typeof id === "string") onCoverageSectionSelect(id);
+    };
+    const hover = (event: MapMouseEvent) => {
+      const id = sectionAt(event);
+      map.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
+      map.setFilter("installation-hover", ["==",["get","sectionId"],typeof id === "string" ? id : ""]);
+    };
+    map.on("click", click);
+    map.on("mousemove", hover);
+    return () => { map.off("click", click); map.off("mousemove", hover); map.getCanvas().style.cursor = ""; map.setFilter("installation-hover", ["==",["get","sectionId"],""]); };
+  }, [coverage, mapReady, onCoverageSectionSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1113,7 +1183,7 @@ export function HikeMap({
 
   return (
     <section className={drawing ? "map-shell is-drawing" : "map-shell"} aria-label="Hike search map" aria-busy={!mapReady}>
-      <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
+      {!coverage ? <div className="map-toolbar map-toolbar-compact" role="toolbar" aria-label="Draw-area tools">
         <button
           type="button"
           className={`map-tool map-tool-draw${drawing ? " active" : ""}`}
@@ -1130,7 +1200,7 @@ export function HikeMap({
         <button type="button" className="map-tool map-tool-clear" aria-label="Clear trailhead filter" disabled={!bounds} onClick={() => onBoundsChange(null)}>
           Clear
         </button>
-      </div>
+      </div> : null}
       <div ref={containerRef} className="map-canvas" />
       {mapError ? <p className="map-data-error" role="status">{mapError}</p> : null}
       {contextMenu ? (

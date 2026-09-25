@@ -7,7 +7,7 @@
 - Builder contract: schema 6, shared basic regional builder, prefix `cc`, and
   `officialAccess: false`.
 - Coverage contract: `boundary.geojson` version
-  `central-cascades-boundary-v1` is the exact hard route-geometry boundary.
+  `central-cascades-boundary-v2` is the exact hard route-geometry boundary.
   Search regions and drawn or drive-time areas filter eligible access points;
   they never clip route geometry.
 
@@ -33,12 +33,22 @@ Central Cascades keeps these connected systems and their public approaches:
 3. the complete Alpine Lakes Wilderness hiking network, including
    Leavenworth/Icicle/Enchantments, Snoqualmie, Middle Fork Snoqualmie, Cle
    Elum, Salmon la Sac, and Tucquala approaches; and
-4. Teanaway Community Forest and its public approach network.
+4. Teanaway Community Forest and its public approach network; and
+5. the Wild Sky and Henry M. Jackson wilderness connection, including West
+   Cady Ridge, the Pacific Crest Trail, Bald Eagle, and North Fork Skykomish
+   approaches.
 
-The committed concave polygon is the reviewed union of the three stable OSM
-named-area outlines with explicit approach corridors. Interior gaps produced
-by that union are filled so the hard boundary does not cut trail connections
-between included systems. Its exact bbox is:
+The committed `MultiPolygon` keeps the v1 concave coverage intact and adds the
+Wild Sky (`osm:relation/6114550`) and Henry M. Jackson
+(`osm:relation/3093637`) Wilderness outlines from the pinned OSM extract.
+Their rings were simplified at 25 m tolerance for build performance. The
+polygons overlap and the runtime treats them as a union. A small approach
+polygon at `[-121.2815, 47.9247, -121.2695, 47.9305]` covers the North Fork
+Skykomish trailhead and the short West Cady/North Fork/Forest Road 63
+connectors, whose mapped vertices lie 7–137 m outside the wilderness boundary.
+The approach polygon is a geometry allowance for the mapped access network,
+not an access or ownership assertion. The v1 interior connections remain
+covered. The exact bbox is unchanged:
 
 ```text
 [-121.73319523634241, 47.19654585917808, -120.5276988, 48.4758823]
@@ -48,6 +58,17 @@ This is not a county, watershed, national-forest administrative boundary, or
 rectangular download extent. Boundary-crossing trail edges, components,
 cycle-bearing portals, and neighboring-pack overlap must be reviewed before
 activation.
+
+On 2026-09-22, the eight pinned OSM ways forming the candidate West Cady Ridge
+cycle were checked against the v2 geometry with the repository's full-line
+coverage predicate: West Cady Ridge (`372537133`, `951045865`, `951045864`),
+Pacific Crest Trail (`1356527413`, `380422295`), Bald Eagle (`372497128`),
+North Fork Skykomish (`372538840`), and Forest Road 63 (`218617733`). All
+mapped line segments and the North Fork Skykomish trailhead point lie inside.
+The connected mapped circuit is about 23.93 miles and includes a 23 m
+`foot=unknown` track segment and two OSM ford nodes. These are map-data
+observations; a compiled route, access decision, and field conditions still
+require build and route QA.
 
 ## Explicit exclusions
 
@@ -76,11 +97,14 @@ and predate the configured 2026-08-01 Washington extract:
 | Alpine Lakes Wilderness | `relation/6112652` | version 19, `2025-02-03T23:34:11Z` | Retain with the same shared rule. Numerous default-eligible portals measured 91–489 m outside the legal boundary. |
 | Teanaway Community Forest | `relation/6437099` | version 17, `2023-08-04T01:35:02Z` | Retain: 22 default-eligible derived portals fall inside the polygon. |
 
-The v1 selectors are therefore the whole pack, Glacier Peak Wilderness, Alpine
+The reviewed selectors remain the whole pack, Glacier Peak Wilderness, Alpine
 Lakes Wilderness, and Teanaway Community Forest. The approach band is shared
 runtime behavior for every reviewed named region; it is not custom geometry or
 a Central Cascades exception. It applies only to derived trail portals and does
 not relax drawn-area or drive-time geometry.
+
+Wild Sky and Henry M. Jackson are boundary sources in v2, not newly published
+named search selectors. A selector requires its own portal and cycle review.
 
 This remains a measured limitation: straight-line proximity to a legal boundary
 does not prove that a portal's trail enters the named area, and a legitimate
@@ -93,9 +117,10 @@ named polygon passes the same access and cycle checks.
 
 ## Representative scenario anchors
 
-`scenarios.json` covers eight required clusters: east Glacier Peak/White River,
-Chiwawa/Spider Meadow, west Glacier Peak, Stevens Pass, Icicle/Enchantments,
-Snoqualmie/Alpine Lakes, Cle Elum/Salmon la Sac, and Teanaway. Coordinates are OSM trailhead
+`scenarios.json` covers nine required clusters: east Glacier Peak/White River,
+Chiwawa/Spider Meadow, west Glacier Peak, West Cady Ridge/North Fork Skykomish,
+Stevens Pass, Icicle/Enchantments, Snoqualmie/Alpine Lakes, Cle Elum/Salmon la
+Sac, and Teanaway. Coordinates are OSM trailhead
 or trail-system review anchors, not independently created starts. Each must
 resolve to a generic derived portal within 500 m before activation. Every
 cluster has a broad plausible exact request and a deliberately impossible gain
@@ -187,3 +212,39 @@ scenario and an honestly labeled close match for its impossible scenario.
 
 Generated packs, raw downloads, caches, collection receipts, databases, and
 audit artifacts remain ignored and must never be committed.
+
+## V2 West Cady acceptance (2026-09-23)
+
+The pinned August 1 OSM snapshot and existing four 3DEP tiles cover the v2
+boundary without a wider download envelope. The July USGS trail supplement's
+pinned bbox also remains sufficient. Exact-node OSM trailhead evidence at a
+walkable track/path junction now creates a derived portal under generic portal
+derivation v4; a marker near a trail or a track by itself does not create one.
+The North Fork Skykomish portal is 23.0 m from its mapped trailhead, has high
+confidence and unknown access, and is included by the default access setting.
+Disabling unknown access excludes this start.
+
+Two independent fresh offline builds from the same pinned sources produced
+byte-identical schema-6 `cc-d9160473291fdf6b` artifacts:
+
+| File | SHA-256 |
+| --- | --- |
+| `manifest.json` | `41a898b1ed8cb916dcd0ba06b338396e64ceb5d1265f3a896e25ba630b17eaa1` |
+| `pack.sqlite` | `6b5b2cf857ff52ef09896856ce2587ff9bb2bd725ef343d899e639e363b0af7e` |
+| `audit.json` | `3087060441edc1122aabd840cfc43f3f30ee9d9cdd3f2da25ed9853add8781c6` |
+| `regional-audit.json` | `c92e832ece2a2f65c67c4badd828a17be0b17888da7056317d78f5af525dd2` |
+| `portal-audit.json` | `e1ec4e0909a6e5431b738b41b81caf4690b21f5fd0f8c4cbf770aa38e0a97349` |
+| `official-trail-conflation-audit.json` | `e04125dfeadd4af3fcf1a233313041dcab5e8ec0e8e32d0e1adf8fc3b8e934bc` |
+
+Audit: 279,344 nodes, 555,865 directed edges, 573 persisted portals, 30 named
+areas, four reviewed search regions, 270 inclusive and 64 known cycle-feasible
+portals, zero missing elevations, zero outside-coverage persisted edges, zero
+audit errors or conflicts, no non-trail published edges, and clean SQLite
+integrity and foreign-key checks. All nine Thorough scenario pairs returned an
+exact route and a labeled close match for their impossible request with zero
+directed-validation rejections. The West Cady scenario selected the portal
+23.0 m from its reference point and returned three exact routes. A direct
+result inspection found a 23.92-mile simple loop with 8.05 miles of West Cady
+Ridge Trail, 7,697 ft of gain, and no repeated trail. The mapped loop crosses
+two OSM ford nodes; these observations do not establish current passability.
+The locally installed artifact's six file hashes match the validated build.

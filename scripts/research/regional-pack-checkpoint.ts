@@ -1,20 +1,18 @@
+import { SQLiteGraphRepository } from "@/lib/graph/sqlite-repository";
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
 import {
   packManifestSchema,
   type PackManifest,
-  type SearchEffortV3,
 } from "@/lib/contracts";
 import { getSearchRegion } from "@/lib/data/named-area-catalog";
 import {
   distanceMetersBetween,
-  SQLiteClosedRouteFeasibilityRepository,
-  SQLiteGraphRepository,
   type AccessPointCandidate,
 } from "@/lib/graph";
 import {
-  CLOSED_ROUTE_EFFORT_BUDGETS,
+  CLOSED_ROUTE_BUDGET,
   listEligibleAccessPointCandidates,
   ReachableGraphClosedRouteSolver,
   type ResolvedAccessFilterContext,
@@ -65,7 +63,7 @@ function argument(name: string): string | undefined {
 
 function usage(): string {
   return "Usage: node --import tsx scripts/research/regional-pack-checkpoint.ts "
-    + "--pack=<pack-id> --database=<path> --manifest=<path> [--scenarios=<path>] [--effort=quick|thorough]";
+    + "--pack=<pack-id> --database=<path> --manifest=<path> [--scenarios=<path>]";
 }
 
 function errorMessage(error: unknown): string {
@@ -89,7 +87,6 @@ function buildRequest(
   scenario: Scenario,
   startAccessPointId: string,
   expectation: Expectation,
-  effort: SearchEffortV3,
 ): RouteSearchRequest {
   return {
     startAccessPointId,
@@ -100,7 +97,6 @@ function buildRequest(
     distanceMiles: expectation.distanceMiles,
     elevationGainFeet: expectation.elevationGainFeet,
     includeUncertainAccess: true,
-    searchEffort: effort,
     limit: 10,
   };
 }
@@ -111,9 +107,7 @@ async function runExpectation(options: {
   expectationName: "exact" | "impossible";
   expectation: Expectation;
   startAccessPointId: string;
-  effort: SearchEffortV3;
   graphRepository: SQLiteGraphRepository;
-  topologyRepository: SQLiteClosedRouteFeasibilityRepository;
   accessFilter: ResolvedAccessFilterContext;
 }) {
   const validationRejections: Record<string, number> = {};
@@ -139,13 +133,11 @@ async function runExpectation(options: {
     options.scenario,
     options.startAccessPointId,
     options.expectation,
-    options.effort,
   );
   const startedAt = performance.now();
   const response = await solver.generate(request, {
     repository: options.graphRepository,
-    topologyRepository: options.topologyRepository,
-    budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[options.effort] },
+    budget: { ...CLOSED_ROUTE_BUDGET },
     accessFilter: options.accessFilter,
   });
   const wallTimeMs = performance.now() - startedAt;
@@ -176,12 +168,6 @@ const manifestPath = argument("--manifest");
 const scenariosPath = argument("--scenarios") ?? DEFAULT_SCENARIOS_PATH;
 if (!databasePath || !manifestPath) throw new Error(usage());
 
-const effortArgument = argument("--effort") ?? "thorough";
-if (effortArgument !== "quick" && effortArgument !== "thorough") {
-  throw new Error(`--effort must be quick or thorough\n${usage()}`);
-}
-const effort: SearchEffortV3 = effortArgument;
-
 const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
 if (parsedManifest.schemaVersion !== "6" || parsedManifest.id !== PACK_ID) {
   throw new Error(`Regional checkpoint requires the schema-6 ${PACK_ID} manifest`);
@@ -191,10 +177,8 @@ const scenarioFile = scenarioFileSchema.parse(JSON.parse(await readFile(scenario
 const graphRepository = new SQLiteGraphRepository(databasePath, manifest.id);
 const runs: Array<Record<string, unknown>> = [];
 const failures: string[] = [];
-let topologyRepository: SQLiteClosedRouteFeasibilityRepository | undefined;
 
 try {
-  topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
   for (const scenario of scenarioFile.scenarios) {
     try {
       const region = getSearchRegion(databasePath, scenario.searchRegionId);
@@ -223,9 +207,7 @@ try {
         expectationName: "exact",
         expectation: scenario.exactExpectation,
         startAccessPointId: selected.candidate.id,
-        effort,
         graphRepository,
-        topologyRepository,
         accessFilter,
       });
       const impossible = await runExpectation({
@@ -234,9 +216,7 @@ try {
         expectationName: "impossible",
         expectation: scenario.impossibleExpectation,
         startAccessPointId: selected.candidate.id,
-        effort,
         graphRepository,
-        topologyRepository,
         accessFilter,
       });
       if (!exact.passed) failures.push(`${scenario.id}: exact expectation returned no exact route`);
@@ -272,7 +252,6 @@ try {
     }
   }
 } finally {
-  if (topologyRepository) await topologyRepository.close();
   await graphRepository.close();
 }
 
@@ -287,7 +266,6 @@ console.log(JSON.stringify({
     runtimeMode: manifest.closedRouteTopology.runtimeMode,
   },
   scenariosPath,
-  effort,
   scenarioCount: scenarioFile.scenarios.length,
   failures,
   runs,

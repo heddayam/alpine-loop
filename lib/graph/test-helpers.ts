@@ -1,6 +1,8 @@
+import { DatabaseSync } from "node:sqlite";
+import type { PreparedGraphDescriptor } from "./prepared-repository";
 import { packManifestSchema, type PackManifest } from "@/lib/contracts";
-import { writePackDatabase } from "@/lib/data/sqlite-writer";
-import { buildClosedRouteTopology } from "@/lib/data/topology-compiler";
+import { writePackDatabase } from "@/lib/data/testing/sqlite-writer";
+import { buildClosedRouteTopology } from "@/lib/data/testing/topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "@/lib/data/types";
 import type { AccessPointCandidate, GraphAccessPoint, InducedGraph } from "./types";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "./closed-route-topology";
@@ -80,4 +82,41 @@ export function writeGraphFixture(
     closedRouteTopology: topology,
   });
   return manifest;
+}
+
+/** Temporary schema-6 compiler baseline promoted to the prepared runtime layout. */
+export function writePreparedGraphFixture(
+  databasePath: string,
+  graph: InducedGraph,
+  points: Array<GraphAccessPoint & Partial<AccessPointCandidate>> = graph.accessPoints,
+): PreparedGraphDescriptor {
+  const manifest = writeGraphFixture(databasePath, graph, points);
+  promoteGraphFixture(databasePath, manifest.dataVersion);
+  return {
+    releaseId: manifest.dataVersion, installationId: manifest.id,
+    coverage: manifest.coverage.boundary,
+    artifacts: [{ path: databasePath, geometry: manifest.coverage.boundary }],
+  };
+}
+
+/** Convert the legacy fixture layout, including local-rowid spatial indexes. */
+export function promoteGraphFixture(databasePath: string, releaseId: string): void {
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.exec(`UPDATE metadata SET value='7' WHERE key='schemaVersion';
+      ALTER TABLE access_points ADD COLUMN known_minimum_stem_m REAL;
+      ALTER TABLE access_points ADD COLUMN inclusive_minimum_stem_m REAL;
+      UPDATE access_points SET
+        known_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='known' AND access_point_id=access_points.id),
+        inclusive_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='inclusive' AND access_point_id=access_points.id);
+      DROP TABLE access_topology; DROP TABLE topology_profiles;
+      DELETE FROM node_spatial;
+      INSERT INTO node_spatial SELECT node_key,lon,lon,lat,lat FROM nodes;
+      DELETE FROM edge_spatial;
+      INSERT INTO edge_spatial SELECT e.edge_key,
+        min(json_extract(j.value,'$[0]')),max(json_extract(j.value,'$[0]')),
+        min(json_extract(j.value,'$[1]')),max(json_extract(j.value,'$[1]'))
+        FROM edges e,json_each(e.geometry) j GROUP BY e.edge_key;`);
+    database.prepare("INSERT INTO metadata(key,value) VALUES ('releaseId',?)").run(releaseId);
+  } finally { database.close(); }
 }

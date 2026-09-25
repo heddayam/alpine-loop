@@ -1,10 +1,7 @@
+import { PreparedGraphRepository } from "@/lib/graph";
+import { loadInstallation } from "@/lib/coverage-install";
 import {
-  SQLiteClosedRouteFeasibilityRepository,
-  SQLiteGraphRepository,
-} from "@/lib/graph";
-import { loadInstalledPackVersion } from "@/lib/packs/installed-pack";
-import {
-  CLOSED_ROUTE_EFFORT_BUDGETS,
+  CLOSED_ROUTE_BUDGET,
   type PreparedRouteSearch,
   type RouteGraphContext,
   AccessFilterResolutionError,
@@ -22,8 +19,7 @@ type Session = {
   input: RouteSolverWorkerInput;
   solver: ReachableGraphClosedRouteSolver;
   context: RouteGraphContext;
-  repository: SQLiteGraphRepository;
-  topologyRepository: SQLiteClosedRouteFeasibilityRepository;
+  repository: PreparedGraphRepository;
   search?: PreparedRouteSearch;
 };
 
@@ -43,28 +39,24 @@ function serializedError(error: unknown): Extract<RouteSolverResponse, { ok: fal
 }
 
 async function initialize(input: RouteSolverWorkerInput): Promise<void> {
-  let repository: SQLiteGraphRepository | undefined;
-  let topologyRepository: SQLiteClosedRouteFeasibilityRepository | undefined;
+  let repository: PreparedGraphRepository | undefined;
   try {
-    const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
-    if (!installed) throw new Error("The pinned pack version is no longer installed.");
-    const { manifest } = installed;
-    repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
-    topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath: installed.databasePath, manifest });
-    const solver = new ReachableGraphClosedRouteSolver({
-      pack: {
-        id: manifest.id,
-        dataVersion: manifest.dataVersion, builtAt: manifest.builtAt,
-      },
-      sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
-      sourceConfidence: manifest.fieldConfidence.access ?? "low",
-      fallbackSourceIds: manifest.sources.map(({ id }) => id),
+    const installed = await loadInstallation(undefined, input.installationId);
+    if (!installed) throw new Error("The pinned installation is unavailable. Install prepared coverage and start a new search.");
+    const { installation, release, artifacts } = installed;
+    repository = new PreparedGraphRepository({
+      installationId: installation.id, releaseId: release.id, artifacts, coverage: installation.geometry,
     });
-    session = { input, solver, context: { repository, topologyRepository, accessFilter: input.accessFilter }, repository, topologyRepository };
+    const solver = new ReachableGraphClosedRouteSolver({
+      pack: { id: installation.id, dataVersion: release.id, builtAt: release.builtAt },
+      sourceFreshness: release.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? release.builtAt,
+      sourceConfidence: "low",
+      fallbackSourceIds: release.sources.map(({ id }) => id),
+    });
+    session = { input, solver, context: { repository, accessFilter: input.accessFilter }, repository };
   } catch (error) {
-    await topologyRepository?.close();
     await repository?.close();
-    throw new ServerApiError("PACK_UNAVAILABLE", error instanceof Error ? error.message : "The pinned pack could not be opened.", 503);
+    throw new ServerApiError("DATA_UNAVAILABLE", `The pinned installation could not be opened. Install prepared coverage and start a new search. ${error instanceof Error ? error.message : ""}`, 503);
   }
 }
 
@@ -77,30 +69,20 @@ async function preparedSearch(): Promise<PreparedRouteSearch> {
 async function search(accessPointId: string): Promise<StartSearchResult> {
   const prepared = await preparedSearch();
   const routesPerAccessPoint = 10;
-  const run = (searchEffort: "quick" | "thorough") => prepared.generate({
+  const result = await prepared.generate({
     startAccessPointId: accessPointId,
-    searchEffort,
     limit: routesPerAccessPoint,
-  }, { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] });
-  const quick = await run("quick");
-  await new Promise<void>((resolveYield) => setImmediate(resolveYield));
-  const thorough = await run("thorough");
-  const unique = <T extends { id: string }>(values: readonly T[]): T[] => {
-    const seen = new Set<string>();
-    return values.filter(({ id }) => !seen.has(id) && Boolean(seen.add(id)));
-  };
+  }, { ...CLOSED_ROUTE_BUDGET });
   return {
-    exact: unique([...quick.exact, ...thorough.exact]).slice(0, routesPerAccessPoint),
-    nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
-    truncated: quick.diagnostics.hardTruncationReasons.length > 0
-      || thorough.diagnostics.hardTruncationReasons.length > 0,
-    diagnostics: { quick: quick.diagnostics, thorough: thorough.diagnostics },
+    exact: result.exact,
+    nearMisses: result.nearMisses,
+    truncated: result.diagnostics.hardTruncationReasons.length > 0,
+    diagnostics: result.diagnostics,
   };
 }
 
 async function close(): Promise<void> {
   if (!session) return;
-  await session.topologyRepository.close();
   await session.repository.close();
   session = undefined;
 }
@@ -111,12 +93,7 @@ async function handle(request: RouteSolverRequest): Promise<void> {
     if (request.type === "initialize") await initialize(request.input);
     else if (request.type === "enumerate") value = (await preparedSearch()).eligibleAccessPointIds;
     else if (request.type === "search") value = await search(request.accessPointId);
-    else if (request.type === "generate") {
-      if (!session) throw new Error("Route solver process was not initialized.");
-      value = await session.solver.generate({ ...session.input.criteria, ...request.policy }, {
-        ...session.context, budget: request.budget,
-      });
-    } else await close();
+    else await close();
     send({ id: request.id, ok: true, ...(value === undefined ? {} : { value }) });
   } catch (error) {
     send({ id: request.id, ok: false, error: serializedError(error) });

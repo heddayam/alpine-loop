@@ -95,21 +95,6 @@ export function SettingsModal({
                 }}
               />
             </label>
-            <div className="count-field">
-              <label htmlFor="settings-route-count">Quick-search routes</label>
-              <input
-                id="settings-route-count"
-                type="number"
-                min="1"
-                max="20"
-                value={Number.isNaN(draft.quickSearchRouteCount) ? "" : draft.quickSearchRouteCount}
-                onChange={(event) => {
-                  const quickSearchRouteCount = event.currentTarget.valueAsNumber;
-                  setDraft((current) => ({ ...current, quickSearchRouteCount }));
-                }}
-              />
-              <small>1 to 20 alternatives</small>
-            </div>
           </section>
 
           <section className="settings-group" aria-labelledby="grade-preset-settings-title">

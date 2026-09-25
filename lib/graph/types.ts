@@ -27,16 +27,20 @@ export type AccessPointCandidate = GraphAccessPoint & {
   parkingDistanceM?: number | null;
   /** Whether the inclusive topology profile can reach a physical cycle. */
   canReachCycle?: boolean;
+  knownMinimumStemMeters?: number | null;
+  inclusiveMinimumStemMeters?: number | null;
 };
 
 export type AccessPointCandidateQuery = {
   bbox: BoundingBox;
+  accessPointId?: string;
   includeUncertainAccess: boolean;
   signal?: AbortSignal;
 };
 
 export type ReachableGraphQuery = {
   startNodeId: string;
+  startCoordinates?: readonly [number, number];
   maximumDistanceMeters: number;
   maximumDirectedEdges: number;
   includeUncertainAccess: boolean;

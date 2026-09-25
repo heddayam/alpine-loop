@@ -4,6 +4,7 @@ import {
   areaBounds,
   coordinateIsInsideArea,
   lineIsInsideArea,
+  segmentIntersectsArea,
   segmentIsInsideArea,
 } from "./geometry";
 
@@ -20,6 +21,14 @@ describe("area geometry", () => {
     expect(coordinateIsInsideArea([0, 5], polygonWithHole)).toBe(true);
     expect(coordinateIsInsideArea([4, 5], polygonWithHole)).toBe(true);
     expect(coordinateIsInsideArea([5, 5], polygonWithHole)).toBe(false);
+  });
+
+  it("detects positive-length segment contact through coverage, not a hole or corner tangent", () => {
+    expect(segmentIntersectsArea([-1, 5], [11, 5], polygonWithHole)).toBe(true);
+    expect(segmentIntersectsArea([4.5, 4.5], [5.5, 5.5], polygonWithHole)).toBe(false);
+    expect(segmentIntersectsArea([-1, 1], [1, -1], polygonWithHole)).toBe(false);
+    expect(segmentIntersectsArea([-1, 0], [5, 0], polygonWithHole)).toBe(true);
+    expect(segmentIntersectsArea([1, 1], [1, 1], polygonWithHole)).toBe(false);
   });
 
   it("supports disjoint multipolygon islands", () => {

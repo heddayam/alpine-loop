@@ -1,21 +1,22 @@
 name: alpine-loop
 
 services:
-  packs:
+  data:
     profiles: [tools]
     build:
       context: .
-      target: packs
+      target: developer
     init: true
     user: "${ALPINE_UID:-1000}:${ALPINE_GID:-1000}"
+    mem_limit: 4g
+    memswap_limit: 4g
     environment:
-      ALPINE_ROUTE_JOBS_DB: /app/.local-data/runtime/route-jobs.sqlite
-      ALPINE_NATIVE_ROUTE_JOBS_DB: /app/.local-data/native-runtime/route-jobs.sqlite
+      ALPINE_SOURCE_CACHE: /app/.cache/sources
+      ALPINE_COVERAGE_ROOT: /app/.cache/build
+      ALPINE_RELEASE_ROOT: /app/.local-data/releases/prepared
     volumes:
       - ./.cache:/app/.cache
-      - ./.local-data/packs:/app/.local-data/packs
-      - ./.local-data/runtime:/app/.local-data/native-runtime:ro
-      - alpine-runtime:/app/.local-data/runtime:ro
+      - ./.local-data/releases:/app/.local-data/releases
 
   app:
     build:
@@ -29,11 +30,12 @@ services:
       ARCGIS_API_KEY: "${ARCGIS_API_KEY:-}"
       ARCGIS_GEOCODING_API_KEY: "${ARCGIS_GEOCODING_API_KEY:-}"
       ARCGIS_ROUTING_API_KEY: "${ARCGIS_ROUTING_API_KEY:-}"
-      ALPINE_PACK_ROOT: /app/.local-data/packs
       ALPINE_PROVIDER_USAGE_DB: /app/.local-data/runtime/provider-usage.sqlite
       ALPINE_ROUTE_JOBS_DB: /app/.local-data/runtime/route-jobs.sqlite
+      ALPINE_COVERAGE_ROOT: /app/.local-data/runtime/coverage
+      ALPINE_COVERAGE_CATALOG: "${ALPINE_COVERAGE_CATALOG:-/app/.local-data/releases/prepared}"
     volumes:
-      - ./.local-data/packs:/app/.local-data/packs:ro
+      - ./.local-data/releases:/app/.local-data/releases:ro
       - alpine-runtime:/app/.local-data/runtime
 
 volumes:

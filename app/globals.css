@@ -318,13 +318,9 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .switch-row input { flex: 0 0 auto; width: 1.7rem; height: .95rem; margin: 0; accent-color: var(--accent); }
 
 .builder-action-footer { padding: var(--s4); background: var(--chrome); border-top: 1px solid var(--line-2); }
-.search-count { display: flex; gap: var(--s2); align-items: center; margin-bottom: var(--s3); font-size: var(--fs-xs); }
-.search-count label { font-weight: 600; }
-.search-count select { width: 4.5rem; margin-left: auto; }
-.search-count > span { color: var(--ink-2); }
-.builder-action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.builder-action-buttons { display: grid; }
 .builder-action-buttons .btn { min-height: 2rem; font-size: var(--fs-md); }
-.action-legend { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); margin-top: var(--s1); color: var(--ink-3); font-size: 10px; text-align: center; }
+.action-legend { margin-top: var(--s1); color: var(--ink-3); font-size: 10px; text-align: center; }
 .validation-errors { margin-bottom: var(--s2); padding: var(--s2); color: var(--danger); background: var(--danger-soft); border-radius: var(--radius); font-size: var(--fs-xs); }
 .validation-errors ul { margin: var(--s1) 0 0; padding-left: 1rem; }
 .generation-status { margin-top: var(--s2); color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.35; }
@@ -684,10 +680,6 @@ details.result-section[open] > summary::before { content: "▾"; }
 .viewed-search-context { padding: var(--s3) var(--s4); color: var(--ink-2); background: var(--chrome); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.5; }
 .map-data-error { position: absolute; bottom: 30px; left: 16px; background: white; padding: 6px 10px; font-size: 12px; z-index: 2; }
 
-.count-field { display: grid; grid-template-columns: minmax(0, 1fr) 4rem; gap: var(--s1) var(--s3); align-items: center; font-size: var(--fs-sm); }
-.count-field > label { font-weight: 600; }
-.count-field input { grid-row: 1 / span 2; grid-column: 2; width: 100%; height: var(--ctl); padding: 0 var(--s2); border: 1px solid var(--line-2); border-radius: var(--radius); }
-.count-field small { grid-column: 1; color: var(--ink-3); font-size: var(--fs-xs); }
 .detail-back { margin: 0; }
 .route-detail-view > .route-card { margin: var(--s3) var(--s4); }
 .route-match-label { white-space: nowrap; color: var(--accent); font-size: var(--fs-xs); font-weight: 700; }
@@ -696,3 +688,22 @@ details.result-section[open] > summary::before { content: "▾"; }
 
 .start-filter { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s3); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); }
 .start-filter .btn-link { flex: 0 0 auto; }
+
+.coverage-content { display: grid; align-content: start; gap: var(--s3); font-size: var(--fs-sm); line-height: 1.4; }
+.coverage-content section { display: grid; gap: var(--s2); min-width: 0; }
+.coverage-content h3 { font-weight: 700; }
+.coverage-heading, .coverage-counts, .coverage-counts > span, .coverage-download header { display: flex; align-items: center; gap: var(--s2); }
+.coverage-heading, .coverage-download header { justify-content: space-between; }
+.coverage-counts { gap: var(--s4); }
+.coverage-selection { color: var(--ink-3); font-size: var(--fs-xs); }
+.coverage-download { display: grid; gap: var(--s2); padding-block: var(--s3); border-top: 1px solid var(--line); }
+.coverage-download progress { width: 100%; height: .4rem; }
+.coverage-content .action-row { flex-wrap: wrap; }
+.coverage-content .error-state { overflow-wrap: anywhere; }
+.coverage-panel .coverage-content { padding: var(--s4); }
+.coverage-panel h2 { font-size: var(--fs-lg); }
+.coverage-installed { fill: #a7d7b5; stroke: #166534; background: #a7d7b5; border-color: #166534; }
+.coverage-swatch { display: inline-block; width: 1rem; height: .7rem; border-width: 1.4px; border-style: solid; }
+.coverage-available { background: #e5e7eb; border-color: #6b7280; }
+.coverage-selected { background: #bfdbfe; border-color: #2563eb; }
+.coverage-downloading { background: #fcd34d; border-color: #b77900; }

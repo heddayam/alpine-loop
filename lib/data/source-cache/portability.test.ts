@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { readPinnedOsmSnapshot, refreshPinnedOsmSnapshot, type OsmSourceConfig } from "../osm/source";
+import { inspectPinnedOsmSnapshot, readPinnedOsmSnapshot, refreshPinnedOsmSnapshot, type OsmSourceConfig } from "../osm/source";
 import { readPinnedOfficialTrailSnapshot, refreshPinnedOfficialTrailSnapshot, type OfficialTrailSourceConfig } from "../official-trails/source";
 import { readPinnedThreeDepCollection, type ElevationSourceConfig } from "../elevation/source";
 import { refreshThreeDepCollection } from "../elevation/collection";
@@ -111,4 +111,29 @@ it("uses pins without acquisition by default, acquires missing pins, and honors 
   expect(await readOrAcquireSource(undefined, read, acquire)).toBe("acquired");
   await expect(readOrAcquireSource(false, read, acquire)).rejects.toThrow("Missing pin");
   expect(acquire).toHaveBeenCalledTimes(2);
+});
+
+
+it("inspects OSM availability without treating matching metadata as verified content", async () => {
+  const cacheRoot = await root();
+  const config: OsmSourceConfig = { schemaVersion: 1, id: "osm-fixture", authority: "Fixture", dataset: "OSM",
+    version: "v1", upstreamTimestamp: "2026-01-01T00:00:00Z", url: "https://fixtures.invalid/osm.pbf",
+    expectedByteLength: bytes.length, license: "CC0", attribution: "Fixture" };
+  const {snapshot} = await refreshPinnedOsmSnapshot(cacheRoot, config, fetchFile);
+  expect(await inspectPinnedOsmSnapshot(cacheRoot, config)).toEqual(snapshot);
+  for (const changed of [{version:"v2"},{url:"https://fixtures.invalid/other.pbf"},{expectedByteLength:bytes.length+1}]) {
+    await expect(inspectPinnedOsmSnapshot(cacheRoot, {...config,...changed})).rejects.toThrow(/configured/);
+  }
+  const pointerPath = path.join(cacheRoot,config.id,"pinned.json");
+  const pointerText = await readFile(pointerPath,"utf8");
+  const pointer = JSON.parse(pointerText);
+  pointer.cached.receipt.sourceId = "different-source";
+  await writeFile(pointerPath,JSON.stringify(pointer));
+  await expect(inspectPinnedOsmSnapshot(cacheRoot,config)).rejects.toThrow("configured source");
+  await writeFile(pointerPath,pointerText);
+  await writeFile(snapshot.localPath,Buffer.alloc(bytes.length,120));
+  expect(await inspectPinnedOsmSnapshot(cacheRoot,config)).toEqual(snapshot);
+  await expect(readPinnedOsmSnapshot(cacheRoot,config)).rejects.toThrow("integrity");
+  await writeFile(snapshot.localPath,"short");
+  await expect(inspectPinnedOsmSnapshot(cacheRoot,config)).rejects.toThrow("file size");
 });

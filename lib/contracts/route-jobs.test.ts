@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchAreaSchema, searchIntentSchema, searchRequestSchema } from "./search";
+import { searchAreaSchema, searchIntentSchema } from "./search";
 
 const criteria = {
   closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
@@ -14,7 +14,6 @@ describe("geographic requests", () => {
     for (const minDurationMinutes of [0, 5, 30, 55]) {
       const band = { ...drive, minDurationMinutes };
       expect(searchIntentSchema.parse({ area: band, criteria }).area).toEqual(band);
-      expect(searchRequestSchema.parse({ area: band, criteria }).area).toEqual(band);
     }
     for (const minDurationMinutes of [-5, 1, 7.5, 60, 75, 301]) {
       expect(searchAreaSchema.safeParse({ ...drive, minDurationMinutes }).success).toBe(false);
@@ -28,7 +27,5 @@ describe("geographic requests", () => {
   it("keeps execution controls out of a retained intent", () => {
     expect(searchIntentSchema.parse({ area, criteria })).toEqual({ area, criteria });
     expect(searchIntentSchema.safeParse({ area, criteria, limit: 20 }).success).toBe(false);
-    expect(searchRequestSchema.parse({ area, criteria }).limit).toBe(10);
-    for (const limit of [0, 21]) expect(searchRequestSchema.safeParse({ area, criteria, limit }).success).toBe(false);
   });
 });

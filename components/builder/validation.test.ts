@@ -11,22 +11,11 @@ describe("search criteria validation", () => {
     const result = parseSearchCriteria(values());
     expect(result.success).toBe(true);
     if (result.success) expect(result).toMatchObject({
-      limit: 10,
       criteria: {
         closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
         includeUncertainAccess: true,
       },
     });
-  });
-
-  it.each(["1", "20"])("accepts route count boundary %s", (limit) => {
-    expect(parseSearchCriteria(values({ limit })).success).toBe(true);
-  });
-
-  it.each(["0", "21", "1.5", "NaN"])("rejects invalid route count %s", (limit) => {
-    const result = parseSearchCriteria(values({ limit }));
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.errors).toContain("Route count must be a whole number from 1 through 20.");
   });
 
   it("validates repetition and optional shared-stem limits", () => {

@@ -25,7 +25,7 @@ export type OsmPipelineOptions = {
 export type PreparedOsmRegion = { regionPath: string; identity: string };
 export type OsmRegionOptions = Pick<OsmPipelineOptions, "preparationRoot" | "runner">;
 
-export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v9";
+export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v10";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
 async function nonempty(filePath: string, label: string): Promise<void> {

@@ -24,6 +24,8 @@ export type RouteJobSearchSession = {
 export type RouteJobRunnerDependencies = {
   resolveJob(request: SearchIntent, signal: AbortSignal): Promise<SearchPlan>;
   resolveDriveTime(area: Extract<SearchArea, { mode: "drive-time" }>, signal: AbortSignal): Promise<ResolvedDriveTime>;
-  currentDataVersion(packId: string): Promise<string | null>;
+  currentInstallationId(): Promise<string | null>;
+  cleanupInstallations?(): Promise<void>;
+  pinInstallation<T>(id: string, action: () => Promise<T>): Promise<T>;
   openSearchSession(input: { request: SearchIntent; plan: SearchPlan; signal: AbortSignal }): Promise<RouteJobSearchSession>;
 };

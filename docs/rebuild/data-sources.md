@@ -1,9 +1,12 @@
 # Data sources and storage policy
 
+Coverage delivery and developer commands follow [prepared coverage](prepared-coverage.md).
+Historical pack-specific measurements below remain provenance, not runtime instructions.
+
 ## Decision summary
 
 The application must not query OpenStreetMap while serving a user request. Build
-a local, versioned regional graph pack in an explicit refresh pipeline. This is
+a local, versioned routing snapshot in an explicit refresh pipeline. This is
 more reliable, faster, reproducible, and friendlier to community services than
 using the public editing API or Overpass as a routing backend.
 
@@ -27,9 +30,10 @@ input so it can be adjusted without changing app or solver code.
   and verify their URLs from an empty cache when reviewing setup; cached builds
   cannot prove fresh-install availability. These upstream URLs are not permanent
   archives, so pins still need periodic review.
-- Use [`osmium extract`](https://docs.osmcode.org/osmium/latest/osmium-extract.html)
-  with the versioned pack polygon and a reference-complete strategy before
-  retaining ways/nodes needed for pedestrian topology.
+- Progressive builds inventory the pinned extract before installation clipping.
+  Retain source context on disk and apply the exact installed union only at
+  publication. Legacy regional builds retain their reference-complete
+  `osmium extract` path during migration.
 - Interpret hiking-relevant highway/path/foot/access/oneway/route/relation tags
   through a versioned adapter with fixture tests.
 - Use Overpass only for small manual QA queries while developing an adapter, not
@@ -142,7 +146,9 @@ still function if tiles are temporarily unavailable.
 ```text
 .cache/sources/<source>/<snapshot>/     ignored immutable downloads
 .cache/build/<pack>/<run-id>/           ignored staging and audit artifacts
-.local-data/packs/<pack>/<version>/     ignored validated runtime pack
+.local-data/releases/prepared/          ignored exported catalog and artifacts
+.local-data/coverage/                   ignored installed artifacts and references
+.cache/build/                          ignored resumable developer staging
 data/fixtures/                          committed tiny deterministic inputs
 ```
 
@@ -152,8 +158,10 @@ data/fixtures/                          committed tiny deterministic inputs
   builds reuse verified configured pins, acquiring only missing/unusable inputs;
   `--offline` prohibits acquisition and `--refresh` explicitly rediscovers sources.
 - Build to a staging directory and publish only after all validation succeeds.
-- Point an atomic `current` manifest/symlink at the new version, then prune older
-  validated builds for that pack. Failed builds leave the current build intact.
+- Point an atomic `current` manifest/symlink at the new version. Progressive
+  snapshot cleanup preserves the current generation, live search pins, and
+  every saved job reference under a shared publication lock. Unknown reference
+  history prevents deletion. Failed builds leave the current build intact.
 - Database and manifest schema versions are separate from data versions.
 - Runtime opens packs read-only and verifies manifest/database compatibility.
 - Large files are not committed and Git LFS is unnecessary for the first slice.
@@ -171,6 +179,11 @@ metadata per source instead of assuming all public-agency data has identical
 terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
+
+The [prepared coverage design](prepared-coverage.md) is the forward path:
+add independently reviewed coverage intent and verified provider extent to
+a coherent release. Existing pack definitions below remain migration
+inputs and legacy maintenance instructions.
 
 The authoritative region order, boundary intent, selector behavior, and
 onboarding/activation gates are defined in the [regional expansion

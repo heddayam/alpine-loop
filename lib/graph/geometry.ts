@@ -127,8 +127,7 @@ function segmentBoundaryParameters(start: Position, end: Position, ring: Readonl
   return parameters;
 }
 
-export function segmentIsInsideArea(start: Position, end: Position, geometry: AreaGeometry): boolean {
-  if (!coordinateIsInsideArea(start, geometry) || !coordinateIsInsideArea(end, geometry)) return false;
+function* segmentInteriorPoints(start: Position, end: Position, geometry: AreaGeometry): Generator<Position> {
   const parameters = [
     0,
     1,
@@ -143,9 +142,25 @@ export function segmentIsInsideArea(start: Position, end: Position, geometry: Ar
       start[0] + (end[0] - start[0]) * middle,
       start[1] + (end[1] - start[1]) * middle,
     ];
+    yield point;
+  }
+}
+
+export function segmentIsInsideArea(start: Position, end: Position, geometry: AreaGeometry): boolean {
+  if (!coordinateIsInsideArea(start, geometry) || !coordinateIsInsideArea(end, geometry)) return false;
+  for (const point of segmentInteriorPoints(start, end, geometry)) {
     if (!coordinateIsInsideArea(point, geometry)) return false;
   }
   return true;
+}
+
+/** Positive-length contact with installed coverage, including a segment whose endpoints are outside. */
+export function segmentIntersectsArea(start: Position, end: Position, geometry: AreaGeometry): boolean {
+  if (Math.abs(start[0] - end[0]) <= GEOMETRY_EPSILON && Math.abs(start[1] - end[1]) <= GEOMETRY_EPSILON) return false;
+  for (const point of segmentInteriorPoints(start, end, geometry)) {
+    if (coordinateIsInsideArea(point, geometry)) return true;
+  }
+  return false;
 }
 
 export function lineIsInsideArea(coordinates: ReadonlyArray<Position>, geometry: AreaGeometry): boolean {

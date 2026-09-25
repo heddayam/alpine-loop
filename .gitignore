@@ -1,11 +1,12 @@
 # Dependencies and framework output
 node_modules/
 .venv/
+__pycache__/
 .next/
 .next-playwright/
 next-env.d.ts
 out/
-coverage/
+/coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo

@@ -25,8 +25,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Adds fields introduced by compatible schema-1 upgrades while retaining strict
- * validation for values that are present in the file.
+ * Adds compatible schema-1 defaults. Retired top-level preferences are discarded
+ * on read; values of supported preferences remain strictly validated.
  */
 function mergeWithDefaults(value: unknown): unknown {
   if (!isRecord(value)) return value;
@@ -83,7 +83,7 @@ export class SettingsStore {
       throw new SettingsFileError(`Settings file ${this.filePath} is not valid JSON`, { cause: error });
     }
 
-    const parsed = appSettingsV1Schema.safeParse(mergeWithDefaults(decoded));
+    const parsed = appSettingsV1Schema.strip().safeParse(mergeWithDefaults(decoded));
     if (!parsed.success) {
       throw new SettingsFileError(`Settings file ${this.filePath} does not match schema version 1`, {
         cause: parsed.error,

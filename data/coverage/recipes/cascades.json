@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -122.51,
+          45.5
+        ],
+        [
+          -119.78,
+          45.5
+        ],
+        [
+          -119.78,
+          49.01
+        ],
+        [
+          -122.51,
+          49.01
+        ],
+        [
+          -122.51,
+          45.5
+        ]
+      ]
+    ]
+  },
+  "sources": [
+    {
+      "configPath": "../../regions/north-cascades/osm-source.json",
+      "geometryPath": "../washington-source.geojson",
+      "sha256": "sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e"
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "yakama-reservation",
+      "geometryPath": "../yakama-exclusion.geojson"
+    }
+  ],
+  "reviewedRegionIds": [
+    "north-cascades",
+    "central-cascades",
+    "rainier-goat-rocks",
+    "southwest-cascades"
+  ],
+  "memoryLimitMiB": 4096,
+  "offline": false,
+  "limitations": [
+    "Independent trail-inventory review remains incomplete; mapped coverage does not guarantee source completeness."
+  ]
+}

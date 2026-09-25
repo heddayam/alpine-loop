@@ -74,7 +74,6 @@ function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchReques
     },
     distanceMiles: { min: 1.8, max: 2 },
     includeUncertainAccess: true,
-    searchEffort: "quick",
     limit: 3,
     ...overrides,
   };

@@ -1,4 +1,4 @@
-import type { GeneratedClosedRouteV3, ConstraintViolationV3, RouteCriteria, SearchEffortV3 } from "@/lib/contracts";
+import type { GeneratedClosedRouteV3, ConstraintViolationV3, RouteCriteria } from "@/lib/contracts";
 import type { AreaGeometry } from "@/lib/graph";
 
 export type ResolvedAccessFilterContext = {
@@ -8,7 +8,6 @@ export type ResolvedAccessFilterContext = {
 };
 
 export type RouteSearchPolicy = {
-  searchEffort: SearchEffortV3;
   limit: number;
   startAccessPointId?: string;
 };
@@ -28,9 +27,6 @@ export type RouteSearchResult = {
     maximumLoadedDirectedEdges: number;
     noCycleAccessPointCount: number;
     feasibleAccessPointCount: number;
-    attachmentGroupCount: number;
-    probedAttachmentGroupCount: number;
-    deeplySearchedAttachmentGroupCount: number;
     composedCandidateCount: number;
     repairedCandidateCount: number;
     directedValidationRejectionCount: number;

@@ -1,4 +1,4 @@
-import type { SearchRequest, SearchResult } from "../../lib/contracts/search";
+import type { SearchIntent, RouteJobV2, SearchRoute } from "../../lib/contracts/search";
 import type {
   GeneratedClosedRouteV3,
   NamedArea,
@@ -136,7 +136,7 @@ function route(index: number): GeneratedClosedRouteV3 {
   };
 }
 
-export function routeResponse(request: SearchRequest, count = 1): SearchResult {
+export function savedRoutes(request: SearchIntent, count = 1): { request: SearchIntent; area: RouteJobV2["area"]; exact: SearchRoute[] } {
   return {
     request,
     area: {
@@ -147,7 +147,7 @@ export function routeResponse(request: SearchRequest, count = 1): SearchResult {
       ...(request.area.mode === "drive-time" && request.area.regionIds.length ? { refinementGeometry: REFINEMENT_GEOMETRY } : {}),
     },
     exact: Array.from({ length: count }, (_, index) => ({ ...route(index), regionLabel: NAMED_AREA.name })),
-    nearMisses: [], incomplete: false, messages: [],
+
   };
 }
 

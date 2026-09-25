@@ -2,7 +2,7 @@ import { routeCriteriaSchema, type RouteCriteria } from "@/lib/contracts";
 import type { BuilderValues, RangeField } from "./types";
 
 type ValidationResult =
-  | { success: true; criteria: RouteCriteria; limit: number }
+  | { success: true; criteria: RouteCriteria }
   | { success: false; errors: string[] };
 
 function parseRange(field: RangeField, label: string) {
@@ -26,8 +26,6 @@ export function parseSearchCriteria(values: BuilderValues): ValidationResult {
   errors.push(...distance.errors, ...elevationGain.errors, ...maximumElevation.errors);
   if (distance.value && distance.value.max > 30) errors.push("Route distance may not exceed 30 miles.");
 
-  const limit = Number(values.limit);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 20) errors.push("Route count must be a whole number from 1 through 20.");
   const maximumRepeatedTrailPct = Number(values.maximumRepeatedTrailPct);
   if (!values.maximumRepeatedTrailPct.trim() || !Number.isInteger(maximumRepeatedTrailPct) || maximumRepeatedTrailPct < 0 || maximumRepeatedTrailPct > 100) {
     errors.push("Maximum repeated trail must be a whole percentage from 0 through 100.");
@@ -52,6 +50,6 @@ export function parseSearchCriteria(values: BuilderValues): ValidationResult {
   };
   const parsed = routeCriteriaSchema.safeParse(candidate);
   return parsed.success
-    ? { success: true, criteria: parsed.data, limit }
+    ? { success: true, criteria: parsed.data }
     : { success: false, errors: parsed.error.issues.map((issue) => issue.message) };
 }

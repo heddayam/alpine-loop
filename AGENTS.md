@@ -34,7 +34,8 @@ application.
 - Unknown access is included by default and can be explicitly disabled.
 - Return exact matches separately from clearly labeled close matches; never relax
   constraints silently.
-- Route count is chosen by the user from 1 through 20 and defaults to 10.
+- Full search is the sole search workflow; retain up to ten exact routes per
+  eligible start, or a clearly labeled close match.
 - The active app is standard local Next.js plus MapLibre. Do not restore Sites,
   ChatGPT/OpenAI hosting, Cloudflare Workers, D1, R2, vinext, or Vite hosting.
 - Pre-rebuild source is preserved by the `archive/pre-redo-*` tags. Keep legacy

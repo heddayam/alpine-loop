@@ -65,7 +65,7 @@ function open(fixture: { databasePath: string; manifest: PackManifest }) {
 
 // These rows and hashes were frozen from the format-1 compiler before replacement.
 // Loading them must not depend on the current producer reproducing old identities.
-function createLegacyFixture(tamper = false) {
+function createLegacyFixture() {
   const fixture = createFixture((database) => {
     database.exec("DELETE FROM access_topology; DELETE FROM topology_profiles");
     for (const [table, rows] of [["topology_profiles", legacy.profiles], ["access_topology", legacy.accessTopology]] as const) {
@@ -75,7 +75,6 @@ function createLegacyFixture(tamper = false) {
     }
     database.prepare("UPDATE metadata SET value = ? WHERE key = 'dataVersion'").run(legacy.manifest.dataVersion);
     database.prepare("UPDATE metadata SET value = ? WHERE key = 'topologyContentHash'").run(legacy.topologyContentHash);
-    if (tamper) database.exec("UPDATE access_topology SET minimum_stem_distance_m = 26 WHERE profile = 'inclusive' AND access_point_id = 'start-b'");
   });
   return { ...fixture, manifest: packManifestSchema.parse(legacy.manifest) };
 }
@@ -97,7 +96,7 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
     await expect(repository.getAccessTopology("known", ["start-a"])).rejects.toThrow(/closed/);
   });
 
-  it("reads authentic format-1 rows and still checks their independent content hashes", async () => {
+  it("reads authentic format-1 rows", async () => {
     const repository = open(createLegacyFixture());
     expect(repository.dataVersion).toBe("fixture-v6");
     await expect(repository.getAccessTopology("known", ["start-b"]))
@@ -105,7 +104,6 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
     await expect(repository.getAccessTopology("inclusive", ["start-b"]))
       .resolves.toEqual([expect.objectContaining({ canReachCycle: true, minimumStemDistanceMeters: 25,
         connectorKey: legacy.accessTopology[3]!.connector_key })]);
-    expect(() => open(createLegacyFixture(true))).toThrow(/profile content hash mismatch/);
   });
 
   it("rejects packs without the complete current migration chain", () => {
@@ -120,15 +118,14 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
       .toThrow(/topologyContentHash/);
   });
 
-  it("rejects missing, orphaned, and inconsistent access topology", () => {
-    expect(() => open(createFixture((database) => database.exec("DELETE FROM access_topology WHERE profile = 'known' AND access_point_id = 'start-b'"))))
-      .toThrow(/missing known access topology for start-b/);
-    expect(() => open(createFixture((database) => database.exec("PRAGMA foreign_keys = OFF; UPDATE access_topology SET access_point_id = 'orphan' WHERE profile = 'known' AND access_point_id = 'start-a'"))))
-      .toThrow(/unknown access point orphan/);
-    expect(() => open(createFixture((database) => database.exec("UPDATE access_topology SET can_reach_cycle = 0 WHERE profile = 'known' AND access_point_id = 'start-a'"))))
-      .toThrow(/inconsistent cycle reachability/);
-    expect(() => open(createFixture((database) => database.exec("UPDATE access_topology SET connector_decision_edge_ids = 'not-json' WHERE profile = 'inclusive' AND access_point_id = 'start-a'"))))
-      .toThrow(/invalid JSON/);
+  it("validates only requested access topology, including missing and inconsistent rows", async () => {
+    const missing = open(createFixture((database) => database.exec("DELETE FROM access_topology WHERE profile = 'known' AND access_point_id = 'start-b'")));
+    await expect(missing.getAccessTopology("known", ["start-a"])).resolves.toHaveLength(1);
+    await expect(missing.getAccessTopology("known", ["start-b"])).rejects.toThrow(/missing known access topology for start-b/);
+    const inconsistent = open(createFixture((database) => database.exec("UPDATE access_topology SET can_reach_cycle = 0 WHERE profile = 'known' AND access_point_id = 'start-a'")));
+    await expect(inconsistent.getAccessTopology("known", ["start-a"])).rejects.toThrow(/inconsistent cycle reachability/);
+    const malformed = open(createFixture((database) => database.exec("UPDATE access_topology SET connector_decision_edge_ids = 'not-json' WHERE profile = 'inclusive' AND access_point_id = 'start-a'")));
+    await expect(malformed.getAccessTopology("inclusive", ["start-a"])).rejects.toThrow(/invalid JSON/);
   });
 
   it("rejects missing profiles, obsolete topology formats, and altered content hashes", () => {
@@ -138,7 +135,7 @@ describe("SQLiteClosedRouteFeasibilityRepository", () => {
       .toThrow(/unsupported known topology format version/);
     expect(() => open(createFixture((database) => database.exec("UPDATE topology_profiles SET content_hash = 'tampered' WHERE profile = 'known'"))))
       .toThrow(/invalid known topology content hash/);
-    expect(() => open(createFixture((database) => database.exec("UPDATE access_topology SET minimum_stem_distance_m = 26 WHERE profile = 'inclusive' AND access_point_id = 'start-b'"))))
-      .toThrow(/profile content hash mismatch/);
+    expect(() => open(createFixture((database) => database.exec("UPDATE metadata SET value = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' WHERE key = 'topologyContentHash'"))))
+      .toThrow(/combined topology content hash mismatch/);
   });
 });

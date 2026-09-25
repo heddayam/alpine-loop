@@ -32,7 +32,7 @@ describe("SettingsStore", () => {
   it("writes the full settings atomically and reads them back", async () => {
     const store = new SettingsStore({ rootDirectory: await temporaryRoot() });
     const settings = defaultAppSettings();
-    settings.quickSearchRouteCount = 17;
+    settings.includeUncertainAccess = false;
     settings.selectedGradePreset = "steep";
 
     await expect(store.put(settings)).resolves.toEqual(settings);
@@ -47,12 +47,13 @@ describe("SettingsStore", () => {
     await writeFile(filePath, JSON.stringify({
       schemaVersion: 1,
       includeUncertainAccess: false,
-      quickSearchRouteCount: 4,
+      retiredPreference: 4,
       loopOptions: { maximumRepeatedTrailPct: 20 },
       gradePresets: { moderate: { maximumClimbP90Pct: 13 } },
     }));
 
     const settings = await new SettingsStore({ filePath }).get();
+    expect(settings).not.toHaveProperty("retiredPreference");
     expect(settings.showRegionBoundaries).toBe(false);
     expect(settings.gradeConstraintEnabled).toBe(false);
     expect(settings.selectedGradePreset).toBe("moderate");
@@ -71,7 +72,7 @@ describe("SettingsStore", () => {
     const malformedPath = path.join(root, "malformed.json");
     const invalidPath = path.join(root, "invalid.json");
     await writeFile(malformedPath, "{");
-    await writeFile(invalidPath, JSON.stringify({ ...defaultAppSettings(), quickSearchRouteCount: 99 }));
+    await writeFile(invalidPath, JSON.stringify({ ...defaultAppSettings(), includeUncertainAccess: "invalid" }));
 
     await expect(new SettingsStore({ filePath: malformedPath }).get()).rejects.toBeInstanceOf(SettingsFileError);
     await expect(new SettingsStore({ filePath: invalidPath }).get()).rejects.toBeInstanceOf(SettingsFileError);
@@ -82,7 +83,7 @@ describe("SettingsStore", () => {
     const valid = defaultAppSettings();
     await store.put(valid);
 
-    await expect(store.put({ ...valid, quickSearchRouteCount: 21 })).rejects.toThrow();
+    await expect(store.put({ ...valid, selectedGradePreset: "invalid" })).rejects.toThrow();
     await expect(store.get()).resolves.toEqual(valid);
   });
 });

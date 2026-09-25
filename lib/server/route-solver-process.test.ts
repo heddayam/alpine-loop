@@ -1,9 +1,7 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { compilePack } from "@/lib/data/compiler";
-import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
-import { generatedClosedRouteV3Schema, packManifestSchema } from "@/lib/contracts";
-import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
+import { preparedInstallation } from "./__fixtures__/prepared-installation";
+import { generatedClosedRouteV3Schema } from "@/lib/contracts";
 import { drawnArea } from "./search-area";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -22,7 +20,7 @@ const request: SearchIntent = {
 
 const input: RouteSolverWorkerInput = {
   criteria: request.criteria,
-  pack: { id: "fixture-pack", dataVersion: "v4" },
+  installationId: "fixture-installation",
   accessFilter: {
     predicates: [],
     coverage: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
@@ -30,31 +28,25 @@ const input: RouteSolverWorkerInput = {
 };
 
 describe("RouteSolverProcess", () => {
-  it("uses the production child and SQLite data for foreground and per-start searches", async () => {
+  it("uses the production child and SQLite data for per-start searches", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "alpine-compute-"));
     let session: RouteSolverProcess | undefined;
     try {
-      const artifact = await compilePack(await fixtureCompileOptions(root));
-      const manifest = packManifestSchema.parse(JSON.parse(await readFile(artifact.manifestPath, "utf8")));
+      const { installation, manifest } = await preparedInstallation(root);
       session = await RouteSolverProcess.open({
-        pack: manifest,
+        installationId: installation.id,
         criteria: { ...request.criteria, distanceMiles: { min: 0.1, max: 20 } },
         accessFilter: { predicates: [drawnArea(manifest.coverage.bbox)], coverage: manifest.coverage.boundary },
-      }, new AbortController().signal, { env: { ALPINE_PACK_ROOT: root } });
+      }, new AbortController().signal, { env: { ALPINE_COVERAGE_ROOT: root } });
       const signal = new AbortController().signal;
-      const response = await session.generate(
-        { searchEffort: "quick", limit: 2 }, CLOSED_ROUTE_EFFORT_BUDGETS.quick, signal,
-      );
-      expect(response.exact.every((route) => generatedClosedRouteV3Schema.safeParse(route).success)).toBe(true);
-      expect(response.exact.length).toBeGreaterThan(0);
       const starts = await session.enumerateEligibleAccessPointIds(signal);
-      expect(starts).toContain(response.exact[0]!.startAccessPoint.id);
-      const full = await session.searchAccessPoint(response.exact[0]!.startAccessPoint.id, signal);
-      const perStart = await session.generate({ searchEffort: "quick", limit: 10,
-        startAccessPointId: response.exact[0]!.startAccessPoint.id }, CLOSED_ROUTE_EFFORT_BUDGETS.quick, signal);
-      expect(full.exact.map(({ id }) => id)).toEqual(expect.arrayContaining(perStart.exact.map(({ id }) => id)));
-      await expect(session.generate({ searchEffort: "quick", limit: 1, startAccessPointId: "missing" },
-        CLOSED_ROUTE_EFFORT_BUDGETS.quick, signal)).rejects.toMatchObject({ code: "START_NOT_FOUND" });
+      expect(starts.length).toBeGreaterThan(0);
+      const response = await session.searchAccessPoint(starts[0]!, signal);
+      expect(response.exact.length).toBeGreaterThan(0);
+      expect(response.exact.length).toBeLessThanOrEqual(10);
+      expect(response.exact.every((route) => generatedClosedRouteV3Schema.safeParse(route).success)).toBe(true);
+      expect(response.exact.every((route) => route.startAccessPoint.id === starts[0])).toBe(true);
+      await expect(session.searchAccessPoint("missing", signal)).rejects.toMatchObject({ code: "START_INELIGIBLE" });
     } finally {
       await session?.close();
       await rm(root, { recursive: true, force: true });
@@ -76,14 +68,14 @@ describe("RouteSolverProcess", () => {
     } finally { await Promise.all(sessions.map((session) => session.close())); }
   });
 
-  it("boots the production child entrypoint and reports pinned-pack initialization errors", async () => {
+  it("boots the production child entrypoint and reports pinned installation initialization errors", async () => {
     await expect(RouteSolverProcess.open({
       ...input,
-      pack: { ...input.pack, id: "definitely-missing-worker-pack" },
-    }, new AbortController().signal)).rejects.toThrow("pinned pack version is no longer installed");
+      installationId: "definitely-missing-installation",
+    }, new AbortController().signal)).rejects.toThrow("pinned installation could not be opened");
   });
 
-  it.each(["quick", "full"] as const)("keeps the API responsive and cancels a synchronous %s search", async (mode) => {
+  it("keeps the API responsive and cancels a synchronous search", async () => {
     const session = await RouteSolverProcess.open(input, new AbortController().signal, {
       modulePath: resolve(process.cwd(), "lib/server/__fixtures__/route-solver-fixture-child.ts"),
       env: { ALPINE_TEST_SOLVE_MS: "15000" },
@@ -92,11 +84,7 @@ describe("RouteSolverProcess", () => {
 
     const controller = new AbortController();
     const startedAt = performance.now();
-    const search = mode === "full"
-      ? session.searchAccessPoint("slow-access", controller.signal)
-      : session.generate({ searchEffort: "quick", limit: 1 }, {
-        deadlineMs: 15_000, maximumDirectedEdges: 100, maximumExpandedStates: 100, maximumRawCandidates: 10,
-      }, controller.signal);
+    const search = session.searchAccessPoint("slow-access", controller.signal);
     const rejection = expect(search).rejects.toMatchObject({ name: "AbortError" });
     let refreshTicks = 0;
     const refresh = setInterval(() => { refreshTicks += 1; }, 5);
