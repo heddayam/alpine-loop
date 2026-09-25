@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { catalog, plan, request, job, installation } from "../../tests/fixtures/coverage/catalog";
 import { CoveragePanel } from "./CoveragePanel";
@@ -54,7 +54,7 @@ it("resumes downloads and refreshes search only after atomic activation", async 
   render(<CoveragePanel {...props} onChanged={changed} />);
   fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-  expect(screen.getByText("1 section installed")).toBeVisible();
+  expect(screen.getByText("1 installed")).toBeVisible();
 });
 
 it("does not let an old poll overwrite pause and stops polling while closed", async () => {
@@ -99,35 +99,39 @@ it("requires explicit removal when a new catalog drops previously installed sect
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "old", sectionIds: ["retired"] } })));
   render(<CoveragePanel {...props} />);
   expect(await screen.findByRole("button", { name: "Preview update" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Remove unavailable sections" })).toBeEnabled();
-  expect(screen.getByText(/Your existing coverage is retained/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Remove unavailable sections (1)" })).toBeEnabled();
 });
 
 
-it("counts only additional catalog sections and explains map or list selection", async () => {
+it("shows concise available and installed counts for map selection", async () => {
   const base = catalog.release!;
-  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...base, sections: [...base.sections, { ...base.sections[0], id: "next" }, { ...base.sections[0], id: "farther" }] } })));
-  render(<CoveragePanel {...props} selected={["next"]} />);
-  expect(await screen.findByText("2 additional sections available in this catalog.")).toBeVisible();
-  expect(screen.getByText("Click outlined available sections on the map or choose them from the list below, then select Preview download. Areas without sections are not published yet.")).toBeVisible();
+  const releaseGeometry = { type: "Polygon" as const, coordinates: [[[-123,46],[-120,46],[-120,49],[-123,49],[-123,46]]] };
+  const onMapChange = vi.fn();
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...base, geometry: releaseGeometry, sections: [...base.sections, { ...base.sections[0], id: "next" }, { ...base.sections[0], id: "farther" }] } })));
+  const view = render(<CoveragePanel {...props} selected={["next"]} onMapChange={onMapChange} />);
+  expect(await screen.findByText("2 available")).toBeVisible();
+  expect(screen.getByText("1 installed")).toBeVisible();
+  expect(screen.getByText("1 section selected · 256 KiB")).toBeVisible();
   expect(screen.getByRole("button", { name: "Preview download" })).toBeEnabled();
+  expect(onMapChange.mock.lastCall![0].focus).toEqual([-123,46,-120,49]);
+  expect(view.container.querySelector("details, summary, select, p")).toBeNull();
 });
 
-it("explains that a fully installed catalog has no additional coverage while retaining update and removal", async () => {
+it("keeps update and removal controls when all catalog sections are installed", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "older" } })));
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByText("No additional coverage is available in this catalog.")).toBeVisible();
-  expect(screen.getByText("All sections in this catalog are installed. Select installed sections on the map or in the list below to remove coverage.")).toBeVisible();
+  expect(await screen.findByText("0 available")).toBeVisible();
   expect(screen.getByRole("button", { name: "Preview update" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Remove selected coverage" })).toBeEnabled();
 });
 
-it("keeps partial benchmark limitations prominent even when every catalog section is installed", async () => {
+it("labels partial releases without warning prose or completed download history", async () => {
   const limitation = "Partial benchmark coverage only; the full region is not available in this release.";
-  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...catalog.release!, limitations: [limitation] } })));
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: installation, release: { ...catalog.release!, limitations: [limitation] }, jobs: [{ ...job, status: "completed", installation }] })));
   render(<CoveragePanel {...props} />);
-  const limits = await screen.findByRole("region", { name: "Coverage limits" });
-  expect(within(limits).getByText(limitation)).toBeVisible();
-  expect(screen.getByText("No additional coverage is available in this catalog.")).toBeVisible();
+  expect(await screen.findByText("Limited coverage")).toBeVisible();
+  expect(screen.queryByText(limitation)).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Active downloads" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Preview download" })).toBeDisabled();
+  expect(screen.getByRole("link", { name: /OpenStreetMap contributors/ })).toHaveAttribute("href", "https://www.openstreetmap.org");
 });

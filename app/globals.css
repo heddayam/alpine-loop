@@ -689,30 +689,26 @@ details.result-section[open] > summary::before { content: "▾"; }
 .start-filter { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s3); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); }
 .start-filter .btn-link { flex: 0 0 auto; }
 
-.coverage-content { display: grid; gap: var(--s4); font-size: var(--fs-sm); line-height: 1.5; }
-.coverage-content section, .coverage-content fieldset { display: grid; gap: var(--s2); min-width: 0; }
-.coverage-content fieldset { padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius); }
-.coverage-content legend, .coverage-content h3 { font-weight: 700; }
-.coverage-content ul { padding-left: 1.2rem; }
-.coverage-choice { display: flex; align-items: flex-start; gap: var(--s2); padding-block: var(--s1); }
-.coverage-choice input { flex: 0 0 auto; margin-top: .3rem; }
-.coverage-choice small { display: block; color: var(--ink-3); }
+.coverage-content { display: grid; align-content: start; gap: var(--s3); font-size: var(--fs-sm); line-height: 1.4; }
+.coverage-content section { display: grid; gap: var(--s2); min-width: 0; }
+.coverage-content h3 { font-weight: 700; }
+.coverage-heading, .coverage-counts, .coverage-counts > span, .coverage-download header { display: flex; align-items: center; gap: var(--s2); }
+.coverage-heading, .coverage-download header { justify-content: space-between; }
+.coverage-counts { gap: var(--s4); }
+.coverage-limited { color: var(--warn); font-size: var(--fs-xs); white-space: nowrap; }
+.coverage-selection, .coverage-sources { color: var(--ink-3); font-size: var(--fs-xs); }
 .coverage-plan { padding: var(--s3); background: var(--surface-2); border-radius: var(--radius); }
 .coverage-plan dl > div { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: space-between; }
 .coverage-plan dd { margin: 0; }
-.coverage-units { overflow-wrap: anywhere; }
-.coverage-units summary { cursor: pointer; color: var(--accent); }
-.coverage-units ul { max-height: 12rem; overflow: auto; }
-.coverage-content .job-card footer { flex-wrap: wrap; }
-.coverage-content .hint, .coverage-content .error-state { overflow-wrap: anywhere; }
-.coverage-caveat { padding: var(--s2) var(--s3); background: var(--surface-2); border-left: 3px solid var(--warn); }
+.coverage-download { display: grid; gap: var(--s2); padding-block: var(--s3); border-top: 1px solid var(--line); }
+.coverage-download progress { width: 100%; height: .4rem; }
+.coverage-content .action-row { flex-wrap: wrap; }
+.coverage-content .error-state { overflow-wrap: anywhere; }
+.coverage-sources { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
 .coverage-panel .coverage-content { padding: var(--s4); }
 .coverage-panel h2 { font-size: var(--fs-lg); }
 .coverage-installed { fill: #a7d7b5; stroke: #166534; background: #a7d7b5; border-color: #166534; }
-.coverage-legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); padding: var(--s2) 0 !important; list-style: none; font-size: var(--fs-xs); }
-.coverage-legend li { display: flex; align-items: center; gap: var(--s1); }
 .coverage-swatch { display: inline-block; width: 1rem; height: .7rem; border-width: 1.4px; border-style: solid; }
 .coverage-available { background: #e5e7eb; border-color: #6b7280; }
 .coverage-selected { background: #bfdbfe; border-color: #2563eb; }
 .coverage-downloading { background: #fcd34d; border-color: #b77900; }
-.coverage-units fieldset { max-height: 16rem; overflow: auto; border: 0; padding: var(--s2) 0; }
