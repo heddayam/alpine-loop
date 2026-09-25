@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import registry from "@/data/regions/registry.json";
-import type { CoverageCollection, CoverageUnit } from "@/lib/contracts";
+import type { CoverageCollection, CoverageUnit } from "./types";
 import { installationUnits, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { assertValidAreaGeometry, type AreaGeometry } from "@/lib/data/area-geometry";
 import { readOsmSourceConfig, type OsmSourceConfig } from "@/lib/data/osm/source";

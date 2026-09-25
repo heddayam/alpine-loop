@@ -18,7 +18,7 @@ vi.mock("@/lib/data/elevation/uv-rasterio-sampler",async importOriginal=>{
   const actual=await importOriginal<typeof import("@/lib/data/elevation/uv-rasterio-sampler")>();
   return {...actual,get PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION(){return algorithms.metricVersion??actual.PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION;}};
 });
-vi.mock("@/lib/data/osm/source", () => ({ readOsmSourceConfig: vi.fn(), inspectPinnedOsmSnapshot: vi.fn(), readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
+vi.mock("@/lib/data/osm/source", async (importOriginal) => ({...await importOriginal<typeof import("@/lib/data/osm/source")>(), readOsmSourceConfig: vi.fn(), inspectPinnedOsmSnapshot: vi.fn(), readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}), elevationPinsFingerprint: vi.fn(async () => "fixture-pins") }));
 vi.mock("./collections", async (importOriginal) => ({
   ...await importOriginal<typeof import("./collections")>(), coverageExclusions: async () => [],
@@ -127,3 +127,62 @@ it("publishes West Cady, wholly omitted Pilchuck, and the formerly cut road appr
   for (const id of [372537133,951045864,951045865,37583693,218617733])
     expect(published.some(row=>String(row.id).startsWith(`osm-way-${id}:`))).toBe(true);
 },30_000);
+it("audits standalone export inputs and verifies every artifact during inspect",async()=>{
+  const {exportPreparedRelease,inspectPreparedRelease}=await import("@/lib/data/prepared-release");
+  await run(await request(-121.27,-121.23),context());
+  const manifest=await release();
+  const databasePath=path.join(root,"stage",(await readdir(path.join(root,"stage"))).find(file=>file.endsWith("-complete.sqlite"))!);
+  const {geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations}=manifest;
+  const options={databasePath,outputRoot:path.join(root,"checked"),geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations};
+  expect(await inspectPreparedRelease(path.join(root,"release/release.json"))).toMatchObject({verified:true,sections:2});
+  await expect(exportPreparedRelease({...options,compilerVersion:"changed-without-rebuild"})).rejects.toThrow("release identity");
+  const db=new DatabaseSync(databasePath);
+  try {db.exec("UPDATE edges SET length_m=length_m+1 WHERE edge_key=(SELECT min(edge_key) FROM edges)");}finally {db.close();}
+  await expect(exportPreparedRelease(options)).rejects.toThrow("metrics/elevation");
+  await expect(readFile(path.join(root,"checked/release.json"),"utf8")).rejects.toThrow();
+  const artifact=manifest.artifacts[0]!;
+  await writeFile(path.join(root,"release",artifact.path),"corrupt");
+  await expect(inspectPreparedRelease(path.join(root,"release/release.json"))).rejects.toThrow("size differs");
+});
+it("rejects invalid compact bounds before publishing any release",async()=>{
+  const {exportPreparedRelease}=await import("@/lib/data/prepared-release");
+  await run(await request(-121.27,-121.23),context());const manifest=await release();
+  const databasePath=path.join(root,"stage",(await readdir(path.join(root,"stage"))).find(file=>file.endsWith("-complete.sqlite"))!);
+  const db=new DatabaseSync(databasePath);
+  try {db.exec("UPDATE access_points SET known_minimum_stem_m=0,inclusive_minimum_stem_m=1");}finally {db.close();}
+  const {geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations}=manifest;
+  await expect(exportPreparedRelease({databasePath,outputRoot:path.join(root,"bad"),geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations})).rejects.toThrow("compact feasibility");
+});
+it("keeps cell selection identities stable when a release boundary changes",async()=>{
+  await run(await request(-121.27,-121.23),context());const first=await release();
+  await run(await request(-121.265,-121.235),context());const second=await release();
+  expect(second.sections.map(section=>section.id)).toEqual(first.sections.map(section=>section.id));
+  expect(second.sections.map(section=>section.geometry)).not.toEqual(first.sections.map(section=>section.geometry));
+  expect(second.id).not.toBe(first.id);
+});
+it("builds explicit pinned recipes and rejects mismatched source digests",async()=>{
+  const {buildRelease}=await import("./recipe");
+  const geometry=rectangle([-121.27,47.5,-121.23,47.55]);
+  const recipe={schemaVersion:1 as const,geometry,sources:[{config:{schemaVersion:1 as const,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry,sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]};
+  await buildRelease(recipe,context());expect((await release()).sections).toHaveLength(2);
+  await expect(buildRelease({...recipe,sources:[{...recipe.sources[0]!,sha256:`sha256:${"2".repeat(64)}`}]},context())).rejects.toThrow("Pinned source hash differs");
+});
+it("rejects missing elevation, invalid hints and inconsistent physical directions in standalone exports",async()=>{
+  const {copyFile}=await import("node:fs/promises");
+  const {exportPreparedRelease}=await import("@/lib/data/prepared-release");
+  await run(await request(-121.27,-121.23),context());const manifest=await release();
+  const original=path.join(root,"stage",(await readdir(path.join(root,"stage"))).find(file=>file.endsWith("-complete.sqlite"))!);
+  const {geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations}=manifest;
+  const corruptions=[
+    ["UPDATE nodes SET elevation_m=NULL WHERE node_key=(SELECT min(node_key) FROM nodes)","elevation"],
+    ["UPDATE access_points SET inclusive_minimum_stem_m=1e999","compact feasibility"],
+    ["UPDATE edges SET gain_m=gain_m+1 WHERE edge_key=(SELECT min(edge_key) FROM edges)","metrics/directions"],
+    ["DELETE FROM nodes WHERE node_key=(SELECT min(node_key) FROM nodes)","integrity audit"],
+  ];
+  for(const [sql,message] of corruptions) {
+    const databasePath=path.join(root,"corrupt.sqlite");await copyFile(original,databasePath);
+    const db=new DatabaseSync(databasePath);try {db.exec("PRAGMA foreign_keys=OFF");db.exec(sql!);}finally {db.close();}
+    await expect(exportPreparedRelease({databasePath,outputRoot:path.join(root,"rejected"),geometry,sources,regions,builtAt,compilerVersion,metricAlgorithmVersion,limitations})).rejects.toThrow(message);
+    await expect(readFile(path.join(root,"rejected/release.json"),"utf8")).rejects.toThrow();
+  }
+});

@@ -7,7 +7,7 @@ import { UvRasterioThreeDepElevationSampler } from "@/lib/data/elevation/uv-rast
 import { sha256File } from "@/lib/data/file-source";
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { areaBounds } from "@/lib/graph/geometry";
-import type { CoverageUnit } from "@/lib/contracts";
+import type { CoverageUnit } from "./types";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { ElevationSampler, SourceSnapshot } from "@/lib/data/adapters";
 import { intersectCoverage, rectangle } from "./geometry";

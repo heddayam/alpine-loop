@@ -1,8 +1,10 @@
+import type { BuildRecipe } from "./recipe";
 import { createHash } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
-import { type CoveragePlan, type CoverageSnapshot, type CoverageUnit, type PackManifest } from "@/lib/contracts";
+import type { PackManifest } from "@/lib/contracts";
+import type { CoveragePlan, CoverageSnapshot, CoverageUnit } from "./types";
 import { areaBounds, lineIsInsideArea } from "@/lib/graph/geometry";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import { DatabaseSync } from "node:sqlite";
@@ -32,7 +34,7 @@ import { auditOfficialTrailReferences, officialSourceEnvelope, type OfficialRefe
 import type { SourceSnapshot } from "@/lib/data/adapters";
 
 import { COVERAGE_PACK_ID, COVERAGE_BUILD_VERSION as BUILD_VERSION } from "./planning";
-export { COVERAGE_PACK_ID, installedSnapshot, catalog, plan } from "./planning";
+export { COVERAGE_PACK_ID, plan } from "./planning";
 const preparationRoot = () => path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage");
 const releaseRoot = () => path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared");
 const cacheRoot = () => path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
@@ -60,11 +62,11 @@ async function metricArea(raws: CoverageSourceStore[], geometry: CoverageUnit["g
 }
 
 /** Developer-only resumable build; a release appears only after every unit completes. */
-export async function run(plan: CoveragePlan, context: CoverageRunnerContext): Promise<CoverageRunResult> {
-  return runAttempt(plan,context,true);
+export async function run(plan: CoveragePlan, context: CoverageRunnerContext, recipe?: BuildRecipe): Promise<CoverageRunResult> {
+  return runAttempt(plan,context,true,recipe);
 }
 class ChangedMetricInputs extends Error {}
-async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, retryChangedMetrics: boolean): Promise<CoverageRunResult> {
+async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, retryChangedMetrics: boolean, recipe?: BuildRecipe): Promise<CoverageRunResult> {
   const root = preparationRoot();
   await mkdir(root, { recursive: true });
   let store!: ReturnType<typeof openProgressiveGraphStore>;
@@ -110,21 +112,14 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     store!.database.prepare("DELETE FROM sources WHERE id LIKE 'usgs-dem-%' AND id<>?").run(finalElevation?.source.id ?? "");
     const currentSources = [...store!.database.prepare("SELECT record FROM sources ORDER BY id").iterate()]
       .map((row) => JSON.parse(String(row.record)) as PackManifest["sources"][number]);
-    const metadata = await preparedNamedAreas({ geometry, sources: currentSources, snapshots: rawStores.map(raw=>raw.source), preparationRoot: root });
+    const metadata = await preparedNamedAreas({ geometry, sources: currentSources, snapshots: rawStores.map(raw=>raw.source), preparationRoot: root, regionIds: recipe?.reviewedRegionIds });
     const sources = metadata.sources;
     for (const source of sources) store!.putSource({ ...source, contentHash: source.contentHash as `sha256:${string}`, localPath: "" });
     const sourceFingerprint = contentId({ sources, version: BUILD_VERSION, metricVersion: DEM_METRIC_ALGORITHM_VERSION, topologyVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION });
     const unitIds = [...new Set([...([]), ...prepared.map((unit) => unit.id)])].sort();
     const dataVersion = `coverage-${contentId({ geometry, sourceFingerprint, unitIds, namedAreas: metadata.namedAreas, searchRegions: metadata.searchRegions }).slice(0, 24)}`;
     const createdAt = sources.map((source) => source.retrievedAt).sort().at(-1)!;
-    const next: CoverageSnapshot = { schemaVersion: 1, id: COVERAGE_PACK_ID, dataVersion, geometry, unitIds, createdAt, sourceFingerprint, auditStatus: "passed", limitations: plan.warnings };
-    const bbox = areaBounds(geometry);
-    const manifest: PackManifest = { schemaVersion: "6", id: COVERAGE_PACK_ID, name: "Installed coverage", dataVersion, builtAt: createdAt,
-      compilerVersion: BUILD_VERSION, metricAlgorithmVersion: DEM_METRIC_ALGORITHM_VERSION, coverage: { boundary: geometry, bbox: [...bbox] },
-      display: { center: [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], zoom: 8 },
-      capabilities: { elevation: true, officialAccess: false, namedAreas: true, closedRouteTopology: true, batchSearchRegions: true, elevationProfiles: true, portalAccessPoints: true },
-      fieldConfidence: { topology: "high", access: "medium", elevation: "high" }, sources,
-      closedRouteTopology: { runtimeMode: "reachable-graph-fallback", algorithmVersion: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, policyVersion: "closed-route-decision-graph-v1", profiles: ["known", "inclusive"] } };
+    const next: CoverageSnapshot = { schemaVersion: 1, id: COVERAGE_PACK_ID, dataVersion, geometry, unitIds, createdAt, sourceFingerprint, auditStatus: "passed", limitations: recipe?.limitations ?? [] };
     await report("Reconciling source inventory");
     const inventory: Awaited<ReturnType<typeof reconcileInventory>>[] = [];
     for (const raw of rawStores) inventory.push(await reconcileInventory(raw, store!, geometry, check));
@@ -152,7 +147,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     const selectedRegions=new Set(metadata.searchRegions.map(item=>item.namedAreaId));
     const exportOptions={databasePath,outputRoot,geometry,sources,
       regions:metadata.namedAreas.filter(area=>selectedRegions.has(area.id)).map(({id,name,geometry,aliases,sourceIds})=>({id,name,geometry,aliases,sourceIds})),
-      builtAt:createdAt,compilerVersion:`prepared-v1:${BUILD_VERSION}`,metricAlgorithmVersion:DEM_METRIC_ALGORITHM_VERSION,limitations:next.limitations,checkpoint:check};
+      builtAt:createdAt,compilerVersion:`prepared-v2:${BUILD_VERSION}`,metricAlgorithmVersion:DEM_METRIC_ALGORITHM_VERSION,limitations:next.limitations,checkpoint:check};
     await rm(databasePath,{force:true});
     const db=new DatabaseSync(databasePath);
     try {
@@ -160,7 +155,7 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
       createPreparedSchema(db);
       await selectProgressiveEdges(store!,geometry,check);
       await insertGraph(store!,db,topologySha256(geometry),new Set(sources.map(source=>source.id)),check);
-      await writeProgressiveTopology(db,manifest,check,true);
+      await writeProgressiveTopology(db,check);
       db.prepare("INSERT INTO metadata VALUES ('schemaVersion','7')").run();
       db.prepare("INSERT INTO metadata VALUES ('releaseId',?)").run(preparedReleaseId(exportOptions));
       const add=db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)");
@@ -176,15 +171,15 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
   };
   try {
     const restrictions: Awaited<ReturnType<typeof readCuratedAccessFile>>[] = [];
-    for (const region of legacyRegionIds) {
+    for (const region of recipe?.reviewedRegionIds ?? legacyRegionIds) {
       try { restrictions.push(await readCuratedAccessFile(path.resolve(`data/regions/${region}/access-restrictions.json`))); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     }
-    const configuredSources = (await coverageSources()).filter((source) => intersectCoverage(source.geometry, requestedCoverage));
-    const exclusions = await coverageExclusions();
+    const configuredSources = (recipe?.sources ?? await coverageSources()).filter((source) => intersectCoverage(source.geometry, requestedCoverage));
+    const exclusions = recipe?.exclusions ?? await coverageExclusions();
     const coveragePlan = planCoverageGeometry(requestedCoverage, configuredSources, exclusions);
     const supportedCoverage = coveragePlan.supported;
-    for (const region of legacyRegionIds) {
+    for (const region of recipe?.reviewedRegionIds ?? legacyRegionIds) {
       let config;
       try { config = await readOfficialTrailSourceConfig(path.resolve(`data/regions/${region}/official-trail-source.json`)); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
@@ -206,6 +201,8 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
         if (plan.request.offline) throw error;
         return (await refreshPinnedOsmSnapshot(cacheRoot(), source.config)).snapshot;
       });
+      const expectedHash=recipe?.sources.find(item=>item.config.id===source.config.id)?.sha256;
+      if(expectedHash && input.contentHash!==expectedHash) throw new Error(`Pinned source hash differs for ${source.config.id}`);
       const raw = new CoverageSourceStore(path.join(root, sourceStoreFileName(input)), input);
       rawStores.push(raw);
       await report(`Inventorying ${source.config.dataset}`);
@@ -376,6 +373,6 @@ async function runAttempt(plan: CoveragePlan, context: CoverageRunnerContext, re
     close(); await resources.stop();
     for (const suffix of ["","-wal","-shm"]) await rm(path.join(root,`${stageKey}.sqlite${suffix}`),{force:true});
     await context.report({stage:"Elevation inputs changed; replaying affected preparation"});
-    return runAttempt(plan,context,false);
+    return runAttempt(plan,context,false,recipe);
   } finally { close(); await resources.stop(); }
 }

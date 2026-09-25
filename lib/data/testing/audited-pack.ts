@@ -1,8 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { assertPackAuditPassed, auditSqlitePack, type RegionalPackAudit } from "./audit";
+import { assertPackAuditPassed, auditSqlitePack, type RegionalPackAudit } from "../audit";
 import { compilePack, type CompilePackOptions } from "./compiler";
-import type { PackBuildResult } from "./types";
+import type { PackBuildResult } from "../types";
 
 /** Audits the completed artifact and writes its reports before activation. */
 export async function compileAuditedPack(

@@ -6,13 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { packManifestSchema } from "@/lib/contracts";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import { SQLiteClosedRouteFeasibilityRepository } from "@/lib/graph/sqlite-closed-route-feasibility-repository";
-import { buildClosedRouteTopology } from "../topology-compiler";
+import { buildClosedRouteTopology } from "../testing/topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import { openProgressiveGraphStore, type ProgressiveGraphStore } from "./store";
-import { insertGraph, selectProgressiveEdges, publishProgressiveGraph } from "./publish";
+import { insertGraph, selectProgressiveEdges } from "./publish";
+import { publishProgressiveGraph } from "../testing/progressive-publish";
 import { createPreparedSchema } from "../sqlite-writer";
 import { topologySha256 } from "@/lib/graph/topology-hash";
-import { writeProgressiveTopology } from "./topology";
+import { writeProgressiveTopology } from "../testing/progressive-topology";
+import { writeProgressiveTopology as writeCompactHints } from "./topology";
 
 const builtAt="2026-01-01T00:00:00.000Z";
 function stageSource(store:ProgressiveGraphStore){store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:"fixture"});}
@@ -360,7 +362,7 @@ it("writes only compact known/inclusive cycle bounds without connector exports",
     createPreparedSchema(db);const version=manifest("hints",0.02);
     await selectProgressiveEdges(store,version.coverage.boundary);
     await insertGraph(store,db,topologySha256(version.coverage.boundary),new Set(["fixture"]),async()=>{});
-    await writeProgressiveTopology(db,version,async()=>{},true);
+    await writeCompactHints(db,async()=>{});
     expect(db.prepare("SELECT id,known_minimum_stem_m,inclusive_minimum_stem_m FROM access_points ORDER BY id").all()).toEqual([
       {id:"portal:a",known_minimum_stem_m:0,inclusive_minimum_stem_m:0},
       {id:"portal:stem",known_minimum_stem_m:null,inclusive_minimum_stem_m:100},

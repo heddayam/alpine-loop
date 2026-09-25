@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import type { CoverageUnit } from "@/lib/contracts";
+import type { CoverageUnit } from "./types";
 import type { ThreeDepCollection } from "@/lib/data/elevation/collection";
 import { rectangle } from "./geometry";
 import { describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";

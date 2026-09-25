@@ -1,4 +1,8 @@
+import { createHash } from "node:crypto";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
+import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
+import type { PackManifest } from "@/lib/contracts";
 
 type Row = Record<string, string | number | null>;
 // Fixed SQL only; each invocation owns its cache. Iterators remain uncached.
@@ -150,8 +154,27 @@ async function distances(db: DatabaseSync, checkpoint: () => Promise<void>): Pro
   db.exec("DROP TABLE queue;");
 }
 
+async function connectorHash(db: DatabaseSync, start: number, portal: number, checkpoint: () => Promise<void>): Promise<string> {
+  let work = 0;
+  await checkpoint();
+  const hash = createHash("sha256");
+  hash.update(`{"algorithmVersion":${JSON.stringify(CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION)},"directedEdgeIds":[`);
+  let current = start, count = 0;
+  while (current !== portal) {
+    if (++work % 1000 === 0) await checkpoint();
+    const edge = one(db, "SELECT e.id,e.to_node FROM work_nodes w JOIN edges e ON e.edge_key=w.next_edge WHERE w.k=?", current);
+    if (!edge) throw new Error(`Missing cycle connector from node ${current}`);
+    if (count++) hash.update(",");
+    hash.update(JSON.stringify(edge.id));
+    current = number(one(db, "SELECT node_key AS k FROM nodes WHERE id=?", String(edge.to_node)), "k");
+    if (count > number(one(db, "SELECT count(*) AS n FROM nodes"), "n")) throw new Error("Cycle connector repeats a node");
+  }
+  hash.update("]}");
+  return `sha256:${hash.digest("hex")}`;
+}
+
 /** Publish scratch work in bounded transactions, never across an async checkpoint. */
-export async function writeProgressiveTopology(db: DatabaseSync, checkpoint: () => Promise<void> = async () => {}): ReturnType<typeof deriveTopology> {
+export async function writeProgressiveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void> = async () => {}, compact = false): ReturnType<typeof deriveTopology> {
   if (db.isTransaction) throw new Error("Topology derivation requires no active transaction");
   if (statementCaches.has(db)) throw new Error("Topology derivation is already running");
   statementCaches.set(db, new Map());
@@ -161,7 +184,7 @@ export async function writeProgressiveTopology(db: DatabaseSync, checkpoint: () 
     db.exec("BEGIN IMMEDIATE");
   };
   try {
-    const result = await deriveTopology(db, nextBatch);
+    const result = await deriveTopology(db, manifest, nextBatch, compact);
     db.exec("COMMIT");
     return result;
   } catch (error) {
@@ -170,8 +193,9 @@ export async function writeProgressiveTopology(db: DatabaseSync, checkpoint: () 
   } finally { statementCaches.delete(db); }
 }
 
-async function deriveTopology(db: DatabaseSync, checkpoint: () => Promise<void>): Promise<void> {
+async function deriveTopology(db: DatabaseSync, manifest: PackManifest, checkpoint: () => Promise<void>, compact: boolean): Promise<{ hash: string; profiles: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> }> {
   let work = 0;
+  const summaries: Array<{ profile: "known" | "inclusive"; hash: string; feasible: number; physical: number }> = [];
   for (const profile of ["known", "inclusive"] as const) {
     await checkpoint();
     db.exec(`CREATE TEMP TABLE work_nodes(k INTEGER PRIMARY KEY,seen INTEGER NOT NULL DEFAULT 0,finish INTEGER,scc INTEGER NOT NULL DEFAULT 0,disc INTEGER NOT NULL DEFAULT 0,low INTEGER NOT NULL DEFAULT 0,dist REAL,portal INTEGER,settled INTEGER NOT NULL DEFAULT 0,next_edge INTEGER) STRICT;
@@ -185,14 +209,50 @@ async function deriveTopology(db: DatabaseSync, checkpoint: () => Promise<void>)
       INSERT INTO work_physical SELECT p.physical_edge_key,p.from_node_key,p.to_node_key FROM physical_edges p WHERE p.physical_edge_key IN (SELECT physical_edge_key FROM work_edges);`);
     await scc(db,checkpoint);
     db.exec("CREATE INDEX work_nodes_scc ON work_nodes(scc,k);");
+    const physical = number(one(db, "SELECT count(*) AS n FROM work_physical"), "n");
     db.exec(`DELETE FROM work_physical WHERE (SELECT scc FROM work_nodes WHERE k=from_key)<>(SELECT scc FROM work_nodes WHERE k=to_key);`);
     await seedCycles(db,checkpoint);
     await distances(db,checkpoint);
+    if (compact) {
+      let feasible=0;
       for(const access of rows(db, "SELECT a.id,w.dist FROM access_points a JOIN nodes n ON n.id=a.node_id JOIN work_nodes w ON w.k=n.node_key ORDER BY a.id")) {
         if(++work%1000===0) await checkpoint();
+        if(access.dist!==null) feasible++;
         run(db, `UPDATE access_points SET ${profile}_minimum_stem_m=? WHERE id=?`, access.dist, String(access.id));
       }
+      summaries.push({profile,hash:"",feasible,physical});
       db.exec("DROP TABLE seeds; DROP TABLE bridges; DROP TABLE work_physical; DROP TABLE work_edges; DROP TABLE work_nodes;");
+      continue;
+    }
+    // The schema-6 fallback stores only access feasibility; all primitive topology tables remain empty.
+    run(db, "INSERT INTO topology_profiles VALUES (?,?,?,?,?,?,?,?)", profile, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION, 0, physical, 0, 0, manifest.builtAt, "pending");
+    const hash = createHash("sha256");
+    hash.update('{"accessTopology":[');
+    let count = 0, feasible = 0;
+    for (const access of rows(db, `SELECT a.id AS id,n.node_key AS k,w.scc,w.dist,w.portal FROM access_points a JOIN nodes n ON n.id=a.node_id JOIN work_nodes w ON w.k=n.node_key ORDER BY a.id`)) {
+      if (++work % 1000 === 0) await checkpoint();
+      const key = Number(access.k), canReachCycle = access.dist !== null;
+      const network = canReachCycle ? number(one(db, "SELECT min(k) AS k FROM work_nodes WHERE scc=?", Number(access.scc)), "k") : null;
+      const portal = canReachCycle ? Number(access.portal) : null;
+      const record = {
+        accessPointId: String(access.id), attachmentDecisionNodeId: key, cycleNetworkId: network,
+        connectorKey: canReachCycle ? await connectorHash(db, key, portal!, checkpoint) : null,
+        connectorDecisionEdgeIds: [], portalDecisionNodeId: portal,
+        minimumStemDistanceM: canReachCycle ? Number(access.dist) : null, canReachCycle,
+      };
+      if (count++) hash.update(",");
+      if (canReachCycle) feasible++;
+      hash.update(canonicalTopologyJson(record));
+      run(db, "INSERT INTO access_topology VALUES (?,?,?,?,?,?,?,?,?)", profile, record.accessPointId, key, network, record.connectorKey, "[]", portal, record.minimumStemDistanceM, Number(canReachCycle));
+    }
+    hash.update(`],"blockLinks":[],"blocks":[],"decisionEdgeCount":0,"decisionEdges":[],"decisionNodeCount":0,"formatVersion":${CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION},"networks":[],"nodeCount":0,"nodes":[],"physicalEdgeCount":${physical},"profile":${JSON.stringify(profile)}}`);
+    const contentHash = `sha256:${hash.digest("hex")}`;
+    run(db, "UPDATE topology_profiles SET content_hash=? WHERE profile=?", contentHash, profile);
+    summaries.push({ profile, hash: contentHash, feasible, physical });
+    db.exec("DROP TABLE seeds; DROP TABLE bridges; DROP TABLE work_physical; DROP TABLE work_edges; DROP TABLE work_nodes;");
   }
+  if(compact) {await checkpoint(); return {hash:"",profiles:summaries};}
+  const combined = topologySha256({ runtimeMode: "reachable-graph-fallback", algorithmVersion: manifest.closedRouteTopology.algorithmVersion, policyVersion: manifest.closedRouteTopology.policyVersion, profiles: summaries.map(({ profile, hash }) => ({ profile, contentHash: hash })) });
   await checkpoint();
+  return { hash: combined, profiles: summaries };
 }

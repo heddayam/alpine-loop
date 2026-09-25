@@ -1,6 +1,6 @@
 import polygonClipping from "polygon-clipping";
 import { createHash } from "node:crypto";
-import type { CoverageUnit } from "@/lib/contracts";
+import type { CoverageUnit } from "./types";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { areaBounds } from "@/lib/graph/geometry";
 

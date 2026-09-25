@@ -1,7 +1,7 @@
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 import type { TopologyProfile } from "@/lib/contracts";
-import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, ClosedRouteTopologyBuild, TopologyProfileBuild } from "./types";
+import type { NormalizedAccessPoint, NormalizedNode, CompiledEdge, ClosedRouteTopologyBuild, TopologyProfileBuild } from "../types";
 
 export { CLOSED_ROUTE_TOPOLOGY_FORMAT_VERSION } from "@/lib/graph/closed-route-topology";
 

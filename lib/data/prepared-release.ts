@@ -8,6 +8,7 @@ import { createGzip } from "node:zlib";
 import { dataReleaseSchema, type DataRelease } from "@/lib/contracts/releases";
 import { areaBounds, coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { contentId, installationUnits } from "@/lib/coverage/geometry";
+import { auditPreparedGraph } from "./prepared-audit";
 import { createPreparedSchema } from "./sqlite-writer";
 import { writeJsonAtomically } from "./source-cache";
 import type { Coordinate } from "./types";
@@ -16,8 +17,8 @@ type Geometry = DataRelease["geometry"];
 export type PreparedReleaseOptions = Pick<DataRelease,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"> & {
   databasePath: string; outputRoot: string; limitations?: string[]; checkpoint?: () => Promise<void>;
 };
-export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"compilerVersion"|"metricAlgorithmVersion">): string {
-  return `release-${contentId({ geometry:input.geometry, sources:input.sources, regions:input.regions, compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion }).slice(0,32)}`;
+export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"|"limitations">): string {
+  return `release-${contentId({ geometry:input.geometry, sources:input.sources, regions:input.regions, compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
 }
 /** Inclusive segment intersection: boundary contacts belong to both adjacent sections. */
 function touches(line: Coordinate[], area: Geometry): boolean {
@@ -42,10 +43,13 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
   try {
     const schema=input.prepare("SELECT value FROM metadata WHERE key='schemaVersion'").get();
     if(schema?.value!=="7") throw new Error("Release export requires a complete schema-7 graph");
+    input.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
+    await auditPreparedGraph(input,release,checkpoint);
     input.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE; CREATE TEMP TABLE accounted(id TEXT PRIMARY KEY) STRICT");
     let work=0;
     for(const unit of installationUnits(options.geometry)) {
       await checkpoint();
+      const sectionId=unit.id.split("-").slice(0,3).join("-");
       const file=path.join(temp,"section.sqlite"), db=new DatabaseSync(file);
       try {
         db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA temp_store=FILE; PRAGMA cache_size=-16384");
@@ -78,7 +82,7 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
           const {lon,lat,...access}=row; void lon; void lat; insert("access_points",access);
         }
         for(const source of input.prepare("SELECT * FROM sources ORDER BY id").iterate()) insert("sources",source);
-        for(const [key,value] of Object.entries({schemaVersion:"7",sectionId:unit.id,releaseId:id,dataVersion:id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion})) insert("metadata",{key,value});
+        for(const [key,value] of Object.entries({schemaVersion:"7",sectionId,releaseId:id,dataVersion:id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion})) insert("metadata",{key,value});
         db.exec("COMMIT");
         if(db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Section endpoint references are incomplete");
         if(db.prepare("PRAGMA integrity_check").get()?.integrity_check!=="ok") throw new Error("Section integrity check failed");
@@ -89,7 +93,7 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
       await pipeline(createReadStream(file),createGzip({level:6}),createWriteStream(compressed));
       const artifact={id:digest,path:relative,bytes:(await stat(file)).size,compressedBytes:(await stat(compressed)).size,geometry:unit.geometry};
       await rename(compressed,path.join(options.outputRoot,relative)); await rm(file);
-      release.sections.push({id:unit.id,geometry:unit.geometry,artifactIds:[digest]});
+      release.sections.push({id:sectionId,geometry:unit.geometry,artifactIds:[digest]});
       release.artifacts.push(artifact);
     }
     if(input.prepare("SELECT id FROM edges WHERE id NOT IN (SELECT id FROM accounted) LIMIT 1").get()) throw new Error("Release export lost source graph edges");
@@ -97,4 +101,33 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
     await writeJsonAtomically(path.join(options.outputRoot,"release.json"),release);
     return release;
   } finally {input.close();await rm(temp,{recursive:true,force:true});}
+}
+
+/** Verify transport hashes, uncompressed identities, SQLite contents, and visible inventory. */
+export async function inspectPreparedRelease(manifestPath:string,checkpoint:()=>Promise<void>=async()=>{}) {
+  const {readFile}=await import("node:fs/promises");
+  const {tmpdir}=await import("node:os");
+  const {createGunzip}=await import("node:zlib");
+  const {Transform}=await import("node:stream");
+  const release=dataReleaseSchema.parse(JSON.parse(await readFile(manifestPath,"utf8")));
+  const temporary=await mkdtemp(path.join(tmpdir(),"alpine-release-inspect-"));
+  const artifacts=[];
+  try {
+    for(const artifact of release.artifacts) {
+      await checkpoint();
+      const compressed=path.join(path.dirname(manifestPath),artifact.path), file=path.join(temporary,"artifact.sqlite");
+      if((await stat(compressed)).size!==artifact.compressedBytes) throw new Error(`Compressed artifact size differs: ${artifact.id}`);
+      const hash=createHash("sha256");let bytes=0;
+      const verify=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);if(bytes>artifact.bytes) done(new Error("Artifact exceeds declared size"));else done(null,chunk);}});
+      await pipeline(createReadStream(compressed),createGunzip(),verify,createWriteStream(file));
+      if(bytes!==artifact.bytes||hash.digest("hex")!==artifact.id) throw new Error(`Artifact checksum/size differs: ${artifact.id}`);
+      const db=new DatabaseSync(file,{readOnly:true});
+      try {
+        db.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
+        await auditPreparedGraph(db,release,checkpoint);
+        artifacts.push({id:artifact.id,nodes:Number(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n),directedEdges:Number(db.prepare("SELECT count(*) AS n FROM edges").get()!.n),accessPoints:Number(db.prepare("SELECT count(*) AS n FROM access_points").get()!.n)});
+      } finally {db.close();await rm(file);}
+    }
+    return {id:release.id,verified:true,sections:release.sections.length,artifacts,rawBytes:release.artifacts.reduce((sum,item)=>sum+item.bytes,0),compressedBytes:release.artifacts.reduce((sum,item)=>sum+item.compressedBytes,0)};
+  } finally {await rm(temporary,{recursive:true,force:true});}
 }

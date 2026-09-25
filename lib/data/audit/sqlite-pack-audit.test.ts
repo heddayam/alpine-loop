@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { packManifestSchema } from "@/lib/contracts";
-import { compilePack } from "../compiler";
+import { compilePack } from "../testing/compiler";
 import { fixtureCompileOptions, fixturePackSeed } from "../fixture-pack";
 import { auditSqlitePack } from "./sqlite-pack-audit";
 

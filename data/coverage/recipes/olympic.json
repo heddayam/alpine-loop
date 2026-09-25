@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -124.8,
+          46.9
+        ],
+        [
+          -122.8,
+          46.9
+        ],
+        [
+          -122.8,
+          48.5
+        ],
+        [
+          -124.8,
+          48.5
+        ],
+        [
+          -124.8,
+          46.9
+        ]
+      ]
+    ]
+  },
+  "sources": [
+    {
+      "configPath": "../../regions/north-cascades/osm-source.json",
+      "geometryPath": "../washington-source.geojson",
+      "sha256": "sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e"
+    }
+  ],
+  "exclusions": [],
+  "reviewedRegionIds": [
+    "olympic-peninsula"
+  ],
+  "memoryLimitMiB": 4096,
+  "offline": false,
+  "limitations": [
+    "Independent trail-inventory review remains incomplete; mapped coverage does not guarantee source completeness."
+  ]
+}

@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
-import { coverageRequestSchema, coverageSnapshotSchema, type CoverageCatalog, type CoveragePlan, type CoverageRequest, type CoverageSnapshot } from "@/lib/contracts";
-import { loadInstalledPack } from "@/lib/packs/installed-pack";
+import { coverageRequestSchema, type CoveragePlan, type CoverageRequest } from "./types";
 import { inspectPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { contentId, intersectCoverage, unionCoverage } from "./geometry";
@@ -11,19 +8,7 @@ import { NORMALIZATION_VERSION, sourceStoreFileName } from "./source-store";
 
 export const COVERAGE_PACK_ID = "local-coverage";
 export const COVERAGE_BUILD_VERSION = `progressive-v1:${NORMALIZATION_VERSION}`;
-const exec = promisify(execFile);
 
-export async function installedSnapshot(): Promise<CoverageSnapshot | null> {
-  const pack = await loadInstalledPack(COVERAGE_PACK_ID);
-  return pack ? coverageSnapshotSchema.parse(JSON.parse(await readFile(path.join(pack.directory, "coverage-snapshot.json"), "utf8"))) : null;
-}
-export async function catalog(): Promise<CoverageCatalog> {
-  const prerequisites = await Promise.all(["osmium", "uv"].map(async (id) => {
-    try { await exec(id, ["--version"], { timeout: 3000 }); return { id, available: true, instructions: `${id} is installed` }; }
-    catch { return { id, available: false, instructions: `Install ${id} locally before building coverage` }; }
-  }));
-  return { collections: await collections(), installed: await installedSnapshot(), jobs: [], prerequisites };
-}
 export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const request = coverageRequestSchema.parse(input);
   const available = await collections();

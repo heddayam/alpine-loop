@@ -11,15 +11,15 @@ import type {
   NormalizedAccessEvidence,
   OfficialAccessAdapter,
   SourceSnapshot,
-} from "./adapters";
-import { reconcileAccess } from "./access";
-import { compiledEdgesForSegment } from "./compiled-edges";
-import { calculateEdgeMetricsBatch, distanceMeters, MAX_ELEVATION_BATCH_COORDINATES, sampleElevations } from "./metrics";
-import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "./area-geometry";
-import { validateAndSortNamedAreas } from "./named-areas";
-import { validateSearchRegions, type SearchRegionInput } from "./search-regions";
-import type { BuildingCentroid } from "./osm/buildings";
-import { accessPointIsWildEnough, countNearbyBuildings } from "./wilderness";
+} from "../adapters";
+import { reconcileAccess } from "../access";
+import { compiledEdgesForSegment } from "../compiled-edges";
+import { calculateEdgeMetricsBatch, distanceMeters, MAX_ELEVATION_BATCH_COORDINATES, sampleElevations } from "../metrics";
+import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry } from "../area-geometry";
+import { validateAndSortNamedAreas } from "../named-areas";
+import { validateSearchRegions, type SearchRegionInput } from "../search-regions";
+import type { BuildingCentroid } from "../osm/buildings";
+import { accessPointIsWildEnough, countNearbyBuildings } from "../wilderness";
 import { writePackDatabase } from "./sqlite-writer";
 import { buildClosedRouteTopology } from "./topology-compiler";
 import { topologySha256 } from "@/lib/graph/topology-hash";
@@ -32,7 +32,7 @@ import type {
   NormalizedTopology,
   PackAudit,
   PackBuildResult,
-} from "./types";
+} from "../types";
 
 export type PackSeed = Omit<PackManifest, "builtAt" | "metricAlgorithmVersion" | "sources">;
 
