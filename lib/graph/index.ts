@@ -4,3 +4,5 @@ export * from "./policy";
 export * from "./sqlite-repository";
 export * from "./sqlite-closed-route-feasibility-repository";
 export * from "./types";
+
+export * from "./prepared-repository";

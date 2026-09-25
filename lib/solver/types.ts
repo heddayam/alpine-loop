@@ -28,9 +28,6 @@ export type RouteSearchResult = {
     maximumLoadedDirectedEdges: number;
     noCycleAccessPointCount: number;
     feasibleAccessPointCount: number;
-    attachmentGroupCount: number;
-    probedAttachmentGroupCount: number;
-    deeplySearchedAttachmentGroupCount: number;
     composedCandidateCount: number;
     repairedCandidateCount: number;
     directedValidationRejectionCount: number;

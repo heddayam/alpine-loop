@@ -1,3 +1,5 @@
+import { DatabaseSync } from "node:sqlite";
+import type { PreparedGraphDescriptor } from "./prepared-repository";
 import { packManifestSchema, type PackManifest } from "@/lib/contracts";
 import { writePackDatabase } from "@/lib/data/sqlite-writer";
 import { buildClosedRouteTopology } from "@/lib/data/topology-compiler";
@@ -80,4 +82,29 @@ export function writeGraphFixture(
     closedRouteTopology: topology,
   });
   return manifest;
+}
+
+/** Temporary schema-6 compiler baseline promoted to the prepared runtime layout. */
+export function writePreparedGraphFixture(
+  databasePath: string,
+  graph: InducedGraph,
+  points: Array<GraphAccessPoint & Partial<AccessPointCandidate>> = graph.accessPoints,
+): PreparedGraphDescriptor {
+  const manifest = writeGraphFixture(databasePath, graph, points);
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.exec(`UPDATE metadata SET value='7' WHERE key='schemaVersion';
+      ALTER TABLE access_points ADD COLUMN known_minimum_stem_m REAL;
+      ALTER TABLE access_points ADD COLUMN inclusive_minimum_stem_m REAL;
+      UPDATE access_points SET
+        known_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='known' AND access_point_id=access_points.id),
+        inclusive_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='inclusive' AND access_point_id=access_points.id);
+      DROP TABLE access_topology; DROP TABLE topology_profiles;`);
+    database.prepare("INSERT INTO metadata(key,value) VALUES ('releaseId',?)").run(manifest.dataVersion);
+  } finally { database.close(); }
+  return {
+    releaseId: manifest.dataVersion, installationId: manifest.id,
+    coverage: manifest.coverage.boundary,
+    artifacts: [{ path: databasePath, geometry: manifest.coverage.boundary }],
+  };
 }

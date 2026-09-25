@@ -3,8 +3,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SQLiteGraphRepository, SQLiteClosedRouteFeasibilityRepository } from "@/lib/graph";
-import { GRAPH_FIXTURE_IDENTITY, writeGraphFixture } from "@/lib/graph/test-helpers";
+import { PreparedGraphRepository } from "@/lib/graph";
+import { GRAPH_FIXTURE_IDENTITY, writePreparedGraphFixture } from "@/lib/graph/test-helpers";
 
 import {
   generatedClosedRouteV3Schema,
@@ -110,11 +110,10 @@ function fixtureGraph(kind: GraphKind): InducedGraph {
   return { nodes, edges, accessPoints: [] };
 }
 
-const fixtures: Array<{ directory: string; repository: SQLiteGraphRepository; topology: SQLiteClosedRouteFeasibilityRepository }> = [];
+const fixtures: Array<{ directory: string; repository: PreparedGraphRepository }> = [];
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) {
     await fixture.repository.close();
-    await fixture.topology.close();
     rmSync(fixture.directory, { recursive: true, force: true });
   }
 });
@@ -137,13 +136,11 @@ function context(
 ): ReachableGraphClosedRouteContext {
   const directory = mkdtempSync(join(tmpdir(), "solver-graph-"));
   const databasePath = join(directory, "pack.sqlite");
-  const manifest = writeGraphFixture(databasePath, graph, points);
-  const repository = new SQLiteGraphRepository(databasePath, manifest.id);
-  const topology = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
-  fixtures.push({ directory, repository, topology });
+  const descriptor = writePreparedGraphFixture(databasePath, graph, points);
+  const repository = new PreparedGraphRepository(descriptor);
+  fixtures.push({ directory, repository });
   return {
     repository,
-    topologyRepository: topology,
     budget: {
       maximumDirectedEdges: 1_000,
       maximumExpandedStates: 20_000,
@@ -288,38 +285,18 @@ describe("ReachableGraphClosedRouteSolver", () => {
         physicalEdgeKey: edge.physicalEdgeKey! + index * 10 })));
     });
     const testContext = context(points, graph);
-    const readTopology = testContext.topologyRepository.getAccessTopology.bind(testContext.topologyRepository);
-    const lookup = vi.spyOn(testContext.topologyRepository, "getAccessTopology");
     const result = await solver.generate(request({ searchEffort: "quick" }), testContext);
 
-    expect(lookup).toHaveBeenCalledWith("known", points.map(({ id }) => id).sort());
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 12,
       feasibleAccessPointCount: 12,
       searchedAccessPointCount: 12,
       graphQueryCount: 12,
-      probedAttachmentGroupCount: 12,
     });
     expect(result.exact.length).toBeGreaterThan(0);
     for (const route of result.exact) expect(generatedClosedRouteV3Schema.safeParse(route).success).toBe(true);
 
-    const withoutGroupCounts = (value: typeof result) => ({ ...value, diagnostics: {
-      ...value.diagnostics, attachmentGroupCount: 0, probedAttachmentGroupCount: 0,
-      deeplySearchedAttachmentGroupCount: 0,
-    } });
-    for (const sharedGroup of [true, false]) {
-      lookup.mockImplementation(async (profile, ids) => (await readTopology(profile, ids)).map((value, index) => ({
-        ...value, cycleNetworkId: 900, portalDecisionNodeId: 700,
-        connectorKey: sharedGroup ? "arbitrary-shared-identity" : `arbitrary-identity-${index}`,
-      })));
-      const regrouped = await solver.generate(request({ searchEffort: "quick" }), testContext);
-      expect(regrouped.diagnostics).toMatchObject({
-        searchedAccessPointCount: 12, graphQueryCount: 12,
-        attachmentGroupCount: sharedGroup ? 1 : 12,
-        probedAttachmentGroupCount: sharedGroup ? 1 : 12,
-      });
-      expect(withoutGroupCounts(regrouped)).toEqual(withoutGroupCounts(result));
-    }
+
   });
 
   test("prepares eligible starts once for repeated Quick and Thorough searches", async () => {
@@ -330,7 +307,6 @@ describe("ReachableGraphClosedRouteSolver", () => {
     graph.nodes.set("outside", { id: "outside", lon: 2, lat: 0, elevationMeters: 100, flags: [] });
     const preparedContext = context(allPoints, graph);
     const enumerate = vi.spyOn(preparedContext.repository, "getAccessPointCandidates");
-    const lookup = vi.spyOn(preparedContext.topologyRepository, "getAccessTopology");
     const target = request();
     const prepared = await solver.prepare(target, preparedContext);
 
@@ -346,8 +322,6 @@ describe("ReachableGraphClosedRouteSolver", () => {
       }
     }
     expect(enumerate).toHaveBeenCalledTimes(1);
-    expect(lookup).toHaveBeenCalledTimes(1);
-    expect(lookup).toHaveBeenCalledWith("known", points.map(({ id }) => id));
     await expect(prepared.generate({ searchEffort: "quick", limit: 1, startAccessPointId: outside.id }, preparedContext.budget))
       .rejects.toThrow("not prepared for this search");
   });
@@ -356,14 +330,12 @@ describe("ReachableGraphClosedRouteSolver", () => {
     const builtUp = accessPoint();
     builtUp.nearbyBuildingCount = 500;
     const testContext = context([builtUp], fixtureGraph("loop"));
-    const lookup = vi.spyOn(testContext.topologyRepository, "getAccessTopology");
     const result = await solver.generate(request(), testContext);
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 0,
       feasibleAccessPointCount: 0,
       searchedAccessPointCount: 0,
     });
-    expect(lookup).toHaveBeenCalledWith("known", []);
 
     await expect(solver.generate(
       request({ startAccessPointId: builtUp.id }),
