@@ -123,7 +123,6 @@ function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchReques
     closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
     distanceMiles: { min: 0.92, max: 0.94 },
     includeUncertainAccess: false,
-    searchEffort: "thorough",
     limit: 10,
     ...overrides,
   };
@@ -276,7 +275,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
   test("cheaply evaluates and fairly probes every eligible start without a top-N cutoff", async () => {
     const points = Array.from({ length: 12 }, (_, index) => ({ ...accessPoint(index), nodeId: `start-${index}` }));
     const graph: InducedGraph = { nodes: new Map(), edges: [], accessPoints: [] };
-    // Distinct attachments exercise fair probing without bypassing real connector grouping.
+    // Distinct attachments exercise fair probing across independent trail systems.
     points.forEach((_, index) => {
       const loop = fixtureGraph("loop");
       for (const [id, node] of loop.nodes) graph.nodes.set(`${id}-${index}`, { ...node, id: `${id}-${index}` });
@@ -285,13 +284,13 @@ describe("ReachableGraphClosedRouteSolver", () => {
         physicalEdgeKey: edge.physicalEdgeKey! + index * 10 })));
     });
     const testContext = context(points, graph);
-    const result = await solver.generate(request({ searchEffort: "quick" }), testContext);
+    const result = await solver.generate(request(), testContext);
 
     expect(result.diagnostics).toMatchObject({
       eligibleAccessPointCount: 12,
       feasibleAccessPointCount: 12,
       searchedAccessPointCount: 12,
-      graphQueryCount: 12,
+      graphQueryCount: 24,
     });
     expect(result.exact.length).toBeGreaterThan(0);
     for (const route of result.exact) expect(generatedClosedRouteV3Schema.safeParse(route).success).toBe(true);
@@ -299,7 +298,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
 
   });
 
-  test("prepares eligible starts once for repeated Quick and Thorough searches", async () => {
+  test("prepares eligible starts once for per-start searches", async () => {
     const points = [accessPoint(0), accessPoint(1), accessPoint(2)];
     const outside = { ...accessPoint(3), nodeId: "outside", lon: 2 };
     const allPoints = [...points, outside];
@@ -312,17 +311,15 @@ describe("ReachableGraphClosedRouteSolver", () => {
 
     expect(prepared.eligibleAccessPointIds).toEqual(points.map(({ id }) => id));
     for (const startAccessPointId of prepared.eligibleAccessPointIds) {
-      for (const searchEffort of ["quick", "thorough"] as const) {
-        const policy = { startAccessPointId, searchEffort, limit: target.limit };
-        const result = await prepared.generate(policy, preparedContext.budget);
-        const ordinary = await solver.generate({ ...target, ...policy }, context(allPoints, graph));
-        expect(result).toEqual(ordinary);
-        expect(result.exact.length).toBeGreaterThan(0);
-        expect(result.exact.every(({ startAccessPoint }) => startAccessPoint.id === startAccessPointId)).toBe(true);
-      }
+      const policy = { startAccessPointId, limit: target.limit };
+      const result = await prepared.generate(policy, preparedContext.budget);
+      const ordinary = await solver.generate({ ...target, ...policy }, context(allPoints, graph));
+      expect(result).toEqual(ordinary);
+      expect(result.exact.length).toBeGreaterThan(0);
+      expect(result.exact.every(({ startAccessPoint }) => startAccessPoint.id === startAccessPointId)).toBe(true);
     }
     expect(enumerate).toHaveBeenCalledTimes(1);
-    await expect(prepared.generate({ searchEffort: "quick", limit: 1, startAccessPointId: outside.id }, preparedContext.budget))
+    await expect(prepared.generate({ limit: 1, startAccessPointId: outside.id }, preparedContext.budget))
       .rejects.toThrow("not prepared for this search");
   });
 

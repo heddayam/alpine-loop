@@ -33,10 +33,9 @@ if (process.env.TSX_TSCONFIG_PATH !== tsconfig) {
 const mode = argument("mode", "fixed-work");
 const suite = argument("suite", "fixtures");
 const layer = argument("layer", "both");
-const effort = argument("effort", "quick");
 if (!["fixed-work", "deadline"].includes(mode) || !["fixtures", "packs", "all"].includes(suite)
-  || !["raw", "pipeline", "both"].includes(layer) || (effort !== "quick" && effort !== "thorough")) {
-  throw new Error("Expected --mode=fixed-work|deadline --suite=fixtures|packs|all --layer=raw|pipeline|both --effort=quick|thorough");
+  || !["raw", "pipeline", "both"].includes(layer)) {
+  throw new Error("Expected --mode=fixed-work|deadline --suite=fixtures|packs|all --layer=raw|pipeline|both");
 }
 const integer = (name: string, fallback: string, min = 0): number => {
   const value = Number(argument(name, fallback));
@@ -51,7 +50,7 @@ const output = argument("output", "");
 const moduleUrl = (path: string): string => pathToFileURL(join(solverRoot, path)).href;
 const { searchPenalizedClosedRoutes } = await import(moduleUrl("lib/solver/penalized-closed-route-search.ts")) as typeof import("../../lib/solver/penalized-closed-route-search");
 const { ReachableGraphClosedRouteSolver } = await import(moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")) as typeof import("../../lib/solver/reachable-graph-closed-route-solver");
-const { CLOSED_ROUTE_EFFORT_BUDGETS } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
+const { CLOSED_ROUTE_BUDGET } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
 const { distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
 const { SQLiteGraphRepository } = await import(moduleUrl("lib/graph/sqlite-repository.ts")) as typeof import("../../lib/graph/sqlite-repository");
 const contractionPath = "lib/solver/contract-corridors.ts";
@@ -62,7 +61,7 @@ const { writeGraphFixture } = await import(moduleUrl("lib/graph/test-helpers.ts"
 const { packManifestSchema } = await import(moduleUrl("lib/contracts/index.ts")) as typeof import("../../lib/contracts");
 const { listEligibleAccessPointCandidates } = await import(moduleUrl("lib/solver/eligible-access-points.ts")) as typeof import("../../lib/solver/eligible-access-points");
 const { getSearchRegion } = await import(moduleUrl("lib/data/named-area-catalog.ts")) as typeof import("../../lib/data/named-area-catalog");
-const budget = { ...CLOSED_ROUTE_EFFORT_BUDGETS[effort], deadlineMs: integer("deadline-ms", String(CLOSED_ROUTE_EFFORT_BUDGETS[effort].deadlineMs), 1) };
+const budget = { ...CLOSED_ROUTE_BUDGET, deadlineMs: integer("deadline-ms", String(CLOSED_ROUTE_BUDGET.deadlineMs), 1) };
 const now = mode === "fixed-work" ? () => 0 : Date.now;
 const hash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const stableDiagnostics = (value: object): object => Object.fromEntries(Object.entries(value)
@@ -129,7 +128,7 @@ type PreparedCase = BenchmarkCase & {
 };
 
 async function runCase(item: PreparedCase) {
-  const target: RouteSearchRequest = { ...item.request, startAccessPointId: item.start.id, searchEffort: effort as RouteSearchRequest["searchEffort"] };
+  const target: RouteSearchRequest = { ...item.request, startAccessPointId: item.start.id };
   const chains = contraction?.contractCorridors(item.graph.edges.filter((edge) => edgeIsTraversable(edge, target.includeUncertainAccess))
     .map((edge) => ({ edge, from: item.graph.nodes.get(edge.fromNodeId)!, to: item.graph.nodes.get(edge.toNodeId)! }))
     .sort((a, b) => a.edge.id.localeCompare(b.edge.id) || a.from.id.localeCompare(b.from.id) || a.to.id.localeCompare(b.to.id)), item.start.nodeId);
@@ -219,7 +218,7 @@ const sourceFiles = ["lib/solver", "lib/graph"].flatMap((folder) => readdirSync(
   .map((file) => [join(folder, file), readFileSync(join(solverRoot, folder, file), "utf8")]));
 const report = { formatVersion: 1, solverRoot,
   commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: solverRoot, encoding: "utf8" }).trim(),
-  solverSourceFingerprint: hash(sourceFiles), node: process.version, mode, suite, layer, effort, warmup, repeats, budget,
+  solverSourceFingerprint: hash(sourceFiles), node: process.version, mode, suite, layer, warmup, repeats, budget,
   notes: ["Raw inputs are loaded before timing; pipeline timing includes SQLite reads and validation.",
     "Target deviation is descriptive, not a complete measure of hike quality. Compare exact counts, diversity, topology, repetition and violations together.",
     "Fixed-work retains expansion and candidate caps. Run benchmarks serially on an idle machine."],

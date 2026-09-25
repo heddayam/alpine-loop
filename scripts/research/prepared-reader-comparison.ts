@@ -13,7 +13,7 @@ import { performance } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { areaBounds, PreparedGraphRepository, type PreparedGraphDescriptor, type GraphRepository, type InducedGraph } from "@/lib/graph";
 import { SQLiteGraphRepository } from "@/lib/graph/sqlite-repository";
-import { CLOSED_ROUTE_EFFORT_BUDGETS, listEligibleAccessPointCandidates, ReachableGraphClosedRouteSolver, type RouteSearchResult } from "@/lib/solver";
+import { CLOSED_ROUTE_BUDGET, listEligibleAccessPointCandidates, ReachableGraphClosedRouteSolver, type RouteSearchResult } from "@/lib/solver";
 import type { RouteCriteria } from "@/lib/contracts";
 
 type Input = {
@@ -47,17 +47,6 @@ const graphFingerprint = (graph: InducedGraph) => fingerprint({
 const resultFingerprint = (result: RouteSearchResult) => fingerprint({
   ...result, diagnostics: { ...result.diagnostics, elapsedMs: 0, timeToFirstExactMs: 0 },
 });
-const fullPayload = (quick: RouteSearchResult, thorough: RouteSearchResult) => {
-  const unique = <T extends { id: string }>(rows: T[]) => {
-    const seen = new Set<string>();
-    return rows.filter(row => !seen.has(row.id) && Boolean(seen.add(row.id)));
-  };
-  return {
-    exact: unique([...quick.exact, ...thorough.exact]).slice(0, 10),
-    nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
-    truncated: [quick, thorough].some(result => result.diagnostics.hardTruncationReasons.length > 0),
-  };
-};
 const rows: unknown[] = [];
 let comparisons = 0, mismatches = 0;
 try {
@@ -73,21 +62,21 @@ try {
   for (const point of selected) {
     const current = preparedPoints.find(candidate => candidate.id === point.id);
     if (fingerprint(point) !== fingerprint(current)) throw new Error(`Same-graph precondition failed: candidate ${point.id} differs`);
-    for (const effort of ["quick", "thorough"] as const) {
-      const reachable = { startNodeId: point.nodeId, startCoordinates: [point.lon, point.lat] as const,
-        maximumDistanceMeters: criteria.distanceMiles.max * 1609.344,
-        maximumDirectedEdges: CLOSED_ROUTE_EFFORT_BUDGETS[effort].maximumDirectedEdges,
-        includeUncertainAccess: criteria.includeUncertainAccess, coverage: input.prepared.coverage };
-      const old = await baseline.getReachableGraph(reachable), next = await prepared.getReachableGraph(reachable);
-      if (old.truncated !== next.truncated || graphFingerprint(old.graph) !== graphFingerprint(next.graph)) {
-        throw new Error(`Same-graph precondition failed: ${effort} reachable graph/keys/metrics at ${point.id} differ`);
-      }
+    const reachable = { startNodeId: point.nodeId, startCoordinates: [point.lon, point.lat] as const,
+      maximumDistanceMeters: criteria.distanceMiles.max * 1609.344,
+      maximumDirectedEdges: CLOSED_ROUTE_BUDGET.maximumDirectedEdges,
+      includeUncertainAccess: criteria.includeUncertainAccess, coverage: input.prepared.coverage };
+    const old = await baseline.getReachableGraph(reachable), next = await prepared.getReachableGraph(reachable);
+    if (old.truncated !== next.truncated || graphFingerprint(old.graph) !== graphFingerprint(next.graph)) {
+      throw new Error(`Same-graph precondition failed: reachable graph/keys/metrics at ${point.id} differ`);
     }
   }
   const repetitions = Math.max(1, Math.min(20, input.repetitions ?? 3));
-  for (let repetition = 0; repetition < repetitions; repetition++) for (const point of selected) {
-    const outcomes = new Map<string, { quick: RouteSearchResult; thorough: RouteSearchResult }>();
-    // Alternate order to reduce warm-filesystem and JIT bias. Handle caches stay bounded.
+  const sessions: unknown[] = [];
+  for (let repetition = 0; repetition < repetitions; repetition++) {
+    const outcomes = new Map<string, Map<string, string>>();
+    // Each reader session models one worker: prepare once, then search its starts.
+    // Alternate session order to reduce warm-filesystem and JIT bias.
     const readers: Array<[string, GraphRepository]> = [["baseline", baseline], ["prepared", prepared]];
     if (repetition % 2) readers.reverse();
     for (const [reader, repository] of readers) {
@@ -95,36 +84,40 @@ try {
         pack: { id: repository.packId, dataVersion: metadata.get("dataVersion") ?? "comparison", builtAt: metadata.get("builtAt")! },
         sourceFreshness: metadata.get("builtAt"), sourceConfidence: "high", fallbackSourceIds: ["comparison"],
       });
-      // Freeze the solver's clock for identical state/candidate budgets. Graph I/O
-      // retains its real deadline and aborts honestly if a reader exceeds it.
-      const context = { repository, accessFilter: { predicates: [], coverage: input.prepared.coverage }, now: () => 0 };
-      const results: RouteSearchResult[] = [];
-      const elapsed: number[] = [];
-      for (const searchEffort of ["quick", "thorough"] as const) {
+      // Freeze only the solver clock for identical state/candidate budgets.
+      // Graph I/O keeps its real deadline and reports truncation honestly.
+      const context = { repository, accessFilter: { predicates: [input.prepared.coverage], coverage: input.prepared.coverage }, now: () => 0 };
+      const sessionStartedAt = performance.now();
+      const session = await solver.prepare(criteria, context);
+      const preparationMs = performance.now() - sessionStartedAt;
+      const fingerprints = new Map<string, string>();
+      let searchMs = 0;
+      for (const point of selected) {
         const begin = performance.now();
-        results.push(await solver.generate({ ...criteria, searchEffort, limit: 10, startAccessPointId: point.id },
-          { ...context, budget: CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] }));
-        elapsed.push(performance.now() - begin);
+        const result = await session.generate({ limit: 10, startAccessPointId: point.id }, CLOSED_ROUTE_BUDGET);
+        const elapsedMs = performance.now() - begin;
+        searchMs += elapsedMs;
+        const resultHash = resultFingerprint(result);
+        fingerprints.set(point.id, resultHash);
+        rows.push({ repetition, start: point.id, reader, searchMs: elapsedMs,
+          resultFingerprint: resultHash, diagnostics: result.diagnostics,
+          processRssBytes: process.memoryUsage().rss });
       }
-      const [quick, thorough] = results;
-      outcomes.set(reader, { quick, thorough });
-      rows.push({ repetition, start: point.id, reader, quickMs: elapsed[0], fullMs: elapsed[0] + elapsed[1],
-        quickFingerprint: resultFingerprint(quick), fullFingerprint: fingerprint(fullPayload(quick, thorough)),
-        quickDiagnostics: quick.diagnostics, thoroughDiagnostics: thorough.diagnostics,
-        processRssBytes: process.memoryUsage().rss });
+      sessions.push({ repetition, reader, starts: selected.length, preparationMs, searchMs,
+        totalMs: performance.now() - sessionStartedAt });
+      outcomes.set(reader, fingerprints);
     }
-    const old = outcomes.get("baseline")!, next = outcomes.get("prepared")!;
-    comparisons++;
-    if (resultFingerprint(old.quick) !== resultFingerprint(next.quick)
-      || resultFingerprint(old.thorough) !== resultFingerprint(next.thorough)
-      || fingerprint(fullPayload(old.quick, old.thorough)) !== fingerprint(fullPayload(next.quick, next.thorough))) mismatches++;
+    for (const point of selected) {
+      comparisons++;
+      if (outcomes.get("baseline")!.get(point.id) !== outcomes.get("prepared")!.get(point.id)) mismatches++;
+    }
   }
-  await writeFile(outputPath, JSON.stringify({ comparisons, mismatches, budgets: CLOSED_ROUTE_EFFORT_BUDGETS,
+  await writeFile(outputPath, JSON.stringify({ comparisons, mismatches, budget: CLOSED_ROUTE_BUDGET,
     preparedConnections: prepared.connectionStats, processPeakRssBytes: process.resourceUsage().maxRSS * 1024,
-    limitations: ["Same-graph preconditions passed for all selected starts and both effort budgets.",
-      "Full means the production union of per-start Quick and Thorough results.",
+    limitations: ["Same-graph preconditions passed for all selected starts under the production search budget.",
+      "Each session prepares one worker once. Total time includes preparation and every selected start; per-start rows exclude preparation.",
       "This comparison does not establish source completeness, migration coverage, or per-reader peak memory.",
-      "RSS covers both readers in one process; measure total build/install memory separately in a constrained container."], rows }, null, 2));
+      "RSS covers both readers in one process; measure total build/install memory separately in a constrained container."], sessions, rows }, null, 2));
   if (mismatches) throw new Error(`${mismatches}/${comparisons} comparisons differ; inspect ${outputPath}`);
-  console.log(`${comparisons} Quick/Full comparisons match; report ${outputPath}`);
+  console.log(`${comparisons} Full comparisons match; report ${outputPath}`);
 } finally { await baseline.close(); await prepared.close(); }

@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   packManifestSchema,
   type PackManifest,
-  type SearchEffortV3,
 } from "@/lib/contracts";
 import { getSearchRegion } from "@/lib/data/named-area-catalog";
 import {
@@ -13,7 +12,7 @@ import {
   type AccessPointCandidate,
 } from "@/lib/graph";
 import {
-  CLOSED_ROUTE_EFFORT_BUDGETS,
+  CLOSED_ROUTE_BUDGET,
   listEligibleAccessPointCandidates,
   ReachableGraphClosedRouteSolver,
   type ResolvedAccessFilterContext,
@@ -64,7 +63,7 @@ function argument(name: string): string | undefined {
 
 function usage(): string {
   return "Usage: node --import tsx scripts/research/regional-pack-checkpoint.ts "
-    + "--pack=<pack-id> --database=<path> --manifest=<path> [--scenarios=<path>] [--effort=quick|thorough]";
+    + "--pack=<pack-id> --database=<path> --manifest=<path> [--scenarios=<path>]";
 }
 
 function errorMessage(error: unknown): string {
@@ -88,7 +87,6 @@ function buildRequest(
   scenario: Scenario,
   startAccessPointId: string,
   expectation: Expectation,
-  effort: SearchEffortV3,
 ): RouteSearchRequest {
   return {
     startAccessPointId,
@@ -99,7 +97,6 @@ function buildRequest(
     distanceMiles: expectation.distanceMiles,
     elevationGainFeet: expectation.elevationGainFeet,
     includeUncertainAccess: true,
-    searchEffort: effort,
     limit: 10,
   };
 }
@@ -110,7 +107,6 @@ async function runExpectation(options: {
   expectationName: "exact" | "impossible";
   expectation: Expectation;
   startAccessPointId: string;
-  effort: SearchEffortV3;
   graphRepository: SQLiteGraphRepository;
   accessFilter: ResolvedAccessFilterContext;
 }) {
@@ -137,12 +133,11 @@ async function runExpectation(options: {
     options.scenario,
     options.startAccessPointId,
     options.expectation,
-    options.effort,
   );
   const startedAt = performance.now();
   const response = await solver.generate(request, {
     repository: options.graphRepository,
-    budget: { ...CLOSED_ROUTE_EFFORT_BUDGETS[options.effort] },
+    budget: { ...CLOSED_ROUTE_BUDGET },
     accessFilter: options.accessFilter,
   });
   const wallTimeMs = performance.now() - startedAt;
@@ -172,12 +167,6 @@ const databasePath = argument("--database");
 const manifestPath = argument("--manifest");
 const scenariosPath = argument("--scenarios") ?? DEFAULT_SCENARIOS_PATH;
 if (!databasePath || !manifestPath) throw new Error(usage());
-
-const effortArgument = argument("--effort") ?? "thorough";
-if (effortArgument !== "quick" && effortArgument !== "thorough") {
-  throw new Error(`--effort must be quick or thorough\n${usage()}`);
-}
-const effort: SearchEffortV3 = effortArgument;
 
 const parsedManifest = packManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
 if (parsedManifest.schemaVersion !== "6" || parsedManifest.id !== PACK_ID) {
@@ -218,7 +207,6 @@ try {
         expectationName: "exact",
         expectation: scenario.exactExpectation,
         startAccessPointId: selected.candidate.id,
-        effort,
         graphRepository,
         accessFilter,
       });
@@ -228,7 +216,6 @@ try {
         expectationName: "impossible",
         expectation: scenario.impossibleExpectation,
         startAccessPointId: selected.candidate.id,
-        effort,
         graphRepository,
         accessFilter,
       });
@@ -279,7 +266,6 @@ console.log(JSON.stringify({
     runtimeMode: manifest.closedRouteTopology.runtimeMode,
   },
   scenariosPath,
-  effort,
   scenarioCount: scenarioFile.scenarios.length,
   failures,
   runs,

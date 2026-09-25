@@ -11,7 +11,7 @@ import {
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
 
-import { CLOSED_ROUTE_EFFORT_BUDGETS, type SolverBudget } from "./budget";
+import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
 import {
   validateReconstructedClosedRoute,
   type ValidatedClosedRoute,
@@ -73,13 +73,12 @@ type RankedClosedRoute = ValidatedClosedRoute & {
   score: number;
 };
 
-function effectiveBudget(request: RouteSearchRequest, supplied: SolverBudget): SolverBudget {
-  const effort = CLOSED_ROUTE_EFFORT_BUDGETS[request.searchEffort];
+function effectiveBudget(supplied: SolverBudget): SolverBudget {
   return {
-    maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, effort.maximumDirectedEdges),
-    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, effort.maximumExpandedStates),
-    deadlineMs: Math.min(supplied.deadlineMs, effort.deadlineMs),
-    maximumRawCandidates: Math.min(supplied.maximumRawCandidates, effort.maximumRawCandidates),
+    maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, CLOSED_ROUTE_BUDGET.maximumDirectedEdges),
+    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, CLOSED_ROUTE_BUDGET.maximumExpandedStates),
+    deadlineMs: Math.min(supplied.deadlineMs, CLOSED_ROUTE_BUDGET.deadlineMs),
+    maximumRawCandidates: Math.min(supplied.maximumRawCandidates, CLOSED_ROUTE_BUDGET.maximumRawCandidates),
   };
 }
 
@@ -372,7 +371,7 @@ export class ReachableGraphClosedRouteSolver {
   ): Promise<RouteSearchResult> {
     if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
     const now = context.now ?? Date.now;
-    const budget = effectiveBudget(request, context.budget);
+    const budget = effectiveBudget(context.budget);
     const deadlineAt = startedAt + budget.deadlineMs;
     const hardTruncationReasons = new Set<string>();
     const nonBudgetShortfallReasons = new Set<string>();
@@ -391,7 +390,7 @@ export class ReachableGraphClosedRouteSolver {
     let timeToFirstExactMs: number | undefined;
     const searchedStarts = new Set<string>();
     const candidates = new Map<string, RankedClosedRoute>();
-    const rounds = request.searchEffort === "thorough" ? 2 : 1;
+    const rounds = 2;
     search: for (let round = 0; round < rounds; round++) {
       for (const [startIndex, feasibleStart] of feasible.entries()) {
         if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
@@ -541,9 +540,6 @@ export class ReachableGraphClosedRouteSolver {
     }
     if (feasible.length === 0 && starts.length > noCycleStartCount) {
       nonBudgetShortfallReasons.add("topology-constraints-infeasible");
-    }
-    if (request.searchEffort === "quick" && searchedStarts.size > 0) {
-      nonBudgetShortfallReasons.add("quick-starts-not-deeply-searched");
     }
     const ranked = [...candidates.values()].sort(compareRanked);
     const exact = selectDiverse(ranked.filter(({ exact: isExact }) => isExact), request.limit);

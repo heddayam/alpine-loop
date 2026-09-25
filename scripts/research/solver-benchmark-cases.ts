@@ -11,7 +11,7 @@ export function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearc
   return {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 2, max: 8 }, includeUncertainAccess: true,
-    searchEffort: "quick", limit: 10, ...overrides,
+    limit: 10, ...overrides,
   };
 }
 
