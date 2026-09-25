@@ -14,6 +14,9 @@ type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: Boundin
 const MAXIMUM_CONNECTIONS = 8;
 const BATCH_SIZE = 256;
 
+// SQLite BINARY compares UTF-8 bytes; locale collation can reorder stable IDs.
+const compareIds = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
 function intersects(a: BoundingBox, b: BoundingBox): boolean {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
@@ -234,6 +237,7 @@ export class PreparedGraphRepository implements GraphRepository {
       const adjacency = new Map<string, GraphEdge>();
       for (const artifact of this.#at([node.lon, node.lat])) {
         const rows = this.#database(artifact.path).prepare("SELECT * FROM edges WHERE from_node = ? ORDER BY id").iterate(node.id);
+        let eligibleInArtifact = 0;
         for (const row of rows) {
           assertNotAborted(query.signal);
           const edge = parseEdge(row);
@@ -243,15 +247,15 @@ export class PreparedGraphRepository implements GraphRepository {
             || !lineIsInsideArea(edge.coordinates, query.coverage)) continue;
           insertConsistent(adjacency, edge.id, edge);
           // At most one extra eligible edge is needed to prove truncation.
-          if (adjacency.size > query.maximumDirectedEdges) break;
+          if (++eligibleInArtifact > query.maximumDirectedEdges) break;
         }
         if (adjacency.size > query.maximumDirectedEdges + 1) {
-          const keep = [...adjacency.keys()].sort((a, b) => a.localeCompare(b)).slice(0, query.maximumDirectedEdges + 1);
+          const keep = [...adjacency.keys()].sort(compareIds).slice(0, query.maximumDirectedEdges + 1);
           const keys = new Set(keep);
           for (const id of adjacency.keys()) if (!keys.has(id)) adjacency.delete(id);
         }
       }
-      for (const edge of [...adjacency.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+      for (const edge of [...adjacency.values()].sort((a, b) => compareIds(a.id, b.id))) {
         if (!edges.has(edge.id) && edges.size >= query.maximumDirectedEdges) { truncated = true; break search; }
         insertConsistent(edges, edge.id, edge);
         let to = nodes.get(edge.toNodeId);

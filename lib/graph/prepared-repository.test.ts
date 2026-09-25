@@ -49,11 +49,17 @@ function graph(): InducedGraph {
     confidence: "high", parkingEvidence: null, sourceIds: ["fixture"], nearbyBuildingCount: 0,
   }] };
 }
-function fixture() {
+function fixture(mixedIds = false) {
   const directory = mkdtempSync(join(tmpdir(), "prepared-reader-"));
   directories.push(directory);
   const original = join(directory, "original.sqlite");
-  writeGraphFixture(original, graph());
+  const input = graph();
+  if (mixedIds) {
+    const ids = ["a_1", "a-1", "a:A", "a:a", "a:0", "a.0"];
+    let index = 0;
+    input.edges = input.edges.map(edge => edge.fromNodeId === "s" ? { ...edge, id: ids[index++]! } : edge);
+  }
+  writeGraphFixture(original, input);
   const mono = new SQLiteGraphRepository(original, GRAPH_FIXTURE_IDENTITY.id);
   repositories.push(mono);
   const prepared = join(directory, "complete.sqlite");
@@ -232,4 +238,15 @@ test("excludes starts whose complete departures leave the installed subset", asy
   const { artifacts, open } = fixture();
   const repository = open(artifacts, rectangle(-0.0001, -0.0001, 0.0001, 0.0001));
   expect(await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true })).toEqual([]);
+});
+
+test("budgeted adjacency keeps SQLite BINARY ID order for mixed IDs and reversed artifact order", async () => {
+  const { mono, artifacts, open } = fixture(true);
+  const bounded = { ...query, maximumDirectedEdges: 2 };
+  const expected = await mono.getReachableGraph(bounded);
+  expect(expected.truncated).toBe(true);
+  for (const order of [artifacts, [...artifacts].reverse()]) {
+    const actual = await open(order).getReachableGraph(bounded);
+    expect(actual).toEqual(expected);
+  }
 });
