@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { processBirth } from './process-owner';
 import { downloadJobSchema, type DownloadJob, type DataRelease } from '@/lib/contracts/releases';
 export class DownloadError extends Error {
     constructor(readonly status: number, message: string) {
@@ -17,6 +18,22 @@ export function alive(pid: number): boolean {
         return (e as NodeJS.ErrnoException).code === 'EPERM';
     }
 }
+let birth: string | undefined;
+export function currentProcessBirth(): string {
+    birth ??= processBirth(process.pid) ?? undefined;
+    if (!birth) throw new DownloadError(409, 'Cannot establish coverage process identity. Run on a supported Linux or macOS host and retry.');
+    return birth;
+}
+export function ownerAlive(row: { pid?: unknown; birth?: unknown }): boolean {
+    const pid = Number(row.pid);
+    if (!Number.isSafeInteger(pid) || pid <= 0) throw new DownloadError(409, 'Coverage lease has an invalid owner; stop coverage workers before repairing local state.');
+    if (!alive(pid)) return false;
+    const actual = pid === process.pid ? currentProcessBirth() : processBirth(pid);
+    if (typeof row.birth !== 'string' || !row.birth || !actual) {
+        throw new DownloadError(409, `Cannot verify coverage owner ${pid}. Stop that worker or restart the host, then retry; its data is retained.`);
+    }
+    return row.birth === actual;
+}
 export class Store {
     readonly db: DatabaseSync;
     constructor(readonly root: string) {
@@ -27,6 +44,12 @@ export class Store {
       CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS publication_lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS pins(token TEXT, pid INTEGER, installation TEXT, PRIMARY KEY(token,installation));`);
+        this.tx(() => {
+            for (const table of ['lease', 'publication_lease', 'pins']) {
+                const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+                if (!columns.some(column => column.name === 'birth')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN birth TEXT`);
+            }
+        });
     }
     close() {
         this.db.close();
@@ -63,7 +86,7 @@ export class Store {
     }
     recover() {
         const lease = this.db.prepare('SELECT * FROM lease').get();
-        if (lease && alive(Number(lease.pid)))
+        if (lease && ownerAlive(lease))
             return;
         this.db.exec('DELETE FROM lease');
         for (const job of this.list())
@@ -78,7 +101,7 @@ export class Store {
             this.recover();
             if (this.db.prepare('SELECT 1 FROM lease').get())
                 return false;
-            this.db.prepare('INSERT INTO lease VALUES(1,?,?)').run(token, process.pid);
+            this.db.prepare('INSERT INTO lease(id,token,pid,birth) VALUES(1,?,?,?)').run(token, process.pid, currentProcessBirth());
             return true;
         });
     }

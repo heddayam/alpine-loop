@@ -9,7 +9,7 @@ import type { DataRelease } from '@/lib/contracts/releases';
 import { DownloadService, runDownloadWorker } from './service';
 import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
-import { Store } from './store';
+import { Store, currentProcessBirth } from './store';
 const paths: string[] = [];
 afterEach(async () => {
     for (const path of paths.splice(0))
@@ -272,6 +272,36 @@ describe('prepared coverage installation', () => {
         service.action(job.id,'cancel');worker.progress(job.id,10);
         expect(service.get(job.id)).toMatchObject({status:'pausing',stage:'Cancelling',downloadedBytes:10});
         worker.release('worker');worker.close();service.close();
+    });
+
+    it('recovers a reused writer PID after reopening without stealing a live process lease', async()=>{
+        const f=await fixture();const service=new DownloadService(f.options);const job=await service.create({releaseId:'r1',sectionIds:['a']});
+        expect(service.store.acquire('old')).toBe(true);
+        const running=service.get(job.id);running.status='running';service.store.save(running);
+        service.store.db.prepare('UPDATE lease SET birth=?').run('previous-boot-or-process');service.close();
+        const reopened=new DownloadService(f.options);
+        expect(reopened.get(job.id).status).toBe('paused');expect(reopened.store.acquire('new')).toBe(true);
+        expect(reopened.store.acquire('competitor')).toBe(false);
+        expect(reopened.store.db.prepare('SELECT birth FROM lease').get()?.birth).toBe(currentProcessBirth());
+        reopened.store.release('new');reopened.close();
+    });
+    it('recovers reused publication PIDs and reports unknown owners without waiting forever', async()=>{
+        const f=await fixture();const store=new Store(f.root);
+        store.db.prepare('INSERT INTO publication_lease(id,token,pid,birth) VALUES(1,?,?,?)').run('old',process.pid,'previous-process');
+        await expect(withPublicationLock(f.root,async()=>true)).resolves.toBe(true);
+        store.db.prepare('INSERT INTO publication_lease(id,token,pid,birth) VALUES(1,?,?,NULL)').run('unknown',process.pid);
+        await expect(withPublicationLock(f.root,async()=>true)).rejects.toThrow('Cannot verify coverage owner');
+        store.db.exec('DELETE FROM publication_lease');
+        store.db.prepare('INSERT INTO lease(id,token,pid,birth) VALUES(1,?,?,NULL)').run('unknown',process.pid);
+        expect(()=>store.acquire('candidate')).toThrow('Cannot verify coverage owner');store.close();
+    });
+    it('retains unknown live pins but discards pins belonging to a reused PID', async()=>{
+        const f=await fixture();await install(f);const old=(await loadInstallation(f.root))!.installation.id;await install(f,['a','b']);
+        const store=new Store(f.root);
+        store.db.prepare('INSERT INTO pins(token,pid,installation,birth) VALUES(?,?,?,NULL)').run('unknown',process.pid,old);
+        expect(await cleanupInstallations(f.root,[])).toEqual([]);
+        store.db.prepare('UPDATE pins SET birth=?').run('previous-process');
+        expect(await cleanupInstallations(f.root,[])).toEqual([old]);store.close();
     });
 
 });

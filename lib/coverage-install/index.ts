@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import polygonClipping from 'polygon-clipping';
 import { coverageInstallationSchema, dataReleaseSchema, type DataRelease, type CoverageInstallation } from '@/lib/contracts/releases';
 import { searchAreaSnapshotSchema } from '@/lib/contracts/search';
-import { Store, alive, DownloadError } from './store';
+import { Store, ownerAlive, currentProcessBirth, DownloadError } from './store';
 export const coverageRoot = () => resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? '.local-data/coverage');
 export async function atomicJson(file: string, value: unknown) {
     const temp = `${file}.${randomUUID()}.tmp`;
@@ -80,10 +80,10 @@ export async function withPublicationLock<T>(root: string, fn: (store: Store) =>
     try {
         while (!acquired) {
             acquired = store.tx(() => {
-                const lease = store.db.prepare('SELECT token,pid FROM publication_lease WHERE id=1').get();
-                if (lease && alive(Number(lease.pid))) return false;
+                const lease = store.db.prepare('SELECT token,pid,birth FROM publication_lease WHERE id=1').get();
+                if (lease && ownerAlive(lease)) return false;
                 store.db.prepare('DELETE FROM publication_lease WHERE id=1').run();
-                store.db.prepare('INSERT INTO publication_lease VALUES(1,?,?)').run(token, process.pid);
+                store.db.prepare('INSERT INTO publication_lease(id,token,pid,birth) VALUES(1,?,?,?)').run(token, process.pid, currentProcessBirth());
                 return true;
             });
             if (!acquired) await new Promise(resolve => setTimeout(resolve, 10));
@@ -101,7 +101,7 @@ export async function withInstallationPins<T>(ids: readonly string[], fn: () => 
         for (const id of new Set(ids)) {
             if (!await loadInstallation(root, id))
                 throw new Error('Missing installation');
-            store.db.prepare('INSERT INTO pins VALUES(?,?,?)').run(token, process.pid, id);
+            store.db.prepare('INSERT INTO pins(token,pid,installation,birth) VALUES(?,?,?,?)').run(token, process.pid, id, currentProcessBirth());
         }
     });
     try {
@@ -187,7 +187,7 @@ export async function cleanupInstallations(root = coverageRoot(), retainedIds?: 
         const current = await loadInstallation(root);
         if (current) keep.add(current.installation.id);
         for (const row of store.db.prepare('SELECT * FROM pins').iterate()) {
-            if (alive(Number(row.pid))) keep.add(String(row.installation));
+            try { if (ownerAlive(row)) keep.add(String(row.installation)); } catch { return []; }
         }
         const artifacts = new Set<string>();
         for (const row of store.db.prepare('SELECT payload,release FROM jobs').iterate()) {
