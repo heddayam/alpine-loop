@@ -33,7 +33,7 @@ export function startDownloadWorker(root: string) {
             store.close();
         }
     };
-    const child = spawn(process.execPath, ['--import', 'tsx', resolve(process.cwd(), 'scripts/coverage-download-worker.ts'), root], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], env: process.env });
+    const child = spawn(process.execPath, ['--import', 'tsx', resolve(/* turbopackIgnore: true */ process.cwd(), 'scripts/coverage-download-worker.ts'), root], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], env: process.env });
     child.once('error', failed);
     child.once('exit', (code, signal) => {
         if (code !== 0)
@@ -180,9 +180,7 @@ export async function runDownloadWorker(options: Options = {}) {
                     checkpoint();
                     await downloadArtifact({
                         root: service.root, source, releaseId: release.id, artifact, checkpoint, fetcher: options.fetcher, available: options.available, progress(bytes) {
-                            const current = store.get(job.id);
-                            current.downloadedBytes = Math.min(current.totalBytes, done + bytes);
-                            store.save(current);
+                            store.progress(job.id, done + bytes);
                         }
                     });
                     done += artifact.compressedBytes;

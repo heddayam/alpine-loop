@@ -265,4 +265,13 @@ describe('prepared coverage installation', () => {
         expect(service.get(job.id).status).toBe('completed');service.close();
     });
 
+    it('preserves concurrent cancellation when another connection reports progress', async()=>{
+        const f=await fixture();const service=new DownloadService(f.options);const job=await service.create({releaseId:'r1',sectionIds:['a']});
+        const worker=new Store(f.root);expect(worker.acquire('worker')).toBe(true);
+        const running=worker.get(job.id);running.status='running';worker.save(running);
+        service.action(job.id,'cancel');worker.progress(job.id,10);
+        expect(service.get(job.id)).toMatchObject({status:'pausing',stage:'Cancelling',downloadedBytes:10});
+        worker.release('worker');worker.close();service.close();
+    });
+
 });

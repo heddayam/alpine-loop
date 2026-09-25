@@ -56,6 +56,11 @@ export class Store {
         job.updatedAt = new Date().toISOString();
         this.db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(JSON.stringify(downloadJobSchema.parse(job)), job.id);
     }
+    progress(id: string, downloadedBytes: number) {
+        // Update only progress so a concurrent controller cannot be overwritten.
+        this.db.prepare("UPDATE jobs SET payload=json_set(payload,'$.downloadedBytes',min(json_extract(payload,'$.totalBytes'),?),'$.updatedAt',?) WHERE id=?")
+            .run(downloadedBytes, new Date().toISOString(), id);
+    }
     recover() {
         const lease = this.db.prepare('SELECT * FROM lease').get();
         if (lease && alive(Number(lease.pid)))

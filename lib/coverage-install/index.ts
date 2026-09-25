@@ -113,7 +113,7 @@ export async function withInstallationPins<T>(ids: readonly string[], fn: () => 
         });
     }
 }
-export function assertMigrationReady(database = resolve(process.env.ALPINE_ROUTE_JOBS_DB ?? '.local-data/runtime/route-jobs.sqlite')) {
+export function assertMigrationReady(database = resolve(/* turbopackIgnore: true */ process.env.ALPINE_ROUTE_JOBS_DB ?? '.local-data/runtime/route-jobs.sqlite')) {
     if (!existsSync(database))
         return;
     const db = new DatabaseSync(database, { readOnly: true });
@@ -180,7 +180,7 @@ function savedInstallationReferences(database: string): Set<string> | null {
 }
 /** Explicit IDs are an injected authoritative history for offline callers. Production
  * reads the saved-job database inside the same lock used to register live pins. */
-export async function cleanupInstallations(root = coverageRoot(), retainedIds?: readonly string[], routeJobsDb = resolve(process.env.ALPINE_ROUTE_JOBS_DB ?? '.local-data/runtime/route-jobs.sqlite')) {
+export async function cleanupInstallations(root = coverageRoot(), retainedIds?: readonly string[], routeJobsDb = resolve(/* turbopackIgnore: true */ process.env.ALPINE_ROUTE_JOBS_DB ?? '.local-data/runtime/route-jobs.sqlite')) {
     return withPublicationLock(root, async store => {
         const keep = retainedIds ? new Set(retainedIds) : savedInstallationReferences(routeJobsDb);
         if (!keep) return [];
