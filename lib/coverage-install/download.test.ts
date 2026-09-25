@@ -10,20 +10,25 @@ import { DownloadService, runDownloadWorker } from './service';
 import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
 import { Store, currentProcessBirth } from './store';
+import { createPreparedSchema } from '@/lib/data/sqlite-writer';
 const paths: string[] = [];
 afterEach(async () => {
     for (const path of paths.splice(0))
         await rm(path, { recursive: true, force: true });
 });
 const geometry: DataRelease["geometry"] = { type: 'Polygon' as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] };
-async function fixture(releaseId = 'r1') {
+async function fixture(releaseId = 'r1', marker = '') {
     const dir = await mkdtemp(join(tmpdir(), 'coverage-download-test-'));
     paths.push(dir);
     const source = join(dir, 'source'), root = join(dir, 'installed');
     await mkdir(join(source, 'objects'), { recursive: true });
     const file = join(dir, 'tiny.sqlite');
     const db = new DatabaseSync(file);
-    db.exec(`CREATE TABLE metadata(key TEXT,value TEXT);CREATE TABLE access_points(id TEXT,known_minimum_stem_m REAL,inclusive_minimum_stem_m REAL);`);
+    createPreparedSchema(db);
+    db.exec(`INSERT INTO nodes VALUES('n1',1,0.5,0.5,NULL,'[]');
+        INSERT INTO node_spatial VALUES(1,0.5,0.5,0.5,0.5);
+        INSERT INTO access_points VALUES('a1','n1','Fixture start','trailhead','public','high',NULL,'[]',0,0,0,0,0,0,'n1','street',NULL,NULL,NULL);`);
+    db.prepare('INSERT INTO metadata VALUES(?,?)').run('fixture', marker);
     db.prepare('INSERT INTO metadata VALUES(?,?)').run('schemaVersion', '7');
     db.prepare('INSERT INTO metadata VALUES(?,?)').run('releaseId', releaseId);
     db.close();
@@ -68,6 +73,35 @@ describe('prepared coverage installation', () => {
         finally {
             service.close();
         }
+    });
+    it('counts only transferred bytes when expanding past a cached artifact', async () => {
+        const f = await fixture(), second = await fixture('r1', 'second');
+        f.release.artifacts.push(second.artifact);
+        f.release.sections[1]!.artifactIds = [second.artifact.id];
+        await writeFile(join(f.source, 'release.json'), JSON.stringify(f.release));
+        await install(f);
+        const compressed = await readFile(join(second.source, second.artifact.path));
+        const half = Math.floor(compressed.length / 2);
+        let jobId = '', observed = 0;
+        const options = { ...f.options, source: 'https://example.com/release.json', fetcher: (async (url) => {
+            if (String(url).endsWith('release.json')) return new Response(JSON.stringify(f.release));
+            let part = 0;
+            return new Response(new ReadableStream({ async pull(controller) {
+                if (part++ === 0) { controller.enqueue(compressed.subarray(0, half)); return; }
+                const deadline = Date.now() + 3000;
+                while (service.get(jobId).downloadedBytes === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+                observed = service.get(jobId).downloadedBytes;
+                controller.enqueue(compressed.subarray(half)); controller.close();
+            } }));
+        }) as typeof fetch };
+        const service = new DownloadService(options);
+        try {
+            const job = await service.create({ releaseId: 'r1', sectionIds: ['a', 'b'] }); jobId = job.id;
+            expect(job.totalBytes).toBe(compressed.length);
+            await runDownloadWorker(options);
+            expect(observed).toBe(half);
+            expect(service.get(job.id)).toMatchObject({ status: 'completed', totalBytes: compressed.length, downloadedBytes: compressed.length });
+        } finally { service.close(); }
     });
     it('preserves active data on corrupted update and insufficient disk', async () => {
         const f = await fixture();
@@ -181,6 +215,22 @@ describe('prepared coverage installation', () => {
         const bytes = await readFile(file);
         await expect(verifyArtifact(file, { ...f.artifact, id: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length }, 'r1')).rejects.toThrow('lacks known_minimum_stem_m');
     });
+    it.each(['edges', 'node_spatial'])('rejects a checksummed artifact missing required %s before activation', async (table) => {
+        const f = await fixture();
+        const file = join(f.source, '..', 'tiny.sqlite');
+        const db = new DatabaseSync(file);
+        db.exec(`DROP TABLE ${table}`); db.close();
+        const raw = await readFile(file), compressed = gzipSync(raw);
+        const id = createHash('sha256').update(raw).digest('hex');
+        const artifact = { ...f.artifact, id, path: `objects/${id}.sqlite.gz`, bytes: raw.length, compressedBytes: compressed.length };
+        const release = { ...f.release, artifacts: [artifact], sections: f.release.sections.map(section => ({ ...section, artifactIds: [id] })) };
+        await writeFile(join(f.source, artifact.path), compressed);
+        await writeFile(join(f.source, 'release.json'), JSON.stringify(release));
+        const job = await install(f);
+        expect(job).toMatchObject({ status: 'failed', installation: null });
+        expect(job.error).toContain(table);
+        expect(await loadInstallation(f.root)).toBeNull();
+    });
     it('blocks legacy cutover until unfinished searches are completed or cancelled', async () => {
         const f = await fixture();
         const file = join(f.source, '..', 'jobs.sqlite');
@@ -250,7 +300,7 @@ describe('prepared coverage installation', () => {
     it('rejects finite-domain and profile-order corruption in checksummed hint rows', async()=>{
         const f=await fixture();const file=join(f.source,'..','tiny.sqlite');const db=new DatabaseSync(file);
         for(const values of [[-1,0],[2,3],[2,null],[Infinity,0]]) {
-            db.exec('DELETE FROM access_points');db.prepare('INSERT INTO access_points VALUES(?,?,?)').run('bad',...values);
+            db.exec('PRAGMA ignore_check_constraints=ON');db.prepare('UPDATE access_points SET known_minimum_stem_m=?, inclusive_minimum_stem_m=?').run(...values);
             const bytes=await readFile(file);const artifact={...f.artifact,id:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};
             await expect(verifyArtifact(file,artifact,'r1')).rejects.toThrow('minimum-stem hints');
         } db.close();
@@ -262,7 +312,7 @@ describe('prepared coverage installation', () => {
         service.action(job.id,'cancel');await cleanupInstallations(f.root,[]);
         expect((await stat(join(f.root,'artifacts',`${f.artifact.id}.sqlite`))).size).toBe(f.artifact.bytes);
         await rm(join(f.source,f.artifact.path));service.action(job.id,'resume');await runDownloadWorker(f.options);
-        expect(service.get(job.id).status).toBe('completed');service.close();
+        expect(service.get(job.id)).toMatchObject({status:'completed',totalBytes:0,downloadedBytes:0});service.close();
     });
 
     it('preserves concurrent cancellation when another connection reports progress', async()=>{

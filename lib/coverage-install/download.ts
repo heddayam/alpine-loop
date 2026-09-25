@@ -51,6 +51,16 @@ export async function verifyArtifact(file: string, artifact: ReleaseArtifact, re
         for (const field of ['known_minimum_stem_m', 'inclusive_minimum_stem_m'])
             if (!columns.has(field))
                 throw new Error(`Artifact lacks ${field}`);
+        // Compile reader projections without scanning records. A version label and
+        // quick_check alone also accept an SQLite file with no routing tables.
+        const required = {
+            nodes: 'id,node_key,lon,lat,elevation_m,flags',
+            edges: 'id,edge_key,physical_edge_key,from_node,to_node,geometry,length_m,gain_m,loss_m,max_elevation_m,max_sustained_grade_pct,elevation_profile,access_state,edge_class,source_refs,flags',
+            access_points: 'id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m',
+            node_spatial: 'row_id,min_lon,max_lon,min_lat,max_lat',
+            edge_spatial: 'row_id,min_lon,max_lon,min_lat,max_lat',
+        };
+        for (const [table, projection] of Object.entries(required)) db.prepare(`SELECT ${projection} FROM ${table} LIMIT 0`);
         for (const row of db.prepare('SELECT known_minimum_stem_m AS known, inclusive_minimum_stem_m AS inclusive FROM access_points').iterate()) {
             checkpoint();
             for (const value of [row.known, row.inclusive]) if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) throw new Error('Artifact has invalid minimum-stem hints');

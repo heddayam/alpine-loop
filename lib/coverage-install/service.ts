@@ -176,14 +176,23 @@ export async function runDownloadWorker(options: Options = {}) {
             try {
                 const plan = await service.makePlan({ releaseId: release.id, sectionIds: job.sectionIds }, release, checkpoint);
                 await requireDisk(service.root, plan.additionalBytes, options.available);
+                store.tx(() => {
+                    checkpoint();
+                    const current = store.get(job.id);
+                    current.totalBytes = plan.downloadBytes;
+                    current.downloadedBytes = 0;
+                    store.save(current);
+                });
                 for (const artifact of release.artifacts.filter(a => plan.artifactIds.includes(a.id))) {
                     checkpoint();
+                    let transferred = 0;
                     await downloadArtifact({
                         root: service.root, source, releaseId: release.id, artifact, checkpoint, fetcher: options.fetcher, available: options.available, progress(bytes) {
+                            transferred = bytes;
                             store.progress(job.id, done + bytes);
                         }
                     });
-                    done += artifact.compressedBytes;
+                    done += transferred;
                 }
                 await withPublicationLock(service.root, async (locked) => {
                     checkpoint();
