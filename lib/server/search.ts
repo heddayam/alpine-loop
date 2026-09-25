@@ -1,12 +1,9 @@
-import type { SearchIntent, SearchRequest, SearchResult } from "@/lib/contracts";
-import { loadInstallation, withInstallationPins } from "@/lib/coverage-install";
+import type { SearchIntent } from "@/lib/contracts";
+import { loadInstallation } from "@/lib/coverage-install";
 import { areaBounds } from "@/lib/graph";
-import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import { namespacedId, namespaceRoute, splitNamespacedId } from "@/lib/search/identity";
-import { combineRoutes } from "@/lib/search/routes";
-import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
 import { ServerApiError } from "./api-error";
-import { boundsOverlap, eligibleAreaBounds, executableInstallationId, resolveSearchPlan, restorePlanArea } from "./search-area";
+import { boundsOverlap, eligibleAreaBounds, executableInstallationId, restorePlanArea } from "./search-area";
 import type { SearchPlan } from "./search-plan";
 import { RouteSolverProcess } from "./route-solver-process";
 import { solverWorkerCount } from "./solver-concurrency";
@@ -24,52 +21,6 @@ async function openInstallation(request: SearchIntent, plan: SearchPlan, signal:
     installationId, criteria: request.criteria,
     accessFilter: { predicates, namedRegionPredicateIndex, coverage: installed.installation.geometry },
   }, signal);
-}
-
-export async function generateSearch(request: SearchRequest, signal: AbortSignal): Promise<SearchResult> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const plan = await resolveSearchPlan(request, signal);
-    try {
-      return await withInstallationPins([executableInstallationId(plan)], () => generateWithPlan(request, signal, plan));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || attempt) throw error;
-    }
-  }
-  throw new Error("Installed coverage changed during search planning.");
-}
-
-async function generateWithPlan(request: SearchRequest, signal: AbortSignal, plan: SearchPlan): Promise<SearchResult> {
-  if (request.area.mode === "drive-time") {
-    const resolved = await defaultReachabilityService().resolveArea(request.area, signal);
-    plan.area.filterGeometry = resolved.geometry;
-  }
-  signal.throwIfAborted();
-  const installationId = executableInstallationId(plan);
-  const budget = CLOSED_ROUTE_EFFORT_BUDGETS.quick;
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(budget.deadlineMs + 5_000)]);
-  let session: RouteSolverProcess | undefined;
-  let routes: Pick<SearchResult, "exact" | "nearMisses"> = { exact: [], nearMisses: [] };
-  let incomplete = false;
-  const messages = ["Search is limited to installed coverage. Source-data uncertainty is separate from installation completeness."];
-  try {
-    session = await openInstallation(request, plan, deadline);
-    if (session) {
-      const result = await session.generate({ searchEffort: "quick", limit: request.limit }, budget, deadline);
-      routes = combineRoutes([{
-        exact: result.exact.map(route => namespaceRoute(route, installationId, "Installed coverage")),
-        nearMisses: result.nearMisses.map(route => namespaceRoute(route, installationId, "Installed coverage")),
-      }], request.limit);
-      incomplete = result.diagnostics.hardTruncationReasons.length > 0;
-      if (result.diagnostics.noCycleAccessPointCount > 0) messages.push("Some starts have no reachable cycle in this data release.");
-      if (incomplete) messages.push("The computation limit stopped part of the search early.");
-    }
-  } catch (error) {
-    if (signal.aborted) throw signal.reason;
-    if (error instanceof ServerApiError) throw error;
-    throw new ServerApiError("SEARCH_UNAVAILABLE", "The installed graph could not be searched. Check coverage and start a new search.", 503);
-  } finally { await session?.close().catch(() => undefined); }
-  if (!routes.exact.length) messages.push("No routes matched all criteria. Close matches, when available, are listed separately.");
-  return { request, area: plan.area, ...routes, incomplete, messages };
 }
 
 /** Lazy bounded workers share the same immutable installation across starts. */

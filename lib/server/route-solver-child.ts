@@ -1,7 +1,7 @@
 import { PreparedGraphRepository } from "@/lib/graph";
 import { loadInstallation } from "@/lib/coverage-install";
 import {
-  CLOSED_ROUTE_EFFORT_BUDGETS,
+  CLOSED_ROUTE_BUDGET,
   type PreparedRouteSearch,
   type RouteGraphContext,
   AccessFilterResolutionError,
@@ -69,24 +69,15 @@ async function preparedSearch(): Promise<PreparedRouteSearch> {
 async function search(accessPointId: string): Promise<StartSearchResult> {
   const prepared = await preparedSearch();
   const routesPerAccessPoint = 10;
-  const run = (searchEffort: "quick" | "thorough") => prepared.generate({
+  const result = await prepared.generate({
     startAccessPointId: accessPointId,
-    searchEffort,
     limit: routesPerAccessPoint,
-  }, { ...CLOSED_ROUTE_EFFORT_BUDGETS[searchEffort] });
-  const quick = await run("quick");
-  await new Promise<void>((resolveYield) => setImmediate(resolveYield));
-  const thorough = await run("thorough");
-  const unique = <T extends { id: string }>(values: readonly T[]): T[] => {
-    const seen = new Set<string>();
-    return values.filter(({ id }) => !seen.has(id) && Boolean(seen.add(id)));
-  };
+  }, { ...CLOSED_ROUTE_BUDGET });
   return {
-    exact: unique([...quick.exact, ...thorough.exact]).slice(0, routesPerAccessPoint),
-    nearMisses: unique([...thorough.nearMisses, ...quick.nearMisses]),
-    truncated: quick.diagnostics.hardTruncationReasons.length > 0
-      || thorough.diagnostics.hardTruncationReasons.length > 0,
-    diagnostics: { quick: quick.diagnostics, thorough: thorough.diagnostics },
+    exact: result.exact,
+    nearMisses: result.nearMisses,
+    truncated: result.diagnostics.hardTruncationReasons.length > 0,
+    diagnostics: result.diagnostics,
   };
 }
 
@@ -102,12 +93,7 @@ async function handle(request: RouteSolverRequest): Promise<void> {
     if (request.type === "initialize") await initialize(request.input);
     else if (request.type === "enumerate") value = (await preparedSearch()).eligibleAccessPointIds;
     else if (request.type === "search") value = await search(request.accessPointId);
-    else if (request.type === "generate") {
-      if (!session) throw new Error("Route solver process was not initialized.");
-      value = await session.solver.generate({ ...session.input.criteria, ...request.policy }, {
-        ...session.context, budget: request.budget,
-      });
-    } else await close();
+    else await close();
     send({ id: request.id, ok: true, ...(value === undefined ? {} : { value }) });
   } catch (error) {
     send({ id: request.id, ok: false, error: serializedError(error) });

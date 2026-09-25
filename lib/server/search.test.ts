@@ -2,14 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { searchCatalogSchema, searchResultSchema, type SearchRequest } from "@/lib/contracts";
+import { searchCatalogSchema, type SearchIntent } from "@/lib/contracts";
 import { fixturePackSeed } from "@/lib/data/fixture-pack";
 import { withPublicationLock } from "@/lib/coverage-install";
-import { POST } from "@/app/api/search/route";
 import { PreparedGraphRepository } from "@/lib/graph";
 import { mapData } from "./map";
 import { drawnArea, resolveSearchPlan, searchCatalog } from "./search-area";
-import { generateSearch, openSearchSession } from "./search";
+import { openSearchSession } from "./search";
 import { RouteSolverProcess } from "./route-solver-process";
 import { preparedInstallation } from "./__fixtures__/prepared-installation";
 
@@ -17,13 +16,12 @@ vi.mock("node:os", async (original) => ({ ...await original<typeof import("node:
 const fixtures = vi.hoisted(() => ({ resolveArea: vi.fn() }));
 vi.mock("@/lib/reachability/default-service", () => ({ defaultReachabilityService: () => ({ resolveArea: fixtures.resolveArea }) }));
 const signal = () => new AbortController().signal;
-const request: SearchRequest = {
+const request: SearchIntent = {
   area: { mode: "drawn-area", bbox: [-122.1601, 37.1599, -122.1599, 37.1601] },
   criteria: {
     closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
     distanceMiles: { min: 0.1, max: 20 }, includeUncertainAccess: true,
   },
-  limit: 2,
 };
 let root: string;
 beforeAll(async () => {
@@ -38,11 +36,22 @@ beforeEach(async () => {
 afterAll(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 const pins = () => withPublicationLock(root, store => store.db.prepare("SELECT installation FROM pins").all().map(row => row.installation));
 
+async function searchAllStarts(intent: SearchIntent) {
+  const plan = await resolveSearchPlan(intent, signal());
+  if (intent.area.mode === "drive-time") plan.area.filterGeometry = (await fixtures.resolveArea(intent.area, signal())).geometry;
+  const session = await openSearchSession({ request: intent, plan, signal: signal() });
+  try {
+    const starts = await session.enumerateEligibleAccessPointIds(signal());
+    const results = await Promise.all(starts.map(id => session.searchAccessPoint(id, signal())));
+    return { exact: results.flatMap(result => result.exact), nearMisses: results.flatMap(result => result.nearMisses) };
+  } finally { await session.close(); }
+}
+
 describe("geographic search with prepared installation storage and compute", () => {
-  it("selects starts without clipping routes and enforces one global limit", async () => {
-    const result = searchResultSchema.parse(await generateSearch(request, signal()));
+  it("selects starts without clipping routes and retains bounded alternatives per start", async () => {
+    const result = await searchAllStarts(request);
     expect(result.exact.length).toBeGreaterThan(0);
-    expect(result.exact.length + result.nearMisses.length).toBeLessThanOrEqual(request.limit);
+    expect(result.exact.length).toBeLessThanOrEqual(10);
     expect(new Set(result.exact.map(route => JSON.stringify(route.geometry.coordinates))).size).toBe(result.exact.length);
     for (const route of result.exact) {
       expect(route.id).toContain("fixture-installation::");
@@ -52,32 +61,6 @@ describe("geographic search with prepared installation storage and compute", () 
       expect(route.geometry.coordinates.some(([lon]) => lon! > -122.1599)).toBe(true);
       expect(route.geometry.coordinates.every(([lon, lat]) => lon! >= -122.161 && lon! <= -122.155 && lat! >= 37.159 && lat! <= 37.162)).toBe(true);
     }
-  });
-
-  it("opens one Quick worker for the logical graph regardless of worker count", async () => {
-    const opened = vi.spyOn(RouteSolverProcess, "open");
-    try {
-      vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
-      const first = await generateSearch(request, signal());
-      expect(opened).toHaveBeenCalledTimes(1);
-      vi.stubEnv("ALPINE_SOLVER_WORKERS", "1");
-      expect(await generateSearch(request, signal())).toEqual(first);
-    } finally { opened.mockRestore(); vi.stubEnv("ALPINE_SOLVER_WORKERS", "2"); }
-  });
-
-  it("pins the immutable installation through Quick computation", async () => {
-    const original = RouteSolverProcess.prototype.generate;
-    let started!: () => void, release!: () => void;
-    const entered = new Promise<void>(resolve => { started = resolve; });
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    const generate = vi.spyOn(RouteSolverProcess.prototype, "generate").mockImplementation(async function (this: RouteSolverProcess, ...args) {
-      started(); await gate; return original.apply(this, args);
-    });
-    const running = generateSearch(request, signal());
-    try { await entered; expect(await pins()).toContain("fixture-installation"); }
-    finally { release(); generate.mockRestore(); }
-    await running;
-    expect(await pins()).toEqual([]);
   });
 
   it("pins map readers and resolves canonical region IDs plus legacy aliases from release metadata", async () => {
@@ -182,18 +165,16 @@ describe("geographic search with prepared installation storage and compute", () 
 
   it("resolves one contour for all data and returns an honest empty result outside coverage", async () => {
     fixtures.resolveArea.mockResolvedValue({ geometry: drawnArea([0, 0, 1, 1]), resolvedAt: "2026-09-06T00:00:00Z" });
-    const result = await generateSearch({ ...request, area: {
+    const result = await searchAllStarts({ ...request, area: {
       mode: "drive-time", origin: { lon: 0, lat: 0, label: "Away" }, durationMinutes: 30, regionIds: [],
-    } }, signal());
+    } });
     expect(fixtures.resolveArea).toHaveBeenCalledTimes(1);
     expect(result.exact).toEqual([]);
-    expect(result.incomplete).toBe(false);
-    expect(result.messages).not.toEqual([]);
   });
 
   it("honors drive-time band holes for starts without clipping hiking geometry", async () => {
-    const excludedStart = (await generateSearch(request, signal())).exact[0]!.startAccessPoint.id;
-    const driveRequest: SearchRequest = { ...request, area: {
+    const excludedStart = (await searchAllStarts(request)).exact[0]!.startAccessPoint.id;
+    const driveRequest: SearchIntent = { ...request, area: {
       mode: "drive-time", origin: { lon: -122.16, lat: 37.16, label: "Home" }, minDurationMinutes: 15, durationMinutes: 30, regionIds: [],
     } };
     const outer = drawnArea(fixturePackSeed.coverage.bbox);
@@ -202,9 +183,9 @@ describe("geographic search with prepared installation storage and compute", () 
     if (atStart.type !== "Polygon") throw new Error("Expected fixture polygon");
     const band = { type: "Polygon" as const, coordinates: [outer.coordinates[0]!, atStart.coordinates[0]!] };
     fixtures.resolveArea.mockResolvedValue({ geometry: band, resolvedAt: "2026-09-06T00:00:00Z" });
-    const quick = await generateSearch(driveRequest, signal());
+    const result = await searchAllStarts(driveRequest);
     expect(fixtures.resolveArea).toHaveBeenCalledWith(driveRequest.area, expect.any(AbortSignal));
-    expect([...quick.exact, ...quick.nearMisses].every(({ startAccessPoint }) => startAccessPoint.lon !== -122.16)).toBe(true);
+    expect([...result.exact, ...result.nearMisses].every(({ startAccessPoint }) => startAccessPoint.lon !== -122.16)).toBe(true);
     const plan = await resolveSearchPlan(driveRequest, signal());
     const session = await openSearchSession({ request: driveRequest, plan: { ...plan, area: { ...plan.area, filterGeometry: band } }, signal: signal() });
     try {
@@ -215,16 +196,9 @@ describe("geographic search with prepared installation storage and compute", () 
     const atTrail = drawnArea([-122.1581, 37.1599, -122.1579, 37.1601]);
     if (atTrail.type !== "Polygon") throw new Error("Expected fixture polygon");
     fixtures.resolveArea.mockResolvedValue({ geometry: { ...band, coordinates: [outer.coordinates[0]!, atTrail.coordinates[0]!] }, resolvedAt: "2026-09-06T00:00:00Z" });
-    const throughHole = await generateSearch(driveRequest, signal());
+    const throughHole = await searchAllStarts(driveRequest);
     expect(throughHole.exact.length).toBeGreaterThan(0);
     expect(throughHole.exact.some(({ geometry }) => geometry.coordinates.some(([lon, lat]) => lon === -122.158 && lat === 37.16))).toBe(true);
-  });
-
-  it("validates the geographic HTTP boundary before work begins", async () => {
-    const response = await POST(new Request("http://localhost/api/search", { method: "POST", body: JSON.stringify({ ...request, packId: "fixture-pack" }) }));
-    expect(response.status).toBe(400);
-    const malformed = await POST(new Request("http://localhost/api/search", { method: "POST", body: "{" }));
-    expect(malformed.status).toBe(400);
   });
 
   it("never executes legacy plans or substitutes demo data for an empty installation", async () => {
@@ -234,8 +208,8 @@ describe("geographic search with prepared installation storage and compute", () 
       .rejects.toMatchObject({ code: "REGION_NOT_FOUND" });
     await writeFile(join(root, "current.json"), JSON.stringify({ installationId: null }));
     expect((await searchCatalog()).coverages).toEqual([]);
-    await expect(generateSearch(request, signal())).rejects.toMatchObject({ code: "DATA_UNAVAILABLE" });
+    await expect(searchAllStarts(request)).rejects.toMatchObject({ code: "DATA_UNAVAILABLE" });
     const controller = new AbortController(); controller.abort();
-    await expect(generateSearch(request, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(resolveSearchPlan(request, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
   });
 });
