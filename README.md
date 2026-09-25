@@ -123,8 +123,10 @@ npm run data -- export /absolute/path/export-options.json
 Build status is saved in `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
 `status` prints one snapshot; `status --watch` refreshes every five seconds.
 An explicit report path can be supplied with `status /path/to/report.json --watch`.
-The display includes the phase, elapsed time, prepared section count, and report
-age. A stale report is not a live heartbeat; Ctrl+C stops the viewer only.
+The display includes the phase, elapsed time, prepared/total sections, remaining
+sections, unfinished stages, and report age. Section ETA is a rough range from
+recent completed sections; it excludes final graph validation/export and is
+withheld when the current work outgrows that timing sample. A stale report is not a live heartbeat; Ctrl+C stops the viewer only.
 
 Native builds need `osmium-tool`, `uv`, and the locked DEM environment:
 
