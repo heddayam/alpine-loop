@@ -6,6 +6,21 @@ the evidence line.
 
 ## Active system design revision
 
+### Developer builds and downloadable coverage — active
+
+This revision supersedes app-driven progressive compilation below. Users select
+map sections and install immutable prepared data; developer tooling builds one
+coherent release. The existing branch and draft PR remain the integration path.
+
+- [ ] Graph-reading proof and release/installation/download contracts.
+- [ ] Developer-only coherent builds, compact feasibility hints, release export.
+- [ ] Download lifecycle and clickable coverage sections on the shared map.
+- [ ] Real-data build/install/search measurements, including the 4 GiB gate.
+- [ ] Verified one-time reinstall, saved-result preservation, and legacy deletion.
+
+Preserve existing generated data until replacement is verified. Earlier partial
+scale measurements remain diagnostic evidence, not acceptance of this revision.
+
 ### Progressive coverage — implementation in progress
 
 - [x] **A — Contracts and baseline.** Version-1 coverage plans, jobs, snapshots,

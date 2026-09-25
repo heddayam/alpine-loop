@@ -9,3 +9,4 @@ export * from "./settings";
 
 export * from "./search";
 export * from "./coverage";
+export * from "./releases";
