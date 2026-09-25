@@ -61,7 +61,7 @@ describe("geographic job migration", () => {
       area: { label: "Old region" },
       progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 1, exactRouteCount: 2, truncatedAccessPointCount: 1, elapsedMs: 60_000 },
     });
-    expect(store.getStored(jobId(1))?.plan).toEqual({ packs: [{ id: "old-pack", dataVersion: "old-version", builtAt: timestamp }], area: { label: "Old region" } });
+    expect(store.getStored(jobId(1))?.plan).toEqual({ installationId: null, area: { label: "Old region" } });
     expect(store.toPublic(jobId(2), false)).toMatchObject({ status: "cancelled", partial: true, area: { filterGeometry: { type: "Polygon" } } });
     expect(store.toPublic(jobId(3), false)).toMatchObject({ status: "failed", error: "failure", area: { filterGeometry: contour } });
     const results = store.pageResults(jobId(1), undefined, 50).results;

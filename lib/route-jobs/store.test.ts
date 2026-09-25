@@ -52,7 +52,7 @@ function setup(now: () => Date = () => new Date("2026-01-01T00:00:00.000Z")) {
 }
 
 const resolved = {
-  packs: [{ id: "fixture-pack", dataVersion: "fixture-v4", builtAt: "2026-01-01T00:00:00.000Z" }],
+  installationId: "fixture-v4",
   area: { label: "Fixture Region" },
 };
 

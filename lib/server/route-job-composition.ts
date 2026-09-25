@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { loadInstalledPack } from "@/lib/packs/installed-pack";
+import { loadInstallation, withInstallationPins } from "@/lib/coverage-install";
 import { defaultReachabilityService } from "@/lib/reachability/default-service";
 import { RouteJobService, SQLiteRouteJobStore, type RouteJobRunnerDependencies } from "@/lib/route-jobs";
 import { resolveSearchPlan } from "./search-area";
@@ -14,9 +14,10 @@ function defaultRuntimeDependencies(): RouteJobRunnerDependencies {
   return {
     resolveJob: resolveSearchPlan,
     resolveDriveTime: (area, signal) => defaultReachabilityService().resolveArea(area, signal),
-    async currentDataVersion(packId) {
-      return (await loadInstalledPack(packId))?.manifest.dataVersion ?? null;
+    async currentInstallationId() {
+      return (await loadInstallation())?.installation.id ?? null;
     },
+    pinInstallation: (id, action) => withInstallationPins([id], action),
     openSearchSession,
   };
 }

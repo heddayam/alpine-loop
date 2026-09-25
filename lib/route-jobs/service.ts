@@ -1,6 +1,4 @@
 import { areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } from "@/lib/contracts";
-import { StaleGenerationError, withGenerationLock } from "@/lib/packs/generation-pins";
-import { localPackRoot } from "@/lib/packs/installed-pack";
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
 import { SQLiteRouteJobStore, type ResultCursor, type StoredJob } from "./store";
 import type { RouteJobRunnerDependencies, RouteJob, RouteJobResultsPage, RouteJobResult } from "./types";
@@ -89,16 +87,14 @@ export class RouteJobService {
         throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
       }
       if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
-      const versions = resolved.packs.filter((pack) => pack.id === "local-coverage").map((pack) => pack.dataVersion);
+      if (!resolved.installationId) throw new ServerApiError("COVERAGE_REQUIRED", "Install prepared coverage and restart this search.", 409);
       try {
-        if (versions.length) await withGenerationLock(localPackRoot(), async (lock) => {
-          await lock.requireVersions(versions);
+        await this.#dependencies.pinInstallation(resolved.installationId, async () => {
           this.#store.create(id, parsed.data, resolved);
         });
-        else this.#store.create(id, parsed.data, resolved);
         this.start();
         return (await this.get(id))!;
-      } catch (error) { if (!(error instanceof StaleGenerationError) || attempt) throw error; }
+      } catch (error) { if (attempt || this.#store.getStored(id)) throw error; }
     }
     throw new Error("Local coverage changed during route-job planning");
   }
@@ -107,12 +103,9 @@ export class RouteJobService {
     const stored = this.#store.listIds()
       .map((id) => this.#store.getStored(id))
       .filter((job): job is NonNullable<typeof job> => job !== null);
-    const versions = new Map(await Promise.all([...new Set(stored.flatMap(({ plan }) => plan.packs.map(({ id }) => id)))].map(async (packId) => [
-      packId,
-      await this.#dependencies.currentDataVersion(packId).catch(() => null),
-    ] as const)));
+    const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
     return stored.flatMap(({ id, plan }) => {
-      const job = this.#store.toPublic(id, plan.packs.some((pack) => versions.get(pack.id) !== pack.dataVersion));
+      const job = this.#store.toPublic(id, !plan.installationId || currentId !== plan.installationId);
       return job ? [job] : [];
     });
   }
@@ -120,9 +113,8 @@ export class RouteJobService {
   async get(id: string): Promise<RouteJob | null> {
     const stored = this.#store.getStored(id);
     if (!stored) return null;
-    const changed = await Promise.all(stored.plan.packs.map(async (pack) =>
-      (await this.#dependencies.currentDataVersion(pack.id).catch(() => null)) !== pack.dataVersion));
-    return this.#store.toPublic(id, changed.some(Boolean));
+    const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
+    return this.#store.toPublic(id, !stored.plan.installationId || currentId !== stored.plan.installationId);
   }
 
   async cancel(id: string): Promise<RouteJob> {
@@ -160,7 +152,11 @@ export class RouteJobService {
       const controller = new AbortController();
       this.#active = { id: job.id, controller };
       try {
-        await this.#runJob(job, controller.signal);
+        if (!job.plan.installationId) {
+          this.#store.finish(job.id, "cancelled", "This saved search uses legacy data. Install prepared coverage and restart the search; saved results remain available.");
+          continue;
+        }
+        await this.#dependencies.pinInstallation(job.plan.installationId, () => this.#runJob(job, controller.signal));
         this.#store.finish(job.id, "completed");
       } catch (error) {
         this.#store.finish(job.id, controller.signal.aborted || isCancellationError(error) ? "cancelled" : "failed", errorMessage(error));
