@@ -9,7 +9,7 @@ import { readOsmSourceConfig, type OsmSourceConfig } from "@/lib/data/osm/source
 export type CoverageSource = { config: OsmSourceConfig; regionId: string; geometry: CoverageCollection["geometry"] };
 /** Geographic review envelopes intentionally independent of old hand-drawn pack interiors. */
 const envelopes = [
-  { id: "washington-cascades", name: "Washington Cascades", regionId: "north-cascades", bbox: [-122.51, 45.5, -119.78, 49], limitations: ["Broad mountain and foothill review envelope, including Washington-side Gorge. Independent trail-inventory review is pending; source completeness is not guaranteed."] },
+  { id: "washington-cascades", name: "Washington Cascades", regionId: "north-cascades", bbox: [-122.51, 45.5, -119.78, 49.01], limitations: ["Broad mountain and foothill review envelope, including Washington-side Gorge. Independent trail-inventory review is pending; source completeness is not guaranteed."] },
   { id: "olympic-peninsula", name: "Olympic Peninsula", regionId: "olympic-peninsula", bbox: [-124.8, 46.9, -122.8, 48.5], limitations: ["Beach paths are included where mapped. Tide timing is not modeled.", "Independent trail-inventory and excluded-land review is pending."] },
   { id: "northern-california", name: "Northern California", regionId: "santa-cruz-mountains", bbox: [-123.5, 35.7, -119.5, 39], limitations: ["Broad geographic review envelope. Independent trail-inventory and excluded-land review is pending."] },
 ] as const;
