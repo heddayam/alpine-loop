@@ -94,3 +94,11 @@ it("removes selected installed sections explicitly and announces the change", as
   expect(fetcher).toHaveBeenCalledWith("/api/coverage", expect.objectContaining({ method: "DELETE", body: JSON.stringify({ sectionIds: ["section"] }) }));
   expect(onMapChange.mock.lastCall![0].features.features[0].properties).toEqual({ sectionId: "section", status: "selected" });
 });
+
+it("requires explicit removal when a new catalog drops previously installed sections", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "old", sectionIds: ["retired"] } })));
+  render(<CoveragePanel {...props} />);
+  expect(await screen.findByRole("button", { name: "Preview update" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Remove unavailable sections" })).toBeEnabled();
+  expect(screen.getByText(/Your existing coverage is retained/)).toBeVisible();
+});

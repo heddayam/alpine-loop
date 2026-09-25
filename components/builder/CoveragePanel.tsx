@@ -29,17 +29,18 @@ export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange
   }, [catalog, onChanged]);
   const sections = release?.sections ?? [];
   const installedIds = new Set(installed?.sectionIds ?? []);
+  const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id));
   const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
   const desired = [...new Set([...installedIds, ...selectedIds])].sort();
   const removable = [...selectedIds].filter((id) => installedIds.has(id));
   const updating = Boolean(installed && release && installed.releaseId !== release.id);
-  const downloadable = selectedIds.size > 0 && (updating || [...selectedIds].some((id) => !installedIds.has(id)));
+  const downloadable = !unavailableInstalled.length && selectedIds.size > 0 && (updating || [...selectedIds].some((id) => !installedIds.has(id)));
   const request = release ? { releaseId: release.id, sectionIds: desired } : null;
   const plan = resource.plan && resource.plan.releaseId === release?.id && JSON.stringify([...resource.plan.sectionIds].sort()) === JSON.stringify(desired) ? resource.plan : undefined;
   const downloading = new Set(catalog?.jobs.filter(processingCoverage).flatMap((job) => job.sectionIds) ?? []);
   const mapKey = JSON.stringify({
-    features: { type: "FeatureCollection", features: sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
-      properties: { sectionId: section.id, status: selectedIds.has(section.id) ? "selected" : downloading.has(section.id) ? "downloading" : installedIds.has(section.id) ? "installed" : "available" } })) },
+    features: { type: "FeatureCollection", features: [...(installed && unavailableInstalled.length ? [{ type: "Feature", geometry: installed.geometry, properties: { status: "installed" } }] : []), ...sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
+      properties: { sectionId: section.id, status: selectedIds.has(section.id) ? "selected" : downloading.has(section.id) ? "downloading" : installedIds.has(section.id) ? "installed" : "available" } }))] },
     focus: installed ? areaBounds(installed.geometry) : release ? areaBounds(release.geometry) : null,
   });
   useEffect(() => { onMapChange?.(JSON.parse(mapKey)); }, [mapKey, onMapChange]);
@@ -57,15 +58,16 @@ export function CoveragePanel({ open, selected, onToggle, onChanged, onMapChange
       {catalog ? <>
         <p>{installed ? `${installed.sectionIds.length} ${installed.sectionIds.length === 1 ? "section" : "sections"} installed` : "No prepared coverage installed."}</p>
         {release ? <>
-          <p className="hint">Data release: {new Date(release.builtAt).toLocaleDateString()}</p>
+          <p className="hint">Data release: {new Date(release.builtAt).toLocaleDateString(undefined, { timeZone: "UTC" })}</p>
           <details><summary>Sources and attribution</summary><ul>{release.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer">{source.authority} · {source.dataset}</a><small> {source.version} · {source.license}</small></li>)}</ul></details>
           {release.limitations.map((text) => <p className="hint" key={text}>{text}</p>)}
-          <p role="status">{selectedIds.size} sections selected · {bytes(selectedBytes)} packaged download</p>
+          <p role="status">{selectedIds.size} {selectedIds.size === 1 ? "section" : "sections"} selected · {bytes(selectedBytes)} packaged download</p>
           <div className="action-row">
             <button type="button" className="btn" disabled={busy || !downloadable} onClick={() => request && void resource.preview(request)}>Preview download</button>
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
-            {updating ? <button type="button" className="btn" disabled={busy} onClick={() => request && void resource.preview(request)}>Preview update</button> : null}
+            {updating ? <button type="button" className="btn" disabled={busy || unavailableInstalled.length > 0} onClick={() => request && void resource.preview(request)}>Preview update</button> : null}
           </div>
+          {unavailableInstalled.length ? <p className="hint">{unavailableInstalled.length} installed sections are unavailable in this catalog. Your existing coverage is retained. <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable sections</button></p> : null}
           {updating ? <p className="hint">An update replaces all installed sections together. Current coverage stays available until the update is ready.</p> : null}
           <details className="coverage-units"><summary>Select sections from a list</summary><fieldset disabled={busy}>{sections.map((section) => <label className="coverage-choice" key={section.id}><input type="checkbox" checked={selectedIds.has(section.id)} onChange={() => onToggle(section.id)} /><span>{sectionLabel(section)}{installedIds.has(section.id) ? <small>Installed</small> : null}</span></label>)}</fieldset></details>
         </> : !catalog.error ? <p>No download catalog is configured.</p> : null}
