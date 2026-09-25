@@ -22,6 +22,13 @@ describe("USGS 3DEP product ingestion", () => {
     expect(products.every(({ format }) => format === "GeoTIFF")).toBe(true);
   });
 
+  it("selects only the requested nominal tile before acquisition", async () => {
+    const body = await readFile(path.resolve("data/fixtures/source/elevation/products.json"), "utf8");
+    const products = await queryThreeDepProducts({ ...query, nominalTile: "n38w122" }, async () => new Response(body));
+    expect(products.map(({ productId }) => productId)).toEqual(["USGS_13_n38w122"]);
+    await expect(queryThreeDepProducts({ ...query, nominalTile: "n50w122" }, async () => new Response(body))).rejects.toThrow("no products");
+  });
+
   it("fails loudly on an empty or drifting product response", async () => {
     await expect(queryThreeDepProducts(query, async () => new Response('{"items":[]}', { status: 200 })))
       .rejects.toThrow("no products");

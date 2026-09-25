@@ -157,7 +157,8 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
       const [west, south] = key.split(",").map(Number);
       const downloaded = await refreshThreeDepCollection({
         cacheRoot, collectionRoot: path.join(preparationRoot, "dem", "acquired"),
-        query: { endpoint: config.endpoint, dataset: config.dataset, bbox: [west!, south!, west! + 1, south! + 1], productExtent: config.productExtent },
+        query: { endpoint: config.endpoint, dataset: config.dataset, bbox: [west!, south!, west! + 1, south! + 1], productExtent: config.productExtent,
+          nominalTile: `${south! + 1 >= 0 ? "n" : "s"}${Math.abs(south! + 1)}${west! >= 0 ? "e" : "w"}${Math.abs(west!)}` },
         catalogId: config.catalogId,
       });
       await validateDemProducts(downloaded.collection, downloaded.collectionPath, cache.verifiedProducts);
