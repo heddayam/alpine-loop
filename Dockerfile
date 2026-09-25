@@ -3,11 +3,11 @@ FROM node:24.11.0-bookworm-slim AS dependencies
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --fetch-timeout=60000 --fetch-retries=1
 
 
 FROM dependencies AS production-dependencies
-RUN npm prune --omit=dev
+RUN npm prune --omit=dev --offline
 
 
 FROM dependencies AS developer
@@ -46,7 +46,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-RUN npm run build
+RUN npm run build && rm -rf .next/cache
 
 
 FROM node:24.11.0-bookworm-slim AS runtime
