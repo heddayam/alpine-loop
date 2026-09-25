@@ -1,5 +1,8 @@
 # Data sources and storage policy
 
+Coverage delivery and developer commands follow [prepared coverage](prepared-coverage.md).
+Historical pack-specific measurements below remain provenance, not runtime instructions.
+
 ## Decision summary
 
 The application must not query OpenStreetMap while serving a user request. Build
@@ -143,8 +146,9 @@ still function if tiles are temporarily unavailable.
 ```text
 .cache/sources/<source>/<snapshot>/     ignored immutable downloads
 .cache/build/<pack>/<run-id>/           ignored staging and audit artifacts
-.local-data/packs/<pack>/<version>/     ignored validated runtime pack
-.local-data/coverage/                  ignored resumable source and graph staging
+.local-data/releases/prepared/          ignored exported catalog and artifacts
+.local-data/coverage/                   ignored installed artifacts and references
+.cache/build/                          ignored resumable developer staging
 data/fixtures/                          committed tiny deterministic inputs
 ```
 
@@ -176,9 +180,9 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
 
-The [progressive coverage design](progressive-coverage.md) is the forward path:
-add independently reviewed collection intent and verified provider extent to
-the same combined graph. Existing pack definitions below remain migration
+The [prepared coverage design](prepared-coverage.md) is the forward path:
+add independently reviewed coverage intent and verified provider extent to
+a coherent release. Existing pack definitions below remain migration
 inputs and legacy maintenance instructions.
 
 The authoritative region order, boundary intent, selector behavior, and

@@ -1,5 +1,8 @@
 # Alpine Loop implementation plan
 
+Coverage delivery now follows [developer builds and downloadable coverage](prepared-coverage.md).
+That revision supersedes previous runtime pack/build workflows.
+
 The [system design revision](system-design.md) records the current design and
 its acceptance evidence. [Status](status.md) is the execution resume point.
 
@@ -86,8 +89,8 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 
 The route engine accepts prepared starts, criteria, graph context, and budget.
 A bounded pool of local processes owns graph-reader lifetime so CPU work cannot
-block app status or cancellation. Quick searches parallelize across packs; Full
-searches parallelize across trailheads, retaining ordered durable checkpoints. Quick and Full share execution primitives. Full
+block app status or cancellation. Quick searches read one pinned installation; Full searches parallelize across
+trailheads, retaining ordered durable checkpoints. Quick and Full share execution primitives. Full
 preserves the union of Quick and Thorough candidates because the heuristic is
 not monotonic in its budget.
 
@@ -97,18 +100,19 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 
 ## Local data and preparation
 
-Schema 6 is the supported graph representation. Pack selection, storage paths,
-version pinning, and provider jobs are backend details. Saved result geometry
-remains readable independently of graph-format support.
+Schema 7 is the prepared graph representation. A release maps selectable map
+sections to immutable SQLite artifacts. Installation references select files
+from one release, and one bounded graph reader deduplicates their identities.
+Saved result geometry remains readable independently of graph-format support.
 
-Preparation converts pinned sources into normalized records. The artifact
-builder computes metrics and feasibility, writes SQLite, audits the artifact,
-and activates it only after acceptance. Failed builds leave the previous
-artifact and current pointer intact. Downloads are immutable and cached.
+Developers prepare pinned source inventories, metrics, and release-wide cycle
+hints through the build/inspect/export CLI. The completed graph must pass audit
+before export. Users download and verify artifacts without source processing or
+graph compilation. Atomic installation changes preserve the previous coverage
+until the entire request is ready. Running and saved jobs retain referenced data.
 
-The accepted [progressive coverage revision](progressive-coverage.md) adds
-preclip inventory, resumable installation units, and a coherent combined graph.
-It preserves the solver and selection invariants above. Its gates in status
+The [prepared coverage revision](prepared-coverage.md) defines the release,
+installation, download, and migration contracts. Its acceptance gates in status
 must pass before large-region feasibility or migration is declared complete.
 
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable

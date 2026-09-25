@@ -12,7 +12,11 @@ This revision supersedes app-driven progressive compilation below. Users select
 map sections and install immutable prepared data; developer tooling builds one
 coherent release. The existing branch and draft PR remain the integration path.
 
-- [ ] Graph-reading proof and release/installation/download contracts.
+- [x] Graph-reading proof and release/installation/download contracts.
+  Evidence: schema-7 prepared reader versus schema-6 monolithic offline fixtures;
+  113 graph/solver/server tests passed in 17 files, including actual child-process
+  search, cross-file routes, partial coverage, seam/corner contacts, and bounded
+  connection eviction. Integrated commits f0d0d61 and e92491c.
 - [ ] Developer-only coherent builds, compact feasibility hints, release export.
 - [ ] Download lifecycle and clickable coverage sections on the shared map.
 - [ ] Real-data build/install/search measurements, including the 4 GiB gate.

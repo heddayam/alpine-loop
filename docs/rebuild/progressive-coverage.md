@@ -1,4 +1,8 @@
-# Progressive coverage
+# Progressive coverage — superseded
+
+Historical design and measurements. The active architecture is
+[developer builds and downloadable coverage](prepared-coverage.md). The old
+app-driven build commands below are retained as historical evidence only.
 
 This implements the accepted separation between collections, installation units,
 processing batches, and routing snapshots. The acceptance gates below remain
