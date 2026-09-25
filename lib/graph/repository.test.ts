@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import policy from "@/data/fixtures/graph/policy.json";
 import { packManifestSchema } from "@/lib/contracts";
-import { compilePack } from "@/lib/data/compiler";
+import { compilePack } from "@/lib/data/testing/compiler";
 import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
 import { lineLengthMeters } from "./geometry";
 import { writeGraphFixture } from "./test-helpers";

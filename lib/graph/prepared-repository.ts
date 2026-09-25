@@ -113,7 +113,7 @@ export class PreparedGraphRepository implements GraphRepository {
         assertNotAborted(query.signal);
         const rows = this.#database(artifact.path).prepare(`SELECT a.*, n.lon AS candidate_lon, n.lat AS candidate_lat
           FROM access_points a JOIN nodes n ON n.id = a.node_id
-          JOIN node_spatial s ON s.row_id = n.rowid
+          JOIN node_spatial s ON s.row_id = n.node_key
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
             AND a.id > ? ${query.accessPointId === undefined ? "" : "AND a.id = ?"}
           ORDER BY a.id LIMIT ?`).all(west, east, south, north, after,
@@ -164,7 +164,7 @@ export class PreparedGraphRepository implements GraphRepository {
       while (true) {
         assertNotAborted(query.signal);
         const rows = this.#database(artifact.path).prepare(`SELECT e.* FROM edges e
-          JOIN edge_spatial s ON s.row_id = e.rowid
+          JOIN edge_spatial s ON s.row_id = e.edge_key
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
           AND e.id > ? ORDER BY e.id LIMIT ?`).all(west, east, south, north, after, BATCH_SIZE) as SqliteRow[];
         for (const row of rows) {

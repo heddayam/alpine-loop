@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { PreparedGraphRepository } from "./prepared-repository";
 import { SQLiteGraphRepository } from "./sqlite-repository";
-import { writeGraphFixture, GRAPH_FIXTURE_IDENTITY } from "./test-helpers";
+import { writeGraphFixture, promoteGraphFixture, GRAPH_FIXTURE_IDENTITY } from "./test-helpers";
 import { coordinateIsInsideArea, segmentIntersectsArea, type AreaGeometry } from "./geometry";
 import type { GraphEdge, GraphNode, InducedGraph, ReachableGraphQuery } from "./types";
 import { ReachableGraphClosedRouteSolver } from "../solver/reachable-graph-closed-route-solver";
@@ -64,16 +64,7 @@ function fixture(mixedIds = false) {
   repositories.push(mono);
   const prepared = join(directory, "complete.sqlite");
   copyFileSync(original, prepared);
-  const db = new DatabaseSync(prepared);
-  db.exec(`UPDATE metadata SET value='7' WHERE key='schemaVersion';
-    INSERT INTO metadata VALUES ('releaseId','release');
-    ALTER TABLE access_points ADD COLUMN known_minimum_stem_m REAL;
-    ALTER TABLE access_points ADD COLUMN inclusive_minimum_stem_m REAL;
-    UPDATE access_points SET
-      known_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='known' AND access_point_id=access_points.id),
-      inclusive_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='inclusive' AND access_point_id=access_points.id);
-    DROP TABLE access_topology; DROP TABLE topology_profiles;`);
-  db.close();
+  promoteGraphFixture(prepared, "release");
   const artifacts = sections.map((geometry, index) => {
     const path = join(directory, `piece-${index}.sqlite`);
     copyFileSync(prepared, path);
@@ -88,6 +79,8 @@ function fixture(mixedIds = false) {
     for (const row of db.prepare("SELECT a.id, n.lon, n.lat FROM access_points a JOIN nodes n ON n.id=a.node_id").all()) {
       if (!coordinateIsInsideArea([Number(row.lon), Number(row.lat)], geometry)) db.prepare("DELETE FROM access_points WHERE id=?").run(row.id);
     }
+    // Fresh subset exports retain global keys but assign unrelated local rowids.
+    db.exec("UPDATE nodes SET rowid=rowid+1000000; UPDATE edges SET rowid=rowid+2000000");
     db.close();
     return { path, geometry };
   });

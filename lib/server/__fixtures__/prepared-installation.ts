@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { promoteGraphFixture } from "@/lib/graph/test-helpers";
 import { packManifestSchema, type CoverageInstallation, type DataRelease } from "@/lib/contracts";
-import { compilePack } from "@/lib/data/compiler";
+import { compilePack } from "@/lib/data/testing/compiler";
 import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
 import { listSearchRegions, getSearchRegion } from "@/lib/data/named-area-catalog";
 
@@ -20,17 +20,7 @@ export async function preparedInstallation(root: string) {
     id, name, geometry: getSearchRegion(path, id)!.geometry,
     aliases: [`fixture-pack::${id}`], sourceIds: ["fixture"],
   }));
-  const db = new DatabaseSync(path);
-  try {
-    db.exec(`UPDATE metadata SET value='7' WHERE key='schemaVersion';
-      ALTER TABLE access_points ADD COLUMN known_minimum_stem_m REAL;
-      ALTER TABLE access_points ADD COLUMN inclusive_minimum_stem_m REAL;
-      UPDATE access_points SET
-        known_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='known' AND access_point_id=access_points.id),
-        inclusive_minimum_stem_m=(SELECT minimum_stem_distance_m FROM access_topology WHERE profile='inclusive' AND access_point_id=access_points.id);
-      DROP TABLE access_topology; DROP TABLE topology_profiles;`);
-    db.prepare("INSERT INTO metadata(key,value) VALUES ('releaseId',?)").run(releaseId);
-  } finally { db.close(); }
+  promoteGraphFixture(path, releaseId);
   const bytes = await readFile(path), id = createHash("sha256").update(bytes).digest("hex");
   const release: DataRelease = {
     schemaVersion: 1, graphSchemaVersion: "7", id: releaseId, builtAt: manifest.builtAt,

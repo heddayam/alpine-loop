@@ -13,7 +13,7 @@ import { performance } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { areaBounds, PreparedGraphRepository, type PreparedGraphDescriptor, type GraphRepository, type InducedGraph } from "@/lib/graph";
 import { SQLiteGraphRepository } from "@/lib/graph/sqlite-repository";
-import { CLOSED_ROUTE_EFFORT_BUDGETS, ReachableGraphClosedRouteSolver, type RouteSearchResult } from "@/lib/solver";
+import { CLOSED_ROUTE_EFFORT_BUDGETS, listEligibleAccessPointCandidates, ReachableGraphClosedRouteSolver, type RouteSearchResult } from "@/lib/solver";
 import type { RouteCriteria } from "@/lib/contracts";
 
 type Input = {
@@ -37,7 +37,7 @@ const criteria: RouteCriteria = input.criteria ?? {
   distanceMiles: { min: 3, max: 15 }, includeUncertainAccess: true,
   closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
 };
-const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value, (_key, item) =>
+const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value ?? null, (_key, item) =>
   item && typeof item === "object" && !Array.isArray(item)
     ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item)).digest("hex");
 const graphFingerprint = (graph: InducedGraph) => fingerprint({
@@ -62,7 +62,7 @@ const rows: unknown[] = [];
 let comparisons = 0, mismatches = 0;
 try {
   const query = { bbox: areaBounds(input.prepared.coverage), includeUncertainAccess: criteria.includeUncertainAccess };
-  const candidates = await baseline.getAccessPointCandidates(query);
+  const candidates = (await listEligibleAccessPointCandidates({ repository: baseline, accessFilter: { predicates: [input.prepared.coverage], coverage: input.prepared.coverage }, includeUncertainAccess: criteria.includeUncertainAccess })).eligible;
   const selected = candidates.filter(point => input.accessPointIds
     ? input.accessPointIds.includes(point.id)
     : (criteria.includeUncertainAccess ? point.inclusiveMinimumStemMeters : point.knownMinimumStemMeters) !== null)
