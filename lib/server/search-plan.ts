@@ -1,7 +1,8 @@
 import type { SearchAreaSnapshot } from "@/lib/contracts";
 
-/** Immutable data versions and area resolved for one search. */
+/** One immutable installed subset and the resolved area for one search. */
 export type SearchPlan = {
-  packs: Array<{ id: string; dataVersion: string; builtAt: string }>;
+  /** Null is reserved for archived legacy jobs; their saved geometry is readable. */
+  installationId: string | null;
   area: SearchAreaSnapshot;
 };

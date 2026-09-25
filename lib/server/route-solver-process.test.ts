@@ -1,8 +1,7 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { compilePack } from "@/lib/data/compiler";
-import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
-import { generatedClosedRouteV3Schema, packManifestSchema } from "@/lib/contracts";
+import { preparedInstallation } from "./__fixtures__/prepared-installation";
+import { generatedClosedRouteV3Schema } from "@/lib/contracts";
 import { CLOSED_ROUTE_EFFORT_BUDGETS } from "@/lib/solver";
 import { drawnArea } from "./search-area";
 import { resolve } from "node:path";
@@ -22,7 +21,7 @@ const request: SearchIntent = {
 
 const input: RouteSolverWorkerInput = {
   criteria: request.criteria,
-  pack: { id: "fixture-pack", dataVersion: "v4" },
+  installationId: "fixture-installation",
   accessFilter: {
     predicates: [],
     coverage: { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] },
@@ -34,13 +33,12 @@ describe("RouteSolverProcess", () => {
     const root = await mkdtemp(resolve(tmpdir(), "alpine-compute-"));
     let session: RouteSolverProcess | undefined;
     try {
-      const artifact = await compilePack(await fixtureCompileOptions(root));
-      const manifest = packManifestSchema.parse(JSON.parse(await readFile(artifact.manifestPath, "utf8")));
+      const { installation, manifest } = await preparedInstallation(root);
       session = await RouteSolverProcess.open({
-        pack: manifest,
+        installationId: installation.id,
         criteria: { ...request.criteria, distanceMiles: { min: 0.1, max: 20 } },
         accessFilter: { predicates: [drawnArea(manifest.coverage.bbox)], coverage: manifest.coverage.boundary },
-      }, new AbortController().signal, { env: { ALPINE_PACK_ROOT: root } });
+      }, new AbortController().signal, { env: { ALPINE_COVERAGE_ROOT: root } });
       const signal = new AbortController().signal;
       const response = await session.generate(
         { searchEffort: "quick", limit: 2 }, CLOSED_ROUTE_EFFORT_BUDGETS.quick, signal,
@@ -76,11 +74,11 @@ describe("RouteSolverProcess", () => {
     } finally { await Promise.all(sessions.map((session) => session.close())); }
   });
 
-  it("boots the production child entrypoint and reports pinned-pack initialization errors", async () => {
+  it("boots the production child entrypoint and reports pinned installation initialization errors", async () => {
     await expect(RouteSolverProcess.open({
       ...input,
-      pack: { ...input.pack, id: "definitely-missing-worker-pack" },
-    }, new AbortController().signal)).rejects.toThrow("pinned pack version is no longer installed");
+      installationId: "definitely-missing-installation",
+    }, new AbortController().signal)).rejects.toThrow("pinned installation could not be opened");
   });
 
   it.each(["quick", "full"] as const)("keeps the API responsive and cancels a synchronous %s search", async (mode) => {

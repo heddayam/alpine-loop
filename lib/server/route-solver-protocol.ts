@@ -8,7 +8,7 @@ export type StartSearchResult = Pick<RouteSearchResult, "exact" | "nearMisses"> 
 };
 
 export type RouteSolverWorkerInput = {
-  pack: { id: string; dataVersion: string };
+  installationId: string;
   criteria: RouteCriteria;
   accessFilter: ResolvedAccessFilterContext;
 };

@@ -88,6 +88,18 @@ export class PreparedGraphRepository implements GraphRepository {
       && coordinateIsInsideArea(coordinate, artifact.geometry));
   }
 
+  #hasInstalledDeparture(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean, signal?: AbortSignal): boolean {
+    for (const artifact of this.#at(coordinate)) {
+      const rows = this.#database(artifact.path).prepare("SELECT * FROM edges WHERE from_node = ?").iterate(id);
+      for (const row of rows) {
+        assertNotAborted(signal);
+        const edge = parseEdge(row);
+        if (edgeIsTraversable(edge, includeUncertainAccess) && lineIsInsideArea(edge.coordinates, this.#coverage)) return true;
+      }
+    }
+    return false;
+  }
+
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
     assertNotAborted(query.signal);
     const points = new Map<string, AccessPointCandidate>();
@@ -113,7 +125,8 @@ export class PreparedGraphRepository implements GraphRepository {
           }
           if (!coordinateIsInsideBbox([lon, lat], query.bbox)
             || !coordinateIsInsideArea([lon, lat], this.#coverage)
-            || !accessPointIsEligible(point, query.includeUncertainAccess)) continue;
+            || !accessPointIsEligible(point, query.includeUncertainAccess)
+            || !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal)) continue;
           insertConsistent(points, point.id, {
             ...point, lon, lat, knownMinimumStemMeters, inclusiveMinimumStemMeters,
             canReachCycle: inclusiveMinimumStemMeters !== null,

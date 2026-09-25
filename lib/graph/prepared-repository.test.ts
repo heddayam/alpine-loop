@@ -227,3 +227,9 @@ test("cancels graph reads and rejects query coordinates that cannot locate the s
   await expect(repository.getReachableGraph({ ...query, startCoordinates: undefined })).rejects.toThrow("startCoordinates");
   expect((await repository.getReachableGraph({ ...query, startCoordinates: [1, 1] })).graph.edges).toEqual([]);
 });
+
+test("excludes starts whose complete departures leave the installed subset", async () => {
+  const { artifacts, open } = fixture();
+  const repository = open(artifacts, rectangle(-0.0001, -0.0001, 0.0001, 0.0001));
+  expect(await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true })).toEqual([]);
+});

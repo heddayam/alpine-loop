@@ -1,8 +1,5 @@
-import {
-  SQLiteClosedRouteFeasibilityRepository,
-  SQLiteGraphRepository,
-} from "@/lib/graph";
-import { loadInstalledPackVersion } from "@/lib/packs/installed-pack";
+import { PreparedGraphRepository } from "@/lib/graph";
+import { loadInstallation } from "@/lib/coverage-install";
 import {
   CLOSED_ROUTE_EFFORT_BUDGETS,
   type PreparedRouteSearch,
@@ -22,8 +19,7 @@ type Session = {
   input: RouteSolverWorkerInput;
   solver: ReachableGraphClosedRouteSolver;
   context: RouteGraphContext;
-  repository: SQLiteGraphRepository;
-  topologyRepository: SQLiteClosedRouteFeasibilityRepository;
+  repository: PreparedGraphRepository;
   search?: PreparedRouteSearch;
 };
 
@@ -43,28 +39,24 @@ function serializedError(error: unknown): Extract<RouteSolverResponse, { ok: fal
 }
 
 async function initialize(input: RouteSolverWorkerInput): Promise<void> {
-  let repository: SQLiteGraphRepository | undefined;
-  let topologyRepository: SQLiteClosedRouteFeasibilityRepository | undefined;
+  let repository: PreparedGraphRepository | undefined;
   try {
-    const installed = await loadInstalledPackVersion(input.pack.id, input.pack.dataVersion);
-    if (!installed) throw new Error("The pinned pack version is no longer installed.");
-    const { manifest } = installed;
-    repository = new SQLiteGraphRepository(installed.databasePath, manifest.id);
-    topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath: installed.databasePath, manifest });
-    const solver = new ReachableGraphClosedRouteSolver({
-      pack: {
-        id: manifest.id,
-        dataVersion: manifest.dataVersion, builtAt: manifest.builtAt,
-      },
-      sourceFreshness: manifest.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? manifest.builtAt,
-      sourceConfidence: manifest.fieldConfidence.access ?? "low",
-      fallbackSourceIds: manifest.sources.map(({ id }) => id),
+    const installed = await loadInstallation(undefined, input.installationId);
+    if (!installed) throw new Error("The pinned installation is unavailable. Install prepared coverage and start a new search.");
+    const { installation, release, artifacts } = installed;
+    repository = new PreparedGraphRepository({
+      installationId: installation.id, releaseId: release.id, artifacts, coverage: installation.geometry,
     });
-    session = { input, solver, context: { repository, topologyRepository, accessFilter: input.accessFilter }, repository, topologyRepository };
+    const solver = new ReachableGraphClosedRouteSolver({
+      pack: { id: installation.id, dataVersion: release.id, builtAt: release.builtAt },
+      sourceFreshness: release.sources.map(({ retrievedAt }) => retrievedAt).sort()[0] ?? release.builtAt,
+      sourceConfidence: "low",
+      fallbackSourceIds: release.sources.map(({ id }) => id),
+    });
+    session = { input, solver, context: { repository, accessFilter: input.accessFilter }, repository };
   } catch (error) {
-    await topologyRepository?.close();
     await repository?.close();
-    throw new ServerApiError("PACK_UNAVAILABLE", error instanceof Error ? error.message : "The pinned pack could not be opened.", 503);
+    throw new ServerApiError("DATA_UNAVAILABLE", `The pinned installation could not be opened. Install prepared coverage and start a new search. ${error instanceof Error ? error.message : ""}`, 503);
   }
 }
 
@@ -100,7 +92,6 @@ async function search(accessPointId: string): Promise<StartSearchResult> {
 
 async function close(): Promise<void> {
   if (!session) return;
-  await session.topologyRepository.close();
   await session.repository.close();
   session = undefined;
 }
