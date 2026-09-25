@@ -6,7 +6,6 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GeneratedClosedRouteV3 } from "@/lib/contracts";
-import type { SearchResult } from "@/lib/contracts/search";
 import { ResultsPanel } from "./ResultsPanel";
 import type { RouteResults } from "./types";
 import { routeStart } from "./route-start";
@@ -67,11 +66,11 @@ function route(overrides: Partial<GeneratedClosedRouteV3> = {}): GeneratedClosed
   };
 }
 
-type ResultsOverrides = Partial<Pick<SearchResult, "exact" | "nearMisses" | "incomplete" | "messages">> & { requested?: number };
+type ResultsOverrides = Partial<Pick<RouteResults, "exact" | "nearMisses">>;
 
-function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind: "quick" }> {
+function results(overrides: ResultsOverrides = {}): RouteResults {
   const exact = overrides.exact ?? [route()];
-  const nearMisses: SearchResult["nearMisses"] = overrides.nearMisses ?? [{
+  const nearMisses: RouteResults["nearMisses"] = overrides.nearMisses ?? [{
     ...route({
       id: "near-lollipop",
       distanceMeters: 3218.688,
@@ -96,10 +95,13 @@ function results(overrides: ResultsOverrides = {}): Extract<RouteResults, { kind
     }],
   }];
   return {
-    kind: "quick",
-    request: { area: { mode: "drawn-area", bbox: [-122.2, 37.1, -122.1, 37.2] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, limit: overrides.requested ?? 2 },
-    area: { label: "Drawn area" },
-    exact, nearMisses, incomplete: overrides.incomplete ?? false, messages: overrides.messages ?? [],
+    job: {
+      version: 2, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "completed",
+      request: { area: { mode: "drawn-area", bbox: [-122.2, 37.1, -122.1, 37.2] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } },
+      area: { label: "Drawn area" },
+      progress: { eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: exact.length, nearMissRouteCount: nearMisses.length, truncatedAccessPointCount: 0, elapsedMs: 100 },
+      partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:01Z",
+    }, exact, nearMisses,
   };
 }
 
@@ -158,7 +160,6 @@ describe("ResultsPanel", () => {
     expect(exactSummary).toHaveAttribute("aria-expanded", "false");
     expect(exactSummary).toHaveTextContent("5.0 mi");
     expect(screen.queryByRole("img", { name: /Elevation profile/ })).not.toBeInTheDocument();
-    expect(screen.getByText("1 of 2 requested exact routes found.")).toBeVisible();
 
     rerender(<ResultsPanel {...props} selectedRouteId="near-lollipop" detail />);
     expect(screen.getAllByRole("article")).toHaveLength(1);
@@ -416,45 +417,15 @@ describe("ResultsPanel", () => {
     expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
   });
 
-  it("reports budget truncation and non-budget shortfall honestly", async () => {
-    render(<ResultsPanel onHoverRoute={() => undefined}
-      status="done"
-      results={results({
-        requested: 10,
-        exact: [],
-        nearMisses: [],
-        incomplete: true,
-        messages: ["Search stopped at its time limit.", "No feasible cycle starts."],
-      })}
-      onSelectRoute={() => undefined}
-    />);
-    expect(screen.getByText("0 of 10 requested exact routes found.")).toBeVisible();
-    expect(screen.getByText(/This search is incomplete/)).toBeVisible();
-    expect(screen.getByText(/Close matches are listed separately/)).toBeVisible();
-    await userEvent.click(screen.getByText("Diagnostics"));
-    expect(screen.getByText("Search stopped at its time limit.")).toBeVisible();
-    expect(screen.getByText("No feasible cycle starts.")).toBeVisible();
-  });
-
-  it("does not call a complete exact set partial", () => {
-    render(<ResultsPanel onHoverRoute={() => undefined}
-      status="done"
-      results={results({ requested: 1, exact: [route()], nearMisses: [], incomplete: true })}
-      onSelectRoute={() => undefined}
-    />);
-    expect(screen.queryByText(/requested exact routes found/)).not.toBeInTheDocument();
-  });
-
   it("shows saved job progress without a fabricated route target or solver counters", async () => {
     const saved: RouteResults = {
-      kind: "saved",
       exact: [],
       nearMisses: results().nearMisses,
       job: {
         version: 2,
         id: "3d594650-3436-4f8b-a0e8-38d13fc148ca",
         status: "cancelled",
-        request: { area: { mode: "named-regions", regionIds: ["region-1"] }, criteria: results().request.criteria },
+        request: { area: { mode: "named-regions", regionIds: ["region-1"] }, criteria: results().job.request.criteria },
         area: { label: "Santa Cruz Mountains" },
         progress: { eligibleAccessPointCount: 10, processedAccessPointCount: 4, exactRouteCount: 8, nearMissRouteCount: 2, truncatedAccessPointCount: 1, elapsedMs: 12_000 },
         partial: true,
@@ -509,12 +480,11 @@ describe("ResultsPanel", () => {
     const other = route({ id: "other", startAccessPoint: { ...route().startAccessPoint, id: "other-start", name: "Other start" } });
     const first = route();
     const second = route({ id: "same-start-second" });
-    const response = results({ exact: [other, first, second], requested: 10 });
+    const response = results({ exact: [other, first, second] });
     const onClearStart = vi.fn();
     const props = { status: "done" as const, results: response, onHoverRoute: vi.fn(), onSelectRoute: vi.fn(), onClearStart };
     const { rerender } = render(<ResultsPanel {...props} startKey={routeStart(first).key} nearMissesOpen />);
     expect(screen.getByText("Saratoga Gap · 3 of 4 routes on this page")).toBeVisible();
-    expect(screen.getByText("3 of 10 requested exact routes found.")).toBeVisible();
     expect(screen.getAllByRole("article").map((card) => card.querySelector(".route-number")?.textContent)).toEqual(["2", "3", "4"]);
     expect(screen.queryByRole("article", { name: /Other start/ })).not.toBeInTheDocument();
     const buttons = screen.getAllByRole("article").map((card) => within(card).getAllByRole("button")[0]!);

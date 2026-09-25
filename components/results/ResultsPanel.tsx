@@ -505,8 +505,7 @@ export function ResultsPanel({
   const closeCount = results.nearMisses.filter(matchesStart).length;
   const total = exactCount + closeCount;
   const start = startKey ? routes.find(matchesStart)?.startAccessPoint : undefined;
-  const quick = results.kind === "quick" ? results : undefined;
-  const job = results.kind === "saved" ? results.job : undefined;
+  const job = results.job;
 
   const selectedIndex = routes.findIndex((route) => route.id === selectedRouteId);
   const selectedRoute = routes[selectedIndex];
@@ -533,29 +532,16 @@ export function ResultsPanel({
       <ResultsHeading total={total} onClose={onClose} />
       {startKey ? <div className="start-filter" role="status"><span>{start?.name ?? "Selected trailhead"} · {total} of {routes.length} routes on this page</span><button type="button" className="btn-link" onClick={onClearStart}>All trailheads</button></div> : null}
       {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
-      <p className="viewed-search-context">Viewing {quick?.area.label ?? job?.area.label} · {(quick?.request.criteria ?? job!.request.criteria).distanceMiles.min}–{(quick?.request.criteria ?? job!.request.criteria).distanceMiles.max} mi</p>
+      <p className="viewed-search-context">Viewing {job.area.label} · {job.request.criteria.distanceMiles.min}–{job.request.criteria.distanceMiles.max} mi</p>
 
-      {quick && results.exact.length < quick.request.limit ? (
-        <div className="results-state" role="status" aria-live="polite">
-          <strong>{results.exact.length} of {quick.request.limit} requested exact routes found.</strong>
-          <span>{quick.incomplete
-            ? "This search is incomplete."
-            : "Fewer exact matches than requested."} Close matches are listed separately.</span>
-        </div>
-      ) : null}
-
-      {quick?.incomplete && quick.exact.length >= quick.request.limit ? <p className="results-state" role="status">This search is incomplete. Some areas or starts could not be fully searched.</p> : null}
-      {quick?.messages.length ? <div className="results-state" role="status">{quick.messages.map((message, index) => <p key={index}>{message}</p>)}</div> : null}
-      {job ? (
-        <div className="results-state" role="status">
-          <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
-          <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
-          {job.partial ? <span> Partial results retained.</span> : null}
-          {job.stale ? <span> Generated with older map data.</span> : null}
-          {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
-          {job.error ? <span> {job.error}</span> : null}
-        </div>
-      ) : null}
+      <div className="results-state" role="status">
+        <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
+        <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
+        {job.partial ? <span> Partial results retained.</span> : null}
+        {job.stale ? <span> Generated with older map data.</span> : null}
+        {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
+        {job.error ? <span> {job.error}</span> : null}
+      </div>
 
       {total === 0 ? (
         <div className="no-results" role="status">
@@ -593,18 +579,13 @@ export function ResultsPanel({
 
       <details className="diagnostics">
         <summary>Diagnostics</summary>
-        {quick ? <>
-          <p>{quick.area.label}</p>
-        </> : null}
-        {job ? <>
-          <p>{job.area.label}</p>
-          <dl>
-            <div><dt>Elapsed</dt><dd>{Math.round(job.progress.elapsedMs).toLocaleString("en-US")} ms</dd></div>
-            <div><dt>Saved exact routes</dt><dd>{job.progress.exactRouteCount}</dd></div>
-            <div><dt>Saved close matches</dt><dd>{job.progress.nearMissRouteCount}</dd></div>
-            <div><dt>Job ID</dt><dd>{job.id}</dd></div>
-          </dl>
-        </> : null}
+        <p>{job.area.label}</p>
+        <dl>
+          <div><dt>Elapsed</dt><dd>{Math.round(job.progress.elapsedMs).toLocaleString("en-US")} ms</dd></div>
+          <div><dt>Saved exact routes</dt><dd>{job.progress.exactRouteCount}</dd></div>
+          <div><dt>Saved close matches</dt><dd>{job.progress.nearMissRouteCount}</dd></div>
+          <div><dt>Job ID</dt><dd>{job.id}</dd></div>
+        </dl>
       </details>
     </aside>
   );

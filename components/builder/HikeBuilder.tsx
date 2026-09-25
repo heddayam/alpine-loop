@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Polygon } from "geojson";
 import { useRouter } from "next/navigation";
 import { DRIVE_TIME_DURATIONS_MINUTES, originSchema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
-import { searchCatalogSchema, searchResultSchema, searchRequestSchema, routeJobV2Schema, routeJobResultsPageV2Schema, type SearchCatalog, type SearchRequest } from "@/lib/contracts/search";
+import { searchCatalogSchema, searchIntentSchema, routeJobV2Schema, routeJobResultsPageV2Schema, type SearchCatalog, type SearchIntent } from "@/lib/contracts/search";
 import { HikeMap, type CoverageOverlay } from "../map/HikeMap";
 import { ResultsPanel } from "../results/ResultsPanel";
 import type { RouteResults } from "../results/types";
@@ -22,7 +22,6 @@ import { parseSearchCriteria } from "./validation";
 
 type Workspace = { status: "idle" } | { status: "done"; results: RouteResults } | {
   status: "loading" | "error";
-  kind: "quick" | "saved";
   previous?: RouteResults;
   jobId?: string;
   message?: string;
@@ -100,7 +99,6 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const operation = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
   const routeResults = workspace.status === "done" ? workspace.results : workspace.status === "idle" ? null : workspace.previous ?? null;
-  const savedResults = routeResults?.kind === "saved" ? routeResults : undefined;
   const generationState = workspace.status === "error" ? "error" : routeResults ? "done" : workspace.status;
   const generationMessage = workspace.status === "error" ? workspace.message : launchMessage;
   const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
@@ -137,11 +135,11 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     clearResults();
     setDrawnBounds(bounds);
   }, [clearResults]);
-  const runView = useCallback(async (load: (signal: AbortSignal) => Promise<RouteResults>, kind: "quick" | "saved", jobId?: string, previous?: RouteResults) => {
+  const runView = useCallback(async (load: (signal: AbortSignal) => Promise<RouteResults>, jobId?: string, previous?: RouteResults) => {
     operation.current?.abort();
     const controller = new AbortController();
     operation.current = controller;
-    setWorkspace({ status: "loading", kind, jobId, previous });
+    setWorkspace({ status: "loading", jobId, previous });
     setFocus({});
     setPanel("results");
     setMapExpanded(false);
@@ -155,16 +153,16 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       setPanel("results");
       router.replace("/");
     } catch (error) {
-      if (!controller.signal.aborted && operation.current === controller) setWorkspace({ status: "error", kind, jobId, previous, message: error instanceof Error ? error.message : "Search results could not be loaded." });
+      if (!controller.signal.aborted && operation.current === controller) setWorkspace({ status: "error", jobId, previous, message: error instanceof Error ? error.message : "Search results could not be loaded." });
     } finally { if (operation.current === controller) operation.current = null; }
   }, [router]);
   const loadJob = useCallback((id: string, cursor?: string, previous?: RouteResults) => runView(async (signal) => {
     const query = new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) });
     const page = routeJobResultsPageV2Schema.parse(await requestJson(`/api/route-jobs/${encodeURIComponent(id)}/results?${query}`, { signal, cache: "no-store" }));
-    return { kind: "saved", job: page.job, nextCursor: page.nextCursor,
+    return { job: page.job, nextCursor: page.nextCursor,
       exact: page.results.filter((result) => result.matchType === "exact").map(({ route }) => route),
       nearMisses: page.results.filter((result) => result.matchType === "near-miss").map(({ route }) => route) };
-  }, "saved", id, previous), [runView]);
+  }, id, previous), [runView]);
   useEffect(() => {
     if (!restoreJobId) return;
     void loadJob(restoreJobId);
@@ -192,7 +190,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeJobs = useCallback(() => {
     setWorkspace((current) => {
-      if (current.status !== "loading" || current.kind !== "saved") return current;
+      if (current.status !== "loading") return current;
       operation.current?.abort();
       operation.current = null;
       return current.previous ? { status: "done", results: current.previous } : { status: "idle" };
@@ -248,7 +246,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   };
 
 
-  const prepareRequest = (): SearchRequest | null => {
+  const prepareRequest = (): SearchIntent | null => {
     if (!ready) return null;
     const parsed = parseSearchCriteria(values);
     if (!parsed.success) { setValidationErrors(parsed.errors); return null; }
@@ -263,16 +261,10 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     const area = drawnBounds ? { mode: "drawn-area" as const, bbox: drawnBounds }
       : driveDraft.origin ? { mode: "drive-time" as const, origin: driveDraft.origin, minDurationMinutes: driveDraft.minDurationMinutes, durationMinutes: driveDraft.durationMinutes, regionIds: selectedRegionIds }
       : { mode: "named-regions" as const, regionIds: selectedRegionIds };
-    const request = searchRequestSchema.safeParse({ area, criteria: parsed.criteria, limit: parsed.limit });
+    const request = searchIntentSchema.safeParse({ area, criteria: parsed.criteria });
     if (!request.success) { setValidationErrors(["Choose named regions, resolve an origin, or draw a boundary."]); return null; }
     setValidationErrors([]);
     return request.data;
-  };
-  const runQuick = () => {
-    const request = prepareRequest();
-    if (!request) return;
-    setLaunchMessage("");
-    void runView(async (signal) => ({ kind: "quick", ...searchResultSchema.parse(await requestJson("/api/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request), signal })) }), "quick");
   };
   const launchBatch = async () => {
     if (batchLaunchRef.current) return;
@@ -291,8 +283,8 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   };
   const generatedRoutes = useMemo(() => routeResults ? [...routeResults.exact, ...routeResults.nearMisses] : [], [routeResults]);
   const mappedRoutes = nearMissesOpen ? generatedRoutes : routeResults?.exact ?? [];
-  const viewedRequest = routeResults?.kind === "quick" ? routeResults.request : savedResults?.job.request;
-  const viewedArea = routeResults?.kind === "quick" ? routeResults.area : savedResults?.job.area;
+  const viewedRequest = routeResults?.job.request;
+  const viewedArea = routeResults?.job.area;
   const toggleNearMisses = (open: boolean) => {
     setNearMissesOpen(open);
     if (!open) {
@@ -317,7 +309,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       </header>
 
       {settingsOpen ? <SettingsModal open settings={appSettings} onSave={saveSettings} onClose={closeSettings} /> : null}
-      <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" && workspace.kind === "saved" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" && workspace.kind === "saved" ? workspace.jobId : undefined} onClose={closeJobs} />
+      <JobsModal open={jobsOpen} jobs={jobs} loadState={jobsResource.loadState} loadError={jobsResource.error || (workspace.status === "error" ? workspace.message : undefined)} refreshedAt={jobsResource.refreshedAt} onRefresh={refreshJobs} onOpenResults={(id) => void loadJob(id, undefined, routeResults ?? undefined)} onMutate={jobsResource.mutate} pendingByJob={jobsResource.pending} openingJobId={workspace.status === "loading" ? workspace.jobId : undefined} onClose={closeJobs} />
 
       <div className={mapExpanded ? "workspace map-expanded" : "workspace"}>
         <section className="workspace-panel" aria-label="Route planner">
@@ -421,17 +413,15 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           <footer className="builder-action-footer">
             {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. <button className="btn-link" type="button" onClick={openCoverage}>Install coverage</button> to search.</p> : null}
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
-            <div className="search-count"><label htmlFor="route-count">Routes to find</label><select id="route-count" className="control" value={appSettings.quickSearchRouteCount} disabled={!settingsLoaded} onChange={(event) => { const quickSearchRouteCount = Number(event.currentTarget.value); void preferences.change((current) => ({ ...current, quickSearchRouteCount })); editDraft(); }}>{Array.from({ length: 20 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select><span>Quick search</span></div>
             <div className="builder-action-buttons">
-              <button className="btn btn-primary" type="button" disabled={!ready || (workspace.status === "loading" && workspace.kind === "quick")} onClick={() => void runQuick()}>{workspace.status === "loading" && workspace.kind === "quick" ? "Searching…" : "Quick search"}</button>
-              <button className="btn" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
-            <div className="action-legend"><span>Requested alternatives</span><span>Every eligible trailhead</span></div>
+            <div className="action-legend">Every eligible trailhead · up to ten exact routes per start</div>
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan" || coverageOpen}>
-          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={savedResults ? { hasNext: Boolean(savedResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(savedResults.job.id, savedResults.nextCursor, savedResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults ? { hasNext: Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
         </div>
         </section>
 

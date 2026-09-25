@@ -8,18 +8,18 @@ import { HikeBuilder } from "./HikeBuilder";
 import { routeStart } from "../results/route-start";
 import { useJobs } from "./useJobs";
 import type { AppSettingsV1 } from "@/lib/contracts";
-import type { SearchRequest, SearchResult, RouteJobV2 } from "@/lib/contracts/search";
+import type { SearchIntent, SearchRoute, RouteJobV2 } from "@/lib/contracts/search";
 import { DEFAULT_APP_SETTINGS } from "@/lib/settings/defaults";
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filterGeometry, includeUncertainAccess, onStartSelect, onRouteSelect, selectedRouteId, selectedSegmentId }: {
   onBoundsChange: (bounds: [number, number, number, number]) => void;
-  routes?: SearchResult["exact"]; filterGeometry?: unknown; includeUncertainAccess?: boolean; onStartSelect: (key: string) => void; onRouteSelect: (id: string) => void; selectedRouteId?: string; selectedSegmentId?: string;
+  routes?: SearchRoute[]; filterGeometry?: unknown; includeUncertainAccess?: boolean; onStartSelect: (key: string) => void; onRouteSelect: (id: string) => void; selectedRouteId?: string; selectedSegmentId?: string;
 }) => <div aria-label="Mock map"><output aria-label="Map selection">{JSON.stringify({ selectedRouteId, selectedSegmentId })}</output>{routes.map((route) => <button key={route.id} onClick={() => onRouteSelect(route.id)}>Open map route {route.id}</button>)}{routes[0] ? <button onClick={() => onStartSelect(routeStart(routes[0]!).key)}>Select fixture trailhead</button> : null}<button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess })}</output></div> }));
 const appSettings = DEFAULT_APP_SETTINGS;
 const catalog = { regions: [{ id: "castle-rock", name: "Castle Rock" }, { id: "sunol", name: "Sunol" }], coverages: [{ type: "Polygon", coordinates: [[[-122.2,37.1],[-122.1,37.1],[-122.1,37.2],[-122.2,37.2],[-122.2,37.1]]] }], display: { center: [-122.15,37.15], zoom: 12 } };
-const request: SearchRequest = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true }, limit: 10 };
-const generatedRoute: SearchResult["exact"][number] = {
+const request: SearchIntent = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } };
+const generatedRoute: SearchRoute = {
   regionLabel: "Santa Cruz Mountains",
   id: "exact-route", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
   startAccessPoint: { id: "trailhead-a", name: "Fixture Trailhead", lon: -122.16, lat: 37.16, accessState: "public", confidence: "high" },
@@ -28,8 +28,8 @@ const generatedRoute: SearchResult["exact"][number] = {
   source: { freshness: "2026-08-01T00:00:00Z", confidence: "high", sourceIds: ["fixture"] },
 };
 
-const searchResponse = (request: SearchRequest): SearchResult => ({ request, area: { label: "Saved area", filterGeometry: { type: "Polygon", coordinates: [[[-122.18,37.15],[-122.13,37.15],[-122.13,37.18],[-122.18,37.18],[-122.18,37.15]]] } }, exact: [generatedRoute], nearMisses: [], incomplete: false, messages: [] });
-const job: RouteJobV2 = { version: 2, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "completed", request: { area: request.area, criteria: request.criteria }, area: searchResponse(request).area, progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 1, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 100 }, partial: false, stale: true, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:01Z" };
+const savedArea: RouteJobV2["area"] = { label: "Saved area", filterGeometry: { type: "Polygon", coordinates: [[[-122.18,37.15],[-122.13,37.15],[-122.13,37.18],[-122.18,37.18],[-122.18,37.15]]] } };
+const job: RouteJobV2 = { version: 2, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "completed", request: { area: request.area, criteria: request.criteria }, area: savedArea, progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 1, nearMissRouteCount: 0, truncatedAccessPointCount: 0, elapsedMs: 100 }, partial: false, stale: true, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:01Z" };
 const savedPage = { version: 2, job, results: [{ matchType: "exact", accessPointId: "trailhead-a", route: generatedRoute }] };
 function json(value: unknown, status = 200) { return new Response(JSON.stringify(value), { status }); }
 function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) {
@@ -39,7 +39,6 @@ function mockBaseFetch(onRequest?: (url: string, init?: RequestInit) => Response
     if (custom) return custom;
     if (url === "/api/settings") return json(appSettings);
     if (url === "/api/search/catalog") return json(catalog);
-    if (url === "/api/search") return json(searchResponse(JSON.parse(String(init?.body))));
     if (url.includes("/results?")) return json(savedPage);
     if (url === "/api/route-jobs") return json(init?.method === "POST" ? job : { version: 2, jobs: [job] });
     if (url.endsWith("/cancel") || init?.method === "DELETE") return json({ ok: true });
@@ -62,25 +61,17 @@ describe("geographic workspace", () => {
     mockBaseFetch((url) => url === "/api/search/catalog" ? json({ ...catalog, coverages: [], regions: [] }) : undefined);
     render(<HikeBuilder />);
     expect(await screen.findByText(/No hiking data is installed/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Quick search" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Full search" })).toBeDisabled();
     expect(screen.queryByRole("navigation", { name: "Region packs" })).not.toBeInTheDocument();
   });
-  it("sends one Quick request and one Full intent for several named regions", async () => {
+  it("submits one saved job for several named regions", async () => {
     render(<HikeBuilder />);
     await chooseRegions();
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    await userEvent.click(screen.getByRole("button", { name: "Plan" }));
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
-    const calls = vi.mocked(fetch).mock.calls;
-    const quick = calls.filter(([url]) => url === "/api/search");
-    const full = calls.filter(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
-    expect(quick).toHaveLength(1); expect(full).toHaveLength(1);
-    expect(JSON.parse(String(quick[0]?.[1]?.body))).toMatchObject({ area: { mode: "named-regions", regionIds: ["castle-rock", "sunol"] }, limit: 10 });
-    expect(JSON.parse(String(full[0]?.[1]?.body))).toEqual({ area: { mode: "named-regions", regionIds: ["castle-rock", "sunol"] }, criteria: request.criteria });
-    expect(calls.some(([url]) => /packs|reachability|routes\/generate/.test(String(url)))).toBe(false);
+    const posts = vi.mocked(fetch).mock.calls.filter(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ area: { mode: "named-regions", regionIds: ["castle-rock", "sunol"] }, criteria: request.criteria });
   });
   it("drawn bounds override origin and regions, while unresolved origin never broadens a search", async () => {
     render(<HikeBuilder />);
@@ -90,50 +81,42 @@ describe("geographic workspace", () => {
     expect(await screen.findByText(/Choose a suggested origin or clear/)).toBeVisible();
     expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")).toBe(false);
     await userEvent.click(screen.getByText("Draw fixture area"));
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area).toEqual(request.area);
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")?.[1]?.body)).area).toEqual(request.area);
   });
   it("sends resolved driving criteria directly without provider polling", async () => {
     render(<HikeBuilder />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Quick search" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: [], minDurationMinutes: 0, durationMinutes: 30, origin: { lon: -122.16, lat: 37.16 } });
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: [], minDurationMinutes: 0, durationMinutes: 30, origin: { lon: -122.16, lat: 37.16 } });
   });
-  it("submits the same explicit driving range for Quick and Full search", async () => {
+  it("submits an explicit driving range", async () => {
     render(<HikeBuilder />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Quick search" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
     await userEvent.selectOptions(screen.getByLabelText("Minimum drive time"), "15");
     await userEvent.selectOptions(screen.getByLabelText("Maximum drive time"), "60");
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    await userEvent.click(screen.getByRole("button", { name: "Plan" }));
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
-    const quick = vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search");
     const full = vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
-    const area = JSON.parse(String(quick?.[1]?.body)).area;
-    expect(area).toMatchObject({ mode: "drive-time", minDurationMinutes: 15, durationMinutes: 60 });
-    expect(JSON.parse(String(full?.[1]?.body)).area).toEqual(area);
+    expect(JSON.parse(String(full?.[1]?.body)).area).toMatchObject({ mode: "drive-time", minDurationMinutes: 15, durationMinutes: 60 });
   });
   it.each(["30", "60"])("rejects equal or reversed drive ranges without changing either endpoint (minimum %s)", async (minimum) => {
     render(<HikeBuilder />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Quick search" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
     await userEvent.selectOptions(screen.getByLabelText("Minimum drive time"), minimum);
-    for (const name of ["Quick search", "Full search"]) {
-      await userEvent.click(screen.getByRole("button", { name }));
-      expect(screen.getByText("Minimum drive time must be less than maximum drive time.")).toBeVisible();
-    }
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    expect(screen.getByText("Minimum drive time must be less than maximum drive time.")).toBeVisible();
     expect(screen.getByLabelText("Minimum drive time")).toHaveValue(minimum);
     expect(screen.getByLabelText("Maximum drive time")).toHaveValue("30");
-    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/search" || (url === "/api/route-jobs" && init?.method === "POST"))).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")).toBe(false);
     await userEvent.click(screen.getByText("Draw fixture area"));
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
   });
   it("opens older saved driving results with an omitted minimum", async () => {
     vi.restoreAllMocks();
@@ -143,17 +126,6 @@ describe("geographic workspace", () => {
     await screen.findByRole("heading", { name: "Exact matches" });
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
     expect(screen.getByLabelText("Minimum drive time")).toHaveValue("0");
-  });
-  it("cancels stale Quick completion after drawing another area", async () => {
-    vi.restoreAllMocks(); const pending = deferred<Response>(); let signal: AbortSignal | undefined;
-    mockBaseFetch((url, init) => { if (url === "/api/search") { signal = init?.signal as AbortSignal; return pending.promise; } });
-    render(<HikeBuilder />); await userEvent.click(await screen.findByText("Draw fixture area"));
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await userEvent.click(screen.getByText("Change fixture area"));
-    expect(signal?.aborted).toBe(true);
-    await act(async () => pending.resolve(json(searchResponse(request))));
-    expect(screen.getByLabelText("Map routes")).toHaveTextContent("");
-    expect(screen.queryByRole("heading", { name: "Exact matches" })).not.toBeInTheDocument();
   });
   it("restores stale saved geometry in Strict Mode and keeps its context separate from draft edits", async () => {
     render(<StrictMode><HikeBuilder restoreJobId={job.id} /></StrictMode>);
@@ -208,14 +180,14 @@ describe("geographic workspace", () => {
       await chooseRegions();
       fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.2, -122.1" } });
       await userEvent.click(screen.getByRole("button", { name: "Use my current location" }));
-      await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
+      await userEvent.click(screen.getByRole("button", { name: "Full search" }));
       await act(async () => fail?.({ code: 1, message: "Denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
       await userEvent.click(screen.getByRole("button", { name: "Full search" }));
-      expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/search" || (url === "/api/route-jobs" && init?.method === "POST"))).toBe(false);
+      expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")).toBe(false);
       fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "" } });
-      await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-      await screen.findByRole("heading", { name: "Exact matches" });
-      expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/search")?.[1]?.body)).area.mode).toBe("named-regions");
+      await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+      await screen.findByRole("dialog", { name: "Jobs" });
+      expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")?.[1]?.body)).area.mode).toBe("named-regions");
     } finally {
       if (original) Object.defineProperty(navigator, "geolocation", original);
       else Reflect.deleteProperty(navigator, "geolocation");
@@ -228,19 +200,20 @@ describe("geographic workspace", () => {
     await userEvent.selectOptions(screen.getByLabelText("Grade preset"), "steep");
     expect(screen.getByLabelText("Selected climbing grade")).toHaveTextContent("18%");
     await userEvent.click(await screen.findByRole("button", { name: "Draw fixture area" }));
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    const generationCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/search");
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    const generationCall = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/route-jobs" && init?.method === "POST");
     expect(JSON.parse(String(generationCall?.[1]?.body))).toMatchObject({ criteria: { gradeExperience: appSettings.gradePresets.steep } });
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT")).toBe(true);
 
+    await userEvent.click(screen.getByRole("button", { name: "Close jobs" }));
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     await userEvent.clear(screen.getByLabelText("Moderate climb grade"));
     await userEvent.type(screen.getByLabelText("Moderate climb grade"), "13");
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
     const saves = fetchMock.mock.calls.filter(([input, init]) => String(input) === "/api/settings" && init?.method === "PUT");
-    expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, quickSearchRouteCount: 10, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
+    expect(JSON.parse(String(saves.at(-1)?.[1]?.body))).toMatchObject({ includeUncertainAccess: true, gradePresets: { moderate: { maximumClimbP90Pct: 13 } } });
   });
 
   it("opens a trailhead list from the map and retains its scope through detail and Back", async () => {
@@ -275,17 +248,16 @@ describe("geographic workspace", () => {
     mockBaseFetch((url) => url === "/api/settings" ? settingsResponse.promise : undefined);
     render(<HikeBuilder />);
     expect(screen.getByRole("button", { name: "Settings" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Quick search" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Full search" })).toBeDisabled();
     await userEvent.click(await screen.findByRole("button", { name: "Draw fixture area" }));
     await act(async () => settingsResponse.resolve(new Response(JSON.stringify({
-      ...appSettings, includeUncertainAccess: false, quickSearchRouteCount: 3,
+      ...appSettings, includeUncertainAccess: false,
     }))));
     expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "Quick search" }));
-    await screen.findByRole("heading", { name: "Exact matches" });
-    const generated = vi.mocked(globalThis.fetch).mock.calls.find(([url]) => url === "/api/search");
-    expect(JSON.parse(String(generated?.[1]?.body))).toMatchObject({ criteria: { includeUncertainAccess: false }, limit: 3 });
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    const generated = vi.mocked(globalThis.fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
+    expect(JSON.parse(String(generated?.[1]?.body))).toMatchObject({ criteria: { includeUncertainAccess: false } });
   });
 
   it("serializes rapid preference changes without losing either server value", async () => {
@@ -345,22 +317,22 @@ describe("geographic workspace", () => {
     render(<HikeBuilder />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
-    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText("Moderate climb grade"), { target: { value: "13" } });
     await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
     expect(attempts).toBe(0);
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
-    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    expect(screen.getByLabelText("Moderate climb grade")).toHaveValue(12);
+    fireEvent.change(screen.getByLabelText("Moderate climb grade"), { target: { value: "13" } });
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Settings could not be saved. Check the values and try again.")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(10);
-    fireEvent.change(screen.getByLabelText("Quick-search routes"), { target: { value: "12" } });
+    expect(screen.getByLabelText("Moderate climb grade")).toHaveValue(12);
+    fireEvent.change(screen.getByLabelText("Moderate climb grade"), { target: { value: "13" } });
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByLabelText("Quick-search routes")).toHaveValue(12);
+    expect(screen.getByLabelText("Moderate climb grade")).toHaveValue(13);
     expect(attempts).toBe(2);
   });
 
@@ -410,7 +382,8 @@ it("opens coverage beside Settings and preserves search drawing, draft, and rout
   render(<HikeBuilder/>);
   await userEvent.click(await screen.findByText("Draw fixture area"));
   fireEvent.change(screen.getByLabelText("Distance minimum"),{target:{value:"2"}});
-  await userEvent.click(screen.getByRole("button",{name:"Quick search"}));
+  await userEvent.click(screen.getByRole("button",{name:"Full search"}));
+  await userEvent.click(await screen.findByRole("button", { name: /View results for Saved area/ }));
   await waitFor(()=>expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route"));
   const before=screen.getByLabelText("Map context").textContent;
   await userEvent.click(screen.getByRole("button",{name:"Coverage"}));

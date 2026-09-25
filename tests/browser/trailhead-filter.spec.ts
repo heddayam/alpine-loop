@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { ACCESS_POINTS, routeResponse } from "./fixtures";
-import { enterDrawnArea, installOfflineHarness, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
+import { ACCESS_POINTS, savedRoutes } from "./fixtures";
+import { enterDrawnArea, installOfflineHarness, launchAndOpenResults, SEARCH_REGION, selectRegion, selectTypedOrigin } from "./offline-harness";
 
-test("one builder runs Quick and Full search from the drawn boundary", async ({ page }) => {
+test("drawn-area saved results support route details and GPX export", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
@@ -17,15 +17,14 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await regions.click();
   await expect(page.getByRole("group", { name: "Region selection" }).getByRole("checkbox", { name: SEARCH_REGION.name })).toBeChecked();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Quick search" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full search" })).toBeVisible();
   const drawnBounds = await enterDrawnArea(page);
   await expect(page.getByText("An area selects starting points. Your hike can continue beyond it within installed coverage.")).toBeVisible();
-  expect(harness.generationRequests).toHaveLength(0);
-  await page.getByRole("button", { name: "Quick search" }).click();
-  await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.generationRequests[0]?.area.mode).toBe("drawn-area");
-  if (harness.generationRequests[0]?.area.mode === "drawn-area") harness.generationRequests[0].area.bbox.forEach((value, index) => expect(value).toBeCloseTo(drawnBounds[index]!, 4));
+  expect(harness.batchRequests).toHaveLength(0);
+  await launchAndOpenResults(page);
+  await expect.poll(() => harness.batchRequests.length).toBe(1);
+  expect(harness.batchRequests[0]?.area.mode).toBe("drawn-area");
+  if (harness.batchRequests[0]?.area.mode === "drawn-area") harness.batchRequests[0].area.bbox.forEach((value, index) => expect(value).toBeCloseTo(drawnBounds[index]!, 4));
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   const firstCard = page.locator(".route-card").first();
   await expect(firstCard.getByRole("button", { name: /Stevens Creek Trailhead.*Canyon Trail 1/ })).toBeVisible();
@@ -47,7 +46,7 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   }, xml);
   expect(exported.errors).toBe(0);
   expect(exported.namespace).toBe("http://www.topografix.com/GPX/1/1");
-  expect(exported.points).toEqual(routeResponse(harness.generationRequests[0]!).exact[0]!.geometry.coordinates);
+  expect(exported.points).toEqual(savedRoutes(harness.batchRequests[0]!).exact[0]!.geometry.coordinates);
   const firstSegment = firstCard.getByRole("button", { name: /1.7 mi.*Canyon Trail 1/i });
   await firstSegment.hover();
   await expect(firstSegment).toHaveClass(/hovered/);
@@ -60,7 +59,6 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByLabel("Quick-search routes")).toHaveValue("10");
   const regionBoundarySwitch = page.getByRole("switch", { name: "Show region boundaries" });
   await expect(regionBoundarySwitch).not.toBeChecked();
   await regionBoundarySwitch.click();
@@ -71,18 +69,13 @@ test("one builder runs Quick and Full search from the drawn boundary", async ({ 
   await expect(page.getByRole("heading", { name: "Results" })).toHaveCount(0);
   await expect(page.locator(".route-pin")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Full search" }).click();
-  const jobs = page.getByRole("dialog", { name: "Jobs" });
-  await expect(jobs).toBeVisible();
-  await expect(jobs.getByText("Drawn boundary")).toBeVisible();
   expect(harness.batchRequests).toHaveLength(1);
-  expect(harness.batchRequests[0]?.area).toEqual(harness.generationRequests[0]?.area);
   expect(harness.batchRequests[0]?.criteria.includeUncertainAccess).toBe(true);
   expect(harness.batchRequests[0]).not.toHaveProperty("packId");
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
-test("drive-time range sends Quick and Full requests with named refinements", async ({ page }) => {
+test("drive-time search preserves named refinements in the saved job", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");
 
@@ -91,16 +84,14 @@ test("drive-time range sends Quick and Full requests with named refinements", as
   await page.getByLabel("Maximum drive time").selectOption("60");
   await selectRegion(page);
   await expect(page.getByRole("button", { name: `Regions: ${SEARCH_REGION.name}` })).toBeVisible();
-  await page.getByRole("button", { name: "Quick search" }).click();
+  await launchAndOpenResults(page);
 
-  await expect.poll(() => harness.generationRequests.length).toBe(1);
+  await expect.poll(() => harness.batchRequests.length).toBe(1);
   expect(harness.calls.some(({ pathname }) => pathname.includes("reachability"))).toBe(false);
-  expect(harness.generationRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], minDurationMinutes: 15, durationMinutes: 60, origin: { label: "Castle Rock, California" } });
+  expect(harness.batchRequests[0]?.area).toMatchObject({ mode: "drive-time", regionIds: [SEARCH_REGION.id], minDurationMinutes: 15, durationMinutes: 60, origin: { label: "Castle Rock, California" } });
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
-  await page.getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "Full search" }).click();
-  await expect(page.getByRole("dialog", { name: "Jobs" })).toBeVisible();
-  expect(harness.batchRequests[0]?.area).toEqual(harness.generationRequests[0]?.area);
+  expect(harness.batchRequests).toHaveLength(1);
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(page.getByText("15–60 min from Castle Rock, California")).toBeVisible();
   expect(harness.blockedExternalRequests).toEqual([]);
 });
@@ -140,7 +131,7 @@ test("native trailhead counts open a filtered list and preserve route numbering"
   await page.goto("/");
   await enterDrawnArea(page);
   const framed = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/map");
-  await page.getByRole("button", { name: "Quick search" }).click();
+  await launchAndOpenResults(page);
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
   await framed;
   await expect(page.locator(".maplibregl-marker")).toHaveCount(0);
@@ -152,7 +143,7 @@ test("native trailhead counts open a filtered list and preserve route numbering"
     (lon! + 180) / 360,
     .5 - Math.log(Math.tan(Math.PI / 4 + lat! * Math.PI / 360)) / (2 * Math.PI),
   ];
-  const response = routeResponse(harness.generationRequests[0]!, 10);
+  const response = savedRoutes(harness.batchRequests[0]!, 10);
   const points = response.exact.flatMap((route) => route.geometry.coordinates.map(mercator));
   const xs = points.map(([x]) => x!), ys = points.map(([, y]) => y!);
   const west = Math.min(...xs), east = Math.max(...xs), north = Math.min(...ys), south = Math.max(...ys);
@@ -213,7 +204,7 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   await expect(jobsButton).toBeFocused();
 
   await enterDrawnArea(page);
-  await page.getByRole("button", { name: "Quick search" }).click();
+  await launchAndOpenResults(page);
   await expect(page.getByRole("heading", { name: "Results" })).toBeVisible();
   const results = page.locator(".results-panel");
   await expect.poll(() => results.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -251,9 +242,9 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
   await expect(page.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
   await page.getByRole("checkbox", { name: "Grade" }).check();
   await enterDrawnArea(page);
-  await page.getByRole("button", { name: "Quick search" }).click();
-  await expect.poll(() => harness.generationRequests.length).toBe(1);
-  expect(harness.generationRequests[0]?.criteria.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
+  await launchAndOpenResults(page);
+  await expect.poll(() => harness.batchRequests.length).toBe(1);
+  expect(harness.batchRequests[0]?.criteria.gradeExperience).toMatchObject({ maximumClimbP90Pct: 13 });
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
@@ -261,11 +252,9 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
 test("one panel preserves the draft and selection while switching map and route detail", async ({ page }) => {
   const harness = await installOfflineHarness(page, { routeCount: 10 });
   await page.goto("/");
-  await page.getByLabel("Routes to find").selectOption("3");
   await enterDrawnArea(page);
-  await page.getByRole("button", { name: "Quick search", exact: true }).click();
+  await launchAndOpenResults(page);
   await expect(page.getByRole("heading", { name: "Exact matches" })).toBeVisible();
-  expect(harness.generationRequests[0]?.limit).toBe(3);
   await expect(page.getByLabel("Distance minimum")).toBeHidden();
   await page.locator(".route-card-select").first().focus();
   await page.keyboard.press("ArrowDown");

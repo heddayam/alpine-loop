@@ -318,13 +318,9 @@ select.control { padding-right: var(--s1); cursor: pointer; }
 .switch-row input { flex: 0 0 auto; width: 1.7rem; height: .95rem; margin: 0; accent-color: var(--accent); }
 
 .builder-action-footer { padding: var(--s4); background: var(--chrome); border-top: 1px solid var(--line-2); }
-.search-count { display: flex; gap: var(--s2); align-items: center; margin-bottom: var(--s3); font-size: var(--fs-xs); }
-.search-count label { font-weight: 600; }
-.search-count select { width: 4.5rem; margin-left: auto; }
-.search-count > span { color: var(--ink-2); }
-.builder-action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.builder-action-buttons { display: grid; }
 .builder-action-buttons .btn { min-height: 2rem; font-size: var(--fs-md); }
-.action-legend { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); margin-top: var(--s1); color: var(--ink-3); font-size: 10px; text-align: center; }
+.action-legend { margin-top: var(--s1); color: var(--ink-3); font-size: 10px; text-align: center; }
 .validation-errors { margin-bottom: var(--s2); padding: var(--s2); color: var(--danger); background: var(--danger-soft); border-radius: var(--radius); font-size: var(--fs-xs); }
 .validation-errors ul { margin: var(--s1) 0 0; padding-left: 1rem; }
 .generation-status { margin-top: var(--s2); color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.35; }
@@ -684,10 +680,6 @@ details.result-section[open] > summary::before { content: "▾"; }
 .viewed-search-context { padding: var(--s3) var(--s4); color: var(--ink-2); background: var(--chrome); border-bottom: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.5; }
 .map-data-error { position: absolute; bottom: 30px; left: 16px; background: white; padding: 6px 10px; font-size: 12px; z-index: 2; }
 
-.count-field { display: grid; grid-template-columns: minmax(0, 1fr) 4rem; gap: var(--s1) var(--s3); align-items: center; font-size: var(--fs-sm); }
-.count-field > label { font-weight: 600; }
-.count-field input { grid-row: 1 / span 2; grid-column: 2; width: 100%; height: var(--ctl); padding: 0 var(--s2); border: 1px solid var(--line-2); border-radius: var(--radius); }
-.count-field small { grid-column: 1; color: var(--ink-3); font-size: var(--fs-xs); }
 .detail-back { margin: 0; }
 .route-detail-view > .route-card { margin: var(--s3) var(--s4); }
 .route-match-label { white-space: nowrap; color: var(--accent); font-size: var(--fs-xs); font-weight: 700; }
