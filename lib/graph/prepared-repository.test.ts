@@ -122,7 +122,7 @@ test("solver exact routes are unchanged; a missing section cannot borrow its cyc
   const { mono, artifacts, open } = fixture();
   const solver = new ReachableGraphClosedRouteSolver({ pack: GRAPH_FIXTURE_IDENTITY });
   const request = {
-    distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, searchEffort: "quick" as const, limit: 1,
+    distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, limit: 1,
     closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
   };
   const solve = (repository: PreparedGraphRepository | SQLiteGraphRepository, coverage = full) => solver.generate(request, {
@@ -283,4 +283,20 @@ test("candidate batching falls back from an ineligible first departure and valid
   corrupt.exec("PRAGMA foreign_keys=OFF; UPDATE edges SET physical_edge_key=-1 WHERE id='s-a'");
   corrupt.close();
   await expect(open([{ path: prepared, geometry: full }]).getAccessPointCandidates(candidates)).rejects.toThrow("physical_edge_key");
+});
+
+
+test("bounded adjacency pages continue past a full batch of ineligible edges", async () => {
+  const { prepared, open } = fixture();
+  const database = new DatabaseSync(prepared);
+  database.exec("UPDATE edges SET access_state='private'");
+  const columns = database.prepare("PRAGMA table_info(edges)").all().map(row => String(row.name));
+  const values = columns.map(column => column === "id" || column === "edge_key" ? "?" : column).join(",");
+  const insert = database.prepare(`INSERT INTO edges (${columns.join(",")}) SELECT ${values} FROM edges WHERE id='s-a'`);
+  for (let index = 0; index < 300; index++) insert.run(`x${String(index).padStart(3, "0")}`, index + 100);
+  database.exec("UPDATE edges SET access_state='public' WHERE id='x299'");
+  database.close();
+  const result = await open([{ path: prepared, geometry: full }]).getReachableGraph(query);
+  expect(result.truncated).toBe(false);
+  expect(result.graph.edges.map(edge => edge.id)).toEqual(["x299"]);
 });

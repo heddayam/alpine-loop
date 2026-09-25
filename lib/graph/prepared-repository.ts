@@ -13,7 +13,7 @@ export type PreparedGraphDescriptor = {
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
 const MAXIMUM_CONNECTIONS = 8;
 const BATCH_SIZE = 256;
-const MAXIMUM_STATEMENTS_PER_CONNECTION = 6;
+const MAXIMUM_STATEMENTS_PER_CONNECTION = 7;
 const EDGE_COLUMNS = ["id", "edge_key", "physical_edge_key", "from_node", "to_node", "geometry", "length_m", "gain_m", "loss_m",
   "max_elevation_m", "max_sustained_grade_pct", "elevation_profile", "access_state", "edge_class", "source_refs", "flags"] as const;
 const FIRST_DEPARTURE_COLUMNS = EDGE_COLUMNS.map(column => `departure.${column} AS departure_${column}`).join(", ");
@@ -94,7 +94,7 @@ export class PreparedGraphRepository implements GraphRepository {
     return database;
   }
 
-  /** Fixed SQL only, at most six cached statements per live connection. */
+  /** Fixed SQL only, at most seven cached statements per live connection. */
   #statement(path: string, sql: string): StatementSync {
     const database = this.#database(path);
     let statements = this.#statements.get(database);
@@ -264,17 +264,25 @@ export class PreparedGraphRepository implements GraphRepository {
       const node = nodes.get(current.nodeId)!;
       const adjacency = new Map<string, GraphEdge>();
       for (const artifact of this.#at([node.lon, node.lat])) {
-        const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ? ORDER BY id").iterate(node.id);
-        let eligibleInArtifact = 0;
-        for (const row of rows) {
-          assertNotAborted(query.signal);
-          const edge = parseEdge(row);
-          if (!edgeIsTraversable(edge, query.includeUncertainAccess)
-            || current.distance + edge.lengthMeters > query.maximumDistanceMeters
-            || !lineIsInsideArea(edge.coordinates, this.#coverage)
-            || (!sameCoverage && !lineIsInsideArea(edge.coordinates, query.coverage))) continue;
-          insertConsistent(adjacency, edge.id, edge);
-          if (++eligibleInArtifact > query.maximumDirectedEdges) break;
+        let after = "", eligibleInArtifact = 0;
+        batches: while (true) {
+          // One native call handles ordinary low-degree nodes; large adjacency
+          // lists retain bounded memory and the same BINARY ordering.
+          const rows = after === ""
+            ? this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ? ORDER BY id LIMIT 256").all(node.id) as SqliteRow[]
+            : this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ? AND id > ? ORDER BY id LIMIT 256").all(node.id, after) as SqliteRow[];
+          for (const row of rows) {
+            assertNotAborted(query.signal);
+            const edge = parseEdge(row);
+            if (!edgeIsTraversable(edge, query.includeUncertainAccess)
+              || current.distance + edge.lengthMeters > query.maximumDistanceMeters
+              || !lineIsInsideArea(edge.coordinates, this.#coverage)
+              || (!sameCoverage && !lineIsInsideArea(edge.coordinates, query.coverage))) continue;
+            insertConsistent(adjacency, edge.id, edge);
+            if (++eligibleInArtifact > query.maximumDirectedEdges) break batches;
+          }
+          if (rows.length < BATCH_SIZE) break;
+          after = String(rows.at(-1)!.id);
         }
         if (adjacency.size > query.maximumDirectedEdges + 1) {
           const keep = [...adjacency.keys()].sort(compareIds).slice(0, query.maximumDirectedEdges + 1);
