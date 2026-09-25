@@ -13,7 +13,7 @@ it("downloads selected sections directly without a preview request", async () =>
   vi.stubGlobal("fetch", fetcher);
   render(<CoveragePanel {...props} />);
   expect(await screen.findByText("1 section selected · 256 KiB")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Download", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Download" }));
   await screen.findByRole("button", { name: "Pause" });
   expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) }));
   expect(fetcher.mock.calls.some(([url]) => url.endsWith("/plan"))).toBe(false);
@@ -23,9 +23,9 @@ it("shows a disk-space failure from the direct download request", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/jobs")
     ? { ok: false, json: async () => ({error:"Not enough disk space"}) } : response(catalog)));
   render(<CoveragePanel {...props} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Download", exact: true }));
+  fireEvent.click(await screen.findByRole("button", { name: "Download" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Not enough disk space");
-  expect(screen.getByRole("button", { name: "Download", exact: true })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
 });
 
 it("resumes downloads and refreshes search only after atomic activation", async () => {
