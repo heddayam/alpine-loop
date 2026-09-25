@@ -105,7 +105,7 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-One CLI handles `build`, `inspect`, and `export`. Recipes specify intended
+One CLI handles `build`, `inspect`, `export`, and `status`. Recipes specify intended
 coverage, pinned sources, exclusions, and resource settings. Interrupted builds
 resume verified staging and metric caches. Reuse one `ALPINE_SOURCE_CACHE` across
 recipes; developer inventories and staging can occupy tens of GB. Retire
@@ -114,9 +114,17 @@ complete graph and source inventory pass audit.
 
 ```sh
 npm run data -- build data/coverage/recipes/cascades.json
+# In another terminal:
+npm run data -- status --watch
 npm run data -- inspect .local-data/releases/prepared/release.json
 npm run data -- export /absolute/path/export-options.json
 ```
+
+Build status is saved in `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
+`status` prints one snapshot; `status --watch` refreshes every five seconds.
+An explicit report path can be supplied with `status /path/to/report.json --watch`.
+The display includes the phase, elapsed time, prepared section count, and report
+age. A stale report is not a live heartbeat; Ctrl+C stops the viewer only.
 
 Native builds need `osmium-tool`, `uv`, and the locked DEM environment:
 

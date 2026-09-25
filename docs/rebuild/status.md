@@ -46,6 +46,10 @@ Cascades/Olympics release using the existing normalized inventory and metric
 cache. Current benchmark coverage and saved results remain active until a
 replacement is verified. Per user instruction, validation uses small offline
 tests and targeted checks; no repeated regional builds are run as tests.
+`npm run data -- status --watch` now reads the active report through the local
+`.cache/build/status.json` link. Future CLI builds persist their own status there
+(or under `ALPINE_COVERAGE_ROOT`), including failure and pause state. Two tiny
+status-format tests, lint, and type checking pass.
 
 
 This revision supersedes app-driven progressive compilation below. Users select
