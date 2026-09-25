@@ -17,7 +17,7 @@ try {
     let result:unknown;
     if(command==="build") {
       const controller=new AbortController(), started=Date.now();
-      const progress:Parameters<typeof formatBuildStatus>[0]={status:"running",currentStage:"Starting",elapsedMs:0,completedUnits:0};
+      const progress:Parameters<typeof formatBuildStatus>[0]={status:"running",currentStage:"Starting",elapsedMs:0,completedUnits:0,currentStageStartedMs:0,stageTimings:[]};
       let saved=0;
       const save=async()=>{saved=Date.now();progress.elapsedMs=saved-started;await writeJsonAtomically(statusFile,progress);};
       const stop=()=>controller.abort(); process.once("SIGINT",stop); process.once("SIGTERM",stop);
@@ -27,7 +27,11 @@ try {
           signal:controller.signal,
           checkpoint:async()=>{if(Date.now()-saved>=5000) await save();return "continue";},
           report:async update=>{
-            progress.currentStage=update.stage ?? progress.currentStage;
+            if(update.stage && update.stage!==progress.currentStage) {
+              const at=Date.now()-started;
+              progress.stageTimings!.push({stage:progress.currentStage,elapsedMs:progress.currentStageStartedMs!,durationMs:at-progress.currentStageStartedMs!});
+              progress.currentStageStartedMs=at;progress.currentStage=update.stage;
+            }
             progress.completedUnits=update.completedUnits ?? progress.completedUnits;
             if(update.units) progress.totalUnits=update.units.filter(unit=>unit.status!=="unavailable").length;
             process.stderr.write(`${progress.currentStage}\n`);await save();

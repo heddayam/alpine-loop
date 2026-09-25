@@ -2,14 +2,14 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 
 /** Reports are atomic snapshots; old output must not masquerade as a heartbeat. */
-export function formatBuildStatus(report: { status: string; currentStage: string; elapsedMs: number; completedUnits: number; totalUnits?: number; error?: string; peakMeasuredMemoryBytes?: number; stageTimings?: {stage:string;elapsedMs:number;durationMs:number}[] }, updatedAt: number, now = Date.now()) {
+export function formatBuildStatus(report: { status: string; currentStage: string; elapsedMs: number; completedUnits: number; totalUnits?: number; error?: string; peakMeasuredMemoryBytes?: number; currentStageStartedMs?: number; stageTimings?: {stage:string;elapsedMs:number;durationMs:number}[] }, updatedAt: number, now = Date.now()) {
   const age = Math.max(0, now - updatedAt);
   const duration = (ms: number) => `${Math.floor(ms / 60000)}m ${Math.floor(ms / 1000) % 60}s`;
   const total=report.totalUnits, remaining=total === undefined ? undefined : Math.max(0,total-report.completedUnits);
   const history=report.stageTimings ?? [];
   const preparing=/^(Preparing installation unit|Prepared q-)/.test(report.currentStage);
   const completedAt=history.filter(item=>/^Prepared q-/.test(item.stage)).map(item=>item.elapsedMs);
-  if(/^Prepared q-/.test(report.currentStage)) completedAt.push(report.elapsedMs);
+  if(/^Prepared q-/.test(report.currentStage)) completedAt.push(report.currentStageStartedMs ?? report.elapsedMs);
   const rates=completedAt.slice(1).map((time,index)=>time-completedAt[index]!).slice(-12).sort((a,b)=>a-b);
   const estimate=preparing && remaining && rates.length>=5 && age<=Math.max(60000,rates.at(-1)!)*2
     ? `Section ETA at recent rate: ~${duration(rates[Math.floor(rates.length*.25)]!*remaining)}–${duration(rates[Math.floor(rates.length*.9)]!*remaining)} (rough; finalization excluded)`
