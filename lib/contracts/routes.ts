@@ -47,7 +47,6 @@ export const closedRouteTopologyPreferenceV3Schema = z.object({
   allowMultiCycle: z.boolean(),
 }).strict();
 
-export const searchEffortV3Schema = z.enum(["quick", "thorough"]);
 
 export const GRADE_WINDOW_METERS = 100;
 export const STEEP_GRADE_THRESHOLD_PCT = 10;
@@ -190,7 +189,6 @@ export const constraintViolationV3Schema = constraintViolationSchema.extend({
 }).strict();
 
 export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopologyPreferenceV3Schema>;
-export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
 export type GradeExperienceConstraints = z.infer<typeof gradeExperienceConstraintsSchema>;
 export type GradeExperienceMetrics = z.infer<typeof gradeExperienceMetricsSchema>;
 export type TrailSegmentCondition = z.infer<typeof trailSegmentConditionSchema>;

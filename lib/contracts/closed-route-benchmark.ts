@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isoDateSchema } from "./common";
-import { closedRouteTopologyV3Schema, searchEffortV3Schema } from "./routes";
+import { closedRouteTopologyV3Schema } from "./routes";
 
 export const closedRouteBenchmarkEngineSchema = z.enum([
   "gate4-separated-lanes",
@@ -28,7 +28,7 @@ export const closedRouteBenchmarkOutputSchema = z.object({
   formatVersion: z.literal(1),
   generatedAt: isoDateSchema,
   engine: closedRouteBenchmarkEngineSchema,
-  effort: searchEffortV3Schema.or(z.literal("oracle-60s")),
+  effort: z.enum(["full", "oracle-60s"]),
   deadlineMs: z.number().int().positive(),
   pack: z.object({
     id: z.string().min(1),
