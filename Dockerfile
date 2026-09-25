@@ -6,7 +6,11 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 
-FROM dependencies AS packs
+FROM dependencies AS production-dependencies
+RUN npm prune --omit=dev
+
+
+FROM dependencies AS developer
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /usr/local/bin/uv
 # Rasterio's pinned release builds from source on Linux ARM64.
@@ -30,7 +34,7 @@ RUN rm -rf /tmp/uv-cache \
     && mkdir -p .local-data/runtime && chown node:node .local-data/runtime
 
 ENTRYPOINT ["node", "--import", "tsx"]
-CMD ["scripts/manage-packs.ts", "list"]
+CMD ["scripts/data.ts"]
 
 
 FROM node:24.11.0-bookworm-slim AS build
@@ -54,27 +58,23 @@ ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     PORT=3000
 
-RUN apt-get update && apt-get install -y --no-install-recommends osmium-tool libgdal32 ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=packs /usr/local/bin/uv /usr/local/bin/uv
-COPY --from=packs /opt/dem /opt/dem
-COPY --from=packs /opt/python /opt/python
-ENV UV_PROJECT_ENVIRONMENT=/opt/dem \
-    UV_PYTHON_INSTALL_DIR=/opt/python \
-    UV_NO_SYNC=1
-
-COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
-COPY --from=build --chown=node:node /app/data ./data
 COPY --from=build --chown=node:node /app/lib ./lib
-COPY --from=build --chown=node:node /app/scripts ./scripts
-COPY --from=build --chown=node:node /app/tools/dem ./tools/dem
+COPY --from=build --chown=node:node /app/scripts/coverage-download-worker.ts ./scripts/coverage-download-worker.ts
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json /app/tsconfig.json ./
 
-RUN mkdir -p .local-data/packs .local-data/runtime .local-data/coverage .cache/sources \
-    && chown -R node:node .local-data .cache
+# Only the shared metric and wilderness policies are needed by search workers.
+RUN cp lib/data/metrics.ts lib/data/wilderness.ts /tmp/ \
+    && rm -rf lib/data lib/coverage lib/coverage-jobs lib/packs lib/server/__fixtures__ \
+    && rm -f lib/graph/test-helpers.ts lib/graph/sqlite-repository.ts lib/graph/sqlite-closed-route-feasibility-repository.ts \
+    && mkdir lib/data \
+    && mv /tmp/metrics.ts /tmp/wilderness.ts lib/data/ \
+    && find lib -name '*.test.*' -delete \
+    && mkdir -p .local-data/runtime .local-data/coverage \
+    && chown -R node:node .local-data
 
 USER node
 
