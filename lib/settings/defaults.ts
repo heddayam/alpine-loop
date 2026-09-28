@@ -10,7 +10,6 @@ export const DEFAULT_APP_SETTINGS: AppSettingsV1 = {
     maximumRepeatedTrailPct: 35,
     sharedApproachEnabled: false,
     maximumSharedApproachMiles: 2,
-    allowMultiCycle: true,
   },
   gradePresets: {
     gentle: {

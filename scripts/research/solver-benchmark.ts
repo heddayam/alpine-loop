@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { PackManifest, GeneratedClosedRouteV3 } from "../../lib/contracts";
 import type { EdgeTraversal } from "../../lib/graph";
 import type { ResolvedAccessFilterContext, RouteSearchRequest, RouteSearchResult } from "../../lib/solver";
-import type { PenalizedClosedRouteCandidate, PenalizedClosedRouteSearchResult } from "../../lib/solver/penalized-closed-route-search";
+import type { SimpleRouteCandidate, SimpleRouteSearchResult } from "../../lib/solver/simple-route-search";
 import { fixtureCases, request, type BenchmarkCase } from "./solver-benchmark-cases";
 
 const argument = (name: string, fallback: string): string =>
@@ -48,7 +48,7 @@ const casePattern = new RegExp(argument("case", ".*"));
 const dataRoot = resolve(argument("data-root", join(ownRoot, ".local-data")));
 const output = argument("output", "");
 const moduleUrl = (path: string): string => pathToFileURL(join(solverRoot, path)).href;
-const { searchPenalizedClosedRoutes } = await import(moduleUrl("lib/solver/penalized-closed-route-search.ts")) as typeof import("../../lib/solver/penalized-closed-route-search");
+const { searchSimpleRoutes } = await import(moduleUrl("lib/solver/simple-route-search.ts")) as typeof import("../../lib/solver/simple-route-search");
 const { ReachableGraphClosedRouteSolver } = await import(moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")) as typeof import("../../lib/solver/reachable-graph-closed-route-solver");
 const { CLOSED_ROUTE_BUDGET } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
 const { distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
@@ -73,7 +73,7 @@ const median = (values: number[]): number => {
 };
 const mean = (values: number[]): number | null => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 
-function summarizeRoute(route: PenalizedClosedRouteCandidate | GeneratedClosedRouteV3, target: RouteSearchRequest) {
+function summarizeRoute(route: SimpleRouteCandidate | GeneratedClosedRouteV3, target: RouteSearchRequest) {
   const raw = "traversals" in route;
   const fingerprint = hash(raw ? route.traversals.map(({ edge }) => edge.edgeKey ?? edge.id) : route.geometry);
   const center = (target.distanceMiles.min + target.distanceMiles.max) * 1609.344 / 2;
@@ -88,7 +88,7 @@ function summarizeRoute(route: PenalizedClosedRouteCandidate | GeneratedClosedRo
   };
 }
 
-function summarize(result: PenalizedClosedRouteSearchResult | RouteSearchResult, target: RouteSearchRequest) {
+function summarize(result: SimpleRouteSearchResult | RouteSearchResult, target: RouteSearchRequest) {
   const exact = ("candidates" in result ? result.candidates : result.exact).map((route) => summarizeRoute(route, target));
   const near = ("nearCandidates" in result ? result.nearCandidates : result.nearMisses).map((route) => summarizeRoute(route, target));
   const diagnostics = stableDiagnostics(result.diagnostics);
@@ -105,7 +105,7 @@ function summarize(result: PenalizedClosedRouteSearchResult | RouteSearchResult,
   };
 }
 
-async function measure(id: string, target: RouteSearchRequest, run: () => Promise<RouteSearchResult> | PenalizedClosedRouteSearchResult) {
+async function measure(id: string, target: RouteSearchRequest, run: () => Promise<RouteSearchResult> | SimpleRouteSearchResult) {
   for (let index = 0; index < warmup; index += 1) await run();
   const samples = [];
   for (let index = 0; index < repeats; index += 1) {
@@ -139,7 +139,7 @@ async function runCase(item: PreparedCase) {
     target, budget, dataVersion: item.manifest.dataVersion, accessFilter: item.accessFilter });
   const runs = [];
   if (layer !== "pipeline") runs.push(await measure(`${item.id}/raw`, target,
-    () => searchPenalizedClosedRoutes(item.graph, item.start, target, { budget, now })));
+    () => searchSimpleRoutes(item.graph, item.start, target, { budget, now })));
   if (layer !== "raw") {
     const solver = new ReachableGraphClosedRouteSolver({ pack: item.manifest });
     runs.push(await measure(`${item.id}/pipeline`, target, () => solver.generate(target, {
@@ -199,7 +199,7 @@ try {
         const target = request({ ...(expectation ?? (kind === "exact"
           ? { distanceMiles: { min: 4, max: 10 }, elevationGainFeet: { min: 500, max: 3500 } }
           : { distanceMiles: { min: 1, max: 2 }, elevationGainFeet: { min: 8000, max: 9000 } })),
-        closedRoute: { maximumRepeatedTrailPct: scenario?.maximumRepeatedTrailPct ?? 35, allowMultiCycle: true } });
+        closedRoute: { maximumRepeatedTrailPct: scenario?.maximumRepeatedTrailPct ?? 35 } });
         const { graph, truncated } = await repository.getReachableGraph({ startNodeId: start.nodeId,
           maximumDistanceMeters: target.distanceMiles.max * 1609.344, maximumDirectedEdges: budget.maximumDirectedEdges,
           includeUncertainAccess: true, coverage: manifest.coverage.boundary });

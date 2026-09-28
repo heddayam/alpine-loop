@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { searchAreaSchema, searchIntentSchema } from "./search";
 
 const criteria = {
-  closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+  closedRoute: { maximumRepeatedTrailPct: 35 },
   distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true,
 };
 const area = { mode: "named-regions", regionIds: ["opaque-region"] };

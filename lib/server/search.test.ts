@@ -19,7 +19,7 @@ const signal = () => new AbortController().signal;
 const request: SearchIntent = {
   area: { mode: "drawn-area", bbox: [-122.1601, 37.1599, -122.1599, 37.1601] },
   criteria: {
-    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 35 },
     distanceMiles: { min: 0.1, max: 20 }, includeUncertainAccess: true,
   },
 };

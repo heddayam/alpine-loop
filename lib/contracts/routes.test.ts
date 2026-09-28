@@ -17,13 +17,15 @@ describe("drive-time durations", () => {
 const criteria = {
   closedRoute: {
     maximumRepeatedTrailPct: 35,
-    allowMultiCycle: true,
   },
   distanceMiles: { min: 2, max: 5 },
   includeUncertainAccess: true,
 };
 
 describe("route criteria", () => {
+  it("reads legacy multi-cycle requests without re-enabling the retired policy", () => {
+    expect(routeCriteriaSchema.parse({ ...criteria, closedRoute: { ...criteria.closedRoute, allowMultiCycle: true } })).toEqual(criteria);
+  });
   it("accepts the closed-route defaults materialized by the client", () => {
     expect(routeCriteriaSchema.parse(criteria)).toEqual(criteria);
   });

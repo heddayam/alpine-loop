@@ -35,7 +35,7 @@ const metadata = new Map(metadataDatabase.prepare("SELECT key,value FROM metadat
 metadataDatabase.close();
 const criteria: RouteCriteria = input.criteria ?? {
   distanceMiles: { min: 3, max: 15 }, includeUncertainAccess: true,
-  closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+  closedRoute: { maximumRepeatedTrailPct: 35 },
 };
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value ?? null, (_key, item) =>
   item && typeof item === "object" && !Array.isArray(item)

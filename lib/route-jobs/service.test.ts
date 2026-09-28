@@ -15,7 +15,7 @@ afterEach(() => { vi.unstubAllEnvs(); temporary.splice(0).forEach((path) => rmSy
 
 const request: SearchIntent = {
   area: { mode: "drive-time", origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30, regionIds: ["fixture-pack::pack:fixture-pack"] },
-  criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true },
+  criteria: { closedRoute: { maximumRepeatedTrailPct: 35 }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true },
 };
 const regionWideRequest: SearchIntent = {
   area: { mode: "named-regions", regionIds: ["fixture-pack::pack:fixture-pack"] }, criteria: request.criteria,

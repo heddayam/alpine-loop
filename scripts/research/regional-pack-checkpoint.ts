@@ -92,7 +92,6 @@ function buildRequest(
     startAccessPointId,
     closedRoute: {
       maximumRepeatedTrailPct: scenario.maximumRepeatedTrailPct ?? 35,
-      allowMultiCycle: true,
     },
     distanceMiles: expectation.distanceMiles,
     elevationGainFeet: expectation.elevationGainFeet,

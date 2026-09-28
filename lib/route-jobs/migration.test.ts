@@ -11,7 +11,7 @@ const temporary: string[] = [];
 afterEach(() => temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
 const timestamp = "2026-01-01T00:00:00.000Z";
 const completedAt = "2026-01-01T00:01:00.000Z";
-const criteria = { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true };
+const criteria = { closedRoute: { maximumRepeatedTrailPct: 35 }, distanceMiles: { min: 4, max: 8 }, includeUncertainAccess: true };
 const contour = { type: "Polygon", coordinates: [[[-123, 37], [-122, 37], [-122, 38], [-123, 38], [-123, 37]]] };
 const jobId = (suffix: number) => `00000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`;
 

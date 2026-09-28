@@ -16,7 +16,7 @@ describe("AppSettingsV1", () => {
       showRegionBoundaries: false,
       gradeConstraintEnabled: false,
       selectedGradePreset: "moderate",
-      loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2, allowMultiCycle: true },
+      loopOptions: { maximumRepeatedTrailPct: 35, sharedApproachEnabled: false, maximumSharedApproachMiles: 2 },
       gradePresets: { gentle: preset, moderate: preset, steep: preset },
     }).success).toBe(true);
   });

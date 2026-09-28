@@ -13,7 +13,7 @@ afterEach(() => temporary.splice(0).forEach((path) => rmSync(path, { recursive: 
 const request: SearchIntent = {
   area: { mode: "drive-time", origin: { lon: -122.1, lat: 37.3, label: "Home" }, durationMinutes: 30, regionIds: ["fixture-pack::pack:fixture-pack"] },
   criteria: {
-    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 35 },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
   },

@@ -12,7 +12,7 @@ import type { RouteSolverWorkerInput } from "./route-solver-protocol";
 const request: SearchIntent = {
   area: { mode: "drawn-area", bbox: [-123, 37, -122, 38] },
   criteria: {
-    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 35 },
     distanceMiles: { min: 4, max: 8 },
     includeUncertainAccess: true,
   },
