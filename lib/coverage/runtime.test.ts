@@ -13,7 +13,9 @@ import { CoverageSourceStore } from "./source-store";
 import { areaBounds } from "@/lib/graph/geometry";
 import { PreparedGraphRepository } from "@/lib/graph/prepared-repository";
 import { rectangle } from "./geometry";
-import { plan, run } from "./runtime";
+import { discoverNetworks, buildNetworks } from "./runtime";
+import { NetworkInventory } from "./networks";
+import type { SourceRecipe } from "./recipe";
 
 vi.mock("@/lib/data/progressive/topology", async original => { const actual=await original<typeof import("@/lib/data/progressive/topology")>();return {...actual,writeProgressiveTopology:vi.fn(actual.writeProgressiveTopology)}; });
 const algorithms=vi.hoisted(()=>({metricVersion:undefined as string|undefined}));
@@ -23,11 +25,6 @@ vi.mock("@/lib/data/elevation/uv-rasterio-sampler",async importOriginal=>{
 });
 vi.mock("@/lib/data/osm/source", async (importOriginal) => ({...await importOriginal<typeof import("@/lib/data/osm/source")>(), readOsmSourceConfig: vi.fn(), inspectPinnedOsmSnapshot: vi.fn(), readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}) }));
-vi.mock("./collections", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./collections")>(), coverageExclusions: async () => [],
-  legacyRegionIds: [], collections: vi.fn(async () => []),
-  coverageSources: async () => [{ config: { id: "fixture", dataset: "Offline fixture", expectedByteLength: 100 }, geometry: { type: "Polygon", coordinates: [[[-122,47],[-121,47],[-121,49],[-122,49],[-122,47]]] } }],
-}));
 const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", dataset: "Synthetic progressive loop", version: "1", retrievedAt: "2026-09-24T00:00:00Z", url: "https://example.invalid/progressive", license: "CC0-1.0", contentHash: `sha256:${"1".repeat(64)}`, localPath: path.resolve("data/fixtures/source/osm/progressive.opl") };
 let root: string;
 let fixtureLines: string[];
@@ -55,7 +52,12 @@ beforeEach(async () => {
 });
 afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 const context = (): CoverageRunnerContext => ({ signal: new AbortController().signal, checkpoint: async () => "continue", report: async () => {} });
-const request = (west: number, east: number) => plan({ collectionIds: [], geometry: rectangle([west,47.50,east,47.55]), memoryLimitMiB: 4096, offline: true });
+const recipe = (): SourceRecipe => ({schemaVersion:1,sources:[{config:{schemaVersion:1,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry:rectangle([-122,47,-121,49]),sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]});
+async function build(which: "first" | "all" = "first", ctx = context(), input = recipe()) {
+  const {catalogPath,catalog}=await discoverNetworks(input,context());
+  const networks=[...catalog.networks].sort((a,b)=>areaBounds(a.geometry)[0]-areaBounds(b.geometry)[0]);
+  return buildNetworks(catalogPath,(which==="all"?networks:networks.slice(0,1)).map(network=>network.id),ctx);
+}
 async function release(): Promise<DataRelease> {return JSON.parse(await readFile(path.join(root,"release/release.json"),"utf8"));}
 async function pieces() {
   const result=[];
@@ -74,8 +76,8 @@ async function pieces() {
   }
   return result;
 }
-it("exports a complete network selected by one end, without geographic edge duplication",async()=>{
-  await run(await request(-121.261,-121.259),context());
+it("exports only an explicitly selected complete network, without edge duplication",async()=>{
+  await build();
   const result=await release();
   expect(result.partitioning).toBe("connected-networks");
   expect(result.sections).toHaveLength(1);
@@ -91,11 +93,11 @@ async function expectNoScratch(){expect((await readdir(path.join(root,"stage")))
 it("adding disconnected B reuses A's immutable bytes without elevation or topology work",async()=>{
   const {elevationFor}=await import("./elevation");
   const {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
-  await run(await request(-121.27,-121.23),context());
+  await build();
   const first=await release(), artifact=first.artifacts[0]!;
   const modified=(await stat(path.join(root,"release",artifact.path))).mtimeMs;
   vi.mocked(elevationFor).mockClear();vi.mocked(writeProgressiveTopology).mockClear();
-  await run(await request(-121.27,-121.08),context());
+  await build("all");
   const second=await release();
   expect(second.sections).toHaveLength(2);
   expect(second.artifacts.find(item=>item.id===artifact.id)).toEqual(artifact);
@@ -107,49 +109,51 @@ it("adding disconnected B reuses A's immutable bytes without elevation or topolo
   expect(new Set(all.map(edge=>edge.id)).size).toBe(12);
 });
 
-it("changing the selection within a network preserves catalog and artifact identity",async()=>{
-  await run(await request(-121.27,-121.23),context());const first=await release();
-  await run(await request(-121.261,-121.259),context());expect(await release()).toEqual(first);
+it("rebuilding an explicit network ID preserves catalog and artifact identity",async()=>{
+  await build();const first=await release();
+  await build();expect(await release()).toEqual(first);
 });
 
 it("resumes after one completed network and leaves the previous catalog untouched",async()=>{
-  await run(await request(-121.27,-121.23),context());const prior=await readFile(path.join(root,"release/release.json"),"utf8");
+  await build();const prior=await readFile(path.join(root,"release/release.json"),"utf8");
   const paused=context();paused.report=async update=>{if(update.stage?.startsWith("Prepared "))throw new Error("paused after network");};
-  await expect(run(await request(-121.27,-121.08),paused)).rejects.toThrow("paused after network");
+  await expect(build("all",paused)).rejects.toThrow("paused after network");
   expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(prior);
   await expectNoScratch();
   const {elevationFor}=await import("./elevation"),{writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
   vi.mocked(elevationFor).mockClear();vi.mocked(writeProgressiveTopology).mockClear();
-  await run(await request(-121.27,-121.08),context());
+  await build("all");
   expect(elevationFor).not.toHaveBeenCalled();expect(writeProgressiveTopology).not.toHaveBeenCalled();
   expect((await release()).sections).toHaveLength(2);
 });
 
-it("reports an empty selection without creating empty artifacts or replacing a catalog",async()=>{
-  await run(await request(-121.27,-121.23),context());const first=await release();
-  const {elevationFor}=await import("./elevation");vi.mocked(elevationFor).mockClear();
-  const result=await run(await request(-121.8,-121.7),context());
-  expect(result).toMatchObject({snapshot:null,completedUnits:0,units:[]});
-  expect(await release()).toEqual(first);expect(elevationFor).not.toHaveBeenCalled();
+it("rejects empty, duplicate and unknown IDs before preparation or replacing a catalog",async()=>{
+  await build(); const first=await release();
+  const {catalogPath,catalog}=await discoverNetworks(recipe(),context());
+  const {elevationFor}=await import("./elevation"); vi.mocked(elevationFor).mockClear();
+  const verify=vi.spyOn(CoverageSourceStore.prototype,"import"); verify.mockClear();
+  for(const ids of [[],[catalog.networks[0]!.id,catalog.networks[0]!.id],["network-"+"0".repeat(32)]])
+    await expect(buildNetworks(catalogPath,ids,context())).rejects.toThrow(/unique|Unknown/);
+  expect(await release()).toEqual(first); expect(elevationFor).not.toHaveBeenCalled(); expect(verify).not.toHaveBeenCalled();
 });
 
 it("rejects corrupt artifact bytes and receipt identity before changing the catalog",async()=>{
-  await run(await request(-121.27,-121.23),context());const first=await release();
+  await build();const first=await release();
   const receiptFile=path.join(root,"stage/networks",(await readdir(path.join(root,"stage/networks")))[0]!);
   const original=await readFile(receiptFile,"utf8"),receipt=JSON.parse(original);
   receipt.release.id="forged-identity";await writeFile(receiptFile,JSON.stringify(receipt));
-  await expect(run(await request(-121.27,-121.23),context())).rejects.toThrow("checkpoint identity");
+  await expect(build()).rejects.toThrow("checkpoint identity");
   await writeFile(receiptFile,original);
   await writeFile(path.join(root,"release",first.artifacts[0]!.path),"corrupt");
-  await expect(run(await request(-121.27,-121.23),context())).rejects.toThrow("checkpoint failed");
+  await expect(build()).rejects.toThrow("checkpoint failed");
   expect(await release()).toEqual(first);await expectNoScratch();
 });
 
 it("invalidates artifacts and metrics when their algorithm changes",async()=>{
-  await run(await request(-121.27,-121.23),context());const before=await release();
+  await build();const before=await release();
   algorithms.metricVersion="changed-metrics-v2";
   const {elevationFor}=await import("./elevation");vi.mocked(elevationFor).mockClear();
-  await run(await request(-121.27,-121.23),context());
+  await build();
   expect((await release()).artifacts[0]!.graphId).not.toBe(before.artifacts[0]!.graphId);
   expect(elevationFor).toHaveBeenCalledOnce();
 });
@@ -164,19 +168,20 @@ it("a changed DEM invalidates only the network using that product",async()=>{
   };
   vi.mocked(describeCanonicalElevation).mockImplementation(async geometry=>descriptor(geometry));
   vi.mocked(elevationFor).mockImplementation(async unit=>({...base,...descriptor(unit.geometry)}));
-  await run(await request(-121.27,-121.08),context());const before=await release();changed=true;
+  await build("all");const before=await release();changed=true;
   vi.mocked(elevationFor).mockClear();
-  await run(await request(-121.27,-121.08),context());const after=await release();
+  await build("all");const after=await release();
   expect(elevationFor).toHaveBeenCalledTimes(1);
   expect(after.artifacts.filter(item=>before.artifacts.some(old=>old.id===item.id))).toHaveLength(1);
 });
 
 it("a newly mapped identity connector replaces two networks with one",async()=>{
-  await run(await request(-121.27,-121.08),context());const before=await release();
+  await build("all");const before=await release();
   const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
   vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,contentHash:`sha256:${"2".repeat(64)}`});
   fixtureLines.push("w301 Thighway=path,foot=yes Nn2,n11");
-  await run(await request(-121.27,-121.08),context());const after=await release();
+  const updated=recipe(); updated.sources[0]!.sha256=`sha256:${"2".repeat(64)}`;
+  await build("all",context(),updated);const after=await release();
   expect(before.sections).toHaveLength(2);expect(after.sections).toHaveLength(1);
   expect(before.sections.some(section=>section.id===after.sections[0]!.id)).toBe(false);
   expect((await pieces())[0]!.edges).toHaveLength(14);
@@ -185,24 +190,23 @@ it("a newly mapped identity connector replaces two networks with one",async()=>{
 
 it("publishes West Cady, Pilchuck, and the formerly cut road approach",async()=>{
   fixtureLines=(await readFile("data/fixtures/source/osm/coverage-regressions.opl","utf8")).trim().split("\n");
-  await run(await plan({collectionIds:[],geometry:rectangle([-121.9,47.8,-121.1,48.2]),memoryLimitMiB:4096,offline:true}),context());
+  await build("all");
   const published=(await pieces()).flatMap(piece=>piece.edges);
   for(const id of [372537133,951045864,951045865,37583693,218617733])expect(published.some(row=>String(row.id).startsWith(`osm-way-${id}:`))).toBe(true);
 },30_000);
 
-it("builds pinned recipes, rejects a mismatched digest, and ignores reviews for other source extracts",async()=>{
-  const {buildRelease}=await import("./recipe");
-  const geometry=rectangle([-121.27,47.5,-121.23,47.55]);
-  const recipe={schemaVersion:1 as const,geometry,sources:[{config:{schemaVersion:1 as const,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry:rectangle([-122,47,-121,49]),sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]};
-  await buildRelease(recipe,context());expect((await release()).sections).toHaveLength(1);
-  await expect(buildRelease({...recipe,sources:[{...recipe.sources[0]!,sha256:`sha256:${"2".repeat(64)}`}]},context())).rejects.toThrow("Pinned source hash differs");
+it("rejects a mismatched source digest and stale restriction inputs",async()=>{
+  const {catalogPath,catalog}=await discoverNetworks({...recipe(),reviewedRegionIds:["missing-fixture-region"]},context());
   const access=await import("@/lib/data/curated-access");
   vi.spyOn(access,"readCuratedAccessFile").mockResolvedValue({snapshot:{...source,id:"review"},restrictions:[{externalId:"way/999",accessState:"closed",reason:"reviewed closure",review:{reviewedAt:source.retrievedAt,reviewer:"fixture"}}]});
-  await expect(run(await request(-121.27,-121.23),context(),{...recipe,reviewedRegionIds:["santa-cruz-mountains"]})).resolves.toMatchObject({status:"completed"});
+  await expect(buildNetworks(catalogPath,[catalog.networks[0]!.id],context())).rejects.toThrow("Discovery inputs changed");
+  const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,contentHash:`sha256:${"2".repeat(64)}`});
+  await expect(buildNetworks(catalogPath,[catalog.networks[0]!.id],context())).rejects.toThrow("Pinned source hash differs");
 });
 
 it("reads independently prepared networks through the installed graph reader",async()=>{
-  await run(await request(-121.27,-121.08),context());
+  await build("all");
   const catalog=await release(),artifacts=[];
   for(const artifact of catalog.artifacts){const file=path.join(root,`${artifact.id}.sqlite`);await writeFile(file,gunzipSync(await readFile(path.join(root,"release",artifact.path))));artifacts.push({path:file,geometry:artifact.geometry,graphId:artifact.graphId});}
   const repository=new PreparedGraphRepository({releaseId:catalog.id,installationId:"test",coverage:catalog.geometry,artifacts});
@@ -217,14 +221,64 @@ it("reads independently prepared networks through the installed graph reader",as
 
 it("retains complete way context at a source boundary while publishing only supported segments",async()=>{
   fixtureLines=["n1 T x-121.26 y47.51","n2 T x-121.24 y47.51","n3 T x-120.9 y47.52","w101 Thighway=path,foot=yes Nn1,n2,n3"];
-  await run(await request(-121.27,-121.23),context());
+  await build();
   expect((await release()).sections[0]!.network?.sourceBoundaryLimited).toBe(true);
   expect((await pieces())[0]!.edges).toHaveLength(2);
 });
 
 it("retains unsupported building context disclosures when reusing a network",async()=>{
   fixtureLines.push("r30 Ttype=multipolygon,building=yes Mw999@outer");
-  await run(await request(-121.27,-121.23),context());const before=await release();
+  await build();const before=await release();
   expect(before.limitations.some(message=>message.includes("1 unsupported building relations"))).toBe(true);
-  await run(await request(-121.27,-121.23),context());expect((await release()).limitations).toEqual(before.limitations);
+  await build();expect((await release()).limitations).toEqual(before.limitations);
+});
+
+it("discovery inventories all networks without elevation, topology or publication and reopens without rediscovery",async()=>{
+  const {elevationFor,describeCanonicalElevation}=await import("./elevation");
+  const {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
+  const scan=vi.spyOn(NetworkInventory.prototype,"discover");
+  const official=vi.spyOn(await import("@/lib/data/official-trails/source"),"readOfficialTrailSourceConfig");
+  const named=vi.spyOn(await import("./named-areas"),"preparedNamedAreas");
+  const first=await discoverNetworks(recipe(),context());
+  expect(first.catalog.networks).toHaveLength(2);
+  expect(official).not.toHaveBeenCalled();expect(named).not.toHaveBeenCalled();
+  expect(first.catalog.networks.every(network=>network.cycleRank===1&&network.lengthMeters>0)).toBe(true);
+  expect(elevationFor).not.toHaveBeenCalled(); expect(describeCanonicalElevation).not.toHaveBeenCalled(); expect(writeProgressiveTopology).not.toHaveBeenCalled();
+  await expect(stat(path.join(root,"release"))).rejects.toMatchObject({code:"ENOENT"});
+  const importer=vi.spyOn(CoverageSourceStore.prototype,"import");importer.mockClear();
+  expect(await discoverNetworks(recipe(),context())).toEqual(first);
+  expect(importer).not.toHaveBeenCalled();expect(scan).toHaveBeenCalledOnce();
+  await buildNetworks(first.catalogPath,[first.catalog.networks[0]!.id],context());
+  expect(scan).toHaveBeenCalledOnce();
+});
+it("rejects tampered catalog metadata and inventory bytes before source or DEM work",async()=>{
+  const {catalogPath,catalog}=await discoverNetworks(recipe(),context());
+  const original=await readFile(catalogPath,"utf8");
+  await writeFile(catalogPath,JSON.stringify({...catalog,networks:[{...catalog.networks[0]!,lengthMeters:0}]}));
+  await expect(buildNetworks(catalogPath,[catalog.networks[0]!.id],context())).rejects.toThrow("identity failed");
+  await writeFile(catalogPath,original);await writeFile(path.join(path.dirname(catalogPath),"inventory.sqlite"),"corrupt");
+  await expect(buildNetworks(catalogPath,[catalog.networks[0]!.id],context())).rejects.toThrow("inventory failed");
+  await expect(discoverNetworks(recipe(),context())).rejects.toThrow("inventory failed");
+});
+it("cancelled discovery removes temporary inventory and never activates partial discovery",async()=>{
+  const cancelled=context();cancelled.report=async update=>{if(update.stage?.startsWith("Discovering"))throw new Error("cancelled");};
+  await expect(discoverNetworks(recipe(),cancelled)).rejects.toThrow("cancelled");
+  expect(await readdir(path.join(root,"stage/discovery"))).toEqual([]);
+  expect((await discoverNetworks(recipe(),context())).catalog.networks).toHaveLength(2);
+});
+
+it("missing persisted inventory fails before restarting an expensive source import",async()=>{
+  const {catalogPath}=await discoverNetworks(recipe(),context());
+  await rm(path.join(path.dirname(catalogPath),"inventory.sqlite"));
+  const importer=vi.spyOn(CoverageSourceStore.prototype,"import");importer.mockClear();
+  await expect(discoverNetworks(recipe(),context())).rejects.toMatchObject({code:"ENOENT"});
+  expect(importer).not.toHaveBeenCalled();
+});
+it("does not silently reuse an embedded recipe with different build settings",async()=>{
+  const first=await discoverNetworks(recipe(),context());
+  const input={...recipe(),limitations:["Reviewed source limitation"],memoryLimitMiB:2048};
+  const second=await discoverNetworks(input,context());
+  expect(second.catalogPath).not.toBe(first.catalogPath);
+  expect(second.catalog.recipe).toEqual(input);
+  expect(second.catalog.networks.map(network=>network.id)).toEqual(first.catalog.networks.map(network=>network.id));
 });

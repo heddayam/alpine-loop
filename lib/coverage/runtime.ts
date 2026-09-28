@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { setImmediate } from "node:timers/promises";
 import { DatabaseSync } from "node:sqlite";
 import { dataReleaseSchema, type DataRelease } from "@/lib/contracts/releases";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
@@ -11,79 +10,56 @@ import { exportPreparedRelease, preparedReleaseId, publishPreparedCatalog } from
 import { writeProgressiveTopology } from "@/lib/data/progressive/topology";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
 import { insertGraph, selectProgressiveEdges } from "@/lib/data/progressive/publish";
-import { readOsmSourceConfig, readPinnedOsmSnapshot, refreshPinnedOsmSnapshot } from "@/lib/data/osm/source";
+import { readOsmSourceConfig } from "@/lib/data/osm/source";
 import { readOfficialTrailSourceConfig, readPinnedOfficialTrailSnapshot, refreshPinnedOfficialTrailSnapshot } from "@/lib/data/official-trails/source";
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { sha256File } from "@/lib/data/file-source";
 import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics";
 import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
-import { applyRestriction, readCuratedAccessFile } from "@/lib/data/curated-access";
+import { applyRestriction } from "@/lib/data/curated-access";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as METRIC_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import { coverageExclusions, coverageSources, legacyRegionIds, connectedCoverageSources } from "./collections";
-import { contentId, subtractCoverage, unionCoverage } from "./geometry";
-import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
+import { contentId, unionCoverage } from "./geometry";
+import { CoverageSourceStore, NORMALIZATION_VERSION } from "./source-store";
 import { elevationCache, elevationFor, describeCanonicalElevation } from "./elevation";
-import { classifyIntendedInventory, reconcileInventory } from "./inventory";
+import { reconcileInventory } from "./inventory";
 import { preparedNamedAreas } from "./named-areas";
-import { CoverageResourceGuard } from "./resources";
 import { auditOfficialTrailReferences, officialSourceEnvelope } from "./references";
 import { NetworkInventory, type TrailNetwork } from "./networks";
-import { COVERAGE_PACK_ID, COVERAGE_BUILD_VERSION as BUILD_VERSION } from "./planning";
-import type { BuildRecipe } from "./recipe";
-import type { CoveragePlan, CoverageRunnerContext, CoverageRunResult, CoverageUnit } from "./types";
-export { COVERAGE_PACK_ID, plan } from "./planning";
-/** Source discovery precedes expensive preparation. Only the final catalog write activates data. */
-export async function run(plan: CoveragePlan, context: CoverageRunnerContext, recipe?: BuildRecipe): Promise<CoverageRunResult> {
-  const root = path.resolve(process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage"), outputRoot = path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared"), cacheRoot = path.resolve(process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
-  await mkdir(root, { recursive: true });
-  await mkdir(outputRoot, { recursive: true });
-  const scratch = await mkdtemp(path.join(root, ".networks-")), raws: CoverageSourceStore[] = [], units: CoverageUnit[] = [];
-  const inventory = new NetworkInventory(path.join(scratch, "inventory.sqlite"));
-  const resources = new CoverageResourceGuard({ memoryLimitBytes: plan.request.memoryLimitMiB * 1024 ** 2, diskPaths: [root, outputRoot] });
-  resources.start();
-  const check = async () => {
-    await setImmediate();
-    await resources.checkpoint();
-    if (context.signal.aborted || await context.checkpoint() !== "continue") {
-      throw new Error("Coverage build interrupted at a checkpoint");
-    }
-  };
-  const report = (stage: string) => context.report({ stage, units, completedUnits: units.filter(unit => unit.status === "prepared" || unit.status === "installed").length });
+import { readNetworkCatalog } from "./discovery-catalog";
+import { preparationSession, discoveryInputs, importDiscoverySources, verifyDiscoveryInventory } from "./discovery";
+import type { CoverageRunnerContext, CoverageRunResult } from "./types";
+export { discoverNetworks } from "./discovery";
+export const COVERAGE_PACK_ID = "local-coverage";
+const BUILD_VERSION = `connected-networks-v1:${NORMALIZATION_VERSION}`;
+
+/** Prepare only explicitly selected immutable discovery identities. */
+export async function buildNetworks(catalogPath: string, networkIds: readonly string[], context: CoverageRunnerContext): Promise<CoverageRunResult> {
+  const catalog = await readNetworkCatalog(catalogPath);
+  if (!networkIds.length || new Set(networkIds).size !== networkIds.length) throw new Error("Select one or more unique network IDs");
+  const selected = new Set(networkIds), networks = catalog.networks.filter(network => selected.has(network.id));
+  if (networks.length !== selected.size) throw new Error("Unknown network ID in build selection");
+  const inventoryFile = await verifyDiscoveryInventory(catalogPath, catalog);
+  const recipe = catalog.recipe, session = await preparationSession(recipe, context, true);
+  const {root, outputRoot, cacheRoot, raws, units, check, report} = session;
+  let scratch: string | undefined, inventory: NetworkInventory | undefined;
   const durable = (source: SourceSnapshot) => { const { localPath, ...value } = source; void localPath; return value; };
-  const references: {
-    snapshot: SourceSnapshot;
-    osmId: string;
-    envelope: readonly [number, number, number, number];
-  }[] = [];
+  const references: { snapshot: SourceSnapshot; osmId: string; envelope: readonly [number, number, number, number] }[] = [];
   try {
-    const candidates = recipe?.sources ?? await coverageSources();
-    const configured = connectedCoverageSources<(typeof candidates)[number]>(plan.geometry, candidates).sort((a,b)=>a.config.id.localeCompare(b.config.id));
-    const exclusions = recipe?.exclusions ?? await coverageExclusions();
-    if (!configured.length) {
-      await report("No eligible networks intersect the selection; previous release is unchanged");
-      return {status:"completed",units,completedUnits:0,snapshot:null};
-    }
-    let supported: CoveragePlan["geometry"] | null = unionCoverage(configured.map(source => source.geometry));
-    for (const exclusion of exclusions)
-      if (supported)
-        supported = subtractCoverage(supported, exclusion.geometry);
-    if (!supported)
-      throw new Error("No supported source coverage remains");
-    const restrictions: Awaited<ReturnType<typeof readCuratedAccessFile>>[] = [];
-    for (const region of recipe?.reviewedRegionIds ?? legacyRegionIds) {
-      try {
-        restrictions.push(await readCuratedAccessFile(path.resolve(`data/regions/${region}/access-restrictions.json`)));
-      }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-          throw error;
-      }
+    const inputs = await discoveryInputs(recipe, session, false);
+    if (inputs.inputFingerprint !== catalog.inputFingerprint) throw new Error("Discovery inputs changed; run discovery again before selecting networks");
+    await importDiscoverySources(session, inputs);
+    const {restrictions} = inputs;
+    await mkdir(outputRoot, {recursive:true});
+    scratch = await mkdtemp(path.join(root, ".networks-"));
+    inventory = new NetworkInventory(inventoryFile, true);
+    units.push(...networks.map(network => ({id:network.id, geometry:network.geometry, status:"pending" as const})));
+    for (const region of recipe.reviewedRegionIds) {
       try {
         const config = await readOfficialTrailSourceConfig(path.resolve(`data/regions/${region}/official-trail-source.json`));
         const snapshot = await readPinnedOfficialTrailSnapshot(cacheRoot, config).catch(async (error: unknown) => {
-          if (plan.request.offline && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-          if (plan.request.offline) throw error;
+          if (recipe.offline && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+          if (recipe.offline) throw error;
           return (await refreshPinnedOfficialTrailSnapshot(cacheRoot, config)).snapshot;
         });
         if (snapshot)
@@ -94,34 +70,6 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
           throw error;
       }
     }
-    for (const source of configured) {
-      const prior = raws.find(raw => raw.source.id === source.config.id);
-      if (prior) {
-        if ("sha256" in source && source.sha256 !== prior.source.contentHash)
-          throw new Error(`Conflicting duplicate source ${source.config.id}`);
-        continue;
-      }
-      await report(`Verifying ${source.config.dataset}`);
-      const snapshot = await readPinnedOsmSnapshot(cacheRoot, source.config).catch(async (error: unknown) => {
-        if (plan.request.offline) throw error;
-        return (await refreshPinnedOsmSnapshot(cacheRoot, source.config)).snapshot;
-      });
-      if ("sha256" in source && source.sha256 !== snapshot.contentHash)
-        throw new Error(`Pinned source hash differs for ${source.config.id}`);
-      const raw = new CoverageSourceStore(path.join(root, sourceStoreFileName(snapshot)), snapshot);
-      raws.push(raw);
-      await raw.import(check, { onStage: async (stage) => report(`${stage}: ${source.config.dataset}`) });
-      await classifyIntendedInventory(raw, supported, exclusions, check);
-    }
-    // Reviews span multiple regions; apply matching source identities during discovery.
-    // A target absent from the selected provider extracts is not a compiler loss.
-    await report("Discovering connected trail networks");
-    const networks = await inventory.discover(raws, supported, plan.geometry, restrictions, check);
-    if (!networks.length) {
-      await report("No eligible networks intersect the selection; previous release is unchanged");
-      return { status: "completed", units, completedUnits: 0, snapshot: null };
-    }
-    units.push(...networks.map(network => ({ id: network.id, geometry: network.geometry, status: "pending" as const })));
     // Source-wide diagnostics are constant for this pinned build, not per-network work.
     const unsupportedBySource = new Map(raws.map(raw => [raw.source.id,
       Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n)]));
@@ -186,12 +134,12 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
         flush();
         await check();
         let sampled: Awaited<ReturnType<typeof elevationFor>> | undefined;
-        const elevation = await describeCanonicalElevation(network.geometry, cacheRoot, root, dem) ?? (sampled = await elevationFor(unit, cacheRoot, root, plan.request.offline, dem));
+        const elevation = await describeCanonicalElevation(network.geometry, cacheRoot, root, dem) ?? (sampled = await elevationFor(unit, cacheRoot, root, recipe.offline, dem));
         const sources = [...raws.map(raw => raw.source), ...restrictions.map(file => file.snapshot)].filter(source => memberSources.has(source.id));
         sources.push(elevation.source);
         sources.sort((a,b)=>a.id.localeCompare(b.id));
         sources.forEach(source => store.putSource(source));
-        const metadata = await preparedNamedAreas({ geometry: network.geometry, sources: sources.map(durable), snapshots: raws.filter(raw => memberSources.has(raw.source.id)).map(raw => raw.source), preparationRoot: root, regionIds: recipe?.reviewedRegionIds });
+        const metadata = await preparedNamedAreas({ geometry: network.geometry, sources: sources.map(durable), snapshots: raws.filter(raw => memberSources.has(raw.source.id)).map(raw => raw.source), preparationRoot: root, regionIds: recipe.reviewedRegionIds });
         for (const source of metadata.sources)
           store.putSource({ ...source, contentHash: source.contentHash as `sha256:${string}`, localPath: "" });
         const hash = createHash("sha256");
@@ -205,7 +153,7 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
         const selectedRegions = new Set(metadata.searchRegions.map(region => region.namedAreaId));
         const unsupportedBuildings = raws.filter(raw => memberSources.has(raw.source.id)).reduce((count, raw) =>
           count + (unsupportedBySource.get(raw.source.id) ?? 0), 0);
-        const limitations = [...(recipe?.limitations ?? []),
+        const limitations = [...recipe.limitations,
           ...(unsupportedBuildings ? [`The source inventory contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []), "Networks are complete only within the configured source snapshot and supported coverage. Missing source connections may still exist.", ...(network.sourceBoundaryLimited ? ["This network reaches a source boundary or exclusion and may connect to trails beyond it."] : [])];
         const inputFingerprint = contentId({ network: network.id, context: hash.digest("hex"), sources: metadata.sources, topology: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, metric: METRIC_VERSION, compiler: BUILD_VERSION, elevation: elevation.productFingerprint });
         const options = {
@@ -248,7 +196,7 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
           await report(`Reused ${network.id}`);
           continue;
         }
-        sampled ??= await elevationFor(unit, cacheRoot, root, plan.request.offline, dem);
+        sampled ??= await elevationFor(unit, cacheRoot, root, recipe.offline, dem);
         if (sampled.productFingerprint !== elevation.productFingerprint)
           throw new Error("Elevation inputs changed during network preparation");
         await prepareMetrics(network, inventory, store, raws, sampled, check);
@@ -318,10 +266,9 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
     return { status: "completed", units, completedUnits: units.length, snapshot: { schemaVersion: 1, id: COVERAGE_PACK_ID, dataVersion: release.id, geometry, unitIds: units.map(unit => unit.id), createdAt: release.builtAt, sourceFingerprint: contentId(release.sources), auditStatus: "passed", limitations: release.limitations } };
   }
   finally {
-    inventory.close();
-    raws.forEach(raw => raw.close());
-    await resources.stop();
-    await rm(scratch, { recursive: true, force: true });
+    inventory?.close();
+    await session.close();
+    if (scratch) await rm(scratch, { recursive: true, force: true });
   }
 }
 async function prepareMetrics(network: TrailNetwork, inventory: NetworkInventory, store: ReturnType<typeof openProgressiveGraphStore>, raws: CoverageSourceStore[], elevation: Awaited<ReturnType<typeof elevationFor>>, check: () => Promise<void>) {
