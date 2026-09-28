@@ -1,8 +1,13 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 
+export type BuildStatus = {
+  status: string; currentStage: string; elapsedMs: number; completedUnits: number; totalUnits?: number; error?: string;
+  counts?: Record<string, number>; peakMeasuredMemoryBytes?: number; peakCgroupMemoryBytes?: number; peakDiskBytes?: number | null;
+  currentStageStartedMs?: number; stageTimings?: {stage:string;elapsedMs:number;durationMs:number}[];
+};
 /** Reports are atomic snapshots; old output must not masquerade as a heartbeat. */
-export function formatBuildStatus(report: { status: string; currentStage: string; elapsedMs: number; completedUnits: number; totalUnits?: number; error?: string; peakMeasuredMemoryBytes?: number; currentStageStartedMs?: number; stageTimings?: {stage:string;elapsedMs:number;durationMs:number}[] }, updatedAt: number, now = Date.now()) {
+export function formatBuildStatus(report: BuildStatus, updatedAt: number, now = Date.now()) {
   const age = Math.max(0, now - updatedAt);
   const duration = (ms: number) => `${Math.floor(ms / 60000)}m ${Math.floor(ms / 1000) % 60}s`;
   const total = report.totalUnits;
@@ -16,6 +21,10 @@ export function formatBuildStatus(report: { status: string; currentStage: string
     ...(progress ? [`Area preparation: ${progress}`] : []),
     `Last report: ${duration(age)} ago`,
     ...(report.peakMeasuredMemoryBytes === undefined ? [] : [`Peak process memory: ${Math.ceil(report.peakMeasuredMemoryBytes / 1024 ** 2)} MiB`]),
+    ...(report.peakCgroupMemoryBytes === undefined ? [] : [`Peak container memory: ${Math.ceil(report.peakCgroupMemoryBytes / 1024 ** 2)} MiB`]),
+    ...(report.peakDiskBytes == null ? [] : [`Peak build disk: ${Math.ceil(report.peakDiskBytes / 1024 ** 2)} MiB`]),
+    ...Object.entries(report.counts ?? {}).map(([name, count]) => `${name.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toLowerCase().replace(/^./, letter => letter.toUpperCase())}: ${count.toLocaleString("en-US")}`),
+    ...(report.stageTimings ?? []).map(timing => `${timing.stage}: ${duration(timing.durationMs)}`),
     ...(report.error ? [`Error: ${report.error}`] : []),
   ].join("\n");
 }

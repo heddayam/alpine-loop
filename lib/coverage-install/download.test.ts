@@ -96,7 +96,7 @@ describe('prepared coverage installation', () => {
         const f = await fixture('local-graph');
         const core = { type: 'Polygon' as const, coordinates: [[[0.4,0.4],[0.6,0.4],[0.6,0.6],[0.4,0.6],[0.4,0.4]]] };
         f.release = dataReleaseSchema.parse({ ...f.release, partitioning: 'local-areas',
-            artifacts: [{ ...f.artifact, graphId: 'local-graph', startGeometry: core }],
+            artifacts: [{ ...f.artifact, graphId: 'local-graph', regionId: 'a', startGeometry: core }],
             sections: [{ id: 'a', geometry: core, artifactIds: [f.artifact.id], area: { maximumRouteMiles: 40, bufferMiles: 25 } }],
         });
         await writeFile(join(f.source, 'release.json'), JSON.stringify(f.release));
@@ -105,6 +105,7 @@ describe('prepared coverage installation', () => {
         expect(areaBounds(loaded.installation.geometry)).toEqual([0.4,0.4,0.6,0.6]);
         expect(areaBounds(loaded.routingGeometry)).toEqual([0,0,1,1]);
         expect(loaded.artifacts[0].startGeometry).toEqual(core);
+        expect(loaded.artifacts[0].regionId).toBe('a');
     });
     it('downloads and atomically activates exact section union, then reuses verified bytes', async () => {
         const f = await fixture();

@@ -368,3 +368,25 @@ test("overlapping local graphs deterministically own starts without mixing topol
   expect(other.edges.every(edge => edge.lengthMeters === 400)).toBe(true);
   await expect(repository.getInducedGraph({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true })).rejects.toThrow("require a starting point");
 });
+
+
+test("named region ownership survives artifact filename changes and catalog ordering", async () => {
+  const { directory, prepared } = fixture();
+  const neighbor = join(directory, "a-neighbor.sqlite"), updated = join(directory, "z-updated.sqlite");
+  copyFileSync(prepared, neighbor); copyFileSync(prepared, updated);
+  const db = new DatabaseSync(neighbor);
+  db.exec("UPDATE nodes SET elevation_m=200; UPDATE edges SET length_m=400; UPDATE access_points SET known_minimum_stem_m=500,inclusive_minimum_stem_m=500");
+  db.close();
+  const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
+  for (const ownerPath of [prepared, updated]) {
+    for (const reverse of [false, true]) {
+      const artifacts = [{path:neighbor,regionId:"pasayten",geometry:full,startGeometry:core}, {path:ownerPath,regionId:"glacier-peak",geometry:full,startGeometry:core}];
+      const repository = new PreparedGraphRepository({releaseId:"release",installationId:"local",coverage:full,artifacts:reverse ? artifacts.reverse() : artifacts});
+      repositories.push(repository);
+      expect((await repository.getAccessPointCandidates({bbox:[-1,-1,1,1],includeUncertainAccess:true}))[0].inclusiveMinimumStemMeters).toBe(0);
+      const result = (await repository.getReachableGraph(query)).graph;
+      expect(result.nodes.get("s")!.elevationMeters).toBe(100);
+      expect(result.edges.every(edge => edge.lengthMeters === 200)).toBe(true);
+    }
+  }
+});

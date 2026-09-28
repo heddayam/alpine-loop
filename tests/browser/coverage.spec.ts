@@ -9,10 +9,11 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   catalog.release!.partitioning = "local-areas";
   catalog.release!.artifacts[0].graphId = "area-fixture";
   catalog.release!.artifacts[0].startGeometry = catalog.release!.sections[0].geometry;
+  catalog.release!.sections[0].name = "Glacier Peak area";
   catalog.release!.sections[0].area = { maximumRouteMiles: 40, bufferMiles: 25 };
   const secondArtifact = { ...catalog.release!.artifacts[0], id: "b".repeat(64), path: `objects/${"b".repeat(64)}.sqlite.gz`, graphId: "nested-area" };
   catalog.release!.artifacts.push(secondArtifact);
-  catalog.release!.sections.push({ ...catalog.release!.sections[0], id: "nested", artifactIds: [secondArtifact.id] });
+  catalog.release!.sections.push({ ...catalog.release!.sections[0], id: "nested", name: "Pasayten area", artifactIds: [secondArtifact.id] });
   const request = { releaseId: catalog.release!.id, sectionIds: ["nested", "section"] };
   job.sectionIds = request.sectionIds;
   job.totalBytes *= 2;
@@ -25,7 +26,7 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   await page.goto("/");
   const trigger = page.getByRole("button", { name: "Coverage", exact: true });
   await trigger.click();
-  const dialog = page.getByRole("complementary", { name: "Manage coverage" });
+  const dialog = page.getByRole("complementary", { name: "Download trails" });
   await expect(dialog).toBeVisible();
   if (width <= 600) await page.getByRole("button", { name: "Show map", exact: true }).click();
   const canvas = page.locator(".maplibregl-canvas");
@@ -35,6 +36,14 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   }).toPass({ timeout: 10000 });
   await canvas.click();
   if (width <= 600) await page.getByRole("button", { name: "Show panel", exact: true }).click();
+  await expect(dialog.getByRole("checkbox", {name:"Glacier Peak area Available"})).toBeChecked();
+  await expect(dialog.getByRole("checkbox", {name:"Pasayten area Available"})).toBeChecked();
+  await dialog.getByRole("checkbox", {name:"Pasayten area Available"}).uncheck();
+  await expect(dialog.getByText(/1 area selected/)).toBeVisible();
+  await dialog.getByRole("searchbox", {name:"Find a region"}).fill("Pasayten");
+  await expect(dialog.getByRole("checkbox", {name:"Glacier Peak area Available"})).not.toBeVisible();
+  await dialog.getByRole("checkbox", {name:"Pasayten area Available"}).check();
+  await dialog.getByRole("searchbox", {name:"Find a region"}).clear();
   await expect(dialog.getByText(/2 areas selected/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Draw trailhead filter" })).not.toBeVisible();
   await expect(dialog.getByText(/512 KiB/)).toBeVisible();

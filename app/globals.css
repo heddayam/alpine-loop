@@ -707,3 +707,10 @@ details.result-section[open] > summary::before { content: "▾"; }
 .coverage-available { background: #e5e7eb; border-color: #6b7280; }
 .coverage-selected { background: #bfdbfe; border-color: #2563eb; }
 .coverage-downloading { background: #fcd34d; border-color: #b77900; }
+
+.coverage-search { display: grid; gap: var(--s1); }
+.coverage-search input { min-width: 0; width: 100%; }
+.coverage-region-list { display: grid; max-height: 17rem; overflow-y: auto; }
+.coverage-region { display: flex; align-items: center; gap: var(--s2); padding-block: var(--s2); cursor: pointer; }
+.coverage-region > span { min-width: 0; overflow-wrap: anywhere; }
+.coverage-region small { display: block; color: var(--ink-3); font-size: var(--fs-xs); }

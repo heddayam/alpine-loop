@@ -7,7 +7,7 @@ import type { AccessPointCandidate, AccessPointCandidateQuery, GraphEdge, GraphN
 export type PreparedGraphDescriptor = {
   releaseId: string;
   installationId: string;
-  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string; startGeometry?: AreaGeometry }[];
+  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string; regionId?: string; startGeometry?: AreaGeometry }[];
   coverage: AreaGeometry;
 };
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
@@ -59,9 +59,11 @@ export class PreparedGraphRepository implements GraphRepository {
     if (this.#localAreas && descriptor.artifacts.some(artifact => !artifact.startGeometry)) throw new Error("Local area graphs require start geometry on every artifact");
     this.#coverage = structuredClone(descriptor.coverage);
     this.#coverageJson = JSON.stringify(this.#coverage);
+    // Stable semantic ownership for named builds; retain legacy file order for pinned data.
     this.#artifacts = descriptor.artifacts.map(artifact => ({
       ...structuredClone(artifact), bounds: areaBounds(artifact.geometry),
-    })).sort((a, b) => a.path.localeCompare(b.path));
+    })).sort((a, b) => a.regionId && b.regionId ? compareIds(a.regionId, b.regionId) || a.path.localeCompare(b.path)
+      : a.regionId ? -1 : b.regionId ? 1 : a.path.localeCompare(b.path));
     this.#graphIds = new Map(this.#artifacts.map(artifact => [artifact.path, artifact.graphId ?? descriptor.releaseId]));
   }
 

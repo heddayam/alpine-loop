@@ -25,3 +25,16 @@ it("shows only reported network progress without extrapolating unequal network s
   expect(text).toContain("Area preparation: 8 / 10 · 2 remaining");
   expect(text).not.toMatch(/classification|export|ETA/);
 });
+
+it("shows measured counts, resource peaks and completed stage durations without invented values", () => {
+  const output = formatBuildStatus({status:"completed",currentStage:"Published",elapsedMs:62000,completedUnits:1,
+    counts:{retainedEdges:12000,metricCacheHits:11000},peakMeasuredMemoryBytes:1048576,peakCgroupMemoryBytes:2097152,peakDiskBytes:3145728,
+    stageTimings:[{stage:"Pruning",elapsedMs:1000,durationMs:60000}]},62000,62000);
+  expect(output).toContain("Retained edges: 12,000");
+  expect(output).toContain("Metric cache hits: 11,000");
+  expect(output).toContain("Peak process memory: 1 MiB");
+  expect(output).toContain("Peak container memory: 2 MiB");
+  expect(output).toContain("Peak build disk: 3 MiB");
+  expect(output).toContain("Pruning: 1m 0s");
+  expect(formatBuildStatus({status:"running",currentStage:"Starting",elapsedMs:0,completedUnits:0,peakDiskBytes:null},0,0)).not.toContain("Peak");
+});

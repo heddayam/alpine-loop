@@ -190,3 +190,33 @@ it("presents local areas as hike starts with surrounding trails included", async
   view.rerender(<CoveragePanel {...props} onMapChange={onMapChange} />);
   expect(await screen.findByText("1 area selected · up to 256 KiB download · 1.0 MiB on device")).toBeVisible();
 });
+
+
+it("selects searchable named regions and reflects map selection without showing internal identities", async () => {
+  const base = catalog.release!;
+  const onSelectionChange = vi.fn(), onMapChange = vi.fn();
+  vi.stubGlobal("fetch", vi.fn(async () => response({...catalog,release:{...base,
+    sections:[{...base.sections[0],name:"Glacier Peak area"},{...base.sections[0],id:"opaque-internal-id",name:"Pasayten area"}],
+    limitations:["US-only coverage; the international border is a hard limit."],
+  }})));
+  const view = render(<CoveragePanel open selected={[]} onSelectionChange={onSelectionChange} onMapChange={onMapChange} />);
+  expect(await screen.findByRole("heading", {name:"Download trails"})).toBeVisible();
+  const glacier = await screen.findByRole("checkbox", {name:"Glacier Peak area Available"});
+  fireEvent.click(glacier);
+  expect(onSelectionChange).toHaveBeenLastCalledWith(["section"]);
+  view.rerender(<CoveragePanel open selected={["section"]} onSelectionChange={onSelectionChange} onMapChange={onMapChange} />);
+  expect(glacier).toBeChecked();
+  expect(onMapChange.mock.lastCall![0].features.features[0].properties.status).toBe("selected");
+  expect(screen.getByText("US trails only. Routes stop at the international border.")).toBeVisible();
+  fireEvent.change(screen.getByRole("searchbox", {name:"Find a region"}), {target:{value:"pasayten"}});
+  expect(screen.queryByRole("checkbox", {name:/Glacier/})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", {name:"Pasayten area Available"}));
+  expect(onSelectionChange).toHaveBeenLastCalledWith(["section","opaque-internal-id"]);
+  expect(screen.queryByText("opaque-internal-id")).not.toBeInTheDocument();
+  view.rerender(<CoveragePanel open selected={["opaque-internal-id"]} onSelectionChange={onSelectionChange} />);
+  expect(screen.getByRole("checkbox", {name:"Pasayten area Available"})).toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox", {name:"Pasayten area Available"}));
+  expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+  fireEvent.change(screen.getByRole("searchbox", {name:"Find a region"}), {target:{value:"missing"}});
+  expect(screen.getByText("No matching regions.")).toBeVisible();
+});
