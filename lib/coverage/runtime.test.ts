@@ -198,7 +198,7 @@ it("builds pinned recipes, rejects a mismatched digest, and ignores reviews for 
   await expect(buildRelease({...recipe,sources:[{...recipe.sources[0]!,sha256:`sha256:${"2".repeat(64)}`}]},context())).rejects.toThrow("Pinned source hash differs");
   const access=await import("@/lib/data/curated-access");
   vi.spyOn(access,"readCuratedAccessFile").mockResolvedValue({snapshot:{...source,id:"review"},restrictions:[{externalId:"way/999",accessState:"closed",reason:"reviewed closure",review:{reviewedAt:source.retrievedAt,reviewer:"fixture"}}]});
-  await expect(run(await request(-121.27,-121.23),context(),{...recipe,reviewedRegionIds:["fixture"]})).resolves.toMatchObject({status:"completed"});
+  await expect(run(await request(-121.27,-121.23),context(),{...recipe,reviewedRegionIds:["santa-cruz-mountains"]})).resolves.toMatchObject({status:"completed"});
 });
 
 it("reads independently prepared networks through the installed graph reader",async()=>{
