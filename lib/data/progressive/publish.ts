@@ -86,6 +86,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       if (!first) continue;
       insertPhysical.run(stableKeys?stableGraphKey("physical",row.id):++physicalCount,row.id,Math.min(firstKey,lastKey),Math.max(firstKey,lastKey),topologySha256(firstGeometry<reverse?firstGeometry:reverse));
     }
+    const endpoint=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?");
     const physicalKey=output.prepare("SELECT physical_edge_key FROM physical_edges WHERE stable_physical_id=?");
     const insertEdge=output.prepare("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     const spatialEdge=output.prepare("INSERT INTO edge_spatial VALUES (?,?,?,?,?)");
@@ -97,8 +98,8 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       if (!edge.edgeClass || !edge.elevationProfile || edge.elevationProfile.length<2 || metricValues.some((value)=>value===null||!Number.isFinite(value)) ||
         edge.lengthM<0 || edge.gainM!<0 || edge.lossM!<0 || (edge.maxSustainedGradePct!==null && !Number.isFinite(edge.maxSustainedGradePct)))
         throw new Error(`Trail edge ${edge.id} lacks complete elevation metrics`);
-      const from=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?").get(edge.fromNode) as {lon:number;lat:number;elevation_m:number}|undefined;
-      const to=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?").get(edge.toNode) as {lon:number;lat:number;elevation_m:number}|undefined;
+      const from=endpoint.get(edge.fromNode) as {lon:number;lat:number;elevation_m:number}|undefined;
+      const to=endpoint.get(edge.toNode) as {lon:number;lat:number;elevation_m:number}|undefined;
       const first=edge.geometry[0],last=edge.geometry.at(-1),firstElevation=edge.elevationProfile[0],lastElevation=edge.elevationProfile.at(-1);
       if(!from||!to||!first||!last||!firstElevation||!lastElevation||
         Math.abs(first[0]-from.lon)>1e-10||Math.abs(first[1]-from.lat)>1e-10||Math.abs(last[0]-to.lon)>1e-10||Math.abs(last[1]-to.lat)>1e-10||
@@ -117,6 +118,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       spatialEdge.run(key,...bounds(edge.geometry));
     }
     const insertAccess=output.prepare("INSERT INTO access_points(id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    const usedNode=stage.prepare("SELECT 1 FROM used_nodes WHERE id=?");
     let accessCount=0;
     const derived=Number((stage.prepare("SELECT count(*) AS n FROM derived_portals WHERE coverage_hash=?").get(coverageHash) as {n:number}).n);
     const accessRows=derived
@@ -125,7 +127,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
     for (const row of accessRows as Iterable<{record:string}>) {
       if (++work%1000===0) await checkpoint();
       const point=JSON.parse(row.record) as NormalizedAccessPoint;
-      if (!(stage.prepare("SELECT 1 FROM used_nodes WHERE id=?").get(point.nodeId))) continue;
+      if (!(usedNode.get(point.nodeId))) continue;
       assertRefs(point.sourceRefs,point.id);
       const fields=[point.knownConnectivity,point.inclusiveConnectivity,point.knownOutDegree,point.inclusiveOutDegree,point.nearbyBuildingCount,point.reachableTrailKm,point.trailComponentId,point.portalRoadClass];
       if (fields.some((value)=>value===undefined||value===null)) throw new Error(`Access point ${point.id} is missing ranking or portal fields`);

@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import type { AreaGeometry } from "../area-geometry";
@@ -10,9 +10,16 @@ import { selectProgressiveEdges } from "./publish";
 const EARTH_RADIUS_M=6_371_008.8;
 const restricted="'private','closed','prohibited'";
 type Row=Record<string,string|number|null>;
-const one=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>db.prepare(sql).get(...args) as Row|undefined;
+const statementCaches=new WeakMap<DatabaseSync,Map<string,StatementSync>>();
+function statement(db:DatabaseSync,sql:string):StatementSync {
+  const cache=statementCaches.get(db)!;
+  let prepared=cache.get(sql);
+  if(!prepared){prepared=db.prepare(sql);cache.set(sql,prepared);}
+  return prepared;
+}
+const one=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>statement(db,sql).get(...args) as Row|undefined;
 const rows=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>db.prepare(sql).iterate(...args) as Iterable<Row>;
-const run=(db:DatabaseSync,sql:string,...args:Array<string|number|null>)=>db.prepare(sql).run(...args);
+const run=(db:DatabaseSync,sql:string,...args:Array<string|number|null>)=>statement(db,sql).run(...args);
 function distance(a:[number,number],b:[number,number]):number {
   const radians=Math.PI/180,deltaLat=(b[1]-a[1])*radians,deltaLon=(b[0]-a[0])*radians;
   const x=Math.sin(deltaLat/2)**2+Math.cos(a[1]*radians)*Math.cos(b[1]*radians)*Math.sin(deltaLon/2)**2;
@@ -28,10 +35,12 @@ export class DiskUnion {
   private readonly getParent;
   private readonly setParent;
   private readonly getRank;
-  constructor(private db:DatabaseSync,private table:string) {
+  private readonly increaseRank;
+  constructor(db:DatabaseSync,table:string) {
     this.getParent=db.prepare(`SELECT parent FROM ${table} WHERE id=?`);
     this.setParent=db.prepare(`UPDATE ${table} SET parent=? WHERE id=?`);
     this.getRank=db.prepare(`SELECT rank FROM ${table} WHERE id=?`);
+    this.increaseRank=db.prepare(`UPDATE ${table} SET rank=rank+1 WHERE id=?`);
   }
   find(id:string):string {
     let root=id;
@@ -45,7 +54,7 @@ export class DiskUnion {
     const aRank=Number((this.getRank.get(first) as {rank:number}).rank),bRank=Number((this.getRank.get(second) as {rank:number}).rank);
     if(aRank<bRank || (aRank===bRank && first>second)) [first,second]=[second,first];
     this.setParent.run(first,second);
-    if(aRank===bRank)this.db.prepare(`UPDATE ${this.table} SET rank=rank+1 WHERE id=?`).run(first);
+    if(aRank===bRank)this.increaseRank.run(first);
   }
 }
 
@@ -81,11 +90,12 @@ function waysAt(db:DatabaseSync,nodeId:string):NormalizedWay[] {
   return [...rows(db,"SELECT DISTINCT w.record FROM ways w JOIN way_nodes x ON x.way_id=w.id WHERE x.node_id=? AND w.edge_class='trail' ORDER BY w.id",nodeId)]
     .map(({record})=>JSON.parse(String(record)) as NormalizedWay);
 }
-function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive"):{connectivity:number;outDegree:number} {
-  const root=one(db,`SELECT parent FROM rank_${profile} WHERE id=?`,nodeId);
+function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive",reuseInclusive:boolean):{connectivity:number;outDegree:number} {
+  const table=profile==="inclusive"&&reuseInclusive?"portal_components":`rank_${profile}`;
+  const root=one(db,`SELECT parent FROM ${table} WHERE id=?`,nodeId);
   if(!root)return {connectivity:0,outDegree:0};
-  const union=new DiskUnion(db,`rank_${profile}`),parent=union.find(nodeId);
-  const count=one(db,`SELECT count(*) AS n FROM rank_${profile} WHERE parent=?`,parent);
+  // Component construction compresses every parent before ranking.
+  const count=one(db,`SELECT count(*) AS n FROM ${table} WHERE parent=?`,String(root.parent));
   const condition=profile==="known"?"e.access_state='public'":"e.access_state IN ('public','unknown')";
   const out=one(db,`SELECT count(*) AS n FROM edges e JOIN selected_edges s ON s.id=e.id WHERE e.from_node=? AND ${condition}`,nodeId);
   const incident=one(db,`SELECT 1 AS n FROM edges e JOIN selected_edges s ON s.id=e.id WHERE (e.from_node=? OR e.to_node=?) AND ${condition} LIMIT 1`,nodeId,nodeId);
@@ -109,6 +119,8 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   let work=0;
   await checkpoint();
   const db=store.database,coverageHash=topologySha256(coverage);
+  if(statementCaches.has(db))throw new Error("Portal derivation is already running");
+  statementCaches.set(db,new Map());
   try {
   await selectProgressiveEdges(store,coverage,checkpoint);
   if (!one(db,"SELECT 1 FROM selected_edges LIMIT 1")) {
@@ -116,6 +128,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     return 0;
   }
   db.exec(`DROP TABLE IF EXISTS temp.portal_components; CREATE TEMP TABLE portal_components(id TEXT PRIMARY KEY,parent TEXT NOT NULL,rank INTEGER NOT NULL DEFAULT 0) STRICT;
+    CREATE INDEX portal_component_parent ON portal_components(parent);
     INSERT INTO portal_components(id,parent) SELECT from_node,from_node FROM edges WHERE id IN (SELECT id FROM selected_edges) UNION SELECT to_node,to_node FROM edges WHERE id IN (SELECT id FROM selected_edges);
     DROP TABLE IF EXISTS temp.trail_links; CREATE TEMP TABLE trail_links(physical_id TEXT PRIMARY KEY,a TEXT NOT NULL,b TEXT NOT NULL,length_m REAL NOT NULL) STRICT;`);
   for(const edge of rows(db,"SELECT stable_physical_id,record FROM edges WHERE id IN (SELECT id FROM selected_edges) GROUP BY stable_physical_id ORDER BY stable_physical_id")) {
@@ -132,7 +145,9 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     run(db,"INSERT INTO component_stats(root,min_id,length_m) VALUES (?,?,0) ON CONFLICT(root) DO UPDATE SET min_id=min(min_id,excluded.min_id)",root,id);
   }
   for(const row of rows(db,"SELECT a,length_m FROM trail_links")) { if (++work%1000===0) await checkpoint(); run(db,"UPDATE component_stats SET length_m=length_m+? WHERE root=?",Number(row.length_m),union.find(String(row.a))); }
-  await rankComponents(db,"known",checkpoint);await rankComponents(db,"inclusive",checkpoint);
+  const reuseInclusive=!one(db,`SELECT 1 FROM edges e JOIN selected_edges s ON s.id=e.id WHERE e.access_state NOT IN ('public','unknown') LIMIT 1`);
+  await rankComponents(db,"known",checkpoint);
+  if(!reuseInclusive)await rankComponents(db,"inclusive",checkpoint);
   db.exec(`DROP TABLE IF EXISTS temp.road_nodes; CREATE TEMP TABLE road_nodes(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
     INSERT INTO road_nodes SELECT x.node_id,CASE WHEN max(w.edge_class='street') THEN 'street' ELSE 'service-road' END
     FROM way_nodes x JOIN ways w ON w.id=x.way_id WHERE w.edge_class IN ('street','service-road') AND w.access_state NOT IN (${restricted}) GROUP BY x.node_id;
@@ -212,7 +227,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     const parking=evidence.filter(({item})=>item.kind==="parking").sort((a,b)=>a.distanceM-b.distanceM||a.item.id.localeCompare(b.item.id))[0];
     const states=new Set(incident.map(({accessState})=>accessState));
     const accessState=( ["closed","prohibited","private","unknown","public"] as const).find((state)=>states.has(state))??"unknown";
-    const known=ranking(db,nodeId,"known"),inclusive=ranking(db,nodeId,"inclusive");
+    const known=ranking(db,nodeId,"known",reuseInclusive),inclusive=ranking(db,nodeId,"inclusive",reuseInclusive);
     const point:NormalizedAccessPoint={id:`portal:${nodeId}`,externalId:node.externalId,nodeId,name:named?.item.name??(trailName?`${trailName} trailhead`:"Trailhead"),kind:"trailhead",accessState,
       confidence:evidence.some(({item})=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.item.externalId}`:null,
       sourceRefs:[...new Set([...node.sourceRefs,...incident.flatMap(({sourceRefs})=>sourceRefs),...evidence.flatMap(({item})=>item.sourceRefs)])].sort(),
@@ -223,6 +238,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   await checkpoint();
   return count;
   } finally {
+    statementCaches.delete(db);
     for (const table of ["representatives","clusters","candidate_spatial","portal_candidates","road_nodes","rank_known","rank_inclusive","component_stats","trail_links","portal_components"]) db.exec(`DROP TABLE IF EXISTS temp.${table}`);
   }
 }
