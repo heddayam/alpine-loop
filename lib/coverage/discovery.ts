@@ -71,6 +71,7 @@ export async function importDiscoverySources(session: Session, inputs: Awaited<R
   for (const snapshot of inputs.snapshots) {
     const raw = new CoverageSourceStore(path.join(session.root, sourceStoreFileName(snapshot)), snapshot);
     session.raws.push(raw);
+    await session.report(`Importing ${snapshot.dataset}`);
     await raw.import(session.check, {onStage: async stage => session.report(`${stage}: ${snapshot.dataset}`)});
   }
 }

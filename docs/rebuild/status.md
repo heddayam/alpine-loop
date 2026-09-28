@@ -52,16 +52,49 @@ prepared downloads, saved-result preservation and the real-data gates remain.
   passes used the required local process access. A stale extraction mock was
   corrected to invoke the adapter's cache-miss runner. All task worktrees and
   task branches are retired; obsolete proposal copies were deleted.
+- [x] Replace geographic build selection with saved discovery and explicit IDs.
+  `data discover recipes/washington.json` (full repository path in README)
+  inventories every eligible network in the pinned sources without DEM, metrics,
+  route topology, named-area preparation or reference downloads. Discovery stores
+  a verified catalog and disk inventory; `data build catalog.json --network ID`
+  reopens them without rerunning connectivity. Offline fixtures cover cache reuse,
+  changed-source/restriction invalidation, unknown/duplicate/empty selections,
+  corrupt catalogs/inventories, interruption cleanup and selected-only builds.
+  The offline inspector shows bounded pages of network extents and source size,
+  with byte sizes explicitly unknown before compilation. The app keeps graph IDs,
+  statistics and build controls out of its download UI; no selection shows one
+  map hint instead of zero-byte summaries and inactive buttons.
+  Removed the old collection/area planner, request schemas, geographic membership
+  flags, area-wide classification/frontier audit, three geographic recipes (replaced
+  by one source recipe), old feasibility runner and standalone export command.
+  Relative to b597ca4, production/configuration is net 242 lines smaller
+  (547 additions, 789 deletions); tests are net 25 lines larger. Seven files were
+  deleted, six added and one recipe renamed: one fewer tracked file overall.
+- [x] Verify the discovery-first workflow and simplified app interface.
+  Two `npm run verify` passes each passed 678 tests in 93 files, lint, types and
+  production build. Two offline browser passes each passed nine desktop/mobile
+  flows (1.5 min and 1.1 min); screenshots inspected at 1280px and 390px. The
+  developer inspector's four offline interaction tests and desktop/mobile visual
+  checks passed. Rebuilt Docker tooling; its recipe-only build invocation rejects
+  before data work, requiring explicit network IDs. All three task worktrees
+  archived and branches deleted. No real regional discovery/build was launched.
+- [x] Correct discovery status reporting after the first user-run import exposed
+  stale area-builder progress text. Removed synthetic classification/export states,
+  zero-total percentages, old tile-rate ETA and obsolete context sidecar loading.
+  Source import now emits its own phase; the native watcher shows only observed
+  phase and nonzero network totals. Focused CLI/status tests pass. The user's
+  running Docker discovery was left uninterrupted; restart only the native watcher
+  to pick up its display fix. The import-phase label change applies after rebuilding
+  the tooling image for a future run.
 - [ ] Real-source continuity and bounded real-network build/install/search measurement.
 - [x] User-authorized clean data cutover: removed host `.local-data/packs` (2.7 GiB),
   published `.local-data/releases` (107 MiB), Docker runtime installed coverage
   and obsolete coverage-job database. Restarted app returns `release:null`,
   `installed:null`, no jobs, and empty search regions/coverages. SHA-256 checks
   verified retained Docker saved-route DB, settings and provider data unchanged.
-  User will run the new build; no real network build was launched. Added and
-  parsed `data/coverage/recipes/pilchuck-test.json` as a narrow initial selector.
-  First build still needs broader source import/connectivity; network extent
-  is not constrained by that selector. Transport compatibility code remains,
+  User will run discovery and the new build; no real network build was launched.
+  The temporary Pilchuck selector has been deleted. The Washington source recipe
+  now feeds discovery; the user selects actual network IDs from its output. Transport compatibility code remains,
   but old geographic data is no longer available to the app. Retired old pack
   validation copies, migration views and prepared-reader trial artifacts were
   also removed; reusable source caches remain.
@@ -72,7 +105,7 @@ grids. New expansion counts were 128, 4,198 and 9,790 versus 282, 1,731 and 3,63
 These are small regression fixtures, not evidence of regional performance or
 optimality. No regional build was started for this revision.
 
-Change accounting against 0635351: production/configuration/research source is
+Earlier builder-cutover accounting against 0635351: production/configuration/research source is
 net 473 lines smaller (1,488 additions, 1,961 deletions); tests are net 647 lines
 larger (876 additions, 229 deletions). Documentation is counted separately.
 This builder step and follow-ups add a net 62 production/configuration lines,
