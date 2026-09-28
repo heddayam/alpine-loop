@@ -7,7 +7,7 @@ import type { AccessPointCandidate, AccessPointCandidateQuery, GraphEdge, GraphN
 export type PreparedGraphDescriptor = {
   releaseId: string;
   installationId: string;
-  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string }[];
+  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string; startGeometry?: AreaGeometry }[];
   coverage: AreaGeometry;
 };
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
@@ -34,8 +34,8 @@ function insertConsistent<T>(values: Map<string, T>, id: string, value: T): void
 }
 
 /**
- * One logical graph over immutable release pieces. Node coordinates select every
- * touching piece, so seams/corners need neither a global node index nor a merge DB.
+ * Local starts own one independent buffered graph for their entire search.
+ * Legacy geographic pieces join at shared nodes without a merge database.
  * Every SQLite operation ends before yielding: the LRU can always evict safely.
  */
 export class PreparedGraphRepository implements GraphRepository {
@@ -44,6 +44,7 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly #artifacts: Artifact[];
   readonly #graphIds: Map<string, string>;
   readonly #coverage: AreaGeometry;
+  readonly #localAreas: boolean;
   readonly #coverageJson: string;
   readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
   readonly #pool = new Map<string, DatabaseSync>();
@@ -54,6 +55,8 @@ export class PreparedGraphRepository implements GraphRepository {
     if (!descriptor.releaseId || !descriptor.installationId) throw new Error("Prepared graph identity is required");
     this.packId = descriptor.installationId;
     this.releaseId = descriptor.releaseId;
+    this.#localAreas = descriptor.artifacts.some(artifact => artifact.startGeometry !== undefined);
+    if (this.#localAreas && descriptor.artifacts.some(artifact => !artifact.startGeometry)) throw new Error("Local area graphs require start geometry on every artifact");
     this.#coverage = structuredClone(descriptor.coverage);
     this.#coverageJson = JSON.stringify(this.#coverage);
     this.#artifacts = descriptor.artifacts.map(artifact => ({
@@ -113,8 +116,16 @@ export class PreparedGraphRepository implements GraphRepository {
       && coordinateIsInsideArea(coordinate, artifact.geometry));
   }
 
-  #hasInstalledDeparture(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean, signal?: AbortSignal): boolean {
-    for (const artifact of this.#at(coordinate)) {
+  // Independent buffered graphs can have different local topology/hints. The
+  // same deterministic owner supplies both a candidate and its entire search.
+  #startArtifact(id: string, coordinate: readonly [number, number]): Artifact | undefined {
+    return this.#artifacts.find(artifact => artifact.startGeometry
+      && coordinateIsInsideArea(coordinate, artifact.startGeometry)
+      && this.#node(id, [artifact]) !== undefined);
+  }
+
+  #hasInstalledDeparture(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean, signal?: AbortSignal, owner?: Artifact): boolean {
+    for (const artifact of owner ? [owner] : this.#at(coordinate)) {
       const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ?").iterate(id);
       for (const row of rows) {
         assertNotAborted(signal);
@@ -144,6 +155,7 @@ export class PreparedGraphRepository implements GraphRepository {
         for (const row of rows) {
           const point = parseAccessPoint(row);
           const lon = requiredNumber(row, "candidate_lon"), lat = requiredNumber(row, "candidate_lat");
+          if (this.#localAreas && (points.has(point.id) || this.#startArtifact(point.nodeId, [lon, lat]) !== artifact)) continue;
           const knownMinimumStemMeters = parseMinimumStem(row, "known_minimum_stem_m");
           const inclusiveMinimumStemMeters = parseMinimumStem(row, "inclusive_minimum_stem_m");
           if (knownMinimumStemMeters !== null && (inclusiveMinimumStemMeters === null || inclusiveMinimumStemMeters > knownMinimumStemMeters)) {
@@ -158,7 +170,7 @@ export class PreparedGraphRepository implements GraphRepository {
           // query instead of crossing the JS/SQLite boundary for every point.
           if (!(departure && edgeIsTraversable(departure, query.includeUncertainAccess)
             && lineIsInsideArea(departure.coordinates, this.#coverage))
-            && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal)) continue;
+            && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal, this.#localAreas ? artifact : undefined)) continue;
           insertConsistent(points, point.id, {
             ...point, lon, lat, knownMinimumStemMeters, inclusiveMinimumStemMeters,
             canReachCycle: inclusiveMinimumStemMeters !== null,
@@ -211,6 +223,7 @@ export class PreparedGraphRepository implements GraphRepository {
   }
 
   async getInducedGraph(query: GraphQuery): Promise<InducedGraph> {
+    if (this.#localAreas) throw new Error("Independent local graphs require a starting point; use getReachableGraph");
     const nodes = new Map<string, GraphNode>(), edges: GraphEdge[] = [];
     for await (const edge of this.#viewportEdges(query)) {
       edges.push(edge);
@@ -248,7 +261,9 @@ export class PreparedGraphRepository implements GraphRepository {
   async getReachableGraph(query: ReachableGraphQuery): Promise<ReachableGraphResult> {
     assertNotAborted(query.signal);
     if (!query.startCoordinates) throw new Error("Prepared graph queries require startCoordinates");
-    const start = this.#node(query.startNodeId, this.#at(query.startCoordinates));
+    const owner = this.#localAreas ? this.#startArtifact(query.startNodeId, query.startCoordinates) : undefined;
+    const artifactsAt = (coordinate: readonly [number, number]) => this.#localAreas ? (owner ? [owner] : []) : this.#at(coordinate);
+    const start = this.#node(query.startNodeId, artifactsAt(query.startCoordinates));
     const nodes = new Map<string, GraphNode>(), edges = new Map<string, GraphEdge>();
     if (!start || !coordinateIsInsideArea([start.lon, start.lat], this.#coverage)) {
       return { graph: { nodes, edges: [], accessPoints: [] }, truncated: false };
@@ -265,7 +280,7 @@ export class PreparedGraphRepository implements GraphRepository {
       if (current.distance !== distances.get(current.nodeId)) continue;
       const node = nodes.get(current.nodeId)!;
       const adjacency = new Map<string, GraphEdge>();
-      for (const artifact of this.#at([node.lon, node.lat])) {
+      for (const artifact of artifactsAt([node.lon, node.lat])) {
         let after = "", eligibleInArtifact = 0;
         batches: while (true) {
           // One native call handles ordinary low-degree nodes; large adjacency
@@ -297,7 +312,7 @@ export class PreparedGraphRepository implements GraphRepository {
         insertConsistent(edges, edge.id, edge);
         let to = nodes.get(edge.toNodeId);
         if (!to) {
-          to = this.#node(edge.toNodeId, this.#at(edge.coordinates.at(-1)!));
+          to = this.#node(edge.toNodeId, artifactsAt(edge.coordinates.at(-1)!));
           if (!to) throw new Error(`Graph database corruption: missing endpoint ${edge.toNodeId}`);
           nodes.set(to.id, to);
         }

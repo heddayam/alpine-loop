@@ -8,10 +8,10 @@ const response = (body: unknown) => ({ ok: true, json: async () => body });
 const props = { open: true, selected: ["section"] };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-it("shows an empty network state without a filesystem error or download action", async () => {
+it("shows an empty download state without a filesystem error or download action", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response({release:null,installed:null,jobs:[],error:null})));
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByText("No trail networks available yet.")).toBeVisible();
+  expect(await screen.findByText("No trail downloads available yet.")).toBeVisible();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
 });
@@ -171,4 +171,22 @@ it("can update installed coverage without a map selection and shows the update s
   expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Update" }));
   await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) })));
+});
+
+
+it("presents local areas as hike starts with surrounding trails included", async () => {
+  const base = catalog.release!;
+  const routing = { type: "Polygon" as const, coordinates: [[[-123,46],[-120,46],[-120,49],[-123,49],[-123,46]]] };
+  const onMapChange = vi.fn();
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, release: { ...base, partitioning: "local-areas", geometry: routing,
+    artifacts: base.artifacts.map(file => ({ ...file, graphId: "local", geometry: routing, startGeometry: base.sections[0].geometry })),
+    sections: base.sections.map(section => ({ ...section, area: { maximumRouteMiles: 40, bufferMiles: 25 } })),
+  } })));
+  const view = render(<CoveragePanel {...props} selected={[]} onMapChange={onMapChange} />);
+  expect(await screen.findByText("Select an area on the map.")).toBeVisible();
+  expect(screen.getByText("Choose where hikes start. Downloads include surrounding trails for hikes up to 40 miles.")).toBeVisible();
+  expect(onMapChange.mock.lastCall![0].features.features[0].geometry).toEqual(base.sections[0].geometry);
+  expect(onMapChange.mock.lastCall![0].focus).toEqual([-122,47,-121.75,47.25]);
+  view.rerender(<CoveragePanel {...props} onMapChange={onMapChange} />);
+  expect(await screen.findByText("1 area selected · up to 256 KiB download · 1.0 MiB on device")).toBeVisible();
 });

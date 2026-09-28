@@ -19,7 +19,7 @@ async function openInstallation(request: SearchIntent, plan: SearchPlan, signal:
   if (predicates.some((geometry, index) => !boundsOverlap(areaBounds(installed.installation.geometry), eligibleAreaBounds(geometry, index === namedRegionPredicateIndex)))) return undefined;
   return RouteSolverProcess.open({
     installationId, criteria: request.criteria,
-    accessFilter: { predicates, namedRegionPredicateIndex, coverage: installed.installation.geometry },
+    accessFilter: { predicates, namedRegionPredicateIndex, coverage: installed.routingGeometry },
   }, signal);
 }
 

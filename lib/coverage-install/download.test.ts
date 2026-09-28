@@ -10,6 +10,7 @@ import { DownloadService, runDownloadWorker } from './service';
 import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
 import { Store, currentProcessBirth } from './store';
+import { areaBounds } from '@/lib/graph/geometry';
 import { createPreparedSchema } from '@/lib/data/sqlite-writer';
 const paths: string[] = [];
 afterEach(async () => {
@@ -91,11 +92,26 @@ describe('prepared coverage installation', () => {
         expect(dataReleaseSchema.safeParse({ ...expanded, sections: [...expanded.sections, { ...expanded.sections[0], id: 'duplicate-network' }] }).success).toBe(false);
         expect(dataReleaseSchema.safeParse({ ...expanded, artifacts: [f.artifact] }).success).toBe(false);
     });
+    it('keeps local start coverage separate from all downloaded routing geometry', async () => {
+        const f = await fixture('local-graph');
+        const core = { type: 'Polygon' as const, coordinates: [[[0.4,0.4],[0.6,0.4],[0.6,0.6],[0.4,0.6],[0.4,0.4]]] };
+        f.release = dataReleaseSchema.parse({ ...f.release, partitioning: 'local-areas',
+            artifacts: [{ ...f.artifact, graphId: 'local-graph', startGeometry: core }],
+            sections: [{ id: 'a', geometry: core, artifactIds: [f.artifact.id], area: { maximumRouteMiles: 40, bufferMiles: 25 } }],
+        });
+        await writeFile(join(f.source, 'release.json'), JSON.stringify(f.release));
+        expect((await install(f)).status).toBe('completed');
+        const loaded = (await loadInstallation(f.root))!;
+        expect(areaBounds(loaded.installation.geometry)).toEqual([0.4,0.4,0.6,0.6]);
+        expect(areaBounds(loaded.routingGeometry)).toEqual([0,0,1,1]);
+        expect(loaded.artifacts[0].startGeometry).toEqual(core);
+    });
     it('downloads and atomically activates exact section union, then reuses verified bytes', async () => {
         const f = await fixture();
         expect((await install(f)).status).toBe('completed');
         const old = await loadInstallation(f.root);
         expect(old?.installation.sectionIds).toEqual(['a']);
+        expect(old?.routingGeometry).toEqual(old?.installation.geometry);
         const service = new DownloadService(f.options);
         try {
             const plan = await service.plan({ releaseId: 'r1', sectionIds: ['a', 'b'] });

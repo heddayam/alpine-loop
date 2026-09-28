@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +60,33 @@ describe("geographic search with prepared installation storage and compute", () 
       expect(route.geometry.coordinates[0]).toEqual(route.geometry.coordinates.at(-1));
       expect(route.geometry.coordinates.some(([lon]) => lon! > -122.1599)).toBe(true);
       expect(route.geometry.coordinates.every(([lon, lat]) => lon! >= -122.161 && lon! <= -122.155 && lat! >= 37.159 && lat! <= 37.162)).toBe(true);
+    }
+  });
+
+  it("searches beyond local start coverage and renders trails in the downloaded buffer", async () => {
+    const releasePath = join(root, "releases", "fixture-release.json");
+    const installationPath = join(root, "installations", "fixture-installation.json");
+    const originalRelease = await readFile(releasePath, "utf8"), originalInstallation = await readFile(installationPath, "utf8");
+    const release = JSON.parse(originalRelease), installation = JSON.parse(originalInstallation);
+    const core = drawnArea([-122.1601, 37.1599, -122.1599, 37.1601]);
+    release.partitioning = "local-areas";
+    release.artifacts[0].startGeometry = core;
+    release.artifacts[0].graphId = release.id;
+    release.sections[0].geometry = core;
+    release.sections[0].area = { maximumRouteMiles: 40, bufferMiles: 25 };
+    installation.geometry = core;
+    await writeFile(releasePath, JSON.stringify(release));
+    await writeFile(installationPath, JSON.stringify(installation));
+    try {
+      const result = await searchAllStarts(request);
+      expect(result.exact.length).toBeGreaterThan(0);
+      expect(result.exact.some(route => route.geometry.coordinates.some(([lon]) => lon! > -122.1599))).toBe(true);
+      const bufferMap = await mapData(new Request("http://localhost/api/map?bbox=-122.158,37.159,-122.155,37.162"));
+      expect(bufferMap.accessPoints).toEqual([]);
+      expect(bufferMap.trailNetwork.features.length).toBeGreaterThan(0);
+    } finally {
+      await writeFile(releasePath, originalRelease);
+      await writeFile(installationPath, originalInstallation);
     }
   });
 

@@ -42,11 +42,15 @@ export async function loadInstallation(root = coverageRoot(), id?: string) {
         const artifact = release.artifacts.find(a => a.id === id);
         if (!artifact)
             throw new Error('Missing artifact reference');
-        return { path: join(root, 'artifacts', `${id}.sqlite`), geometry: artifact.geometry, graphId: artifact.graphId };
+        return { path: join(root, 'artifacts', `${id}.sqlite`), geometry: artifact.geometry, graphId: artifact.graphId, startGeometry: artifact.startGeometry };
     });
     for (const artifact of artifacts)
         await stat(artifact.path);
-    return { installation, release, artifacts };
+    const polygons = artifacts.map(artifact => (artifact.geometry.type === 'Polygon' ? [artifact.geometry.coordinates] : artifact.geometry.coordinates) as Parameters<typeof polygonClipping.union>[0]);
+    const routingGeometry = release.partitioning === 'local-areas'
+        ? { type: 'MultiPolygon' as const, coordinates: polygonClipping.union(polygons[0]!, ...polygons.slice(1)) }
+        : installation.geometry;
+    return { installation, release, artifacts, routingGeometry };
 }
 export function selection(release: DataRelease, ids: string[]) {
     const sectionIds = [...new Set(ids)].sort();

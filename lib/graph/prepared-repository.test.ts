@@ -317,3 +317,54 @@ test("bounded adjacency pages continue past a full batch of ineligible edges", a
   expect(result.truncated).toBe(false);
   expect(result.graph.edges.map(edge => edge.id)).toEqual(["x299"]);
 });
+
+
+test("local area starts retain buffered loops but exclude buffer-only access points", async () => {
+  const { prepared } = fixture();
+  const db = new DatabaseSync(prepared);
+  const columns = db.prepare("PRAGMA table_info(access_points)").all().map(row => String(row.name));
+  db.exec(`INSERT INTO access_points SELECT 'buffer-start','a',${columns.slice(2).join(',')} FROM access_points WHERE id='start'`);
+  db.close();
+  const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
+  const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "local", coverage: full,
+    artifacts: [{ path: prepared, geometry: full, startGeometry: core }] });
+  repositories.push(repository);
+  const candidates = await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
+  expect(candidates.map(point => point.id)).toEqual(["start"]);
+  expect((await repository.getReachableGraph({ ...query, startNodeId: "a", startCoordinates: [-0.001, -0.001] })).graph.edges).toEqual([]);
+  const solver = new ReachableGraphClosedRouteSolver({ pack: { ...GRAPH_FIXTURE_IDENTITY, id: "local" } });
+  const result = await solver.generate({ distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, limit: 1,
+    closedRoute: { maximumRepeatedTrailPct: 100 } }, {
+    repository, accessFilter: { predicates: [core], coverage: full },
+    budget: { maximumDirectedEdges: 100, maximumExpandedStates: 20_000, maximumRawCandidates: 2_000, deadlineMs: 10_000 }, now: () => 0,
+  });
+  expect(result.exact).toHaveLength(1);
+  expect(result.exact[0].geometry.coordinates.some(coordinate => !coordinateIsInsideArea(coordinate as [number, number], core))).toBe(true);
+  const trails = [];
+  for await (const edge of repository.iterateMapTrails({ bbox: [-0.002, -0.002, 0.002, -0.0005], includeUncertainAccess: true })) trails.push(edge);
+  expect(trails.length).toBeGreaterThan(0);
+});
+
+test("overlapping local graphs deterministically own starts without mixing topology or profile hints", async () => {
+  const { directory, prepared } = fixture();
+  const second = join(directory, "z-second.sqlite");
+  copyFileSync(prepared, second);
+  const firstDb = new DatabaseSync(prepared);
+  firstDb.exec("DELETE FROM edges WHERE id IN ('s-e','e-s')"); firstDb.close();
+  // Local portal anchoring and hints may differ, even for the same source ID.
+  const secondDb = new DatabaseSync(second);
+  secondDb.exec("UPDATE nodes SET elevation_m=200; UPDATE edges SET length_m=400; UPDATE access_points SET node_id='a',known_minimum_stem_m=500,inclusive_minimum_stem_m=500"); secondDb.close();
+  const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
+  const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "local", coverage: full,
+    artifacts: [{ path: second, geometry: full, startGeometry: full }, { path: prepared, geometry: full, startGeometry: core }] });
+  repositories.push(repository);
+  expect((await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true }))[0].inclusiveMinimumStemMeters).toBe(0);
+  const first = (await repository.getReachableGraph(query)).graph;
+  expect(first.nodes.get("s")!.elevationMeters).toBe(100);
+  expect(first.edges.every(edge => edge.lengthMeters === 200)).toBe(true);
+  expect(first.edges.some(edge => edge.id === "s-e")).toBe(false);
+  const other = (await repository.getReachableGraph({ ...query, startNodeId: "a", startCoordinates: [-0.001, -0.001] })).graph;
+  expect(other.nodes.get("s")!.elevationMeters).toBe(200);
+  expect(other.edges.every(edge => edge.lengthMeters === 400)).toBe(true);
+  await expect(repository.getInducedGraph({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true })).rejects.toThrow("require a starting point");
+});

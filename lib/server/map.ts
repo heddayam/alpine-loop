@@ -23,10 +23,10 @@ export async function mapData(request: Request) {
     const features: FeatureCollection<LineString>["features"] = [];
     const seenGeometry = new Set<string>();
     if (installed) {
-      const { installation, release, artifacts } = installed;
+      const { installation, release, artifacts, routingGeometry } = installed;
       if (request.signal.aborted) throw request.signal.reason;
-      if (!boundsOverlap(bbox.data, areaBounds(installation.geometry))) return { accessPoints, trailNetwork: { type: "FeatureCollection" as const, features } };
-      const repository = new PreparedGraphRepository({ installationId: installation.id, releaseId: release.id, artifacts, coverage: installation.geometry });
+      if (!boundsOverlap(bbox.data, areaBounds(routingGeometry))) return { accessPoints, trailNetwork: { type: "FeatureCollection" as const, features } };
+      const repository = new PreparedGraphRepository({ installationId: installation.id, releaseId: release.id, artifacts, coverage: routingGeometry });
       try {
         const points = await repository.getAccessPointCandidates({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal });
         accessPoints.push(...points.filter(accessPointCanStartClosedRoute).filter(accessPointIsWildEnough).map((point) => ({

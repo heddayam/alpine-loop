@@ -43,9 +43,9 @@ async function initialize(input: RouteSolverWorkerInput): Promise<void> {
   try {
     const installed = await loadInstallation(undefined, input.installationId);
     if (!installed) throw new Error("The pinned installation is unavailable. Install prepared coverage and start a new search.");
-    const { installation, release, artifacts } = installed;
+    const { installation, release, artifacts, routingGeometry } = installed;
     repository = new PreparedGraphRepository({
-      installationId: installation.id, releaseId: release.id, artifacts, coverage: installation.geometry,
+      installationId: installation.id, releaseId: release.id, artifacts, coverage: routingGeometry,
     });
     const solver = new ReachableGraphClosedRouteSolver({
       pack: { id: installation.id, dataVersion: release.id, builtAt: release.builtAt },
