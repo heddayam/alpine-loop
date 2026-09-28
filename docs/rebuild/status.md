@@ -48,6 +48,17 @@ promotion; explicit sidewalk/crossing exclusions and access rules remain.
 - [ ] One user-run local real-source build/install/search measurement, including
   elapsed time, peak memory/disk, source continuity and usefulness of results.
 
+First user-run local build: bounded source extraction/normalization finished in
+26.3 seconds. Metric preparation advanced to 372,000 cached segments, then Docker
+recorded SIGBUS (exit 135) at 587 seconds with no OOM event and no published release.
+The crash immediately followed agent SQL inspection through the macOS bind mount;
+a cross-environment WAL shared-memory interaction is the leading explanation,
+not a confirmed algorithm/resource failure. The last observed Docker memory was
+562 MiB. Cache integrity was subsequently checked inside Docker and passed for all
+372,000 entries. Removed the abandoned graph scratch, retained metric/source/DEM
+caches, and corrected the stale status to failed. Do not reopen live container WAL
+databases from the host. No real build was restarted by the agent.
+
 The canceled statewide discovery is no longer running. Its obsolete 248,000,512-byte
 normalized store, empty discovery scratch and stale progress report were removed;
 its status watcher was stopped. Compressed source/DEM caches, saved results and

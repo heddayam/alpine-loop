@@ -42,6 +42,12 @@ single commit. Subagents inspect freely but edit only their ownership set.
   Jobs UI.
 
 Never have parallel agents edit the same boundary or redesign an accepted API.
+While a Docker data build is running, monitor its JSON status and Docker process
+statistics. Never open its live WAL-mode SQLite files through the macOS host
+mount, even with a read-only connection: WAL shared-memory coordination must stay
+inside the same environment. Any necessary SQL inspection runs inside that build
+container; inspect a closed, verified snapshot otherwise.
+
 Automated tests remain deterministic and network-free. Runtime filter geometry
 selects access points and never clips route geometry; exact pack coverage remains
 the hard boundary. Unknown access follows the explicit request
