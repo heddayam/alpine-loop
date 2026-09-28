@@ -387,7 +387,7 @@ it("opens coverage beside Settings and preserves search drawing, draft, and rout
   await waitFor(()=>expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route"));
   const before=screen.getByLabelText("Map context").textContent;
   await userEvent.click(screen.getByRole("button",{name:"Coverage"}));
-  await screen.findByRole("complementary",{name:"Manage coverage"});
+  await screen.findByRole("complementary",{name:"Download trails"});
   expect(screen.queryByRole("dialog",{name:"Settings"})).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Use drawn area/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button",{name:/Back to planning/}));
