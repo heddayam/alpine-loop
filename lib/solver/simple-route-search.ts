@@ -1,4 +1,5 @@
 import type { RouteSearchRequest } from "./types";
+import { CLOSE_MATCH_DISTANCE_MULTIPLIER } from "@/lib/contracts/routes";
 import { maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
 import {
   edgeIsTraversable,
@@ -375,7 +376,7 @@ export function searchSimpleRoutes(
     const frames = [frameFor(graph.start)];
     // Permit nearby over-distance matches, but never explore unbounded paths
     // merely because the exact target cannot be met.
-    const explorationDistance = maxMeters * 1.25;
+    const explorationDistance = maxMeters * CLOSE_MATCH_DISTANCE_MULTIPLIER;
     while (frames.length > 0 && !exhausted()) {
       const frame = frames.at(-1)!;
       const outgoing = frame.edges;

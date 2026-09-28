@@ -2,6 +2,8 @@ import { z } from "zod";
 import { accessStateSchema, confidenceSchema, finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
 
 export const MAX_ROUTE_DISTANCE_MILES = 40;
+export const CLOSE_MATCH_DISTANCE_MULTIPLIER = 1.25;
+export const PREPARATION_BUFFER_MILES = MAX_ROUTE_DISTANCE_MILES * CLOSE_MATCH_DISTANCE_MULTIPLIER / 2;
 
 export const DRIVE_TIME_DURATIONS_MINUTES = [
   5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,

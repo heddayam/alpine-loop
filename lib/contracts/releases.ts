@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isoDateSchema } from "./common";
 import { packSourceSchema } from "./manifest";
-import { areaGeometrySchema } from "./routes";
+import { areaGeometrySchema, MAX_ROUTE_DISTANCE_MILES, PREPARATION_BUFFER_MILES } from "./routes";
 
 const identity = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -13,6 +13,8 @@ export const releaseArtifactSchema = z.object({
   compressedBytes: bytes,
   bytes,
   geometry: areaGeometrySchema,
+  /** Starts eligible for this independent buffered graph. */
+  startGeometry: areaGeometrySchema.optional(),
   /** Immutable network graph identity, independent of the catalog release. */
   graphId: identity.optional(),
 }).strict().refine((artifact) => artifact.path === `objects/${artifact.id}.sqlite.gz`, "Artifact path must match its SHA-256 identity");
@@ -21,6 +23,10 @@ export const releaseSectionSchema = z.object({
   id: identity,
   geometry: areaGeometrySchema,
   artifactIds: z.array(digest).min(1),
+  area: z.object({
+    maximumRouteMiles: z.literal(MAX_ROUTE_DISTANCE_MILES),
+    bufferMiles: z.literal(PREPARATION_BUFFER_MILES),
+  }).strict().optional(),
   network: z.object({
     /** Eligible source topology, before compiler portal splitting. */
     nodeCount: bytes,
@@ -33,7 +39,7 @@ export const releaseSectionSchema = z.object({
 export const dataReleaseSchema = z.object({
   schemaVersion: z.literal(1),
   graphSchemaVersion: z.literal("7"),
-  partitioning: z.enum(["geographic", "connected-networks"]).optional(),
+  partitioning: z.enum(["geographic", "connected-networks", "local-areas"]).optional(),
   id: identity,
   builtAt: isoDateSchema,
   compilerVersion: z.string().min(1),
@@ -59,11 +65,17 @@ export const dataReleaseSchema = z.object({
     if (release.partitioning === "connected-networks" && (!section.network || section.artifactIds.some(id => !release.artifacts.find(artifact => artifact.id === id)?.graphId))) {
       context.addIssue({ code: "custom", message: `Network ${section.id} requires network metadata and immutable graph identities` });
     }
+    if (release.partitioning === "local-areas") {
+      const artifact = release.artifacts.find(item => item.id === section.artifactIds[0]);
+      if (!section.area || section.artifactIds.length !== 1 || !artifact?.graphId || !artifact.startGeometry || JSON.stringify(section.geometry) !== JSON.stringify(artifact.startGeometry)) {
+        context.addIssue({ code: "custom", message: `Area ${section.id} requires one independent graph and matching start geometry` });
+      }
+    }
   }
-  if (release.partitioning === "connected-networks") {
+  if (release.partitioning === "connected-networks" || release.partitioning === "local-areas") {
     const references = release.sections.flatMap(section => section.artifactIds);
     if (new Set(references).size !== references.length || artifacts.size !== references.length) {
-      context.addIssue({ code: "custom", message: "Every network artifact must belong to exactly one complete network" });
+      context.addIssue({ code: "custom", message: "Every independent graph artifact must belong to exactly one section" });
     }
   }
 });
