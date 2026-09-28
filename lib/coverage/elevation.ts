@@ -11,7 +11,7 @@ import type { CoverageUnit } from "./types";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { ElevationSampler, SourceSnapshot } from "@/lib/data/adapters";
 import { intersectCoverage, rectangle } from "./geometry";
-import { legacyRegionIds } from "./collections";
+import registry from "@/data/regions/registry.json";
 
 type Product = ThreeDepCollection["products"][number];
 export type ElevationCache = {
@@ -84,7 +84,7 @@ async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRo
   }
   const state = cache.canonical;
   const pinned = new Map<string, Product>();
-  for (const region of legacyRegionIds) {
+  for (const { id: region } of registry.regions.filter(region => "packId" in region)) {
     let config;
     try { config = await readElevationSourceConfig(path.resolve(`data/regions/${region}/elevation-source.json`)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }

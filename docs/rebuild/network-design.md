@@ -19,10 +19,11 @@ remain visible. Search areas continue to filter starting points only.
 
 ## Smallest implementation
 
-- Inventory the pinned source before applying the requested geographic selector.
+- Discover every network in the explicitly pinned source set.
   Respect source coverage, explicit exclusions and access restrictions. Preserve
-  source-node identity and distinct parallel physical trails. Geography selects
-  entire networks; it does not create preparation seams.
+  source-node identity and distinct parallel physical trails. Inspect the saved
+  network catalog and choose IDs before preparation. No geographic build selector
+  or implicit hike recipe remains.
 - Prepare, analyze, audit and export each selected network independently. Reuse
   existing verified source and metric primitives; remove the tiled build loop.
   Keep immutable network artifacts separate from catalog identity so adding an
@@ -39,10 +40,21 @@ remain visible. Search areas continue to filter starting points only.
 
 ## Implemented builder boundary
 
-Connectivity is rediscovered from pinned source records. Normal planning follows
-contact between provider coverage polygons to choose source extracts; only exact
-eligible source-node identities create trail connections. Complete member ways
-remain available as compiler context when exclusions cut off some segments.
+Discovery persists connectivity once per verified source/restriction fingerprint.
+The source recipe explicitly lists provider extracts and their supported bounds;
+only exact eligible source-node identities create trail connections. Complete
+member ways remain available as compiler context when exclusions cut off segments.
+The immutable discovery catalog and disk inventory are reused by explicit-ID
+builds. Discovery performs no DEM acquisition, edge metrics, route topology,
+named-area preparation, independent-reference downloads or release publication.
+
+The offline HTML inspector shows full network envelopes, source trail length,
+node/physical-edge counts, source-boundary limitations and undirected cycle rank.
+Envelopes are not exact trail lines, and a structural cycle is not proof of a legal
+hike. Prepared/download byte sizes are unknown until compilation. Inspection is
+metadata-only; builds additionally verify the inventory digest and current inputs.
+Unknown, duplicate, empty, stale or corrupted selections fail rather than choosing
+a replacement network. The selected IDs define the next published catalog.
 
 Preparation receipts depend on network membership, sorted context records,
 source provenance, relevant verified DEM products, metadata and algorithm versions.
@@ -53,9 +65,9 @@ and invalidate their artifacts. Expanding selection within the same pinned sourc
 snapshot cannot merge them. No dynamic merger service or persistent key registry
 is necessary.
 
-Only final catalog activation is atomic. Completed network receipts survive an
-interrupted build; failed work leaves the previous catalog active. Empty selections
-are explicit no-ops. Per-network scratch databases and transient named-area
+Discovery directories and final release catalogs are activated atomically.
+Completed network receipts survive an interrupted build; failed work leaves the
+previous release catalog active. Empty build selections are rejected. Per-network scratch databases and transient named-area
 extracts are cleaned up. Source/metric caches are retained. The user later authorized deleting existing
 geographic installations; saved route results and settings remain intact.
 Independent official-source proximity comparisons remain diagnostic and never
@@ -85,6 +97,12 @@ is a lower bound for every legal continuation. Trail lengths must be nonnegative
 define the storage partition on the underlying eligible physical graph. The
 implementation reuses disk-backed union-find to bound resident graph memory;
 it does not claim the in-memory reference's linear traversal performance on disk.
+
+[NetworkX's cycle-basis documentation](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.cycles.cycle_basis.html)
+distinguishes an independent cycle basis from all possible cycles. For a connected
+physical multigraph, a spanning tree has n−1 edges, leaving m−n+1 independent
+cycles. We display that rank without enumerating cycles; direction, access and
+hiking constraints still determine usable routes.
 
 [Bazel's cache design](https://bazel.build/remote/caching) separates input-dependent
 action reuse from content-addressed output storage. Apply that established pattern

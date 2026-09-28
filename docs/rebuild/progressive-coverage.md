@@ -102,19 +102,12 @@ RAM. Runtime graph loading and Quick/Thorough budgets remain bounded by the
 existing solver. See [coverage investigation](cascades-coverage-audit.md) and
 [solver measurements](solver-acceleration-audit.md).
 
-The isolated measurement harness is:
-
-```sh
-node --import tsx scripts/research/coverage-feasibility.ts \
-  --request /absolute/path/request.json --work-root /absolute/path/work \
-  --source-cache /absolute/path/sources --output /absolute/path/result.json
-```
-
-Reusing `--work-root` measures resume and expansion. `--stop-after-units N`
-provides a controlled interruption. Reports include stage timings, process-tree
-RSS where available, cgroup memory, and temporary disk usage. Large-region
-acceptance requires successful completion in a 4 GiB, swap-disabled environment,
-plus search latency, expansion, resume, and a second geography.
+The former area-request measurement harness has been removed with the geographic
+builder. The historical measurements below remain evidence for that earlier
+implementation; new work uses discovery catalogs and explicit network IDs as
+described in [prepared coverage](prepared-coverage.md). Large-network acceptance
+still requires completion in a 4 GiB, swap-disabled environment, plus search
+latency and resume measurements.
 
 Linux measurements include allocated blocks in unlinked temporary files held
 by the process tree, deduplicated by device and inode. Periodic sampling retains

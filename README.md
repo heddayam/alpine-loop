@@ -105,67 +105,69 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-One CLI handles `build`, `inspect`, `export`, and `status`. Recipes specify intended
-coverage, pinned sources, exclusions, and resource settings. Interrupted builds
-resume verified staging and metric caches. Reuse one `ALPINE_SOURCE_CACHE` across
-recipes; developer inventories and staging can occupy tens of GB. Retire
-superseded validation outputs after recording their audits. A release is exported only after the
-complete graph and source inventory pass audit.
+The workflow is **discover → inspect networks → build selected IDs**. A source
+recipe pins provider data, supported source boundaries and reviewed exclusions;
+it contains no hike or geographic build selector. Discovery saves connectivity
+without downloading elevation or preparing route graphs. The first import still
+reads the full provider extract and can take time and substantial disk space.
+Later commands verify and reuse that discovery.
 
 ```sh
-npm run data -- build data/coverage/recipes/cascades.json
-# In another terminal:
-npm run data -- status --watch
-npm run data -- inspect .local-data/releases/prepared/release.json
-npm run data -- export /absolute/path/export-options.json
-```
-
-Build status is saved in `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
-`status` prints one snapshot; `status --watch` refreshes every five seconds.
-An explicit report path can be supplied with `status /path/to/report.json --watch`.
-The display includes the phase, elapsed time, prepared/total sections, remaining
-sections, unfinished stages, and report age. Section ETA is a rough range from
-recent completed sections; it excludes final graph validation/export and is
-withheld when the current work outgrows that timing sample. A stale report is not a live heartbeat; Ctrl+C stops the viewer only.
-
-Native builds need `osmium-tool`, `uv`, and the locked DEM environment:
-
-```sh
-uv sync --frozen --project tools/dem --python 3.12
-```
-
-Example recipes cover the Cascades and Olympic Peninsula. To use the separate
-Docker tooling:
-
-```sh
-docker compose run --rm data scripts/data.ts build data/coverage/recipes/cascades.json
-```
-
-For an initial network test, use `data/coverage/recipes/pilchuck-test.json`.
-Its small rectangle selects **whole connected networks** touching Mount Pilchuck;
-it does not clip routes or guarantee a small network. The first run imports and
-analyzes the broader Washington source before preparing selected networks.
-
-```sh
-# Build the compiler/tooling image; this does not build trail data.
+# Build the tooling image; this does not build trail data.
 docker compose build data
 
-# This checkout already has the required pinned Washington source in this cache.
+# This checkout already has the pinned Washington extract in this cache.
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build data/coverage/recipes/pilchuck-test.json
-
-# In another terminal, watch the host-mounted build report.
-npm run data -- status --watch
-
-# After the build completes, verify the published files.
-docker compose run --rm data scripts/data.ts inspect /app/.local-data/releases/prepared/release.json
+  data scripts/data.ts discover data/coverage/recipes/washington.json
 ```
 
-The source-cache override above reuses this checkout's existing pinned downloads;
-a fresh clone can omit it and acquire sources in the default cache. The recipe
-allows acquisition of missing inputs. Ctrl+C pauses at a safe checkpoint; rerun
-the same build command to reuse verified completed work.
+Discovery prints the paths to `catalog.json` and `networks.html` under
+`.cache/build/discovery/`. Open the printed HTML path in your browser. It works
+offline and lets you sort/filter networks, inspect their full geographic extents,
+trail length, node/edge counts and structural cycle rank, then copy an ID.
+These are source-network extents, not detailed trail lines. Cycle rank does not
+count valid hikes; a network with rank zero has no simple physical loop.
+Download and prepared-file sizes remain unknown until compilation.
+
+Set `CATALOG` to the exact catalog path printed by discovery and `NETWORK` to
+the ID you chose. Then run:
+
+```sh
+CATALOG='.cache/build/discovery/<fingerprint>/catalog.json'
+NETWORK='network-<id-from-preview>'
+
+docker compose run --rm \
+  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  data scripts/data.ts build "$CATALOG" --network "$NETWORK"
+
+# In another terminal, monitor discovery or preparation:
+npm run data -- status --watch
+
+# After preparation, audit the published files:
+docker compose run --rm data scripts/data.ts inspect .local-data/releases/prepared/release.json
+```
+
+Replace the angle-bracket placeholders before running the assignments. Repeat
+`--network ID` to build several networks into one catalog. The selected IDs define
+the published catalog; include previously published IDs when extending it.
+Unchanged network artifacts are reused. A changed or corrupted discovery is
+rejected before preparation; rerun discovery when source inputs change.
+
+The source-cache override reuses this checkout's existing downloads. A fresh
+clone can omit it. Source recipes allow acquisition of missing inputs. Ctrl+C
+stops at a checkpoint; repeat the command to reuse verified completed work.
+Build reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
+`status [report.json] --watch` refreshes every five seconds; a stale report is
+not a live heartbeat.
+
+For native tooling, install `osmium-tool` and `uv`, then run
+`uv sync --frozen --project tools/dem --python 3.12`. The equivalent commands are
+`npm run data -- discover data/coverage/recipes/washington.json`,
+`npm run data -- networks "$CATALOG"` to reopen inspection, and
+`npm run data -- build "$CATALOG" --network "$NETWORK"`. Set
+`ALPINE_SOURCE_CACHE` to the matching host cache path when reusing downloads.
+The old geographic recipes, planner and standalone export command are removed.
 
 The app already mounts `.local-data/releases`. Refresh it after publication,
 open **Coverage**, select a network, review its extent/size and click **Download**.
@@ -183,7 +185,9 @@ unproven until the measured build gate passes.
 
 ```mermaid
 flowchart LR
-    Sources["Pinned trails and elevation"] --> Builder["Developer build and audit"]
+    Sources["Pinned trail sources"] --> Discovery["Discover and inspect networks"]
+    Discovery --> Selection["Choose network IDs"]
+    Selection --> Builder["Prepare metrics, analyze and audit"]
     Builder --> Release["Static catalog + compressed SQLite files"]
     Release --> Download["Verify and activate installation"]
     Download --> Reader["One bounded graph reader"]

@@ -37,7 +37,7 @@ export async function readSourceRecipe(file:string):Promise<SourceRecipe> {
     if(value.geometry!==undefined) throw new Error("Provide geometry or geometryPath, not both");
     const data=await read(geometryPath);return {...rest,geometry:data.type==="Feature"?data.geometry:data};
   };
-  const resolved={...input};
+  const resolved:Record<string,unknown>={...input};
   if(Array.isArray(resolved.sources)) resolved.sources=await Promise.all(resolved.sources.map(async source=>{
     const {configPath,...rest}=source;
     if(configPath!==undefined && rest.config!==undefined) throw new Error("Provide config or configPath, not both");

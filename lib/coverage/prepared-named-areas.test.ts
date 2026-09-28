@@ -7,7 +7,6 @@ import { preparedNamedAreas } from "./named-areas";
 import { readOsmSourceConfig } from "@/lib/data/osm/source";
 import { prepareOsmNamedAreas } from "@/lib/data/osm/named-areas";
 import { runCommand } from "@/lib/data/osm/command";
-vi.mock("./collections",()=>({legacyRegionIds:["central-cascades"]}));
 vi.mock("@/lib/data/osm/named-areas",()=>({prepareOsmNamedAreas:vi.fn()}));
 vi.mock("@/lib/data/osm/command",()=>({runCommand:vi.fn()}));
 it("resolves reviewed names and aliases from pinned sources with no installed pack",async()=>{
@@ -23,7 +22,7 @@ it("resolves reviewed names and aliases from pinned sources with no installed pa
   ].map(([id,name])=>({id:`osm:relation/${id}`,name:name!,kind:"protected-area",aliases:[`${name} alias`],sourceIds:[source.id],bbox:[-123,45,-120,50],geometry}));
   });
   try {
-    const result=await preparedNamedAreas({geometry,sources:[source],snapshots:[source],preparationRoot});
+    const result=await preparedNamedAreas({geometry,sources:[source],snapshots:[source],preparationRoot,regionIds:["central-cascades"]});
     expect(result.searchRegions).toHaveLength(4);
     expect(result.namedAreas.map(area=>area.name)).toEqual(["Central Cascades","Glacier Peak Wilderness","Alpine Lakes Wilderness","Teanaway Community Forest"]);
     expect(result.namedAreas[1]!.aliases).toContain("Glacier Peak Wilderness alias");

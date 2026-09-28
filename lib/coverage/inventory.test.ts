@@ -1,200 +1,63 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, it } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
 import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import { CoverageSourceStore } from "./source-store";
 import { rectangle } from "./geometry";
-import { classifyIntendedInventory, reconcileInventory } from "./inventory";
+import { reconcileInventory } from "./inventory";
 
-it("blocks unexplained loss and records restricted trails and uninstalled connections separately", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "coverage-inventory-"));
-  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
+const dispose: Array<() => void> = [];
+afterEach(() => { for (const close of dispose.splice(0).reverse()) close(); });
+async function fixture(lines: string[]) {
+  const directory = mkdtempSync(path.join(tmpdir(), "network-inventory-"));
+  const source: SourceSnapshot = {id:"fixture",authority:"fixture",dataset:"fixture",version:"1",retrievedAt:"2026-09-24",url:"https://example.invalid",license:"CC0",localPath:"unused",contentHash:`sha256:${"1".repeat(64)}`};
   const raw = new CoverageSourceStore(":memory:", source);
-  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
-  try {
-    async function* lines() { yield* ["n1 T x0 y0", "n2 T x1 y0", "n3 T x2 y0", "w10 Thighway=path,foot=yes Nn1,n2,n3"]; }
-    await raw.import(async () => {}, { lines: lines() });
-    const coverage = rectangle([-1,-1,1.5,1]);
-    await expect(reconcileInventory(raw, graph, coverage)).rejects.toThrow("Unexplained compiler loss");
-    const way = [...raw.ways(coverage)][0]!.way;
-    graph.putWay({ ...way, accessState: "closed" });
-    const metrics = { lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 100, maxSustainedGradePct: 0, elevationProfile: null };
-    for (const edge of compiledEdgesForSegment(way, 0, way.coordinates.slice(0,2), metrics)) graph.putEdge(edge);
-    const audit = await reconcileInventory(raw, graph, coverage);
-    expect(audit).toMatchObject({ coveredSegments: 1, frontierCount: 1, crossingSegmentCount: 1 });
-    expect(audit.frontierPreview[0]).toMatchObject({ node: "osm-node-2", way: "way/10" });
-    expect(audit.dispositions).toContainEqual({ disposition: "restricted", reason: "access:closed", count: 1 });
-  } finally { raw.close(); graph.close(); rmSync(directory, { recursive: true, force: true }); }
+  const graph = openProgressiveGraphStore({stagingPath:path.join(directory,"graph.sqlite"),buildIdentity:"fixture"});
+  dispose.push(() => { raw.close(); graph.close(); rmSync(directory,{recursive:true,force:true}); });
+  async function* input() { yield* lines; }
+  await raw.import(async () => {}, {lines:input()});
+  const envelope = rectangle([-2,-2,3,3]);
+  const audit = (included: (id: string) => boolean, checkpoint = async () => {}) => reconcileInventory(raw,graph,envelope,checkpoint,included,[]);
+  const add = (externalId: string, segment = 0) => {
+    const way = [...raw.ways(envelope)].find(item => item.way.externalId === externalId)!.way;
+    const metrics = {lengthM:100,gainM:0,lossM:0,maxElevationM:100,maxSustainedGradePct:0,elevationProfile:null};
+    for (const edge of compiledEdgesForSegment(way,segment,way.coordinates.slice(segment,segment+2),metrics)) graph.putEdge(edge);
+    return `${way.id}:${segment}`;
+  };
+  return {raw,graph,source,envelope,audit,add};
+}
+it("audits only exact members inside overlapping network envelopes and catches missing directions", async () => {
+  const f = await fixture(["n1 T x0 y0","n2 T x1 y0","n3 T x2 y0","w10 Thighway=path Nn1,n2,n3","w11 Thighway=path Nn1,n3"]);
+  const id = f.add("way/10");
+  expect(await f.audit(value => value === id)).toEqual({sourceId:"fixture",coveredSegments:1});
+  f.graph.database.prepare("DELETE FROM edges WHERE id=?").run(`${id}:reverse`);
+  await expect(f.audit(value => value === id)).rejects.toThrow("Unexplained compiler loss");
 });
-
-it("reports a source segment through coverage when both OSM nodes are outside, without inventing a frontier", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "coverage-crossings-"));
-  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
-  const raw = new CoverageSourceStore(":memory:", source);
-  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
-  try {
-    async function* lines() { yield* [
-      "n1 T x-1 y0.5", "n2 T x2 y0.5", "n3 T x-1 y1", "n4 T x1 y-1",
-      "w10 Thighway=path Nn1,n2", "w11 Thighway=path Nn3,n4",
-    ]; }
-    await raw.import(async () => {}, { lines: lines() });
-    const coverage = rectangle([0,0,1,1]);
-    const audit = await reconcileInventory(raw, graph, coverage);
-    expect(audit).toMatchObject({ coveredSegments: 0, frontierCount: 0, crossingSegmentCount: 1 });
-    expect(audit.crossingSegmentPreview).toEqual([{ way: "way/10", segment: 0, fromLon: -1, fromLat: 0.5, toLon: 2, toLat: 0.5 }]);
-    expect((await reconcileInventory(raw, graph, coverage)).crossingSegmentCount).toBe(1);
-  } finally { raw.close(); graph.close(); rmSync(directory, { recursive: true, force: true }); }
+it("ignores stale geographic dispositions instead of silently hiding lost members", async () => {
+  const f = await fixture(["n1 T x0 y0","n2 T x1 y0","w10 Thighway=path Nn1,n2"]);
+  f.raw.db.prepare("UPDATE inventory SET disposition='excluded',reason='intentionally-excluded:old-policy'").run();
+  await expect(f.audit(() => true)).rejects.toThrow("Unexplained compiler loss");
+  f.add("way/10");
+  expect(await f.audit(() => true)).toEqual({sourceId:"fixture",coveredSegments:1});
 });
-
-it("interrupts within one long source way and replays the complete audit", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "coverage-inventory-pause-"));
-  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
-  const raw = new CoverageSourceStore(":memory:", source);
-  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
-  try {
-    async function* lines() {
-      for (let i = 1; i <= 1501; i++) yield `n${i} T x${i % 2 ? -1 : 2} y0.5`;
-      yield `w1 Thighway=path N${Array.from({length:1501}, (_, i) => `n${i+1}`).join(",")}`;
-    }
-    await raw.import(async () => {}, { lines: lines() });
-    const coverage = rectangle([0,0,1,1]);
-    let classificationChecks = 0;
-    await expect(classifyIntendedInventory(raw, coverage, [], async () => {
-      if (++classificationChecks === 2) throw new Error("pause classification");
-    })).rejects.toThrow("pause classification");
-    await classifyIntendedInventory(raw, coverage, []);
-    expect(raw.db.prepare("SELECT disposition FROM inventory WHERE id='way/1'").get()!.disposition).toBe("pending");
-    const expected = await reconcileInventory(raw, graph, coverage);
-    let checks = 0;
-    await expect(reconcileInventory(raw, graph, coverage, async () => {
-      if (++checks === 2) throw new Error("pause");
-    })).rejects.toThrow("pause");
-    const partial = Number(raw.db.prepare("SELECT count(*) AS n FROM coverage_crossing_segments").get()!.n);
-    expect(partial).toBeGreaterThan(0);
-    expect(partial).toBeLessThan(1000);
-    expect(await reconcileInventory(raw, graph, coverage)).toEqual(expected);
-    expect(expected.crossingSegmentCount).toBe(1500);
-  } finally { raw.close(); graph.close(); rmSync(directory, { recursive: true, force: true }); }
+it("rejects forbidden selected members while allowing unrelated restricted trails", async () => {
+  const f = await fixture(["n1 T x0 y0","n2 T x1 y0","w10 Thighway=path,access=private Nn1,n2","w11 Thighway=path Nn1,n2"]);
+  const id = f.add("way/11");
+  expect((await f.audit(value => value === id)).coveredSegments).toBe(1);
+  await expect(f.audit(() => true)).rejects.toThrow("Forbidden source segment");
+  const restrictions = [{snapshot:{...f.source,id:"review"},restrictions:[{externalId:"way/11",accessState:"closed" as const,reason:"Closure",review:{reviewedAt:"2026-09-24T00:00:00Z",reviewer:"Fixture"}}]}];
+  await expect(reconcileInventory(f.raw,f.graph,f.envelope,async()=>{},value=>value===id,restrictions)).rejects.toThrow("Forbidden source segment");
 });
-
-it("accounts for intended pending trails and policy exclusions separately from provider candidates", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "coverage-dispositions-"));
-  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
-  const raw = new CoverageSourceStore(":memory:", source);
-  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
-  try {
-    async function* lines() {
-      // Installed; wholly omitted but intended; wholly excluded outside intended;
-      // partly installed; partly excluded; provider-only; crossing without nodes inside.
-      const segments = [[0.1,0.2],[1.1,1.2],[3.1,3.2],[0.3,0.4,1.4],[0.35,0.45,2.2],[4.1,4.2],[-1,1],[1.5,1.6]];
-      let node = 0;
-      for (let index=0;index<segments.length;index++) {
-        const refs = [];
-        for (const x of segments[index]!) { refs.push(`n${++node}`); yield `n${node} T x${x} y0.5`; }
-        yield `w${index+1} Thighway=path${index === 7 ? ",access=private" : ""} N${refs.join(",")}`;
-      }
-    }
-    await raw.import(async () => {}, { lines: lines() });
-    const coverage = rectangle([0,0,0.5,1]);
-    const intendedCoverage = rectangle([0,0,2,1]);
-    const exclusions = [{id:"policy",geometry:rectangle([2,0,3.5,1])}];
-    const metrics = { lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 100, maxSustainedGradePct: 0, elevationProfile: null };
-    for (const {way} of raw.ways(coverage,0)) if (["way/1","way/4","way/5"].includes(way.externalId)) {
-      graph.putWay(way);
-      for (const edge of compiledEdgesForSegment(way,0,way.coordinates.slice(0,2),metrics)) graph.putEdge(edge);
-    }
-    await classifyIntendedInventory(raw,intendedCoverage,exclusions);
-    expect(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='installed'").get()!.n).toBe(0);
-    const audit = await reconcileInventory(raw,graph,coverage);
-    const dispositions = raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all();
-    expect(dispositions).toEqual([
-      {id:"way/1",disposition:"installed",reason:"covered-source-segments-reconciled"},
-      {id:"way/2",disposition:"pending",reason:"pending-installation"},
-      {id:"way/3",disposition:"excluded",reason:"intentionally-excluded:policy"},
-      {id:"way/4",disposition:"pending",reason:"covered-source-segments-reconciled"},
-      {id:"way/5",disposition:"pending",reason:"partially-intentionally-excluded"},
-      {id:"way/6",disposition:"candidate",reason:"access:unknown"},
-      {id:"way/7",disposition:"pending",reason:"pending-installation"},
-      {id:"way/8",disposition:"restricted",reason:"access:private"},
-    ]);
-    expect(audit).toMatchObject({coveredSegments:3,frontierCount:2,crossingSegmentCount:3});
-    expect(await reconcileInventory(raw,graph,coverage)).toEqual(audit);
-    // A changed policy must invalidate its earlier excluded disposition.
-    await classifyIntendedInventory(raw,rectangle([0,0,3.5,1]),[]);
-    expect(raw.db.prepare("SELECT disposition,reason FROM inventory WHERE id='way/3'").get()).toEqual({
-      disposition:"pending",reason:"pending-installation",
-    });
-    expect(raw.db.prepare("SELECT disposition,reason FROM inventory WHERE id='way/5'").get()).toEqual({
-      disposition:"pending",reason:"pending-installation",
-    });
-  } finally { raw.close(); graph.close(); rmSync(directory, {recursive:true,force:true}); }
-});
-
-it("preserves exact exclusion boundaries, holes, and crossings across disjoint exclusion envelopes",async()=>{
-  const source:SourceSnapshot={id:"fixture",authority:"fixture",dataset:"fixture",version:"1",retrievedAt:"2026-09-24",url:"https://example.invalid",license:"CC0",localPath:"unused",contentHash:`sha256:${"1".repeat(64)}`};
-  const raw=new CoverageSourceStore(":memory:",source);
-  try {
-    const segments=[
-      [[2,0.2],[2,0.8]], // Boundary overlap.
-      [[1.5,0.5],[3.5,0.5]], // Both endpoints outside; segment crosses exclusion.
-      [[2-1e-11,0.2],[2-1e-11,0.8]], // Retain the exact predicate's boundary tolerance.
-      [[20.2,0.5],[20.8,0.5]], // A separate exclusion outside the intended area.
-      [[-1,0.5],[-0.5,0.5]], // Distant from all exclusions.
-      [[2.3,0.5],[2.7,0.5]], // Inside a hole, despite overlapping the envelope.
-    ];
-    async function* lines(){
-      for(let index=0;index<segments.length;index++) {
-        for(let end=0;end<2;end++) {const [x,y]=segments[index]![end]!;yield `n${index*2+end+1} T x${x} y${y}`;}
-        yield `w${index+1} Thighway=path Nn${index*2+1},n${index*2+2}`;
-      }
-    }
-    await raw.import(async()=>{}, {lines:lines()});
-    const holed=rectangle([2,0,3,1]);
-    if(holed.type!=="Polygon")throw new Error("Expected fixture polygon");
-    holed.coordinates.push([[2.25,0.25],[2.25,0.75],[2.75,0.75],[2.75,0.25],[2.25,0.25]]);
-    await classifyIntendedInventory(raw,rectangle([-2,-1,4,2]),[{id:"near",geometry:holed},{id:"far",geometry:rectangle([20,0,21,1])}]);
-    expect(raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all()).toEqual([
-      {id:"way/1",disposition:"excluded",reason:"intentionally-excluded:near"},
-      {id:"way/2",disposition:"pending",reason:"partially-intentionally-excluded"},
-      {id:"way/3",disposition:"excluded",reason:"intentionally-excluded:near"},
-      {id:"way/4",disposition:"excluded",reason:"intentionally-excluded:far"},
-      {id:"way/5",disposition:"pending",reason:"pending-installation"},
-      {id:"way/6",disposition:"pending",reason:"pending-installation"},
-    ]);
-  } finally {raw.close();}
-});
-
-it("audits exact network members and explains forbidden access inside an overlapping envelope", async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "coverage-network-audit-"));
-  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
-  const raw = new CoverageSourceStore(":memory:", source);
-  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
-  try {
-    async function* lines() {
-      for (let n = 1; n <= 8; n++) yield `n${n} T x${n / 10} y0.5`;
-      yield* ["w1 Thighway=path,foot=yes Nn1,n2", "w2 Thighway=path,foot=yes Nn3,n4", "w3 Thighway=path,access=private Nn5,n6", "w4 Thighway=path,foot=yes Nn7,n8"];
-    }
-    await raw.import(async () => {}, { lines: lines() });
-    const coverage = rectangle([0,0,1,1]);
-    await classifyIntendedInventory(raw, coverage, []);
-    const way = [...raw.ways(coverage)][0]!.way;
-    const included = (id: string) => id === `${way.id}:0`;
-    const restrictions = [{ snapshot: { ...source, id: "review" }, restrictions: [{ externalId: "way/4", accessState: "closed" as const, reason: "Reviewed closure", review: { reviewedAt: "2026-09-24T00:00:00Z", reviewer: "Fixture" } }] }];
-    await expect(reconcileInventory(raw, graph, coverage, undefined, included, restrictions)).rejects.toThrow("Unexplained compiler loss");
-    const metrics = { lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 100, maxSustainedGradePct: 0, elevationProfile: null };
-    graph.putWay(way);
-    for (const edge of compiledEdgesForSegment(way, 0, way.coordinates, metrics)) graph.putEdge(edge);
-    const audit = await reconcileInventory(raw, graph, coverage, undefined, included, restrictions);
-    expect(audit).toMatchObject({ coveredSegments: 1, frontierCount: 0, crossingSegmentCount: 0, dispositions: [] });
-    expect(raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all()).toEqual([
-      { id: "way/1", disposition: "installed", reason: "covered-source-segments-reconciled" },
-      { id: "way/2", disposition: "pending", reason: "pending-installation" },
-      { id: "way/3", disposition: "restricted", reason: "access:private" },
-      { id: "way/4", disposition: "restricted", reason: "access:closed" },
-    ]);
-    expect(await reconcileInventory(raw, graph, coverage, undefined, included, restrictions)).toEqual(audit);
-  } finally { raw.close(); graph.close(); rmSync(directory, { recursive: true, force: true }); }
+it("interrupts inside a long source way and restarts without accumulated scratch tables", async () => {
+  const lines: string[] = [];
+  for (let i=1;i<=1501;i++) lines.push(`n${i} T x${i%2} y0.5`);
+  lines.push(`w1 Thighway=path N${Array.from({length:1501},(_,i)=>`n${i+1}`).join(",")}`);
+  const f = await fixture(lines);
+  let checks = 0;
+  await expect(f.audit(()=>false,async()=>{if(++checks===2)throw new Error("pause");})).rejects.toThrow("pause");
+  expect(await f.audit(()=>false)).toEqual({sourceId:"fixture",coveredSegments:0});
+  expect(f.raw.db.prepare("SELECT name FROM sqlite_master WHERE name IN ('coverage_frontiers','coverage_crossing_segments')").all()).toEqual([]);
 });

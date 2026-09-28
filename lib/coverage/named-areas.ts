@@ -3,13 +3,12 @@ import { areaBounds } from "@/lib/graph/geometry";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { NormalizedNamedArea, NormalizedSearchRegion } from "@/lib/data/types";
 import { namespacedId } from "@/lib/search/identity";
-import { legacyRegionIds } from "./collections";
 import { contentId, intersectCoverage } from "./geometry";
 const ALIAS="region-id:";
 type Sources=PackManifest["sources"];
 
 /** Fresh builds resolve committed search selectors from pinned inputs, never installed packs. */
-export async function preparedNamedAreas(input: { geometry: AreaGeometry; sources: Sources; snapshots: readonly import("@/lib/data/adapters").SourceSnapshot[]; preparationRoot: string; regionIds?: readonly string[] }) {
+export async function preparedNamedAreas(input: { geometry: AreaGeometry; sources: Sources; snapshots: readonly import("@/lib/data/adapters").SourceSnapshot[]; preparationRoot: string; regionIds: readonly string[] }) {
   const {readFile,mkdir,rm}=await import("node:fs/promises");
   const {randomUUID}=await import("node:crypto");
   const path=await import("node:path");
@@ -18,7 +17,7 @@ export async function preparedNamedAreas(input: { geometry: AreaGeometry; source
   const {runCommand}=await import("@/lib/data/osm/command");
   const {readSearchRegionInput,validateSearchRegions}=await import("@/lib/data/search-regions");
   const namedAreas:NormalizedNamedArea[]=[], searchRegions:NormalizedSearchRegion[]=[];
-  for(const region of input.regionIds ?? legacyRegionIds) {
+  for(const region of input.regionIds) {
     const directory=path.resolve("data/regions",region);
     const boundary=JSON.parse(await readFile(path.join(directory,"boundary.geojson"),"utf8")) as {geometry:AreaGeometry};
     if(!intersectCoverage(input.geometry,boundary.geometry)) continue;

@@ -36,25 +36,32 @@ Candidates are preserved before global representative suppression.
 
 ## Developer workflow
 
-`npm run data -- build recipe.json` discovers connectivity across the configured
-source coverage before selecting whole networks that touch the requested area.
-Each network gets bounded staging, cached metrics, topology analysis and one
-immutable artifact. Re-running verifies receipts and reuses unchanged networks
-without elevation sampling or topology recomputation. Changed network membership,
-context, sources, DEM inputs or algorithm versions invalidate dependent work.
+`npm run data -- discover data/coverage/recipes/washington.json` inventories the
+explicitly pinned sources and persists all complete eligible connected networks.
+Open the printed `networks.html` to inspect extents and source-network sizes.
+`npm run data -- networks catalog.json` regenerates that metadata-only report.
+No DEM, metrics, topology, reference downloads or release export occur in discovery.
+The initial full-source import can still require substantial time and disk.
+
+`npm run data -- build catalog.json --network ID [--network ID ...]` verifies the
+saved discovery and prepares only the selected IDs. It reopens the persistent
+inventory without rerunning connectivity. Unknown, empty, duplicate, corrupt or
+stale selections fail before preparation. Each network gets bounded staging,
+cached metrics, topology analysis and one immutable artifact. The supplied IDs
+define the next published catalog; include existing IDs to extend it. Re-running
+reuses unchanged networks without sampling elevation or recomputing topology.
 
 Before activation, the builder streams and audits every candidate artifact,
 including reused files, and checks cross-network identities in temporary SQLite.
 Only the final catalog write activates the release. There is no persistent
-merger service, key registry, or intermediate partial catalog.
+merger service, key registry, or intermediate partial release.
 
 `npm run data -- inspect release.json` verifies compressed files, raw checksums,
-SQLite integrity, graph records, and per-artifact counts. Example recipes are
-`data/coverage/recipes/cascades.json` and `olympic.json`; relative config and
-geometry references resolve from the recipe file.
-`npm run data -- export export-options.json` exports a finalized network graph
-with its required network identity and input fingerprint. There is no hosted-service
-dependency. The catalog can be served from static HTTPS storage.
+SQLite integrity, graph records and per-artifact counts. The previous geographic
+recipes, planner, request schema and standalone export CLI have been removed.
+Source config/geometry references resolve relative to the source recipe file.
+The published catalog can be served from local files or static HTTPS storage.
+See [README](../../README.md#developer-data-builds) for Docker commands.
 
 Build environment:
 
