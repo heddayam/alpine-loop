@@ -37,20 +37,26 @@ Candidates are preserved before global representative suppression.
 
 ## Developer workflow
 
-`npm run data -- plan data/coverage/recipes/washington.json --bbox west,south,east,north`
-previews start/routing geometry without downloads or source scans. Replace `plan`
-with `build` to prepare that area. Missing required source coverage fails before
-processing. Source config/geometry paths resolve relative to the recipe file.
+`npm run data -- regions` lists the pinned named catalog. `npm run data -- plan
+glacier-peak` previews start/routing geometry without downloads or source scans;
+replace `plan` with `build` to prepare it. Missing required US source coverage fails
+before work, while the explicit international limit clips Canadian support.
 
-Preparation extracts complete local ways and context, computes or reuses segment
-metrics, derives local topology and exports one graph. Repeated unchanged builds
-reuse verified artifacts; overlapping areas reuse metric measurements. Local
-artifacts may have different topology records for shared source trails and are
-audited independently. The final catalog write activates the release atomically.
+One catalog owns the boundary, reviewed approach neighborhoods, names, aliases and
+recipe. Plan and Downloads use that same eligible-start footprint. Preparation
+extracts complete local ways/context, prunes by an admissible distance bound before
+DEM work, reuses measured segment metrics, persists compact corridors and audits.
+Schema 7 geometry/profile records are unchanged. Each artifact carries its stable
+region ID and each section its human name. Display-label changes do not change the
+graph identity. Overlapping artifacts remain independent.
 
-Building another area appends it, while rebuilding the same area replaces its
-entry. Source conflicts with retained areas fail. No statewide discovery,
-connectivity inventory or network-ID selection remains.
+Verified action receipts skip source staging on unchanged inputs. Semantic audit
+receipts are tied to exact compressed content, graph identity, geometry, audit
+version and source provenance; publication hashes transport again before reuse.
+The final catalog activates atomically. Building another region adds it, while
+rebuilding one replaces its entry. Anonymous bbox entries are retired on first
+named publication, without deleting pinned files. Conflicting retained source pins
+fail; updating pins requires a coherent generation rebuild.
 
 `npm run data -- inspect release.json` verifies compressed sizes, checksums, SQLite
 integrity and graph records. Catalogs can be served locally or from static HTTPS.
@@ -68,7 +74,7 @@ collection acceptance requires an actual successful constrained build.
 
 ## User workflow
 
-Coverage sits beside Settings on the shared map. Click start areas to select them;
+Coverage sits beside Settings on the shared map. Search/check named areas or click them;
 overlapping extents offer a choice. The panel previews start extent and download size
 before installation with one Download action.
 Disk-space checks run before creating the job. Pause, resume, cancel, update,

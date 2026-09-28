@@ -1,4 +1,4 @@
-# Loops, lollipops, and local trail preparation
+# Loops, lollipops, and named regional preparation
 
 Accepted user revision, 2026-09-28. This replaces statewide connected-network
 discovery and storage. [Status](status.md) records implementation evidence and
@@ -42,12 +42,27 @@ enumeration or a bound on trail density and search complexity.
 
 ## Local pipeline
 
-`data plan source-recipe.json --bbox west,south,east,north` previews geometry
-without source processing. `data build` with the same arguments verifies source
-pins, extracts the bounded area with complete way references, prepares metrics
-and local topology, audits, and publishes one immutable graph. All local components
-are included; connectivity does not determine preparation extent. The former
-`discover`, `networks`, saved inventory and HTML network inspector are deleted.
+`data regions` lists the pinned catalog. `data plan glacier-peak` previews the
+named trailhead footprint and routing support; `data build glacier-peak` builds it.
+The initial unit is a wilderness-sized hiking area with reviewed approaches, not
+an entire forest or an arbitrary coordinate box. Names, provenance, geometry and
+approach review are owned by one catalog in `data/coverage/regions/`.
+
+After normalization, a bounded multi-source Dijkstra pass seeds every trail node
+inside the start footprint on an undirected lower-bound graph. Any vertex on a
+closed walk of at most 50 miles must be within 25 miles of its start in that graph.
+A physical edge is retained only when both endpoint distances are finite and
+`d(u) + edgeLength + d(v) <= 50 miles` (with conservative numerical tolerance).
+Different nearest seeds only make this bound more permissive. Direction/access
+constraints are still applied in the real graph; directed outward distance alone
+would incorrectly prune some legal cycles. Pruning precedes all DEM acquisition
+and measurement. Full local access/building context remains available.
+
+Only tiles owning actual retained elevation samples are resolved. Corridor
+compaction preserves starts, junctions, metadata/direction boundaries and rings,
+retains all geometry/profile samples, sums additive costs and recomputes grade
+across joins. Biconnected components remain internal search structures. No
+statewide connectivity discovery, network inventory or bbox CLI remains.
 
 Osmium still scans the compressed provider extract. Only local trail/access/
 building context enters normalization. Temporary extracts and raw joins are
@@ -66,8 +81,9 @@ context margin protects edge-boundary selection. Context features crossing or
 enclosing the whole extract without an inside vertex can still be absent;
 building/access evidence is therefore not a completeness certificate.
 
-Completed area receipts reuse immutable graph bytes without repeating metrics
-or topology. A shared metric cache keys each physical segment's geometry,
+Completed action receipts validate dependencies and reuse immutable graph bytes before
+normalization, metrics or topology. Publication rehashes compressed transport and
+reuses semantic audits; explicit inspect still scans every graph. A shared metric cache keys each physical segment's geometry,
 elevation product and metric algorithm, allowing overlap reuse. Local topology
 and stored graph geometry may be duplicated across overlapping areas. No global
 connectivity registry, merger service or promise of zero repeated work remains.
@@ -79,7 +95,7 @@ replaces its catalog entry. Conflicting retained source pins fail.
 Each artifact has a start geometry and a larger routing geometry. Installation
 coverage and selection overlays expose eligible starts. The reader uses routing
 coverage for edges; buffer-only access points are not offered as eligible starts.
-For an overlapping start, deterministic ownership chooses one complete local graph
+For an overlapping start, stable named region IDs determine ownership of one complete local graph
 and pins the whole search to it. Independent graphs are never stitched together,
 so differences in local portal splitting or topology cannot create false junctions.
 
@@ -137,6 +153,6 @@ disk usage and Full-search usefulness remain a separate acceptance gate.
 
 A 25-mile circle alone is about 1,963 square miles; even a tiny start area is not
 a tiny data build. Elevation tiles and source scans can dominate. Local topology
-may still be dense and budget-limited. Measure one small start area before making
+may still be dense and budget-limited. Measure Glacier Peak before making
 regional performance claims, using the existing pinned cache and no repeated
 regional build as a test.

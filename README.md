@@ -105,76 +105,76 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-The workflow is **choose a start area → preview its buffered extent → build**.
-A source recipe pins provider data and reviewed exclusions. The bounding box
-selects eligible starting points; routes can leave that box. Preparation includes
-surrounding trails for requests up to **40 miles**, with a **25-mile buffer** to
-preserve the solver's explicitly labeled close matches up to 50 miles.
-
-The commands below use a small start area near Index, Washington as an example.
-Change `START_BBOX` to your desired west,south,east,north coordinates. It selects
-all eligible starts there, not a named hike or connected network.
+The workflow is **choose a named hiking area → preview → build**. Start with
+`glacier-peak`, which includes the wilderness footprint and eight reviewed USFS
+approach neighborhoods. The same footprint selects trailheads in Plan and Downloads;
+a hike does not have to enter the legal wilderness boundary. Forest names are
+search aliases, not separate overlapping state-sized builds.
 
 ```sh
-# Build tooling only; this does not build trail data.
+# Build tooling only; this does not process trail data.
 docker compose build data
-START_BBOX='-121.6,47.75,-121.5,47.85'
+docker compose run --rm data scripts/data.ts regions
 
-# Immediate geometry preview: no downloads, normalization or graph work.
-docker compose run --rm data scripts/data.ts plan \
-  data/coverage/recipes/washington.json --bbox "$START_BBOX"
+# Immediate geometry preview: no downloads or source processing.
+docker compose run --rm data scripts/data.ts plan glacier-peak
 
-# Prepare that area and its surrounding trails, reusing this checkout's cache.
+# Prepare the region, using the source cache from this checkout's earlier builds.
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build data/coverage/recipes/washington.json --bbox "$START_BBOX"
+  data scripts/data.ts build glacier-peak
 
 # In another terminal:
 npm run data -- status --watch
 ```
 
-`plan` prints the start and routing geometries; download size is known only after
-compilation. Missing provider coverage anywhere in the required buffer fails
-before data processing: add an adjacent pinned source or choose an interior area.
-Reviewed exclusions remain hard route boundaries.
+`plan` prints eligible start geometry and the surrounding routing extent. Requests
+remain capped at **40 miles**; the conservative **25-mile buffer** also supports
+explicitly labeled close matches up to 50 miles. Missing US source coverage fails
+before processing. The declared international border and reviewed exclusions are
+hard routing limits. Download bytes become known after preparation.
 
-The builder verifies the compressed source and extracts a bounded subset with
-complete way references before normalization. It then prepares local metrics,
-topology, access evidence and elevation. It does not inventory statewide trail
-connectivity. Osmium still scans the provider file, and elevation can require
-large raster downloads. Local preparation is not a fixed time or disk guarantee.
+The builder extracts local trails and access/building context, prunes trails that
+cannot participate within the distance budget **before elevation work**, and requests
+only DEM tiles owning retained samples. It reuses segment metrics across overlapping
+builds, then stores compact corridors with their full geometry and elevation profiles.
+Each named region remains an independent graph; overlapping regions never get stitched
+together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
 
-Building another box adds or replaces its area in the published local catalog.
-Unchanged areas reuse their artifacts; overlapping builds reuse measured segment
-metrics, but keep independent topology and may duplicate stored trails. A source
-pin conflict with retained areas fails instead of silently mixing snapshots.
+Unchanged builds validate dependencies and reuse their artifact before normalization.
+Building another named region adds it; rebuilding the same ID replaces it. The first
+named publication retires anonymous bbox entries from the active catalog, retaining
+immutable files needed by saved references. Conflicting source pins in retained
+regions fail explicitly; source refresh is a coherent generation change, not a
+partial mixed-snapshot update.
+
+Osmium still scans the provider extract, and missing DEM tiles can be large. About
+ten minutes for a first useful region is the **acceptance target, not a measured
+guarantee**. Status records stage timings, work counts and measured memory/disk peaks;
+first-download time and warm reuse should be evaluated separately.
 
 A fresh clone can omit the source-cache override. Ctrl+C stops at a checkpoint;
-repeat the command to reuse verified completed work. Incomplete source imports
-restart their local normalization. Transient extracts and staging files are
-removed on completion or cancellation; pinned downloads and metric caches remain.
-Reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
-`status [report.json] --watch` refreshes every five seconds; stale reports are not
-live heartbeats.
+repeat the command to reuse verified work. Incomplete imports restart normalization.
+Temporary build files and child processes are cleaned up; useful source/DEM/metric
+caches remain. Reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
+`status --watch` refreshes every five seconds; it watches the report, not the process.
 
-For native tooling, install `osmium-tool` and `uv`, then run
-`uv sync --frozen --project tools/dem --python 3.12`. Use
-`npm run data -- plan data/coverage/recipes/washington.json --bbox "$START_BBOX"`
-and replace `plan` with `build` to prepare data. Set `ALPINE_SOURCE_CACHE` to the
-matching host cache path. `npm run data -- inspect
-.local-data/releases/prepared/release.json` audits a published release.
-The former `discover`, `networks`, and `--network` workflow is removed.
+For native tooling, install `osmium-tool` and `uv`, run
+`uv sync --frozen --project tools/dem --python 3.12`, then use
+`npm run data -- plan glacier-peak` or `npm run data -- build glacier-peak`.
+`npm run data -- inspect .local-data/releases/prepared/release.json` performs a full
+transport and graph audit. The bbox, discovery and network-ID commands are removed.
 
-After publication, refresh the app, open **Coverage**, select an area, review
-its size and click **Download**. Selected areas define eligible starts; their
-surrounding trails are included automatically. Building or restarting the app
-image alone does not prepare or install trail data. Saved results and settings
-remain separate from coverage.
+After publication, rebuild/start the app with
+`docker compose up --detach --build app`. Open **Coverage**, choose **Glacier Peak
+area**, review its size and select **Download**. The page remains the normal app at
+`http://localhost:3000`; there is no networks HTML page. Building the app alone does
+not prepare or install trail data. Saved results and settings remain separate.
 
-The Docker `data` service applies a 4 GiB memory limit with swap disabled; the
-ordinary `app` image excludes data tools. See [prepared coverage](docs/rebuild/prepared-coverage.md)
-for contracts and acceptance evidence. Real-source preparation time, disk and
-memory remain unmeasured for this replacement.
+The Docker data service has a 4 GiB memory limit with swap disabled. See
+[prepared coverage](docs/rebuild/prepared-coverage.md) and the
+[regional study](docs/rebuild/regional-preparation-study.md) for contracts, tradeoffs
+and remaining real-data acceptance.
 
 ### How it fits together
 

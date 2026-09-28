@@ -99,7 +99,7 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 ## Local data and preparation
 
 Schema 7 remains the prepared graph record representation. Developers select a
-start area and prepare its surrounding trail graph. A 25-mile geographic buffer
+pinned named hiking area with reviewed approaches and prepare its surrounding graph. A 25-mile geographic buffer
 covers closed routes up to the 50-mile close-match exploration bound; requested
 hikes remain limited to 40 miles. Source gaps fail before preparation, and explicit
 exclusions remain hard boundaries. Geographic search filters still select starts
@@ -107,9 +107,9 @@ only and never clip a hike.
 
 Each local area has an independent immutable SQLite artifact. The catalog and
 installation distinguish eligible start coverage from buffered routing coverage.
-One graph owns each start; overlapping artifacts are never joined. Segment metric
-caches are reusable across overlapping builds, while topology is local to each
-artifact. Ambiguous footways are possible walking links without a global
+One graph owns each start; overlapping artifacts are never joined. An admissible graph-distance bound prunes before DEM work, and persisted corridors
+retain geometry and metric profiles. Segment metric caches are reusable across
+overlapping builds, while topology is local to each artifact. Ambiguous footways are possible walking links without a global
 connectivity prerequisite; explicit sidewalks/crossings remain excluded and access
 restrictions still apply.
 

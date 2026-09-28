@@ -1,7 +1,6 @@
 export * from "./buildings";
 export * from "./command";
 export * from "./normalize";
-export * from "./named-areas";
 export * from "./opl";
 export * from "./pipeline";
 export * from "./source";
