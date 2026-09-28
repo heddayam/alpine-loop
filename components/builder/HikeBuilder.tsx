@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Polygon } from "geojson";
 import { useRouter } from "next/navigation";
-import { DRIVE_TIME_DURATIONS_MINUTES, originSchema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
+import { MAX_ROUTE_DISTANCE_MILES, DRIVE_TIME_DURATIONS_MINUTES, originSchema, type AppSettingsV1, type GradePresetId } from "@/lib/contracts";
 import { searchCatalogSchema, searchIntentSchema, routeJobV2Schema, routeJobResultsPageV2Schema, type SearchCatalog, type SearchIntent } from "@/lib/contracts/search";
 import { HikeMap, type CoverageOverlay } from "../map/HikeMap";
 import { ResultsPanel } from "../results/ResultsPanel";
@@ -367,7 +367,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
               <div className="section-head"><h3 id="constraints-title">Route</h3></div>
               <div className="range-table">
                 <div className="range-table-header" aria-hidden="true"><span>Constraint</span><span>Min</span><span>Max</span><span>Unit</span></div>
-                <RangeInput id="distance" label="Distance" unit="mi" title="Total route distance, up to 30 miles" optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); editDraft(); }} />
+                <RangeInput id="distance" label="Distance" unit="mi" title={`Total route distance, up to ${MAX_ROUTE_DISTANCE_MILES} miles`} optional={false} value={values.distanceMiles} onChange={(next) => { patchRange(setValues, "distanceMiles", next); editDraft(); }} />
                 <RangeInput id="gain" label="Elevation gain" unit="ft" title="Cumulative elevation gain" value={values.elevationGainFeet} onChange={(next) => { patchRange(setValues, "elevationGainFeet", next); editDraft(); }} />
                 <RangeInput id="altitude" label="Max elevation" unit="ft" title="Highest point reached" value={values.maximumElevationFeet} onChange={(next) => { patchRange(setValues, "maximumElevationFeet", next); editDraft(); }} />
                 <GradePresetInput

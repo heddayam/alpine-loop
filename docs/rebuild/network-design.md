@@ -43,6 +43,20 @@ Network IDs, graph statistics and build controls stay in developer tooling.
   result retention. The user chose to delete old geographic data and start fresh;
   saved route results remain separate from installed graph data.
 
+## Distance-budget proposal — not yet implemented
+
+The request limit is 40 miles. For the proposed local preparation model, exact
+closed routes need complete mapped coverage within 20 miles of eligible starts.
+The existing solver explores up to 125% of requested maximum distance for labeled
+close matches: at the request cap, 50 miles of exploration requires a conservative
+25-mile geographic buffer. Every point of a closed route of length L lies within
+L/2 straight-line distance of its start, since both outgoing and returning paths
+must span that distance. Source completeness and conservative extraction still
+need verification; the buffer alone cannot repair missing source data.
+
+This records the preparation implication of the new limit, not an implemented
+replacement for the statewide discovery builder described below.
+
 ## Implemented builder boundary
 
 Discovery persists connectivity once per verified source/restriction fingerprint.

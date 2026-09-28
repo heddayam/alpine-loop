@@ -1,4 +1,4 @@
-import { routeCriteriaSchema, type RouteCriteria } from "@/lib/contracts";
+import { MAX_ROUTE_DISTANCE_MILES, routeCriteriaSchema, type RouteCriteria } from "@/lib/contracts";
 import type { BuilderValues, RangeField } from "./types";
 
 type ValidationResult =
@@ -24,7 +24,7 @@ export function parseSearchCriteria(values: BuilderValues): ValidationResult {
   const elevationGain = parseRange(values.elevationGainFeet, "Elevation gain");
   const maximumElevation = parseRange(values.maximumElevationFeet, "Maximum elevation");
   errors.push(...distance.errors, ...elevationGain.errors, ...maximumElevation.errors);
-  if (distance.value && distance.value.max > 30) errors.push("Route distance may not exceed 30 miles.");
+  if (distance.value && distance.value.max > MAX_ROUTE_DISTANCE_MILES) errors.push(`Route distance may not exceed ${MAX_ROUTE_DISTANCE_MILES} miles.`);
 
   const maximumRepeatedTrailPct = Number(values.maximumRepeatedTrailPct);
   if (!values.maximumRepeatedTrailPct.trim() || !Number.isInteger(maximumRepeatedTrailPct) || maximumRepeatedTrailPct < 0 || maximumRepeatedTrailPct > 100) {

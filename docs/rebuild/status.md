@@ -107,6 +107,12 @@ prepared downloads, saved-result preservation and the real-data gates remain.
   worktrees were archived and their branches deleted. Relative to 3f7149b,
   production source is 11 lines smaller and tests 45 lines smaller; the committed
   native fixture adds 44 lines. Documentation is counted separately.
+- [x] Raise the requested hike-distance limit to 40 miles. API criteria, client
+  validation and the distance tooltip share one limit. The focused route-contract
+  and builder-validation suite passes 16 tests, including acceptance at 40 and
+  rejection at 40.1 miles. For the proposed local preparation model, this implies
+  a 20-mile exact-route buffer, or 25 miles preserving the current 125% close-match
+  exploration bound. That preparation redesign is documented but not implemented.
 - [ ] Real-source continuity and bounded real-network build/install/search measurement.
 - [x] User-authorized clean data cutover: removed host `.local-data/packs` (2.7 GiB),
   published `.local-data/releases` (107 MiB), Docker runtime installed coverage

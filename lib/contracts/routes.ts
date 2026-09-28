@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { accessStateSchema, confidenceSchema, finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
 
+export const MAX_ROUTE_DISTANCE_MILES = 40;
+
 export const DRIVE_TIME_DURATIONS_MINUTES = [
   5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
   75, 90, 105, 120, 135, 150, 165, 180, 210, 240, 270, 300,
@@ -73,8 +75,8 @@ export const gradeExperienceMetricsSchema = z.object({
 
 export const routeCriteriaSchema = z.object({
   closedRoute: closedRouteTopologyPreferenceV3Schema,
-  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= 30, {
-    message: "Route distance may not exceed 30 miles",
+  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= MAX_ROUTE_DISTANCE_MILES, {
+    message: `Route distance may not exceed ${MAX_ROUTE_DISTANCE_MILES} miles`,
   }),
   elevationGainFeet: orderedRangeSchema.optional(),
   maximumElevationFeet: orderedRangeSchema.optional(),

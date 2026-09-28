@@ -30,9 +30,10 @@ describe("search criteria validation", () => {
     });
   });
 
-  it("enforces the 30-mile cap", () => {
-    const result = parseSearchCriteria(values({ distanceMiles: { enabled: true, min: "3", max: "31" } }));
+  it("accepts 40 miles and rejects distances above the cap", () => {
+    expect(parseSearchCriteria(values({ distanceMiles: { enabled: true, min: "35", max: "40" } })).success).toBe(true);
+    const result = parseSearchCriteria(values({ distanceMiles: { enabled: true, min: "3", max: "40.1" } }));
     expect(result.success).toBe(false);
-    if (!result.success) expect(result.errors).toContain("Route distance may not exceed 30 miles.");
+    if (!result.success) expect(result.errors).toContain("Route distance may not exceed 40 miles.");
   });
 });

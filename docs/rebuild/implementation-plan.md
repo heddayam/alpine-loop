@@ -13,7 +13,8 @@ its acceptance evidence. [Status](status.md) is the execution resume point.
 
 Alpine Loop generates closed hiking routes from installed trail data. It is not
 a catalog of known hikes. Users choose an area, physical route constraints,
-acceptable repetition, and whether unknown access is included.
+acceptable repetition, and whether unknown access is included. Requested route
+distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
