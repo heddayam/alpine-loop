@@ -120,7 +120,7 @@ afterEach(async () => {
 
 function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
-    closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 100 },
     distanceMiles: { min: 0.92, max: 0.94 },
     includeUncertainAccess: false,
     limit: 10,
@@ -161,7 +161,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
   test("applies 0/25/100 repetition and the shared-stem cap using exact physical edges", async () => {
     const point = accessPoint();
     const zero = await solver.generate(
-      request({ closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true }, limit: 1 }),
+      request({ closedRoute: { maximumRepeatedTrailPct: 0 }, limit: 1 }),
       context([point], fixtureGraph("loop")),
     );
     expect(zero.exact[0]?.topology).toMatchObject({ kind: "simple-loop", repeatedTrailFraction: 0 });
@@ -169,7 +169,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
     for (const maximumRepeatedTrailPct of [25, 100]) {
       const result = await solver.generate(
         request({
-          closedRoute: { maximumRepeatedTrailPct, allowMultiCycle: true },
+          closedRoute: { maximumRepeatedTrailPct },
           distanceMiles: { min: 1.17, max: 1.19 },
           limit: 1,
         }),
@@ -184,7 +184,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
 
     const repeatedZero = await solver.generate(
       request({
-        closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true },
+        closedRoute: { maximumRepeatedTrailPct: 0 },
         distanceMiles: { min: 1.17, max: 1.19 },
       }),
       context([point], fixtureGraph("lollipop")),
@@ -192,7 +192,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(repeatedZero.diagnostics.feasibleAccessPointCount).toBe(0);
     const stemCapped = await solver.generate(
       request({
-        closedRoute: { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1, allowMultiCycle: true },
+        closedRoute: { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1 },
         distanceMiles: { min: 1.17, max: 1.19 },
       }),
       context([point], fixtureGraph("lollipop")),
@@ -214,8 +214,8 @@ describe("ReachableGraphClosedRouteSolver", () => {
     const testContext = context([accessPoint()], graph);
     const graphQuery = vi.spyOn(testContext.repository, "getReachableGraph");
     for (const closedRoute of [
-      { maximumRepeatedTrailPct: 0, allowMultiCycle: true },
-      { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1, allowMultiCycle: true },
+      { maximumRepeatedTrailPct: 0 },
+      { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1 },
     ]) {
       const result = await solver.generate(request({ closedRoute, distanceMiles: { min: 1.17, max: 1.19 } }), testContext);
       expect(result.diagnostics).toMatchObject({ feasibleAccessPointCount: 0, graphQueryCount: 0 });
@@ -226,18 +226,13 @@ describe("ReachableGraphClosedRouteSolver", () => {
     expect(graphQuery).toHaveBeenCalled();
   });
 
-  test("uses the multi-cycle toggle and labels a distance close match", async () => {
+  test("keeps figure-eight lobes separate and labels a distance close match", async () => {
     const point = accessPoint();
     const figureEight = fixtureGraph("figure-eight");
     const target = request({ distanceMiles: { min: 1.85, max: 1.88 }, limit: 2 });
     const enabled = await solver.generate(target, context([point], figureEight));
-    expect(enabled.exact.some(({ topology: value }) => value.cycleCount === 2)).toBe(true);
-
-    const disabled = await solver.generate(
-      { ...target, closedRoute: { ...target.closedRoute, allowMultiCycle: false } },
-      context([point], figureEight),
-    );
-    expect([...disabled.exact, ...disabled.nearMisses].every(({ topology: value }) => value.cycleCount === 1)).toBe(true);
+    expect(enabled.exact).toEqual([]);
+    expect(enabled.nearMisses.every(({ topology: value }) => value.cycleCount === 1)).toBe(true);
 
     const near = await solver.generate(
       request({ distanceMiles: { min: 0.95, max: 1 }, limit: 1 }),
@@ -290,7 +285,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
       eligibleAccessPointCount: 12,
       feasibleAccessPointCount: 12,
       searchedAccessPointCount: 12,
-      graphQueryCount: 24,
+      graphQueryCount: 12,
     });
     expect(result.exact.length).toBeGreaterThan(0);
     for (const route of result.exact) expect(generatedClosedRouteV3Schema.safeParse(route).success).toBe(true);

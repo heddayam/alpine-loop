@@ -19,7 +19,7 @@ import {
 import { RouteSearchCancelledError } from "./control";
 import { stableHash } from "./route-identity";
 import { AccessFilterResolutionError } from "./access-filter-error";
-import { searchPenalizedClosedRoutes } from "./penalized-closed-route-search";
+import { searchSimpleRoutes } from "./simple-route-search";
 import {
   accessPointMatchesResolvedFilter,
   listEligibleAccessPointCandidates,
@@ -383,153 +383,143 @@ export class ReachableGraphClosedRouteSolver {
     let maximumLoadedDirectedEdges = 0;
     let expandedStates = 0;
     let rawCandidateCount = 0;
-    let composedCandidateCount = 0;
-    let repairedCandidateCount = 0;
-    let assemblyCandidateCount = 0;
     let directedValidationRejectionCount = 0;
     let timeToFirstExactMs: number | undefined;
     const searchedStarts = new Set<string>();
     const candidates = new Map<string, RankedClosedRoute>();
-    const rounds = 2;
-    search: for (let round = 0; round < rounds; round++) {
-      for (const [startIndex, feasibleStart] of feasible.entries()) {
+    search: for (const [startIndex, feasibleStart] of feasible.entries()) {
+      if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
+      const remainingTime = deadlineAt - now();
+      const remainingExpanded = budget.maximumExpandedStates - expandedStates;
+      const remainingRaw = budget.maximumRawCandidates - rawCandidateCount;
+      if (remainingTime <= 0) {
+        hardTruncationReasons.add("deadline");
+        break search;
+      }
+      if (remainingExpanded <= 0) {
+        hardTruncationReasons.add("maximum-expanded-states");
+        break search;
+      }
+      if (remainingRaw <= 0) {
+        hardTruncationReasons.add("maximum-raw-candidates");
+        break search;
+      }
+      const startsRemainingThisRound = feasible.length - startIndex;
+      const startDeadlineAt = deadlineAt;
+      const expansionAllocation = Math.max(
+        1,
+        Math.floor(remainingExpanded / Math.max(startsRemainingThisRound, 1)),
+      );
+      const rawAllocation = Math.max(
+        1,
+        Math.floor(remainingRaw / Math.max(startsRemainingThisRound, 1)),
+      );
+      const queryController = new AbortController();
+      const abortForParent = () => queryController.abort(context.signal?.reason);
+      context.signal?.addEventListener("abort", abortForParent, { once: true });
+      const timeout = setTimeout(
+        () => queryController.abort(new Error("Closed-route search deadline exceeded")),
+        Math.max(1, remainingTime),
+      );
+      let reachable;
+      const graphStartedAt = now();
+      try {
+        graphQueryCount += 1;
+        searchedStarts.add(feasibleStart.start.id);
+        reachable = await context.repository.getReachableGraph({
+          startNodeId: feasibleStart.start.nodeId,
+          startCoordinates: [feasibleStart.start.lon, feasibleStart.start.lat],
+          maximumDistanceMeters,
+          maximumDirectedEdges: budget.maximumDirectedEdges,
+          includeUncertainAccess: request.includeUncertainAccess,
+          coverage: context.accessFilter.coverage,
+          signal: queryController.signal,
+        });
+      } catch (error) {
         if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
-        const remainingTime = deadlineAt - now();
-        const remainingExpanded = budget.maximumExpandedStates - expandedStates;
-        const remainingRaw = budget.maximumRawCandidates - rawCandidateCount;
-        if (remainingTime <= 0) {
+        if (queryController.signal.aborted) {
           hardTruncationReasons.add("deadline");
           break search;
         }
-        if (remainingExpanded <= 0) {
-          hardTruncationReasons.add("maximum-expanded-states");
-          break search;
-        }
-        if (remainingRaw <= 0) {
-          hardTruncationReasons.add("maximum-raw-candidates");
-          break search;
-        }
-        const startsRemainingThisRound = feasible.length - startIndex;
-        const startDeadlineAt = deadlineAt;
-        const expansionAllocation = Math.max(
-          1,
-          Math.floor(remainingExpanded / Math.max(startsRemainingThisRound, 1)),
-        );
-        const rawAllocation = Math.max(
-          1,
-          Math.floor(remainingRaw / Math.max(startsRemainingThisRound, 1)),
-        );
-        const queryController = new AbortController();
-        const abortForParent = () => queryController.abort(context.signal?.reason);
-        context.signal?.addEventListener("abort", abortForParent, { once: true });
-        const timeout = setTimeout(
-          () => queryController.abort(new Error("Closed-route search deadline exceeded")),
-          Math.max(1, remainingTime),
-        );
-        let reachable;
-        const graphStartedAt = now();
-        try {
-          graphQueryCount += 1;
-          searchedStarts.add(feasibleStart.start.id);
-          reachable = await context.repository.getReachableGraph({
-            startNodeId: feasibleStart.start.nodeId,
-            startCoordinates: [feasibleStart.start.lon, feasibleStart.start.lat],
-            maximumDistanceMeters,
-            maximumDirectedEdges: budget.maximumDirectedEdges,
-            includeUncertainAccess: request.includeUncertainAccess,
-            coverage: context.accessFilter.coverage,
-            signal: queryController.signal,
-          });
-        } catch (error) {
-          if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
-          if (queryController.signal.aborted) {
-            hardTruncationReasons.add("deadline");
-            break search;
-          }
-          throw error;
-        } finally {
-          clearTimeout(timeout);
-          context.signal?.removeEventListener("abort", abortForParent);
-        }
-        this.options.onPhaseTiming?.("graph", Math.max(0, now() - graphStartedAt));
-        maximumLoadedDirectedEdges = Math.max(maximumLoadedDirectedEdges, reachable.graph.edges.length);
-        if (reachable.truncated) hardTruncationReasons.add("maximum-directed-edges");
-
-        const graphWithSelectedStart = reachable.graph.accessPoints.some(({ id }) => id === feasibleStart.start.id)
-          ? reachable.graph
-          : { ...reachable.graph, accessPoints: [...reachable.graph.accessPoints, feasibleStart.start] };
-        const generationStartedAt = now();
-        const generated = searchPenalizedClosedRoutes(
-          graphWithSelectedStart,
-          feasibleStart.start,
-          request,
-          {
-          budget: {
-            maximumDirectedEdges: budget.maximumDirectedEdges,
-            maximumExpandedStates: expansionAllocation,
-            deadlineMs: Math.max(1, Math.floor((startDeadlineAt - now()) * 0.7)),
-            maximumRawCandidates: rawAllocation,
-          },
-          signal: context.signal,
-          now,
-          maximumRouteOverlapFraction: MAXIMUM_ALLOWED_OVERLAP,
-          },
-        );
-        this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
-        expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
-        rawCandidateCount = Math.min(budget.maximumRawCandidates, rawCandidateCount + generated.diagnostics.candidateCount);
-        repairedCandidateCount += generated.diagnostics.repairAccepted;
-        assemblyCandidateCount += generated.diagnostics.assemblyAccepted;
-        for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
-        const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].sort((left, right) =>
-          left.score - right.score
-          || left.id.localeCompare(right.id));
-        const validationStartedAt = now();
-        for (const candidate of orderedCandidates) {
-          if (now() >= startDeadlineAt) {
-            hardTruncationReasons.add("deadline");
-            break;
-          }
-          composedCandidateCount += 1;
-          const reconstructed = reconstructTraversals(candidate.traversals);
-          if (!reconstructed) {
-            directedValidationRejectionCount += 1;
-            this.options.onValidationRejection?.("missing-schema-3-edge-identity");
-            continue;
-          }
-          const forwardSignature = reconstructed.map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
-          const reverseSignature = [...reconstructed].reverse().map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
-          const signature = forwardSignature < reverseSignature ? forwardSignature : reverseSignature;
-          const routeId = `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}`;
-          const validated = validateReconstructedClosedRoute(reconstructed, {
-            start: feasibleStart.start,
-            includeUncertainAccess: request.includeUncertainAccess,
-            coverage: context.accessFilter.coverage,
-            sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
-            sourceConfidence: this.options.sourceConfidence ?? "high",
-            fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
-            routeId,
-          });
-          if (!validated.valid) {
-            directedValidationRejectionCount += 1;
-            this.options.onValidationRejection?.(validated.reason);
-            continue;
-          }
-          if (request.gradeExperience && !validated.value.route.gradeExperience) {
-            directedValidationRejectionCount += 1;
-            this.options.onValidationRejection?.("missing-grade-experience-profile");
-            continue;
-          }
-          if (!request.closedRoute.allowMultiCycle && validated.value.route.topology.cycleCount > 1) continue;
-          const ranked = rankRoute(validated.value, request);
-          const previous = candidates.get(routeId);
-          if (!previous || compareRanked(ranked, previous) < 0) candidates.set(routeId, ranked);
-          if (ranked.exact && timeToFirstExactMs === undefined) {
-            timeToFirstExactMs = Math.max(0, now() - startedAt);
-          }
-        }
-        this.options.onPhaseTiming?.("validation", Math.max(0, now() - validationStartedAt));
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        context.signal?.removeEventListener("abort", abortForParent);
       }
+      this.options.onPhaseTiming?.("graph", Math.max(0, now() - graphStartedAt));
+      maximumLoadedDirectedEdges = Math.max(maximumLoadedDirectedEdges, reachable.graph.edges.length);
+      if (reachable.truncated) hardTruncationReasons.add("maximum-directed-edges");
+
+      const graphWithSelectedStart = reachable.graph.accessPoints.some(({ id }) => id === feasibleStart.start.id)
+        ? reachable.graph
+        : { ...reachable.graph, accessPoints: [...reachable.graph.accessPoints, feasibleStart.start] };
+      const generationStartedAt = now();
+      const generated = searchSimpleRoutes(
+        graphWithSelectedStart,
+        feasibleStart.start,
+        request,
+        {
+        budget: {
+          maximumDirectedEdges: budget.maximumDirectedEdges,
+          maximumExpandedStates: expansionAllocation,
+          deadlineMs: Math.max(1, Math.floor((startDeadlineAt - now()) * 0.7)),
+          maximumRawCandidates: rawAllocation,
+        },
+        signal: context.signal,
+        now,
+        maximumRouteOverlapFraction: MAXIMUM_ALLOWED_OVERLAP,
+        },
+      );
+      this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
+      expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
+      rawCandidateCount = Math.min(budget.maximumRawCandidates, rawCandidateCount + generated.diagnostics.candidateCount);
+      for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
+      const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].sort((left, right) =>
+        left.score - right.score
+        || left.id.localeCompare(right.id));
+      const validationStartedAt = now();
+      for (const candidate of orderedCandidates) {
+        if (now() >= startDeadlineAt) {
+          hardTruncationReasons.add("deadline");
+          break;
+        }
+        const reconstructed = reconstructTraversals(candidate.traversals);
+        if (!reconstructed) {
+          directedValidationRejectionCount += 1;
+          this.options.onValidationRejection?.("missing-schema-3-edge-identity");
+          continue;
+        }
+        const forwardSignature = reconstructed.map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
+        const reverseSignature = [...reconstructed].reverse().map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
+        const signature = forwardSignature < reverseSignature ? forwardSignature : reverseSignature;
+        const routeId = `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}`;
+        const validated = validateReconstructedClosedRoute(reconstructed, {
+          start: feasibleStart.start,
+          includeUncertainAccess: request.includeUncertainAccess,
+          coverage: context.accessFilter.coverage,
+          sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
+          sourceConfidence: this.options.sourceConfidence ?? "high",
+          fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
+          routeId,
+        });
+        if (!validated.valid) {
+          directedValidationRejectionCount += 1;
+          this.options.onValidationRejection?.(validated.reason);
+          continue;
+        }
+        if (request.gradeExperience && !validated.value.route.gradeExperience) {
+          directedValidationRejectionCount += 1;
+          this.options.onValidationRejection?.("missing-grade-experience-profile");
+          continue;
+        }
+        const ranked = rankRoute(validated.value, request);
+        const previous = candidates.get(routeId);
+        if (!previous || compareRanked(ranked, previous) < 0) candidates.set(routeId, ranked);
+        if (ranked.exact && timeToFirstExactMs === undefined) {
+          timeToFirstExactMs = Math.max(0, now() - startedAt);
+        }
+      }
+      this.options.onPhaseTiming?.("validation", Math.max(0, now() - validationStartedAt));
     }
 
     if (eligible.length === 0 && noCycleAccessPointCount === 0) {
@@ -560,10 +550,7 @@ export class ReachableGraphClosedRouteSolver {
         maximumLoadedDirectedEdges,
         noCycleAccessPointCount,
         feasibleAccessPointCount: feasible.length,
-        composedCandidateCount,
-        repairedCandidateCount,
         directedValidationRejectionCount,
-        expandedAssemblyStates: assemblyCandidateCount,
         ...(timeToFirstExactMs === undefined ? {} : { timeToFirstExactMs }),
         hardTruncationReasons: truncationReasons,
         nonBudgetShortfallReasons: shortfallReasons,

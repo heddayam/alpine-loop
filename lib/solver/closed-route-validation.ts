@@ -20,7 +20,7 @@ export type ClosedRouteValidationFailure =
   | "illegal-access"
   | "outside-coverage"
   | "incomplete-elevation"
-  | "zero-cycle";
+  | "unsupported-route-shape";
 
 export type ValidatedClosedRoute = {
   edges: readonly ReconstructedDirectedEdge[];
@@ -42,214 +42,46 @@ export type ClosedRouteValidationOptions = {
   routeId: string;
 };
 
-type PhysicalEdge = {
-  key: number;
-  fromNodeId: string;
-  toNodeId: string;
-  lengthMeters: number;
-  traversalCount: number;
-  repeatedDistanceMeters: number;
-};
-
-type Adjacent = { edgeIndex: number; nodeId: string };
-
-function physicalGraph(edges: readonly ReconstructedDirectedEdge[]): PhysicalEdge[] {
-  const byKey = new Map<number, PhysicalEdge>();
-  for (const edge of edges) {
-    const current = byKey.get(edge.physicalEdgeKey);
-    if (current) {
-      current.traversalCount += 1;
-      current.repeatedDistanceMeters += edge.lengthMeters;
-    } else {
-      byKey.set(edge.physicalEdgeKey, {
-        key: edge.physicalEdgeKey,
-        fromNodeId: edge.fromNodeId,
-        toNodeId: edge.toNodeId,
-        lengthMeters: edge.lengthMeters,
-        traversalCount: 1,
-        repeatedDistanceMeters: 0,
-      });
-    }
-  }
-  return [...byKey.values()].sort((left, right) => left.key - right.key);
-}
-
-function adjacencyFor(edges: readonly PhysicalEdge[]): Map<string, Adjacent[]> {
-  const adjacency = new Map<string, Adjacent[]>();
-  edges.forEach((edge, edgeIndex) => {
-    adjacency.set(edge.fromNodeId, [...(adjacency.get(edge.fromNodeId) ?? []), { edgeIndex, nodeId: edge.toNodeId }]);
-    adjacency.set(edge.toNodeId, [...(adjacency.get(edge.toNodeId) ?? []), { edgeIndex, nodeId: edge.fromNodeId }]);
-  });
-  for (const adjacent of adjacency.values()) {
-    adjacent.sort((left, right) => left.edgeIndex - right.edgeIndex || left.nodeId.localeCompare(right.nodeId));
-  }
-  return adjacency;
-}
-
-function decomposePhysicalGraph(edges: readonly PhysicalEdge[]) {
-  const adjacency = adjacencyFor(edges);
-  const discovery = new Map<string, number>();
-  const low = new Map<string, number>();
-  const bridges = new Set<number>();
-  const edgeStack: number[] = [];
-  const blocks: Array<{ edges: Set<number>; nodes: Set<string>; cycleRank: number }> = [];
-  let clock = 0;
-
-  const emitBlockThrough = (lastEdgeIndex: number): void => {
-    const blockEdges = new Set<number>();
-    while (edgeStack.length > 0) {
-      const edgeIndex = edgeStack.pop()!;
-      blockEdges.add(edgeIndex);
-      if (edgeIndex === lastEdgeIndex) break;
-    }
-    const nodes = new Set<string>();
-    for (const edgeIndex of blockEdges) {
-      nodes.add(edges[edgeIndex]!.fromNodeId);
-      nodes.add(edges[edgeIndex]!.toNodeId);
-    }
-    blocks.push({ edges: blockEdges, nodes, cycleRank: Math.max(0, blockEdges.size - nodes.size + 1) });
-  };
-
-  for (const nodeId of [...adjacency.keys()].sort()) {
-    if (discovery.has(nodeId)) continue;
-    const frames: Array<{ nodeId: string; parentEdgeIndex: number | null; nextIndex: number }> = [
-      { nodeId, parentEdgeIndex: null, nextIndex: 0 },
-    ];
-    discovery.set(nodeId, ++clock);
-    low.set(nodeId, clock);
-    while (frames.length > 0) {
-      const frame = frames.at(-1)!;
-      const neighbors = adjacency.get(frame.nodeId)!;
-      if (frame.nextIndex === neighbors.length) {
-        frames.pop();
-        const parent = frames.at(-1);
-        if (parent && frame.parentEdgeIndex !== null) {
-          const childLow = low.get(frame.nodeId)!;
-          low.set(parent.nodeId, Math.min(low.get(parent.nodeId)!, childLow));
-          if (childLow > discovery.get(parent.nodeId)!) bridges.add(frame.parentEdgeIndex);
-          if (childLow >= discovery.get(parent.nodeId)!) emitBlockThrough(frame.parentEdgeIndex);
-        }
-        continue;
-      }
-      const adjacent = neighbors[frame.nextIndex++]!;
-      if (adjacent.edgeIndex === frame.parentEdgeIndex) continue;
-      const adjacentDiscovery = discovery.get(adjacent.nodeId);
-      if (adjacentDiscovery === undefined) {
-        edgeStack.push(adjacent.edgeIndex);
-        discovery.set(adjacent.nodeId, ++clock);
-        low.set(adjacent.nodeId, clock);
-        frames.push({ nodeId: adjacent.nodeId, parentEdgeIndex: adjacent.edgeIndex, nextIndex: 0 });
-      } else if (adjacentDiscovery < discovery.get(frame.nodeId)!) {
-        edgeStack.push(adjacent.edgeIndex);
-        low.set(frame.nodeId, Math.min(low.get(frame.nodeId)!, adjacentDiscovery));
-      }
-    }
-    if (edgeStack.length > 0) emitBlockThrough(edgeStack[0]!);
-  }
-  const cyclicBlocks = blocks.filter(({ cycleRank }) => cycleRank > 0);
-  return { adjacency, bridges, cyclicBlocks };
-}
-
-function blocksMeetWithoutConnector(blocks: readonly { nodes: ReadonlySet<string> }[]): boolean {
-  if (blocks.length < 2) return true;
-  const reached = new Set([0]);
-  const pending = [0];
-  while (pending.length > 0) {
-    const current = pending.pop()!;
-    for (let index = 0; index < blocks.length; index += 1) {
-      if (reached.has(index)) continue;
-      if ([...blocks[current]!.nodes].some((nodeId) => blocks[index]!.nodes.has(nodeId))) {
-        reached.add(index);
-        pending.push(index);
-      }
-    }
-  }
-  return reached.size === blocks.length;
-}
-
-function sharedStemDistance(
-  startNodeId: string,
-  physicalEdges: readonly PhysicalEdge[],
-  adjacency: ReadonlyMap<string, readonly Adjacent[]>,
-  bridges: ReadonlySet<number>,
-): number {
-  const cycleNodes = new Set<string>();
-  physicalEdges.forEach((edge, index) => {
-    if (!bridges.has(index)) {
-      cycleNodes.add(edge.fromNodeId);
-      cycleNodes.add(edge.toNodeId);
-    }
-  });
-  if (cycleNodes.has(startNodeId)) return 0;
-  const frontier: Array<{ nodeId: string; distance: number }> = [{ nodeId: startNodeId, distance: 0 }];
-  const best = new Map<string, number>();
-  while (frontier.length > 0) {
-    frontier.sort((left, right) => left.distance - right.distance || left.nodeId.localeCompare(right.nodeId));
-    const current = frontier.shift()!;
-    if (current.distance >= (best.get(current.nodeId) ?? Number.POSITIVE_INFINITY)) continue;
-    best.set(current.nodeId, current.distance);
-    if (cycleNodes.has(current.nodeId)) return current.distance;
-    for (const adjacent of adjacency.get(current.nodeId) ?? []) {
-      if (!bridges.has(adjacent.edgeIndex)) continue;
-      const edge = physicalEdges[adjacent.edgeIndex]!;
-      if (edge.traversalCount < 2) continue;
-      frontier.push({ nodeId: adjacent.nodeId, distance: current.distance + edge.lengthMeters });
-    }
-  }
-  return 0;
-}
-
+/** Peel the one permitted retrace, then require exactly one simple cycle. */
 function topologyFor(edges: readonly ReconstructedDirectedEdge[], startNodeId: string): ClosedRouteTopologyV3 | null {
-  const physicalEdges = physicalGraph(edges);
-  const nodeIds = new Set(physicalEdges.flatMap((edge) => [edge.fromNodeId, edge.toNodeId]));
-  const cycleCount = Math.max(0, physicalEdges.length - nodeIds.size + 1);
-  if (cycleCount === 0) return null;
+  let left = 0;
+  let right = edges.length - 1;
+  let sharedStemDistanceMeters = 0;
+  let repeatedTrailDistanceMeters = 0;
+  const usedNodes = new Set<string>();
+  const usedPhysical = new Set<number>();
+  while (left < right) {
+    const outward = edges[left]!;
+    const inward = edges[right]!;
+    if (outward.physicalEdgeKey !== inward.physicalEdgeKey
+      || outward.fromNodeId !== inward.toNodeId || outward.toNodeId !== inward.fromNodeId) break;
+    if (usedNodes.has(outward.fromNodeId) || usedPhysical.has(outward.physicalEdgeKey)) return null;
+    usedNodes.add(outward.fromNodeId);
+    usedPhysical.add(outward.physicalEdgeKey);
+    sharedStemDistanceMeters += outward.lengthMeters;
+    repeatedTrailDistanceMeters += inward.lengthMeters;
+    left += 1;
+    right -= 1;
+  }
+  if (left > right) return null;
+  const attachment = edges[left]!.fromNodeId;
+  if (edges[right]!.toNodeId !== attachment || usedNodes.has(attachment)) return null;
+  for (let index = left; index <= right; index += 1) {
+    const edge = edges[index]!;
+    if (usedNodes.has(edge.fromNodeId) || usedPhysical.has(edge.physicalEdgeKey)) return null;
+    usedNodes.add(edge.fromNodeId);
+    usedPhysical.add(edge.physicalEdgeKey);
+  }
+  if (edges[0]!.fromNodeId !== startNodeId) return null;
   const totalDistanceMeters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
-  const repeatedTrailDistanceMeters = physicalEdges.reduce(
-    (sum, edge) => sum + edge.repeatedDistanceMeters,
-    0,
-  );
-  const { adjacency, bridges, cyclicBlocks } = decomposePhysicalGraph(physicalEdges);
-  const repeatedIndexes = new Set(
-    physicalEdges.map((edge, index) => edge.traversalCount > 1 ? index : -1).filter((index) => index >= 0),
-  );
-  const everyRepeatIsConnector = [...repeatedIndexes].every((edgeIndex) => bridges.has(edgeIndex));
-  const cycleBlockCount = Math.max(1, cyclicBlocks.length);
-  let kind: ClosedRouteTopologyV3["kind"];
-  if (cycleCount === 1 && repeatedTrailDistanceMeters === 0) kind = "simple-loop";
-  else if (cycleCount === 1 && repeatedTrailDistanceMeters > 0 && everyRepeatIsConnector) kind = "lollipop";
-  else if (cycleCount > 1 && cycleBlockCount > 1 && blocksMeetWithoutConnector(cyclicBlocks)) kind = "figure-eight";
-  else if (cycleCount > 1 && cycleBlockCount > 1 && bridges.size > 0) kind = "chained-loops";
-  else kind = "complex-closed";
-  const repeatedBridgeIndexes = [...repeatedIndexes].filter((edgeIndex) => bridges.has(edgeIndex));
-  const connectorNodes = new Set<string>();
-  for (const edgeIndex of repeatedBridgeIndexes) {
-    connectorNodes.add(physicalEdges[edgeIndex]!.fromNodeId);
-    connectorNodes.add(physicalEdges[edgeIndex]!.toNodeId);
-  }
-  let connectorCount = 0;
-  const visited = new Set<string>();
-  for (const nodeId of [...connectorNodes].sort()) {
-    if (visited.has(nodeId)) continue;
-    connectorCount += 1;
-    const pending = [nodeId];
-    while (pending.length > 0) {
-      const current = pending.pop()!;
-      if (visited.has(current)) continue;
-      visited.add(current);
-      for (const adjacent of adjacency.get(current) ?? []) {
-        if (repeatedIndexes.has(adjacent.edgeIndex) && bridges.has(adjacent.edgeIndex)) pending.push(adjacent.nodeId);
-      }
-    }
-  }
   return {
-    kind,
-    cycleCount,
-    cycleBlockCount,
+    kind: left === 0 ? "simple-loop" : "lollipop",
+    cycleCount: 1,
+    cycleBlockCount: 1,
+    sharedStemDistanceMeters,
     repeatedTrailDistanceMeters,
     repeatedTrailFraction: totalDistanceMeters > 0 ? repeatedTrailDistanceMeters / totalDistanceMeters : 0,
-    sharedStemDistanceMeters: sharedStemDistance(startNodeId, physicalEdges, adjacency, bridges),
-    connectorCount,
+    connectorCount: left === 0 ? 0 : 1,
   };
 }
 
@@ -311,7 +143,7 @@ export function validateReconstructedClosedRoute(
     return { valid: false, reason: "outside-coverage" };
   }
   const topology = topologyFor(edges, options.start.nodeId);
-  if (!topology) return { valid: false, reason: "zero-cycle" };
+  if (!topology) return { valid: false, reason: "unsupported-route-shape" };
   const distanceMeters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
   const knownMinimumElevations = edges.map(({ minimumElevationMeters }) => minimumElevationMeters);
   if (knownMinimumElevations.some((value) => value === null)) {

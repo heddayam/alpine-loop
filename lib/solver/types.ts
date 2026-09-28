@@ -27,10 +27,7 @@ export type RouteSearchResult = {
     maximumLoadedDirectedEdges: number;
     noCycleAccessPointCount: number;
     feasibleAccessPointCount: number;
-    composedCandidateCount: number;
-    repairedCandidateCount: number;
     directedValidationRejectionCount: number;
-    expandedAssemblyStates: number;
     timeToFirstExactMs?: number;
     hardTruncationReasons: string[];
     nonBudgetShortfallReasons: string[];

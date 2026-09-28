@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { GraphAccessPoint, GraphEdge, GraphNode, InducedGraph } from "@/lib/graph";
 
 import { RouteSearchCancelledError } from "./control";
-import { searchPenalizedClosedRoutes } from "./penalized-closed-route-search";
+import { searchSimpleRoutes } from "./simple-route-search";
 
 type PhysicalEdge = {
   id: number;
@@ -69,8 +69,7 @@ function graph(specs: readonly PhysicalEdge[]): InducedGraph {
 function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
     closedRoute: {
-      maximumRepeatedTrailPct: 0,
-      allowMultiCycle: false,
+      maximumRepeatedTrailPct: 0
     },
     distanceMiles: { min: 1.8, max: 2 },
     includeUncertainAccess: true,
@@ -86,14 +85,14 @@ const budget = {
   maximumRawCandidates: 2_000,
 };
 
-describe("searchPenalizedClosedRoutes", () => {
+describe("searchSimpleRoutes", () => {
   it("finds a directed physical cycle and returns a contiguous raw walk", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "a", length: 1_000 },
       { id: 2, from: "a", to: "b", length: 1_000 },
       { id: 3, from: "b", to: "s", length: 1_000 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request(), { budget });
+    const result = searchSimpleRoutes(fixture, start, request(), { budget });
 
     expect(result.candidates).toHaveLength(1);
     const route = result.candidates[0]!;
@@ -112,7 +111,7 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 2, from: "a", to: "b", length: 1_000 },
       { id: 3, from: "b", to: "s", length: 1_000 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
+    const result = searchSimpleRoutes(fixture, start, request({
       steepestSustainedGradePct: { min: 0, max: 5 },
     }), { budget });
 
@@ -126,7 +125,7 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 2, from: "a", to: "b", length: 1_000 },
       { id: 3, from: "b", to: "s", length: 1_000 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
+    const result = searchSimpleRoutes(fixture, start, request({
       maximumElevationFeet: { min: 0, max: 500 },
     }), { budget });
 
@@ -141,7 +140,7 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 2, from: "a", to: "b", length: 50, oneWay: true, gain: 10 },
       { id: 3, from: "b", to: "s", length: 50, oneWay: true, gain: 0 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
+    const result = searchSimpleRoutes(fixture, start, request({
       distanceMiles: { min: 140 / 1_609.344, max: 160 / 1_609.344 },
       steepestSustainedGradePct: { min: 0, max: 5 },
     }), { budget, now: () => 0 });
@@ -158,8 +157,8 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 3, from: "a", to: "b", length: 800 },
       { id: 4, from: "b", to: "p", length: 800 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 35, maximumSharedStemMiles: 0.2, allowMultiCycle: false },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 35, maximumSharedStemMiles: 0.2 },
       distanceMiles: { min: 2.05, max: 2.2 },
     }), { budget });
 
@@ -175,8 +174,8 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 3, from: "a", to: "b", length: 800 },
       { id: 4, from: "b", to: "p", length: 800 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 35, maximumSharedStemMiles: 0.4, allowMultiCycle: false },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 35, maximumSharedStemMiles: 0.4 },
       distanceMiles: { min: 2.05, max: 2.2 },
     }), { budget });
 
@@ -187,7 +186,7 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.candidates[0]!.traversals.at(-1)!.edge.physicalEdgeKey).toBe(1);
   });
 
-  it("assembles archived short cycles into a compound route", () => {
+  it("keeps figure-eight lobes separate", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "a", length: 600 },
       { id: 2, from: "a", to: "b", length: 600 },
@@ -196,16 +195,15 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 5, from: "c", to: "d", length: 600 },
       { id: 6, from: "d", to: "s", length: 600 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 0 },
       distanceMiles: { min: 2.1, max: 2.3 },
       limit: 1,
     }), { budget });
 
-    expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0]!.distanceMeters).toBe(3_600);
-    expect(new Set(result.candidates[0]!.traversals.map(({ edge }) => edge.physicalEdgeKey)).size).toBe(6);
-    expect(result.diagnostics.assemblyAccepted).toBeGreaterThan(0);
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.length).toBeGreaterThan(0);
+    expect(result.nearCandidates.every(({ distanceMeters }) => distanceMeters === 1_800)).toBe(true);
   });
 
   it("reports hard caps without exceeding them", () => {
@@ -214,7 +212,7 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 2, from: "a", to: "b", length: 1_000 },
       { id: 3, from: "b", to: "s", length: 1_000 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request(), {
+    const result = searchSimpleRoutes(fixture, start, request(), {
       budget: { ...budget, maximumExpandedStates: 1 },
     });
 
@@ -223,7 +221,7 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.diagnostics.truncationReasons).toContain("maximum-expanded-states");
   });
 
-  it("joins distinct cycles when the complete route satisfies the repetition limit", () => {
+  it("reaches a separate loop by a stem without chaining it with the local loop", () => {
     const fixture = graph([
       { id: 1, from: "s", to: "a", length: 1_000 },
       { id: 2, from: "a", to: "b", length: 1_000 },
@@ -233,16 +231,14 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 6, from: "x", to: "y", length: 700 },
       { id: 7, from: "y", to: "p", length: 700 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 10, allowMultiCycle: true },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 10 },
       distanceMiles: { min: 6_000 / 1_609.344, max: 6_200 / 1_609.344 },
       limit: 1,
     }), { budget, now: () => 0 });
-    expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0]!.distanceMeters).toBe(6_100);
-    expect(result.candidates[0]!.repeatedEdgeFraction).toBeCloseTo(500 / 6_100);
-    expect(result.candidates[0]!.violatedConstraints).toEqual([]);
-    expect(new Set(result.candidates[0]!.traversals.map(({ edge }) => edge.physicalEdgeKey)).size).toBe(7);
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates.some(({ distanceMeters }) => distanceMeters === 3_100)).toBe(true);
+    expect(result.nearCandidates.every(({ distanceMeters }) => distanceMeters === 3_000 || distanceMeters === 3_100)).toBe(true);
   });
 
   it.each([0, 1_000])("removes a tiny side loop and its %i m connector instead of padding the distance", (connector) => {
@@ -257,8 +253,8 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 7, from: "y", to: hub, length: 200 },
     ]);
     const target = 3_600 + 2 * connector;
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 35 },
       distanceMiles: { min: (target - 100) / 1_609.344, max: (target + 100) / 1_609.344 },
       limit: 1,
     }), { budget, now: () => 0 });
@@ -275,8 +271,8 @@ describe("searchPenalizedClosedRoutes", () => {
       { id: 2, from: "a", to: "b", length: 1_000 },
       { id: 3, from: "b", to: "s", length: 1_000 },
     ]);
-    const result = searchPenalizedClosedRoutes(fixture, start, request({
-      closedRoute: { maximumRepeatedTrailPct: 55, allowMultiCycle: true },
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 55 },
       distanceMiles: { min: 5_900 / 1_609.344, max: 6_100 / 1_609.344 },
       limit: 1,
     }), { budget, now: () => 0 });
@@ -284,10 +280,78 @@ describe("searchPenalizedClosedRoutes", () => {
     expect(result.nearCandidates.some((candidate) => candidate.distanceMeters === 3_000)).toBe(true);
   });
 
-  it("cooperatively aborts before and during graph work", () => {
+  it("does not use a one-way trail as a retraced stem", () => {
+    const fixture = graph([
+      { id: 1, from: "s", to: "p", length: 500, oneWay: true },
+      { id: 2, from: "p", to: "a", length: 800 },
+      { id: 3, from: "a", to: "b", length: 800 },
+      { id: 4, from: "b", to: "p", length: 800 },
+    ]);
+    const result = searchSimpleRoutes(fixture, start, request({
+      closedRoute: { maximumRepeatedTrailPct: 100 },
+    }), { budget });
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates).toEqual([]);
+  });
+
+  it("keeps distinct parallel physical trails as a valid cycle", () => {
+    const result = searchSimpleRoutes(graph([
+      { id: 1, from: "s", to: "a", length: 1_500 },
+      { id: 2, from: "s", to: "a", length: 1_500 },
+    ]), start, request(), { budget });
+    expect(result.candidates).toHaveLength(1);
+    expect(new Set(result.candidates[0]!.traversals.map(({ edge }) => edge.physicalEdgeKey))).toEqual(new Set([1, 2]));
+  });
+
+  // Fixed-work discovery floor measured against the former solver: 4, 7, 9
+  // diverse exact routes respectively. This is a small synthetic regression,
+  // not a claim about exhaustive discovery or regional performance.
+  it.each([[3, 4], [5, 7], [7, 9]])("preserves useful discovery on a %i-wide grid", (size, minimumExact) => {
+    const specs: PhysicalEdge[] = [];
+    const node = (x: number, y: number) => x === 0 && y === 0 ? "s" : `${x}:${y}`;
+    let id = 1;
+    for (let x = 0; x < size; x++) for (let y = 0; y < size; y++) {
+      if (x + 1 < size) specs.push({ id: id++, from: node(x, y), to: node(x + 1, y), length: 250 });
+      if (y + 1 < size) specs.push({ id: id++, from: node(x, y), to: node(x, y + 1), length: 250 });
+    }
+    const result = searchSimpleRoutes(graph(specs), start, request({
+      distanceMiles: { min: (size * 500 - 100) / 1609.344, max: (size * 500 + 100) / 1609.344 },
+      closedRoute: { maximumRepeatedTrailPct: 35 },
+      limit: 10,
+    }), { budget: { ...budget, maximumExpandedStates: 25_000 }, now: () => 0 });
+    expect(result.candidates.length).toBeGreaterThanOrEqual(minimumExact);
+    expect(result.diagnostics.expandedStates).toBeLessThanOrEqual(25_000);
+    expect(result.diagnostics.candidateCount).toBeLessThanOrEqual(budget.maximumRawCandidates);
+  });
+
+  it("enforces the directed-edge load cap", () => {
+    const result = searchSimpleRoutes(graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+    ]), start, request(), { budget: { ...budget, maximumDirectedEdges: 2 } });
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates).toEqual([]);
+    expect(result.diagnostics.truncationReasons).toContain("maximum-directed-edges");
+  });
+
+  it("cooperatively aborts during weighted-bound computation", () => {
+    const controller = new AbortController();
+    let calls = 0;
+    expect(() => searchSimpleRoutes(graph([
+      { id: 1, from: "s", to: "a", length: 1_000 },
+      { id: 2, from: "a", to: "b", length: 1_000 },
+      { id: 3, from: "b", to: "s", length: 1_000 },
+    ]), start, request(), { budget, signal: controller.signal, now: () => {
+      if (++calls === 3) controller.abort("stop");
+      return 0;
+    } })).toThrow(RouteSearchCancelledError);
+  });
+
+  it("cooperatively aborts before graph work", () => {
     const controller = new AbortController();
     controller.abort(new Error("stop"));
-    expect(() => searchPenalizedClosedRoutes(graph([
+    expect(() => searchSimpleRoutes(graph([
       { id: 1, from: "s", to: "a", length: 1_000 },
     ]), start, request(), { budget, signal: controller.signal })).toThrow(RouteSearchCancelledError);
   });
