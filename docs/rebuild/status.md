@@ -154,6 +154,12 @@ unexplained pipeline loss.
   real shared starts and representative boundary routes. README gives the exact
   Docker command, including rebuilding the tooling image to load this catalog.
 
+Build correction: the new test accessed optional `CoverageRegion.sources` without
+narrowing, failing the app's TypeScript check despite passing Vitest. Optional
+chaining now preserves the equality assertion (missing provenance still fails).
+The two region tests pass. The Docker retry was canceled at the user's request;
+the user will rerun the production build.
+
 ### Local preparation with a distance budget — 2026-09-28
 
 This active revision supersedes the complete-network/discovery builder recorded

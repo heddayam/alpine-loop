@@ -36,7 +36,7 @@ it("plans neighboring areas with a shared approach and distinct eligible starts"
   expect(coordinateIsInsideArea(downey,second.geometry)).toBe(true);
   // Reject the mislocated USFS Stevens Pass North record, which points to Snoqualmie.
   expect(coordinateIsInsideArea([-121.4154977,47.4284097],second.startGeometry)).toBe(false);
-  expect(jackson.sources.map(source=>source.id)).toEqual([
+  expect(jackson.sources?.map(source=>source.id)).toEqual([
     "region-boundary-henry-m-jackson","region-approaches-henry-m-jackson",
   ]);
 });
