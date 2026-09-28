@@ -20,7 +20,7 @@ it("downloads selected sections directly without a preview request", async () =>
   const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/jobs") ? job : catalog));
   vi.stubGlobal("fetch", fetcher);
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByText("1 section selected · up to 256 KiB download · 1.0 MiB installed size")).toBeVisible();
+  expect(await screen.findByText("1 section selected · up to 256 KiB download · 1.0 MiB on device")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Download" }));
   await screen.findByRole("button", { name: "Pause" });
   expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) }));
@@ -85,7 +85,7 @@ it("removes selected installed sections explicitly and announces the change", as
 
 it("requires explicit removal when a new catalog drops previously installed sections", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, installed: { ...installation, releaseId: "old", sectionIds: ["retired"] } })));
-  render(<CoveragePanel {...props} />);
+  render(<CoveragePanel {...props} selected={[]} />);
   expect(await screen.findByRole("button", { name: "Update" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Remove unavailable sections (1)" })).toBeEnabled();
 });
@@ -99,7 +99,7 @@ it("shows concise available and installed counts for map selection", async () =>
   const view = render(<CoveragePanel {...props} selected={["next"]} onMapChange={onMapChange} />);
   expect(await screen.findByText("2 available")).toBeVisible();
   expect(screen.getByText("1 installed")).toBeVisible();
-  expect(screen.getByText("1 section selected · up to 0 KiB download · 1.0 MiB installed size")).toBeVisible();
+  expect(screen.getByText("1 section selected · up to 0 KiB download · 1.0 MiB on device")).toBeVisible();
   expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
   expect(onMapChange.mock.lastCall![0].focus).toEqual([-123,46,-120,49]);
   expect(view.container.querySelector("details, summary, select, p")).toBeNull();
@@ -138,11 +138,37 @@ it("previews complete network extents and deduplicated sizes while reusing immut
     ] },
   })));
   render(<CoveragePanel {...props} selected={["section", "next", "next"]} onMapChange={onMapChange} onShowArea={onShowArea} />);
-  expect(await screen.findByText("2 networks selected · up to 256 KiB download · 2.0 MiB installed size")).toBeVisible();
-  expect(screen.getByText(/reaches the source boundary/)).toBeVisible();
+  expect(await screen.findByText("2 networks selected · up to 256 KiB download · 2.0 MiB on device")).toBeVisible();
+  expect(screen.getByText("Trails may continue beyond the available data.")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Show selected area" }));
   expect(onMapChange.mock.lastCall![0]).toMatchObject({ focus: [-124,45,-119,50], focusRevision: 1 });
   expect(onShowArea).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "Show selected area" }));
   expect(onMapChange.mock.lastCall![0].focusRevision).toBe(2);
+});
+
+
+it("guides map selection without empty summaries or inactive selection actions", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, release: { ...catalog.release!, partitioning: "connected-networks", artifacts: catalog.release!.artifacts.map((file) => ({ ...file, graphId: "network-fixture" })), sections: catalog.release!.sections.map((section) => ({ ...section, network: { nodeCount: 4, physicalEdgeCount: 4, loopBlockCount: 1, sourceBoundaryLimited: true } })) } })));
+  render(<CoveragePanel {...props} selected={["unknown"]} />);
+  expect(await screen.findByText("Select a network on the map.")).toBeVisible();
+  expect(screen.queryByText(/selected ·/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/download ·/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Show selected area" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Trails may continue beyond the available data.")).not.toBeInTheDocument();
+});
+
+it("can update installed coverage without a map selection and shows the update size", async () => {
+  const release = catalog.release!;
+  const replacement = { ...release.artifacts[0], id: "b".repeat(64), path: `objects/${"b".repeat(64)}.sqlite.gz`, compressedBytes: 524288, bytes: 2097152 };
+  const updatedCatalog = { ...catalog, installed: { ...installation, releaseId: "older" }, release: { ...release, artifacts: [replacement], sections: [{ ...release.sections[0], artifactIds: [replacement.id] }] } };
+  const fetcher = vi.fn(async (url: string) => response(url.endsWith("/jobs") ? job : updatedCatalog));
+  vi.stubGlobal("fetch", fetcher);
+  render(<CoveragePanel {...props} selected={[]} />);
+  expect(await screen.findByText("Update downloaded trails · up to 512 KiB download · 2.0 MiB on device")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Show selected area" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Update" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) })));
 });

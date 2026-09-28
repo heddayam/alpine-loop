@@ -65,11 +65,12 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose,
       {catalog ? <>
         <div className="coverage-counts" role="status"><span><i className="coverage-swatch coverage-available" />{additionalCount} available</span><span><i className="coverage-swatch coverage-installed" />{installedIds.size} installed</span></div>
         {release ? <>
-          <div className="coverage-selection" role="status">{selectedIds.size} {unit}{selectedIds.size === 1 ? "" : "s"} selected · up to {bytes(selectedBytes)} download · {bytes(installedBytes)} installed size</div>
-          {selectedSections.some(({ network }) => network?.sourceBoundaryLimited) ? <span className="coverage-selection">Selected network reaches the source boundary; trails may continue beyond it.</span> : null}
+          {!selectedIds.size ? <span className="coverage-selection">Select a {unit} on the map.</span> : null}
+          {selectedIds.size || updating ? <div className="coverage-selection" role="status">{selectedIds.size ? `${selectedIds.size} ${unit}${selectedIds.size === 1 ? "" : "s"} selected` : "Update downloaded trails"} · up to {bytes(selectedBytes)} download · {bytes(installedBytes)} on device</div> : null}
+          {selectedSections.some(({ network }) => network?.sourceBoundaryLimited) ? <span className="coverage-selection">Trails may continue beyond the available data.</span> : null}
           <div className="action-row">
-            <button type="button" className="btn" disabled={!selectedIds.size} onClick={showSelectedArea}>Show selected area</button>
-            <button type="button" className="btn" disabled={busy || (updating ? unavailableInstalled.length > 0 : !downloadable)} onClick={() => request && void resource.start(request)}>{updating ? "Update" : "Download"}</button>
+            {selectedIds.size ? <button type="button" className="btn" onClick={showSelectedArea}>Show selected area</button> : null}
+            {selectedIds.size || updating ? <button type="button" className="btn" disabled={busy || (updating ? unavailableInstalled.length > 0 : !downloadable)} onClick={() => request && void resource.start(request)}>{updating ? "Update" : "Download"}</button> : null}
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
             {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable {unit}s ({unavailableInstalled.length})</button> : null}
           </div>
