@@ -76,7 +76,9 @@ export class DownloadService {
             release = await this.release();
         }
         catch (e) {
-            error = e instanceof Error ? e.message : String(e);
+            // A fresh local setup has no published catalog until its first build.
+            if ((e as NodeJS.ErrnoException).code !== 'ENOENT' || this.source.startsWith('https://'))
+                error = e instanceof Error ? e.message : String(e);
         }
         const installed = await loadInstallation(this.root);
         return { release: release ?? installed?.release ?? null, installed: installed?.installation ?? null, jobs: this.store.list(), error };

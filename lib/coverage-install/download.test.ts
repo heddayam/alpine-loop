@@ -56,6 +56,17 @@ async function install(f: Awaited<ReturnType<typeof fixture>>, sections = ['a'])
     }
 }
 describe('prepared coverage installation', () => {
+    it('treats an unpublished local catalog as empty while retaining malformed-catalog errors', async () => {
+        const f = await fixture();
+        await rm(join(f.source, 'release.json'));
+        const service = new DownloadService(f.options);
+        try {
+            expect(await service.catalog()).toEqual({ release: null, installed: null, jobs: [], error: null });
+            await writeFile(join(f.source, 'release.json'), '{broken');
+            expect((await service.catalog()).error).toBeTruthy();
+        } finally { service.close(); }
+    });
+
     it('reuses a complete immutable network across catalog releases and rejects mismatched graph identity', async () => {
         const f = await fixture('network-v1');
         const artifact = { ...f.artifact, graphId: 'network-v1' };

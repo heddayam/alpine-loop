@@ -8,6 +8,14 @@ const response = (body: unknown) => ({ ok: true, json: async () => body });
 const props = { open: true, selected: ["section"] };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+it("shows an empty network state without a filesystem error or download action", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({release:null,installed:null,jobs:[],error:null})));
+  render(<CoveragePanel {...props} />);
+  expect(await screen.findByText("No trail networks available yet.")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
+});
+
 it("downloads selected sections directly without a preview request", async () => {
   const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/jobs") ? job : catalog));
   vi.stubGlobal("fetch", fetcher);

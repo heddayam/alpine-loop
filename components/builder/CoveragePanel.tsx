@@ -73,7 +73,7 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose,
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
             {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable {unit}s ({unavailableInstalled.length})</button> : null}
           </div>
-        </> : !catalog.error ? <span>No catalog configured</span> : null}
+        </> : !catalog.error ? <span>No trail networks available yet.</span> : null}
         {activeJobs.length ? <section className="coverage-downloads" aria-label="Active downloads">{activeJobs.map((job) => <article key={job.id} className="coverage-download" aria-label={`Download ${job.id}`}>
           <header><strong>{job.sectionIds.length} {unit}{job.sectionIds.length === 1 ? "" : "s"}</strong><span>{job.status}</span></header>
           <div role="status">{bytes(job.downloadedBytes)} / {bytes(job.totalBytes)}</div>
