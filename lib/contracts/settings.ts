@@ -13,8 +13,11 @@ export const loopOptionDefaultsSchema = z.object({
   maximumRepeatedTrailPct: z.number().int().min(0).max(100),
   sharedApproachEnabled: z.boolean(),
   maximumSharedApproachMiles: z.number().min(0).max(30),
-  allowMultiCycle: z.boolean(),
-}).strict();
+  allowMultiCycle: z.boolean().optional(),
+}).strict().transform(({ allowMultiCycle, ...preferences }) => {
+  void allowMultiCycle;
+  return preferences;
+});
 
 export const appSettingsV1Schema = z.object({
   schemaVersion: z.literal(1),

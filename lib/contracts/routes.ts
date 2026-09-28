@@ -44,8 +44,12 @@ export const bboxSchema = z
 export const closedRouteTopologyPreferenceV3Schema = z.object({
   maximumRepeatedTrailPct: z.number().int().min(0).max(100),
   maximumSharedStemMiles: finiteNumberSchema.nonnegative().max(30).optional(),
-  allowMultiCycle: z.boolean(),
-}).strict();
+  // Read old saved requests, but never expose the retired preference to search.
+  allowMultiCycle: z.boolean().optional(),
+}).strict().transform(({ allowMultiCycle, ...preferences }) => {
+  void allowMultiCycle;
+  return preferences;
+});
 
 
 export const GRADE_WINDOW_METERS = 100;

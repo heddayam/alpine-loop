@@ -13,17 +13,26 @@ export const releaseArtifactSchema = z.object({
   compressedBytes: bytes,
   bytes,
   geometry: areaGeometrySchema,
+  /** Immutable network graph identity, independent of the catalog release. */
+  graphId: identity.optional(),
 }).strict().refine((artifact) => artifact.path === `objects/${artifact.id}.sqlite.gz`, "Artifact path must match its SHA-256 identity");
 
 export const releaseSectionSchema = z.object({
   id: identity,
   geometry: areaGeometrySchema,
   artifactIds: z.array(digest).min(1),
+  network: z.object({
+    nodeCount: bytes,
+    physicalEdgeCount: bytes,
+    loopBlockCount: bytes,
+    sourceBoundaryLimited: z.boolean(),
+  }).strict().optional(),
 }).strict();
 
 export const dataReleaseSchema = z.object({
   schemaVersion: z.literal(1),
   graphSchemaVersion: z.literal("7"),
+  partitioning: z.enum(["geographic", "connected-networks"]).optional(),
   id: identity,
   builtAt: isoDateSchema,
   compilerVersion: z.string().min(1),
@@ -45,6 +54,15 @@ export const dataReleaseSchema = z.object({
   for (const section of release.sections) {
     if (new Set(section.artifactIds).size !== section.artifactIds.length || section.artifactIds.some((id) => !artifacts.has(id))) {
       context.addIssue({ code: "custom", message: `Section ${section.id} has invalid artifact references` });
+    }
+    if (release.partitioning === "connected-networks" && (!section.network || section.artifactIds.some(id => !release.artifacts.find(artifact => artifact.id === id)?.graphId))) {
+      context.addIssue({ code: "custom", message: `Network ${section.id} requires network metadata and immutable graph identities` });
+    }
+  }
+  if (release.partitioning === "connected-networks") {
+    const references = release.sections.flatMap(section => section.artifactIds);
+    if (new Set(references).size !== references.length || artifacts.size !== references.length) {
+      context.addIssue({ code: "custom", message: "Every network artifact must belong to exactly one complete network" });
     }
   }
 });
