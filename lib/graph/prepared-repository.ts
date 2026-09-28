@@ -7,7 +7,7 @@ import type { AccessPointCandidate, AccessPointCandidateQuery, GraphEdge, GraphN
 export type PreparedGraphDescriptor = {
   releaseId: string;
   installationId: string;
-  artifacts: readonly { path: string; geometry: AreaGeometry }[];
+  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string }[];
   coverage: AreaGeometry;
 };
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
@@ -42,6 +42,7 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly packId: string;
   readonly releaseId: string;
   readonly #artifacts: Artifact[];
+  readonly #graphIds: Map<string, string>;
   readonly #coverage: AreaGeometry;
   readonly #coverageJson: string;
   readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
@@ -58,6 +59,7 @@ export class PreparedGraphRepository implements GraphRepository {
     this.#artifacts = descriptor.artifacts.map(artifact => ({
       ...structuredClone(artifact), bounds: areaBounds(artifact.geometry),
     })).sort((a, b) => a.path.localeCompare(b.path));
+    this.#graphIds = new Map(this.#artifacts.map(artifact => [artifact.path, artifact.graphId ?? descriptor.releaseId]));
   }
 
   get connectionStats(): { open: number; peak: number; limit: number } {
@@ -82,7 +84,7 @@ export class PreparedGraphRepository implements GraphRepository {
     try {
       const metadata = new Map(database.prepare("SELECT key, value FROM metadata").all().map(row => [row.key, row.value]));
       if (metadata.get("schemaVersion") !== "7") throw new Error("expected schema version 7");
-      if (metadata.get("releaseId") !== this.releaseId) throw new Error("release identity mismatch");
+      if (metadata.get("releaseId") !== this.#graphIds.get(path)) throw new Error("release identity mismatch");
       database.prepare("SELECT known_minimum_stem_m, inclusive_minimum_stem_m FROM access_points LIMIT 0");
       database.exec("PRAGMA cache_size = -2048");
     } catch (error) {

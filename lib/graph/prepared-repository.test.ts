@@ -97,6 +97,23 @@ const query: ReachableGraphQuery = {
 };
 const sortedEdges = (graph: InducedGraph) => [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
 
+test("pins immutable network identity independently of an expanded release catalog", async () => {
+  const { prepared, mono } = fixture();
+  const repository = new PreparedGraphRepository({
+    releaseId: "expanded-catalog", installationId: "installed-networks",
+    artifacts: [{ path: prepared, geometry: full, graphId: "release" }], coverage: full,
+  });
+  repositories.push(repository);
+  const expected = await mono.getReachableGraph(query);
+  expect(sortedEdges((await repository.getReachableGraph(query)).graph)).toEqual(sortedEdges(expected.graph));
+  const wrong = new PreparedGraphRepository({
+    releaseId: "expanded-catalog", installationId: "installed-networks",
+    artifacts: [{ path: prepared, geometry: full, graphId: "wrong-network-version" }], coverage: full,
+  });
+  repositories.push(wrong);
+  await expect(wrong.getReachableGraph(query)).rejects.toThrow("identity mismatch");
+});
+
 test("pieces match the monolithic graph across seams, corner starts and boundary-aligned edges", async () => {
   const { mono, artifacts, open } = fixture();
   const expected = await mono.getReachableGraph(query);
@@ -123,7 +140,7 @@ test("solver exact routes are unchanged; a missing section cannot borrow its cyc
   const solver = new ReachableGraphClosedRouteSolver({ pack: GRAPH_FIXTURE_IDENTITY });
   const request = {
     distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, limit: 1,
-    closedRoute: { maximumRepeatedTrailPct: 100, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 100 },
   };
   const solve = (repository: PreparedGraphRepository | SQLiteGraphRepository, coverage = full) => solver.generate(request, {
     repository, accessFilter: { predicates: [rectangle(-0.00001, -0.00001, 0.00001, 0.00001)], coverage },

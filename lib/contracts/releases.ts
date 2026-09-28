@@ -24,7 +24,7 @@ export const releaseSectionSchema = z.object({
   network: z.object({
     nodeCount: bytes,
     physicalEdgeCount: bytes,
-    loopBlockCount: bytes,
+    loopBlockCount: bytes.optional(),
     sourceBoundaryLimited: z.boolean(),
   }).strict().optional(),
 }).strict();

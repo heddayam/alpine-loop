@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
-import type { DataRelease } from '@/lib/contracts/releases';
+import { dataReleaseSchema, type DataRelease } from '@/lib/contracts/releases';
 import { DownloadService, runDownloadWorker } from './service';
 import { cleanupInstallations, loadInstallation, withInstallationPins, assertMigrationReady, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
@@ -56,6 +56,30 @@ async function install(f: Awaited<ReturnType<typeof fixture>>, sections = ['a'])
     }
 }
 describe('prepared coverage installation', () => {
+    it('reuses a complete immutable network across catalog releases and rejects mismatched graph identity', async () => {
+        const f = await fixture('network-v1');
+        const artifact = { ...f.artifact, graphId: 'network-v1' };
+        f.release = dataReleaseSchema.parse({ ...f.release, id: 'catalog-v1', partitioning: 'connected-networks',
+            artifacts: [artifact], sections: [{ id: 'a', geometry, artifactIds: [artifact.id],
+                network: { nodeCount: 1, physicalEdgeCount: 0, sourceBoundaryLimited: true } }] });
+        await writeFile(join(f.source, 'release.json'), JSON.stringify(f.release));
+        expect((await install(f)).status).toBe('completed');
+        const expanded = { ...f.release, id: 'catalog-v2' };
+        await writeFile(join(f.source, 'release.json'), JSON.stringify(expanded));
+        const service = new DownloadService(f.options);
+        try {
+            const plan = await service.plan({ releaseId: expanded.id, sectionIds: ['a'] });
+            expect(plan).toMatchObject({ downloadBytes: 0, additionalBytes: 0, reusableBytes: artifact.bytes });
+            const job = await service.create({ releaseId: expanded.id, sectionIds: ['a'] });
+            await runDownloadWorker(f.options);
+            expect(service.get(job.id).status).toBe('completed');
+            const loaded = await loadInstallation(f.root);
+            expect(loaded?.artifacts[0].graphId).toBe('network-v1');
+            await expect(verifyArtifact(join(f.root, 'artifacts', `${artifact.id}.sqlite`), { ...artifact, graphId: 'wrong' }, expanded.id)).rejects.toThrow('identity mismatch');
+        } finally { service.close(); }
+        expect(dataReleaseSchema.safeParse({ ...expanded, sections: [...expanded.sections, { ...expanded.sections[0], id: 'duplicate-network' }] }).success).toBe(false);
+        expect(dataReleaseSchema.safeParse({ ...expanded, artifacts: [f.artifact] }).success).toBe(false);
+    });
     it('downloads and atomically activates exact section union, then reuses verified bytes', async () => {
         const f = await fixture();
         expect((await install(f)).status).toBe('completed');

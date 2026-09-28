@@ -45,7 +45,7 @@ export async function verifyArtifact(file: string, artifact: ReleaseArtifact, re
     const db = new DatabaseSync(file, { readOnly: true });
     try {
         const metadata = new Map(db.prepare('SELECT key,value FROM metadata').all().map(r => [r.key, r.value]));
-        if (metadata.get('schemaVersion') !== '7' || metadata.get('releaseId') !== releaseId)
+        if (metadata.get('schemaVersion') !== '7' || metadata.get('releaseId') !== (artifact.graphId ?? releaseId))
             throw new Error('Artifact schema or release identity mismatch');
         const columns = new Set(db.prepare('PRAGMA table_info(access_points)').all().map(r => r.name));
         for (const field of ['known_minimum_stem_m', 'inclusive_minimum_stem_m'])
