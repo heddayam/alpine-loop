@@ -8,7 +8,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { CoverageUnit } from "./types";
 import type { ThreeDepCollection } from "@/lib/data/elevation/collection";
 import { rectangle } from "./geometry";
-import { describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";
+import { geometryElevationFingerprint, describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";
 
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/data/elevation/collection", async (original) => ({
@@ -166,4 +166,26 @@ it("validates only relevant raster bytes when describing a cached network",async
   expect(await describeCanonicalElevation(south,value.cacheRoot,value.preparationRoot,cache)).not.toBeNull();
   await expect(describeCanonicalElevation(rectangle([-121.8,48.1,-121.2,48.2]),value.cacheRoot,value.preparationRoot,cache)).rejects.toThrow("integrity validation");
   expect(refresh).not.toHaveBeenCalled();
+});
+
+it("keys segment metrics by every sampled tile, independent of unrelated area tiles", () => {
+  const bytes=Buffer.from("tile");
+  const south=product("south","n48w122","south.tif",bytes);
+  const north=product("north","n49w122","north.tif",bytes);
+  const far=product("far","n50w122","far.tif",bytes);
+  const segment:[number,number][]=[[-121.5,47.99],[-121.5,48.01]];
+  const before=geometryElevationFingerprint([south,north])(segment);
+  expect(geometryElevationFingerprint([far,north,south])(segment)).toBe(before);
+  const changed={...north,receipt:{...north.receipt,sha256:`sha256:${"2".repeat(64)}`}};
+  expect(geometryElevationFingerprint([south,changed])(segment)).not.toBe(before);
+  expect(()=>geometryElevationFingerprint([south,far])([[-121.5,47.9],[-121.5,49.1]])).toThrow("-122,48");
+});
+it("uses exact seam ownership, including zero and negative latitudes", () => {
+  const bytes=Buffer.from("tile");
+  const tiles=[product("south","n48w122","a",bytes),product("north","n49w122","b",bytes),product("west","n48w123","c",bytes),product("equator","n00w122","d",bytes),product("negative","s01w122","e",bytes)];
+  const fingerprint=geometryElevationFingerprint(tiles);
+  for(const [point,owner] of [
+    [[-121.9,48],tiles[0]], [[-122,47.9],tiles[0]], [[-122.000001,47.9],tiles[2]], [[-121.9,0],tiles[3]], [[-121.9,-1],tiles[4]],
+  ] as const) expect(fingerprint([point,point])).toBe(geometryElevationFingerprint([owner!])([point,point]));
+  expect(()=>geometryElevationFingerprint([tiles[1]!])([[-121.9,48],[-121.9,48]])).toThrow("-122,47");
 });

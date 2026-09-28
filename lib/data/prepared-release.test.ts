@@ -16,7 +16,7 @@ beforeEach(async()=>{root=await mkdtemp(path.join(tmpdir(),"network-export-test-
 afterEach(async()=>{await rm(root,{recursive:true,force:true});});
 const source={id:"fixture",authority:"Alpine Loop",dataset:"Synthetic trails",version:"1",retrievedAt:"2026-09-28T00:00:00Z",url:"https://example.invalid/source",license:"CC0",contentHash:`sha256:${"1".repeat(64)}`};
 function fixture(name="a",offset=0):PreparedReleaseOptions {
-  const options:PreparedReleaseOptions={databasePath:path.join(root,`${name}.sqlite`),outputRoot:root,geometry:rectangle([-2,-2,2,2]),sources:[source],regions:[],builtAt:source.retrievedAt,compilerVersion:"fixture",metricAlgorithmVersion:"fixture",network:{id:name,inputFingerprint:`input-${name}`,summary:{nodeCount:2,physicalEdgeCount:1,sourceBoundaryLimited:true}},publish:false};
+  const options:PreparedReleaseOptions={databasePath:path.join(root,`${name}.sqlite`),outputRoot:root,geometry:rectangle([-2,-2,2,2]),sources:[source],regions:[],builtAt:source.retrievedAt,compilerVersion:"fixture",metricAlgorithmVersion:"fixture",area:{id:name,inputFingerprint:`input-${name}`,startGeometry:rectangle([-0.1,-0.1,0.1,0.1]),maximumRouteMiles:40,bufferMiles:25},publish:false};
   const db=new DatabaseSync(options.databasePath);
   try {
     createPreparedSchema(db);
@@ -45,19 +45,21 @@ async function mutateArtifact(release:DataRelease,sql:string) {
   release.artifacts=[{...artifact,id,path:`objects/${id}.sqlite.gz`,bytes:bytes.length,compressedBytes:compressed.length}];
   await writeFile(path.join(root,release.artifacts[0]!.path),compressed);
 }
-it("exports the complete graph directly, with no geographic partitioning or renumbering",async()=>{
+it("exports routing geometry separately from eligible starts",async()=>{
   const options=fixture(),release=await exportPreparedRelease({...options,publish:true});
   expect(release.sections).toHaveLength(1);expect(release.artifacts).toHaveLength(1);
-  expect(release.partitioning).toBe("connected-networks");
+  expect(release.partitioning).toBe("local-areas");
+  expect(release.sections[0]!.geometry).toEqual(options.area.startGeometry);
+  expect(release.artifacts[0]!.geometry).toEqual(options.geometry);
   expect(release.artifacts[0]!.graphId).toBe(preparedReleaseId(options));
   expect(gunzipSync(await readFile(path.join(root,release.artifacts[0]!.path)))).toEqual(await readFile(options.databasePath));
   expect(await inspectPreparedRelease(path.join(root,"release.json"))).toMatchObject({verified:true,sections:1,artifacts:[{nodes:2,directedEdges:1}]});
   expect((await readdir(root)).some(name=>name.startsWith(".export-"))).toBe(false);
 });
-it("includes network membership and input fingerprint in immutable graph identity",()=>{
+it("includes start area and input fingerprint in immutable graph identity",()=>{
   const options=fixture();
-  expect(preparedReleaseId({...options,network:{...options.network,id:"another-network"}})).not.toBe(preparedReleaseId(options));
-  expect(preparedReleaseId({...options,network:{...options.network,inputFingerprint:"changed-input"}})).not.toBe(preparedReleaseId(options));
+  expect(preparedReleaseId({...options,area:{...options.area,id:"another-network"}})).not.toBe(preparedReleaseId(options));
+  expect(preparedReleaseId({...options,area:{...options.area,inputFingerprint:"changed-input"}})).not.toBe(preparedReleaseId(options));
 });
 it("publishes an expanded catalog using unchanged artifact bytes and independent graph identities",async()=>{
   const a=await exportPreparedRelease({...fixture(),publish:true}),before=await readFile(path.join(root,a.artifacts[0]!.path));
@@ -87,23 +89,9 @@ it("cancellation preserves the prior catalog and a later retry succeeds",async()
   await publishPreparedCatalog(candidate,root);
   expect(JSON.parse(await manifest()).id).toBe(candidate.id);
 });
-it("rejects cross-network numeric key collisions",async()=>{
+it("allows overlapping independent local graphs without merging their identities",async()=>{
   const a=await exportPreparedRelease(fixture()),b=await exportPreparedRelease(fixture("b"));
-  await expect(publishPreparedCatalog(combined(a,b),root)).rejects.toThrow("Conflicting graph identity");
-});
-it("rejects one source identity with two numeric keys",async()=>{
-  const a=await exportPreparedRelease(fixture()),b=await exportPreparedRelease(fixture("b",10));
-  await mutateArtifact(b,"UPDATE nodes SET id='a-start' WHERE id='b-start'; UPDATE edges SET from_node='a-start' WHERE from_node='b-start'; UPDATE access_points SET node_id='a-start' WHERE node_id='b-start'");
-  await expect(publishPreparedCatalog(combined(a,b),root)).rejects.toThrow("Conflicting graph identity");
-});
-it("rejects duplicate source membership across networks, while inspecting consistent geographic seams",async()=>{
-  const a=await exportPreparedRelease(fixture()),b=structuredClone(a);
-  b.sections[0]!.id="b";
-  await mutateArtifact(b,"INSERT INTO metadata VALUES ('unused','different artifact')");
-  const release=combined(a,b);
-  await expect(publishPreparedCatalog(release,root)).rejects.toThrow("multiple networks");
-  release.partitioning="geographic";
-  await publishPreparedCatalog(release,root);
+  await publishPreparedCatalog(combined(a,b),root);
   expect(await inspectPreparedRelease(path.join(root,"release.json"))).toMatchObject({verified:true,sections:2});
 });
 it("supports legacy graph identity fallback",async()=>{

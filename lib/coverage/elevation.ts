@@ -1,3 +1,5 @@
+import { densifyGeometry } from "@/lib/data/metrics";
+import type { Coordinate } from "@/lib/data/types";
 import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -69,8 +71,8 @@ function tileIntersectsCoverage(key: string | null, coverage: AreaGeometry): boo
   return Boolean(intersectCoverage(coverage, rectangle([west!, south!, west! + 1, south! + 1])));
 }
 
-/** Keep a shared verified product inventory, but resolve pins for each network's extent.
- * Action fingerprints describe only products used by that network (Bazel's input-cache pattern).
+/** Keep a shared verified product inventory, but resolve pins for each area's extent.
+ * Action fingerprints describe only products used by that area (Bazel's input-cache pattern).
  */
 async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, cache: ElevationCache): Promise<{
   state: NonNullable<ElevationCache["canonical"]>; cachedPath: string;
@@ -112,7 +114,7 @@ async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRo
   return { state, cachedPath };
 }
 
-export async function elevationFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, offline: boolean, cache = elevationCache()): Promise<{ sampler: ElevationSampler; source: SourceSnapshot; productFingerprint: string }> {
+export async function elevationFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, offline: boolean, cache = elevationCache()): Promise<{ sampler: ElevationSampler; source: SourceSnapshot; productFingerprint: string; fingerprintForGeometry: (coordinates: readonly Coordinate[]) => string }> {
   const { state, cachedPath } = await canonicalFor(unit, cacheRoot, preparationRoot, cache);
   const missingBeforeAcquisition = missingDemTiles(unit, state.products);
   if (missingBeforeAcquisition.length) {
@@ -143,7 +145,7 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
   await writeJsonAtomically(cachedPath, collection);
   const described = describeInitialized(unit.geometry, cachedPath, state);
   if (!described) throw new Error("No canonical DEM product covers this installation unit");
-  return { sampler: new UvRasterioThreeDepElevationSampler(cachedPath, { tileOwnership: true }), ...described };
+  return { sampler: new UvRasterioThreeDepElevationSampler(cachedPath, { tileOwnership: true }), fingerprintForGeometry: geometryElevationFingerprint(selected), ...described };
 }
 
 function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: NonNullable<ElevationCache["canonical"]>): {source:SourceSnapshot;productFingerprint:string}|null {
@@ -181,4 +183,27 @@ export async function describeCanonicalElevation(geometry: AreaGeometry, cacheRo
   const described = describeInitialized(geometry, cachedPath, state);
   if (described) await writeJsonAtomically(cachedPath, { ...state.template!, products: state.products });
   return described;
+}
+
+/** The sampler's WarpedVRT interpolates within one owned raster, never across files.
+ * Use the actual metric sample coordinates and the same [west,east), (south,north]
+ * ownership as tools/dem/sample_dem.py; an intermediate crossed tile also matters.
+ */
+export function geometryElevationFingerprint(products: readonly Product[]): (coordinates: readonly Coordinate[]) => string {
+  const byTile = new Map(products.map(product => [tile(product), product]));
+  const fingerprints = new Map<string, string>();
+  return coordinates => {
+    const owners = [...new Set(densifyGeometry(coordinates).map(([lon, lat]) => `${Math.floor(lon)},${Math.ceil(lat) - 1}`))].sort();
+    const key = owners.join(";");
+    const previous = fingerprints.get(key);
+    if (previous) return previous;
+    const inputs = owners.map(owner => {
+      const product = byTile.get(owner);
+      if (!product) throw new Error(`Missing elevation tile for a metric sample: ${owner}`);
+      return [owner, product.productId, product.receipt.sha256];
+    });
+    const fingerprint = `sha256:${createHash("sha256").update(JSON.stringify(inputs)).digest("hex")}`;
+    fingerprints.set(key, fingerprint);
+    return fingerprint;
+  };
 }

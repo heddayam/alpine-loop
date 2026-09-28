@@ -7,21 +7,22 @@ import { DatabaseSync } from "node:sqlite";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
-import { dataReleaseSchema, type DataRelease, type ReleaseSection } from "@/lib/contracts/releases";
+import { dataReleaseSchema, type DataRelease } from "@/lib/contracts/releases";
+import type { AreaGeometry } from "./area-geometry";
 import { contentId } from "@/lib/coverage/geometry";
 import { auditPreparedGraph } from "./prepared-audit";
 import { writeJsonAtomically } from "./source-cache";
 
 export type PreparedReleaseOptions = Pick<DataRelease,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"> & {
   databasePath: string; outputRoot: string; limitations?: string[]; checkpoint?: () => Promise<void>;
-  network: { id: string; inputFingerprint: string; summary: NonNullable<ReleaseSection["network"]> };
+  area: { id: string; inputFingerprint: string; startGeometry: AreaGeometry; maximumRouteMiles: number; bufferMiles: number };
   publish?: boolean;
 };
-export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"|"limitations"|"network">): string {
-  return `network-${contentId({ networkId:input.network.id, inputFingerprint:input.network.inputFingerprint, geometry:input.geometry, sources:input.sources, regions:input.regions, compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
+export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"|"limitations"|"area">): string {
+  return `area-${contentId({ area:input.area, geometry:input.geometry, sources:input.sources, regions:input.regions, compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
 }
 
-/** Export one complete prepared network, without clipping, repartitioning or renumbering. */
+/** Export one bounded prepared area, without clipping, repartitioning or renumbering. */
 export async function exportPreparedRelease(options: PreparedReleaseOptions): Promise<DataRelease> {
   const checkpoint=options.checkpoint ?? (async()=>{}), id=preparedReleaseId(options);
   await mkdir(path.join(options.outputRoot,"objects"),{recursive:true});
@@ -31,15 +32,15 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
     input.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
     // The preparation writer must be closed before export; hashing the database file
     // cannot include pending WAL pages. Catalog validation also audits the exact bytes.
-    if(input.prepare("PRAGMA journal_mode").get()?.journal_mode!=="delete") throw new Error("Network export requires a finalized DELETE-journal database");
+    if(input.prepare("PRAGMA journal_mode").get()?.journal_mode!=="delete") throw new Error("Area export requires a finalized DELETE-journal database");
     await auditPreparedGraph(input,{id,geometry:options.geometry,sources:options.sources},checkpoint);
     const hash=createHash("sha256"); let bytes=0;
-    const compressed=path.join(temporary,"network.gz");
+    const compressed=path.join(temporary,"area.gz");
     const measure=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);checkpoint().then(()=>done(null,chunk),done);}});
     await pipeline(createReadStream(options.databasePath),measure,createGzip({level:6}),createWriteStream(compressed));
     const digest=hash.digest("hex"), relative=`objects/${digest}.sqlite.gz`;
-    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id};
-    const release=dataReleaseSchema.parse({schemaVersion:1,graphSchemaVersion:"7",partitioning:"connected-networks",id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion,sources:options.sources,regions:options.regions,geometry:options.geometry,limitations:options.limitations??[],sections:[{id:options.network.id,geometry:options.geometry,artifactIds:[digest],network:options.network.summary}],artifacts:[artifact]});
+    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id,startGeometry:options.area.startGeometry};
+    const release=dataReleaseSchema.parse({schemaVersion:1,graphSchemaVersion:"7",partitioning:"local-areas",id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion,sources:options.sources,regions:options.regions,geometry:options.geometry,limitations:options.limitations??[],sections:[{id:options.area.id,geometry:options.area.startGeometry,artifactIds:[digest],area:{maximumRouteMiles:options.area.maximumRouteMiles,bufferMiles:options.area.bufferMiles}}],artifacts:[artifact]});
     await checkpoint();
     await rename(compressed,path.join(options.outputRoot,relative));
     if(options.publish!==false) await publishPreparedCatalog(release,options.outputRoot,checkpoint);
@@ -85,7 +86,8 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
       const db=new DatabaseSync(file,{readOnly:true});
       try {
         db.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
-        await auditPreparedGraph(db,{id:artifact.graphId??release.id,geometry:release.partitioning==="connected-networks"?artifact.geometry:release.geometry,sources:release.sources},checkpoint,true);
+        await auditPreparedGraph(db,{id:artifact.graphId??release.id,geometry:release.partitioning==="connected-networks"||release.partitioning==="local-areas"?artifact.geometry:release.geometry,sources:release.sources},checkpoint,true);
+        if (release.partitioning !== "local-areas") {
         identities.exec("BEGIN");
         for(const [table,key,id] of [["nodes","node_key","id"],["edges","edge_key","id"],["physical_edges","physical_edge_key","stable_physical_id"]]) {
           for(const row of db.prepare(`SELECT * FROM ${table} ORDER BY ${key}`).iterate()) {
@@ -105,6 +107,7 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
           if(!prior) insertAccess.run(sourceId,signature);
         }
         identities.exec("COMMIT");
+        }
         artifacts.push({id:artifact.id,nodes:Number(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n),directedEdges:Number(db.prepare("SELECT count(*) AS n FROM edges").get()!.n),physicalEdges:Number(db.prepare("SELECT count(*) AS n FROM physical_edges").get()!.n),accessPoints:Number(db.prepare("SELECT count(*) AS n FROM access_points").get()!.n)});
       } finally {db.close();await rm(file);}
     }

@@ -14,7 +14,7 @@ afterEach(() => { for (const close of dispose.splice(0).reverse()) close(); });
 async function fixture(lines: string[]) {
   const directory = mkdtempSync(path.join(tmpdir(), "network-inventory-"));
   const source: SourceSnapshot = {id:"fixture",authority:"fixture",dataset:"fixture",version:"1",retrievedAt:"2026-09-24",url:"https://example.invalid",license:"CC0",localPath:"unused",contentHash:`sha256:${"1".repeat(64)}`};
-  const raw = new CoverageSourceStore(":memory:", source);
+  const raw = new CoverageSourceStore(":memory:", source, rectangle([-2,-2,3,3]));
   const graph = openProgressiveGraphStore({stagingPath:path.join(directory,"graph.sqlite"),buildIdentity:"fixture"});
   dispose.push(() => { raw.close(); graph.close(); rmSync(directory,{recursive:true,force:true}); });
   async function* input() { yield* lines; }

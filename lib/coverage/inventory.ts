@@ -3,7 +3,7 @@ import type { ProgressiveGraphStore } from "@/lib/data/progressive/store";
 import { applyRestriction, type CuratedAccessFile } from "@/lib/data/curated-access";
 import type { CoverageSourceStore } from "./source-store";
 
-/** Reconcile exact discovered membership with compiled directed edges.
+/** Reconcile locally eligible segment membership with compiled directed edges.
  * Envelopes bound the source query; exact membership determines what is audited.
  */
 export async function reconcileInventory(
@@ -27,7 +27,7 @@ export async function reconcileInventory(
       const prefix = `${way.id}:${segment}`;
       if (!segmentIncluded(prefix)) continue;
       if (!["public", "unknown"].includes(reviewed.accessState))
-        throw new Error(`Forbidden source segment in network membership: ${prefix}`);
+        throw new Error(`Forbidden source segment in local membership: ${prefix}`);
       for (const suffix of way.bidirectional ? ["forward", "reverse"] : ["forward"]) {
         if (!edge.get(`${prefix}:${suffix}`)) throw new Error(`Unexplained compiler loss: ${prefix}:${suffix}`);
       }
