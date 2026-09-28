@@ -68,7 +68,7 @@ it("rejects a cached raster whose bytes no longer match its receipt", async () =
   const value = await fixture();
   await writeFile(value.firstPath, "tampered");
   await expect(validateDemProducts(collection([value.first]), value.cachedPath)).rejects.toThrow(/integrity validation/);
-  await expect(elevationFor(unit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow(/verified cached elevation/);
+  await expect(elevationFor(unit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow(/integrity validation/);
 });
 
 it("acquires missing tiles when a verified saved collection overlaps only part of the unit", async () => {
@@ -103,7 +103,7 @@ it("describes acquired DEM without downloading tiles for an empty area", async (
   const value = await fixture();
   const cache = elevationCache();
   const partial = await describeCanonicalElevation(unit.geometry, value.cacheRoot, value.preparationRoot, cache);
-  expect(partial?.source.localPath).toBe(value.cachedPath);
+  expect(partial).toBeNull();
   expect(await describeCanonicalElevation(rectangle([-120.9,47.8,-120.8,47.9]), value.cacheRoot, value.preparationRoot, cache)).toBeNull();
   expect(refresh).not.toHaveBeenCalled();
 });
@@ -155,4 +155,15 @@ for tile in json.loads(sys.argv[2]):
   // The n49 tile owns latitude49; its overlap at latitude48 cannot replace n48.
   await writeFile(file,JSON.stringify({products:[products[1]]}));
   expect(sample("-121.9 48\n-121.9 49\n")).toEqual(["nan","200.000000"]);
+});
+
+it("validates only relevant raster bytes when describing a cached network",async()=>{
+  const value=await fixture();
+  await writeFile(value.cachedPath,JSON.stringify(collection([value.first,value.second])));
+  await writeFile(value.secondPath,"corrupt unrelated product");
+  const cache=elevationCache();
+  const south=rectangle([-121.8,47.8,-121.2,47.9]);
+  expect(await describeCanonicalElevation(south,value.cacheRoot,value.preparationRoot,cache)).not.toBeNull();
+  await expect(describeCanonicalElevation(rectangle([-121.8,48.1,-121.2,48.2]),value.cacheRoot,value.preparationRoot,cache)).rejects.toThrow("integrity validation");
+  expect(refresh).not.toHaveBeenCalled();
 });

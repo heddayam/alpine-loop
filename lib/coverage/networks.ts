@@ -1,3 +1,4 @@
+import { canonicalTopologyJson } from "@/lib/graph/topology-hash";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
@@ -41,12 +42,12 @@ export class NetworkInventory {
         let work = 0;
         const merge = (table: "nodes" | "ways", value: NormalizedNode | NormalizedWay, prior: Record<string, unknown> | undefined) => {
             if (!prior)
-                return JSON.stringify(value);
+                return canonicalTopologyJson({...value,sourceRefs:[...new Set(value.sourceRefs)].sort()});
             const old = JSON.parse(String(prior.record)) as typeof value;
             const { sourceRefs: a, ...before } = old, { sourceRefs: b, ...after } = value;
-            if (JSON.stringify(before) !== JSON.stringify(after))
+            if (canonicalTopologyJson(before) !== canonicalTopologyJson(after))
                 throw new Error(`Conflicting overlapping source ${table}: ${value.id}`);
-            const merged = JSON.stringify({ ...old, sourceRefs: [...new Set([...a, ...b])].sort() });
+            const merged = canonicalTopologyJson({ ...old, sourceRefs: [...new Set([...a, ...b])].sort() });
             db.prepare(`UPDATE ${table} SET record=? WHERE id=?`).run(merged, value.id);
             return null;
         };
@@ -65,6 +66,10 @@ export class NetworkInventory {
                 const record = merge("ways", current, getWay.get(current.id));
                 if (record)
                     way.run(current.id, record);
+                for (const value of item.nodes) {
+                    const record = merge("nodes", value, getNode.get(value.id));
+                    if (record) node.run(value.id, record, value.id);
+                }
                 for (let i = 0; i < current.nodeIds.length - 1; i++) {
                     if (++work % 1000 === 0)
                         await checkpoint();
@@ -133,6 +138,10 @@ export class NetworkInventory {
     *segments(network: TrailNetwork) {
         for (const row of this.db.prepare("SELECT s.id,s.ordinal,w.record FROM segments s JOIN ways w ON w.id=s.way WHERE s.root=? ORDER BY s.id").iterate(network.root))
             yield { id: String(row.id), segment: Number(row.ordinal), way: JSON.parse(String(row.record)) as NormalizedWay };
+    }
+    *ways(network: TrailNetwork) {
+        for (const row of this.db.prepare("SELECT record FROM ways WHERE id IN (SELECT way FROM segments WHERE root=?) ORDER BY id").iterate(network.root))
+            yield JSON.parse(String(row.record)) as NormalizedWay;
     }
     node(id: string): NormalizedNode { return JSON.parse(String(this.db.prepare("SELECT record FROM nodes WHERE id=?").get(id)!.record)); }
 }

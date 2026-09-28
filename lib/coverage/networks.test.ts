@@ -78,3 +78,9 @@ it("honors cancellation while scanning a source network", async () => {
         throw new Error("cancelled"); })).rejects.toThrow("cancelled");
     expect(checkpoints).toBe(2);
 });
+
+it("network identities are independent of overlapping source enumeration order",async()=>{
+  const first=way("a",[["a",1,1],["b",2,1]],{sourceRefs:["source-z"]});
+  const duplicate={...first,sourceRefs:["source-a"]};
+  expect(await discover([first,duplicate])).toEqual(await discover([duplicate,first]));
+});

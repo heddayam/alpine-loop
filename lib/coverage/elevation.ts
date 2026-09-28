@@ -18,32 +18,8 @@ export type ElevationCache = {
   pinned: Map<string, Promise<Awaited<ReturnType<typeof readPinnedThreeDepCollection>>>>;
   verifiedProducts: Set<string>;
   canonical?: { products: Product[]; template?: ThreeDepCollection };
-  pinCoverage?: AreaGeometry;
 };
 export const elevationCache = (): ElevationCache => ({ pinned: new Map(), verifiedProducts: new Set() });
-
-/** Changes to configured DEM pins require a fresh graph generation. */
-export async function elevationPinsFingerprint(cacheRoot: string, coverage: AreaGeometry, cache = elevationCache()): Promise<string> {
-  cache.pinCoverage = coverage;
-  const pins: unknown[] = [];
-  for (const region of legacyRegionIds) {
-    try {
-      const config = await readElevationSourceConfig(path.resolve(`data/regions/${region}/elevation-source.json`));
-      if (!intersectCoverage(coverage, rectangle(config.bbox))) continue;
-      const key = JSON.stringify(config);
-      if (!cache.pinned.has(key)) cache.pinned.set(key, readPinnedThreeDepCollection(cacheRoot, config));
-      const found = await cache.pinned.get(key)!;
-      for (const product of absoluteProducts(found.collection, found.collectionPath))
-        cache.verifiedProducts.add(`${product.filePath}:${product.receipt.sha256}`);
-      pins.push([region, config.version, found.buildFingerprint]);
-    } catch (error) {
-      // An absent pin can be completed online, but its absence is itself part
-      // of the source generation and cannot silently reuse older metrics.
-      pins.push([region, (error as Error).message]);
-    }
-  }
-  return createHash("sha256").update(JSON.stringify(pins)).digest("hex");
-}
 
 /** USGS one-degree product titles name the north-west tile corner (for example n48w122). */
 function tile(product: Product): string | null {
@@ -93,57 +69,47 @@ function tileIntersectsCoverage(key: string | null, coverage: AreaGeometry): boo
   return Boolean(intersectCoverage(coverage, rectangle([west!, south!, west! + 1, south! + 1])));
 }
 
-/** All units in a preparation use the same ordered raster mosaic, including on resume. */
+/** Keep a shared verified product inventory, but resolve pins for each network's extent.
+ * Action fingerprints describe only products used by that network (Bazel's input-cache pattern).
+ */
 async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, cache: ElevationCache): Promise<{
   state: NonNullable<ElevationCache["canonical"]>; cachedPath: string;
 }> {
-  const directory = path.join(preparationRoot, "dem", "canonical");
-  const cachedPath = path.join(directory, "collection.json");
+  const cachedPath = path.join(preparationRoot, "dem", "canonical", "collection.json");
   if (!cache.canonical) {
     let cached: ThreeDepCollection | undefined;
-    try {
-      cached = await readThreeDepCollection(cachedPath);
-      await validateDemProducts(cached, cachedPath, cache.verifiedProducts);
-    } catch {
-      cached = undefined; // A malformed or tampered cache cannot be used as a resume receipt.
-    }
-    const relevantCoverage = cache.pinCoverage ?? unit.geometry;
-    const products = cached ? absoluteProducts(cached, cachedPath).filter((product) => tileIntersectsCoverage(tile(product), relevantCoverage)) : [];
-    let template: ThreeDepCollection | undefined;
-    // Load every configured pin before selecting any tile. Request order cannot
-    // determine which overlapping pinned raster wins.
-    const pinned = new Map<string, Product>();
-    for (const region of legacyRegionIds) {
-      try {
-        const config = await readElevationSourceConfig(path.resolve(`data/regions/${region}/elevation-source.json`));
-        if (!intersectCoverage(cache.pinCoverage ?? unit.geometry, rectangle(config.bbox))) continue;
-        const key = JSON.stringify(config);
-        if (!cache.pinned.has(key)) cache.pinned.set(key, readPinnedThreeDepCollection(cacheRoot, config));
-        const found = await cache.pinned.get(key)!;
-        for (const product of absoluteProducts(found.collection, found.collectionPath)) cache.verifiedProducts.add(`${product.filePath}:${product.receipt.sha256}`);
-        template ??= found.collection;
-        for (const product of absoluteProducts(found.collection, found.collectionPath)) {
-          const key = tile(product);
-          if (!key) continue;
-          const prior = pinned.get(key);
-          if (!prior || product.productId.localeCompare(prior.productId) < 0) pinned.set(key, product);
-        }
-      } catch { /* Missing or invalid pins cannot establish DEM coverage. */ }
-    }
-    template ??= cached;
-    const seen = new Set<string>();
-    const canonical = products.map((product) => {
-      const key = tile(product);
-      if (!key) return product;
-      seen.add(key);
-      return pinned.get(key) ?? product;
-    });
-    for (const [key, product] of [...pinned].sort(([a], [b]) => a.localeCompare(b))) {
-      if (!seen.has(key)) canonical.push(product);
-    }
-    cache.canonical = { products: canonical, template };
+    try { cached = await readThreeDepCollection(cachedPath); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    cache.canonical = { products: cached ? absoluteProducts(cached, cachedPath) : [], template: cached };
   }
-  return { state: cache.canonical, cachedPath };
+  const state = cache.canonical;
+  const pinned = new Map<string, Product>();
+  for (const region of legacyRegionIds) {
+    let config;
+    try { config = await readElevationSourceConfig(path.resolve(`data/regions/${region}/elevation-source.json`)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
+    if (!intersectCoverage(unit.geometry, rectangle(config.bbox))) continue;
+    const key = JSON.stringify(config);
+    try {
+      if (!cache.pinned.has(key)) cache.pinned.set(key, readPinnedThreeDepCollection(cacheRoot, config));
+      const found = await cache.pinned.get(key)!;
+      state.template ??= found.collection;
+      for (const product of absoluteProducts(found.collection, found.collectionPath)) {
+        const key = tile(product);
+        if (!key || !tileIntersectsCoverage(key, unit.geometry)) continue;
+        cache.verifiedProducts.add(`${product.filePath}:${product.receipt.sha256}`);
+        const prior = pinned.get(key);
+        if (!prior || product.productId.localeCompare(prior.productId) < 0) pinned.set(key, product);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  const products = new Map(state.products.map(product => [tile(product), product]));
+  for (const [key, product] of pinned) products.set(key, product);
+  state.products = [...products.values()].sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
+  if (state.template) await validateDemProducts({ ...state.template, products: state.products.filter(product => tileIntersectsCoverage(tile(product), unit.geometry)) }, cachedPath, cache.verifiedProducts);
+  return { state, cachedPath };
 }
 
 export async function elevationFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, offline: boolean, cache = elevationCache()): Promise<{ sampler: ElevationSampler; source: SourceSnapshot; productFingerprint: string }> {
@@ -211,6 +177,7 @@ function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: 
 export async function describeCanonicalElevation(geometry: AreaGeometry, cacheRoot: string, preparationRoot: string, cache = elevationCache()): Promise<{source:SourceSnapshot;productFingerprint:string}|null> {
   const { state, cachedPath } = await canonicalFor({ id: "description", geometry, status: "pending" }, cacheRoot, preparationRoot, cache);
   state.products.sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
+  if (missingDemTiles({id:"description",geometry,status:"pending"}, state.products).length) return null;
   const described = describeInitialized(geometry, cachedPath, state);
   if (described) await writeJsonAtomically(cachedPath, { ...state.template!, products: state.products });
   return described;
