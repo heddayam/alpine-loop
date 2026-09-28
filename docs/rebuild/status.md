@@ -20,29 +20,51 @@ prepared downloads, saved-result preservation and the real-data gates remain.
   graph identity, unchanged-artifact reuse across catalog versions, full-extent
   selection, overlapping map hits and legacy saved request parsing.
 - [x] Connected-source discovery and stable publication primitives.
-  Integrated 2d21421. Seven discovery tests cover complete selection, disconnected
-  additions, joins, boundary cuts, duplicate conflicts, restrictions and
-  cancellation. Twelve publisher/identity tests, six elevation tests (one
-  existing skipped), and eleven unchanged runtime tests pass. These primitives
-  are not yet wired into the active builder.
-- [ ] Replace the geographic builder and exporter with independent network
-  preparation, reuse, auditing and publication. Automatic approval review rejected
-  the core runtime replacement because its combined ingestion/cache/publication
-  changes posed regression and release-integrity risk. The live builder remains
-  unchanged. The unapplied runtime/export patches and their validation gaps are
-  retained locally at `.cache/review/network-builder/README.md` (ignored).
-- [x] Verify the implemented subset and retire completed task worktrees.
-  Two final `npm run verify` passes each passed 624 tests in 88 files, lint,
-  type checking and production build. Two browser passes each passed nine
-  offline desktop/mobile flows (60 s and 54 s). Earlier concurrent runs hit
-  five-second timeouts in separate process-heavy integration tests; each passed
-  in isolation. Vitest now uses one worker, retaining the same timeout and
-  assertions, and both full passes are green. Browser testing caught and fixed
-  desktop preview hiding download controls (3439142). Browser servers and test
-  workers exited; temporary browser output and duplicate proposal copies were
-  removed. Installed coverage, source caches and saved results were preserved.
-- [ ] Real-source continuity, bounded regional build/install/search measurement,
-  saved-result migration and removal of superseded generated data.
+  Integrated 2d21421, now wired into the active builder. Source boundaries,
+  exclusions, reviewed access and source-node identity determine connectivity;
+  full member-way context remains available without publishing excluded segments.
+- [x] Replace the geographic builder and exporter with independent network
+  preparation, reuse, auditing and publication. User reauthorized this on
+  2026-09-28 after reviewing the earlier blocked proposal. Integrated 6603297,
+  0993cfc and f8e89a7; bcf2ad6 removes repeated provider-wide audit scans and
+  limits restriction application to matching source identities. Offline tests
+  prove A→A+B leaves A's artifact digest and mtime unchanged, with no elevation
+  sampling or topology work for A; selection within A is stable; changed DEMs,
+  algorithms and connecting trails invalidate dependent artifacts; interruption
+  preserves the old catalog and resumes completed networks. Exact membership,
+  corruption, collision, independent readers, source-boundary context and
+  West Cady/Pilchuck/approach fixtures pass. There is no persistent merger or
+  graph-key registry. Every candidate artifact is audited before atomic activation.
+  Named-area cache hits no longer re-extract source files; per-network scratch
+  files are removed on success or interruption. Old geographic staging receipts
+  are deleted. Source caches and saved results remain untouched. The subsequent
+  user-authorized clean cutover is recorded below.
+- [x] Final integrated verification and cleanup for the builder replacement.
+  Two `npm run verify` passes each passed 658 tests in 92 files, lint, type
+  checking and production build. Two offline browser runs each passed nine
+  flows (1.5 min and 1.2 min). The clean-cutover empty-catalog follow-up passed
+  24 installer tests and 11 panel tests, lint and type checking. Missing local
+  catalogs now show a normal empty state; malformed catalogs still report errors.
+  Rebuilt/restarted Docker app; `/api/coverage` returns all-null empty state with
+  `error:null`. Live in-app browser confirms “No trail networks available yet.”
+  with zero available/installed and no filesystem alert.
+  The initial restricted test run could not inspect process identities; final
+  passes used the required local process access. A stale extraction mock was
+  corrected to invoke the adapter's cache-miss runner. All task worktrees and
+  task branches are retired; obsolete proposal copies were deleted.
+- [ ] Real-source continuity and bounded real-network build/install/search measurement.
+- [x] User-authorized clean data cutover: removed host `.local-data/packs` (2.7 GiB),
+  published `.local-data/releases` (107 MiB), Docker runtime installed coverage
+  and obsolete coverage-job database. Restarted app returns `release:null`,
+  `installed:null`, no jobs, and empty search regions/coverages. SHA-256 checks
+  verified retained Docker saved-route DB, settings and provider data unchanged.
+  User will run the new build; no real network build was launched. Added and
+  parsed `data/coverage/recipes/pilchuck-test.json` as a narrow initial selector.
+  First build still needs broader source import/connectivity; network extent
+  is not constrained by that selector. Transport compatibility code remains,
+  but old geographic data is no longer available to the app. Retired old pack
+  validation copies, migration views and prepared-reader trial artifacts were
+  also removed; reusable source caches remain.
 
 Synthetic fixed-work search comparison (25,000 expansion / 2,000 raw-candidate
 caps) found old/new exact-route counts 4/4, 7/10 and 9/10 on 3x3, 5x5 and 7x7
@@ -51,15 +73,17 @@ These are small regression fixtures, not evidence of regional performance or
 optimality. No regional build was started for this revision.
 
 Change accounting against 0635351: production/configuration/research source is
-net 535 lines smaller (866 additions, 1,401 deletions); tests are net 256 lines
-larger (343 additions, 87 deletions). Documentation adds 181 lines and
-removes 19 lines, counted separately from executable code.
-The old 990-line search engine is deleted and replaced by a 453-line
-engine; its test file is renamed. Discovery adds one implementation and one test
-file, so the active repository's file count has not decreased. Unapplied proposal
-patches are excluded from these counts. Remaining builder simplification is not
-claimed as complete. The three task worktrees are archived and their task branches
-deleted; the six pre-existing local branches are preserved.
+net 473 lines smaller (1,488 additions, 1,961 deletions); tests are net 647 lines
+larger (876 additions, 229 deletions). Documentation is counted separately.
+This builder step and follow-ups add a net 62 production/configuration lines,
+including the 50-line initial-build recipe: removing geographic orchestration is
+offset by network reuse and integrity checks.
+The old 990-line search engine is deleted and replaced by a 453-line engine;
+its test file is renamed. One network implementation, five test files and one
+design document and one build recipe are added, so total file count increases
+by eight. This is not
+claimed as an enormous repository reduction. The three new task worktrees are
+archived and their branches deleted; the six pre-existing branches are preserved.
 
 ### Full-only search — active user revision
 

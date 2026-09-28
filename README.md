@@ -141,6 +141,38 @@ Docker tooling:
 docker compose run --rm data scripts/data.ts build data/coverage/recipes/cascades.json
 ```
 
+For an initial network test, use `data/coverage/recipes/pilchuck-test.json`.
+Its small rectangle selects **whole connected networks** touching Mount Pilchuck;
+it does not clip routes or guarantee a small network. The first run imports and
+analyzes the broader Washington source before preparing selected networks.
+
+```sh
+# Build the compiler/tooling image; this does not build trail data.
+docker compose build data
+
+# This checkout already has the required pinned Washington source in this cache.
+docker compose run --rm \
+  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  data scripts/data.ts build data/coverage/recipes/pilchuck-test.json
+
+# In another terminal, watch the host-mounted build report.
+npm run data -- status --watch
+
+# After the build completes, verify the published files.
+docker compose run --rm data scripts/data.ts inspect /app/.local-data/releases/prepared/release.json
+```
+
+The source-cache override above reuses this checkout's existing pinned downloads;
+a fresh clone can omit it and acquire sources in the default cache. The recipe
+allows acquisition of missing inputs. Ctrl+C pauses at a safe checkpoint; rerun
+the same build command to reuse verified completed work.
+
+The app already mounts `.local-data/releases`. Refresh it after publication,
+open **Coverage**, select a network, review its extent/size and click **Download**.
+Publication makes networks available; Download installs them for search. Building
+or restarting the `app` image alone does neither. Old geographic coverage was
+removed for the clean cutover; saved route results and settings were retained.
+
 The separate Docker `data` service includes these tools and applies a 4 GiB
 memory limit with swap disabled. The ordinary `app` image excludes them.
 See [prepared coverage](docs/rebuild/prepared-coverage.md) for contracts,

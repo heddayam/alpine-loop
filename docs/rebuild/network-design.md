@@ -34,7 +34,32 @@ remain visible. Search areas continue to filter starting points only.
   bounded loop/lollipop search with authoritative route-shape validation. Keep
   cancellation, exact/close separation, grade/elevation rules and diversity.
 - Continue atomic installation, worker isolation, pinned running jobs and saved
-  result retention. Legacy download catalogs remain readable during migration.
+  result retention. The user chose to delete old geographic data and start fresh;
+  saved route results remain separate from installed graph data.
+
+## Implemented builder boundary
+
+Connectivity is rediscovered from pinned source records. Normal planning follows
+contact between provider coverage polygons to choose source extracts; only exact
+eligible source-node identities create trail connections. Complete member ways
+remain available as compiler context when exclusions cut off some segments.
+
+Preparation receipts depend on network membership, sorted context records,
+source provenance, relevant verified DEM products, metadata and algorithm versions.
+A cache hit verifies its immutable file and skips metric sampling and topology.
+Catalog activation audits every object sequentially, with disk-backed identity
+collision checks; it does not rerun topology. A source change may merge networks
+and invalidate their artifacts. Expanding selection within the same pinned source
+snapshot cannot merge them. No dynamic merger service or persistent key registry
+is necessary.
+
+Only final catalog activation is atomic. Completed network receipts survive an
+interrupted build; failed work leaves the previous catalog active. Empty selections
+are explicit no-ops. Per-network scratch databases and transient named-area
+extracts are cleaned up. Source/metric caches are retained. The user later authorized deleting existing
+geographic installations; saved route results and settings remain intact.
+Independent official-source proximity comparisons remain diagnostic and never
+claim exact installed-feature membership from a network envelope.
 
 ## Established work informing decisions
 
