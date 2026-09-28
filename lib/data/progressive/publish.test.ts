@@ -124,11 +124,10 @@ describe("progressive schema-6 publisher",()=>{
       for(const node of nodes) store.putNode(node);
       for(const edge of edges) store.putEdge(edge);
       for(const point of points) store.putAccessPoint(point);
-      store.putReceipt({stage:"metric",fingerprint:"v1",rowCount:edges.length,contentHash:"fixture"});
       store.close();
       store=openProgressiveGraphStore({stagingPath:path.join(directory,"stage.sqlite"),buildIdentity:"source-and-algorithms-v1"});
       stageSource(store);
-      expect(store.getReceipt("metric")?.rowCount).toBe(edges.length);
+      expect([...store.iterateEdges()]).toHaveLength(edges.length);
       for(const edge of edges) store.putEdge(edge);
       const outputRoot=path.join(directory,"packs");
       const options={outputRoot,namedAreas:[],searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]};

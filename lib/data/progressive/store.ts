@@ -9,7 +9,6 @@ import type { BuildingCentroid } from "../osm/buildings";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
 
 export type ProgressiveGraphStoreOptions = { stagingPath: string; buildIdentity: string };
-export type StageReceipt = { stage: string; fingerprint: string; rowCount: number; contentHash: string };
 
 function canonicalRecord<T extends { sourceRefs?: string[] }>(record: T): string {
   return JSON.stringify({ ...record, ...(record.sourceRefs ? { sourceRefs: [...new Set(record.sourceRefs)].sort() } : {}) });
@@ -57,7 +56,6 @@ export class ProgressiveGraphStore {
       CREATE INDEX IF NOT EXISTS edges_from ON edges(from_node);
       CREATE INDEX IF NOT EXISTS edges_to ON edges(to_node);
       CREATE TABLE IF NOT EXISTS access_points(id TEXT PRIMARY KEY,node_id TEXT NOT NULL,record TEXT NOT NULL) STRICT;
-      CREATE TABLE IF NOT EXISTS receipts(stage TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,row_count INTEGER NOT NULL,content_hash TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS derived_portals(coverage_hash TEXT NOT NULL,id TEXT NOT NULL,node_id TEXT NOT NULL,record TEXT NOT NULL,PRIMARY KEY(coverage_hash,id)) STRICT;
       CREATE INDEX IF NOT EXISTS derived_portals_node ON derived_portals(coverage_hash,node_id);
     `);
@@ -168,16 +166,6 @@ export class ProgressiveGraphStore {
     for (const row of this.database.prepare("SELECT record FROM edges ORDER BY id").iterate() as Iterable<{record:string}>) yield JSON.parse(row.record) as CompiledEdge;
   }
   derivePortals(coverage: AreaGeometry, checkpoint?: () => Promise<void>): Promise<number> { return deriveProgressivePortals(this,coverage,checkpoint); }
-  getReceipt(stage: string): StageReceipt | null {
-    this.assertOpen();
-    const row=this.database.prepare("SELECT stage,fingerprint,row_count AS rowCount,content_hash AS contentHash FROM receipts WHERE stage=?").get(stage);
-    return row ? row as StageReceipt : null;
-  }
-  putReceipt(receipt: StageReceipt): void {
-    this.assertOpen();
-    this.database.prepare("INSERT INTO receipts VALUES (?,?,?,?) ON CONFLICT(stage) DO UPDATE SET fingerprint=excluded.fingerprint,row_count=excluded.row_count,content_hash=excluded.content_hash")
-      .run(receipt.stage,receipt.fingerprint,receipt.rowCount,receipt.contentHash);
-  }
   close(): void { if (!this.closed) { this.database.close(); this.closed=true; } }
 }
 export function openProgressiveGraphStore(options: ProgressiveGraphStoreOptions): ProgressiveGraphStore {
