@@ -114,7 +114,7 @@ async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRo
   return { state, cachedPath };
 }
 
-export async function elevationFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, offline: boolean, cache = elevationCache()): Promise<{ sampler: ElevationSampler; source: SourceSnapshot; productFingerprint: string; fingerprintForGeometry: (coordinates: readonly Coordinate[]) => string }> {
+export async function elevationFor(unit: CoverageUnit, cacheRoot: string, preparationRoot: string, offline: boolean, cache = elevationCache(), samplerCollectionPath?: string): Promise<{ sampler: ElevationSampler; source: SourceSnapshot; productFingerprint: string; fingerprintForGeometry: (coordinates: readonly Coordinate[]) => string }> {
   const { state, cachedPath } = await canonicalFor(unit, cacheRoot, preparationRoot, cache);
   const missingBeforeAcquisition = missingDemTiles(unit, state.products);
   if (missingBeforeAcquisition.length) {
@@ -145,7 +145,9 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
   await writeJsonAtomically(cachedPath, collection);
   const described = describeInitialized(unit.geometry, cachedPath, state);
   if (!described) throw new Error("No canonical DEM product covers this installation unit");
-  return { sampler: new UvRasterioThreeDepElevationSampler(cachedPath, { tileOwnership: true }), fingerprintForGeometry: geometryElevationFingerprint(selected), ...described };
+  const required = selected.filter(product => tileIntersectsCoverage(tile(product), unit.geometry));
+  if (samplerCollectionPath) await writeJsonAtomically(samplerCollectionPath, {...collection, products:required});
+  return { sampler: new UvRasterioThreeDepElevationSampler(samplerCollectionPath ?? cachedPath, { tileOwnership: true }), fingerprintForGeometry: geometryElevationFingerprint(required), ...described };
 }
 
 function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: NonNullable<ElevationCache["canonical"]>): {source:SourceSnapshot;productFingerprint:string}|null {

@@ -189,3 +189,14 @@ it("uses exact seam ownership, including zero and negative latitudes", () => {
   ] as const) expect(fingerprint([point,point])).toBe(geometryElevationFingerprint([owner!])([point,point]));
   expect(()=>geometryElevationFingerprint([tiles[1]!])([[-121.9,48],[-121.9,48]])).toThrow("-122,47");
 });
+
+it("writes only required products to the disposable sampling collection",async()=>{
+  const value=await fixture();
+  await writeFile(value.cachedPath,JSON.stringify(collection([value.first,value.second])));
+  const sampling=path.join(value.preparationRoot,"scratch","sample-dem.json");
+  await elevationFor({...unit,geometry:rectangle([-121.8,47.8,-121.2,47.9])},value.cacheRoot,value.preparationRoot,true,elevationCache(),sampling);
+  const selected=JSON.parse(await readFile(sampling,"utf8")) as ThreeDepCollection;
+  expect(selected.products.map(product=>product.productId)).toEqual(["one"]);
+  expect(selected.products[0]!.filePath).toBe(value.firstPath);
+  expect((JSON.parse(await readFile(value.cachedPath,"utf8")) as ThreeDepCollection).products).toHaveLength(2);
+});

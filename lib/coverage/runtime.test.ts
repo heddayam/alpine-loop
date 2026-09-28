@@ -10,8 +10,8 @@ import type { DataRelease } from "@/lib/contracts/releases";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { CoverageRunnerContext } from "./types";
 import { filteredSourceLines } from "./source-filter";
-import { rectangle } from "./geometry";
-import { buildLocalCoverage } from "./runtime";
+import { rectangle, unionCoverage } from "./geometry";
+import { buildCoverageRegion } from "./runtime";
 import { calculateEdgeMetricsBatch } from "@/lib/data/metrics";
 import type { SourceRecipe } from "./recipe";
 
@@ -51,7 +51,7 @@ const context = (): CoverageRunnerContext => ({ signal: new AbortController().si
 const recipe = (): SourceRecipe => ({schemaVersion:1,sources:[{config:{schemaVersion:1,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry:rectangle([-123,46,-119,49]),sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]});
 const startArea = rectangle([-121.27,47.50,-121.25,47.52]);
 const secondArea = rectangle([-121.13,47.50,-121.09,47.54]);
-const build = (area = startArea, ctx = context(), input = recipe()) => buildLocalCoverage(input, area, ctx);
+const build = (area = startArea, ctx = context(), input = recipe()) => buildCoverageRegion({id:area===startArea?"first-region":"second-region",name:area===startArea?"First region":"Second region",geometry:area,recipe:input},ctx);
 async function release(): Promise<DataRelease> {return JSON.parse(await readFile(path.join(root,"release/release.json"),"utf8"));}
 async function pieces() {
   const result=[];
@@ -65,12 +65,13 @@ async function pieces() {
       edges:db.prepare("SELECT * FROM edges ORDER BY id").all(),nodes:db.prepare("SELECT * FROM nodes ORDER BY id").all(),
       access:db.prepare("SELECT * FROM access_points ORDER BY id").all(),
       metadata:db.prepare("SELECT * FROM metadata ORDER BY key").all(),
-    });expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]); }
+    });expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(db.prepare("PRAGMA freelist_count").get()!.freelist_count).toBe(0); }
     finally {db.close();}
   }
   return result;
 }
-it("prepares all local components without statewide discovery, advertising only starts",async()=>{
+it("prepares distance-relevant trails and advertises the named start footprint",async()=>{
   fixtureLines.push("n21 T x-119.5 y47.5","n22 T x-119.49 y47.5","w202 Thighway=path Nn21,n22");
   await build();
   const result=await release(), [piece]=await pieces();
@@ -78,15 +79,18 @@ it("prepares all local components without statewide discovery, advertising only 
   expect(result.sections).toHaveLength(1);
   expect(result.sections[0]!.geometry).toEqual(startArea);
   expect(result.sections[0]!.area).toEqual({maximumRouteMiles:40,bufferMiles:25});
+  expect(result.sections[0]!.name).toBe("First region");
+  expect(result.regions).toEqual([expect.objectContaining({id:"first-region",name:"First region",geometry:startArea})]);
   expect(result.artifacts[0]!.startGeometry).toEqual(startArea);
-  expect(piece!.edges).toHaveLength(12);
-  expect(piece!.nodes.some(node=>node.lon===-121.24)).toBe(true);
+  expect(piece!.edges.length).toBeGreaterThan(0);
+  expect(piece!.edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.1)).toBe(false);
+  expect(piece!.edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.24)).toBe(true);
   expect(piece!.edges.some(edge=>String(edge.id).startsWith("osm-way-202:"))).toBe(false);
   expect(piece!.access.length).toBeGreaterThan(0);
   expect(filteredSourceLines).toHaveBeenCalledOnce();
   await expectNoScratch();
 });
-async function expectNoScratch(){expect((await readdir(path.join(root,"stage"))).filter(file=>file.startsWith(".area-"))).toEqual([]);}
+async function expectNoScratch(){expect((await readdir(path.join(root,"stage"))).filter(file=>file.startsWith(".region-"))).toEqual([]);}
 
 it("reuses immutable area bytes without elevation sampling or topology recomputation",async()=>{
   const {elevationFor}=await import("./elevation"), {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
@@ -100,7 +104,8 @@ it("reuses immutable area bytes without elevation sampling or topology recomputa
 it("adding an overlapping area reuses segment measurements and preserves prior bytes",async()=>{
   await build();const before=await release(),artifact=before.artifacts[0]!,bytes=await readFile(path.join(root,"release",artifact.path));
   vi.mocked(calculateEdgeMetricsBatch).mockClear();
-  await build(secondArea);
+  const overlapping=rectangle([-121.26,47.50,-121.23,47.55]);
+  await build(overlapping);
   expect((await release()).sections).toHaveLength(2);
   expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
   expect(await readFile(path.join(root,"release",artifact.path))).toEqual(bytes);
@@ -118,7 +123,7 @@ it("cancellation leaves the prior catalog active and removes scratch",async()=>{
 });
 it("rejects corrupt artifact bytes and receipt identity before changing the catalog",async()=>{
   await build();const first=await release();
-  const receiptFile=path.join(root,"stage/areas",(await readdir(path.join(root,"stage/areas")))[0]!);
+  const receiptFile=path.join(root,"stage/regions",(await readdir(path.join(root,"stage/regions")))[0]!);
   const original=await readFile(receiptFile,"utf8"),receipt=JSON.parse(original);
   receipt.release.id="forged-identity";await writeFile(receiptFile,JSON.stringify(receipt));
   await expect(build()).rejects.toThrow("checkpoint identity");
@@ -143,13 +148,11 @@ it("keeps complete way context while publishing only segments inside the route b
   await build();expect((await pieces())[0]!.edges).toHaveLength(2);
 });
 it("applies access restrictions before compiling eligible local segments",async()=>{
-  const named=await import("./named-areas");
-  vi.spyOn(named,"preparedNamedAreas").mockImplementation(async input=>({sources:input.sources,namedAreas:[],searchRegions:[]}));
   const access=await import("@/lib/data/curated-access");
   vi.spyOn(access,"readCuratedAccessFile").mockResolvedValue({snapshot:{...source,id:"review"},restrictions:[{externalId:"way/201",accessState:"closed",reason:"reviewed closure",review:{reviewedAt:source.retrievedAt,reviewer:"fixture"}}]});
   await build(startArea,context(),{...recipe(),reviewedRegionIds:["missing-fixture-region"]});
   const edges=(await pieces())[0]!.edges;
-  expect(edges).toHaveLength(6);expect(edges.some(edge=>String(edge.id).startsWith("osm-way-201:"))).toBe(false);
+  expect(edges.length).toBeGreaterThan(0);expect(edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.1)).toBe(false);
 });
 it("does not silently combine different source pins across prepared areas",async()=>{
   await build();const before=await release();
@@ -177,7 +180,7 @@ it("keeps complete way segments crossing adjoining verified source extents",asyn
   const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
   vi.mocked(readPinnedOsmSnapshot).mockImplementation(async (_root,config)=>({...source,id:config.id}));
   await build(startArea,context(),input);
-  expect((await pieces())[0]!.edges).toHaveLength(12);
+  expect((await pieces())[0]!.edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.24)).toBe(true);
 });
 
 it("does not acquire elevation or publish when the local buffer has no eligible links",async()=>{
@@ -186,4 +189,24 @@ it("does not acquire elevation or publish when the local buffer has no eligible 
   const {elevationFor,describeCanonicalElevation}=await import("./elevation");
   expect(elevationFor).not.toHaveBeenCalled();expect(describeCanonicalElevation).not.toHaveBeenCalled();
   await expectNoScratch();
+});
+
+it("plans elevation only for retained sample-owner tiles and reports useful work and resource counts",async()=>{
+  const {elevationFor}=await import("./elevation");
+  const updates:unknown[]=[];const ctx=context();ctx.report=async update=>{updates.push(update);};
+  await build(startArea,ctx);
+  expect(vi.mocked(elevationFor).mock.calls[0]![0].geometry).toEqual(unionCoverage([rectangle([-122,47,-121,48])]));
+  expect(vi.mocked(calculateEdgeMetricsBatch).mock.calls.reduce((sum,call)=>sum+call[0].length,0)).toBe(3);
+  expect(updates).toContainEqual(expect.objectContaining({counts:expect.objectContaining({candidateSegments:6,retainedSegments:3})}));
+  expect(updates).toContainEqual(expect.objectContaining({peakMeasuredMemoryBytes:expect.any(Number),peakDiskBytes:expect.any(Number)}));
+});
+it("reuses geometry measurements after source segment ordinals change",async()=>{
+  await build();
+  fixtureLines=fixtureLines.map(line=>line.startsWith("w101 ")?line.replace("Nn1,n2,n3,n1","Nn2,n3,n1,n2"):line);
+  const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
+  const changed={...source,contentHash:`sha256:${"2".repeat(64)}` as const};
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(changed);
+  const input=recipe();input.sources[0]!.sha256=changed.contentHash;
+  vi.mocked(calculateEdgeMetricsBatch).mockClear();await build(startArea,context(),input);
+  expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
 });

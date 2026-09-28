@@ -8,7 +8,7 @@ import type { SourceRecipe } from "./recipe";
 import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
 import { CoverageResourceGuard } from "./resources";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
-import type { CoverageRunnerContext, CoverageUnit } from "./types";
+import type { CoverageProgressUpdate, CoverageRunnerContext, CoverageUnit } from "./types";
 
 function preparationPaths() {
   return {
@@ -23,6 +23,7 @@ export async function preparationSession(recipe: SourceRecipe, context: Coverage
   const resources = new CoverageResourceGuard({memoryLimitBytes:recipe.memoryLimitMiB * 1024 ** 2, diskPaths:[paths.root,paths.outputRoot]});
   const raws: CoverageSourceStore[] = [], units: CoverageUnit[] = [];
   resources.start();
+  const measurements = (): CoverageProgressUpdate => ({peakMeasuredMemoryBytes:resources.peakMemoryBytes,peakCgroupMemoryBytes:resources.cgroupPeakBytes,peakDiskBytes:resources.peakDiskBytes});
   return {
     ...paths, raws, units,
     check: async () => {
@@ -30,8 +31,11 @@ export async function preparationSession(recipe: SourceRecipe, context: Coverage
       await resources.checkpoint();
       if (context.signal.aborted || await context.checkpoint() !== "continue") throw new Error("Coverage build interrupted at a checkpoint");
     },
-    report: (stage: string) => context.report({stage, units, completedUnits:units.filter(unit => unit.status === "prepared" || unit.status === "installed").length}),
-    close: async () => { raws.forEach(raw => raw.close()); await resources.stop(); },
+    report: async (stage: string, counts?: Record<string, number>) => {
+      await resources.sample(stage);
+      await context.report({stage, units, counts, completedUnits:units.filter(unit => unit.status === "prepared" || unit.status === "installed").length, ...measurements()});
+    },
+    close: async () => { raws.forEach(raw => raw.close()); await resources.stop(); await context.report(measurements()); },
   };
 }
 type Session = Awaited<ReturnType<typeof preparationSession>>;
