@@ -7,7 +7,9 @@ import { DatabaseSync } from "node:sqlite";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
+import { z } from "zod";
 import { dataReleaseSchema, type DataRelease } from "@/lib/contracts/releases";
+import { packSourceSchema } from "@/lib/contracts/manifest";
 import type { AreaGeometry } from "./area-geometry";
 import { contentId } from "@/lib/coverage/geometry";
 import { auditPreparedGraph } from "./prepared-audit";
@@ -15,11 +17,30 @@ import { writeJsonAtomically } from "./source-cache";
 
 export type PreparedReleaseOptions = Pick<DataRelease,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"> & {
   databasePath: string; outputRoot: string; limitations?: string[]; checkpoint?: () => Promise<void>;
-  area: { id: string; inputFingerprint: string; startGeometry: AreaGeometry; maximumRouteMiles: number; bufferMiles: number };
+  area: { id: string; name?: string; inputFingerprint: string; startGeometry: AreaGeometry; maximumRouteMiles: number; bufferMiles: number };
   publish?: boolean;
 };
 export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"|"limitations"|"area">): string {
-  return `area-${contentId({ area:input.area, geometry:input.geometry, sources:input.sources, regions:input.regions, compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
+  const {id,inputFingerprint,startGeometry,maximumRouteMiles,bufferMiles}=input.area;
+  return `area-${contentId({ area:{id,inputFingerprint,startGeometry,maximumRouteMiles,bufferMiles}, geometry:input.geometry, sources:input.sources, regions:input.regions.map(({id,geometry,sourceIds})=>({id,geometry,sourceIds})), compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
+}
+
+const count=z.number().int().nonnegative();
+const summarySchema=z.object({id:z.string(),nodes:count,directedEdges:count,physicalEdges:count,accessPoints:count}).strict();
+const receiptSchema=z.object({key:z.string(),compressedHash:z.string(),sources:z.array(packSourceSchema),summary:summarySchema}).strict();
+const auditKey=(artifact:DataRelease["artifacts"][number])=>contentId({version:1,id:artifact.id,bytes:artifact.bytes,graphId:artifact.graphId,geometry:artifact.geometry});
+const receiptPath=(root:string,id:string)=>path.join(root,".audits",`${id}.json`);
+async function fileHash(file:string,checkpoint:()=>Promise<void>):Promise<string> {
+  const hash=createHash("sha256");
+  for await(const chunk of createReadStream(file)) {hash.update(chunk);await checkpoint();}
+  return hash.digest("hex");
+}
+function graphSummary(db:DatabaseSync,id:string) {
+  return {id,nodes:Number(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n),directedEdges:Number(db.prepare("SELECT count(*) AS n FROM edges").get()!.n),physicalEdges:Number(db.prepare("SELECT count(*) AS n FROM physical_edges").get()!.n),accessPoints:Number(db.prepare("SELECT count(*) AS n FROM access_points").get()!.n)};
+}
+async function writeAuditReceipt(root:string,artifact:DataRelease["artifacts"][number],compressedHash:string,sources:DataRelease["sources"],summary:z.infer<typeof summarySchema>) {
+  await mkdir(path.join(root,".audits"),{recursive:true});
+  await writeJsonAtomically(receiptPath(root,artifact.id),{key:auditKey(artifact),compressedHash,sources,summary});
 }
 
 /** Export one bounded prepared area, without clipping, repartitioning or renumbering. */
@@ -39,10 +60,11 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
     const measure=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);checkpoint().then(()=>done(null,chunk),done);}});
     await pipeline(createReadStream(options.databasePath),measure,createGzip({level:6}),createWriteStream(compressed));
     const digest=hash.digest("hex"), relative=`objects/${digest}.sqlite.gz`;
-    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id,startGeometry:options.area.startGeometry};
-    const release=dataReleaseSchema.parse({schemaVersion:1,graphSchemaVersion:"7",partitioning:"local-areas",id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion,sources:options.sources,regions:options.regions,geometry:options.geometry,limitations:options.limitations??[],sections:[{id:options.area.id,geometry:options.area.startGeometry,artifactIds:[digest],area:{maximumRouteMiles:options.area.maximumRouteMiles,bufferMiles:options.area.bufferMiles}}],artifacts:[artifact]});
+    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id,regionId:options.area.name?options.area.id:undefined,startGeometry:options.area.startGeometry};
+    const release=dataReleaseSchema.parse({schemaVersion:1,graphSchemaVersion:"7",partitioning:"local-areas",id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion,sources:options.sources,regions:options.regions,geometry:options.geometry,limitations:options.limitations??[],sections:[{id:options.area.id,name:options.area.name,geometry:options.area.startGeometry,artifactIds:[digest],area:{maximumRouteMiles:options.area.maximumRouteMiles,bufferMiles:options.area.bufferMiles}}],artifacts:[artifact]});
     await checkpoint();
     await rename(compressed,path.join(options.outputRoot,relative));
+    await writeAuditReceipt(options.outputRoot,artifact,await fileHash(path.join(options.outputRoot,relative),checkpoint),options.sources,graphSummary(input,digest));
     if(options.publish!==false) await publishPreparedCatalog(release,options.outputRoot,checkpoint);
     return release;
   } finally {input.close();await rm(temporary,{recursive:true,force:true});}
@@ -51,7 +73,7 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
 /** Validate every immutable object, including reused objects, before one atomic activation. */
 export async function publishPreparedCatalog(release:DataRelease,outputRoot:string,checkpoint:()=>Promise<void>=async()=>{}):Promise<void> {
   const candidate=dataReleaseSchema.parse(release);
-  await auditCatalog(candidate,outputRoot,checkpoint);
+  await auditCatalog(candidate,outputRoot,checkpoint,true);
   await checkpoint();
   await writeJsonAtomically(path.join(outputRoot,"release.json"),candidate);
 }
@@ -62,7 +84,7 @@ export async function inspectPreparedRelease(manifestPath:string,checkpoint:()=>
   return auditCatalog(release,path.dirname(manifestPath),checkpoint);
 }
 
-async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=>Promise<void>) {
+async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=>Promise<void>,reuseAudits=false) {
   const temporary=await mkdtemp(path.join(tmpdir(),"alpine-release-audit-"));
   const identities=new DatabaseSync(path.join(temporary,"identities.sqlite"));
   const artifacts=[];
@@ -79,6 +101,15 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
       await checkpoint();
       const compressed=path.join(outputRoot,artifact.path), file=path.join(temporary,"artifact.sqlite");
       if((await stat(compressed)).size!==artifact.compressedBytes) throw new Error(`Compressed artifact size differs: ${artifact.id}`);
+      // Immutable transport is hashed every time. Only a matching semantic audit
+      // can skip decompression/scanning; inspect always performs the full audit.
+      const compressedHash=await fileHash(compressed,checkpoint);
+      if(reuseAudits && release.partitioning==="local-areas") {
+        const receipt=await readFile(receiptPath(outputRoot,artifact.id),"utf8").then(raw=>receiptSchema.parse(JSON.parse(raw))).catch(()=>null);
+        if(receipt && receipt.key===auditKey(artifact) && receipt.compressedHash===compressedHash && receipt.summary.id===artifact.id && receipt.sources.every(source=>release.sources.some(candidate=>candidate.id===source.id&&contentId(candidate)===contentId(source)))) {
+          artifacts.push(receipt.summary);continue;
+        }
+      }
       const hash=createHash("sha256");let bytes=0;
       const verify=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);if(bytes>artifact.bytes) done(new Error("Artifact exceeds declared size"));else checkpoint().then(()=>done(null,chunk),done);}});
       await pipeline(createReadStream(compressed),createGunzip(),verify,createWriteStream(file));
@@ -108,7 +139,12 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
         }
         identities.exec("COMMIT");
         }
-        artifacts.push({id:artifact.id,nodes:Number(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n),directedEdges:Number(db.prepare("SELECT count(*) AS n FROM edges").get()!.n),physicalEdges:Number(db.prepare("SELECT count(*) AS n FROM physical_edges").get()!.n),accessPoints:Number(db.prepare("SELECT count(*) AS n FROM access_points").get()!.n)});
+        const summary=graphSummary(db,artifact.id);
+        artifacts.push(summary);
+        if(release.partitioning==="local-areas") {
+          const ids=new Set(db.prepare("SELECT id FROM sources").all().map(row=>String(row.id)));
+          await writeAuditReceipt(outputRoot,artifact,compressedHash,release.sources.filter(source=>ids.has(source.id)),summary);
+        }
       } finally {db.close();await rm(file);}
     }
     return {id:release.id,verified:true,sections:release.sections.length,artifacts,rawBytes:release.artifacts.reduce((sum,item)=>sum+item.bytes,0),compressedBytes:release.artifacts.reduce((sum,item)=>sum+item.compressedBytes,0)};

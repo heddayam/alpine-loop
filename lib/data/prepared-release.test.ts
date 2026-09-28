@@ -61,6 +61,19 @@ it("includes start area and input fingerprint in immutable graph identity",()=>{
   expect(preparedReleaseId({...options,area:{...options.area,id:"another-network"}})).not.toBe(preparedReleaseId(options));
   expect(preparedReleaseId({...options,area:{...options.area,inputFingerprint:"changed-input"}})).not.toBe(preparedReleaseId(options));
 });
+it("publishes named ownership without rebuilding for display label changes",async()=>{
+  const options=fixture();
+  const named={...options,area:{...options.area,name:"Glacier Peak area"}};
+  expect(preparedReleaseId(named)).toBe(preparedReleaseId(options));
+  const release=await exportPreparedRelease(named);
+  expect(release.sections[0]!.name).toBe("Glacier Peak area");
+  expect(release.artifacts[0]!.regionId).toBe(options.area.id);
+});
+it("invalidates semantic receipts when source provenance changes",async()=>{
+  const release=await exportPreparedRelease(fixture());
+  release.sources[0]={...release.sources[0]!,version:"changed"};
+  await expect(publishPreparedCatalog(release,root)).rejects.toThrow("source differs");
+});
 it("publishes an expanded catalog using unchanged artifact bytes and independent graph identities",async()=>{
   const a=await exportPreparedRelease({...fixture(),publish:true}),before=await readFile(path.join(root,a.artifacts[0]!.path));
   const b=await exportPreparedRelease(fixture("b",10));

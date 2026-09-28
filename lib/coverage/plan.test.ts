@@ -49,3 +49,14 @@ it("rejects unsupported polar and antimeridian buffers and retains stable area i
   expect(() => planLocalCoverage(recipe, rectangle([179.8,0,179.9,0.1]))).toThrow("antimeridian");
   expect(planLocalCoverage(recipe, starts).id).toBe(planLocalCoverage({ ...recipe, sources: [...recipe.sources].reverse() }, starts).id);
 });
+
+it("clips only the declared international limit, while rejecting missing US source coverage",()=>{
+  const supportedArea={name:"US side",geometry:rectangle([-130,40,-110,49])};
+  const borderStarts=rectangle([-121,48.9,-120.9,49.1]);
+  const usRecipe={...recipe,supportedArea,sources:[{...recipe.sources[0]!,geometry:rectangle([-125,45,-117,49])}]};
+  const plan=planLocalCoverage(usRecipe,borderStarts);
+  expect(coordinateIsInsideArea([-120.95,49.05],plan.startGeometry)).toBe(false);
+  expect(coordinateIsInsideArea([-120.95,49.05],plan.geometry)).toBe(false);
+  expect(coordinateIsInsideArea([-120.95,48.95],plan.startGeometry)).toBe(true);
+  expect(()=>planLocalCoverage({...usRecipe,sources:[{...recipe.sources[0]!,geometry:rectangle([-121,45,-117,49])}]},borderStarts)).toThrow("complete 25-mile");
+});

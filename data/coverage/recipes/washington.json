@@ -23,6 +23,11 @@
   "memoryLimitMiB": 4096,
   "offline": false,
   "limitations": [
-    "Independent trail-inventory review remains incomplete; mapped coverage does not guarantee source completeness."
-  ]
+    "Independent trail-inventory review remains incomplete; mapped coverage does not guarantee source completeness.",
+    "US-only coverage. The international border is a hard routing limit, represented by the IBC mapping line; routes cannot cross into Canada."
+  ],
+  "supportedArea": {
+    "name": "US side of the Washington international border",
+    "geometryPath": "../washington-us-limit.geojson"
+  }
 }

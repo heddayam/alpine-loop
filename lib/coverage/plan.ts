@@ -14,8 +14,7 @@ export type LocalCoveragePlan = {
 };
 
 /** Every point of a closed walk of length L is at most L/2 from its start. */
-export function planLocalCoverage(recipe: SourceRecipe, input: AreaGeometry): LocalCoveragePlan {
-  let startGeometry = assertValidAreaGeometry(input, "Start area");
+export function routingEnvelope(startGeometry: AreaGeometry): AreaGeometry {
   const [west, south, east, north] = areaGeometryBounds(startGeometry);
   // Smaller than both the graph's spherical radius and Earth's minimum radius:
   // this overestimates angular distance. Bound longitude at the furthest latitude
@@ -26,7 +25,12 @@ export function planLocalCoverage(recipe: SourceRecipe, input: AreaGeometry): Lo
   if (furthestLatitude >= 90) throw new Error("Start areas whose buffer reaches a pole are not supported");
   const longitude = latitude / Math.cos(furthestLatitude * Math.PI / 180);
   if (west - longitude <= -180 || east + longitude >= 180) throw new Error("Start areas whose buffer crosses the antimeridian are not supported");
-  let geometry = rectangle([west - longitude, south - latitude, east + longitude, north + latitude]);
+  return rectangle([west - longitude, south - latitude, east + longitude, north + latitude]);
+}
+
+export function planLocalCoverage(recipe: SourceRecipe, input: AreaGeometry): LocalCoveragePlan {
+  let startGeometry = assertValidAreaGeometry(input, "Start area");
+  let geometry = routingEnvelope(startGeometry);
   if (recipe.supportedArea) {
     const starts = intersectCoverage(startGeometry, recipe.supportedArea.geometry);
     const routes = intersectCoverage(geometry, recipe.supportedArea.geometry);

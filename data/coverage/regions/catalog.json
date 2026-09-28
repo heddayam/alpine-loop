@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "regions": [
+    {
+      "id": "glacier-peak",
+      "name": "Glacier Peak area",
+      "aliases": [
+        "Glacier Peak Wilderness",
+        "Mount Baker-Snoqualmie National Forest",
+        "Okanogan-Wenatchee National Forest"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "glacier-peak.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "approachSourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0",
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "5357010357",
+          "name": "Downey Creek trailhead",
+          "coordinates": [
+            -121.22291487131737,
+            48.25950577384695
+          ],
+          "basis": "Enjoy a relatively gentle grade following Downey Creek into the Glacier Peak Wilderness.  Several steep creek crossings can be challenging during high water.  Big trees and occasional views of surrounding peaks are features of this route.  Find camping spots at about mile 3 and at the end of the trail at Bachelor Creek, mile 6.6. The Downey Creek trail is the southern end of the cross-country mountaineering route called the Ptarmigan Traverse",
+          "url": null
+        },
+        {
+          "id": "5346010357",
+          "name": "Suiattle trailhead",
+          "coordinates": [
+            -121.19211486331501,
+            48.24810577664694
+          ],
+          "basis": "The Suiattle trail winds its way above the Suiattle River through a recent burn, old growth forest and some mature forest recovering from an old burn from the 1920's. The Suiattle Trail ends just beyond Canyon Creek, where it intersects with the Pacific Crest Trail.",
+          "url": null
+        },
+        {
+          "id": "11303010357",
+          "name": "North Fork Sauk trailhead",
+          "coordinates": [
+            -121.28821483238441,
+            48.05790575565364
+          ],
+          "basis": "Access to the North Fork Sauk Trail 649. This 9-mile 1 way trail gains about 5,000 feet of elevation by the time it interests with the Pacific Crest Trail near White Pass. Begin in impressive old-growth forest, immediately entering the Glacier Peak Wilderness. Find campsites and backcountry toilets in 3.5 miles at Red Creek, 2,800 feet, and five miles at Mackinaw Shelter, 2,950 feet. This is the main route for climbing Glacier Peak and accesses Pilot Ridge Trail 652 as part of the popular Pilot Ridge Loop.",
+          "url": null
+        },
+        {
+          "id": "6307.005511",
+          "name": "White River trailhead",
+          "coordinates": [
+            -120.94502475155335,
+            47.962805788175615
+          ],
+          "basis": "This is a popular trailhead located upriver from Lake Wenatchee that provides access to: Indian Creek Trail #1502, White River Trail #1507, Mount David Trail #1521, and Boulder Creek Trail #1562. These trails are all within the Glacier Peak Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59069"
+        },
+        {
+          "id": "6279.005511",
+          "name": "Phelps Creek trailhead",
+          "coordinates": [
+            -120.83501476237457,
+            48.08320580702007
+          ],
+          "basis": "This trailhead provides access to the Phelps Creek Trail #1511 which enters the Glacier Peak Wilderness at 2.6 miles. This trailhead also accesses Carne Mountain Trail #1508.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58939"
+        },
+        {
+          "id": "6278.005511",
+          "name": "Trinity trailhead",
+          "coordinates": [
+            -120.8500047621596,
+            48.07197180474025
+          ],
+          "basis": "This trailhead provides access to Buck Creek Trail #1513 and Chiwawa River Trail #1550 within the Glacier Peak Wilderness. There is a vault toilet at the trailhead. The trailhead borders private land. Please respect private property and stay on the trail in this area.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59027"
+        },
+        {
+          "id": "5112010416",
+          "name": "Entiat River trailhead",
+          "coordinates": [
+            -120.65021471664457,
+            48.02460582402954
+          ],
+          "basis": "Provides access to Entiat River Trail #1400 (and numerous side trails). Trail enters Glacier Peak Wilderness 4 miles from the trailhead.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=57963"
+        },
+        {
+          "id": "5278010416",
+          "name": "Little Wenatchee Ford trailhead",
+          "coordinates": [
+            -121.08761476440273,
+            47.917015769962624
+          ],
+          "basis": "This trailhead provides access to the Little Wenatchee Trail #1525, Cady Creek Trail #1501, and Cady Ridge Trail #1532, which enter the Henry M Jackson Wilderness, and the Poe Mountain Trail #1520 which travels along the border of the Glacier Peak Wilderness. The Little Wenatchee Trail #1525 travels through Henry M. Jackson Wilderness to meet the Pacific Crest Trail within Glacier Peak Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58865"
+        }
+      ],
+      "limitations": [
+        "Trailheads within the wilderness footprint and eight reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
+        "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations. They select existing eligible access points; they never create access or imply that roads or trails are currently open."
+      ]
+    }
+  ]
+}
