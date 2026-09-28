@@ -6,6 +6,36 @@ the evidence line.
 
 ## Active system design revision
 
+### Local preparation with a distance budget — 2026-09-28
+
+This active revision supersedes the complete-network/discovery builder recorded
+below. Accepted design: [network-design.md](network-design.md). The user approved
+including ambiguous footways as possible walking links without global connectivity
+promotion; explicit sidewalk/crossing exclusions and access rules remain.
+
+- [x] Shared 40-mile request / 50-mile close-match / 25-mile buffer contract.
+  Conservative geographic planning rejects provider gaps before work. Eligible
+  start geometry is separate from routing geometry. Focused planner/route tests:
+  17 passed; release ownership metadata tests: 2 passed.
+- [x] Bounded source extraction and local classification. Integrated fbb001f;
+  38 focused offline source/store/adapter tests pass, including native Osmium and
+  cancellation. Removed global promotion, unbounded trail import, and per-source
+  metric tables (production/test total net 135 lines removed).
+- [x] Independent buffered graph reads and area-download UI. Integrated 0fa83e8;
+  66 focused reader/install/server/UI tests pass. Searches pin one graph, can leave
+  the start core, and exclude buffer-only starts. Overlapping graph records need
+  not be identical. Desktop/mobile offline download/pause flows pass (2 tests),
+  with screenshots inspected at 1280px and 390px.
+- [ ] Integrate local compiler, reusable segment metrics, and retire discovery CLI.
+- [ ] Final integrated verification and cleanup.
+- [ ] One user-run local real-source build/install/search measurement, including
+  elapsed time, peak memory/disk, source continuity and usefulness of results.
+
+The canceled statewide discovery is no longer running. Its obsolete 248,000,512-byte
+normalized store, empty discovery scratch and stale progress report were removed;
+its status watcher was stopped. Compressed source/DEM caches, saved results and
+settings remain. No regional data build was launched during this revision.
+
 ### Loops/lollipops and complete networks — 2026-09-28
 
 Accepted design: [network-design.md](network-design.md). This supersedes

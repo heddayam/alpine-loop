@@ -31,11 +31,12 @@ input so it can be adjusted without changing app or solver code.
   cannot prove fresh-install availability. These upstream URLs are not permanent
   archives, so pins still need periodic review.
 - Filter potential hiking connections and complete node references from the
-  pinned extract before normalization. Discover connected networks globally
-  within configured source coverage; only selected networks receive buffered
-  access/building context extraction and elevation. Retain the compressed source,
-  compact normalized graph and reusable selected context; discard transient
-  extracts and raw joins. See [network design](network-design.md) for extraction
+  pinned extract before normalization. Extract only the chosen start area and its required
+  routing buffer before normalization. Include ambiguous footways as possible
+  walking links without distant-connectivity promotion; retain access rules and
+  explicit sidewalk/crossing exclusions. Retain the compressed source, bounded
+  normalized context and shared metric cache; discard transient extracts and raw
+  joins. See [network design](network-design.md) for extraction
   semantics and limitations. No legacy broad importer remains.
 - Interpret hiking-relevant highway/path/foot/access/oneway/route/relation tags
   through a versioned adapter with fixture tests.

@@ -1,8 +1,8 @@
 # Alpine Loop implementation plan
 
 The accepted [network and route revision](network-design.md) restricts generated
-routes to loops/lollipops and replaces geographic preparation units with complete
-connected networks. [Status](status.md) distinguishes implemented work from
+routes to loops/lollipops and uses locally prepared start areas with distance-derived
+routing buffers. [Status](status.md) distinguishes implemented work from
 pending gates. Developer builds and downloadable coverage remain the delivery
 model established by [prepared coverage](prepared-coverage.md).
 
@@ -98,22 +98,24 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 
 ## Local data and preparation
 
-Schema 7 remains the prepared graph record representation. Preparation and
-storage use complete connected trail networks within pinned source coverage
-and explicit exclusions. Geographic selection chooses networks, rather than
-clipping their trails. The download UI shows full network extent and size
-before installation. A release maps networks to immutable SQLite artifacts;
-one bounded reader opens the selected networks.
-Saved result geometry remains readable independently of graph-format support.
+Schema 7 remains the prepared graph record representation. Developers select a
+start area and prepare its surrounding trail graph. A 25-mile geographic buffer
+covers closed routes up to the 50-mile close-match exploration bound; requested
+hikes remain limited to 40 miles. Source gaps fail before preparation, and explicit
+exclusions remain hard boundaries. Geographic search filters still select starts
+only and never clip a hike.
 
-Developers inventory pinned source topology before selecting networks. Each
-network has independent metric preparation, topology analysis, audit and
-immutable publication. Adding disconnected networks reuses unchanged artifacts;
-changed connectivity invalidates affected networks. Source-boundary truncation
-is disclosed; no coordinate-proximity connection is invented. Component counts
-are not evidence that source connectivity is complete. Users download and verify artifacts without source processing or
-graph compilation. Atomic installation changes preserve the previous coverage
-until the entire request is ready. Running and saved jobs retain referenced data.
+Each local area has an independent immutable SQLite artifact. The catalog and
+installation distinguish eligible start coverage from buffered routing coverage.
+One graph owns each start; overlapping artifacts are never joined. Segment metric
+caches are reusable across overlapping builds, while topology is local to each
+artifact. Ambiguous footways are possible walking links without a global
+connectivity prerequisite; explicit sidewalks/crossings remain excluded and access
+restrictions still apply.
+
+Users select start areas and review download sizes. Downloads include their route
+buffers, require no source processing, and activate atomically. Running and saved
+jobs retain their referenced data; saved route geometry remains readable.
 
 The [prepared coverage revision](prepared-coverage.md) defines the release,
 installation, download, and migration contracts. Its acceptance gates in status

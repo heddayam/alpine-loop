@@ -13,7 +13,7 @@ export function formatBuildStatus(report: { status: string; currentStage: string
     `Last reported state: ${report.status}`,
     `Phase: ${report.currentStage}`,
     `Elapsed: ${duration(report.elapsedMs + (report.status === "running" ? age : 0))}`,
-    ...(progress ? [`Network preparation: ${progress}`] : []),
+    ...(progress ? [`Area preparation: ${progress}`] : []),
     `Last report: ${duration(age)} ago`,
     ...(report.peakMeasuredMemoryBytes === undefined ? [] : [`Peak process memory: ${Math.ceil(report.peakMeasuredMemoryBytes / 1024 ** 2)} MiB`]),
     ...(report.error ? [`Error: ${report.error}`] : []),

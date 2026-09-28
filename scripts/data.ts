@@ -1,15 +1,15 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { showBuildStatus, formatBuildStatus } from "./data-status";
-import { writeNetworkPreview } from "./network-preview";
 import { readSourceRecipe } from "@/lib/coverage/recipe";
-import { readNetworkCatalog, type NetworkCatalog } from "@/lib/coverage/discovery-catalog";
-import { discoverNetworks, buildNetworks } from "@/lib/coverage/runtime";
+import { buildLocalCoverage } from "@/lib/coverage/runtime";
+import { planLocalCoverage } from "@/lib/coverage/plan";
+import { rectangle } from "@/lib/coverage/geometry";
 import type { CoverageRunnerContext } from "@/lib/coverage/types";
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { inspectPreparedRelease } from "@/lib/data/prepared-release";
 
-const usage = "Usage: data discover source-recipe.json | networks catalog.json | build catalog.json --network ID [--network ID ...] | inspect release.json | status [report.json] [--watch]";
+const usage = "Usage: data plan|build source-recipe.json --bbox west,south,east,north | inspect release.json | status [report.json] [--watch]";
 
 async function withProgress<T>(statusFile: string, action: (context: CoverageRunnerContext) => Promise<T>): Promise<T> {
   const controller = new AbortController(), started = Date.now();
@@ -47,13 +47,6 @@ async function withProgress<T>(statusFile: string, action: (context: CoverageRun
   }
 }
 
-async function describeNetworks(catalog: NetworkCatalog, catalogPath: string): Promise<void> {
-  const previewPath = await writeNetworkPreview(catalog, catalogPath);
-  process.stdout.write(`${catalog.networks.length} connected networks; ${catalog.networks.filter(network => network.cycleRank > 0).length} contain undirected cycles.\n`);
-  process.stdout.write(`Catalog: ${path.relative(process.cwd(), catalogPath)}\nOpen: ${path.relative(process.cwd(), previewPath)}\n`);
-  process.stdout.write("Choose a network in the preview, then build its ID. Download size is unknown until preparation.\n");
-}
-
 export async function runDataCommand(argv: readonly string[]): Promise<void> {
   const [command, ...args] = argv;
   process.env.ALPINE_COVERAGE_ROOT ??= ".cache/build";
@@ -66,28 +59,23 @@ export async function runDataCommand(argv: readonly string[]): Promise<void> {
   }
   const [file, ...options] = args;
   if (!file || file.startsWith("--")) throw new Error(usage);
-  if (command === "build") {
-    const ids: string[] = [];
-    for (let i = 0; i < options.length; i += 2) {
-      if (options[i] !== "--network" || !/^network-[a-f0-9]{32}$/.test(options[i + 1] ?? "")) throw new Error(usage);
-      ids.push(options[i + 1]!);
+  if (command === "plan" || command === "build") {
+    if (options.length !== 2 || options[0] !== "--bbox") throw new Error(usage);
+    const coordinates = options[1]!.split(",");
+    const bbox = coordinates.map(Number);
+    if (coordinates.length !== 4 || coordinates.some(value => !value.trim()) || bbox.some(value => !Number.isFinite(value)) ||
+      bbox[0]! >= bbox[2]! || bbox[1]! >= bbox[3]! || bbox[0]! < -180 || bbox[2]! > 180 || bbox[1]! < -90 || bbox[3]! > 90) {
+      throw new Error("Bbox must be west,south,east,north with increasing longitude/latitude inside geographic bounds");
     }
-    if (!ids.length) throw new Error("Build requires explicit --network IDs from a discovery catalog. Run data discover source-recipe.json first.");
-    if (new Set(ids).size !== ids.length) throw new Error("Select each network ID only once");
-    const result = await withProgress(statusFile, context => buildNetworks(file, ids, context));
+    const recipe = await readSourceRecipe(file), startGeometry = rectangle(bbox);
+    const plan = planLocalCoverage(recipe, startGeometry);
+    const result = command === "plan"
+      ? { ...plan, downloadBytes: null, note: "Start area plus surrounding trails; download size is known after preparation. No source data was processed." }
+      : await withProgress(statusFile, context => buildLocalCoverage(recipe, startGeometry, context));
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  } else {
-    if (options.length) throw new Error(usage);
-    if (command === "discover") {
-      const recipe = await readSourceRecipe(file);
-      const {catalog, catalogPath} = await withProgress(statusFile, context => discoverNetworks(recipe, context));
-      await describeNetworks(catalog, catalogPath);
-    } else if (command === "networks") {
-      await describeNetworks(await readNetworkCatalog(file), file);
-    } else if (command === "inspect") {
-      process.stdout.write(`${JSON.stringify(await inspectPreparedRelease(file), null, 2)}\n`);
-    } else throw new Error(usage);
-  }
+  } else if (command === "inspect" && !options.length) {
+    process.stdout.write(`${JSON.stringify(await inspectPreparedRelease(file), null, 2)}\n`);
+  } else throw new Error(usage);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

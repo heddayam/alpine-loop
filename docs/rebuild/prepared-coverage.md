@@ -1,22 +1,19 @@
 # Developer builds and downloadable coverage
 
-The [network revision](network-design.md) uses complete connected networks for
-preparation and downloads. [Status](status.md) separates offline implementation
-evidence from the remaining real-data acceptance gates.
+The [local preparation revision](network-design.md) uses a start area plus a
+25-mile routing buffer for requests up to 40 miles and labeled close matches up
+to 50 miles. [Status](status.md) separates implementation from real-data acceptance.
 
 ## Product boundary
 
-Developers build one coherent, audited release. Users select connected trail
-networks and preview their full extent and size before downloading prepared data.
-Network sections are discovered from pinned source identities. Named hiking regions continue
-to filter starting points. The exact installed union is the route boundary.
+Developers build audited immutable graphs. Users select start areas and review
+size before downloading; surrounding routing data is included automatically.
+Named/drawn/driving areas filter starts and never clip routes.
 
-One bounded reader opens immutable SQLite artifacts directly. It holds at most
-eight connections, with bounded SQLite caches. No local merge or graph rebuild
-occurs during installation. Each new artifact contains one complete network,
-with stable graph identities independent of the catalog version. Legacy geographic
-artifacts remain readable, including their duplicated seam records. Coordinates
-never imply a connection.
+One bounded reader opens at most eight SQLite files. Each start uses one complete
+local graph; overlapping graphs are not merged. Legacy transport remains readable
+for saved references, but the active builder produces only local areas.
+Coordinates never imply a connection.
 
 ## Release contract
 
@@ -25,6 +22,10 @@ plans, and persistent download jobs. Release metadata includes sections,
 section-to-file mappings, exact geometry, raw SHA-256 identities, compressed
 and installed sizes, source dates, attribution, limitations, and named search
 regions with aliases. Artifacts are `objects/<sha256>.sqlite.gz`.
+
+Local sections carry start geometry and the supported distance/buffer metadata.
+Their artifact geometry is the routing extent; each section owns exactly one
+artifact with matching start geometry and an independent graph identity.
 
 Schema 7 stores two nullable minimum approach distances per starting candidate,
 for known access and for known plus unknown access. Null proves no physical
@@ -36,31 +37,23 @@ Candidates are preserved before global representative suppression.
 
 ## Developer workflow
 
-`npm run data -- discover data/coverage/recipes/washington.json` inventories the
-explicitly pinned sources and persists all complete eligible connected networks.
-Open the printed `networks.html` to inspect extents and source-network sizes.
-`npm run data -- networks catalog.json` regenerates that metadata-only report.
-No DEM, metrics, topology, reference downloads or release export occur in discovery.
-The initial full-source import can still require substantial time and disk.
+`npm run data -- plan data/coverage/recipes/washington.json --bbox west,south,east,north`
+previews start/routing geometry without downloads or source scans. Replace `plan`
+with `build` to prepare that area. Missing required source coverage fails before
+processing. Source config/geometry paths resolve relative to the recipe file.
 
-`npm run data -- build catalog.json --network ID [--network ID ...]` verifies the
-saved discovery and prepares only the selected IDs. It reopens the persistent
-inventory without rerunning connectivity. Unknown, empty, duplicate, corrupt or
-stale selections fail before preparation. Each network gets bounded staging,
-cached metrics, topology analysis and one immutable artifact. The supplied IDs
-define the next published catalog; include existing IDs to extend it. Re-running
-reuses unchanged networks without sampling elevation or recomputing topology.
+Preparation extracts complete local ways and context, computes or reuses segment
+metrics, derives local topology and exports one graph. Repeated unchanged builds
+reuse verified artifacts; overlapping areas reuse metric measurements. Local
+artifacts may have different topology records for shared source trails and are
+audited independently. The final catalog write activates the release atomically.
 
-Before activation, the builder streams and audits every candidate artifact,
-including reused files, and checks cross-network identities in temporary SQLite.
-Only the final catalog write activates the release. There is no persistent
-merger service, key registry, or intermediate partial release.
+Building another area appends it, while rebuilding the same area replaces its
+entry. Source conflicts with retained areas fail. No statewide discovery,
+connectivity inventory or network-ID selection remains.
 
-`npm run data -- inspect release.json` verifies compressed files, raw checksums,
-SQLite integrity, graph records and per-artifact counts. The previous geographic
-recipes, planner, request schema and standalone export CLI have been removed.
-Source config/geometry references resolve relative to the source recipe file.
-The published catalog can be served from local files or static HTTPS storage.
+`npm run data -- inspect release.json` verifies compressed sizes, checksums, SQLite
+integrity and graph records. Catalogs can be served locally or from static HTTPS.
 See [README](../../README.md#developer-data-builds) for Docker commands.
 
 Build environment:
@@ -75,8 +68,8 @@ collection acceptance requires an actual successful constrained build.
 
 ## User workflow
 
-Coverage sits beside Settings on the shared map. Click networks to select them;
-overlapping extents offer a choice. The panel previews complete extent and size
+Coverage sits beside Settings on the shared map. Click start areas to select them;
+overlapping extents offer a choice. The panel previews start extent and download size
 before installation with one Download action.
 Disk-space checks run before creating the job. Pause, resume, cancel, update,
 and remove use the same installation service.
@@ -97,7 +90,7 @@ Verified work survives pause, cancellation, and process interruption.
 
 On 2026-09-28 the user chose a clean cutover. The old host packs, published
 geographic catalog and Docker-installed coverage were deleted; the app now
-starts without coverage until a new network catalog is built and installed.
+starts without coverage until local coverage is built and installed.
 Saved routes, settings and cached source downloads were preserved.
 The app has one prepared-data runtime. Legacy saved route geometry, metadata,
 and exports remain readable through the stored-result compatibility parser.
@@ -123,7 +116,7 @@ regressions. A fixture pass does not establish Cascades-sized feasibility.
 
 These historical measurements use the former geographic builder and a 26-section,
 corrected-source partial Cascades graph. They do not establish acceptance or
-performance of the new network builder or complete Cascades collection.
+performance of the local area builder or complete Cascades collection.
 
 | Measurement | Result |
 | --- | --- |

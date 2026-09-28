@@ -105,98 +105,83 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-The workflow is **discover → inspect networks → build selected IDs**. A source
-recipe pins provider data, supported source boundaries and reviewed exclusions;
-it contains no hike or geographic build selector. Discovery saves connectivity
-without downloading elevation or preparing route graphs. Osmium first filters
-potential walking connections and their referenced nodes from the compressed
-provider file; SQLite retains the normalized trail graph, not the entire map.
-Discovery still scans the source file. Runtime and peak disk use for Washington
-must be measured; no fixed completion time is promised.
+The workflow is **choose a start area → preview its buffered extent → build**.
+A source recipe pins provider data and reviewed exclusions. The bounding box
+selects eligible starting points; routes can leave that box. Preparation includes
+surrounding trails for requests up to **40 miles**, with a **25-mile buffer** to
+preserve the solver's explicitly labeled close matches up to 50 miles.
 
-Only after selecting network IDs does preparation extract nearby access roads,
-parking, gates and buildings, then acquire elevation and compile routes.
-Verified trail and per-network context caches are reused. Temporary extracts
-and raw node/reference joins are discarded.
+The commands below use a small start area near Index, Washington as an example.
+Change `START_BBOX` to your desired west,south,east,north coordinates. It selects
+all eligible starts there, not a named hike or connected network.
 
 ```sh
-# Build the tooling image; this does not build trail data.
+# Build tooling only; this does not build trail data.
 docker compose build data
+START_BBOX='-121.6,47.75,-121.5,47.85'
 
-# This checkout already has the pinned Washington extract in this cache.
+# Immediate geometry preview: no downloads, normalization or graph work.
+docker compose run --rm data scripts/data.ts plan \
+  data/coverage/recipes/washington.json --bbox "$START_BBOX"
+
+# Prepare that area and its surrounding trails, reusing this checkout's cache.
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts discover data/coverage/recipes/washington.json
-```
+  data scripts/data.ts build data/coverage/recipes/washington.json --bbox "$START_BBOX"
 
-Discovery prints the paths to `catalog.json` and `networks.html` under
-`.cache/build/discovery/`. Open the printed HTML path in your browser. It works
-offline and lets you sort/filter networks, inspect their full geographic extents,
-trail length, node/edge counts and structural cycle rank, then copy an ID.
-These are source-network extents, not detailed trail lines. Cycle rank does not
-count valid hikes; a network with rank zero has no simple physical loop.
-Download and prepared-file sizes remain unknown until compilation.
-
-Set `CATALOG` to the exact catalog path printed by discovery and `NETWORK` to
-the ID you chose. Then run:
-
-```sh
-CATALOG='.cache/build/discovery/<fingerprint>/catalog.json'
-NETWORK='network-<id-from-preview>'
-
-docker compose run --rm \
-  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build "$CATALOG" --network "$NETWORK"
-
-# In another terminal, monitor discovery or preparation:
+# In another terminal:
 npm run data -- status --watch
-
-# After preparation, audit the published files:
-docker compose run --rm data scripts/data.ts inspect .local-data/releases/prepared/release.json
 ```
 
-Replace the angle-bracket placeholders before running the assignments. Repeat
-`--network ID` to build several networks into one catalog. The selected IDs define
-the published catalog; include previously published IDs when extending it.
-Unchanged network artifacts are reused. A changed or corrupted discovery is
-rejected before preparation; rerun discovery when source inputs change.
+`plan` prints the start and routing geometries; download size is known only after
+compilation. Missing provider coverage anywhere in the required buffer fails
+before data processing: add an adjacent pinned source or choose an interior area.
+Reviewed exclusions remain hard route boundaries.
 
-The source-cache override reuses this checkout's existing downloads. A fresh
-clone can omit it. Source recipes allow acquisition of missing inputs. Ctrl+C
-stops at a checkpoint; repeat the command to reuse verified completed work.
-An interrupted source import restarts its compact normalization; there is no
-raw-record resume database or legacy importer.
-Build reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
-`status [report.json] --watch` refreshes every five seconds; a stale report is
-not a live heartbeat.
+The builder verifies the compressed source and extracts a bounded subset with
+complete way references before normalization. It then prepares local metrics,
+topology, access evidence and elevation. It does not inventory statewide trail
+connectivity. Osmium still scans the provider file, and elevation can require
+large raster downloads. Local preparation is not a fixed time or disk guarantee.
+
+Building another box adds or replaces its area in the published local catalog.
+Unchanged areas reuse their artifacts; overlapping builds reuse measured segment
+metrics, but keep independent topology and may duplicate stored trails. A source
+pin conflict with retained areas fails instead of silently mixing snapshots.
+
+A fresh clone can omit the source-cache override. Ctrl+C stops at a checkpoint;
+repeat the command to reuse verified completed work. Incomplete source imports
+restart their local normalization. Transient extracts and staging files are
+removed on completion or cancellation; pinned downloads and metric caches remain.
+Reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
+`status [report.json] --watch` refreshes every five seconds; stale reports are not
+live heartbeats.
 
 For native tooling, install `osmium-tool` and `uv`, then run
-`uv sync --frozen --project tools/dem --python 3.12`. The equivalent commands are
-`npm run data -- discover data/coverage/recipes/washington.json`,
-`npm run data -- networks "$CATALOG"` to reopen inspection, and
-`npm run data -- build "$CATALOG" --network "$NETWORK"`. Set
-`ALPINE_SOURCE_CACHE` to the matching host cache path when reusing downloads.
-The old geographic recipes, planner and standalone export command are removed.
+`uv sync --frozen --project tools/dem --python 3.12`. Use
+`npm run data -- plan data/coverage/recipes/washington.json --bbox "$START_BBOX"`
+and replace `plan` with `build` to prepare data. Set `ALPINE_SOURCE_CACHE` to the
+matching host cache path. `npm run data -- inspect
+.local-data/releases/prepared/release.json` audits a published release.
+The former `discover`, `networks`, and `--network` workflow is removed.
 
-The app already mounts `.local-data/releases`. Refresh it after publication,
-open **Coverage**, select a network, review its extent/size and click **Download**.
-Publication makes networks available; Download installs them for search. Building
-or restarting the `app` image alone does neither. Old geographic coverage was
-removed for the clean cutover; saved route results and settings were retained.
+After publication, refresh the app, open **Coverage**, select an area, review
+its size and click **Download**. Selected areas define eligible starts; their
+surrounding trails are included automatically. Building or restarting the app
+image alone does not prepare or install trail data. Saved results and settings
+remain separate from coverage.
 
-The separate Docker `data` service includes these tools and applies a 4 GiB
-memory limit with swap disabled. The ordinary `app` image excludes them.
-See [prepared coverage](docs/rebuild/prepared-coverage.md) for contracts,
-configuration, and acceptance evidence. Large-region feasibility remains
-unproven until the measured build gate passes.
+The Docker `data` service applies a 4 GiB memory limit with swap disabled; the
+ordinary `app` image excludes data tools. See [prepared coverage](docs/rebuild/prepared-coverage.md)
+for contracts and acceptance evidence. Real-source preparation time, disk and
+memory remain unmeasured for this replacement.
 
 ### How it fits together
 
 ```mermaid
 flowchart LR
-    Sources["Pinned trail sources"] --> Discovery["Discover and inspect networks"]
-    Discovery --> Selection["Choose network IDs"]
-    Selection --> Builder["Prepare metrics, analyze and audit"]
+    Sources["Pinned source + start area"] --> Extract["Extract surrounding trails"]
+    Extract --> Builder["Prepare metrics, analyze and audit"]
     Builder --> Release["Static catalog + compressed SQLite files"]
     Release --> Download["Verify and activate installation"]
     Download --> Reader["One bounded graph reader"]
@@ -205,9 +190,9 @@ flowchart LR
     Solver --> Jobs["Saved searches"]
 ```
 
-There is no merged local routing database. Files share release-wide source
-identities, and routes can cross installed section boundaries. Full search
-uses one coherent graph and distributes starts among bounded workers.
+There is no merged local routing database. Each start uses one complete local graph,
+including its surrounding buffer. Overlapping prepared graphs are never stitched
+together. Full search distributes eligible starts among bounded workers.
 `ALPINE_SOLVER_WORKERS` accepts 1–8 and defaults to at most two available CPUs.
 Saved Full searches remain FIFO with ordered checkpoints.
 

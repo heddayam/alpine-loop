@@ -15,7 +15,7 @@ const stores:CoverageSourceStore[]=[];
 afterEach(()=>stores.splice(0).forEach((store)=>store.close()));
 
 it("inventories real West Cady, Pilchuck, and road-approach ways before coverage clipping",async()=>{
-  const store=new CoverageSourceStore(":memory:",source);stores.push(store);
+  const store=new CoverageSourceStore(":memory:",source,rectangle([-180,-90,180,90]));stores.push(store);
   const lines=createInterface({input:createReadStream(fixture),crlfDelay:Infinity});
   await store.import(async()=>{}, {lines});
   const ids=[...store.ways(rectangle([-180,-90,180,90]),0)].map(({way})=>way.externalId);
@@ -29,7 +29,7 @@ it("inventories real West Cady, Pilchuck, and road-approach ways before coverage
 
 
 it("reports independent represented, missing, and unsupported official references without changing OSM",async()=>{
-  const store=new CoverageSourceStore(":memory:",source);stores.push(store);
+  const store=new CoverageSourceStore(":memory:",source,rectangle([-180,-90,180,90]));stores.push(store);
   const lines=createInterface({input:createReadStream(fixture),crlfDelay:Infinity});
   await store.import(async()=>{}, {lines});
   const coverage=rectangle([-121.83,47.90,-121.17,48.09]);
@@ -64,7 +64,7 @@ it("reads the pinned USGS query envelope rather than assuming statewide official
 
 
 it("keeps source-represented trails pending beyond the installed subset",async()=>{
-  const store=new CoverageSourceStore(":memory:",source);stores.push(store);
+  const store=new CoverageSourceStore(":memory:",source,rectangle([-180,-90,180,90]));stores.push(store);
   async function* lines(){yield* [
     "n1 T x0 y0", "n2 T x0.001 y0", "n3 T x1 y0", "n4 T x1.001 y0",
     "w1 Thighway=path Nn1,n2", "w2 Thighway=path Nn3,n4",
@@ -93,7 +93,7 @@ it("keeps source-represented trails pending beyond the installed subset",async()
 });
 
 it.each(["index", "samples", "candidates"])("interrupts within reference %s work and replays without leaving temporary tables", async (phase) => {
-  const store=new CoverageSourceStore(":memory:",source);stores.push(store);
+  const store=new CoverageSourceStore(":memory:",source,rectangle([-180,-90,180,90]));stores.push(store);
   async function* lines() {
     if(phase==="candidates") {
       yield "n1 T x0 y0";yield "n2 T x0.002 y0.002";

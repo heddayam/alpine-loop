@@ -1,124 +1,98 @@
-# Loops, lollipops, and complete trail networks
+# Loops, lollipops, and local trail preparation
 
-Accepted user revision, 2026-09-28. Implementation and acceptance are tracked in
-[status](status.md). Replaces arbitrary closed-walk search and geographic units
-of preparation. Keep local Next.js, MapLibre, SQLite, Full search, and developer
-builds with prepared downloads.
+Accepted user revision, 2026-09-28. This replaces statewide connected-network
+discovery and storage. [Status](status.md) records implementation evidence and
+remaining real-data acceptance. Keep local Next.js, MapLibre, SQLite, Full search,
+developer builds and prepared downloads.
 
 ## Product
 
 A generated hike is one node-simple physical cycle, optionally reached by one
 node-simple stem retraced in reverse. Stem and cycle share only their attachment.
 No figure-eights, chained loops, extra retraced branches or multiply traversed
-cycles, even among close matches. Numerical constraint relaxation remains explicit.
-A zero-repeat request accepts simple loops only. Saved older results remain readable.
+cycles, even among close matches. Numerical relaxation remains explicit. A
+zero-repeat request accepts simple loops only. Saved older results remain readable.
 
-The user selects complete connected networks on the map and reviews their full
-extent and download/installed size before installation. Source-boundary limitations
-remain visible. Search areas continue to filter starting points only.
+Users select areas containing eligible starts and review their download size.
+The download also contains surrounding trails: selected/search areas never clip
+hikes. The UI exposes extent, size, installed state and relevant download actions;
+no graph IDs, topology statistics or developer build controls are needed.
 
-The app exposes trail downloads: map selection, full extent, download/device size,
-installed state and the actions relevant to that state. With no selection, show
-one map-selection hint instead of zero-size summaries and disabled buttons.
-Network IDs, graph statistics and build controls stay in developer tooling.
+## Distance bound
 
-## Smallest implementation
+Requested hikes are limited to 40 miles. The existing search explores up to 125%
+of the requested maximum for clearly labeled close matches: at the cap, 50 miles.
+Every point on a closed walk of length L is at most L/2 straight-line distance
+from its start, because both paths between that point and the start have to cover
+that distance. This holds for loops, lollipops and directed edges.
 
-- Discover every network in the explicitly pinned source set.
-  Respect source coverage, explicit exclusions and access restrictions. Preserve
-  source-node identity and distinct parallel physical trails. Inspect the saved
-  network catalog and choose IDs before preparation. No geographic build selector
-  or implicit hike recipe remains.
-- Prepare, analyze, audit and export each selected network independently. Reuse
-  existing verified source and metric primitives; remove the tiled build loop.
-  Keep immutable network artifacts separate from catalog identity so adding an
-  unrelated network does not rewrite old bytes or rerun its topology analysis.
-- Retain bridge approaches and shared junctions. Biconnected blocks contain simple
-  cycles, but may remain large. Do not enumerate all cycles at build time, invent
-  connectors across source gaps, or add dynamic connectivity maintenance.
-- Contract corridors while preserving direction and original trails. Use one
-  bounded loop/lollipop search with authoritative route-shape validation. Keep
-  cancellation, exact/close separation, grade/elevation rules and diversity.
-- Continue atomic installation, worker isolation, pinned running jobs and saved
-  result retention. The user chose to delete old geographic data and start fresh;
-  saved route results remain separate from installed graph data.
+Preparation therefore covers every eligible start plus a conservative 25-mile
+buffer. A bounding rectangle over that buffer is deliberately larger than the
+minimum circle. Latitude/longitude expansion uses a conservative radius and the
+furthest reachable latitude. Unsupported polar/antimeridian buffers fail.
+The planner rejects missing provider coverage anywhere in this required envelope
+before data processing. Explicit reviewed exclusions are hard boundaries within
+it. Source coverage is a configured guarantee of extent, not proof that OSM has
+mapped every trail correctly.
 
-## Distance-budget proposal — not yet implemented
+The distance cap, close-match multiplier and preparation buffer share constants.
+Changing any of them requires rebuilding affected data and rerunning the boundary
+fixtures. This bound establishes geographic sufficiency, not exhaustive route
+enumeration or a bound on trail density and search complexity.
 
-The request limit is 40 miles. For the proposed local preparation model, exact
-closed routes need complete mapped coverage within 20 miles of eligible starts.
-The existing solver explores up to 125% of requested maximum distance for labeled
-close matches: at the request cap, 50 miles of exploration requires a conservative
-25-mile geographic buffer. Every point of a closed route of length L lies within
-L/2 straight-line distance of its start, since both outgoing and returning paths
-must span that distance. Source completeness and conservative extraction still
-need verification; the buffer alone cannot repair missing source data.
+## Local pipeline
 
-This records the preparation implication of the new limit, not an implemented
-replacement for the statewide discovery builder described below.
+`data plan source-recipe.json --bbox west,south,east,north` previews geometry
+without source processing. `data build` with the same arguments verifies source
+pins, extracts the bounded area with complete way references, prepares metrics
+and local topology, audits, and publishes one immutable graph. All local components
+are included; connectivity does not determine preparation extent. The former
+`discover`, `networks`, saved inventory and HTML network inspector are deleted.
 
-## Implemented builder boundary
+Osmium still scans the compressed provider extract. Only local trail/access/
+building context enters normalization. Temporary extracts and raw joins are
+removed; completed local stores are sealed and reusable. Incomplete imports
+restart, and child processes are checkpointed and reaped on cancellation.
 
-Discovery persists connectivity once per verified source/restriction fingerprint.
-The source recipe explicitly lists provider extracts and their supported bounds;
-only exact eligible source-node identities create trail connections. Complete
-member ways remain available as compiler context when exclusions cut off segments.
-The immutable discovery catalog and disk inventory are reused by explicit-ID
-builds. Discovery performs no DEM acquisition, edge metrics, route topology,
-named-area preparation, independent-reference downloads or release publication.
+Unlabelled footways/pedestrian paths are possible walking links, as explicitly
+approved by the user. They no longer require connectivity to a known trail far
+away. Explicit sidewalk/crossing tags remain excluded from route edges; access,
+direction, provenance and reviewed restrictions still apply. This broader policy
+can include urban pedestrian links; it does not imply public access or trail quality.
 
-Source normalization is filter-first. Osmium selects a conservative superset of
-all hiking classifications (including tracks, ambiguous footways and permitted
-road connectors), with complete referenced nodes. Global contextual-footway
-promotion precedes connectivity. SQLite retains normalized trail ways; temporary
-node/reference joins and non-trail rows are discarded. No statewide building,
-road-context, excluded-feature inventory or raw-batch checkpoint store remains.
+Smart node-based extraction completes included ways and building relations.
+A valid budgeted route has all its vertices within the routing buffer. An extra
+context margin protects edge-boundary selection. Context features crossing or
+enclosing the whole extract without an inside vertex can still be absent;
+building/access evidence is therefore not a completeness certificate.
 
-Preparation extracts context only for selected network envelopes, buffering each
-component by 0.01 degree as in the context queries. Building multipolygon members
-are completed before normalization. Context-local footway classification cannot
-replace the global trail classification. Per-source/per-envelope context stores
-are verified and reused, then closed before the next network. Unsupported
-building diagnostics apply to that selected context, not the whole state.
+Completed area receipts reuse immutable graph bytes without repeating metrics
+or topology. A shared metric cache keys each physical segment's geometry,
+elevation product and metric algorithm, allowing overlap reuse. Local topology
+and stored graph geometry may be duplicated across overlapping areas. No global
+connectivity registry, merger service or promise of zero repeated work remains.
+Adding an area preserves existing artifacts; rebuilding the same start area
+replaces its catalog entry. Conflicting retained source pins fail.
 
-The geographic context extraction is node-based: a road crossing the buffer with
-all nodes outside, or a building enclosing it with no vertex inside, can be
-absent. This affects access/building evidence and is disclosed in the release;
-it cannot truncate or join trail networks, which are discovered without this
-geographic extraction. Source completeness and regional performance remain
-unverified until the real-data gate. Do not equate reduced retained data with a
-promised runtime or disk bound.
+## Runtime boundary
 
-Completed normalized stores have one immutable-data seal; metric caches are
-excluded. Incomplete imports roll back and restart from the filtered source.
-The former row-range checksums, raw-record resume and legacy seal compatibility
-are removed. Native subprocesses are checkpointed and reaped, and temporary
-extracts are deleted on completion, cancellation and failure.
+Each artifact has a start geometry and a larger routing geometry. Installation
+coverage and selection overlays expose eligible starts. The reader uses routing
+coverage for edges; buffer-only access points are not offered as eligible starts.
+For an overlapping start, deterministic ownership chooses one complete local graph
+and pins the whole search to it. Independent graphs are never stitched together,
+so differences in local portal splitting or topology cannot create false junctions.
 
-The offline HTML inspector shows full network envelopes, source trail length,
-node/physical-edge counts, source-boundary limitations and undirected cycle rank.
-Envelopes are not exact trail lines, and a structural cycle is not proof of a legal
-hike. Prepared/download byte sizes are unknown until compilation. Inspection is
-metadata-only; builds additionally verify the inventory digest and current inputs.
-Unknown, duplicate, empty, stale or corrupted selections fail rather than choosing
-a replacement network. The selected IDs define the next published catalog.
+Retain bridge approaches and shared junctions within each graph. Biconnected blocks
+and corridor contraction still accelerate simple-cycle search; they are not
+installation units and need not be small. Do not enumerate every cycle at build
+time or invent links across source gaps. Cancellation, exact/close separation,
+constraint validation and bounded search remain authoritative.
 
-Preparation receipts depend on network membership, sorted context records,
-source provenance, relevant verified DEM products, metadata and algorithm versions.
-A cache hit verifies its immutable file and skips metric sampling and topology.
-Catalog activation audits every object sequentially, with disk-backed identity
-collision checks; it does not rerun topology. A source change may merge networks
-and invalidate their artifacts. Expanding selection within the same pinned source
-snapshot cannot merge them. No dynamic merger service or persistent key registry
-is necessary.
-
-Discovery directories and final release catalogs are activated atomically.
-Completed network receipts survive an interrupted build; failed work leaves the
-previous release catalog active. Empty build selections are rejected. Per-network scratch databases and transient named-area
-extracts are cleaned up. Source/metric caches are retained. The user later authorized deleting existing
-geographic installations; saved route results and settings remain intact.
-Independent official-source proximity comparisons remain diagnostic and never
-claim exact installed-feature membership from a network envelope.
+Every artifact is independently audited before atomic catalog activation.
+Failed builds leave the previous catalog active. Downloads remain atomic, running
+jobs pin installations, and saved results retain their references. Independent
+official-source comparisons remain diagnostic rather than additional routing edges.
 
 ## Established work informing decisions
 
@@ -148,41 +122,21 @@ they give distance back to the start. Our correctness argument is that removing
 already-used nodes cannot make that unrestricted shortest return shorter, so it
 is a lower bound for every legal continuation. Trail lengths must be nonnegative.
 
-[Connected-component semantics](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.components.connected_components.html)
-define the storage partition on the underlying eligible physical graph. The
-implementation reuses disk-backed union-find to bound resident graph memory;
-it does not claim the in-memory reference's linear traversal performance on disk.
-
-[NetworkX's cycle-basis documentation](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.cycles.cycle_basis.html)
-distinguishes an independent cycle basis from all possible cycles. For a connected
-physical multigraph, a spanning tree has n−1 edges, leaving m−n+1 independent
-cycles. We display that rank without enumerating cycles; direction, access and
-hiking constraints still determine usable routes.
-
 [Bazel's cache design](https://bazel.build/remote/caching) separates input-dependent
-action reuse from content-addressed output storage. Apply that established pattern
-locally: network preparation identity covers actual dependencies; catalog growth
-alone is not an input change. No Bazel service or remote-cache dependency is added.
+action reuse from content-addressed output storage. Apply that pattern locally:
+area preparation identity covers actual dependencies; catalog growth alone is not
+an input change. No remote-cache service is added.
 
-[SQLite transaction guidance](https://www.sqlite.org/faq.html#q18) supports batching
-source-inventory writes. The unpublished discovery database uses one transaction,
-a bounded page cache and [disk spill](https://www.sqlite.org/pragma.html#pragma_cache_spill);
-failed scratch inventories are discarded rather than exposed as reusable results.
+## Acceptance and limits
 
-## Evidence and acceptance
+Offline regressions cover buffered extent, missing source coverage, local footway
+classification, complete references, access rules, metric reuse, unchanged artifact
+reuse, interruption cleanup, routes outside the start area, excluded buffer starts,
+and overlapping graphs with different records. Real-source build time, peak memory,
+disk usage and Full-search usefulness remain a separate acceptance gate.
 
-The read-only Washington census processed 3,985,803 physical source segments in
-33.2 seconds after a 95.6-second local copy. It found 33,531 components, a largest
-network of 3,125.5 km, and 9,305 cyclic biconnected blocks with a largest block of
-1,411.4 km. Peak RSS was 1.28 GiB; the temporary 10 GB copy was deleted.
-These are filtered-source facts, not proof of real-world network independence:
-PCT continuity has not been traced, direction was ignored, and the source includes
-tracks and may omit connecting road crossings. Generated evidence remains ignored
-under `.cache/topology-census/`.
-
-Before regional acceptance, prove strict route shape and source-identity continuity
-on small offline fixtures; independent network append/reuse; merge invalidation;
-full-extent preview; atomic download recovery; and preservation of saved results.
-Use bounded focused tests, then integration/build/browser checks. No repeated
-regional build as a test. Record production, test and documentation deletion
-counts separately. Retire completed worktrees and temporary outputs promptly.
+A 25-mile circle alone is about 1,963 square miles; even a tiny start area is not
+a tiny data build. Elevation tiles and source scans can dominate. Local topology
+may still be dense and budget-limited. Measure one small start area before making
+regional performance claims, using the existing pinned cache and no repeated
+regional build as a test.
