@@ -1,8 +1,7 @@
 import polygonClipping from "polygon-clipping";
 import { createHash } from "node:crypto";
-import type { CoverageUnit } from "./types";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
-import { areaBounds } from "@/lib/graph/geometry";
+import { areaBounds, coordinateIsInsideArea } from "@/lib/graph/geometry";
 
 type Multi = Parameters<typeof polygonClipping.union>[0];
 function coordinates(geometry: AreaGeometry): Multi {
@@ -25,16 +24,16 @@ export function rectangle([west, south, east, north]: readonly number[]): AreaGe
   return { type: "Polygon", coordinates: [[[west!, south!], [east!, south!], [east!, north!], [west!, north!], [west!, south!]]] };
 }
 export function contentId(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
-/** Cell boundaries select installation work, not graph connections. Geometry suffix permits expanding a partially installed cell. */
-export function installationUnits(geometry: AreaGeometry): CoverageUnit[] {
-  const [west, south, east, north] = areaBounds(geometry);
-  const units: CoverageUnit[] = [];
-  if ((east - west) * (north - south) > 1000) throw new Error("Choose a smaller installation area (at most 1,000 square degrees per request)");
-  for (let y = Math.floor((south + 90) * 4); y < Math.ceil((north + 90) * 4); y++) {
-    for (let x = Math.floor((west + 180) * 4); x < Math.ceil((east + 180) * 4); x++) {
-      const part = intersectCoverage(geometry, rectangle([x / 4 - 180, y / 4 - 90, (x + 1) / 4 - 180, (y + 1) / 4 - 90]));
-      if (part) units.push({ id: `q-${x}-${y}-${contentId(part).slice(0, 12)}`, geometry: part, status: "pending" });
-    }
-  }
-  return units;
+/** Polygon contact includes shared boundaries, which have no polygon-clipping area.
+ * This selects upstream providers conservatively; it never joins trail nodes.
+ */
+export function coverageTouches(a: AreaGeometry, b: AreaGeometry): boolean {
+  const left = areaBounds(a), right = areaBounds(b);
+  if (left[2] < right[0] || right[2] < left[0] || left[3] < right[1] || right[3] < left[1]) return false;
+  if (intersectCoverage(a, b)) return true;
+  const boundaryTouches = (from: AreaGeometry, to: AreaGeometry) => {
+    const polygons = from.type === "Polygon" ? [from.coordinates] : from.coordinates;
+    return polygons.some(polygon => polygon.some(ring => ring.some(point => coordinateIsInsideArea([point[0]!, point[1]!], to))));
+  };
+  return boundaryTouches(a, b) || boundaryTouches(b, a);
 }

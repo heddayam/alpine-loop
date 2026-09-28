@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
+import { collections, connectedCoverageSources, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
 import { rectangle, unionCoverage } from "./geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 
@@ -80,18 +80,17 @@ describe("coverage source geography", () => {
     expect(plan.units.every((unit) => unit.status === "unavailable" && unit.reason === "intentionally-excluded:yakama-reservation")).toBe(true);
   });
 
-  it("splits a cell across all source extents, preserves the request, and gives unsupported pieces a stable identity", () => {
+  it("retains supported and unavailable geometry without inventing geographic work units", () => {
     const requested = rectangle([0, 0, 0.25, 0.25]);
     const sources = [{ geometry: rectangle([0, 0, 0.1, 0.25]) }, { geometry: rectangle([0.15, 0, 0.25, 0.25]) }];
     const plan = planCoverageGeometry(requested, sources, []);
-    expect(plan.units).toHaveLength(2);
-    const available = plan.units.find((unit) => unit.status === "pending")!;
+    expect(plan.units).toHaveLength(1);
+    const available = plan.supported!;
     const unavailable = plan.units.find((unit) => unit.status === "unavailable")!;
-    expect(coordinateIsInsideArea([0.125, 0.1], available.geometry)).toBe(false);
+    expect(coordinateIsInsideArea([0.125, 0.1], available)).toBe(false);
     expect(coordinateIsInsideArea([0.125, 0.1], unavailable.geometry)).toBe(true);
-    expect(available.id).not.toBe(unavailable.id);
     expect(planCoverageGeometry(requested, [...sources].reverse(), [])).toEqual(plan);
-    const rebuilt = unionCoverage(plan.units.map((unit) => unit.geometry));
+    const rebuilt = unionCoverage([available, ...plan.units.map((unit) => unit.geometry)]);
     for (const x of [0.05, 0.125, 0.2]) expect(coordinateIsInsideArea([x, 0.1], rebuilt)).toBe(true);
   });
 
@@ -100,4 +99,15 @@ describe("coverage source geography", () => {
     expect(plan.supported).toBeNull();
     expect(plan.units[0]?.reason).toBe("outside-configured-source-coverage");
   });
+});
+
+
+it("follows transitive provider contact beyond the request but leaves disjoint providers unloaded", () => {
+  const sources = [
+    { id: "distant", geometry: rectangle([10, 0, 11, 1]) },
+    { id: "third", geometry: rectangle([2, 0, 3, 1]) },
+    { id: "second", geometry: rectangle([1, 0, 2, 1]) },
+    { id: "first", geometry: rectangle([0, 0, 1, 1]) },
+  ];
+  expect(connectedCoverageSources(rectangle([0.2, 0.2, 0.3, 0.3]), sources).map(source => source.id)).toEqual(["third", "second", "first"]);
 });

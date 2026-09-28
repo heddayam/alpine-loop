@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import registry from "@/data/regions/registry.json";
 import type { CoverageCollection, CoverageUnit } from "./types";
-import { installationUnits, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { contentId, coverageTouches, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { assertValidAreaGeometry, type AreaGeometry } from "@/lib/data/area-geometry";
 import { readOsmSourceConfig, type OsmSourceConfig } from "@/lib/data/osm/source";
 
@@ -42,7 +42,25 @@ export async function collections(): Promise<CoverageCollection[]> {
     };
   });
 }
-/** Split before tiling: a border cell never marks its unsupported part installed. */
+/** Include the provider-contact component so a request cannot hide an adjacent continuation.
+ * Standard graph reachability (NetworkX connected_components); the configured provider
+ * list is small, so an implicit adjacency scan avoids a separate graph/index structure.
+ */
+export function connectedCoverageSources<T extends { geometry: AreaGeometry }>(requested: AreaGeometry, sources: readonly T[]): T[] {
+  const reached = new Set(sources.filter(source => coverageTouches(requested, source.geometry)));
+  const queue = [...reached];
+  for (let i = 0; i < queue.length; i++) {
+    for (const source of sources) {
+      if (!reached.has(source) && coverageTouches(queue[i]!.geometry, source.geometry)) {
+        reached.add(source);
+        queue.push(source);
+      }
+    }
+  }
+  return sources.filter(source => reached.has(source));
+}
+
+/** Review unsupported/excluded geometry without inventing preparation units. */
 export function planCoverageGeometry(requested: AreaGeometry, sources: readonly Pick<CoverageSource, "geometry">[], exclusions: readonly CoverageExclusion[]) {
   let eligible: AreaGeometry | null = requested;
   const unavailableParts: AreaGeometry[] = [];
@@ -52,16 +70,15 @@ export function planCoverageGeometry(requested: AreaGeometry, sources: readonly 
     const part = intersectCoverage(eligible, exclusion.geometry);
     if (!part) continue;
     unavailableParts.push(part);
-    units.push(...installationUnits(part).map((unit) => ({ ...unit, status: "unavailable" as const, reason: `intentionally-excluded:${exclusion.id}` })));
+    units.push({ id: `excluded-${exclusion.id}-${contentId(part).slice(0, 12)}`, geometry: part, status: "unavailable", reason: `intentionally-excluded:${exclusion.id}` });
     eligible = subtractCoverage(eligible, exclusion.geometry);
   }
   const support = sources.length ? unionCoverage(sources.map((source) => source.geometry)) : null;
   const supported = eligible && support ? intersectCoverage(eligible, support) : null;
   const unsupported = eligible && support ? subtractCoverage(eligible, support) : eligible;
-  if (supported) units.push(...installationUnits(supported));
   if (unsupported) {
     unavailableParts.push(unsupported);
-    units.push(...installationUnits(unsupported).map((unit) => ({ ...unit, status: "unavailable" as const, reason: "outside-configured-source-coverage" })));
+    units.push({ id: `unsupported-${contentId(unsupported).slice(0, 12)}`, geometry: unsupported, status: "unavailable", reason: "outside-configured-source-coverage" });
   }
   return { supported, unavailable: unavailableParts.length ? unionCoverage(unavailableParts) : null, units: units.sort((a, b) => a.id.localeCompare(b.id)) };
 }

@@ -3,6 +3,7 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { ProgressiveGraphStore } from "@/lib/data/progressive/store";
 import type { CoverageSourceStore } from "./source-store";
 import { unionCoverage } from "./geometry";
+import { applyRestriction, type CuratedAccessFile } from "@/lib/data/curated-access";
 
 /** Keep exact predicates near boundaries; reject only clearly disjoint envelopes. */
 function mayIntersect(from: readonly [number,number], to: readonly [number,number], bounds: BoundingBox): boolean {
@@ -50,7 +51,9 @@ export async function classifyIntendedInventory(raw: CoverageSourceStore, intend
 }
 
 /** Independent source-to-output reconciliation: every covered source segment must survive compilation. */
-export async function reconcileInventory(raw: CoverageSourceStore, graph: ProgressiveGraphStore, coverage: AreaGeometry, checkpoint: () => Promise<void> = async () => {}) {
+export async function reconcileInventory(raw: CoverageSourceStore, graph: ProgressiveGraphStore, coverage: AreaGeometry,
+  checkpoint: () => Promise<void> = async () => {}, segmentIncluded?: (id: string) => boolean,
+  restrictions?: readonly CuratedAccessFile[]) {
   await checkpoint();
   let steps = 0;
   const coverageBounds = areaBounds(coverage);
@@ -64,10 +67,27 @@ export async function reconcileInventory(raw: CoverageSourceStore, graph: Progre
   for (const { way } of raw.ways(coverage, 0)) {
     if (++steps % 1000 === 0) await checkpoint();
     if (way.edgeClass !== "trail") continue;
-    let installed = 0;
+    const previous = raw.db.prepare("SELECT disposition,reason FROM inventory WHERE id=?").get(way.externalId);
+    const explicitlyExcluded = previous?.disposition === "excluded" && String(previous.reason).startsWith("intentionally-excluded:");
+    if ((segmentIncluded || restrictions) && explicitlyExcluded) continue;
+    let reviewed = way;
+    for (const source of restrictions ?? []) {
+      const restriction = source.restrictions.find(item => item.externalId === way.externalId);
+      if (restriction) reviewed = applyRestriction(reviewed, restriction, source.snapshot.id);
+    }
+    // Network discovery omits forbidden access; its audit must account for those
+    // omissions without demanding edges that intentionally cannot be generated.
+    if ((segmentIncluded || restrictions) && !["public", "unknown"].includes(reviewed.accessState)) {
+      record.run("restricted", `access:${reviewed.accessState}`, way.externalId);
+      continue;
+    }
+    let installed = 0, members = 0;
     for (let segment = 0; segment < way.coordinates.length - 1; segment++) {
       if (++steps % 1000 === 0) await checkpoint();
-      if (!lineIsInsideArea(way.coordinates.slice(segment, segment + 2), coverage)) {
+      const prefix = `${way.id}:${segment}`;
+      if (segmentIncluded && !segmentIncluded(prefix)) continue;
+      members++;
+      if (!segmentIncluded && !lineIsInsideArea(way.coordinates.slice(segment, segment + 2), coverage)) {
         const from = way.coordinates[segment]!, to = way.coordinates[segment + 1]!;
         if (Math.max(from[0], to[0]) >= coverageBounds[0] && Math.min(from[0], to[0]) <= coverageBounds[2] &&
           Math.max(from[1], to[1]) >= coverageBounds[1] && Math.min(from[1], to[1]) <= coverageBounds[3] &&
@@ -78,18 +98,17 @@ export async function reconcileInventory(raw: CoverageSourceStore, graph: Progre
         }
         continue;
       }
-      const prefix = `${way.id}:${segment}`;
       for (const suffix of way.bidirectional ? ["forward", "reverse"] : ["forward"]) {
         if (!edge.get(`${prefix}:${suffix}`)) throw new Error(`Unexplained compiler loss: ${prefix}:${suffix}`);
       }
       installed++;
     }
     coveredSegments += installed;
+    if (segmentIncluded && !members) continue;
     const staged = graph.database.prepare("SELECT record FROM ways WHERE id=?").get(way.id);
     const access = staged ? (JSON.parse(String(staged.record)) as { accessState: string }).accessState : way.accessState;
     const restricted = !["public", "unknown"].includes(access);
-    const previous = raw.db.prepare("SELECT disposition,reason FROM inventory WHERE id=?").get(way.externalId);
-    if (previous?.disposition === "excluded" && String(previous.reason).startsWith("intentionally-excluded:")) continue;
+    if (explicitlyExcluded) continue;
     record.run(restricted ? "restricted" : installed === way.coordinates.length - 1 ? "installed" : "pending", restricted ? `access:${access}` : previous?.reason === "partially-intentionally-excluded" ? String(previous.reason) : installed ? "covered-source-segments-reconciled" : "pending-installation", way.externalId);
   }
   const grouped = new Map<string, { disposition: string; reason: string; count: number }>();

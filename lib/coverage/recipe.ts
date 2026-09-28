@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { areaGeometrySchema } from "@/lib/contracts";
 import { osmSourceConfigSchema } from "@/lib/data/osm/source";
-import { contentId, intersectCoverage } from "./geometry";
+import { contentId, unionCoverage } from "./geometry";
 import { planCoverageGeometry } from "./collections";
 import { run } from "./runtime";
 import type { CoverageRunnerContext } from "./types";
@@ -16,9 +16,17 @@ export const buildRecipeSchema=z.object({
   memoryLimitMiB:z.number().int().min(512).max(65536).default(4096),
   offline:z.boolean().default(false),
   limitations:z.array(z.string()).default([]),
-}).strict().superRefine((recipe,context)=>{
-  if(new Set(recipe.sources.map(source=>source.config.id)).size!==recipe.sources.length) context.addIssue({code:"custom",message:"Source identities must be unique"});
-  if(recipe.sources.some(source=>!intersectCoverage(recipe.geometry,source.geometry))) context.addIssue({code:"custom",message:"Every source must intersect intended coverage"});
+}).strict().transform((recipe, context) => {
+  const sources = new Map<string, typeof recipe.sources[number]>();
+  for (const source of recipe.sources) {
+    const previous = sources.get(source.config.id);
+    if (previous && (previous.sha256 !== source.sha256 || contentId(previous.config) !== contentId(source.config))) {
+      context.addIssue({ code: "custom", message: `Conflicting source pins: ${source.config.id}` });
+      return z.NEVER;
+    }
+    sources.set(source.config.id, previous ? { ...previous, geometry: unionCoverage([previous.geometry, source.geometry]) } : source);
+  }
+  return { ...recipe, sources: [...sources.values()].sort((a, b) => a.config.id.localeCompare(b.config.id)) };
 });
 export type BuildRecipe=z.infer<typeof buildRecipeSchema>;
 export async function buildRelease(input:BuildRecipe,context:CoverageRunnerContext) {
@@ -26,7 +34,7 @@ export async function buildRelease(input:BuildRecipe,context:CoverageRunnerConte
   const partition=planCoverageGeometry(recipe.geometry,recipe.sources,recipe.exclusions);
   if(!partition.supported) throw new Error("No intended coverage is supported by recipe sources");
   return run({id:contentId(recipe),request:{collectionIds:[],geometry:recipe.geometry,memoryLimitMiB:recipe.memoryLimitMiB,offline:recipe.offline},geometry:recipe.geometry,
-    units:partition.units,sourceIds:recipe.sources.map(source=>source.config.id),estimates:{downloadBytes:null,temporaryBytes:null,reusableBytes:0},warnings:recipe.limitations},context,recipe);
+    units:[],sourceIds:recipe.sources.map(source=>source.config.id),estimates:{downloadBytes:null,temporaryBytes:null,reusableBytes:0},warnings:recipe.limitations},context,recipe);
 }
 
 /** Resolve repository-relative source/config geometry references before strict validation. */

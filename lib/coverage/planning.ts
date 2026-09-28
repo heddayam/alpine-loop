@@ -2,12 +2,12 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { coverageRequestSchema, type CoveragePlan, type CoverageRequest } from "./types";
 import { inspectPinnedOsmSnapshot } from "@/lib/data/osm/source";
-import { collections, coverageExclusions, coverageSources, planCoverageGeometry } from "./collections";
-import { contentId, intersectCoverage, unionCoverage } from "./geometry";
+import { collections, connectedCoverageSources, coverageSources } from "./collections";
+import { contentId, unionCoverage } from "./geometry";
 import { NORMALIZATION_VERSION, sourceStoreFileName } from "./source-store";
 
 export const COVERAGE_PACK_ID = "local-coverage";
-export const COVERAGE_BUILD_VERSION = `progressive-v1:${NORMALIZATION_VERSION}`;
+export const COVERAGE_BUILD_VERSION = `connected-networks-v1:${NORMALIZATION_VERSION}`;
 
 export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const request = coverageRequestSchema.parse(input);
@@ -18,9 +18,8 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
     return collection;
   });
   const geometry = unionCoverage([...selected.map((item) => item.geometry), ...(request.geometry ? [request.geometry] : [])]);
-  const sources = (await coverageSources()).filter((source) => intersectCoverage(source.geometry, geometry));
+  const sources = connectedCoverageSources(geometry, await coverageSources());
   if (!sources.length) throw new Error("No configured source covers this installation area");
-  const units = planCoverageGeometry(geometry, sources, await coverageExclusions()).units;
   const sourceIds = [...new Set(sources.map((source) => source.config.id))].sort();
   const cache = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources");
   const preparationRoot = path.resolve(/* turbopackIgnore: true */ process.env.ALPINE_COVERAGE_ROOT ?? ".local-data/coverage");
@@ -38,7 +37,7 @@ export async function plan(input: CoverageRequest): Promise<CoveragePlan> {
   const cachedPreparationBytes = cached.reduce((sum, item) => sum + item.preparationBytes, 0);
   const reusableBytes = cachedSourceBytes + cachedPreparationBytes;
   const upstreamBytes = sources.reduce((sum,{config})=>sum+config.expectedByteLength,0);
-  return { id: contentId({ request, sources: sources.map(({ config }) => config), version: COVERAGE_BUILD_VERSION }), request, geometry, units, sourceIds,
+  return { id: contentId({ request, sources: sources.map(({ config }) => config), version: COVERAGE_BUILD_VERSION }), request, geometry, units: [], sourceIds,
     estimates: { downloadBytes: null, temporaryBytes: null, reusableBytes },
     warnings: [...new Set(selected.flatMap((item) => item.limitations)),
       `${Math.ceil((upstreamBytes-cachedSourceBytes)/1024**2)} MiB of configured OSM downloads remain; ${Math.ceil(cachedSourceBytes/1024**2)} MiB is present in the source cache.`,

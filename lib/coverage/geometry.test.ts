@@ -1,24 +1,27 @@
-import { describe, expect, it } from "vitest";
-import { installationUnits, rectangle, unionCoverage, intersectCoverage } from "./geometry";
-import { coordinateIsInsideArea, lineIsInsideArea } from "@/lib/graph/geometry";
+import { expect, it } from "vitest";
+import { coverageTouches, intersectCoverage, rectangle, unionCoverage } from "./geometry";
+import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 
-describe("coverage installation geometry", () => {
-  it("keeps a crossing line whole when adjacent units are combined", () => {
-    const request = rectangle([-121.1, 47.1, -120.9, 47.4]);
-    const units = installationUnits(request);
-    expect(units).toHaveLength(4);
-    const union = unionCoverage(units.map((unit) => unit.geometry));
-    expect(lineIsInsideArea([[-121.05, 47.15], [-120.95, 47.35]], union)).toBe(true);
-    expect(coordinateIsInsideArea([-121.2, 47.2], union)).toBe(false);
-    expect(installationUnits(request)).toEqual(units);
-  });
-  it("retains holes and disconnected clipped pieces", () => {
-    const area = { type: "Polygon" as const, coordinates: [rectangle([0, 0, 1, 1]).coordinates[0], [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9], [0.1, 0.1]]] };
-    const union = unionCoverage(installationUnits(area as never).map((unit) => unit.geometry));
-    expect(coordinateIsInsideArea([0.5, 0.5], union)).toBe(false);
-    expect(intersectCoverage(rectangle([0, 0, 1, 1]), rectangle([2, 2, 3, 3]))).toBeNull();
-  });
-  it("distinguishes expansion within a partially installed cell", () => {
-    expect(installationUnits(rectangle([0, 0, 0.1, 0.1]))[0]!.id).not.toBe(installationUnits(rectangle([0, 0, 0.2, 0.2]))[0]!.id);
-  });
+it("distinguishes provider contact from positive-area intersection and disjoint envelopes", () => {
+  const a = rectangle([0, 0, 1, 1]);
+  for (const b of [rectangle([1, 0, 2, 1]), rectangle([1, 1, 2, 2])]) {
+    expect(intersectCoverage(a, b)).toBeNull();
+    expect(coverageTouches(a, b)).toBe(true);
+    expect(coverageTouches(b, a)).toBe(true);
+  }
+  expect(coverageTouches(a, rectangle([1.01, 0, 2, 1]))).toBe(false);
+  expect(coverageTouches(a, rectangle([0.5, 0.5, 2, 2]))).toBe(true);
+});
+
+it("preserves holes and does not treat a provider inside a hole as touching", () => {
+  const outer = rectangle([0, 0, 4, 4]);
+  if (outer.type !== "Polygon") throw new Error("Expected polygon");
+  outer.coordinates.push([[1, 1], [1, 3], [3, 3], [3, 1], [1, 1]]);
+  const inner = rectangle([1.5, 1.5, 2.5, 2.5]);
+  expect(coverageTouches(outer, inner)).toBe(false);
+  expect(coverageTouches(inner, outer)).toBe(false);
+  expect(coverageTouches(outer, rectangle([1, 1.5, 2, 2.5]))).toBe(true);
+  const union = unionCoverage([outer, rectangle([5, 5, 6, 6])]);
+  expect(coordinateIsInsideArea([2, 2], union)).toBe(false);
+  expect(coordinateIsInsideArea([5.5, 5.5], union)).toBe(true);
 });

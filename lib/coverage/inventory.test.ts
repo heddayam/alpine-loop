@@ -166,3 +166,35 @@ it("preserves exact exclusion boundaries, holes, and crossings across disjoint e
     ]);
   } finally {raw.close();}
 });
+
+it("audits exact network members and explains forbidden access inside an overlapping envelope", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "coverage-network-audit-"));
+  const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid", license: "CC0", localPath: "unused", contentHash: `sha256:${"1".repeat(64)}` };
+  const raw = new CoverageSourceStore(":memory:", source);
+  const graph = openProgressiveGraphStore({ stagingPath: path.join(directory, "graph.sqlite"), buildIdentity: "fixture" });
+  try {
+    async function* lines() {
+      for (let n = 1; n <= 8; n++) yield `n${n} T x${n / 10} y0.5`;
+      yield* ["w1 Thighway=path,foot=yes Nn1,n2", "w2 Thighway=path,foot=yes Nn3,n4", "w3 Thighway=path,access=private Nn5,n6", "w4 Thighway=path,foot=yes Nn7,n8"];
+    }
+    await raw.import(async () => {}, { lines: lines() });
+    const coverage = rectangle([0,0,1,1]);
+    await classifyIntendedInventory(raw, coverage, []);
+    const way = [...raw.ways(coverage)][0]!.way;
+    const included = (id: string) => id === `${way.id}:0`;
+    const restrictions = [{ snapshot: { ...source, id: "review" }, restrictions: [{ externalId: "way/4", accessState: "closed" as const, reason: "Reviewed closure", review: { reviewedAt: "2026-09-24T00:00:00Z", reviewer: "Fixture" } }] }];
+    await expect(reconcileInventory(raw, graph, coverage, undefined, included, restrictions)).rejects.toThrow("Unexplained compiler loss");
+    const metrics = { lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 100, maxSustainedGradePct: 0, elevationProfile: null };
+    graph.putWay(way);
+    for (const edge of compiledEdgesForSegment(way, 0, way.coordinates, metrics)) graph.putEdge(edge);
+    const audit = await reconcileInventory(raw, graph, coverage, undefined, included, restrictions);
+    expect(audit).toMatchObject({ coveredSegments: 1, frontierCount: 0, crossingSegmentCount: 0 });
+    expect(raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all()).toEqual([
+      { id: "way/1", disposition: "installed", reason: "covered-source-segments-reconciled" },
+      { id: "way/2", disposition: "pending", reason: "pending-installation" },
+      { id: "way/3", disposition: "restricted", reason: "access:private" },
+      { id: "way/4", disposition: "restricted", reason: "access:closed" },
+    ]);
+    expect(await reconcileInventory(raw, graph, coverage, undefined, included, restrictions)).toEqual(audit);
+  } finally { raw.close(); graph.close(); rmSync(directory, { recursive: true, force: true }); }
+});
