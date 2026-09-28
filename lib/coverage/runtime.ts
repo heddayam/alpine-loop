@@ -20,7 +20,7 @@ import { applyRestriction } from "@/lib/data/curated-access";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as METRIC_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import { contentId, unionCoverage } from "./geometry";
-import { CoverageSourceStore, NORMALIZATION_VERSION } from "./source-store";
+import { CoverageSourceStore, NORMALIZATION_VERSION, sourceStoreFileName } from "./source-store";
 import { elevationCache, elevationFor, describeCanonicalElevation } from "./elevation";
 import { reconcileInventory } from "./inventory";
 import { preparedNamedAreas } from "./named-areas";
@@ -70,9 +70,6 @@ export async function buildNetworks(catalogPath: string, networkIds: readonly st
           throw error;
       }
     }
-    // Source-wide diagnostics are constant for this pinned build, not per-network work.
-    const unsupportedBySource = new Map(raws.map(raw => [raw.source.id,
-      Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n)]));
     const dem = elevationCache(), results: DataRelease[] = [], receipts = path.join(root, "networks");
     await mkdir(receipts, { recursive: true });
     for (const network of networks) {
@@ -104,32 +101,39 @@ export async function buildNetworks(catalogPath: string, networkIds: readonly st
           if (enqueue(() => store.putWay(way))) await check();
           way.sourceRefs.forEach(id => memberSources.add(id));
         }
+        let unsupportedBuildings = 0;
         for (const raw of raws) {
-          for (const { way, nodes } of raw.ways(network.geometry)) {
-            if (way.edgeClass === "trail")
-              continue;
-            for (const node of nodes) {
-              if (enqueue(() => store.putNode(node))) await check();
+          const selection = {kind: "context" as const, geometry: network.geometry};
+          const local = new CoverageSourceStore(path.join(root, sourceStoreFileName(raw.source, selection)), raw.source, selection);
+          try {
+            await local.import(check, {onStage: stage => report(`${stage}: ${network.id}`)});
+            unsupportedBuildings += Number(local.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n);
+            for (const { way, nodes } of local.ways(network.geometry)) {
+              if (way.edgeClass === "trail" || raw.isTrail(way.externalId))
+                continue;
+              for (const node of nodes) {
+                if (enqueue(() => store.putNode(node))) await check();
+              }
+              let current = way;
+              for (const file of restrictions) {
+                const rule = file.restrictions.find(rule => rule.externalId === current.externalId);
+                if (rule)
+                  current = applyRestriction(current, rule, file.snapshot.id);
+              }
+              if (enqueue(() => store.putWay(current))) await check();
+              current.sourceRefs.forEach(id => memberSources.add(id));
+              memberSources.add(raw.source.id);
             }
-            let current = way;
-            for (const file of restrictions) {
-              const rule = file.restrictions.find(rule => rule.externalId === current.externalId);
-              if (rule)
-                current = applyRestriction(current, rule, file.snapshot.id);
+            for (const building of local.buildings(network.geometry)) {
+              if (enqueue(() => store.putBuilding(building))) await check();
+              memberSources.add(raw.source.id);
             }
-            if (enqueue(() => store.putWay(current))) await check();
-            current.sourceRefs.forEach(id => memberSources.add(id));
-            memberSources.add(raw.source.id);
-          }
-          for (const building of raw.buildings(network.geometry)) {
-            if (enqueue(() => store.putBuilding(building))) await check();
-            memberSources.add(raw.source.id);
-          }
-          for (const evidence of raw.evidence(network.geometry)) {
-            if (enqueue(() => store.putPortalEvidence(evidence))) await check();
-            evidence.sourceRefs.forEach(id => memberSources.add(id));
-            memberSources.add(raw.source.id);
-          }
+            for (const evidence of local.evidence(network.geometry)) {
+              if (enqueue(() => store.putPortalEvidence(evidence))) await check();
+              evidence.sourceRefs.forEach(id => memberSources.add(id));
+              memberSources.add(raw.source.id);
+            }
+          } finally { local.close(); }
         }
         flush();
         await check();
@@ -151,10 +155,8 @@ export async function buildNetworks(catalogPath: string, networkIds: readonly st
           }
         }
         const selectedRegions = new Set(metadata.searchRegions.map(region => region.namedAreaId));
-        const unsupportedBuildings = raws.filter(raw => memberSources.has(raw.source.id)).reduce((count, raw) =>
-          count + (unsupportedBySource.get(raw.source.id) ?? 0), 0);
         const limitations = [...recipe.limitations,
-          ...(unsupportedBuildings ? [`The source inventory contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []), "Networks are complete only within the configured source snapshot and supported coverage. Missing source connections may still exist.", ...(network.sourceBoundaryLimited ? ["This network reaches a source boundary or exclusion and may connect to trails beyond it."] : [])];
+          ...(unsupportedBuildings ? [`The selected network context contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in its context inventory.`] : []), "Access and building context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.", "Networks are complete only within the configured source snapshot and supported coverage. Missing source connections may still exist.", ...(network.sourceBoundaryLimited ? ["This network reaches a source boundary or exclusion and may connect to trails beyond it."] : [])];
         const inputFingerprint = contentId({ network: network.id, context: hash.digest("hex"), sources: metadata.sources, topology: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, metric: METRIC_VERSION, compiler: BUILD_VERSION, elevation: elevation.productFingerprint });
         const options = {
           databasePath, outputRoot, geometry: network.geometry, sources: metadata.sources,

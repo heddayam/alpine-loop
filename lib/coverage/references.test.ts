@@ -18,7 +18,7 @@ it("inventories real West Cady, Pilchuck, and road-approach ways before coverage
   const store=new CoverageSourceStore(":memory:",source);stores.push(store);
   const lines=createInterface({input:createReadStream(fixture),crlfDelay:Infinity});
   await store.import(async()=>{}, {lines});
-  const ids=[...store.db.prepare("SELECT id FROM inventory WHERE disposition='candidate' ORDER BY id").iterate()].map((row)=>String(row.id));
+  const ids=[...store.ways(rectangle([-180,-90,180,90]),0)].map(({way})=>way.externalId);
   expect(ids).toEqual(["way/218617733","way/372537133","way/37583693","way/951045864","way/951045865"]);
   const cady=[...store.ways(rectangle([-121.29,47.90,-121.17,47.94]),0)].map(({way})=>way.externalId);
   expect(cady).toContain("way/372537133");

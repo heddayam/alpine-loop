@@ -53,6 +53,34 @@ The immutable discovery catalog and disk inventory are reused by explicit-ID
 builds. Discovery performs no DEM acquisition, edge metrics, route topology,
 named-area preparation, independent-reference downloads or release publication.
 
+Source normalization is filter-first. Osmium selects a conservative superset of
+all hiking classifications (including tracks, ambiguous footways and permitted
+road connectors), with complete referenced nodes. Global contextual-footway
+promotion precedes connectivity. SQLite retains normalized trail ways; temporary
+node/reference joins and non-trail rows are discarded. No statewide building,
+road-context, excluded-feature inventory or raw-batch checkpoint store remains.
+
+Preparation extracts context only for selected network envelopes, buffering each
+component by 0.01 degree as in the context queries. Building multipolygon members
+are completed before normalization. Context-local footway classification cannot
+replace the global trail classification. Per-source/per-envelope context stores
+are verified and reused, then closed before the next network. Unsupported
+building diagnostics apply to that selected context, not the whole state.
+
+The geographic context extraction is node-based: a road crossing the buffer with
+all nodes outside, or a building enclosing it with no vertex inside, can be
+absent. This affects access/building evidence and is disclosed in the release;
+it cannot truncate or join trail networks, which are discovered without this
+geographic extraction. Source completeness and regional performance remain
+unverified until the real-data gate. Do not equate reduced retained data with a
+promised runtime or disk bound.
+
+Completed normalized stores have one immutable-data seal; metric caches are
+excluded. Incomplete imports roll back and restart from the filtered source.
+The former row-range checksums, raw-record resume and legacy seal compatibility
+are removed. Native subprocesses are checkpointed and reaped, and temporary
+extracts are deleted on completion, cancellation and failure.
+
 The offline HTML inspector shows full network envelopes, source trail length,
 node/physical-edge counts, source-boundary limitations and undirected cycle rank.
 Envelopes are not exact trail lines, and a structural cycle is not proof of a legal
@@ -79,6 +107,14 @@ Independent official-source proximity comparisons remain diagnostic and never
 claim exact installed-feature membership from a network envelope.
 
 ## Established work informing decisions
+
+[Osmium tags-filter](https://docs.osmcode.org/osmium/latest/osmium-tags-filter.html)
+retains referenced objects by default and can read a source in multiple passes.
+[Osmium extract](https://docs.osmcode.org/osmium/latest/osmium-extract.html)
+provides complete-way and smart relation extraction; its node-based spatial
+selection explains the context limitation above. These established native
+operations avoid expanding unrelated statewide geometry into SQLite. They do
+not establish a measured performance guarantee for this build.
 
 [NetworkX's cycle implementation](https://networkx.org/documentation/stable/_modules/networkx/algorithms/cycles.html)
 uses SCC preprocessing for directed cycles and biconnected decomposition for

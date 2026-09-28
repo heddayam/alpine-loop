@@ -4,8 +4,7 @@ import { applyRestriction, type CuratedAccessFile } from "@/lib/data/curated-acc
 import type { CoverageSourceStore } from "./source-store";
 
 /** Reconcile exact discovered membership with compiled directed edges.
- * Envelopes bound the source query only; old source-wide dispositions cannot
- * exclude members or make unrelated networks part of this audit.
+ * Envelopes bound the source query; exact membership determines what is audited.
  */
 export async function reconcileInventory(
   raw: CoverageSourceStore, graph: ProgressiveGraphStore, envelope: AreaGeometry,

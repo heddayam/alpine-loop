@@ -36,13 +36,6 @@ it("audits only exact members inside overlapping network envelopes and catches m
   f.graph.database.prepare("DELETE FROM edges WHERE id=?").run(`${id}:reverse`);
   await expect(f.audit(value => value === id)).rejects.toThrow("Unexplained compiler loss");
 });
-it("ignores stale geographic dispositions instead of silently hiding lost members", async () => {
-  const f = await fixture(["n1 T x0 y0","n2 T x1 y0","w10 Thighway=path Nn1,n2"]);
-  f.raw.db.prepare("UPDATE inventory SET disposition='excluded',reason='intentionally-excluded:old-policy'").run();
-  await expect(f.audit(() => true)).rejects.toThrow("Unexplained compiler loss");
-  f.add("way/10");
-  expect(await f.audit(() => true)).toEqual({sourceId:"fixture",coveredSegments:1});
-});
 it("rejects forbidden selected members while allowing unrelated restricted trails", async () => {
   const f = await fixture(["n1 T x0 y0","n2 T x1 y0","w10 Thighway=path,access=private Nn1,n2","w11 Thighway=path Nn1,n2"]);
   const id = f.add("way/11");

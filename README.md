@@ -108,9 +108,16 @@ Automated tests do not fetch trail data or call external providers.
 The workflow is **discover → inspect networks → build selected IDs**. A source
 recipe pins provider data, supported source boundaries and reviewed exclusions;
 it contains no hike or geographic build selector. Discovery saves connectivity
-without downloading elevation or preparing route graphs. The first import still
-reads the full provider extract and can take time and substantial disk space.
-Later commands verify and reuse that discovery.
+without downloading elevation or preparing route graphs. Osmium first filters
+potential walking connections and their referenced nodes from the compressed
+provider file; SQLite retains the normalized trail graph, not the entire map.
+Discovery still scans the source file. Runtime and peak disk use for Washington
+must be measured; no fixed completion time is promised.
+
+Only after selecting network IDs does preparation extract nearby access roads,
+parking, gates and buildings, then acquire elevation and compile routes.
+Verified trail and per-network context caches are reused. Temporary extracts
+and raw node/reference joins are discarded.
 
 ```sh
 # Build the tooling image; this does not build trail data.
@@ -157,6 +164,8 @@ rejected before preparation; rerun discovery when source inputs change.
 The source-cache override reuses this checkout's existing downloads. A fresh
 clone can omit it. Source recipes allow acquisition of missing inputs. Ctrl+C
 stops at a checkpoint; repeat the command to reuse verified completed work.
+An interrupted source import restarts its compact normalization; there is no
+raw-record resume database or legacy importer.
 Build reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
 `status [report.json] --watch` refreshes every five seconds; a stale report is
 not a live heartbeat.

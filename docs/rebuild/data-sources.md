@@ -30,10 +30,13 @@ input so it can be adjusted without changing app or solver code.
   and verify their URLs from an empty cache when reviewing setup; cached builds
   cannot prove fresh-install availability. These upstream URLs are not permanent
   archives, so pins still need periodic review.
-- Progressive builds inventory the pinned extract before installation clipping.
-  Retain source context on disk and apply the exact installed union only at
-  publication. Legacy regional builds retain their reference-complete
-  `osmium extract` path during migration.
+- Filter potential hiking connections and complete node references from the
+  pinned extract before normalization. Discover connected networks globally
+  within configured source coverage; only selected networks receive buffered
+  access/building context extraction and elevation. Retain the compressed source,
+  compact normalized graph and reusable selected context; discard transient
+  extracts and raw joins. See [network design](network-design.md) for extraction
+  semantics and limitations. No legacy broad importer remains.
 - Interpret hiking-relevant highway/path/foot/access/oneway/route/relation tags
   through a versioned adapter with fixture tests.
 - Use Overpass only for small manual QA queries while developing an adapter, not

@@ -10,6 +10,7 @@ import type { DataRelease } from "@/lib/contracts/releases";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { CoverageRunnerContext } from "./types";
 import { CoverageSourceStore } from "./source-store";
+import { filteredSourceLines } from "./source-filter";
 import { areaBounds } from "@/lib/graph/geometry";
 import { PreparedGraphRepository } from "@/lib/graph/prepared-repository";
 import { rectangle } from "./geometry";
@@ -29,7 +30,7 @@ const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", datase
 let root: string;
 let fixtureLines: string[];
 const secondNetwork=["n11 T x-121.12 y47.51","n12 T x-121.10 y47.51","n13 T x-121.11 y47.54","w201 Thighway=path,foot=yes,name=Second%20%loop Nn11,n12,n13,n11"];
-const importSource = CoverageSourceStore.prototype.import;
+vi.mock("./source-filter", () => ({ filteredSourceLines: vi.fn() }));
 beforeEach(async () => {
   algorithms.metricVersion=undefined;
   vi.clearAllMocks();
@@ -45,10 +46,7 @@ beforeEach(async () => {
   vi.mocked(elevationFor).mockResolvedValue({ source: { ...source, id: "dem" }, productFingerprint: "fixture-dem", sampler: { algorithmVersion: "fixture", sample: async (coordinates) => coordinates.map(() => 100) } } as Awaited<ReturnType<typeof elevationFor>>);
   vi.mocked(describeCanonicalElevation).mockResolvedValue({source:{...source,id:"dem"},productFingerprint:"fixture-dem"});
   fixtureLines = [...(await readFile(source.localPath,"utf8")).trim().split("\n"),...secondNetwork];
-  vi.spyOn(CoverageSourceStore.prototype, "import").mockImplementation(function (this: CoverageSourceStore, check) {
-    async function* lines() { yield* fixtureLines; }
-    return importSource.call(this, check, { lines: lines() });
-  });
+  vi.mocked(filteredSourceLines).mockImplementation(async function* () { yield* fixtureLines; });
 });
 afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 const context = (): CoverageRunnerContext => ({ signal: new AbortController().signal, checkpoint: async () => "continue", report: async () => {} });
@@ -84,6 +82,7 @@ it("exports only an explicitly selected complete network, without edge duplicati
   const [piece]=await pieces();
   expect(piece!.edges).toHaveLength(6);
   expect(piece!.nodes.some(node=>node.lon===-121.24)).toBe(true);
+  expect(piece!.access.length).toBeGreaterThan(0);
   expect(result.sections[0]!.network).toMatchObject({nodeCount:3,physicalEdgeCount:3});
   expect(result.artifacts[0]!.graphId).toBeTruthy();
   await expectNoScratch();
@@ -95,6 +94,7 @@ it("adding disconnected B reuses A's immutable bytes without elevation or topolo
   const {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
   await build();
   const first=await release(), artifact=first.artifacts[0]!;
+  vi.mocked(filteredSourceLines).mockClear();
   const modified=(await stat(path.join(root,"release",artifact.path))).mtimeMs;
   vi.mocked(elevationFor).mockClear();vi.mocked(writeProgressiveTopology).mockClear();
   await build("all");
@@ -104,6 +104,11 @@ it("adding disconnected B reuses A's immutable bytes without elevation or topolo
   expect((await stat(path.join(root,"release",artifact.path))).mtimeMs).toBe(modified);
   expect(elevationFor).toHaveBeenCalledTimes(1);
   expect(writeProgressiveTopology).toHaveBeenCalledTimes(1);
+  // Only B needs a new context extract; A's context and the trail source are reused.
+  expect(filteredSourceLines).toHaveBeenCalledTimes(1);
+  const selection = vi.mocked(filteredSourceLines).mock.calls[0]![2];
+  expect(selection.kind).toBe("context");
+  if (selection.kind === "context") expect(areaBounds(selection.geometry)[0]).toBeGreaterThan(-121.2);
   const all=(await pieces()).flatMap(piece=>piece.edges);
   expect(new Set(all.map(edge=>edge.edge_key)).size).toBe(12);
   expect(new Set(all.map(edge=>edge.id)).size).toBe(12);
@@ -241,6 +246,7 @@ it("discovery inventories all networks without elevation, topology or publicatio
   const named=vi.spyOn(await import("./named-areas"),"preparedNamedAreas");
   const first=await discoverNetworks(recipe(),context());
   expect(first.catalog.networks).toHaveLength(2);
+  expect(vi.mocked(filteredSourceLines).mock.calls.map(call => call[2].kind)).toEqual(["trails"]);
   expect(official).not.toHaveBeenCalled();expect(named).not.toHaveBeenCalled();
   expect(first.catalog.networks.every(network=>network.cycleRank===1&&network.lengthMeters>0)).toBe(true);
   expect(elevationFor).not.toHaveBeenCalled(); expect(describeCanonicalElevation).not.toHaveBeenCalled(); expect(writeProgressiveTopology).not.toHaveBeenCalled();
@@ -250,6 +256,9 @@ it("discovery inventories all networks without elevation, topology or publicatio
   expect(importer).not.toHaveBeenCalled();expect(scan).toHaveBeenCalledOnce();
   await buildNetworks(first.catalogPath,[first.catalog.networks[0]!.id],context());
   expect(scan).toHaveBeenCalledOnce();
+  expect(vi.mocked(filteredSourceLines).mock.calls.map(call => call[2])).toEqual([
+    {kind:"trails"}, {kind:"context",geometry:first.catalog.networks[0]!.geometry},
+  ]);
 });
 it("rejects tampered catalog metadata and inventory bytes before source or DEM work",async()=>{
   const {catalogPath,catalog}=await discoverNetworks(recipe(),context());

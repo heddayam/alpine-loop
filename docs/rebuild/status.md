@@ -86,6 +86,27 @@ prepared downloads, saved-result preservation and the real-data gates remain.
   running Docker discovery was left uninterrupted; restart only the native watcher
   to pick up its display fix. The import-phase label change applies after rebuilding
   the tooling image for a future run.
+- [x] Replace broad source normalization with filter-first trail discovery and
+  selected-network context extraction. Integrated efa8b63 and e513a25 plus the
+  runtime wiring. Osmium streams candidate walking ways and complete references;
+  normalized SQLite retains only exact/promoted trails. Selected context is
+  extracted, verified and cached independently. Removed durable raw-node/way
+  inventories, raw-batch checksum/resume logic and legacy seal compatibility.
+  Context uses global trail classification and cannot change network membership.
+  Node-based context extraction can omit crossing/enclosing features without an
+  inside vertex; the release and design document disclose this limitation.
+  Focused verification: 8 filter tests (including real host Osmium), 12 compact
+  store tests, and 29 runtime/reference/inventory tests pass; lint and type
+  checking pass. Rebuilt the Docker data image; its offline native fixture run
+  produced 23 trail-filter objects and 36 context objects and removed all scratch
+  files. Per the user's request to stop repeating checks, no repeated full build
+  or browser suites were run for this backend-only change. No Washington job was
+  restarted; real-source time, disk and continuity measurements remain pending.
+  Removed the cancelled normalization database (1,911,586,816 bytes); compressed
+  downloads, other source caches and saved app data remain intact. Both task
+  worktrees were archived and their branches deleted. Relative to 3f7149b,
+  production source is 11 lines smaller and tests 45 lines smaller; the committed
+  native fixture adds 44 lines. Documentation is counted separately.
 - [ ] Real-source continuity and bounded real-network build/install/search measurement.
 - [x] User-authorized clean data cutover: removed host `.local-data/packs` (2.7 GiB),
   published `.local-data/releases` (107 MiB), Docker runtime installed coverage
