@@ -1,10 +1,12 @@
 import { MAX_ROUTE_DISTANCE_MILES, PREPARATION_BUFFER_MILES } from "@/lib/contracts/routes";
 import { assertValidAreaGeometry, areaGeometryBounds, type AreaGeometry } from "@/lib/data/area-geometry";
-import { contentId, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import type { SourceRecipe } from "./recipe";
+import type { CoverageRegion } from "./types";
 
 export type LocalCoveragePlan = {
   id: string;
+  name?: string;
   startGeometry: AreaGeometry;
   geometry: AreaGeometry;
   maximumRouteMiles: typeof MAX_ROUTE_DISTANCE_MILES;
@@ -25,6 +27,13 @@ export function planLocalCoverage(recipe: SourceRecipe, input: AreaGeometry): Lo
   const longitude = latitude / Math.cos(furthestLatitude * Math.PI / 180);
   if (west - longitude <= -180 || east + longitude >= 180) throw new Error("Start areas whose buffer crosses the antimeridian are not supported");
   let geometry = rectangle([west - longitude, south - latitude, east + longitude, north + latitude]);
+  if (recipe.supportedArea) {
+    const starts = intersectCoverage(startGeometry, recipe.supportedArea.geometry);
+    const routes = intersectCoverage(geometry, recipe.supportedArea.geometry);
+    if (!starts || !routes) throw new Error(`No starts within ${recipe.supportedArea.name}`);
+    startGeometry = starts;
+    geometry = routes;
+  }
   if (subtractCoverage(geometry, unionCoverage(recipe.sources.map(source => source.geometry)))) {
     throw new Error("Sources do not cover the complete 25-mile route buffer. Add an adjacent source or choose an interior start area.");
   }
@@ -39,4 +48,9 @@ export function planLocalCoverage(recipe: SourceRecipe, input: AreaGeometry): Lo
     id: `area-${contentId({ startGeometry, maximumRouteMiles: MAX_ROUTE_DISTANCE_MILES, bufferMiles: PREPARATION_BUFFER_MILES }).slice(0, 32)}`,
     startGeometry, geometry, maximumRouteMiles: MAX_ROUTE_DISTANCE_MILES, bufferMiles: PREPARATION_BUFFER_MILES,
   };
+}
+
+/** Public build selection is a stable place name, not a coordinate-derived identity. */
+export function planCoverageRegion(region: CoverageRegion): LocalCoveragePlan & {name: string} {
+  return {...planLocalCoverage(region.recipe, region.geometry), id:region.id, name:region.name};
 }

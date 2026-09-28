@@ -8,6 +8,8 @@ export const sourceRecipeSchema=z.object({
   schemaVersion:z.literal(1),
   sources:z.array(z.object({config:osmSourceConfigSchema,geometry:areaGeometrySchema,sha256:z.string().regex(/^sha256:[a-f0-9]{64}$/)}).strict()).min(1),
   exclusions:z.array(z.object({id:z.string().min(1),geometry:areaGeometrySchema}).strict()),
+  /** Explicit product boundary (for example the US border), never an inferred source gap. */
+  supportedArea:z.object({name:z.string().min(1),geometry:areaGeometrySchema}).strict().optional(),
   reviewedRegionIds:z.array(z.string().min(1)),
   memoryLimitMiB:z.number().int().min(512).max(65536).default(4096),
   offline:z.boolean().default(false),
@@ -44,5 +46,6 @@ export async function readSourceRecipe(file:string):Promise<SourceRecipe> {
     return geometry({...rest,...(typeof configPath==="string"?{config:await read(configPath)}:{})});
   }));
   if(Array.isArray(resolved.exclusions)) resolved.exclusions=await Promise.all(resolved.exclusions.map(geometry));
+  if(resolved.supportedArea) resolved.supportedArea=await geometry(resolved.supportedArea as Record<string,unknown>);
   return sourceRecipeSchema.parse(resolved);
 }

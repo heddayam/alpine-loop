@@ -17,10 +17,13 @@ export const releaseArtifactSchema = z.object({
   startGeometry: areaGeometrySchema.optional(),
   /** Immutable network graph identity, independent of the catalog release. */
   graphId: identity.optional(),
+  /** Stable named region ownership, independent of artifact content hashes. */
+  regionId: identity.optional(),
 }).strict().refine((artifact) => artifact.path === `objects/${artifact.id}.sqlite.gz`, "Artifact path must match its SHA-256 identity");
 
 export const releaseSectionSchema = z.object({
   id: identity,
+  name: z.string().min(1).optional(),
   geometry: areaGeometrySchema,
   artifactIds: z.array(digest).min(1),
   area: z.object({
@@ -69,6 +72,9 @@ export const dataReleaseSchema = z.object({
       const artifact = release.artifacts.find(item => item.id === section.artifactIds[0]);
       if (!section.area || section.artifactIds.length !== 1 || !artifact?.graphId || !artifact.startGeometry || JSON.stringify(section.geometry) !== JSON.stringify(artifact.startGeometry)) {
         context.addIssue({ code: "custom", message: `Area ${section.id} requires one independent graph and matching start geometry` });
+      }
+      if (artifact?.regionId !== undefined && artifact.regionId !== section.id) {
+        context.addIssue({ code: "custom", message: `Region ${section.id} has inconsistent graph ownership` });
       }
     }
   }

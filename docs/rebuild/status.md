@@ -6,6 +6,31 @@ the evidence line.
 
 ## Active system design revision
 
+### Named regional preparation study — 2026-09-28
+
+The user requested a comprehensive design/cost study before another overhaul.
+[Regional preparation study](regional-preparation-study.md) records alternatives,
+primary references, measured costs, lifecycle/UI consequences and replacement
+criteria. This is not an implemented architecture or a completed regional gate.
+
+- [x] Inspect the current pipeline and compare named independent graphs against
+  shared storage, statewide graphs and connected-component preparation.
+- [x] Bounded read-only experiment on the finished artifact: 406,472 physical
+  edges become 11,664 (2.87%) under a conservative 25-mile undirected bound from
+  all 4,009 core nodes. Probe: 4.924 seconds, 137.5 MiB peak RSS. Its isolated
+  625 MB copy was deleted; no cache/live WAL database was opened. Shape-node
+  counts also show compaction potential, not measured final bytes or runtime.
+- [x] Record product answers: about ten minutes for a first useful region;
+  named areas select trailheads including approaches; initial coverage is
+  US-only with the international border explicitly shown as a hard limit.
+- [ ] Resolve download granularity and review the first named start footprint.
+- [ ] Implement and verify the selected replacement; perform the bounded
+  real-region acceptance measurements in the study before claiming feasibility.
+
+No regional build, application mutation, new downloads or repeated test suites
+were run for this study. Existing data and the user's untracked
+progressive-publication-review.md were preserved.
+
 ### Local preparation with a distance budget — 2026-09-28
 
 This active revision supersedes the complete-network/discovery builder recorded
