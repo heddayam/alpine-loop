@@ -82,6 +82,48 @@ and export cases passed: 29 tests, with targeted lint. No full suite or regional
 build repeated. The existing container cannot pick up the fix; rebuild the data
 image and rerun using the retained caches. End-to-end savings remain unmeasured.
 
+### Glacier Peak initial acceptance inspection — 2026-09-28
+
+The user completed and installed `release-418f3e22c7a40acbc7cb75bb791f92e4`,
+artifact `20fa88fb1388d296cf9cf744fe247545d6ef967d66a60986539d78fa52338d19`.
+The app API confirms the installed artifact matches publication. Its retry with
+cached normalized source/DEM/metrics completed in 167.236 seconds, including
+18.998 seconds compaction. All 103,560 segment metrics were reused; this is not
+an empty-cache first-build or an unchanged-artifact no-op benchmark. Measured
+process-tree peak was 642,764,800 bytes. Final graph: 1,214 nodes, 1,342 physical
+edges, 2,684 directed edges; 5,979,754 compressed and 17,580,032 raw bytes.
+
+Bounded read-only acceptance checks (no rebuild):
+
+- [x] Explicit full `data inspect` passed transport, SQLite and graph integrity.
+- [x] All eight declared approach neighborhoods contain final access points within
+  500 m. The graph has 13 access-point records, including duplicate candidates at
+  some trailheads; this is not 13 distinct approach locations. Suiattle's nearest
+  Sulphur Creek candidate has no cycle hint, but the other nearby Suiattle candidate
+  does. Checks used an isolated copy of the finalized compressed artifact, deleted
+  afterward; no live/cache DB was opened.
+- [ ] Complete approach inventory: the current eight are explicitly non-exhaustive.
+  The USFS Lost Creek Ridge trailhead point (-121.33288424882707,
+  48.09445575270973) lies outside the current start footprint and no corresponding
+  access point is installed. Review this and other omitted Glacier Peak gateways.
+- [ ] Independent final-graph trail/connectivity comparison. Existing references
+  are partial-source and compare normalized OSM against official linework, not the
+  installed graph. Of 601 geometrically covered reference features, 226 are flagged
+  (205 proximity gaps, 12 beyond the reference envelope, 9 mixed). These are not 226
+  proven missing trails; some are in the surrounding support buffer. The report's
+  installed-feature/length fields mean polygon coverage and must not be used as
+  final graph membership evidence. Spider Gap is flagged even though the final
+  artifact contains a mapped Spider Gap Snowfield Route.
+- [ ] Real-data compaction preservation audit and representative known-loop/approach
+  connectivity checks, followed by bounded Full-search usefulness checks. Existing
+  pre-compaction membership checks and small equivalence fixtures are useful but
+  do not independently prove every necessary real trail survived end to end.
+
+The pack is structurally valid. Complete Glacier Peak trail/approach coverage is
+not established. Remaining acceptance must account for omissions explicitly:
+source absence/disagreement, intended policy restriction, budget pruning, or an
+unexplained pipeline loss.
+
 ### Local preparation with a distance budget — 2026-09-28
 
 This active revision supersedes the complete-network/discovery builder recorded
