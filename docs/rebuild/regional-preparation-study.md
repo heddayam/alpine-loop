@@ -454,3 +454,18 @@ need regional review. Unmeasured costs include
 compact artifact sizes, cold first-region runtime, adjoining overlap, and update
 retention. Those are explicit remaining work, not reasons to promise another
 rewrite is already proven final.
+
+## Implementation follow-through
+
+The named Glacier Peak catalog, distance-first preparation, persisted corridor
+compaction, actual sample-owner DEM selection, early action reuse and compressed
+artifact audit reuse are now implemented. The old bbox command and OSM named-area
+discovery pipeline were removed. See [status](status.md) for exact commits and
+offline verification. Larger coordinate batches or persistent Python workers were
+not added: each batch now sees only the required DEM collection, and representative
+measurements should determine whether remaining process overhead matters.
+
+The first catalog entry uses the USFS Wilderness layer WID 207 and eight reviewed
+recreation-site approach points, all pinned in repository files. It does not claim
+all Glacier Peak approaches are included. No new real-region timing or size claim
+is justified until the user-run acceptance build.

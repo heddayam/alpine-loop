@@ -11,7 +11,7 @@ the evidence line.
 The user requested a comprehensive design/cost study before another overhaul.
 [Regional preparation study](regional-preparation-study.md) records alternatives,
 primary references, measured costs, lifecycle/UI consequences and replacement
-criteria. This is not an implemented architecture or a completed regional gate.
+criteria. Implementation is now integrated; real-region performance acceptance remains open.
 
 - [x] Inspect the current pipeline and compare named independent graphs against
   shared storage, statewide graphs and connected-component preparation.
@@ -23,13 +23,46 @@ criteria. This is not an implemented architecture or a completed regional gate.
 - [x] Record product answers: about ten minutes for a first useful region;
   named areas select trailheads including approaches; initial coverage is
   US-only with the international border explicitly shown as a hard limit.
-- [ ] Resolve download granularity and review the first named start footprint.
-- [ ] Implement and verify the selected replacement; perform the bounded
-  real-region acceptance measurements in the study before claiming feasibility.
+- [x] Use wilderness-sized hiking areas initially. Glacier Peak is pinned from the
+  USFS wilderness layer (WID 207, generalized to about 11 m) plus eight reviewed
+  USFS approach neighborhoods with a 500 m registration tolerance. Entiat River,
+  Phelps Creek, White River, Trinity, North Fork Sauk, Suiattle, Downey Creek and
+  Little Wenatchee Ford are included. This is not an exhaustive approach inventory.
+  The same footprint drives build planning, download selection and Plan filtering.
+- [x] Implement and verify named-region preparation. Shared seams 9567f53,
+  pinned catalog/audit reuse e5d6928, compact graph compiler d351013, regional
+  runtime 3747613, named CLI/download UI 428b3b7 and map selection 9948d41.
+  Bounded CSR pruning precedes elevation, only actual sample-owner DEM tiles are
+  resolved, unchanged action receipts skip staging, and physical metric keys
+  survive changed way segment ordinals. Corridors retain geometry/profiles,
+  access nodes, direction/metadata boundaries and rings. Final VACUUM reclaims
+  removed SQLite pages. Semantic audit reuse verifies compressed bytes and source
+  provenance; explicit inspect always performs the complete audit.
+- [x] Remove superseded paths and complete one integrated verification pass.
+  Deleted the old bbox CLI and five OSM named-area discovery/orchestration files;
+  no alternate active builder remains. `npm run verify` passed lint, TypeScript,
+  687 tests in 93 files, and the production Next.js build. The two changed offline
+  desktop/mobile coverage flows passed once (1280/390 px); screenshots inspected.
+  Native `regions` and `plan glacier-peak` resolve the pinned catalog without
+  downloads. Docker application/tooling images were not rebuilt in this turn.
+  Against 33dd23e, production has 688 additions/479 deletions (net +209 lines),
+  tests under lib/scripts/components have 382 additions/243 deletions (net +139);
+  browser fixtures and documentation/data are counted separately. This pass removes
+  obsolete mechanisms but is not a net LOC reduction: bounded pruning/compaction
+  add necessary code. All three task worktrees were archived and their branches
+  deleted. Removed 3.7 MiB of obsolete anonymous-area receipts/search-region cache;
+  retained source/DEM/metric caches, installed data and saved references. No live
+  Docker database was opened; only the app container was running before cleanup.
+- [ ] User-run Glacier Peak build/install/search acceptance: cold acquisition and
+  processing separately, warm no-op reuse, peak RAM/disk, artifact size, expected
+  approach starts and useful loop/lollipop results. About ten minutes remains a
+  target, not a demonstrated first-build runtime. No real regional build was run
+  during implementation; commands are in README.
 
-No regional build, application mutation, new downloads or repeated test suites
-were run for this study. Existing data and the user's untracked
-progressive-publication-review.md were preserved.
+The study itself used only a bounded read-only probe. Implementation subsequently
+retrieved small public USFS boundary/approach metadata for committed offline inputs;
+no OSM or DEM download was launched. The user's untracked
+progressive-publication-review.md remains untouched.
 
 ### Local preparation with a distance budget — 2026-09-28
 
