@@ -5,16 +5,19 @@ import type { DataRelease } from "@/lib/contracts/releases";
 import type { Coordinate } from "./types";
 
 /** A single disk-backed scan verifies complete graph consistency before any release is visible. */
-export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRelease,"id"|"geometry"|"sources">, checkpoint:()=>Promise<void>) {
+export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRelease,"id"|"geometry"|"sources">, checkpoint:()=>Promise<void>, allowSourceSubset=false) {
+  if(db.prepare("SELECT value FROM metadata WHERE key='schemaVersion'").get()?.value!=="7") throw new Error("Prepared graph schema version differs");
   if(db.prepare("SELECT value FROM metadata WHERE key='releaseId'").get()?.value!==expected.id) throw new Error("Complete graph release identity differs from export inputs");
   if(db.prepare("PRAGMA integrity_check").get()?.integrity_check!=="ok" || db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Complete graph failed SQLite integrity audit");
   const sources=new Set(expected.sources.map(source=>source.id));
   const stored=db.prepare("SELECT * FROM sources ORDER BY id").all();
-  if(stored.length!==sources.size) throw new Error("Complete graph source inventory differs");
-  for(const source of expected.sources) {
+  if(!stored.length || (!allowSourceSubset && stored.length!==sources.size) || stored.some(row=>!sources.has(String(row.id)))) throw new Error("Complete graph source inventory differs");
+  for(const source of expected.sources.filter(source=>!allowSourceSubset||stored.some(row=>row.id===source.id))) {
     const row=stored.find(row=>row.id===source.id);
     if(!row || row.authority!==source.authority || row.dataset!==source.dataset || row.version!==source.version || row.retrieved_at!==source.retrievedAt || row.url!==source.url || row.license!==source.license || row.content_hash!==source.contentHash) throw new Error(`Complete graph source differs: ${source.id}`);
   }
+  sources.clear();
+  for(const row of stored) sources.add(String(row.id));
   if(db.prepare(`SELECT n.id FROM nodes n LEFT JOIN node_spatial s ON s.row_id=n.node_key
     WHERE s.row_id IS NULL OR s.min_lon>n.lon OR s.max_lon<n.lon OR s.min_lat>n.lat OR s.max_lat<n.lat LIMIT 1`).get()) throw new Error("Incomplete node spatial inventory");
   let work=0;
@@ -23,8 +26,9 @@ export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRele
     if(++work%1000===0) await checkpoint();
     if(!Number.isSafeInteger(node.node_key)||Number(node.node_key)<1||!finite(node.lon)||!finite(node.lat)||!finite(node.elevation_m)) throw new Error(`Missing node coordinates/elevation: ${node.id}`);
   }
-  for(const access of db.prepare("SELECT id,known_minimum_stem_m AS known,inclusive_minimum_stem_m AS inclusive FROM access_points ORDER BY id").iterate()) {
+  for(const access of db.prepare("SELECT id,source_refs,known_minimum_stem_m AS known,inclusive_minimum_stem_m AS inclusive FROM access_points ORDER BY id").iterate()) {
     if(++work%1000===0) await checkpoint();
+    if((JSON.parse(String(access.source_refs)) as string[]).some(id=>!sources.has(id))) throw new Error(`Unknown access source: ${access.id}`);
     if([access.known,access.inclusive].some(value=>value!==null&&(!finite(value)||Number(value)<0)) || (access.known!==null&&(access.inclusive===null||Number(access.inclusive)>Number(access.known)))) throw new Error(`Invalid compact feasibility hints: ${access.id}`);
   }
   let prior:{key:number;from:string;to:string;length:number;gain:number;loss:number}|undefined;
