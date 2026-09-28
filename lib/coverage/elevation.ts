@@ -184,7 +184,7 @@ function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: 
   const selected = state.products;
   if (!selected.length || !state.template) return null;
   const identity = (products: readonly Product[]) => `sha256:${createHash("sha256").update(JSON.stringify(products.map((p) => [tile(p), p.productId, p.receipt.sha256]))).digest("hex")}` as const;
-  const hash = identity(selected);
+
   const relevant = new Set<string>();
   const [west, south, east, north] = areaBounds(geometry);
   for (let y = Math.floor(south); y < Math.ceil(north); y++) for (let x = Math.floor(west); x < Math.ceil(east); x++) {
@@ -193,8 +193,9 @@ function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: 
   const relevantProducts = selected.filter((product) => relevant.has(tile(product) ?? ""));
   if (!relevantProducts.length) return null;
   const productFingerprint = identity(relevantProducts);
+  const hash = productFingerprint;
   const collection = state.template;
-  const retrievedAt = selected.map((product) => product.receipt.retrievedAt).sort().at(-1)!;
+  const retrievedAt = relevantProducts.map((product) => product.receipt.retrievedAt).sort().at(-1)!;
   const endpoint = new URL(collection.queryUrl);
   endpoint.search = "";
   endpoint.hash = "";

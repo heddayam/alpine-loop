@@ -370,3 +370,30 @@ it("writes only compact known/inclusive cycle bounds without connector exports",
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'topology_%' OR name='access_topology'").all()).toEqual([]);
   } finally {db.close();store.close();rmSync(directory,{recursive:true,force:true});}
 });
+
+it("preserves stable graph keys when another source network is prepared independently",async()=>{
+  const directory=mkdtempSync(path.join(tmpdir(),"network-keys-"));
+  const {nodes,edges}=fixture();
+  const compile=async(name:string,selected:CompiledEdge[])=>{
+    const store=openProgressiveGraphStore({stagingPath:path.join(directory,`${name}.sqlite`),buildIdentity:name});
+    const db=new DatabaseSync(":memory:");
+    try {
+      nodes.forEach(node=>store.putNode(node));selected.forEach(edge=>store.putEdge(edge));
+      createPreparedSchema(db);
+      const coverage=manifest("test",1).coverage.boundary;
+      await selectProgressiveEdges(store,coverage);
+      await insertGraph(store,db,topologySha256(coverage),new Set(["fixture"]),async()=>{},true);
+      expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      return {nodes:db.prepare("SELECT id,node_key FROM nodes ORDER BY id").all(),edges:db.prepare("SELECT id,edge_key,physical_edge_key FROM edges ORDER BY id").all()};
+    } finally {db.close();store.close();}
+  };
+  try {
+    const original=await compile("first",edges.filter(edge=>edge.stablePhysicalId==="ab"));
+    const expanded=await compile("expanded",edges);
+    expect(expanded.nodes.filter(node=>original.nodes.some(prior=>prior.id===node.id))).toEqual(original.nodes);
+    expect(expanded.edges.filter(edge=>original.edges.some(prior=>prior.id===edge.id))).toEqual(original.edges);
+    const other=await compile("other",edges.filter(edge=>edge.stablePhysicalId==="bc"));
+    expect(other.edges.some(edge=>original.edges.some(prior=>prior.edge_key===edge.edge_key))).toBe(false);
+    expect(other.edges.some(edge=>original.edges.some(prior=>prior.physical_edge_key===edge.physical_edge_key))).toBe(false);
+  } finally {rmSync(directory,{recursive:true,force:true});}
+});

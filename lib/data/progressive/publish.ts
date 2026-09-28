@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import { edgeInsideCoverage, type AreaGeometry } from "../area-geometry";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 
+/** Stable across independently prepared networks; uniqueness is checked in SQLite and at export. */
+export function stableGraphKey(kind: "node" | "physical" | "edge", id: string): number {
+  return Number.parseInt(createHash("sha256").update(`${kind}\0${id}`).digest("hex").slice(0, 13), 16) || 1;
+}
 function bounds(geometry: CompiledEdge["geometry"]): [number,number,number,number] {
   let minLon=Infinity,maxLon=-Infinity,minLat=Infinity,maxLat=-Infinity;
   for (const [lon,lat] of geometry) { minLon=Math.min(minLon,lon);maxLon=Math.max(maxLon,lon);minLat=Math.min(minLat,lat);maxLat=Math.max(maxLat,lat); }
@@ -27,7 +32,7 @@ export async function selectProgressiveEdges(store: ProgressiveGraphStore, cover
   return rejected;
 }
 
-export async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
+export async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>, stableKeys = false): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
   let work=0;
   await checkpoint();
   const stage=store.database;
@@ -49,14 +54,16 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       const node=JSON.parse(row.record) as NormalizedNode;
       if (node.elevationM===null) throw new Error(`Missing elevation for published node ${node.id}`);
       assertRefs(node.sourceRefs,node.id);
-      insertNode.run(node.id,++nodeCount,node.lon,node.lat,node.elevationM,JSON.stringify(node.flags));
-      spatialNode.run(nodeCount,node.lon,node.lon,node.lat,node.lat);
+      nodeCount++;
+      const key=stableKeys?stableGraphKey("node",node.id):nodeCount;
+      insertNode.run(node.id,key,node.lon,node.lat,node.elevationM,JSON.stringify(node.flags));
+      spatialNode.run(key,node.lon,node.lon,node.lat,node.lat);
     }
     const nodeKey=output.prepare("SELECT node_key FROM nodes WHERE id=?");
     const insertPhysical=output.prepare("INSERT INTO physical_edges VALUES (?,?,?,?,?)");
     // Find one physical edge first, then probe installed membership per member.
-    const physicalMembers=stage.prepare("SELECT e.record FROM edges e CROSS JOIN selected_edges s ON s.id=e.id WHERE e.stable_physical_id=? ORDER BY e.id");
     let physicalCount=0;
+    const physicalMembers=stage.prepare("SELECT e.record FROM edges e CROSS JOIN selected_edges s ON s.id=e.id WHERE e.stable_physical_id=? ORDER BY e.id");
     for (const row of stage.prepare("SELECT DISTINCT stable_physical_id AS id FROM edges WHERE id IN (SELECT id FROM selected_edges) ORDER BY stable_physical_id").iterate() as Iterable<{id:string}>) {
       if (++work%1000===0) await checkpoint();
       const members=physicalMembers.iterate(row.id) as Iterable<{record:string}>;
@@ -77,7 +84,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
         if (!Number.isInteger(firstKey)||!Number.isInteger(lastKey)) throw new Error(`Missing physical endpoints ${row.id}`);
       }
       if (!first) continue;
-      insertPhysical.run(++physicalCount,row.id,Math.min(firstKey,lastKey),Math.max(firstKey,lastKey),topologySha256(firstGeometry<reverse?firstGeometry:reverse));
+      insertPhysical.run(stableKeys?stableGraphKey("physical",row.id):++physicalCount,row.id,Math.min(firstKey,lastKey),Math.max(firstKey,lastKey),topologySha256(firstGeometry<reverse?firstGeometry:reverse));
     }
     const physicalKey=output.prepare("SELECT physical_edge_key FROM physical_edges WHERE stable_physical_id=?");
     const insertEdge=output.prepare("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
@@ -101,11 +108,13 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       assertRefs(edge.sourceRefs,edge.id);
       const physical=physicalKey.get(edge.stablePhysicalId) as {physical_edge_key:number}|undefined;
       if (!physical) throw new Error(`Missing physical key for ${edge.id}`);
-      insertEdge.run(edge.id,++edgeCount,physical.physical_edge_key,edge.fromNode,edge.toNode,JSON.stringify(edge.geometry),edge.lengthM,
+      edgeCount++;
+      const key=stableKeys?stableGraphKey("edge",edge.id):edgeCount;
+      insertEdge.run(edge.id,key,physical.physical_edge_key,edge.fromNode,edge.toNode,JSON.stringify(edge.geometry),edge.lengthM,
         edge.gainM,edge.lossM,edge.maxElevationM,edge.maxSustainedGradePct,
         JSON.stringify(edge.elevationProfile.map(({distanceMeters,elevationMeters})=>[distanceMeters,elevationMeters])),
         edge.accessState,edge.edgeClass,JSON.stringify(edge.sourceRefs),JSON.stringify(edge.flags));
-      spatialEdge.run(edgeCount,...bounds(edge.geometry));
+      spatialEdge.run(key,...bounds(edge.geometry));
     }
     const insertAccess=output.prepare("INSERT INTO access_points(id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     let accessCount=0;

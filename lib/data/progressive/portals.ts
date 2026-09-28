@@ -24,7 +24,7 @@ function box(lon:number,lat:number,radius:number):[number,number,number,number] 
 }
 
 /** SQLite-backed union-find; source-wide components and clusters occupy disk, not JS maps. */
-class DiskUnion {
+export class DiskUnion {
   private readonly getParent;
   private readonly setParent;
   private readonly getRank;
