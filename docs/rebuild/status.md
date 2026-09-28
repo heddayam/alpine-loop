@@ -124,6 +124,36 @@ not established. Remaining acceptance must account for omissions explicitly:
 source absence/disagreement, intended policy restriction, budget pruning, or an
 unexplained pipeline loss.
 
+### Neighboring Henry M. Jackson configuration — 2026-09-28
+
+- [x] Register `henry-m-jackson` using the USFS wilderness boundary WID 241,
+  generalized to 0.0001 degrees with five-decimal coordinates, plus eleven
+  reviewed USFS approach neighborhoods. Same Washington source recipe/pins and
+  existing compiler; no runtime, schema, dependency, or solver changes.
+  Little Wenatchee Ford is deliberately shared with Glacier Peak. Other reviewed
+  approaches are Blanca Lake, North Fork Skykomish (also Quartz Creek/West Cady),
+  Elliot Creek–Goat Lake, Top Lake, Heather Lake (Wenatchee), Meadow Creek,
+  Bald Eagle, Lake Minotaur, Barlow Pass, and Smithbrook.
+- [x] Pin small public inputs with provenance. Boundary query: `wid=241`,
+  `outSR=4326`, `maxAllowableOffset=0.0001`, `geometryPrecision=5` from the
+  USFS EDW Wilderness layer. Approach review used the EDW Recreation Sites 02
+  layer, WGS84 envelope `-121.7,47.68,-120.9,48.13`, intersection, all fields.
+  Source URLs and descriptions remain in the catalog. Excluded the Stevens Pass
+  North record `6300.005511`, which has mismatched Snoqualmie coordinates and
+  I-90 directions. This initial approach inventory is explicitly non-exhaustive;
+  agency descriptions do not create access or imply current opening.
+- [x] Native `data regions` lists both areas and `data plan henry-m-jackson`
+  succeeds without source processing. Focused offline verification: 36 tests in
+  `regions.test.ts`, `runtime.test.ts`, and `prepared-repository.test.ts` passed,
+  including shared Little Wenatchee starts, distinct Smithbrook eligibility,
+  source compatibility, artifact preservation, and independent graph ownership.
+  Targeted ESLint and `git diff --check` passed. No repeated full verification,
+  browser run, Docker image build, real regional build, or OSM/DEM acquisition.
+- [ ] User-run neighboring build/install/search acceptance: preserve Glacier
+  Peak's artifact, measure marginal bytes and preparation/cache reuse, confirm
+  real shared starts and representative boundary routes. README gives the exact
+  Docker command, including rebuilding the tooling image to load this catalog.
+
 ### Local preparation with a distance budget — 2026-09-28
 
 This active revision supersedes the complete-network/discovery builder recorded

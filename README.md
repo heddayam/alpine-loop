@@ -105,11 +105,12 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-The workflow is **choose a named hiking area → preview → build**. Start with
-`glacier-peak`, which includes the wilderness footprint and eight reviewed USFS
-approach neighborhoods. The same footprint selects trailheads in Plan and Downloads;
-a hike does not have to enter the legal wilderness boundary. Forest names are
-search aliases, not separate overlapping state-sized builds.
+The workflow is **choose a named hiking area → preview → build**. Available areas
+are `glacier-peak` and its southern neighbor `henry-m-jackson`. Each includes its
+wilderness footprint and reviewed USFS approach neighborhoods, with remaining
+inventory limitations recorded in the catalog. The same footprint selects
+trailheads in Plan and Downloads; a hike does not have to enter the legal wilderness
+boundary. Forest aliases do not imply coverage of the entire national forest.
 
 ```sh
 # Build tooling only; this does not process trail data.
@@ -127,6 +128,23 @@ docker compose run --rm \
 # In another terminal:
 npm run data -- status --watch
 ```
+
+To add Henry M. Jackson alongside an existing Glacier Peak build, rebuild the data
+image so it includes the new catalog entry, then prepare only the new area:
+
+```sh
+docker compose build data
+docker compose run --rm \
+  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  data scripts/data.ts build henry-m-jackson
+```
+
+This preserves Glacier Peak's published artifact and reuses shared source and metric
+caches. Little Wenatchee Ford is deliberately included in both start footprints;
+installing both areas searches each shared start through one graph. Regional
+trail completeness and real adjacent-area build/install/search acceptance remain
+open. In Coverage, keep Glacier Peak selected, add **Henry M. Jackson area**, and
+apply the download/update. Preparing data does not install it automatically.
 
 `plan` prints eligible start geometry and the surrounding routing extent. Requests
 remain capped at **40 miles**; the conservative **25-mile buffer** also supports
