@@ -17,6 +17,11 @@ The user selects complete connected networks on the map and reviews their full
 extent and download/installed size before installation. Source-boundary limitations
 remain visible. Search areas continue to filter starting points only.
 
+The app exposes trail downloads: map selection, full extent, download/device size,
+installed state and the actions relevant to that state. With no selection, show
+one map-selection hint instead of zero-size summaries and disabled buttons.
+Network IDs, graph statistics and build controls stay in developer tooling.
+
 ## Smallest implementation
 
 - Discover every network in the explicitly pinned source set.
@@ -108,6 +113,11 @@ hiking constraints still determine usable routes.
 action reuse from content-addressed output storage. Apply that established pattern
 locally: network preparation identity covers actual dependencies; catalog growth
 alone is not an input change. No Bazel service or remote-cache dependency is added.
+
+[SQLite transaction guidance](https://www.sqlite.org/faq.html#q18) supports batching
+source-inventory writes. The unpublished discovery database uses one transaction,
+a bounded page cache and [disk spill](https://www.sqlite.org/pragma.html#pragma_cache_spill);
+failed scratch inventories are discarded rather than exposed as reusable results.
 
 ## Evidence and acceptance
 

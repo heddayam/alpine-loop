@@ -21,7 +21,9 @@ each feature's properties.
   evidence, not a surveyed legal boundary. Inclusion of designated recreation
   areas requires separate authority-backed review.
 
-Desired collection envelopes remain independent from provider extents. Planning
-splits requests into supported and unavailable geometry before producing work
-units. Reviewed exclusions also apply to drawn requests. Unavailable geometry
-is retained in the plan with a reason, and cannot become installed coverage.
+`recipes/washington.json` pins the source and references its supported boundary
+and reviewed exclusion. Discovery inventories all eligible connected networks in
+that scope; these polygons never select a hike or create build units. Developers
+inspect the resulting networks and build explicit IDs. Source boundaries and
+exclusions can cut connectivity, so affected networks carry that limitation.
+Drawn areas in the app filter starting points only.
