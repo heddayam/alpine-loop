@@ -64,6 +64,24 @@ retrieved small public USFS boundary/approach metadata for committed offline inp
 no OSM or DEM download was launched. The user's untracked
 progressive-publication-review.md remains untouched.
 
+### Regional compaction performance correction — 2026-09-28
+
+The first user-run Glacier Peak build reached compaction after 155.7 seconds:
+622,002 candidate segments pruned to 103,560; four DEM tiles; 65,829 measured
+segments and 37,731 metric-cache hits. Compaction then exceeded ten minutes while
+using one CPU core and about 315 MiB current container memory; no OOM kill occurred.
+Read-only process/status inspection did not open the live database.
+
+An isolated `EXPLAIN QUERY PLAN` reproduction confirmed repeated full child-table
+scans for FK checks on every physical-edge deletion and final node cleanup.
+Added `edges(physical_edge_key)`, `physical_edges(to_node_key)` and
+`access_points(node_id)` indexes; FK checks now use indexed searches. This follows
+[SQLite's child-key indexing guidance](https://www.sqlite.org/foreignkeys.html#required_and_suggested_database_indexes).
+The schema-7 data contract is unchanged. A query-plan regression plus compaction
+and export cases passed: 29 tests, with targeted lint. No full suite or regional
+build repeated. The existing container cannot pick up the fix; rebuild the data
+image and rerun using the retained caches. End-to-end savings remain unmeasured.
+
 ### Local preparation with a distance budget — 2026-09-28
 
 This active revision supersedes the complete-network/discovery builder recorded

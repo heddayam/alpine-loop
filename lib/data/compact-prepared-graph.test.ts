@@ -62,6 +62,13 @@ function integrity(db:DatabaseSync) {
 }
 
 describe("persistent junction graph",()=>{
+  it("uses indexed foreign-key checks when removing corridor edges and shape nodes",()=>{
+    const {db}=fixture();
+    for(const sql of ["DELETE FROM physical_edges WHERE physical_edge_key=?", "DELETE FROM nodes WHERE id=?"]) {
+      const plan=db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(1).map(row=>String(row.detail));
+      expect(plan.filter(detail=>/^SCAN\b/.test(detail))).toEqual([]);
+    }
+  });
   it("preserves lollipop routes, all access nodes, geometry, metrics, and topology hints",async()=>{
     const {db,node,access,add}=fixture();
     for(const id of ["s","stem","j","a","b","c"])node(id);

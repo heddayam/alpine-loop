@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
-/** Immutable prepared graph section schema. */
+/** Immutable prepared graph section schema. Child-key indexes also keep compiler
+ * compaction from scanning whole tables for every foreign-key deletion check. */
 export function createPreparedSchema(database:DatabaseSync):void {
   database.exec(`      CREATE TABLE nodes (
         id TEXT PRIMARY KEY, node_key INTEGER NOT NULL UNIQUE, lon REAL NOT NULL, lat REAL NOT NULL,
@@ -18,6 +19,7 @@ export function createPreparedSchema(database:DatabaseSync):void {
         geometry_hash TEXT NOT NULL
       ) STRICT;
       CREATE INDEX physical_edges_nodes ON physical_edges(from_node_key, to_node_key);
+      CREATE INDEX physical_edges_to_node ON physical_edges(to_node_key);
       CREATE TABLE edges (
         id TEXT PRIMARY KEY, edge_key INTEGER NOT NULL UNIQUE, physical_edge_key INTEGER NOT NULL REFERENCES physical_edges(physical_edge_key), from_node TEXT NOT NULL REFERENCES nodes(id),
         to_node TEXT NOT NULL REFERENCES nodes(id), geometry TEXT NOT NULL,
@@ -27,6 +29,7 @@ export function createPreparedSchema(database:DatabaseSync):void {
       ) STRICT;
       CREATE INDEX edges_from_node ON edges(from_node);
       CREATE INDEX edges_to_node ON edges(to_node);
+      CREATE INDEX edges_physical_edge ON edges(physical_edge_key);
       CREATE VIRTUAL TABLE edge_spatial USING rtree(
         row_id, min_lon, max_lon, min_lat, max_lat
       );
@@ -46,6 +49,7 @@ export function createPreparedSchema(database:DatabaseSync):void {
         portal_road_class TEXT NOT NULL CHECK(portal_road_class IN ('street','service-road')),
         parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)
       ) STRICT;
+      CREATE INDEX access_points_node ON access_points(node_id);
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
         version TEXT NOT NULL, retrieved_at TEXT NOT NULL, url TEXT NOT NULL,
