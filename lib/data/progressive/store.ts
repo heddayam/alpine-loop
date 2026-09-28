@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { canonicalTopologyJson } from "@/lib/graph/topology-hash";
 import { deriveProgressivePortals } from "./portals";
 import type { AreaGeometry } from "../area-geometry";
 import type { SourceSnapshot } from "../adapters";
@@ -12,6 +13,17 @@ export type StageReceipt = { stage: string; fingerprint: string; rowCount: numbe
 
 function canonicalRecord<T extends { sourceRefs?: string[] }>(record: T): string {
   return JSON.stringify({ ...record, ...(record.sourceRefs ? { sourceRefs: [...new Set(record.sourceRefs)].sort() } : {}) });
+}
+
+/** Overlapping extracts can describe one identity with different provenance. */
+function mergeProvenance(previous: string, incoming: string): string | null {
+  if (previous === incoming) return previous;
+  const left = JSON.parse(previous), right = JSON.parse(incoming);
+  const { sourceRefs: leftRefs, ...leftValue } = left;
+  const { sourceRefs: rightRefs, ...rightValue } = right;
+  if (!Array.isArray(leftRefs) || !Array.isArray(rightRefs)
+    || canonicalTopologyJson(leftValue) !== canonicalTopologyJson(rightValue)) return null;
+  return canonicalRecord({ ...left, sourceRefs: [...leftRefs, ...rightRefs] });
 }
 
 /** Persistent, geometry-independent source union. Each put is idempotent on resume. */
@@ -62,7 +74,9 @@ export class ProgressiveGraphStore {
     this.assertOpen();
     const prior = this.database.prepare(`SELECT record FROM ${table} WHERE id=?`).get(id) as { record: string } | undefined;
     if (prior) {
-      if (prior.record !== record) throw new Error(`Conflicting progressive ${table} record ${id}`);
+      const merged = mergeProvenance(prior.record, record);
+      if (merged === null) throw new Error(`Conflicting progressive ${table} record ${id}`);
+      if (merged !== prior.record) this.database.prepare(`UPDATE ${table} SET record=? WHERE id=?`).run(merged, id);
       return false;
     }
     const marks = Array(columns.length + 2).fill("?").join(",");
@@ -79,8 +93,10 @@ export class ProgressiveGraphStore {
     const prior = this.database.prepare("SELECT rowid,record FROM nodes WHERE id=?").get(node.id) as {rowid:number;record:string}|undefined;
     if (prior) {
       const existing = JSON.parse(prior.record) as NormalizedNode;
-      if (canonicalRecord({...existing,elevationM:null}) !== canonicalRecord({...node,elevationM:null}))
-        throw new Error(`Conflicting progressive nodes record ${node.id}`);
+      const merged = mergeProvenance(canonicalRecord({...existing,elevationM:null}), canonicalRecord({...node,elevationM:null}));
+      if (merged === null) throw new Error(`Conflicting progressive nodes record ${node.id}`);
+      const record = canonicalRecord({ ...JSON.parse(merged), elevationM: existing.elevationM });
+      if (record !== prior.record) this.database.prepare("UPDATE nodes SET record=? WHERE id=?").run(record, node.id);
       if (node.elevationM !== null) this.setNodeElevation(node.id,node.elevationM);
     } else {
       this.put("nodes", node.id, ["lon","lat"], [node.lon,node.lat], canonicalRecord(node));

@@ -22,6 +22,7 @@ export const releaseSectionSchema = z.object({
   geometry: areaGeometrySchema,
   artifactIds: z.array(digest).min(1),
   network: z.object({
+    /** Eligible source topology, before compiler portal splitting. */
     nodeCount: bytes,
     physicalEdgeCount: bytes,
     loopBlockCount: bytes.optional(),
