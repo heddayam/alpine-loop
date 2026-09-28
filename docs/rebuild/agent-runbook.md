@@ -9,6 +9,14 @@ The primary agent reads the implementation plan, data policy, status, and this
 runbook before changing the app. It owns shared contracts, root configuration,
 lockfile, integration order, full verification, status evidence, and cleanup.
 
+For algorithmic or design decisions, first look for relevant primary papers,
+established practices, and maintained reference implementations. Record the
+sources, their assumptions, and why the chosen approach fits this application's
+weighted, directed trail graph and resource limits. Check corrections and known
+counterexamples before adopting an optimization. Claims of optimal performance
+require an applicable proof or representative measurements; a reference alone
+does not establish them.
+
 Use up to three bounded subagents when work has stable inputs and exclusive file
 ownership. Every delegated task specifies its objective, allowed/forbidden
 files, accepted contracts, focused tests, verification command, and a required

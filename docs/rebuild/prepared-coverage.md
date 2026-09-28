@@ -1,5 +1,10 @@
 # Developer builds and downloadable coverage
 
+The accepted [network revision](network-design.md) replaces the geographic
+preparation and download units below. Its builder transition is pending in
+[status](status.md); the current geographic builder remains active until that
+gate passes. Installation, atomic publication and retention requirements remain.
+
 ## Product boundary
 
 Developers build one coherent, audited release. Users select quarter-degree map

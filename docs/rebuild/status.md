@@ -6,6 +6,61 @@ the evidence line.
 
 ## Active system design revision
 
+### Loops/lollipops and complete networks — 2026-09-28
+
+Accepted design: [network-design.md](network-design.md). This supersedes
+arbitrary closed walks and geographic preparation units; developer-only builds,
+prepared downloads, saved-result preservation and the real-data gates remain.
+
+- [x] Strict loop/lollipop generation and validation; remove multi-cycle controls.
+  Integrated 8e30829 and a726a01. Solver focused suite: 91 tests. Combined solver,
+  reader, installer and UI checks: 117 tests; integrated type checking passes.
+- [x] Separate immutable graph identity from catalog identity; preview complete
+  network extent and size. Integrated 85df60b and a726a01. Offline tests verify
+  graph identity, unchanged-artifact reuse across catalog versions, full-extent
+  selection, overlapping map hits and legacy saved request parsing.
+- [x] Connected-source discovery and stable publication primitives.
+  Integrated 2d21421. Seven discovery tests cover complete selection, disconnected
+  additions, joins, boundary cuts, duplicate conflicts, restrictions and
+  cancellation. Twelve publisher/identity tests, six elevation tests (one
+  existing skipped), and eleven unchanged runtime tests pass. These primitives
+  are not yet wired into the active builder.
+- [ ] Replace the geographic builder and exporter with independent network
+  preparation, reuse, auditing and publication. Automatic approval review rejected
+  the core runtime replacement because its combined ingestion/cache/publication
+  changes posed regression and release-integrity risk. The live builder remains
+  unchanged. The unapplied runtime/export patches and their validation gaps are
+  retained locally at `.cache/review/network-builder/README.md` (ignored).
+- [x] Verify the implemented subset and retire completed task worktrees.
+  Two final `npm run verify` passes each passed 624 tests in 88 files, lint,
+  type checking and production build. Two browser passes each passed nine
+  offline desktop/mobile flows (60 s and 54 s). Earlier concurrent runs hit
+  five-second timeouts in separate process-heavy integration tests; each passed
+  in isolation. Vitest now uses one worker, retaining the same timeout and
+  assertions, and both full passes are green. Browser testing caught and fixed
+  desktop preview hiding download controls (3439142). Browser servers and test
+  workers exited; temporary browser output and duplicate proposal copies were
+  removed. Installed coverage, source caches and saved results were preserved.
+- [ ] Real-source continuity, bounded regional build/install/search measurement,
+  saved-result migration and removal of superseded generated data.
+
+Synthetic fixed-work search comparison (25,000 expansion / 2,000 raw-candidate
+caps) found old/new exact-route counts 4/4, 7/10 and 9/10 on 3x3, 5x5 and 7x7
+grids. New expansion counts were 128, 4,198 and 9,790 versus 282, 1,731 and 3,631.
+These are small regression fixtures, not evidence of regional performance or
+optimality. No regional build was started for this revision.
+
+Change accounting against 0635351: production/configuration/research source is
+net 535 lines smaller (866 additions, 1,401 deletions); tests are net 256 lines
+larger (343 additions, 87 deletions). Documentation adds 181 lines and
+removes 19 lines, counted separately from executable code.
+The old 990-line search engine is deleted and replaced by a 453-line
+engine; its test file is renamed. Discovery adds one implementation and one test
+file, so the active repository's file count has not decreased. Unapplied proposal
+patches are excluded from these counts. Remaining builder simplification is not
+claimed as complete. The three task worktrees are archived and their task branches
+deleted; the six pre-existing local branches are preserved.
+
 ### Full-only search — active user revision
 
 - [x] Remove foreground search UI, endpoint, settings, and worker protocol.
@@ -41,9 +96,9 @@ country boundary: all forty source nodes lie in Canada according to the pinned
 IBC mapping boundary. The provider north edge is corrected and the Cascades
 intent includes US slivers above latitude 49. Focused border/elevation/compiler
 tests pass (30 tests); acquisition now filters nominal DEM tiles before download.
-The same retained 4 GiB, swap-disabled container is producing one coherent
+The same retained 4 GiB, swap-disabled container attempted one coherent
 Cascades/Olympics release using the existing normalized inventory and metric
-cache. Current benchmark coverage and saved results remain active until a
+cache; its later stopped state is recorded below. Current benchmark coverage and saved results remain active until a
 replacement is verified. Per user instruction, validation uses small offline
 tests and targeted checks; no repeated regional builds are run as tests.
 `npm run data -- status --watch` now reads the active report through the local
@@ -70,8 +125,8 @@ coherent release. The existing branch and draft PR remain the integration path.
 - [ ] Real-data build/install/search measurements, including the 4 GiB gate.
 - [ ] Verified one-time reinstall, saved-result preservation, and legacy deletion.
 
-Latest constrained build stopped safely after 55 prepared units because source
-way/1186146299 has missing elevation samples. No release was activated. Verified
+Latest retained constrained-build report records 150 prepared units and missing
+elevation on way/53658218. The container is stopped; no release was activated. Verified
 source/metric caches and completed receipts remain available; diagnose the missing
 samples before resuming. The 4 GiB gate remains open. Disk cleanup retired old
 validation outputs and a superseded stage, consolidated identical raw downloads,

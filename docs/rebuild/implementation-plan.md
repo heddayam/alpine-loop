@@ -1,7 +1,10 @@
 # Alpine Loop implementation plan
 
-Coverage delivery now follows [developer builds and downloadable coverage](prepared-coverage.md).
-That revision supersedes previous runtime pack/build workflows.
+The accepted [network and route revision](network-design.md) restricts generated
+routes to loops/lollipops and replaces geographic preparation units with complete
+connected networks. [Status](status.md) distinguishes implemented work from
+pending gates. Developer builds and downloadable coverage remain the delivery
+model established by [prepared coverage](prepared-coverage.md).
 
 The [system design revision](system-design.md) records the current design and
 its acceptance evidence. [Status](status.md) is the execution resume point.
@@ -26,13 +29,13 @@ broaden the area.
   search means every eligible start was attempted, not that every possible
   closed walk was enumerated. Computation limits remain visible.
 
-Routes contain a physical trail cycle and finish at their starting point.
-Simple loop, lollipop, figure-eight, chained-loop, and complex-closed describe
-results. The search preserves direction, access restrictions, metric accuracy,
-repetition limits, and topology. Unknown access is included by default.
-Search removes minor side loops and retraced spurs before checking constraints;
-it does not pad a hike with tiny excursions to meet its distance target. The
-relative size rule preserves intentionally short hikes and substantial chains.
+New routes are simple loops or lollipops only. A simple loop revisits no node
+except its start/end. A lollipop has one node-simple stem, traversed out and
+back along the same physical trails, meeting one simple loop only at its
+attachment. No additional spurs, figure-eights, chained cycles, or complex
+closed walks are accepted, including as close matches. Direction, access,
+metrics, grade and repetition limits still apply. Unknown access is included
+by default. Legacy saved route geometry and topology remain readable.
 
 ## Workspace
 
@@ -94,14 +97,20 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 
 ## Local data and preparation
 
-Schema 7 is the prepared graph representation. A release maps selectable map
-sections to immutable SQLite artifacts. Installation references select files
-from one release, and one bounded graph reader deduplicates their identities.
+Schema 7 remains the prepared graph record representation. Preparation and
+storage use complete connected trail networks within pinned source coverage
+and explicit exclusions. Geographic selection chooses networks, rather than
+clipping their trails. The download UI shows full network extent and size
+before installation. A release maps networks to immutable SQLite artifacts;
+one bounded reader opens the selected networks.
 Saved result geometry remains readable independently of graph-format support.
 
-Developers prepare pinned source inventories, metrics, and release-wide cycle
-hints through the build/inspect/export CLI. The completed graph must pass audit
-before export. Users download and verify artifacts without source processing or
+Developers inventory pinned source topology before selecting networks. Each
+network has independent metric preparation, topology analysis, audit and
+immutable publication. Adding disconnected networks reuses unchanged artifacts;
+changed connectivity invalidates affected networks. Source-boundary truncation
+is disclosed; no coordinate-proximity connection is invented. Component counts
+are not evidence that source connectivity is complete. Users download and verify artifacts without source processing or
 graph compilation. Atomic installation changes preserve the previous coverage
 until the entire request is ready. Running and saved jobs retain referenced data.
 
