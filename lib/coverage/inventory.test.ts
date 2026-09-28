@@ -188,7 +188,7 @@ it("audits exact network members and explains forbidden access inside an overlap
     graph.putWay(way);
     for (const edge of compiledEdgesForSegment(way, 0, way.coordinates, metrics)) graph.putEdge(edge);
     const audit = await reconcileInventory(raw, graph, coverage, undefined, included, restrictions);
-    expect(audit).toMatchObject({ coveredSegments: 1, frontierCount: 0, crossingSegmentCount: 0 });
+    expect(audit).toMatchObject({ coveredSegments: 1, frontierCount: 0, crossingSegmentCount: 0, dispositions: [] });
     expect(raw.db.prepare("SELECT id,disposition,reason FROM inventory ORDER BY id").all()).toEqual([
       { id: "way/1", disposition: "installed", reason: "covered-source-segments-reconciled" },
       { id: "way/2", disposition: "pending", reason: "pending-installation" },

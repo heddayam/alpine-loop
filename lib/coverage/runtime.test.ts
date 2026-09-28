@@ -190,7 +190,7 @@ it("publishes West Cady, Pilchuck, and the formerly cut road approach",async()=>
   for(const id of [372537133,951045864,951045865,37583693,218617733])expect(published.some(row=>String(row.id).startsWith(`osm-way-${id}:`))).toBe(true);
 },30_000);
 
-it("builds pinned recipes and rejects a mismatched source digest",async()=>{
+it("builds pinned recipes, rejects a mismatched digest, and ignores reviews for other source extracts",async()=>{
   const {buildRelease}=await import("./recipe");
   const geometry=rectangle([-121.27,47.5,-121.23,47.55]);
   const recipe={schemaVersion:1 as const,geometry,sources:[{config:{schemaVersion:1 as const,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry:rectangle([-122,47,-121,49]),sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]};
@@ -198,7 +198,7 @@ it("builds pinned recipes and rejects a mismatched source digest",async()=>{
   await expect(buildRelease({...recipe,sources:[{...recipe.sources[0]!,sha256:`sha256:${"2".repeat(64)}`}]},context())).rejects.toThrow("Pinned source hash differs");
   const access=await import("@/lib/data/curated-access");
   vi.spyOn(access,"readCuratedAccessFile").mockResolvedValue({snapshot:{...source,id:"review"},restrictions:[{externalId:"way/999",accessState:"closed",reason:"reviewed closure",review:{reviewedAt:source.retrievedAt,reviewer:"fixture"}}]});
-  await expect(run(await request(-121.27,-121.23),context(),{...recipe,reviewedRegionIds:["fixture"]})).rejects.toThrow("Curated access target way/999 is missing");
+  await expect(run(await request(-121.27,-121.23),context(),{...recipe,reviewedRegionIds:["fixture"]})).resolves.toMatchObject({status:"completed"});
 });
 
 it("reads independently prepared networks through the installed graph reader",async()=>{

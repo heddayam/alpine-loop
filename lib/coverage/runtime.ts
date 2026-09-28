@@ -113,14 +113,8 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
       await raw.import(check, { onStage: async (stage) => report(`${stage}: ${source.config.dataset}`) });
       await classifyIntendedInventory(raw, supported, exclusions, check);
     }
-    for (const file of restrictions) {
-      for (const restriction of file.restrictions) {
-        const id = restriction.externalId.replace(/^way\//, "");
-        if (!raws.some(raw => raw.db.prepare("SELECT 1 FROM ways WHERE id=?").get(id))) {
-          throw new Error(`Curated access target ${restriction.externalId} is missing from topology`);
-        }
-      }
-    }
+    // Reviews span multiple regions; apply matching source identities during discovery.
+    // A target absent from the selected provider extracts is not a compiler loss.
     await report("Discovering connected trail networks");
     const networks = await inventory.discover(raws, supported, plan.geometry, restrictions, check);
     if (!networks.length) {
@@ -128,6 +122,9 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
       return { status: "completed", units, completedUnits: 0, snapshot: null };
     }
     units.push(...networks.map(network => ({ id: network.id, geometry: network.geometry, status: "pending" as const })));
+    // Source-wide diagnostics are constant for this pinned build, not per-network work.
+    const unsupportedBySource = new Map(raws.map(raw => [raw.source.id,
+      Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n)]));
     const dem = elevationCache(), results: DataRelease[] = [], receipts = path.join(root, "networks");
     await mkdir(receipts, { recursive: true });
     for (const network of networks) {
@@ -207,7 +204,7 @@ export async function run(plan: CoveragePlan, context: CoverageRunnerContext, re
         }
         const selectedRegions = new Set(metadata.searchRegions.map(region => region.namedAreaId));
         const unsupportedBuildings = raws.filter(raw => memberSources.has(raw.source.id)).reduce((count, raw) =>
-          count + Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n), 0);
+          count + (unsupportedBySource.get(raw.source.id) ?? 0), 0);
         const limitations = [...(recipe?.limitations ?? []),
           ...(unsupportedBuildings ? [`The source inventory contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in the inventory.`] : []), "Networks are complete only within the configured source snapshot and supported coverage. Missing source connections may still exist.", ...(network.sourceBoundaryLimited ? ["This network reaches a source boundary or exclusion and may connect to trails beyond it."] : [])];
         const inputFingerprint = contentId({ network: network.id, context: hash.digest("hex"), sources: metadata.sources, topology: CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION, metric: METRIC_VERSION, compiler: BUILD_VERSION, elevation: elevation.productFingerprint });

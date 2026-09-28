@@ -112,7 +112,9 @@ export async function reconcileInventory(raw: CoverageSourceStore, graph: Progre
     record.run(restricted ? "restricted" : installed === way.coordinates.length - 1 ? "installed" : "pending", restricted ? `access:${access}` : previous?.reason === "partially-intentionally-excluded" ? String(previous.reason) : installed ? "covered-source-segments-reconciled" : "pending-installation", way.externalId);
   }
   const grouped = new Map<string, { disposition: string; reason: string; count: number }>();
-  for (const row of raw.db.prepare("SELECT disposition,reason FROM inventory").iterate()) {
+  // A network audit reports exact member segments. Provider-wide dispositions
+  // live in the source inventory; do not rescan millions of unrelated rows per network.
+  if (!segmentIncluded) for (const row of raw.db.prepare("SELECT disposition,reason FROM inventory").iterate()) {
     if (++steps % 1000 === 0) await checkpoint();
     const disposition = String(row.disposition), reason = String(row.reason), key = JSON.stringify([disposition, reason]);
     const prior = grouped.get(key);
