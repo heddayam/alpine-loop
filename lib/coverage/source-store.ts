@@ -1,8 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { checkSQLiteIntegrity } from "@/lib/data/sqlite-integrity";
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
-import { createInterface } from "node:readline";
+import { dirname } from "node:path";
+import { filteredSourceLines, type SourceSelection } from "./source-filter";
 import { buildingCentroidOf, parseBuildingCentroids } from "@/lib/data/osm/buildings";
 import { parseOplTags } from "@/lib/data/osm/opl";
 import { classifyOsmWay, needsTrailContext, osmAccessState, osmFootDirection, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
@@ -20,37 +20,13 @@ function componentBounds(area: AreaGeometry, context: number): string {
     return [e+context,w-context,n+context,s-context];
   }));
 }
-const NORMALIZED_SEAL_KEY = "normalized-seal-v1";
-const UNSUPPORTED_SEAL_KEY = "unsupported-inventory-seal-v1";
-export const NORMALIZATION_VERSION = "source-normalization-v3";
-export const sourceStoreFileName = (source: SourceSnapshot) => `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}.sqlite`;
-const RAW_BATCH_PREFIX = "raw-batch-v1:";
+const SEAL_KEY = "compact-seal-v1";
+const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-const RAW_COLUMNS = { nodes: "id,lon,lat,tags", source_ways: "id,refs",
-  ways: "id,refs,tags,kind,coordinates,minx,maxx,miny,maxy", refs: "way,node",
-  relation_buildings: "id,lon,lat" } as const;
-type RawTable = keyof typeof RAW_COLUMNS;
-type RawMaxima = Record<RawTable,number>;
-type RawBatchSeal = { sourceHash:string; algorithmVersion:string; fromLine:number; toLine:number; legacyBaseline?:boolean;
-  rows: Record<RawTable,{from:number;to:number;count:number;checksum:string}> };
-type NormalizedSeal = {
-  sourceHash: string; algorithmVersion: string;
-  counts: { ways: number; taggedNodes: number; relationBuildings: number };
-  contentHash: string;
-};
-async function* sourceLines(file: string): AsyncGenerator<string> {
-  const child = spawn("osmium", ["cat", file, "-f", "opl"], { stdio: ["ignore", "pipe", "pipe"] });
-  let error = "";
-  child.stderr.on("data", (data: Buffer) => { error = (error + data.toString()).slice(-4096); });
-  const ended = new Promise<void>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`OSM import failed (${code}): ${error}`)));
-  });
-  void ended.catch(() => undefined);
-  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-  try { yield* lines; await ended; }
-  finally { child.kill(); lines.close(); await ended.catch(() => undefined); }
-}
+export const NORMALIZATION_VERSION = "source-normalization-v4";
+const selectionHash = (selection: SourceSelection) => createHash("sha256").update(JSON.stringify(selection)).digest("hex");
+export const sourceStoreFileName = (source: SourceSnapshot, selection: SourceSelection = { kind: "trails" }) =>
+  `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${selectionHash(selection).slice(0, 24)}.sqlite`;
 
 class UnsupportedBuildingGeometry extends Error {}
 
@@ -74,169 +50,80 @@ function outerRings(parts: string[][]): string[][] {
   return rings;
 }
 
-/** Source inventory precedes installation clipping. One raw record at a time, with all reference joins on disk. */
+/** Compact source data; temporary disk joins are discarded before publication. */
 export class CoverageSourceStore {
   readonly db: DatabaseSync;
   private spatialReady = false;
-  constructor(readonly path: string, readonly source: SourceSnapshot) {
+  constructor(readonly path: string, readonly source: SourceSnapshot, readonly selection: SourceSelection = { kind: "trails" }) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL,tags TEXT);
       CREATE INDEX IF NOT EXISTS nodes_location ON nodes(lon,lat);
-      CREATE TABLE IF NOT EXISTS source_ways(id TEXT PRIMARY KEY,refs TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relation_buildings(id TEXT PRIMARY KEY,lon REAL,lat REAL);
       CREATE INDEX IF NOT EXISTS relation_buildings_location ON relation_buildings(lon,lat);
       CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,refs TEXT,tags TEXT,kind TEXT,promoted INTEGER DEFAULT 0,coordinates TEXT,minx REAL,maxx REAL,miny REAL,maxy REAL);
-      CREATE INDEX IF NOT EXISTS ways_bounds ON ways(minx,maxx,miny,maxy);
-      CREATE TABLE IF NOT EXISTS refs(way TEXT,node TEXT,PRIMARY KEY(way,node));
-      CREATE INDEX IF NOT EXISTS refs_node ON refs(node,way);
       CREATE TABLE IF NOT EXISTS receipts(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS inventory(id TEXT PRIMARY KEY,disposition TEXT NOT NULL,reason TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS metrics(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,value TEXT NOT NULL);
     `);
+    const identity = `${NORMALIZATION_VERSION}:${source.contentHash}:${selectionHash(selection)}`;
     const previous = this.db.prepare("SELECT value FROM meta WHERE key='source'").get() as {value:string}|undefined;
-    if (previous && previous.value !== source.contentHash) { this.db.close(); throw new Error("Staged source fingerprint mismatch"); }
-    this.db.prepare("INSERT OR IGNORE INTO meta VALUES('source',?)").run(source.contentHash);
+    if (previous && previous.value !== identity) { this.db.close(); throw new Error("Staged source fingerprint mismatch"); }
+    this.db.prepare("INSERT OR IGNORE INTO meta VALUES('source',?)").run(identity);
   }
   receipt(key: string): string | undefined { return (this.db.prepare("SELECT value FROM receipts WHERE key=?").get(key) as {value:string}|undefined)?.value; }
   mark(key: string, value = "complete") { this.db.prepare("INSERT OR REPLACE INTO receipts VALUES(?,?)").run(key,value); }
   close() { this.db.close(); }
-  private rawMaxima(): RawMaxima {
-    return Object.fromEntries(Object.keys(RAW_COLUMNS).map((table) => [table,
-      Number((this.db.prepare(`SELECT coalesce(max(rowid),0) AS n FROM ${table}`).get() as {n:number}).n)])) as RawMaxima;
+  isTrail(externalId: string): boolean {
+    if (!this.spatialReady) throw new Error("Source requires a completed verified import");
+    return Boolean(this.db.prepare("SELECT 1 FROM ways WHERE id=? AND (kind='trail' OR promoted=1)").get(externalId.replace(/^way\//, "")));
   }
-  private async rawBatch(fromLine:number,toLine:number,from:RawMaxima,to:RawMaxima,checkpoint:()=>Promise<void>,legacyBaseline=false,verifying=false): Promise<RawBatchSeal> {
-    const rows = {} as RawBatchSeal["rows"];
-    for (const [table,columns] of Object.entries(RAW_COLUMNS) as [RawTable,string][]) {
-      const hash=createHash("sha256"); let count=0;
-      hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${table}\0${fromLine}:${toLine}\0`);
-      for (const row of this.db.prepare(`SELECT ${columns} FROM ${table} WHERE rowid>? AND rowid<=? ORDER BY rowid`).iterate(from[table],to[table]) as Iterable<Record<string,unknown>>) {
-        const record=JSON.stringify(Object.values(row)); hash.update(`${Buffer.byteLength(record)}:`); hash.update(record); count++;
-        if (count%CHECKPOINT_ROWS===0) await checkpoint();
-      }
-      rows[table]={from:from[table],to:to[table],count,checksum:`sha256:${hash.digest("hex")}`};
-      if (verifying) await checkpoint();
-    }
-    return {sourceHash:this.source.contentHash,algorithmVersion:NORMALIZATION_VERSION,fromLine,toLine,
-      ...(legacyBaseline?{legacyBaseline:true}:{}),rows};
-  }
-  private async verifyRawBatches(checkpoint:()=>Promise<void>): Promise<{committed:number;maxima:RawMaxima}> {
-    const rawCounter=this.receipt("import-lines-v2"),committed=rawCounter===undefined?0:Number(rawCounter);
-    if (!Number.isSafeInteger(committed)||committed<0) throw new Error("Staged source raw line counter is invalid");
-    let line=0,maxima=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,seen=false;
-    for (const row of this.db.prepare("SELECT key,value FROM receipts WHERE key LIKE 'raw-batch-v1:%' ORDER BY CAST(substr(key,14) AS INTEGER)").iterate() as Iterable<{key:string;value:string}>) {
-      let seal:RawBatchSeal;
-      try {seal=JSON.parse(row.value) as RawBatchSeal;} catch {throw new Error("Staged source raw batch receipt is malformed");}
-      if (seal.fromLine!==line||!Number.isSafeInteger(seal.toLine)||seal.toLine<=line||seal.toLine>committed||
-        row.key!==`${RAW_BATCH_PREFIX}${seal.toLine}`||seal.sourceHash!==this.source.contentHash||seal.algorithmVersion!==NORMALIZATION_VERSION)
-        throw new Error("Staged source raw batch line receipt failed verification");
-      const to=Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,seal.rows?.[table as RawTable]?.to])) as RawMaxima;
-      if (Object.values(to).some((value)=>!Number.isSafeInteger(value)||value<0)) throw new Error("Staged source raw batch row range is invalid");
-      const expected=await this.rawBatch(line,seal.toLine,maxima,to,checkpoint,Boolean(seal.legacyBaseline),true);
-      if (JSON.stringify(seal)!==JSON.stringify(expected)) throw new Error("Staged source raw batch records failed checksum verification");
-      line=seal.toLine;maxima=to;seen=true;
-      await checkpoint();
-    }
-    let baseline:RawBatchSeal|undefined;
-    if (!seen&&committed>0) {
-      // Old in-progress caches have only a line counter. Seal the existing
-      // committed prefix once; its history before this baseline is unverifiable.
-      maxima=this.rawMaxima();baseline=await this.rawBatch(0,committed,
-        Object.fromEntries(Object.keys(RAW_COLUMNS).map((table)=>[table,0])) as RawMaxima,maxima,checkpoint,true,true);
-      line=committed;
-    }
-    if (line!==committed||Object.entries(this.rawMaxima()).some(([table,max])=>max!==maxima[table as RawTable]))
-      throw new Error("Staged source raw batch counter or row range failed verification");
-    if (committed>0) await checkpoint();
-    if (baseline) this.mark(`${RAW_BATCH_PREFIX}${committed}`,JSON.stringify(baseline));
-    return {committed,maxima};
-  }
-  private async normalizedSeal(checkpoint:()=>Promise<void>): Promise<NormalizedSeal> {
+  private async seal(checkpoint:()=>Promise<void>): Promise<string> {
     await checkpoint();
     await checkSQLiteIntegrity(this.path, this.db, checkpoint);
-    await checkpoint();
-    // Derived spatial state is rebuilt with the mandatory seal scan. A paused
-    // or corrupt cache cannot leave a trusted but incomplete persisted index.
     this.db.exec("DROP TABLE IF EXISTS temp.ways_spatial; CREATE VIRTUAL TABLE temp.ways_spatial USING rtree(id,minx,maxx,miny,maxy)");
     const spatial = this.db.prepare("INSERT INTO ways_spatial VALUES(?,?,?,?,?)");
-    const hash = createHash("sha256");
-    hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0`);
-    const counts = { ways: 0, taggedNodes: 0, relationBuildings: 0 };
-    const scan = async (kind: keyof typeof counts, sql: string) => {
-      hash.update(`${kind}\0`);
-      // Bound TEMP journaling as well as pause latency; savepoints also nest
-      // inside the first import's source-seal transaction.
-      const indexing = kind === "ways";
-      if (indexing) this.db.exec("SAVEPOINT coverage_spatial_batch");
+    const hash = createHash("sha256").update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${selectionHash(this.selection)}\0`);
+    const tables = {
+      ways: "SELECT rowid AS spatialRow,id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id",
+      nodes: "SELECT id,lon,lat,tags FROM nodes ORDER BY id",
+      buildings: "SELECT id,lon,lat FROM relation_buildings ORDER BY id",
+      unsupported: "SELECT id,disposition,reason FROM inventory ORDER BY id",
+    };
+    for (const [table, sql] of Object.entries(tables)) {
+      hash.update(`${table}\0`);
+      let count = 0;
+      const indexing = table === "ways";
+      if (indexing) this.db.exec("SAVEPOINT source_spatial");
       try {
         for (const row of this.db.prepare(sql).iterate() as Iterable<Record<string,unknown>>) {
           const { spatialRow, ...values } = row;
-          if (kind === "ways") spatial.run(Number(spatialRow), Number(row.minx), Number(row.maxx), Number(row.miny), Number(row.maxy));
+          if (indexing) spatial.run(Number(spatialRow), Number(row.minx), Number(row.maxx), Number(row.miny), Number(row.maxy));
           const record = JSON.stringify(Object.values(values));
-          hash.update(`${Buffer.byteLength(record)}:`);
-          hash.update(record);
-          counts[kind]++;
-          if (counts[kind]%CHECKPOINT_ROWS===0) {
+          hash.update(`${Buffer.byteLength(record)}:${record}`);
+          if (++count % CHECKPOINT_ROWS === 0) {
             await checkpoint();
-            if (indexing) this.db.exec("RELEASE coverage_spatial_batch; SAVEPOINT coverage_spatial_batch");
+            if (indexing) this.db.exec("RELEASE source_spatial; SAVEPOINT source_spatial");
           }
         }
-        hash.update("\0");
-        await checkpoint();
       } catch (error) {
-        if (indexing) this.db.exec("ROLLBACK TO coverage_spatial_batch");
+        if (indexing) this.db.exec("ROLLBACK TO source_spatial");
         throw error;
       } finally {
-        if (indexing) this.db.exec("RELEASE coverage_spatial_batch");
+        if (indexing) this.db.exec("RELEASE source_spatial");
       }
-    };
-    // These are the immutable rows read by ways(), evidence(), and buildings().
-    // Metrics and inventory dispositions are intentionally mutable and excluded.
-    await scan("ways", "SELECT rowid AS spatialRow,id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id");
-    await scan("taggedNodes", "SELECT id,lon,lat,tags FROM nodes WHERE tags!='' ORDER BY id");
-    await scan("relationBuildings", "SELECT id,lon,lat FROM relation_buildings ORDER BY id");
-    return { sourceHash: this.source.contentHash, algorithmVersion: NORMALIZATION_VERSION, counts, contentHash: `sha256:${hash.digest("hex")}` };
-  }
-  private async unsupportedSeal(checkpoint:()=>Promise<void>): Promise<string> {
-    const hash=createHash("sha256"); let count=0;
-    hash.update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0unsupported-inventory\0`);
-    for (const row of this.db.prepare("SELECT id,reason FROM inventory WHERE disposition='unsupported' ORDER BY id").iterate() as Iterable<Record<string,unknown>>) {
-      const record=JSON.stringify(Object.values(row)); hash.update(`${Buffer.byteLength(record)}:`); hash.update(record);
-      if (++count%CHECKPOINT_ROWS===0) await checkpoint();
-    }
-    await checkpoint();
-    return JSON.stringify({sourceHash:this.source.contentHash,algorithmVersion:NORMALIZATION_VERSION,count,contentHash:`sha256:${hash.digest("hex")}`});
-  }
-  private async verifyCompletedImport(checkpoint:()=>Promise<void>): Promise<void> {
-    const expected = await this.normalizedSeal(checkpoint);
-    const saved = this.receipt(NORMALIZED_SEAL_KEY);
-    if (saved) {
-      let actual: NormalizedSeal;
-      try { actual = JSON.parse(saved) as NormalizedSeal; }
-      catch { throw new Error("Staged source normalized seal is malformed"); }
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("Staged source normalized records failed seal verification");
-    }
-    const unsupported=await this.unsupportedSeal(checkpoint),savedUnsupported=this.receipt(UNSUPPORTED_SEAL_KEY);
-    if (savedUnsupported && savedUnsupported!==unsupported) throw new Error("Staged source unsupported inventory failed seal verification");
-    if (!saved || !savedUnsupported) {
-      // Older completed caches predate these seals. Certify both baselines
-      // atomically only after every verification scan and checkpoint succeeds.
+      hash.update("\0");
       await checkpoint();
-      this.db.exec("BEGIN IMMEDIATE");
-      try {
-        if (!saved) this.mark(NORMALIZED_SEAL_KEY,JSON.stringify(expected));
-        if (!savedUnsupported) this.mark(UNSUPPORTED_SEAL_KEY,unsupported);
-        this.db.exec("COMMIT");
-      } catch (error) { this.db.exec("ROLLBACK"); throw error; }
     }
+    return hash.digest("hex");
   }
   private async promoteContextualWays(checkpoint:()=>Promise<void>): Promise<void> {
     this.db.exec(`CREATE TEMP TABLE IF NOT EXISTS promotion_frontier(node TEXT PRIMARY KEY) WITHOUT ROWID;
       CREATE TEMP TABLE IF NOT EXISTS promotion_found(way TEXT PRIMARY KEY) WITHOUT ROWID;
       DELETE FROM promotion_frontier; DELETE FROM promotion_found;
       UPDATE ways SET promoted=1 WHERE kind='trail' AND promoted=0`);
-    // Seed from every already promoted way so a pause after any wave can resume.
+    // Walk ambiguous footway components from explicit trail seeds using disk-backed frontiers.
     const maxRow=Number((this.db.prepare("SELECT coalesce(max(rowid),0) AS n FROM ways").get() as {n:number}).n);
     const seed=this.db.prepare(`INSERT OR IGNORE INTO promotion_frontier
       SELECT r.node FROM ways w JOIN refs r ON r.way=w.id WHERE w.rowid>? AND w.rowid<=? AND w.promoted=1`);
@@ -280,119 +167,109 @@ export class CoverageSourceStore {
     this.db.exec("DELETE FROM promotion_frontier; DELETE FROM promotion_found");
   }
   async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number;
-    onStage?: (stage:"checkpoint-verification"|"context-promotion"|"integrity-check")=>Promise<void> } = {}) {
+    onStage?: (stage:string)=>Promise<void> } = {}) {
     this.spatialReady = false;
-    if (this.receipt("import-v2")) { await options.onStage?.("integrity-check"); await this.verifyCompletedImport(checkpoint); this.spatialReady = true; return; }
-    if (this.receipt("import-lines-v2")) await options.onStage?.("checkpoint-verification");
-    const verified=await this.verifyRawBatches(checkpoint);
-    if (!this.receipt("raw-import-v2")) {
-      const putNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
-      const getNode = this.db.prepare("SELECT * FROM nodes WHERE id=?");
-      const putSourceWay = this.db.prepare("INSERT OR REPLACE INTO source_ways VALUES(?,?)");
-      const getSourceWay = this.db.prepare("SELECT refs FROM source_ways WHERE id=?");
-      const putWay = this.db.prepare("INSERT OR REPLACE INTO ways(id,refs,tags,kind,coordinates,minx,maxx,miny,maxy) VALUES(?,?,?,?,?,?,?,?,?)");
-      const putRef = this.db.prepare("INSERT OR IGNORE INTO refs VALUES(?,?)");
-      const inventory = this.db.prepare("INSERT OR REPLACE INTO inventory VALUES(?,?,?)");
-      const committed = verified.committed;
-      let sealedLine=committed, startRows=verified.maxima;
-      const batchSize = options.batchSize ?? 10_000;
-      if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid import batch size");
-      const coordinates = (refs: string[]) => refs.map((ref): [number, number] => {
-        const node = getNode.get(ref) as Node | undefined;
-        if (!node) throw new Error(`Source references missing node/${ref}`);
-        return [node.lon, node.lat];
-      });
-      let count = 0;
-      this.db.exec("BEGIN");
-      try {
-        for await (const line of options.lines ?? sourceLines(this.source.localPath)) {
-          if (++count <= committed) continue;
-          const fields = line.split(" "), id = fields[0]!.slice(1), type = line[0];
-          const field = (prefix: string) => fields.find((value) => value.startsWith(prefix))?.slice(1) ?? "";
-          if (type === "n") {
-            const lon = Number(field("x")), lat = Number(field("y"));
-            if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
-            putNode.run(id, lon, lat, field("T"));
-          } else if (type === "w") {
-            const tags = parseOplTags(field("T"));
-            const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
-            putSourceWay.run(id, JSON.stringify(refs));
-            const kind = classifyOsmWay(tags), evidence = osmPortalEvidenceKinds(tags);
-            const retained = kind || tags.building || evidence.length;
-            inventory.run(`way/${id}`, kind === "trail" ? "candidate" : retained ? "context" : "excluded",
-              kind === "trail" ? `access:${osmAccessState(tags)}` : needsTrailContext(tags) ? "unresolved-footway" : kind ?? (tags.building ? "building" : evidence.length ? "portal-evidence" : "non-hiking-way"));
-            if (retained) {
-              if (refs.length < 2) throw new Error(`Source way/${id} has fewer than two nodes`);
-              const coords = coordinates(refs);
-              const bounds = coords.reduce(([w,s,e,n], [x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]);
-              putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), needsTrailContext(tags) ? "ambiguous" : kind ?? (tags.building ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
-              if (kind) for (const ref of refs) putRef.run(id, ref);
-            }
-          } else if (type === "r") {
-            const tags = parseOplTags(field("T"));
-            if (tags.building && tags.building !== "no" && tags.type === "multipolygon") {
-              try {
-                const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
-                const parts = outer.map((member) => {
-                  const wayId = member.slice(1).split("@")[0]!;
-                  const way = getSourceWay.get(wayId) as { refs: string } | undefined;
-                  if (!way) throw new UnsupportedBuildingGeometry(`Building relation/${id} references missing way/${wayId}`);
-                  return JSON.parse(way.refs) as string[];
-                });
-                const rings = outerRings(parts);
-                // Match the existing building normalizer: each polygon contributes its outer-ring centroid.
-                const centers = rings.map((ring) => {
-                  const [center] = parseBuildingCentroids(JSON.stringify({ geometry: { type: "Polygon", coordinates: [coordinates(ring)] } }));
-                  if (!center) throw new UnsupportedBuildingGeometry(`Invalid building relation/${id}`);
-                  return center;
-                });
-                centers.forEach((center,index) => this.db.prepare("INSERT OR REPLACE INTO relation_buildings VALUES(?,?,?)").run(`${id}:${index}`, ...center));
-                inventory.run(`relation/${id}`, "context", "building");
-              } catch (error) {
-                if (!(error instanceof UnsupportedBuildingGeometry)) throw error;
-                inventory.run(`relation/${id}`, "unsupported", `building-geometry:${error.message}`);
-              }
-            } else if (tags.name && (tags.boundary || tags.protect_class || tags.leisure === "nature_reserve" || tags.leisure === "park")) {
-              inventory.run(`relation/${id}`, "excluded", "named-area-geometry-not-imported");
-            }
-          }
-          if (count % batchSize === 0) {
-            const endRows=this.rawMaxima();
-            this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(await this.rawBatch(sealedLine,count,startRows,endRows,checkpoint)));
-            this.mark("import-lines-v2", String(count));
-            this.db.exec("COMMIT");
-            sealedLine=count;startRows=endRows;
-            await checkpoint();
-            this.db.exec("BEGIN");
-          }
-        }
-        if (count < committed) throw new Error("Source stream is shorter than its committed checkpoint");
-        if (count>sealedLine) {
-          const endRows=this.rawMaxima();
-          this.mark(`${RAW_BATCH_PREFIX}${count}`,JSON.stringify(await this.rawBatch(sealedLine,count,startRows,endRows,checkpoint)));
-        }
-        this.mark("import-lines-v2", String(count));
-        this.mark("raw-import-v2");
-        this.db.exec("COMMIT");
-        await checkpoint();
-      } catch (cause) { if (this.db.isTransaction) this.db.exec("ROLLBACK"); throw cause; }
+    if (this.receipt(COMPLETE_KEY)) {
+      await options.onStage?.("integrity-check");
+      if (this.receipt(SEAL_KEY) !== await this.seal(checkpoint)) throw new Error("Staged source normalized records failed seal verification");
+      this.spatialReady = true;
+      return;
     }
-    await options.onStage?.("context-promotion");
-    await this.promoteContextualWays(checkpoint);
-    this.db.exec(`UPDATE inventory SET disposition='candidate',reason='connected-trail-footway'
-      WHERE id IN (SELECT 'way/'||id FROM ways WHERE kind='ambiguous' AND promoted=1)`);
-    await options.onStage?.("integrity-check");
-    this.db.exec("BEGIN IMMEDIATE");
+    if (this.receipt(SEAL_KEY)) throw new Error("Staged source has a seal without a completion marker");
+    const batchSize = options.batchSize ?? CHECKPOINT_ROWS;
+    if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid import batch size");
+    // Incomplete compact imports are disposable. No raw-prefix checkpoint can
+    // certify an interrupted stream, so restart the filtered input atomically.
+    this.db.exec(`DELETE FROM ways; DELETE FROM nodes; DELETE FROM relation_buildings; DELETE FROM inventory; DELETE FROM receipts;
+      CREATE TEMP TABLE import_nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL);
+      CREATE TEMP TABLE source_ways(id TEXT PRIMARY KEY,refs TEXT NOT NULL);
+      CREATE TEMP TABLE refs(way TEXT,node TEXT,PRIMARY KEY(way,node));
+      CREATE INDEX temp.refs_node ON refs(node,way);`);
+    const putNode = this.db.prepare("INSERT OR REPLACE INTO import_nodes VALUES(?,?,?)");
+    const getNode = this.db.prepare("SELECT * FROM import_nodes WHERE id=?");
+    const putContextNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
+    const putSourceWay = this.db.prepare("INSERT OR REPLACE INTO source_ways VALUES(?,?)");
+    const getSourceWay = this.db.prepare("SELECT refs FROM source_ways WHERE id=?");
+    const putWay = this.db.prepare("INSERT OR REPLACE INTO ways(id,refs,tags,kind,coordinates,minx,maxx,miny,maxy) VALUES(?,?,?,?,?,?,?,?,?)");
+    const putRef = this.db.prepare("INSERT OR IGNORE INTO refs VALUES(?,?)");
+    const coordinates = (refs: string[]) => refs.map((ref): [number, number] => {
+      const node = getNode.get(ref) as Node | undefined;
+      if (!node) throw new Error(`Source references missing node/${ref}`);
+      return [node.lon, node.lat];
+    });
+    const cleanupJoins = () => this.db.exec(`DROP TABLE IF EXISTS temp.import_nodes; DROP TABLE IF EXISTS temp.source_ways; DROP TABLE IF EXISTS temp.refs;
+      DROP TABLE IF EXISTS temp.promotion_frontier; DROP TABLE IF EXISTS temp.promotion_found;`);
+    const context = this.selection.kind === "context";
+    let count = 0;
+    this.db.exec("BEGIN");
     try {
-      const normalized=await this.normalizedSeal(checkpoint);
-      const unsupported=await this.unsupportedSeal(checkpoint);
-      await checkpoint();
-      this.mark(NORMALIZED_SEAL_KEY, JSON.stringify(normalized));
-      this.mark(UNSUPPORTED_SEAL_KEY, unsupported);
-      this.mark("import-v2");
+      for await (const line of options.lines ?? filteredSourceLines(this.source.localPath, dirname(this.path), this.selection, checkpoint, options.onStage)) {
+        const fields = line.split(" "), id = fields[0]!.slice(1), type = line[0];
+        const field = (prefix: string) => fields.find((value) => value.startsWith(prefix))?.slice(1) ?? "";
+        if (type === "n") {
+          const lon = Number(field("x")), lat = Number(field("y"));
+          if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
+          putNode.run(id, lon, lat);
+          const tags = parseOplTags(field("T"));
+          if (context && (tags.building || osmPortalEvidenceKinds(tags).length)) putContextNode.run(id, lon, lat, field("T"));
+        } else if (type === "w") {
+          const tags = parseOplTags(field("T"));
+          const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
+          if (context) putSourceWay.run(id, JSON.stringify(refs));
+          const kind = classifyOsmWay(tags), ambiguous = needsTrailContext(tags);
+          const retained = context ? kind || tags.building || osmPortalEvidenceKinds(tags).length : kind === "trail" || ambiguous;
+          if (retained) {
+            if (refs.length < 2) throw new Error(`Source way/${id} has fewer than two nodes`);
+            const coords = coordinates(refs);
+            const bounds = coords.reduce(([w,s,e,n], [x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]);
+            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), ambiguous ? "ambiguous" : kind ?? (tags.building ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
+            if (!context) for (const ref of refs) putRef.run(id, ref);
+          }
+        } else if (type === "r" && context) {
+          const tags = parseOplTags(field("T"));
+          if (tags.building && tags.building !== "no" && tags.type === "multipolygon") {
+            try {
+              const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
+              const parts = outer.map((member) => {
+                const wayId = member.slice(1).split("@")[0]!;
+                const way = getSourceWay.get(wayId) as { refs: string } | undefined;
+                if (!way) throw new UnsupportedBuildingGeometry(`Building relation/${id} references missing way/${wayId}`);
+                return JSON.parse(way.refs) as string[];
+              });
+              const centers = outerRings(parts).map((ring) => {
+                const [center] = parseBuildingCentroids(JSON.stringify({ geometry: { type: "Polygon", coordinates: [coordinates(ring)] } }));
+                if (!center) throw new UnsupportedBuildingGeometry(`Invalid building relation/${id}`);
+                return center;
+              });
+              centers.forEach((center,index) => this.db.prepare("INSERT OR REPLACE INTO relation_buildings VALUES(?,?,?)").run(`${id}:${index}`, ...center));
+            } catch (error) {
+              if (!(error instanceof UnsupportedBuildingGeometry)) throw error;
+              this.db.prepare("INSERT OR REPLACE INTO inventory VALUES(?,'unsupported',?)").run(`relation/${id}`, `building-geometry:${error.message}`);
+            }
+          }
+        }
+        if (++count % batchSize === 0) await checkpoint();
+      }
+      if (!context) {
+        await options.onStage?.("context-promotion");
+        await this.promoteContextualWays(checkpoint);
+        this.db.exec("DELETE FROM ways WHERE promoted=0");
+      }
       this.db.exec("COMMIT");
-    } catch (error) { this.db.exec("ROLLBACK"); throw error; }
-    this.spatialReady = true;
+      cleanupJoins();
+      await options.onStage?.("integrity-check");
+      const seal = await this.seal(checkpoint);
+      this.db.exec("BEGIN");
+      this.mark(SEAL_KEY, seal);
+      this.mark(COMPLETE_KEY);
+      this.db.exec("COMMIT; PRAGMA wal_checkpoint(TRUNCATE)");
+      this.spatialReady = true;
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      cleanupJoins();
+    }
   }
   private *nearbyWays(area: AreaGeometry, contextDegrees=0.01): Generator<Row> {
     if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
@@ -407,6 +284,7 @@ export class CoverageSourceStore {
       ORDER BY w.id`).iterate(componentBounds(area,contextDegrees)) as Iterable<Row>;
   }
   private *nearbyPoints(table: "nodes" | "relation_buildings", area: AreaGeometry): Generator<Node> {
+    if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
     yield* this.db.prepare(`SELECT p.* FROM ${table} p WHERE p.rowid IN (
       SELECT candidate.rowid FROM json_each(?) b CROSS JOIN ${table} candidate
       WHERE candidate.lon BETWEEN json_extract(b.value,'$[1]') AND json_extract(b.value,'$[0]')
