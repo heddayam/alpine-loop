@@ -10,7 +10,8 @@ type Sources=PackManifest["sources"];
 
 /** Fresh builds resolve committed search selectors from pinned inputs, never installed packs. */
 export async function preparedNamedAreas(input: { geometry: AreaGeometry; sources: Sources; snapshots: readonly import("@/lib/data/adapters").SourceSnapshot[]; preparationRoot: string; regionIds?: readonly string[] }) {
-  const {readFile,mkdir}=await import("node:fs/promises");
+  const {readFile,mkdir,rm}=await import("node:fs/promises");
+  const {randomUUID}=await import("node:crypto");
   const path=await import("node:path");
   const {readOsmSourceConfig}=await import("@/lib/data/osm/source");
   const {prepareOsmNamedAreas}=await import("@/lib/data/osm/named-areas");
@@ -31,9 +32,18 @@ export async function preparedNamedAreas(input: { geometry: AreaGeometry; source
     if(ids.length) {
       const identity=contentId({source:snapshot.contentHash,ids});
       const root=path.join(input.preparationRoot,"search-regions",identity); await mkdir(root,{recursive:true});
-      const regionPath=path.join(root,"reviewed.osm.pbf");
-      await runCommand("osmium",["getid","--add-referenced","--overwrite","--output",regionPath,snapshot.localPath,...ids]);
-      areas.push(...await prepareOsmNamedAreas(snapshot,{regionPath,identity},{preparationRoot:root}));
+      const regionPath=path.join(root,`.reviewed-${randomUUID()}.osm.pbf`);
+      let extracted=false;
+      try {
+        areas.push(...await prepareOsmNamedAreas(snapshot,{regionPath,identity},{preparationRoot:root,runner:async(command,args)=>{
+          // The adapter invokes its runner only after a normalized-cache miss.
+          if(!extracted) {
+            await runCommand("osmium",["getid","--add-referenced","--overwrite","--output",regionPath,snapshot.localPath,...ids]);
+            extracted=true;
+          }
+          return runCommand(command,args);
+        }}));
+      } finally {await rm(regionPath,{force:true});}
     }
     const selected=validateSearchRegions(review,areas);
     for(const item of selected) {
