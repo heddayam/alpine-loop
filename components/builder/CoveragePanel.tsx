@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { areaBounds } from "@/lib/graph/geometry";
 import type { CoverageOverlay } from "../map/HikeMap";
 import { processingCoverage, useCoverage } from "./useCoverage";
 
 function bytes(value: number) { return value < 1024 * 1024 ? `${Math.round(value / 1024)} KiB` : `${(value / 1024 / 1024).toFixed(1)} MiB`; }
 
-export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose }: {
+export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose, onShowArea }: {
   open: boolean; selected: string[]; onClose?: () => void;
-  onChanged?: () => void; onMapChange?: (overlay: CoverageOverlay) => void;
+  onChanged?: () => void; onShowArea?: () => void; onMapChange?: (overlay: CoverageOverlay) => void;
 }) {
   const resource = useCoverage(open);
+  const [focus, setFocus] = useState<Pick<CoverageOverlay, "focus" | "focusRevision">>();
   const { catalog, busy, error } = resource;
   const release = catalog?.release, installed = catalog?.installed;
   const previous = useRef<string | null | undefined>(undefined);
@@ -22,10 +23,12 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
     previous.current = next;
   }, [catalog, onChanged]);
   const sections = release?.sections ?? [];
+  const unit = release?.partitioning === "connected-networks" ? "network" : "section";
   const installedIds = new Set(installed?.sectionIds ?? []);
   const additionalCount = sections.filter(({ id }) => !installedIds.has(id)).length;
   const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id));
   const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
+  const selectedSections = sections.filter(({ id }) => selectedIds.has(id));
   const desired = [...new Set([...installedIds, ...selectedIds])].sort();
   const removable = [...selectedIds].filter((id) => installedIds.has(id));
   const updating = Boolean(installed && release && installed.releaseId !== release.id);
@@ -36,10 +39,22 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
     features: { type: "FeatureCollection", features: [...(installed && unavailableInstalled.length ? [{ type: "Feature", geometry: installed.geometry, properties: { status: "installed" } }] : []), ...sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
       properties: { sectionId: section.id, status: selectedIds.has(section.id) ? "selected" : downloading.has(section.id) ? "downloading" : installedIds.has(section.id) ? "installed" : "available" } }))] },
     focus: release ? areaBounds(release.geometry) : installed ? areaBounds(installed.geometry) : null,
+    ...focus,
   });
   useEffect(() => { onMapChange?.(JSON.parse(mapKey)); }, [mapKey, onMapChange]);
   const selectedArtifacts = new Set(sections.filter(({id}) => updating ? desired.includes(id) : selectedIds.has(id)).flatMap(({artifactIds}) => artifactIds));
-  const selectedBytes = release?.artifacts.filter(({id}) => selectedArtifacts.has(id) && !(installed?.releaseId === release?.id && installed.artifactIds.includes(id))).reduce((sum, file) => sum + file.compressedBytes, 0) ?? 0;
+  const selectedFiles = release?.artifacts.filter(({ id }) => selectedArtifacts.has(id)) ?? [];
+  const selectedBytes = selectedFiles.filter(({ id }) => !installed?.artifactIds.includes(id)).reduce((sum, file) => sum + file.compressedBytes, 0);
+  const installedBytes = selectedFiles.reduce((sum, file) => sum + file.bytes, 0);
+  const showSelectedArea = () => {
+    const bounds = selectedSections.reduce<CoverageOverlay["focus"]>((union, { geometry }) => {
+      const [w,s,e,n] = areaBounds(geometry);
+      return union ? [Math.min(union[0],w), Math.min(union[1],s), Math.max(union[2],e), Math.max(union[3],n)] : [w,s,e,n];
+    }, null);
+    if (!bounds) return;
+    setFocus({ focus: bounds, focusRevision: (focus?.focusRevision ?? 0) + 1 });
+    onShowArea?.();
+  };
   const activeJobs = catalog?.jobs.filter((job) => processingCoverage(job) || ["paused", "failed"].includes(job.status)) ?? [];
   return <aside className="builder-panel coverage-panel" hidden={!open} aria-labelledby="coverage-title">
     <div className="builder-scroll coverage-content">
@@ -50,15 +65,17 @@ export function CoveragePanel({ open, selected, onChanged, onMapChange, onClose 
       {catalog ? <>
         <div className="coverage-counts" role="status"><span><i className="coverage-swatch coverage-available" />{additionalCount} available</span><span><i className="coverage-swatch coverage-installed" />{installedIds.size} installed</span></div>
         {release ? <>
-          <div className="coverage-selection" role="status">{selectedIds.size} {selectedIds.size === 1 ? "section" : "sections"} selected · {bytes(selectedBytes)}</div>
+          <div className="coverage-selection" role="status">{selectedIds.size} {unit}{selectedIds.size === 1 ? "" : "s"} selected · up to {bytes(selectedBytes)} download · {bytes(installedBytes)} installed size</div>
+          {selectedSections.some(({ network }) => network?.sourceBoundaryLimited) ? <span className="coverage-selection">Selected network reaches the source boundary; trails may continue beyond it.</span> : null}
           <div className="action-row">
+            <button type="button" className="btn" disabled={!selectedIds.size} onClick={showSelectedArea}>Show selected area</button>
             <button type="button" className="btn" disabled={busy || (updating ? unavailableInstalled.length > 0 : !downloadable)} onClick={() => request && void resource.start(request)}>{updating ? "Update" : "Download"}</button>
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
-            {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable sections ({unavailableInstalled.length})</button> : null}
+            {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable {unit}s ({unavailableInstalled.length})</button> : null}
           </div>
         </> : !catalog.error ? <span>No catalog configured</span> : null}
         {activeJobs.length ? <section className="coverage-downloads" aria-label="Active downloads">{activeJobs.map((job) => <article key={job.id} className="coverage-download" aria-label={`Download ${job.id}`}>
-          <header><strong>{job.sectionIds.length} {job.sectionIds.length === 1 ? "section" : "sections"}</strong><span>{job.status}</span></header>
+          <header><strong>{job.sectionIds.length} {unit}{job.sectionIds.length === 1 ? "" : "s"}</strong><span>{job.status}</span></header>
           <div role="status">{bytes(job.downloadedBytes)} / {bytes(job.totalBytes)}</div>
           <progress value={job.downloadedBytes} max={Math.max(1,job.totalBytes)} aria-label="Download progress" />
           {job.error ? <div className="error-state">{job.error}</div> : null}

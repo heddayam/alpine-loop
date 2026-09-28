@@ -28,7 +28,6 @@ export type BuilderValues = {
   maximumRepeatedTrailPct: string;
   maximumSharedStemEnabled: boolean;
   maximumSharedStemMiles: string;
-  allowMultiCycle: boolean;
   distanceMiles: RangeField;
   elevationGainFeet: RangeField;
   maximumElevationFeet: RangeField;
@@ -67,7 +66,6 @@ export function builderValues(settings: AppSettingsV1, draft: BuilderDraft): Bui
     maximumRepeatedTrailPct: draft.maximumRepeatedTrailPct ?? String(settings.loopOptions.maximumRepeatedTrailPct),
     maximumSharedStemEnabled: settings.loopOptions.sharedApproachEnabled,
     maximumSharedStemMiles: draft.maximumSharedStemMiles ?? String(settings.loopOptions.maximumSharedApproachMiles),
-    allowMultiCycle: settings.loopOptions.allowMultiCycle,
   };
 }
 

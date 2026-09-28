@@ -12,7 +12,7 @@ it("downloads selected sections directly without a preview request", async () =>
   const fetcher = vi.fn(async (...[url]: [string, RequestInit?]) => response(url.endsWith("/jobs") ? job : catalog));
   vi.stubGlobal("fetch", fetcher);
   render(<CoveragePanel {...props} />);
-  expect(await screen.findByText("1 section selected · 256 KiB")).toBeVisible();
+  expect(await screen.findByText("1 section selected · up to 256 KiB download · 1.0 MiB installed size")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Download" }));
   await screen.findByRole("button", { name: "Pause" });
   expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify(request) }));
@@ -91,7 +91,7 @@ it("shows concise available and installed counts for map selection", async () =>
   const view = render(<CoveragePanel {...props} selected={["next"]} onMapChange={onMapChange} />);
   expect(await screen.findByText("2 available")).toBeVisible();
   expect(screen.getByText("1 installed")).toBeVisible();
-  expect(screen.getByText("1 section selected · 0 KiB")).toBeVisible();
+  expect(screen.getByText("1 section selected · up to 0 KiB download · 1.0 MiB installed size")).toBeVisible();
   expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
   expect(onMapChange.mock.lastCall![0].focus).toEqual([-123,46,-120,49]);
   expect(view.container.querySelector("details, summary, select, p")).toBeNull();
@@ -114,4 +114,27 @@ it("keeps release caveats and completed history out of the panel", async () => {
   expect(screen.queryByText(limitation)).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Active downloads" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();
+});
+
+
+it("previews complete network extents and deduplicated sizes while reusing immutable installed files", async () => {
+  const base = catalog.release!;
+  const geometry = { type: "Polygon" as const, coordinates: [[[-124,45],[-119,45],[-119,50],[-124,50],[-124,45]]] };
+  const onMapChange = vi.fn(), onShowArea = vi.fn();
+  const nextArtifact = { ...base.artifacts[0], id: "b".repeat(64), path: `objects/${"b".repeat(64)}.sqlite.gz`, graphId: "next" };
+  const network = { nodeCount: 4, physicalEdgeCount: 4, loopBlockCount: 1, sourceBoundaryLimited: true };
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog,
+    installed: { ...installation, releaseId: "older" },
+    release: { ...base, partitioning: "connected-networks", artifacts: [{ ...base.artifacts[0], graphId: "first" }, nextArtifact], sections: [
+      { ...base.sections[0], network }, { id: "next", geometry, artifactIds: [nextArtifact.id], network: { ...network, sourceBoundaryLimited: false } },
+    ] },
+  })));
+  render(<CoveragePanel {...props} selected={["section", "next", "next"]} onMapChange={onMapChange} onShowArea={onShowArea} />);
+  expect(await screen.findByText("2 networks selected · up to 256 KiB download · 2.0 MiB installed size")).toBeVisible();
+  expect(screen.getByText(/reaches the source boundary/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Show selected area" }));
+  expect(onMapChange.mock.lastCall![0]).toMatchObject({ focus: [-124,45,-119,50], focusRevision: 1 });
+  expect(onShowArea).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: "Show selected area" }));
+  expect(onMapChange.mock.lastCall![0].focusRevision).toBe(2);
 });

@@ -18,7 +18,7 @@ vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filt
 }) => <div aria-label="Mock map"><output aria-label="Map selection">{JSON.stringify({ selectedRouteId, selectedSegmentId })}</output>{routes.map((route) => <button key={route.id} onClick={() => onRouteSelect(route.id)}>Open map route {route.id}</button>)}{routes[0] ? <button onClick={() => onStartSelect(routeStart(routes[0]!).key)}>Select fixture trailhead</button> : null}<button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess })}</output></div> }));
 const appSettings = DEFAULT_APP_SETTINGS;
 const catalog = { regions: [{ id: "castle-rock", name: "Castle Rock" }, { id: "sunol", name: "Sunol" }], coverages: [{ type: "Polygon", coordinates: [[[-122.2,37.1],[-122.1,37.1],[-122.1,37.2],[-122.2,37.2],[-122.2,37.1]]] }], display: { center: [-122.15,37.15], zoom: 12 } };
-const request: SearchIntent = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } };
+const request: SearchIntent = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35 }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } };
 const generatedRoute: SearchRoute = {
   regionLabel: "Santa Cruz Mountains",
   id: "exact-route", geometry: { type: "LineString", coordinates: [[-122.16, 37.16], [-122.12, 37.19], [-122.16, 37.16]] },
@@ -279,12 +279,12 @@ describe("geographic workspace", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Settings" })).toBeEnabled());
     (screen.getByText("Loop options").closest("details") as HTMLDetailsElement).open = true;
     fireEvent.click(screen.getByRole("checkbox", { name: "Grade" }));
-    fireEvent.click(screen.getByRole("switch", { name: /Allow figure-eights/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Shared approach" }));
     expect(screen.getByRole("checkbox", { name: "Grade" })).toBeChecked();
-    expect(screen.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Shared approach" })).toBeChecked();
     await waitFor(() => expect(writes).toHaveLength(1));
     await act(async () => firstSave.resolve());
-    await waitFor(() => expect(stored).toMatchObject({ gradeConstraintEnabled: true, loopOptions: { allowMultiCycle: false } }));
+    await waitFor(() => expect(stored).toMatchObject({ gradeConstraintEnabled: true, loopOptions: { sharedApproachEnabled: true } }));
     expect(writes).toHaveLength(2);
   });
 

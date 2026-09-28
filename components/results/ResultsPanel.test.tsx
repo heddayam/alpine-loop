@@ -97,7 +97,7 @@ function results(overrides: ResultsOverrides = {}): RouteResults {
   return {
     job: {
       version: 2, id: "3d594650-3436-4f8b-a0e8-38d13fc148ca", status: "completed",
-      request: { area: { mode: "drawn-area", bbox: [-122.2, 37.1, -122.1, 37.2] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } },
+      request: { area: { mode: "drawn-area", bbox: [-122.2, 37.1, -122.1, 37.2] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35 }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } },
       area: { label: "Drawn area" },
       progress: { eligibleAccessPointCount: 1, processedAccessPointCount: 1, exactRouteCount: exact.length, nearMissRouteCount: nearMisses.length, truncatedAccessPointCount: 0, elapsedMs: 100 },
       partial: false, stale: false, createdAt: "2026-08-06T00:00:00Z", updatedAt: "2026-08-06T00:00:01Z",

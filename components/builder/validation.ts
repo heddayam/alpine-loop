@@ -40,7 +40,6 @@ export function parseSearchCriteria(values: BuilderValues): ValidationResult {
     closedRoute: {
       maximumRepeatedTrailPct,
       ...(values.maximumSharedStemEnabled ? { maximumSharedStemMiles } : {}),
-      allowMultiCycle: values.allowMultiCycle,
     },
     distanceMiles: distance.value,
     ...(elevationGain.value ? { elevationGainFeet: elevationGain.value } : {}),

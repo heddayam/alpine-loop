@@ -230,8 +230,7 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
   await page.getByRole("checkbox", { name: "Shared approach" }).check();
   await page.getByLabel("Maximum shared approach").fill("1.2");
   await page.getByLabel("Maximum shared approach").press("Tab");
-  await page.getByRole("switch", { name: /Allow figure-eights/ }).uncheck();
-  await expect.poll(() => harness.settingsRequests.at(-1)?.loopOptions).toEqual({ maximumRepeatedTrailPct: 20, sharedApproachEnabled: true, maximumSharedApproachMiles: 1.2, allowMultiCycle: false });
+  await expect.poll(() => harness.settingsRequests.at(-1)?.loopOptions).toEqual({ maximumRepeatedTrailPct: 20, sharedApproachEnabled: true, maximumSharedApproachMiles: 1.2 });
 
   await page.reload();
   await expect(page.getByLabel("Selected climbing grade")).toHaveText("13%");
@@ -239,7 +238,7 @@ test("grade and loop defaults persist across reloads", async ({ page }) => {
   await expect(page.getByLabel("Maximum repeated trail")).toHaveValue("20");
   await expect(page.getByRole("checkbox", { name: "Shared approach" })).toBeChecked();
   await expect(page.getByLabel("Maximum shared approach")).toHaveValue("1.2");
-  await expect(page.getByRole("switch", { name: /Allow figure-eights/ })).not.toBeChecked();
+  await expect(page.getByRole("switch", { name: /Allow figure-eights/ })).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Grade" }).check();
   await enterDrawnArea(page);
   await launchAndOpenResults(page);

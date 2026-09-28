@@ -1,11 +1,20 @@
 import { expect, test } from "@playwright/test";
-import { catalog as fixtureCatalog, job as fixtureJob, request } from "../fixtures/coverage/catalog";
+import { catalog as fixtureCatalog, job as fixtureJob } from "../fixtures/coverage/catalog";
 import { installOfflineHarness } from "./offline-harness";
 
 for (const width of [1280, 390]) test(`coverage can be downloaded and paused at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   const harness = await installOfflineHarness(page);
   const catalog = structuredClone(fixtureCatalog), job = structuredClone(fixtureJob);
+  catalog.release!.partitioning = "connected-networks";
+  catalog.release!.artifacts[0].graphId = "network-fixture";
+  catalog.release!.sections[0].network = { nodeCount: 4, physicalEdgeCount: 4, loopBlockCount: 1, sourceBoundaryLimited: true };
+  const secondArtifact = { ...catalog.release!.artifacts[0], id: "b".repeat(64), path: `objects/${"b".repeat(64)}.sqlite.gz`, graphId: "nested-network" };
+  catalog.release!.artifacts.push(secondArtifact);
+  catalog.release!.sections.push({ ...catalog.release!.sections[0], id: "nested", artifactIds: [secondArtifact.id] });
+  const request = { releaseId: catalog.release!.id, sectionIds: ["nested", "section"] };
+  job.sectionIds = request.sectionIds;
+  job.totalBytes *= 2;
   await page.route("**/api/coverage**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/pause")) { job.status = "paused"; await route.fulfill({ json: job }); }
@@ -25,9 +34,13 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   }).toPass({ timeout: 10000 });
   await canvas.click();
   if (width <= 600) await page.getByRole("button", { name: "Show panel", exact: true }).click();
-  await expect(dialog.getByText(/1 section selected/)).toBeVisible();
+  await expect(dialog.getByText(/2 networks selected/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Draw trailhead filter" })).not.toBeVisible();
-  await expect(dialog.getByText(/256 KiB/)).toBeVisible();
+  await expect(dialog.getByText(/512 KiB/)).toBeVisible();
+  await expect(dialog.getByText(/2.0 MiB installed size/)).toBeVisible();
+  await expect(dialog.getByText(/reaches the source boundary/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Show selected area" }).click();
+  if (width <= 600) await page.getByRole("button", { name: "Show panel", exact: true }).click();
   await page.screenshot({ path: test.info().outputPath("coverage.png") });
   await dialog.getByRole("button", { name: "Download", exact: true }).click();
   await dialog.getByRole("button", { name: "Pause", exact: true }).click();

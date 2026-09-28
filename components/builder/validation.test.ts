@@ -12,7 +12,7 @@ describe("search criteria validation", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result).toMatchObject({
       criteria: {
-        closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+        closedRoute: { maximumRepeatedTrailPct: 35 },
         includeUncertainAccess: true,
       },
     });

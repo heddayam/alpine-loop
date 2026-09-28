@@ -10,12 +10,12 @@ import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
 import { routeStart } from "../results/route-start";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 
-export type CoverageOverlay = { features: FeatureCollection<Polygon | MultiPolygon>; focus: Bounds | null };
+export type CoverageOverlay = { features: FeatureCollection<Polygon | MultiPolygon>; focus: Bounds | null; focusRevision?: number };
 const coverageColors = { available: "#6b7280", selected: "#2563eb", downloading: "#b77900", installed: "#166534" };
 
 type HikeMapProps = {
   coverage?: CoverageOverlay;
-  onCoverageSectionSelect?: (id: string) => void;
+  onCoverageSectionsSelect?: (ids: string[]) => void;
   drawBounds: Bounds | null;
   filterGeometry?: Polygon | MultiPolygon;
   refinementGeometry?: Polygon | MultiPolygon;
@@ -308,7 +308,7 @@ export function routeStartFeatures(routes: GeneratedClosedRouteV3[]): FeatureCol
 
 export function HikeMap({
   coverage,
-  onCoverageSectionSelect,
+  onCoverageSectionsSelect,
   drawBounds: bounds,
   filterGeometry,
   refinementGeometry,
@@ -1021,7 +1021,7 @@ export function HikeMap({
   }, [mapReady, routes, selectedRouteId]);
 
   const coverageData = coverage ? JSON.stringify(coverage.features) : "";
-  const coverageBounds = coverage?.focus ? JSON.stringify(coverage.focus) : "";
+  const coverageBounds = coverage?.focus ? JSON.stringify({ bounds: coverage.focus, revision: coverage.focusRevision }) : "";
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -1038,7 +1038,7 @@ export function HikeMap({
     if (coverageData) {
       coverageCamera.current ??= {center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()};
       if (coverageBounds && coverageBounds !== coverageFocus.current) {
-        const [w,s,e,n] = JSON.parse(coverageBounds);
+        const { bounds: [w,s,e,n] } = JSON.parse(coverageBounds);
         map.fitBounds([[w,s],[e,n]],{padding:48,maxZoom:12,duration:0});
         coverageFocus.current = coverageBounds;
       }
@@ -1051,24 +1051,26 @@ export function HikeMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !coverage || !onCoverageSectionSelect) return;
-    const sectionAt = (event: MapMouseEvent) => {
+    if (!map || !mapReady || !coverage || !onCoverageSectionsSelect) return;
+    const sectionsAt = (event: MapMouseEvent): string[] => {
       const layers = Object.keys(coverageColors).map((status) => `installation-${status}-fill`).filter((id) => map.getLayer(id));
-      return layers.length ? map.queryRenderedFeatures(event.point, { layers })[0]?.properties?.sectionId : undefined;
+      // Tile boundaries can duplicate hits; layer order must not hide nested networks.
+      return [...new Set((layers.length ? map.queryRenderedFeatures(event.point, { layers }) : [])
+        .map((feature) => feature.properties?.sectionId).filter((id): id is string => typeof id === "string"))].sort();
     };
     const click = (event: MapMouseEvent) => {
-      const id = sectionAt(event);
-      if (typeof id === "string") onCoverageSectionSelect(id);
+      const ids = sectionsAt(event);
+      if (ids.length) onCoverageSectionsSelect(ids);
     };
     const hover = (event: MapMouseEvent) => {
-      const id = sectionAt(event);
-      map.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
-      map.setFilter("installation-hover", ["==",["get","sectionId"],typeof id === "string" ? id : ""]);
+      const ids = sectionsAt(event);
+      map.getCanvas().style.cursor = ids.length ? "pointer" : "";
+      map.setFilter("installation-hover", ["in", ["get", "sectionId"], ["literal", ids]]);
     };
     map.on("click", click);
     map.on("mousemove", hover);
     return () => { map.off("click", click); map.off("mousemove", hover); map.getCanvas().style.cursor = ""; map.setFilter("installation-hover", ["==",["get","sectionId"],""]); };
-  }, [coverage, mapReady, onCoverageSectionSelect]);
+  }, [coverage, mapReady, onCoverageSectionsSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
