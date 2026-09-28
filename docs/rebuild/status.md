@@ -26,8 +26,25 @@ promotion; explicit sidewalk/crossing exclusions and access rules remain.
   the start core, and exclude buffer-only starts. Overlapping graph records need
   not be identical. Desktop/mobile offline download/pause flows pass (2 tests),
   with screenshots inspected at 1280px and 390px.
-- [ ] Integrate local compiler, reusable segment metrics, and retire discovery CLI.
-- [ ] Final integrated verification and cleanup.
+- [x] Integrate local compiler, reusable segment metrics, and retire discovery CLI.
+  Integrated 22cc84f and 80277a7. Segment cache dependencies include geometry,
+  metric/sampler versions and every DEM tile owning an actual sample. Offline
+  fixtures cover provider seams, unrelated DEM-tile reuse, local graph append,
+  unchanged artifact reuse, empty areas before DEM work, interruption and corrupt
+  receipts. Deleted statewide discovery, network inventory/catalog and HTML inspector.
+- [x] Final integrated verification and cleanup.
+  One integrated lint/type/test pass: 668 tests in 93 files, all passed. Docker
+  data and app images built successfully, including the production Next.js build;
+  restarted the local app. Native and rebuilt-container `plan` commands return
+  the same Index-area geometry with no source processing. The live in-app browser
+  displays the 40-mile constraint; Coverage interactions were verified by the two
+  offline browser cases above (the live browser session became unavailable).
+  No repeated full verification or regional builds were run. All three task
+  worktrees are archived and branches deleted. Against c7c6643, production source
+  has 437 additions / 833 deletions (net 396 removed); tests/fixtures have 410
+  additions / 527 deletions (net 117 removed). Seven files removed and four added,
+  leaving three fewer tracked files. Documentation is counted separately.
+  The user's untracked progressive-publication-review.md remains untouched.
 - [ ] One user-run local real-source build/install/search measurement, including
   elapsed time, peak memory/disk, source continuity and usefulness of results.
 
