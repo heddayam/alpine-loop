@@ -136,7 +136,7 @@ describe("OSM OPL normalization", () => {
     ]);
   });
 
-  it("promotes untagged footway components only when they connect to an explicit trail", () => {
+  it("includes isolated unlabelled walking links without a distant trail dependency", () => {
     const topology = normalizeOsmOpl([
       "n1 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.2 y37.2",
       "n2 v1 dV c0 t2026-01-01T00:00:00Z i0 u x-122.19 y37.2",
@@ -155,9 +155,12 @@ describe("OSM OPL normalization", () => {
       { externalId: "way/1", edgeClass: "trail" },
       { externalId: "way/2", edgeClass: "trail" },
       { externalId: "way/3", edgeClass: "trail" },
-      { externalId: "way/4", edgeClass: "sidewalk" },
+      { externalId: "way/4", edgeClass: "trail" },
       { externalId: "way/5", edgeClass: "sidewalk" },
     ]);
+    const isolated = normalizeOsmOpl("n5 x0 y0\nn6 x1 y0\nw4 Thighway=footway,foot=private,oneway:foot=-1 Nn5,n6", "osm-fixture").ways[0];
+    expect(isolated).toMatchObject({ edgeClass: "trail", accessState: "private", bidirectional: false, nodeIds: ["osm-node-6", "osm-node-5"] });
+    expect(isolated.flags).toContain("possible-walking-link");
   });
 });
 

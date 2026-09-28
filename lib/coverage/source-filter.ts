@@ -4,11 +4,6 @@ import path from "node:path";
 import { areaGeometryBounds, type AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
 
-export type SourceSelection = { kind: "trails" } | { kind: "context"; geometry: AreaGeometry };
-
-// This is a superset of classifyOsmWay's trail classes and needsTrailContext.
-// Keep access/direction tags and referenced nodes; normalization decides eligibility.
-const TRAIL_FILTER = "w/highway=path,bridleway,steps,track,footway,pedestrian,service,unclassified,residential,living_street";
 const CONTEXT_FILTERS = [
   "w/highway", "w/footway", "nw/amenity=parking", "nw/highway=trailhead",
   "nw/information=trailhead,guidepost,board,map", "nw/tourism=information",
@@ -70,40 +65,39 @@ async function* osmium(args: string[], checkpoint: () => Promise<void>): AsyncGe
 
 /**
  * Stream only relevant OSM objects, preserving source ordering and references.
- * Context uses buffered component envelopes, not one bounding box across gaps.
+ * Buffered local envelopes preserve nearby access/building context.
  * Osmium extract selects ways with a node inside: context-only segments crossing
  * the entire buffer with both endpoints outside, and enclosing polygons without
- * an inside vertex, can be absent. Trail membership never uses this extraction.
+ * an inside vertex, can be absent. A closed route within the distance budget has
+ * every vertex inside the routing buffer; complete ways preserve its references.
  * https://docs.osmcode.org/osmium/latest/osmium-extract.html
  * https://docs.osmcode.org/osmium/latest/osmium-tags-filter.html
  */
 export async function* filteredSourceLines(
   sourceFile: string,
   workRoot: string,
-  selection: SourceSelection,
+  geometry: AreaGeometry,
   checkpoint: () => Promise<void>,
   onStage?: (stage: string) => Promise<void>,
 ): AsyncGenerator<string> {
   await mkdir(workRoot, { recursive: true });
   const temporary = await mkdtemp(path.join(workRoot, ".osm-filter-"));
   try {
-    let input = sourceFile;
-    if (selection.kind === "context") {
-      await onStage?.("Extracting selected network context");
-      const polygons = selection.geometry.type === "Polygon" ? [selection.geometry.coordinates] : selection.geometry.coordinates;
-      const envelope = unionCoverage(polygons.map((coordinates) => {
-        const [west, south, east, north] = areaGeometryBounds({ type: "Polygon", coordinates });
-        return rectangle([Math.max(-180, west - .01), Math.max(-90, south - .01), Math.min(180, east + .01), Math.min(90, north + .01)]);
-      }));
-      const polygon = path.join(temporary, "context.geojson");
-      await writeFile(polygon, JSON.stringify({ type: "Feature", properties: {}, geometry: envelope }));
-      input = path.join(temporary, "context.osm.pbf");
-      // Complete building relations only; unrelated regional boundaries can be enormous.
-      for await (const unused of osmium(["extract", sourceFile, "--polygon", polygon,
-        "--strategy", "smart", "-S", "types=multipolygon", "-S", "tags=building", "--output", input], checkpoint)) void unused;
-    }
-    await onStage?.(selection.kind === "trails" ? "Filtering trail candidates" : "Filtering selected network context");
-    yield* osmium(["tags-filter", input, ...(selection.kind === "trails" ? [TRAIL_FILTER] : CONTEXT_FILTERS), "--output-format", "opl"], checkpoint);
+    await onStage?.("Extracting local trails and context");
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    const envelope = unionCoverage(polygons.map((coordinates) => {
+      const [west, south, east, north] = areaGeometryBounds({ type: "Polygon", coordinates });
+      return rectangle([Math.max(-180, west - .01), Math.max(-90, south - .01), Math.min(180, east + .01), Math.min(90, north + .01)]);
+    }));
+    const polygon = path.join(temporary, "context.geojson");
+    await writeFile(polygon, JSON.stringify({ type: "Feature", properties: {}, geometry: envelope }));
+    const input = path.join(temporary, "context.osm.pbf");
+    // Complete building relations only; unrelated regional boundaries can be enormous.
+    for await (const unused of osmium(["extract", sourceFile, "--polygon", polygon,
+      "--strategy", "smart", "-S", "types=multipolygon", "-S", "tags=building", "--output", input], checkpoint)) void unused;
+
+    await onStage?.("Filtering local trails and context");
+    yield* osmium(["tags-filter", input, ...CONTEXT_FILTERS, "--output-format", "opl"], checkpoint);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

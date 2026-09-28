@@ -39,6 +39,7 @@ w20 T Nn30,n31,n32
 w21 T Nn30,n33,n32
 w30 Tnatural=water Nn40,n41
 w31 Thighway=primary Nn40,n41
+w32 Thighway=footway Nn40,n41
 w40 Thighway=primary Nn50,n51
 r1 Ttype=multipolygon,building=yes Mw20@outer,w21@outer
 r2 Ttype=multipolygon,natural=water Mw30@outer

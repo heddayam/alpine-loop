@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOsmWay, osmAccessState } from "./normalize";
+import { classifyOsmWay, osmAccessState, osmWayFlags } from "./normalize";
 
 describe("OSM tag classification", () => {
   it("defaults ambiguous access to unknown and retains explicit restrictions", () => {
@@ -15,11 +15,15 @@ describe("OSM tag classification", () => {
     expect(classifyOsmWay({ highway: "service", foot: "designated" })).toBe("trail");
     expect(classifyOsmWay({ highway: "residential", foot: "yes" })).toBe("trail");
     expect(classifyOsmWay({ highway: "unclassified", name: "Ridge Trail connector" })).toBe("trail");
-    expect(classifyOsmWay({ highway: "footway" })).toBe("sidewalk");
+    expect(classifyOsmWay({ highway: "footway" })).toBe("trail");
+    expect(classifyOsmWay({ highway: "pedestrian" })).toBe("trail");
+    expect(osmWayFlags({ highway: "footway" }, "way/1", "both")).toContain("possible-walking-link");
+    expect(osmWayFlags({ highway: "footway", footway: "sidewalk" }, "way/2", "both")).not.toContain("possible-walking-link");
     expect(classifyOsmWay({ highway: "footway", name: "Ridge Trail" })).toBe("trail");
     expect(classifyOsmWay({ highway: "footway", sac_scale: "hiking" })).toBe("trail");
     for (const footway of ["sidewalk", "crossing", "traffic_island", "access_aisle", "link"]) {
       expect(classifyOsmWay({ highway: "footway", footway })).toBe("sidewalk");
+      expect(classifyOsmWay({ highway: "service", foot: "yes", footway })).toBe("sidewalk");
     }
     expect(classifyOsmWay({ highway: "service", service: "parking_aisle" })).toBe("service-road");
     expect(classifyOsmWay({ highway: "track" })).toBe("trail");

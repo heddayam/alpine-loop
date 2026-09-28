@@ -3,7 +3,6 @@ import { createInterface } from "node:readline";
 import type { NormalizedNode, NormalizedPortalEvidence, NormalizedTopology, NormalizedWay } from "../types";
 import {
   classifyOsmWay,
-  contextualTrailWayIds,
   osmAccessState,
   osmFootDirection,
   osmPortalEvidenceKinds,
@@ -79,13 +78,8 @@ function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], s
   };
   const ways: NormalizedWay[] = [];
   let rejectedWayCount = 0;
-  const contextualTrails = contextualTrailWayIds(inputWays.map((way) => ({
-    id: way.id,
-    nodeIds: way.nodeIds,
-    values: way.tags,
-  })));
   for (const way of inputWays) {
-    const edgeClass = contextualTrails.has(way.id) ? "trail" : classifyOsmWay(way.tags);
+    const edgeClass = classifyOsmWay(way.tags);
     if (!edgeClass) {
       rejectedWayCount += 1;
       continue;

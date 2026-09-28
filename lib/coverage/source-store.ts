@@ -2,16 +2,16 @@ import { DatabaseSync } from "node:sqlite";
 import { checkSQLiteIntegrity } from "@/lib/data/sqlite-integrity";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
-import { filteredSourceLines, type SourceSelection } from "./source-filter";
+import { filteredSourceLines } from "./source-filter";
 import { buildingCentroidOf, parseBuildingCentroids } from "@/lib/data/osm/buildings";
 import { parseOplTags } from "@/lib/data/osm/opl";
-import { classifyOsmWay, needsTrailContext, osmAccessState, osmFootDirection, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
+import { classifyOsmWay, osmAccessState, osmFootDirection, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
 import type { NormalizedNode, NormalizedWay, NormalizedPortalEvidence } from "@/lib/data/types";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { areaBounds } from "@/lib/graph/geometry";
 
-type Row = { id: string; refs: string; tags: string; kind: string; promoted: number; coordinates: string };
+type Row = { id: string; refs: string; tags: string; kind: string; coordinates: string };
 type Node = { id: string; lon: number; lat: number; tags: string };
 function componentBounds(area: AreaGeometry, context: number): string {
   const polygons=area.type==="Polygon"?[area.coordinates]:area.coordinates;
@@ -23,10 +23,10 @@ function componentBounds(area: AreaGeometry, context: number): string {
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v4";
-const selectionHash = (selection: SourceSelection) => createHash("sha256").update(JSON.stringify(selection)).digest("hex");
-export const sourceStoreFileName = (source: SourceSnapshot, selection: SourceSelection = { kind: "trails" }) =>
-  `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${selectionHash(selection).slice(0, 24)}.sqlite`;
+export const NORMALIZATION_VERSION = "source-normalization-v5";
+const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
+export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
+  `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;
 
 class UnsupportedBuildingGeometry extends Error {}
 
@@ -54,7 +54,7 @@ function outerRings(parts: string[][]): string[][] {
 export class CoverageSourceStore {
   readonly db: DatabaseSync;
   private spatialReady = false;
-  constructor(readonly path: string, readonly source: SourceSnapshot, readonly selection: SourceSelection = { kind: "trails" }) {
+  constructor(readonly path: string, readonly source: SourceSnapshot, readonly geometry: AreaGeometry) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -62,12 +62,11 @@ export class CoverageSourceStore {
       CREATE INDEX IF NOT EXISTS nodes_location ON nodes(lon,lat);
       CREATE TABLE IF NOT EXISTS relation_buildings(id TEXT PRIMARY KEY,lon REAL,lat REAL);
       CREATE INDEX IF NOT EXISTS relation_buildings_location ON relation_buildings(lon,lat);
-      CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,refs TEXT,tags TEXT,kind TEXT,promoted INTEGER DEFAULT 0,coordinates TEXT,minx REAL,maxx REAL,miny REAL,maxy REAL);
+      CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,refs TEXT,tags TEXT,kind TEXT,coordinates TEXT,minx REAL,maxx REAL,miny REAL,maxy REAL);
       CREATE TABLE IF NOT EXISTS receipts(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS inventory(id TEXT PRIMARY KEY,disposition TEXT NOT NULL,reason TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS metrics(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,value TEXT NOT NULL);
     `);
-    const identity = `${NORMALIZATION_VERSION}:${source.contentHash}:${selectionHash(selection)}`;
+    const identity = `${NORMALIZATION_VERSION}:${source.contentHash}:${geometryHash(geometry)}`;
     const previous = this.db.prepare("SELECT value FROM meta WHERE key='source'").get() as {value:string}|undefined;
     if (previous && previous.value !== identity) { this.db.close(); throw new Error("Staged source fingerprint mismatch"); }
     this.db.prepare("INSERT OR IGNORE INTO meta VALUES('source',?)").run(identity);
@@ -75,18 +74,14 @@ export class CoverageSourceStore {
   receipt(key: string): string | undefined { return (this.db.prepare("SELECT value FROM receipts WHERE key=?").get(key) as {value:string}|undefined)?.value; }
   mark(key: string, value = "complete") { this.db.prepare("INSERT OR REPLACE INTO receipts VALUES(?,?)").run(key,value); }
   close() { this.db.close(); }
-  isTrail(externalId: string): boolean {
-    if (!this.spatialReady) throw new Error("Source requires a completed verified import");
-    return Boolean(this.db.prepare("SELECT 1 FROM ways WHERE id=? AND (kind='trail' OR promoted=1)").get(externalId.replace(/^way\//, "")));
-  }
   private async seal(checkpoint:()=>Promise<void>): Promise<string> {
     await checkpoint();
     await checkSQLiteIntegrity(this.path, this.db, checkpoint);
     this.db.exec("DROP TABLE IF EXISTS temp.ways_spatial; CREATE VIRTUAL TABLE temp.ways_spatial USING rtree(id,minx,maxx,miny,maxy)");
     const spatial = this.db.prepare("INSERT INTO ways_spatial VALUES(?,?,?,?,?)");
-    const hash = createHash("sha256").update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${selectionHash(this.selection)}\0`);
+    const hash = createHash("sha256").update(`${NORMALIZATION_VERSION}\0${this.source.contentHash}\0${geometryHash(this.geometry)}\0`);
     const tables = {
-      ways: "SELECT rowid AS spatialRow,id,refs,tags,kind,promoted,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id",
+      ways: "SELECT rowid AS spatialRow,id,refs,tags,kind,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id",
       nodes: "SELECT id,lon,lat,tags FROM nodes ORDER BY id",
       buildings: "SELECT id,lon,lat FROM relation_buildings ORDER BY id",
       unsupported: "SELECT id,disposition,reason FROM inventory ORDER BY id",
@@ -118,54 +113,6 @@ export class CoverageSourceStore {
     }
     return hash.digest("hex");
   }
-  private async promoteContextualWays(checkpoint:()=>Promise<void>): Promise<void> {
-    this.db.exec(`CREATE TEMP TABLE IF NOT EXISTS promotion_frontier(node TEXT PRIMARY KEY) WITHOUT ROWID;
-      CREATE TEMP TABLE IF NOT EXISTS promotion_found(way TEXT PRIMARY KEY) WITHOUT ROWID;
-      DELETE FROM promotion_frontier; DELETE FROM promotion_found;
-      UPDATE ways SET promoted=1 WHERE kind='trail' AND promoted=0`);
-    // Walk ambiguous footway components from explicit trail seeds using disk-backed frontiers.
-    const maxRow=Number((this.db.prepare("SELECT coalesce(max(rowid),0) AS n FROM ways").get() as {n:number}).n);
-    const seed=this.db.prepare(`INSERT OR IGNORE INTO promotion_frontier
-      SELECT r.node FROM ways w JOIN refs r ON r.way=w.id WHERE w.rowid>? AND w.rowid<=? AND w.promoted=1`);
-    for(let from=0;from<maxRow;from+=CHECKPOINT_ROWS) {
-      seed.run(from,from+CHECKPOINT_ROWS);
-      await checkpoint();
-    }
-    const page=this.db.prepare("SELECT node FROM promotion_frontier WHERE node>? ORDER BY node LIMIT ?");
-    const adjacent=this.db.prepare(`INSERT OR IGNORE INTO promotion_found
-      SELECT b.way FROM promotion_frontier f CROSS JOIN refs b INDEXED BY refs_node ON b.node=f.node
-      JOIN ways w ON w.id=b.way WHERE f.node>? AND f.node<=? AND w.kind='ambiguous' AND w.promoted=0`);
-    const promote=this.db.prepare("UPDATE ways SET promoted=1 WHERE id IN (SELECT way FROM promotion_found)");
-    const foundPage=this.db.prepare("SELECT way FROM promotion_found WHERE way>? ORDER BY way LIMIT ?");
-    const next=this.db.prepare(`INSERT OR IGNORE INTO promotion_frontier
-      SELECT r.node FROM promotion_found p CROSS JOIN refs r ON r.way=p.way WHERE p.way>? AND p.way<=?`);
-    for (;;) {
-      this.db.exec("DELETE FROM promotion_found");
-      let cursor="",added=0;
-      for (;;) {
-        const rows=page.all(cursor,CHECKPOINT_ROWS) as {node:string}[];
-        if (!rows.length) break;
-        const end=rows.at(-1)!.node;
-        added+=Number(adjacent.run(cursor,end).changes);
-        cursor=end;
-        await checkpoint();
-      }
-      if (!added) break;
-      promote.run();
-      await checkpoint();
-      this.db.exec("DELETE FROM promotion_frontier");
-      cursor="";
-      for (;;) {
-        const rows=foundPage.all(cursor,CHECKPOINT_ROWS) as {way:string}[];
-        if (!rows.length) break;
-        const end=rows.at(-1)!.way;
-        next.run(cursor,end);
-        cursor=end;
-        await checkpoint();
-      }
-    }
-    this.db.exec("DELETE FROM promotion_frontier; DELETE FROM promotion_found");
-  }
   async import(checkpoint: () => Promise<void>, options: { lines?: AsyncIterable<string>; batchSize?: number;
     onStage?: (stage:string)=>Promise<void> } = {}) {
     this.spatialReady = false;
@@ -182,28 +129,23 @@ export class CoverageSourceStore {
     // certify an interrupted stream, so restart the filtered input atomically.
     this.db.exec(`DELETE FROM ways; DELETE FROM nodes; DELETE FROM relation_buildings; DELETE FROM inventory; DELETE FROM receipts;
       CREATE TEMP TABLE import_nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL);
-      CREATE TEMP TABLE source_ways(id TEXT PRIMARY KEY,refs TEXT NOT NULL);
-      CREATE TEMP TABLE refs(way TEXT,node TEXT,PRIMARY KEY(way,node));
-      CREATE INDEX temp.refs_node ON refs(node,way);`);
+      CREATE TEMP TABLE source_ways(id TEXT PRIMARY KEY,refs TEXT NOT NULL);`);
     const putNode = this.db.prepare("INSERT OR REPLACE INTO import_nodes VALUES(?,?,?)");
     const getNode = this.db.prepare("SELECT * FROM import_nodes WHERE id=?");
     const putContextNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
     const putSourceWay = this.db.prepare("INSERT OR REPLACE INTO source_ways VALUES(?,?)");
     const getSourceWay = this.db.prepare("SELECT refs FROM source_ways WHERE id=?");
     const putWay = this.db.prepare("INSERT OR REPLACE INTO ways(id,refs,tags,kind,coordinates,minx,maxx,miny,maxy) VALUES(?,?,?,?,?,?,?,?,?)");
-    const putRef = this.db.prepare("INSERT OR IGNORE INTO refs VALUES(?,?)");
     const coordinates = (refs: string[]) => refs.map((ref): [number, number] => {
       const node = getNode.get(ref) as Node | undefined;
       if (!node) throw new Error(`Source references missing node/${ref}`);
       return [node.lon, node.lat];
     });
-    const cleanupJoins = () => this.db.exec(`DROP TABLE IF EXISTS temp.import_nodes; DROP TABLE IF EXISTS temp.source_ways; DROP TABLE IF EXISTS temp.refs;
-      DROP TABLE IF EXISTS temp.promotion_frontier; DROP TABLE IF EXISTS temp.promotion_found;`);
-    const context = this.selection.kind === "context";
+    const cleanupJoins = () => this.db.exec(`DROP TABLE IF EXISTS temp.import_nodes; DROP TABLE IF EXISTS temp.source_ways;`);
     let count = 0;
     this.db.exec("BEGIN");
     try {
-      for await (const line of options.lines ?? filteredSourceLines(this.source.localPath, dirname(this.path), this.selection, checkpoint, options.onStage)) {
+      for await (const line of options.lines ?? filteredSourceLines(this.source.localPath, dirname(this.path), this.geometry, checkpoint, options.onStage)) {
         const fields = line.split(" "), id = fields[0]!.slice(1), type = line[0];
         const field = (prefix: string) => fields.find((value) => value.startsWith(prefix))?.slice(1) ?? "";
         if (type === "n") {
@@ -211,21 +153,20 @@ export class CoverageSourceStore {
           if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
           putNode.run(id, lon, lat);
           const tags = parseOplTags(field("T"));
-          if (context && (tags.building || osmPortalEvidenceKinds(tags).length)) putContextNode.run(id, lon, lat, field("T"));
+          if (tags.building || osmPortalEvidenceKinds(tags).length) putContextNode.run(id, lon, lat, field("T"));
         } else if (type === "w") {
           const tags = parseOplTags(field("T"));
           const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
-          if (context) putSourceWay.run(id, JSON.stringify(refs));
-          const kind = classifyOsmWay(tags), ambiguous = needsTrailContext(tags);
-          const retained = context ? kind || tags.building || osmPortalEvidenceKinds(tags).length : kind === "trail" || ambiguous;
+          putSourceWay.run(id, JSON.stringify(refs));
+          const kind = classifyOsmWay(tags);
+          const retained = kind || tags.building || osmPortalEvidenceKinds(tags).length;
           if (retained) {
             if (refs.length < 2) throw new Error(`Source way/${id} has fewer than two nodes`);
             const coords = coordinates(refs);
             const bounds = coords.reduce(([w,s,e,n], [x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]);
-            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), ambiguous ? "ambiguous" : kind ?? (tags.building ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
-            if (!context) for (const ref of refs) putRef.run(id, ref);
+            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), kind ?? (tags.building ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
           }
-        } else if (type === "r" && context) {
+        } else if (type === "r") {
           const tags = parseOplTags(field("T"));
           if (tags.building && tags.building !== "no" && tags.type === "multipolygon") {
             try {
@@ -249,11 +190,6 @@ export class CoverageSourceStore {
           }
         }
         if (++count % batchSize === 0) await checkpoint();
-      }
-      if (!context) {
-        await options.onStage?.("context-promotion");
-        await this.promoteContextualWays(checkpoint);
-        this.db.exec("DELETE FROM ways WHERE promoted=0");
       }
       this.db.exec("COMMIT");
       cleanupJoins();
@@ -300,7 +236,7 @@ export class CoverageSourceStore {
       let refs=JSON.parse(row.refs) as string[], coords=JSON.parse(row.coordinates) as [number,number][];
       if(direction==="reverse") {refs=refs.reverse();coords=coords.reverse();}
       const nodes=refs.map((id,index)=>({id:`osm-node-${id}`,externalId:`node/${id}`,lon:coords[index]![0],lat:coords[index]![1],elevationM:null,flags:[],sourceRefs:[this.source.id]}));
-      yield {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map((node)=>node.id),coordinates:coords,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.promoted?"trail":row.kind==="ambiguous"?"sidewalk":row.kind as NormalizedWay["edgeClass"],sourceRefs:[this.source.id],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
+      yield {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map((node)=>node.id),coordinates:coords,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.kind as NormalizedWay["edgeClass"],sourceRefs:[this.source.id],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
     }
   }
   *evidence(area: AreaGeometry): Generator<NormalizedPortalEvidence> {

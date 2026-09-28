@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import type { SourceSelection } from "./source-filter";
+import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
 
 vi.mock("./source-filter", () => ({ filteredSourceLines: () => { throw new Error("Unexpected source read"); } }));
@@ -22,8 +22,8 @@ const fixtures = [
 async function* lines(input = fixtures) { yield* input; }
 const stores: CoverageSourceStore[] = [];
 const directories: string[] = [];
-const make = (selection: SourceSelection = { kind: "trails" }, file = ":memory:") => {
-  const store = new CoverageSourceStore(file, source, selection); stores.push(store); return store;
+const make = (geometry: AreaGeometry = area, file = ":memory:") => {
+  const store = new CoverageSourceStore(file, source, geometry); stores.push(store); return store;
 };
 afterEach(async () => {
   stores.splice(0).forEach((store) => store.close());
@@ -31,19 +31,20 @@ afterEach(async () => {
 });
 
 describe("compact coverage source", () => {
-  it("keeps globally promoted trail chains and discards raw/context rows", async () => {
+  it("retains local trails and context without promotion or global joins", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines([...fixtures,
       "w40 Thighway=residential Nn1,n3", "w41 Thighway=footway Nn3,n4",
       "w42 Tbuilding=yes Nn1,n2,n3,n4,n1",
     ]) });
-    expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/10", "way/11", "way/12"]);
+    expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/10", "way/11", "way/12", "way/13", "way/40", "way/41"]);
     expect([...store.ways(area)][0]!.way.accessState).toBe("private");
-    expect(store.isTrail("way/12")).toBe(true);
-    expect(store.isTrail("way/13")).toBe(false);
-    expect([...store.evidence(area)]).toEqual([]);
-    expect([...store.buildings(area)]).toEqual([]);
-    expect(store.db.prepare("SELECT count(*) AS n FROM nodes").get()?.n).toBe(0);
+    expect([...store.ways(area)].find(({way})=>way.externalId==="way/41")?.way).toMatchObject({edgeClass:"trail",flags:expect.arrayContaining(["possible-walking-link"])});
+    expect([...store.ways(area)].find(({way})=>way.externalId==="way/13")?.way.edgeClass).toBe("sidewalk");
+    expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/5"]);
+    expect([...store.buildings(area)]).toHaveLength(2);
+    expect(store.db.prepare("SELECT count(*) AS n FROM nodes").get()?.n).toBe(1);
+    expect(store.db.prepare("SELECT name FROM sqlite_master WHERE name='metrics'").all()).toEqual([]);
     expect(store.db.prepare("SELECT count(*) AS n FROM inventory").get()?.n).toBe(0);
     expect(store.db.prepare("SELECT name FROM sqlite_temp_master WHERE name IN ('import_nodes','source_ways','refs','promotion_frontier')").all()).toEqual([]);
   });
@@ -59,25 +60,24 @@ describe("compact coverage source", () => {
     expect(ways.map(way=>way.edgeClass)).toEqual(["trail","trail","trail"]);
   });
 
-  it.each(["stream", "promotion", "integrity"])("rebuilds an interrupted %s phase without trusting partial data", async (phase) => {
+  it.each(["stream", "integrity"])("rebuilds an interrupted %s phase without trusting partial data", async (phase) => {
     const store = make();
     let stage = "stream";
     async function* failed() { yield* fixtures.slice(0,6); throw new Error("paused"); }
     await expect(store.import(async () => {
-      if ((phase === "promotion" && stage === "context-promotion") || (phase === "integrity" && stage === "integrity-check")) throw new Error("paused");
+      if ((phase === "integrity" && stage === "integrity-check")) throw new Error("paused");
     }, { lines: phase === "stream" ? failed() : lines(), onStage: async value => { stage=value; } })).rejects.toThrow("paused");
     expect(()=>[...store.ways(area)]).toThrow("completed verified import");
     expect(()=>[...store.evidence(area)]).toThrow("completed verified import");
     expect(()=>[...store.buildings(area)]).toThrow("completed verified import");
     store.db.exec("INSERT OR REPLACE INTO ways(id,kind) VALUES('999','trail')");
     await store.import(async () => {}, { lines: lines() });
-    expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/10","way/11","way/12"]);
+    expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/10","way/11","way/12","way/13"]);
   });
 
-  it("rejects changed immutable data and missing completion metadata, while allowing metrics caching", async () => {
+  it("rejects changed immutable data and missing completion metadata", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines() });
-    store.db.exec("INSERT INTO metrics VALUES('10:0','version','{}')");
     await store.import(async () => {});
     store.db.exec("UPDATE ways SET coordinates='[[99,99],[100,100]]' WHERE id='10'");
     await expect(store.import(async () => {})).rejects.toThrow("failed seal verification");
@@ -119,12 +119,12 @@ describe("compact coverage source", () => {
     expect([...store.ways(coverage,0)].map(({way})=>way.externalId)).toEqual(["way/10","way/20"]);
   });
 
-  it("retains selected context, assembles reversed building fragments, and avoids local footway promotion", async () => {
-    const store = make({ kind: "context", geometry: area });
+  it("retains access evidence and assembles reversed building fragments", async () => {
+    const store = make();
     await store.import(async () => {}, { lines: lines([...fixtures,
       "w40 Thighway=residential Nn1,n3", "w41 Tamenity=parking Nn1,n2",
     ]) });
-    expect([...store.ways(area)].find(({way})=>way.externalId==="way/11")?.way.edgeClass).toBe("sidewalk");
+    expect([...store.ways(area)].find(({way})=>way.externalId==="way/11")?.way.edgeClass).toBe("trail");
     expect([...store.ways(area)].find(({way})=>way.externalId==="way/40")?.way.edgeClass).toBe("street");
     expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/5","way/41"]);
     expect([...store.buildings(area)]).toEqual([[0.4,0.4]]);
@@ -133,7 +133,7 @@ describe("compact coverage source", () => {
   });
 
   it("seals malformed building diagnostics and rounds node buildings as before", async () => {
-    const store = make({ kind: "context", geometry: area });
+    const store = make();
     await store.import(async () => {}, { lines: lines([
       "n1 Tbuilding=hut x0.123456 y0.654321", "r30 Ttype=multipolygon,building=yes Mw999@outer",
     ]) });
@@ -143,12 +143,12 @@ describe("compact coverage source", () => {
     await expect(store.import(async () => {})).rejects.toThrow("failed seal verification");
   });
 
-  it("binds persisted stores and filenames to source, normalization version, and selection", async () => {
+  it("binds persisted stores and filenames to source, normalization version, and bounded geometry", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "compact-source-")); directories.push(directory);
     const file = path.join(directory, "source.sqlite");
-    const store = make({kind:"trails"}, file);
+    const store = make(area, file);
     await store.import(async () => {}, { lines: lines() });
-    expect(()=>new CoverageSourceStore(file, source, {kind:"context",geometry:area})).toThrow("fingerprint mismatch");
-    expect(sourceStoreFileName(source)).not.toBe(sourceStoreFileName(source,{kind:"context",geometry:area}));
+    expect(()=>new CoverageSourceStore(file, source, rectangle([0,0,1,1]))).toThrow("fingerprint mismatch");
+    expect(sourceStoreFileName(source,area)).not.toBe(sourceStoreFileName(source,rectangle([0,0,1,1])));
   });
 });
