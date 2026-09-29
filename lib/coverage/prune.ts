@@ -1,15 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
-import { areaGeometryBounds, type AreaGeometry } from "@/lib/data/area-geometry";
-import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 
-export const PRUNING_ALGORITHM_VERSION = "undirected-multi-source-distance-v1";
+export const PRUNING_ALGORITHM_VERSION = "sparse-start-undirected-distance-v2";
 
 /** Remove only segments that cannot belong to a closed route within the bound.
- * All core trail nodes seed the lower bound, independently of portal discovery.
+ * Only the frozen eligible access candidates seed the lower bound.
  * Ignoring direction/access uncertainty only admits extra segments. Indexed heap
  * and CSR arrays have fixed sizes; no graph-sized JS objects or duplicate queue.
  */
-export async function pruneWalkingGraph(db: DatabaseSync, starts: AreaGeometry, maximumMeters: number,
+export async function pruneWalkingGraph(db: DatabaseSync, maximumMeters: number,
   checkpoint: () => Promise<void>, memoryBudgetBytes: number) {
   await checkpoint();
   db.exec(`CREATE TEMP TABLE pruning_nodes(id TEXT PRIMARY KEY,k INTEGER UNIQUE);
@@ -46,11 +44,9 @@ export async function pruneWalkingGraph(db: DatabaseSync, starts: AreaGeometry, 
     return value;
   };
   let seeds = 0;
-  const [west,south,east,north] = areaGeometryBounds(starts);
-  for (const row of db.prepare(`SELECT p.k,n.lon,n.lat FROM pruning_nodes p JOIN nodes n ON n.id=p.id
-    WHERE n.lon>=? AND n.lon<=? AND n.lat>=? AND n.lat<=? ORDER BY p.k`).iterate(west,east,south,north)) {
+  for (const row of db.prepare(`SELECT p.k FROM pruning_nodes p JOIN sparse_start_nodes s ON s.node_id=p.id ORDER BY p.k`).iterate()) {
     if (++work % 1000 === 0) await checkpoint();
-    if (coordinateIsInsideArea([Number(row.lon), Number(row.lat)], starts)) { const k = Number(row.k); best[k] = 0; offer(k); seeds++; }
+    const k = Number(row.k); best[k] = 0; offer(k); seeds++;
   }
   let index = 0;
   for (const row of db.prepare(`SELECT a.k AS a,b.k AS b,e.length_m FROM eligible_segments e

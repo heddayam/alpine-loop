@@ -9,6 +9,8 @@ import { exportPreparedRelease, preparedReleaseId, publishPreparedCatalog } from
 import { compactPreparedGraph } from "@/lib/data/compact-prepared-graph";
 import { writeProgressiveTopology } from "@/lib/data/progressive/topology";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
+import { prepareSparsePortalCandidates } from "@/lib/data/progressive/portals";
+import { BUILDING_RADIUS_M, MAXIMUM_NEARBY_BUILDINGS } from "@/lib/data/wilderness";
 import { insertGraph } from "@/lib/data/progressive/publish";
 import { readOsmSourceConfig } from "@/lib/data/osm/source";
 import { readOfficialTrailSourceConfig, readPinnedOfficialTrailSnapshot, refreshPinnedOfficialTrailSnapshot } from "@/lib/data/official-trails/source";
@@ -64,7 +66,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     const inputs = await preparationInputs(recipe, session, area.geometry);
     const declared = contentId({id:area.id, startGeometry:area.startGeometry, geometry:area.geometry, maximumRouteMiles:area.maximumRouteMiles,
       sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [], reviewedApproaches:region.reviewedApproaches ?? [],
-      recipe, compiler:BUILD_VERSION, metric:METRIC_VERSION, topology:CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION});
+      recipe, startPolicy:{buildingRadiusMeters:BUILDING_RADIUS_M,maximumNearbyBuildingsExclusive:MAXIMUM_NEARBY_BUILDINGS},
+      compiler:BUILD_VERSION, metric:METRIC_VERSION, topology:CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION});
     const receipts = path.join(root, "regions"), receiptPath = path.join(receipts, `${declared}.json`);
     await mkdir(receipts, {recursive:true});
     units.push({id:area.id, geometry:area.geometry, status:"processing"});
@@ -135,8 +138,13 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           }
         }
         flush(); await check();
+        await report(`Finding sparse access points: ${area.name}`);
+        const candidates=await prepareSparsePortalCandidates(store,area.startGeometry,check);
+        await report(`Found ${candidates.eligibleAccessPoints} eligible starts: ${area.name}`,candidates);
+        if(!candidates.eligibleAccessPoints)
+          throw new Error(`No eligible access points in ${area.name}: starts require fewer than ${MAXIMUM_NEARBY_BUILDINGS} mapped buildings within ${BUILDING_RADIUS_M} m and supported access. Elevation was not acquired; prior published areas are unchanged.`);
         await report(`Keeping trails within the route distance: ${area.name}`);
-        const pruned = await pruneWalkingGraph(store.database,area.startGeometry,area.bufferMiles*2*1609.344,check,Math.min(512,recipe.memoryLimitMiB/2)*1024**2);
+        const pruned = await pruneWalkingGraph(store.database,area.bufferMiles*2*1609.344,check,Math.min(512,recipe.memoryLimitMiB/2)*1024**2);
         await report(`Planning elevation for ${pruned.retainedSegments} retained segments`,pruned);
         const tiles = new Set<string>();
         for (const row of store.database.prepare(`SELECT a.lon AS x,a.lat AS y,b.lon AS x2,b.lat AS y2 FROM eligible_segments e
@@ -168,7 +176,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         await report(`Checking retained source membership: ${area.name}`,measured);
         const member = store.database.prepare("SELECT 1 FROM eligible_segments WHERE id=?");
         for (const raw of raws) await reconcileInventory(raw,store,area.geometry,check,id=>Boolean(member.get(id)),inputs.restrictions);
-        await report(`Finding access trailheads: ${area.name}`);
+        await report(`Ranking retained access points: ${area.name}`);
         await store.derivePortals(area.geometry,check);
         const db = new DatabaseSync(databasePath);
         try {
@@ -185,7 +193,9 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           await report(`Analyzing loops and approaches: ${area.name}`,compact);
           await writeProgressiveTopology(db,check);
           await report(`Checking reviewed approach starts: ${area.name}`);
-          await checkReviewedApproaches(db,region,check);
+          const densityExcluded=await checkReviewedApproaches(db,store.database,region,check);
+          if(densityExcluded.length) limitations.push(`Reviewed approaches excluded by the fewer-than-${MAXIMUM_NEARBY_BUILDINGS}-buildings-within-${BUILDING_RADIUS_M}-m rule: ${densityExcluded.join(", ")}.`);
+          await report(`Reviewed approach checks complete: ${area.name}`,{densityExcludedReviewedApproaches:densityExcluded.length});
           db.prepare("INSERT INTO metadata VALUES ('schemaVersion','7')").run();
           db.prepare("INSERT INTO metadata VALUES ('releaseId',?)").run(preparedReleaseId(options));
           const add = db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)");
@@ -262,19 +272,30 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
   }
 }
 
-/** Reviewed neighborhoods must contain actual starts in the final graph. */
-async function checkReviewedApproaches(db: DatabaseSync, region: CoverageRegion, checkpoint: () => Promise<void>) {
+/** Keep missing topology failures distinct from an explicitly rejected dense start. */
+async function checkReviewedApproaches(db: DatabaseSync, stage: DatabaseSync, region: CoverageRegion, checkpoint: () => Promise<void>) {
   const starts=db.prepare("SELECT n.lon,n.lat FROM access_points a JOIN nodes n ON n.id=a.node_id WHERE a.access_state IN ('public','unknown')");
-  const missing:string[]=[];
+  const rejected=stage.prepare(`SELECT n.lon,n.lat FROM portal_candidate_audit a JOIN nodes n ON n.id=a.node_id
+    WHERE a.access_state IN ('public','unknown') AND a.nearby_building_count>=?`);
+  const missing:string[]=[],densityExcluded:string[]=[];
+  let work=0;
   for(const approach of region.reviewedApproaches??[]) {
     await checkpoint();
     let matched=false;
     for(const row of starts.iterate()) {
+      if(++work%1000===0) await checkpoint();
       if(distanceMeters(approach.coordinates,[Number(row.lon),Number(row.lat)])<=approach.radiusMeters) {matched=true;break;}
+    }
+    if(!matched) for(const row of rejected.iterate(MAXIMUM_NEARBY_BUILDINGS)) {
+      if(++work%1000===0) await checkpoint();
+      if(distanceMeters(approach.coordinates,[Number(row.lon),Number(row.lat)])<=approach.radiusMeters) {
+        densityExcluded.push(approach.name);matched=true;break;
+      }
     }
     if(!matched) missing.push(`${approach.name} (${approach.radiusMeters} m)`);
   }
   if(missing.length) throw new Error(`Reviewed approaches have no mapped starting point in the final graph: ${missing.join(", ")}. Review source topology and the start footprint before publishing.`);
+  return densityExcluded;
 }
 
 async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore>, cachePath: string, elevation: Awaited<ReturnType<typeof elevationFor>>, check: () => Promise<void>) {

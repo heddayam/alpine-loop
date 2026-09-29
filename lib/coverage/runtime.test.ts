@@ -29,7 +29,7 @@ vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevatio
 const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", dataset: "Synthetic progressive loop", version: "1", retrievedAt: "2026-09-24T00:00:00Z", url: "https://example.invalid/progressive", license: "CC0-1.0", contentHash: `sha256:${"1".repeat(64)}`, localPath: path.resolve("data/fixtures/source/osm/progressive.opl") };
 let root: string;
 let fixtureLines: string[];
-const secondNetwork=["n11 T x-121.12 y47.51","n12 T x-121.10 y47.51","n13 T x-121.11 y47.54","w201 Thighway=path,foot=yes,name=Second%20%loop Nn11,n12,n13,n11"];
+const secondNetwork=["n11 T x-121.12 y47.51","n12 T x-121.10 y47.51","n13 T x-121.11 y47.54","n14 T x-121.121 y47.509","w200 Thighway=residential Nn14,n11","w201 Thighway=path,foot=yes,name=Second%20%loop Nn11,n12,n13,n11"];
 vi.mock("./source-filter", () => ({ filteredSourceLines: vi.fn() }));
 beforeEach(async () => {
   algorithms.metricVersion=undefined;
@@ -95,6 +95,35 @@ it("prepares distance-relevant trails and advertises the named start footprint",
   expect(piece!.edges.some(edge=>String(edge.id).startsWith("osm-way-202:"))).toBe(false);
   expect(piece!.access.length).toBeGreaterThan(0);
   expect(filteredSourceLines).toHaveBeenCalledOnce();
+  await expectNoScratch();
+});
+const buildingsAt=(lon:number,lat:number,count:number)=>Array.from({length:count},(_,i)=>`n${9000+i} Tbuilding=yes x${lon+i*.00001} y${lat}`);
+it("excludes dense disconnected trails before elevation and records policy exclusions of reviewed starts",async()=>{
+  fixtureLines.push(...buildingsAt(-121.12,47.51,10));
+  const input=region("both",consolidatedArea);
+  input.reviewedApproaches=[{id:"dense",name:"Dense entrance",coordinates:[-121.12,47.51],radiusMeters:100}];
+  await buildCoverageRegion(input,context());
+  const measured=vi.mocked(calculateEdgeMetricsBatch).mock.calls.flatMap(([geometries])=>geometries.flat());
+  expect(measured.length).toBeGreaterThan(0);
+  expect(measured.every(([lon])=>lon< -121.2)).toBe(true);
+  const [piece]=await pieces();
+  expect(piece!.access.every(point=>Number(point.nearby_building_count)<10)).toBe(true);
+  expect((await release()).limitations).toContain("Reviewed approaches excluded by the fewer-than-10-buildings-within-500-m rule: Dense entrance.");
+  await expectNoScratch();
+});
+it("retains a start with nine nearby buildings",async()=>{
+  fixtureLines.push(...buildingsAt(-121.26,47.51,9));
+  await build();
+  expect((await pieces())[0]!.access.some(point=>point.nearby_building_count===9)).toBe(true);
+});
+it("fails an all-dense selection before acquiring elevation and preserves the published neighbor",async()=>{
+  fixtureLines.push(...buildingsAt(-121.12,47.51,10));
+  await build();
+  const prior=await release(),{elevationFor}=await import("./elevation");
+  vi.mocked(elevationFor).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await expect(build(secondArea)).rejects.toThrow("No eligible access points in Second region");
+  expect(elevationFor).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(await release()).toEqual(prior);
   await expectNoScratch();
 });
 async function expectNoScratch(){expect((await readdir(path.join(root,"stage"))).filter(file=>file.startsWith(".region-"))).toEqual([]);}
@@ -254,7 +283,7 @@ it("rejects source gaps before importing or sampling",async()=>{
   expect(filteredSourceLines).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
 });
 it("keeps complete way context while publishing only segments inside the route buffer",async()=>{
-  fixtureLines=["n1 T x-121.26 y47.51","n2 T x-121.24 y47.51","n3 T x-119.9 y47.52","w101 Thighway=path,foot=yes Nn1,n2,n3"];
+  fixtureLines=["n1 T x-121.26 y47.51","n2 T x-121.24 y47.51","n3 T x-119.9 y47.52","n4 T x-121.261 y47.51","w100 Thighway=residential Nn4,n1","w101 Thighway=path,foot=yes Nn1,n2,n3"];
   await build();expect((await pieces())[0]!.edges).toHaveLength(2);
 });
 it("applies access restrictions before compiling eligible local segments",async()=>{
@@ -295,7 +324,7 @@ it("keeps complete way segments crossing adjoining verified source extents",asyn
 
 it("does not acquire elevation or publish when the local buffer has no eligible links",async()=>{
   fixtureLines=[];
-  await expect(build()).rejects.toThrow("No eligible walking links");
+  await expect(build()).rejects.toThrow("No eligible access points");
   const {elevationFor,describeCanonicalElevation}=await import("./elevation");
   expect(elevationFor).not.toHaveBeenCalled();expect(describeCanonicalElevation).not.toHaveBeenCalled();
   await expectNoScratch();
