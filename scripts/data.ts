@@ -8,7 +8,7 @@ import type { CoverageRunnerContext, CoverageRunResult } from "@/lib/coverage/ty
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { inspectPreparedRelease } from "@/lib/data/prepared-release";
 
-const usage = "Usage: data regions | plan REGION [REGION...] | build REGION [REGION...] | inspect release.json | status [report.json] [--watch]";
+const usage = "Usage: data regions | plan REGION [REGION...] | build REGION [REGION...] [--rebuild] | inspect release.json | status [report.json] [--watch]";
 
 async function withProgress(statusFile: string, action: (context: CoverageRunnerContext) => Promise<CoverageRunResult>) {
   const controller = new AbortController(), started = Date.now();
@@ -68,14 +68,15 @@ export async function runDataCommand(argv: readonly string[]): Promise<void> {
     for (const region of await listCoverageRegions()) process.stdout.write(`${region.id}\t${region.name}\n`);
     return;
   }
-  const [file, ...options] = args;
-  if (!file || file.startsWith("--")) throw new Error(usage);
   if (command === "plan" || command === "build") {
-    if (args.some(id => !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(id))) throw new Error(usage);
-    if (new Set(args).size !== args.length) throw new Error("Choose each region only once.");
+    const rebuild = command === "build" && args.includes("--rebuild");
+    const regionIds = rebuild ? args.filter(arg => arg !== "--rebuild") : args;
+    if (!regionIds.length || args.filter(arg => arg === "--rebuild").length > 1 ||
+      regionIds.some(id => !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(id))) throw new Error(usage);
+    if (new Set(regionIds).size !== regionIds.length) throw new Error("Choose each region only once.");
     // Reject every invalid selection before preparation or status writes begin.
     const selections = [];
-    for (const id of args) {
+    for (const id of regionIds) {
       const region = await readCoverageRegion(id);
       selections.push({region, plan:planCoverageRegion(region)});
     }
@@ -85,7 +86,7 @@ export async function runDataCommand(argv: readonly string[]): Promise<void> {
           note: "Download size and first-build duration are unknown until preparation. No source data was processed.", limitations: region.recipe.limitations }, null, 2)}\n`);
       } else {
         // One active build at a time; stream results rather than retaining packs.
-        const {result, progress} = await withProgress(statusFile, context => buildCoverageRegion(region, context));
+        const {result, progress} = await withProgress(statusFile, context => buildCoverageRegion(region, context, {rebuild}));
         const releasePath = path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared", "release.json");
         process.stderr.write(`${result.status === "completed" ? "Completed" : "Paused"} ${region.name} in ${Math.floor(progress.elapsedMs / 60000)}m ${Math.floor(progress.elapsedMs / 1000) % 60}s.\n`);
         process.stdout.write(`${JSON.stringify({...result, region:{id:region.id,name:region.name}, summary:progress,
@@ -93,8 +94,8 @@ export async function runDataCommand(argv: readonly string[]): Promise<void> {
         if (result.status !== "completed") break;
       }
     }
-  } else if (command === "inspect" && !options.length) {
-    process.stdout.write(`${JSON.stringify(await inspectPreparedRelease(file), null, 2)}\n`);
+  } else if (command === "inspect" && args.length === 1 && !args[0]!.startsWith("--")) {
+    process.stdout.write(`${JSON.stringify(await inspectPreparedRelease(args[0]!), null, 2)}\n`);
   } else throw new Error(usage);
 }
 

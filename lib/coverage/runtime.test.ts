@@ -271,6 +271,34 @@ it("rejects corrupt artifact bytes and receipt identity before changing the cata
   await expect(build()).rejects.toThrow("checkpoint failed");
   expect(await release()).toEqual(first);await expectNoScratch();
 });
+it("explicitly rebuilds a rejected checkpoint using cached inputs and publishes only after success",async()=>{
+  const input=region("first-region");
+  // Match the non-schema source field order used by the named-region catalog.
+  input.sources=input.sources!.map(source=>{const {version,retrievedAt,...rest}=source;return {version,retrievedAt,...rest};});
+  await buildCoverageRegion(input,context());
+  const before=await readFile(path.join(root,"release/release.json"),"utf8");
+  const receiptFile=path.join(root,"stage/regions",(await readdir(path.join(root,"stage/regions")))[0]!);
+  const receipt=JSON.parse(await readFile(receiptFile,"utf8"));
+  receipt.release.id="old-order-checkpoint";
+  const rejected=JSON.stringify(receipt);await writeFile(receiptFile,rejected);
+  await expect(buildCoverageRegion(input,context())).rejects.toThrow("--rebuild");
+  const paused=context();paused.report=async update=>{if(update.stage?.startsWith("Writing prepared graph:"))throw new Error("paused rebuild");};
+  await expect(buildCoverageRegion(input,paused,{rebuild:true})).rejects.toThrow("paused rebuild");
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(before);
+  expect(await readFile(receiptFile,"utf8")).toBe(rejected);
+  vi.mocked(calculateEdgeMetricsBatch).mockClear();vi.mocked(filteredSourceLines).mockClear();
+  const {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
+  vi.mocked(writeProgressiveTopology).mockClear();
+  await buildCoverageRegion(input,context(),{rebuild:true});
+  expect(writeProgressiveTopology).toHaveBeenCalledOnce();
+  expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(filteredSourceLines).not.toHaveBeenCalled();
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(before);
+  vi.mocked(writeProgressiveTopology).mockClear();
+  await buildCoverageRegion(input,context());
+  expect(writeProgressiveTopology).not.toHaveBeenCalled();
+  await expectNoScratch();
+});
 it("invalidates artifact and metric caches when their algorithm changes",async()=>{
   await build();const before=await release();algorithms.metricVersion="changed-metrics-v2";
   vi.mocked(calculateEdgeMetricsBatch).mockClear();await build();

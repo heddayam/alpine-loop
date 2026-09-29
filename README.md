@@ -192,6 +192,20 @@ This check does not establish a complete approach/trail inventory
 or guarantee a suitable loop from every start.
 
 Unchanged builds validate dependencies and reuse their artifact before normalization.
+To test compiler changes or replace an invalid completed checkpoint, add `--rebuild`:
+
+```sh
+docker compose run --rm --build \
+  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  data scripts/data.ts build central-cascades --rebuild
+```
+
+Compose's `--build` updates the data image; the CLI's `--rebuild` reruns graph
+preparation while keeping verified source/context, DEM and measurement caches.
+The previous published area remains available until the rebuild succeeds. This
+measures a warm preparation, so compare individual stages and cache-hit counts
+with the previous run rather than treating the total as a cold-build comparison.
+
 Building another named region adds it; rebuilding the same ID replaces it. The first
 named publication retires anonymous bbox entries from the active catalog, retaining
 immutable files needed by saved references. Conflicting source pins in retained

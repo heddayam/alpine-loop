@@ -42,7 +42,7 @@ type Receipt = { release: DataRelease; compressedHash: string; demGeometry: Area
 const durable = (source: SourceSnapshot) => { const { localPath, ...value } = source; void localPath; return value; };
 
 /** One named place is an independently usable graph, with reusable physical measurements. */
-export async function buildCoverageRegion(region: CoverageRegion, context: CoverageRunnerContext): Promise<CoverageRunResult> {
+export async function buildCoverageRegion(region: CoverageRegion, context: CoverageRunnerContext, buildOptions: {rebuild?:boolean} = {}): Promise<CoverageRunResult> {
   const recipe = sourceRecipeSchema.parse(region.recipe), area = planCoverageRegion({...region, recipe});
   const session = await preparationSession(recipe, context);
   const {root, outputRoot, cacheRoot, raws, units, check, report} = session;
@@ -77,15 +77,17 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     const identity = (elevationFingerprint: string) => ({id:area.id, name:area.name, inputFingerprint:contentId({declared,elevationFingerprint}),
       startGeometry:area.startGeometry, maximumRouteMiles:area.maximumRouteMiles, bufferMiles:area.bufferMiles});
     let cached: Receipt | undefined;
-    try { cached = JSON.parse(await readFile(receiptPath, "utf8")); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    if (!buildOptions.rebuild) {
+      try { cached = JSON.parse(await readFile(receiptPath, "utf8")); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
     let prepared: DataRelease | undefined, referenceAudits: ReferenceAudit[] = [], referenceSources: DataRelease["sources"] = [];
     if (cached) {
       const stored = dataReleaseSchema.parse(cached.release);
       if (stored.sections.length !== 1 || stored.sections[0]!.id !== area.id || stored.artifacts.length !== 1 ||
         stored.id !== preparedReleaseId({...stored, area:identity(cached.elevationFingerprint)}) ||
         contentId(stored.geometry) !== contentId(area.geometry) || contentId(stored.sections[0]!.geometry) !== contentId(area.startGeometry))
-        throw new Error(`Region checkpoint identity failed verification: ${area.id}`);
+        throw new Error(`Region checkpoint identity failed verification: ${area.id}. Run build ${area.id} --rebuild to prepare it again while retaining source and elevation caches.`);
       await report(`Verifying cached elevation: ${area.name}`);
       const actual = await describeCanonicalElevation(cached.demGeometry, cacheRoot, root, dem);
       if (actual?.productFingerprint === cached.elevationFingerprint) {

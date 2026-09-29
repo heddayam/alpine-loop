@@ -6,6 +6,25 @@ the evidence line.
 
 ## Active system design revision
 
+### Checkpoint identity and explicit rebuild — 2026-09-29
+
+- [x] Reproduce Central Cascades' checkpoint rejection using JSON only: export
+  hashed region-source fields in producer insertion order, but release parsing
+  reordered them. Normalize sources with the same source schema before hashing;
+  already schema-ordered inputs keep their identities. This uses a stable input
+  representation as required for repeatable hashing ([RFC 8785 rationale](https://www.rfc-editor.org/rfc/rfc8785)).
+  Invalid older checkpoints remain rejected rather than weakening verification.
+- [x] Add `build REGION [REGION...] --rebuild`: skip only the completed region
+  receipt, retaining verified source/context, DEM and metric caches. Publish a
+  replacement only after successful preparation; failures keep the previous
+  catalog and receipt. CLI preflights all selections and rejects invalid flags.
+  Document the combined Compose `--build` and CLI `--rebuild` command in README.
+- [x] 28 focused CLI, release and runtime cases pass, including source-order
+  round-trip identity, rejected-checkpoint rebuild, failure preservation, cached
+  input reuse and subsequent ordinary receipt reuse. Targeted ESLint and
+  `npm run typecheck` pass. No regional build, cache removal or live SQLite
+  inspection was performed; the user runs the timed preparation.
+
 ### Ranking, metric reuse and compression overhead — 2026-09-29
 
 - [x] Aggregate component sizes once per access profile, instead of recounting

@@ -30,6 +30,9 @@ it.each([
   ["build", "glacier-peak", "--all"],
   ["build", "glacier-peak", "../unreviewed"],
   ["plan", "glacier-peak", "--all"],
+  ["plan", "glacier-peak", "--rebuild"],
+  ["build", "--rebuild"],
+  ["build", "glacier-peak", "--rebuild", "--rebuild"],
   ["build", "glacier-peak", "glacier-peak"],
   ["plan", "glacier-peak", "glacier-peak"],
   ["build", "catalog.json", "--network", "network-old"],
@@ -60,6 +63,13 @@ it("passes the start area to preparation and removes signal listeners", async ()
   expect(process.listenerCount("SIGINT")).toBe(listeners);
   expect(JSON.parse(await readFile(path.join(root, "status.json"), "utf8"))).toMatchObject({status:"completed",completedUnits:1, counts:{sourceEdges:100,retainedEdges:20,metricCacheHits:12},peakMeasuredMemoryBytes:1048576,peakCgroupMemoryBytes:2097152,peakDiskBytes:3145728});
   expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining("Completed Glacier Peak area in"));
+});
+
+it.each([false,true])("forwards explicit rebuild=%s without treating the flag as a region", async rebuild => {
+  vi.mocked(buildCoverageRegion).mockResolvedValue({status:"completed",snapshot:null,completedUnits:1,units:[]});
+  await runDataCommand(["build",...(rebuild?["--rebuild"]:[]),region.id]);
+  expect(readCoverageRegion).toHaveBeenCalledExactlyOnceWith(region.id);
+  expect(buildCoverageRegion).toHaveBeenCalledWith(region,expect.anything(),{rebuild});
 });
 
 it("persists failed preparation status and removes listeners", async () => {
