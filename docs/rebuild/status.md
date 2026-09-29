@@ -6,6 +6,58 @@ the evidence line.
 
 ## Active system design revision
 
+### Regional preparation toward 20–25 minutes — 2026-09-29
+
+- [x] Record the user's warm Central Cascades baseline: 31m 46s, with 10m 17s
+  importing context, 4m 35s preparing sparse starts, 3m 23s writing and 5m 9s
+  compressing. Candidate/eligible/retained counts match the previous run;
+  all 822,526 segment measurements were reused. The earlier approximately
+  49-minute build measured 44,120 segments and included extraction, so total
+  savings are not an isolated compiler comparison.
+- [x] Keep disposable graph databases on an anonymous Docker-native volume,
+  removed by `run --rm`; retain host source/context, elevation, metric and receipt
+  caches. Explicit WAL NORMAL and a bounded 16 MiB working-store cache remove
+  per-transaction durability syncs for rebuildable data. External scratch remains
+  included in disk accounting and is cleaned on completion or interruption.
+- [x] Populate node/edge spatial indexes once after compression. Keep foreign-key
+  indexes, graph schema, stable IDs, geometry, float metrics, access and source
+  validation. Independent publisher/compaction callers retain their defaults;
+  deferred compaction rejects stale indexes and final indexing is transactional.
+- [x] Stream walking/building/evidence context in one way scan and one tagged-node
+  scan, retaining separate source/context envelopes and shared conversion helpers
+  for independent audits. Load temporary portal links in bounded 1,000-ID SQL
+  batches and create endpoint indexes afterward. Preserve source validation,
+  hiking/access flags, exact building counts, checkpoints and recovery.
+- [x] Bounded synthetic evidence preserves exact logical output hashes: in an
+  isolated 1 GiB Docker container, 100,000 node writes took 7,108 ms on shared
+  storage/default settings versus 3,550 ms on native storage/tuned settings.
+  A 30,000-physical-edge graph at approximately 96% compression took 11,160 ms
+  writing/compressing with immediate indexes versus 3,732 ms including final
+  deferred indexing, with about 144 MiB process peak. A 300,000-segment portal
+  load including all indexes took 10,536 versus 2,502 ms; a complete 3,000-segment
+  candidate preparation took 76 versus 41 ms. Combined source reading took
+  176.7 versus 94.4 ms median over alternating passes. These are synthetic
+  measurements, not regional runtime predictions or additive savings.
+- [x] Verification: 166 focused cases pass across portals, publisher/compaction,
+  source-store, progressive-store, runtime and resources; targeted ESLint and one
+  integrated `npm run typecheck` pass. `docker compose config --quiet`, one data
+  image build and a normal-user scratch-volume write/remove probe pass. No
+  regional build or live SQLite inspection was performed; benchmark scratch and
+  managed task worktrees are removed, preserving separate terrain work and the
+  user-owned publication review.
+- [ ] Measure the next Central Cascades preparation with `build central-cascades
+  --rebuild`. The 20–25-minute goal remains unverified. Compare counts and cache
+  hits as well as stages; separate terrain-policy work may change retained input.
+
+Primary references: [Docker volumes](https://docs.docker.com/engine/storage/volumes/),
+SQLite [WAL synchronization and cache bounds](https://www.sqlite.org/pragma.html#pragma_synchronous),
+[R-tree rounding](https://www.sqlite.org/rtree.html#roundoff_error),
+[INSERT SELECT](https://www.sqlite.org/lang_insert.html),
+[JSON table functions](https://www.sqlite.org/json1.html#jeach), and
+[index construction](https://www.sqlite.org/lang_createindex.html).
+NORMAL preserves transaction consistency but may lose recent commits after a
+power failure; only reproducible working graph data changes synchronization.
+
 ### Checkpoint identity and explicit rebuild — 2026-09-29
 
 - [x] Reproduce Central Cascades' checkpoint rejection using JSON only: export
