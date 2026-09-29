@@ -6,6 +6,60 @@ the evidence line.
 
 ## Active system design revision
 
+### Sparse starts and complete territory assignment — 2026-09-28
+
+- [x] Apply the user's explicit rule: 0–9 mapped buildings within 500 metres;
+  ten or more excludes a start. Include quiet foothills/lowlands throughout
+  Washington and the exact existing four California footprints. No mountain
+  heuristic or additional user control. Unknown access remains enabled by default.
+- [x] Correct explicit `building=no` handling for nodes, ways and supported
+  relations, retaining unrelated trail/parking roles. Normalization v7 invalidates
+  old context stores/receipts; valid physical metric cache entries remain reusable.
+- [x] Discover/freeze access candidates before distance pruning and DEM work.
+  Pruning starts only at those candidates, preserving the admissible undirected
+  closed-route bound. Parking snaps cannot move when other trails are pruned.
+  Rank/components run once on measured topology. Scratch tables use disk, failed
+  preparation removes scratch, and all-dense selections stop before DEM acquisition
+  without changing publication. Admission constants participate in cache identity.
+- [x] Preserve reviewed-approach checks. An actual public/unknown mapped candidate
+  rejected solely by building count is named in release limitations; missing or
+  restricted access evidence still fails. Dense disconnected fixture trails are
+  never sampled; nine-building starts remain and ten-building starts are rejected.
+- [x] Assign all 39 pinned Census 2025 counties once across twelve Washington
+  download groups, unioned with existing footprints/approaches. Catalog loading
+  rejects missing, duplicate and unknown assignments. All four California effective
+  footprint hashes remain unchanged. This is complete declared territory assignment,
+  not proof of source-trail completeness or generalized shoreline precision.
+- [x] Add the matching August 1 Idaho extract: 127,365,914 bytes, SHA-256
+  `6cb0ef33774b5580d618749b0b0a54d4f7a0b1bc0674e1df2bfa73024ea0f7b8`,
+  upstream timestamp `2026-08-01T20:21:21Z`, same as Washington/Oregon. Streamed
+  acquisition and header-only inspection retained one useful cache copy/receipts;
+  no live/cache SQLite was opened on the host. Provider polygon/date mismatch is
+  recorded rather than expanding advertised coverage to the PBF header bbox.
+- [x] Extend the surveyed IBC mask through eastern route buffers while preserving
+  all 855 original border vertices. Declare a narrow offshore scope cap west of
+  −125.25 north of 46.4; it removes Olympic's ocean-only source gap without clipping
+  any county/retained start footprint. Real mainland source gaps still fail.
+- [x] Focused verification: 36 compiler-runtime, six pruning, 18 regional-catalog,
+  three recipe, 29 CLI and four retained-seam cases passed, together with the
+  portal/store/publication, building-context, eligibility and six adjacent-source
+  cases run by the bounded agents. Initial runtime fixtures without access roads
+  were corrected to retain their stated test purpose; the two affected cases then
+  passed. The initial full-territory plan exposed the offshore gap above; all 16
+  plans pass after its explicit scope correction. Targeted ESLint and integrated
+  TypeScript checking passed. No full app/browser suite or regional build ran.
+- [ ] User rebuilds the data/app images, rebuilds desired named areas and installs
+  the updates. Existing prepared/installed artifacts remain until replaced normally.
+  Larger groups have unmeasured source-reading time, peak memory, download bytes
+  and total build cost; early pruning does not establish the ten-minute target.
+- [ ] Real-data start/trail completeness, shoreline/boundary margins, representative
+  loops/lollipops and performance acceptance across the expanded territory.
+
+Inputs, tradeoffs and commands are in [territory definitions](../../data/coverage/territories/README.md),
+[network design](network-design.md), [coverage roadmap](regional-expansion-plan.md)
+and [README](../../README.md#developer-data-builds). User caches, prepared/installed
+artifacts, saved jobs and the untracked publication review are preserved.
+
 ### Download worker packaging repair — 2026-09-28
 
 - [x] Reproduce Central Cascades installation failing at zero bytes in the user's
@@ -25,8 +79,8 @@ the evidence line.
   an empty temporary queue. The first probe awaited `close` after IPC disconnect;
   corrected diagnostic waiting on `exit` passed. Temporary containers and queues
   were removed. No user database, installed artifact or build cache was changed.
-- [ ] User rebuilds the app image and resumes the failed installation. Regional
-  graph rebuilding is unnecessary for this packaging fix.
+- [x] User rebuilt the app and reported downloads working. Regional graph
+  rebuilding was unnecessary for this packaging fix.
 
 ### Area consolidation and elevation gap repair — 2026-09-28
 

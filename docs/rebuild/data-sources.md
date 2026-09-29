@@ -129,18 +129,20 @@ region without such a source gets generic portal names, not missing routes.
 
 ### Buildings (is this start in a neighbourhood)
 
-- Source: the **same pinned OSM extract** as the trail topology. `wa/building`
-  is filtered out of the prepared region, exported, and reduced to centroids by
-  `lib/data/osm/buildings.ts`. No second dataset, no raster, no Python.
-- Purpose: the product only ever wants wilderness starts, so this is one
-  measurement and one rule, not a taxonomy the user picks from. An access point
-  is rejected when **10 or more buildings** sit within **500 m** of its snapped
-  node (`lib/data/wilderness.ts`).
-- Only centroids are retained, rounded to five decimal places (about a metre,
-  against a 500 m counting radius). The filtered `.pbf` and the export are
-  deleted before the staging directory is committed: it is renamed into place,
-  so anything left behind is kept forever. Santa Cruz retains 3.9 MB for
-  189,826 buildings.
+- Source: the **same pinned OSM extract** as the trail topology. The local source
+  store records supported building centroids, deduplicated by source identity.
+  Nodes, ways and supported relations count; explicit `building=no` does not.
+  Unsupported relations remain disclosed in the context inventory and release.
+- An access point qualifies with **0–9 mapped buildings within 500 m** of its
+  snapped node (`lib/data/wilderness.ts`). This measures immediate surroundings;
+  mountainous terrain, administrative boundaries and forest membership are not
+  eligibility tests. Unknown access remains enabled by default.
+- Candidate discovery uses a SQLite spatial index followed by an exact distance
+  check before distance pruning and elevation acquisition. The prepared candidates
+  retain their original snapping through final topology/ranking. Runtime search
+  and map eligibility use the same threshold. Source snapshots and admission
+  constants participate in preparation identity; changed policy rebuilds artifacts,
+  while unchanged physical segment measurements remain reusable.
 - This **replaces GHS-POP**, which was previously used for the same decision.
   The reasoning for the swap, and why the earlier argument against OSM
   built-up signals did not survive measurement:
@@ -159,8 +161,11 @@ region without such a source gets generic portal names, not missing routes.
 - Deleting the raster path removed the pinned GHSL download, the tile-grid
   arithmetic, the uv/rasterio sampler, and `tools/dem/sample_population.py`, and
   cut about 35 MB per region from the source cache.
-- No fallback: a region whose extract yields no buildings fails the build rather
-  than silently treating every start as wild.
+- Sparse OSM evidence does not prove absence of buildings. The active source
+  pipeline reports unsupported context and fails malformed/missing references;
+  a locally valid zero count is allowed. There is no population or mountain fallback.
+  Historical source-wide building counts above are observations, not a completeness
+  guarantee for every new Washington area.
 
 ### Basemap
 

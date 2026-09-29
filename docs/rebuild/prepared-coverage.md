@@ -44,8 +44,13 @@ before work, while the explicit international limit clips Canadian support.
 
 One catalog owns the boundary, reviewed approach neighborhoods, names, aliases and
 recipe. Plan and Downloads use that same eligible-start footprint. Preparation
-extracts complete local ways/context, prunes by an admissible distance bound before
-DEM work, reuses measured segment metrics, persists compact corridors and audits.
+extracts local ways/context, discovers and freezes eligible starts with fewer than
+ten mapped buildings within 500 metres, then prunes by an admissible distance bound
+before DEM work. It reuses measured segment metrics, persists compact corridors and
+audits. Washington uses all 39 county units assigned across twelve downloads;
+California retains four exact existing footprints. County lines select starts only.
+Unsupported building relations and density-excluded reviewed approaches are disclosed;
+missing topology remains a publication error.
 Schema 7 geometry/profile records are unchanged. Each artifact carries its stable
 region ID and each section its human name. Display-label changes do not change the
 graph identity. Overlapping artifacts remain independent.

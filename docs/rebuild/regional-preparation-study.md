@@ -164,7 +164,9 @@ most L/2. Therefore its distance from that start in the underlying **undirected*
 graph is at most 25 miles. Ignoring one-way restrictions only lowers distances;
 the final route search still enforces them.
 
-Seed all potentially eligible source trail nodes in the start footprint. Use
+Updated 2026-09-28: seed the frozen access candidates that pass the shared
+0–9 buildings within 500 metres rule. This supersedes the original conservative
+choice to seed every trail node in the start footprint. Use
 nonnegative segment lengths that are conservative lower bounds on published
 lengths. Multi-source Dijkstra with a 25-mile cutoff gives a safe overestimate of
 the relevant graph. Retain edges whose endpoints survive. A further necessary

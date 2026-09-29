@@ -44,12 +44,17 @@ enumeration or a bound on trail density and search complexity.
 
 `data regions` lists the pinned catalog. `data plan central-cascades` previews the
 named trailhead footprint and routing support; `data build central-cascades` builds it.
-The initial unit is a wilderness-sized hiking area with reviewed approaches, not
-an entire forest or an arbitrary coordinate box. Names, provenance, geometry and
-approach review are owned by one catalog in `data/coverage/regions/`.
+Named download groups cover the complete declared territory. Washington assigns
+all 39 pinned county polygons; California preserves the four existing footprints.
+Historical boundaries and reviewed approaches remain included. Names, provenance,
+geometry and approach review are owned by one catalog in `data/coverage/regions/`.
 
-After normalization, a bounded multi-source Dijkstra pass seeds every trail node
-inside the start footprint on an undirected lower-bound graph. Any vertex on a
+After normalization, the shared access discovery finds actual start candidates
+inside the start footprint and counts building centroids through a spatial index.
+Public/unknown starts with 0–9 buildings within 500 metres seed a bounded multi-source
+Dijkstra pass on an undirected lower-bound graph. No mountain rule applies.
+Candidate identities and parking snaps are frozen before pruning; final ranking
+and components run once on the measured graph. Any vertex on a
 closed walk of at most 50 miles must be within 25 miles of its start in that graph.
 A physical edge is retained only when both endpoint distances are finite and
 `d(u) + edgeLength + d(v) <= 50 miles` (with conservative numerical tolerance).
@@ -75,7 +80,8 @@ away. Explicit sidewalk/crossing tags remain excluded from route edges; access,
 direction, provenance and reviewed restrictions still apply. This broader policy
 can include urban pedestrian links; it does not imply public access or trail quality.
 
-Smart node-based extraction completes included ways and building relations.
+Node selection plus sequential parent scans and reference completion preserve
+included ways and supported building relations within the configured memory cap.
 A valid budgeted route has all its vertices within the routing buffer. An extra
 context margin protects edge-boundary selection. Context features crossing or
 enclosing the whole extract without an inside vertex can still be absent;

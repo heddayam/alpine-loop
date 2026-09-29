@@ -9,7 +9,8 @@ and [README](../../README.md#developer-data-builds).
 
 ## Current availability and restoration baseline
 
-`data/coverage/regions/catalog.json` defines nine named build selections. The
+`data/coverage/regions/catalog.json` defines sixteen named build selections:
+twelve Washington groups and the four historical California areas. The
 pilot entries and production polygons are removed. Independent baseline fixtures
 retain their coverage obligations; a Central Cascades rebuild retires the old
 download entries only after successful preparation. New or consolidated definitions
@@ -35,11 +36,12 @@ number of packs does not prescribe the number of new download areas.
 | Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
 | Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Configured; build/install/acceptance pending |
 
-The five historical Washington groups were mountain-focused. They do not establish
-statewide coverage: their charters excluded other Washington hiking systems.
-Maintain an explicit inventory of remaining statewide areas and gaps, including
-lowland and eastern-Washington systems, before claiming Washington complete.
-The existing wilderness-start eligibility and access rules continue to apply.
+The historical Washington polygons were mountain-focused. The current definitions
+union them with all 39 pinned Census county polygons, assigned once across twelve
+groups. This closes unassigned territorial gaps and retains old approach obligations.
+Eligibility is fewer than ten mapped buildings within 500 metres plus the existing
+access/topology rules, including quiet lowlands and foothills. Complete county
+assignment is not a claim of complete source trails or built/installed coverage.
 
 Marin/Mount Tam and Tahoe–Eldorado were planned, not previously activated.
 Keep them distinct from restoration obligations. The August 4 archive tags contain
@@ -50,8 +52,9 @@ earlier prototype source samples, not the nine later completed regional builds.
 - The generic loader reads each area's boundary/approach attribution from data.
   Washington's full mainland and maritime IBC support limit is explicit in its
   recipe; California uses its own verified provider extent. Southwest Cascades
-  includes a separately pinned Oregon source, as requested, to preserve its full
-  route buffer. Source gaps still fail instead of silently shrinking coverage.
+  includes the separately pinned Oregon source; eastern groups use matching Idaho
+  inputs. The surveyed US border extends across both providers. Real source gaps
+  still fail instead of silently shrinking coverage.
 - The restored definitions reuse reviewed geographic footprints, exact-way access
   restrictions and source-linked representative approach checkpoints. Those
   checkpoints are not complete trailhead inventories. Larger historical groups
@@ -71,24 +74,26 @@ earlier prototype source samples, not the nine later completed regional builds.
 - Source-refresh/publication across a coherent generation remains a separate
   maintenance gate. A batch of builds is not an atomic generation refresh.
 
-## Washington inventory still to reconcile
+## Washington territory assignment and acceptance
 
-Restoring the five mountain-focused groups is not Washington-wide completion.
-The following are explicit inventory work, not silently omitted or advertised
-as available. Boundaries, authoritative approach evidence, provider buffers and
-representative routes must be reviewed before adding buildable entries.
+The [pinned county definitions](../../data/coverage/territories/README.md) document
+all assignments and provenance. Catalog validation rejects a missing unit, duplicate
+assignment or unknown unit. Existing groups cover their whole assigned counties;
+seven new groups cover the remaining islands, lowlands and eastern territory:
 
-| Remaining system inventory | What must be reconciled |
-| --- | --- |
-| Puget lowlands, islands and Chuckanut | Eligible rural starts outside the historical mountain footprints; retain the shared built-up start rule |
-| Southwest lowlands, Willapa Hills and remaining Columbia Gorge | Systems beyond Southwest Cascades' retained starts; Oregon source support does not automatically add starts |
-| Okanogan Highlands, Kettle/Colville and northeast Washington | Historical North Cascades coverage does not establish these systems; check Idaho/Canada buffer needs and preserve US-only scope |
-| Spokane-area systems and southeast Washington/Blue Mountains | New natural-area definitions, approach and source review; Oregon/Idaho support where needed |
-| Columbia Basin, canyon and eastern foothill systems | Inventory eligible networks and gaps without claiming that every mapped urban path is a wilderness start |
+- North Puget Islands; South Puget Sound; Willapa Hills and Lower Columbia.
+- Northeast Washington; Spokane and Palouse; Columbia Basin.
+- Blue Mountains and Walla Walla.
 
-This is a regional reconciliation checklist, not an exhaustive official statewide
-trail inventory. Existing exclusions requiring further permission/source review
-remain explicit; forest aliases never imply an entire forest is installed.
+The original five groups also expand to their west/east foothills and lowlands.
+Census mapping geometry is generalized; shorelines, small islands and margins still
+need source-start acceptance. The precise IBC mask and reviewed exclusions remain
+hard routing limits. Preserve explicit permission/source-review exclusions.
+
+Real-data build time, memory, bytes, installation, route generation and independent
+source completeness are still acceptance work. The rectangular routing buffers
+can make large county groups expensive even after early sparse-start filtering.
+Future measured regrouping must preserve every unit and existing coverage obligation.
 
 ## Region definition and acceptance
 

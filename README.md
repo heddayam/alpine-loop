@@ -107,18 +107,18 @@ Automated tests do not fetch trail data or call external providers.
 ### Developer data builds
 
 The workflow is **choose named hiking areas → preview → build**. Run `data regions`
-for the configured names. The catalog restores the nine historical Washington and
-California groups. Central Cascades includes the full Glacier Peak and Henry M.
-Jackson pilot footprints and reviewed approaches; those pilots are retired as
-separate builds and downloads. A configured area becomes downloadable only after a successful build;
-installation is a separate action in Coverage. See the [coverage roadmap](docs/rebuild/regional-expansion-plan.md)
-for built/installed acceptance and remaining Washington-wide gaps.
+for the configured names: twelve Washington groups and the four existing California
+areas. Washington's 39 counties are all assigned; names organize downloads, while
+access and **fewer than 10 mapped buildings within 500 metres** determine eligible
+starts. Quiet foothill and lowland starts qualify too. California retains its exact
+previous footprints. See the [territory definitions](data/coverage/territories/README.md)
+for grouping and boundary limitations.
 
-Each footprint selects trailheads, including reviewed approach neighborhoods.
-A hike does not have to stay inside the named area. The broader restoration
-footprints reuse reviewed geographic groups; their first-build time is unmeasured
-and can exceed the former wilderness pilot builds. Forest aliases do not imply
-coverage of an entire national forest.
+Central Cascades preserves the Glacier Peak and Henry M. Jackson pilot footprints
+and approaches. Areas become downloadable after a successful build, then install
+through Coverage. Larger start territories increase source-processing costs; build
+times and artifact sizes need measurement. The ten-minute target is not established
+for these expanded areas. Forest aliases do not promise entire-forest coverage.
 
 ```sh
 # Build tooling only; this does not process trail data.
@@ -133,10 +133,16 @@ docker compose run --rm data scripts/data.ts plan santa-cruz-mountains henry-coe
 docker compose run --rm data scripts/data.ts build \
   santa-cruz-mountains southern-east-bay monterey-carmel henry-coe
 
-# Washington restoration, alongside any existing pilot builds:
+# Rebuild the expanded existing Washington groups:
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
   data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks southwest-cascades olympic-peninsula
+
+# Additional Washington groups, also built sequentially:
+docker compose run --rm \
+  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  data scripts/data.ts build north-puget south-puget willapa-hills \
+  northeast-washington spokane-palouse columbia-basin blue-mountains
 
 # In another terminal:
 npm run data -- status --watch
@@ -161,16 +167,18 @@ explicitly labeled close matches up to 50 miles. Missing US source coverage fail
 before processing. The declared international border and reviewed exclusions are
 hard routing limits. Download bytes become known after preparation.
 
-The builder extracts local trails and access/building context, prunes trails that
-cannot participate within the distance budget **before elevation work**, and requests
-only DEM tiles owning retained samples. It reuses segment metrics across overlapping
+The builder extracts local trails and access/building context, finds sparse eligible
+starts, then prunes trails that cannot participate within their distance budget
+**before elevation work**. It requests only DEM tiles owning retained samples. It reuses segment metrics across overlapping
 builds, then stores compact corridors with their full geometry and elevation profiles.
 Each named region remains an independent graph; overlapping regions never get stitched
 together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
 Before publication, each reviewed approach must have a mapped starting point in
-the final graph within its declared registration neighborhood. A missing start
-stops publication and names the approach to investigate; the previous release
-remains usable. This check does not establish a complete approach/trail inventory
+the final graph within its declared registration neighborhood, or an actual mapped
+start explicitly excluded by the building rule and named in release limitations.
+Missing topology still stops publication and names the approach to investigate; the
+previous release remains usable. Areas with no eligible starts stop before elevation.
+This check does not establish a complete approach/trail inventory
 or guarantee a suitable loop from every start.
 
 Unchanged builds validate dependencies and reuse their artifact before normalization.

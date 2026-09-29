@@ -16,10 +16,14 @@ a catalog of known hikes. Users choose an area, physical route constraints,
 acceptable repetition, and whether unknown access is included. Requested route
 distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
-Coverage targets all Washington hiking areas and restoration of the previously
-available Bay Area/nearby California systems. The nine build areas consolidate
-Glacier Peak and Henry M. Jackson into Central Cascades. The [coverage roadmap](regional-expansion-plan.md)
-tracks historical coverage, current restoration and the remaining statewide scope.
+Coverage targets all eligible starts in Washington and the exact previously
+available Bay Area/nearby California footprints. A start needs fewer than ten mapped
+buildings within 500 metres, regardless of mountain/foothill/lowland geography.
+Twelve Washington download groups assign all 39 counties, adding the preserved
+historical footprints and approaches; four California definitions remain unchanged.
+County lines organize downloads and do not clip hikes. Generalized boundary/source
+limitations and real-data acceptance remain explicit. The [coverage roadmap](regional-expansion-plan.md)
+tracks implementation separately from built, installed and verified coverage.
 
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
