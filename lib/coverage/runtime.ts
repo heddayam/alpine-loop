@@ -7,6 +7,7 @@ import { topologySha256 } from "@/lib/graph/topology-hash";
 import { createPreparedSchema } from "@/lib/data/sqlite-writer";
 import { exportPreparedRelease, preparedReleaseId, publishPreparedCatalog } from "@/lib/data/prepared-release";
 import { compactPreparedGraph } from "@/lib/data/compact-prepared-graph";
+import { rebuildPreparedSpatialIndexes } from "@/lib/data/prepared-spatial-index";
 import { writeProgressiveTopology } from "@/lib/data/progressive/topology";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
 import { prepareSparsePortalCandidates } from "@/lib/data/progressive/portals";
@@ -118,7 +119,18 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         for (const raw of raws) {
           unsupportedBuildings += Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n);
           const sourceCoverage = intersectCoverage(area.geometry, recipe.sources.find(source => source.config.id === raw.source.id)!.geometry)!;
-          for (const {way, nodes} of raw.ways(sourceCoverage)) {
+          for (const entry of raw.context(area.geometry,sourceCoverage)) {
+            if (entry.kind === "building") {
+              if (enqueue(() => store.putBuilding(entry.centroid))) await check();
+              memberSources.add(raw.source.id);
+              continue;
+            }
+            if (entry.kind === "evidence") {
+              if (enqueue(() => store.putPortalEvidence(entry.evidence))) await check();
+              entry.evidence.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
+              continue;
+            }
+            const {way,nodes}=entry;
             for (const node of nodes) if (enqueue(() => store.putNode(node))) await check();
             let current = way;
             for (const file of inputs.restrictions) { const rule = file.restrictions.find(rule => rule.externalId === current.externalId); if (rule) current = applyRestriction(current,rule,file.snapshot.id); }
@@ -133,11 +145,6 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
               }
             }
             current.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
-          }
-          for (const building of raw.buildings(area.geometry)) { if (enqueue(() => store.putBuilding(building))) await check(); memberSources.add(raw.source.id); }
-          for (const evidence of raw.evidence(area.geometry)) {
-            if (enqueue(() => store.putPortalEvidence(evidence))) await check();
-            evidence.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
           }
         }
         flush(); await check();
@@ -186,14 +193,16 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         try {
           db.exec("PRAGMA foreign_keys=ON;PRAGMA journal_mode=DELETE;PRAGMA cache_size=-16384;PRAGMA temp_store=FILE");
           createPreparedSchema(db);
-          await insertGraph(store,db,topologySha256(area.geometry),new Set(sources.map(source=>source.id)),check,true);
+          await insertGraph(store,db,topologySha256(area.geometry),new Set(sources.map(source=>source.id)),check,true,{spatialIndexes:false});
           const remove = db.prepare("DELETE FROM access_points WHERE id=?");
           const excluded: string[] = [];
           for (const row of db.prepare("SELECT a.id,n.lon,n.lat FROM access_points a JOIN nodes n ON n.id=a.node_id").iterate())
             if (!coordinateIsInsideArea([Number(row.lon),Number(row.lat)],area.startGeometry)) excluded.push(String(row.id));
           for (const id of excluded) remove.run(id);
           await report(`Compressing trail paths: ${area.name}`);
-          const compact = await compactPreparedGraph(db,check);
+          const compact = await compactPreparedGraph(db,check,{spatialIndexes:false});
+          await report(`Indexing compact trails: ${area.name}`);
+          await rebuildPreparedSpatialIndexes(db,check);
           await report(`Analyzing loops and approaches: ${area.name}`,compact);
           await writeProgressiveTopology(db,check);
           await report(`Checking reviewed approach starts: ${area.name}`);
