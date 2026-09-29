@@ -61,6 +61,14 @@ it("includes start area and input fingerprint in immutable graph identity",()=>{
   expect(preparedReleaseId({...options,area:{...options.area,id:"another-network"}})).not.toBe(preparedReleaseId(options));
   expect(preparedReleaseId({...options,area:{...options.area,inputFingerprint:"changed-input"}})).not.toBe(preparedReleaseId(options));
 });
+it("preserves graph identity when export normalizes source field order",async()=>{
+  const options=fixture();
+  const reordered=Object.fromEntries(Object.entries(source).reverse()) as typeof source;
+  expect(preparedReleaseId({...options,sources:[reordered]})).toBe(preparedReleaseId(options));
+  const release=await exportPreparedRelease({...options,sources:[reordered]});
+  expect(preparedReleaseId({...release,area:options.area})).toBe(release.id);
+  expect(preparedReleaseId({...options,sources:[{...reordered,version:"changed"}]})).not.toBe(release.id);
+});
 it("publishes named ownership without rebuilding for display label changes",async()=>{
   const options=fixture();
   const named={...options,area:{...options.area,name:"Glacier Peak area"}};

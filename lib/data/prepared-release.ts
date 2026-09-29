@@ -22,7 +22,10 @@ export type PreparedReleaseOptions = Pick<DataRelease,"geometry"|"sources"|"regi
 };
 export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"|"limitations"|"area">): string {
   const {id,inputFingerprint,startGeometry,maximumRouteMiles,bufferMiles}=input.area;
-  return `area-${contentId({ area:{id,inputFingerprint,startGeometry,maximumRouteMiles,bufferMiles}, geometry:input.geometry, sources:input.sources, regions:input.regions.map(({id,geometry,sourceIds})=>({id,geometry,sourceIds})), compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
+  // Hash the same field representation used by export and checkpoint parsing.
+  // Producer object insertion order must not change identity after a round trip.
+  const sources=input.sources.map(source=>packSourceSchema.parse(source));
+  return `area-${contentId({ area:{id,inputFingerprint,startGeometry,maximumRouteMiles,bufferMiles}, geometry:input.geometry, sources, regions:input.regions.map(({id,geometry,sourceIds})=>({id,geometry,sourceIds})), compilerVersion:input.compilerVersion, metricAlgorithmVersion:input.metricAlgorithmVersion, builtAt:input.builtAt, limitations:input.limitations ?? [] }).slice(0,32)}`;
 }
 
 const count=z.number().int().nonnegative();
