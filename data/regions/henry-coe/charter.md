@@ -97,9 +97,16 @@ clear OSM access tag; unresolved evidence remains unknown. Safety-critical
 authority removals must be committed as restrictive exact OSM-way targets and
 applied before portals are derived.
 
-## Trailhead identification contract
+## Historical trailhead identification contract (schema 6)
 
-This pack must use the shared schema-6 portal pipeline without regional tuning
+The contract below records the accepted schema-6 build. Its in-memory portal
+implementation has been removed; current builds use the shared
+[`progressive portal compiler`](../../../lib/data/progressive/portals.ts)
+through [`coverage preparation`](../../../lib/coverage/runtime.ts), following the
+[implementation plan](../../../docs/rebuild/implementation-plan.md). Historical
+clustering, thresholds, and optional overlays below do not configure current builds.
+
+This pack used the shared schema-6 portal pipeline without regional tuning
 or an authority-specific trailhead adapter:
 
 - classify OSM ways and retain road context only for build-time portal
@@ -107,7 +114,7 @@ or an authority-specific trailhead adapter:
 - derive candidates where a non-restrictive street touches a trail, or where a
   street-connected parking feature lies near a trail;
 - use the shared 150 m portal clustering, 250 m evidence radius, and 25 m
-  parking-to-road contact constants from `lib/data/portals.ts`;
+  parking-to-road contact constants from the retired `lib/data/portals.ts`;
 - rank and persist portals using trail-only reachable distance, component ID,
   road class, and parking distance, then strip roads, sidewalks, and evidence-
   only objects from the published graph;
@@ -117,10 +124,10 @@ or an authority-specific trailhead adapter:
   on a nearby derived portal only. It cannot create a start, change access,
   reopen a restricted trail, or add a connector.
 
-This means that official point data is not an onboarding dependency. The first
-build should run with OSM portal evidence alone; add an entrance-name overlay
-only if the generic portal labels are materially poor and the source's license
-decision is complete.
+Official point data was not an onboarding dependency. The first build used OSM
+portal evidence alone; the historical contract allowed an entrance-name overlay
+only if generic labels were materially poor and the source's license decision
+was complete. No such overlay was needed, as recorded below.
 
 ## Candidate reviewed search regions
 
