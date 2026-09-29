@@ -151,12 +151,12 @@ async function rankComponents(db:DatabaseSync,profile:"known"|"inclusive",checkp
 
 /** Candidate admission needs local links and context, not elevation or graph-wide ranking. */
 function createPortalLinks(db:DatabaseSync):void {
-  db.exec(`CREATE TEMP TABLE portal_links(physical_id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,allowed INTEGER NOT NULL,hiking INTEGER NOT NULL,measured INTEGER NOT NULL) STRICT;
-    CREATE INDEX portal_links_from ON portal_links(from_node);
-    CREATE INDEX portal_links_to ON portal_links(to_node);`);
+  db.exec(`CREATE TEMP TABLE portal_links(physical_id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,allowed INTEGER NOT NULL,hiking INTEGER NOT NULL,measured INTEGER NOT NULL) STRICT;`);
 }
 function indexPortalNodes(db:DatabaseSync):void {
-  db.exec(`CREATE TEMP TABLE portal_trail_nodes(id TEXT PRIMARY KEY) STRICT;
+  db.exec(`CREATE INDEX portal_links_from ON portal_links(from_node);
+    CREATE INDEX portal_links_to ON portal_links(to_node);
+    CREATE TEMP TABLE portal_trail_nodes(id TEXT PRIMARY KEY) STRICT;
     INSERT INTO portal_trail_nodes SELECT from_node FROM portal_links UNION SELECT to_node FROM portal_links;`);
 }
 async function linksFromMeasuredEdges(db:DatabaseSync,checkpoint:()=>Promise<void>):Promise<void> {
@@ -258,18 +258,32 @@ export async function prepareSparsePortalCandidates(store:ProgressiveGraphStore,
     db.exec("DROP TABLE IF EXISTS temp.sparse_start_nodes; DROP TABLE IF EXISTS temp.sparse_portal_candidates; DROP TABLE IF EXISTS temp.portal_candidate_audit;");
     await checkpoint();
     createPortalLinks(db);
-    let work=0,previousId="",way:NormalizedWay|undefined;
-    for(const link of rows(db,"SELECT * FROM eligible_segments ORDER BY id")) {
-      if(++work%1000===0)await checkpoint();
+    let work=0,previousId="",allowed=false,hiking=0;
+    let batch:Array<[string,number]>=[];
+    const flush=()=>{
+      if(!batch.length)return;
+      // Copy endpoints/distances inside SQLite; only bounded IDs and way flags
+      // cross the JS boundary. json_each preserves exact IDs without SQL quoting.
+      run(db,`INSERT INTO portal_links
+        SELECT e.id,e.from_node,e.to_node,e.length_m,1,json_extract(j.value,'$[1]'),0
+        FROM json_each(?) j JOIN eligible_segments e ON e.id=json_extract(j.value,'$[0]')
+        ORDER BY CAST(j.key AS INTEGER)`,JSON.stringify(batch));
+      batch=[];
+    };
+    for(const link of rows(db,"SELECT id FROM eligible_segments ORDER BY id")) {
+      if(++work%1000===0){flush();await checkpoint();}
       const id=String(link.id),wayId=id.slice(0,id.lastIndexOf(":"));
       if(wayId!==previousId) {
         const record=one(db,"SELECT record FROM ways WHERE id=?",wayId);
         if(!record)throw new Error(`Unknown source way for candidate segment ${id}`);
-        way=JSON.parse(String(record.record)) as NormalizedWay;previousId=wayId;
+        const way=JSON.parse(String(record.record)) as NormalizedWay;
+        allowed=way.edgeClass==="trail"&&allowedAccess(way);
+        hiking=allowed?Number(hikingWay(way)):0;previousId=wayId;
       }
-      if(!way||way.edgeClass!=="trail"||!allowedAccess(way))continue;
-      run(db,"INSERT INTO portal_links VALUES (?,?,?,?,?,?,0)",id,String(link.from_node),String(link.to_node),Number(link.length_m),1,Number(hikingWay(way)));
+      if(allowed)batch.push([id,hiking]);
     }
+    flush();
+    await checkpoint();
     indexPortalNodes(db);
     await discoverPortalCandidates(db,startGeometry,checkpoint);
     db.exec(`CREATE TEMP TABLE sparse_start_nodes(node_id TEXT PRIMARY KEY) STRICT;

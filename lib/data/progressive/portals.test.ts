@@ -290,6 +290,81 @@ n13 Tbarrier=gate,name=Unrelated%20%gate x-122.00004 y48`;
 });
 
 describe("sparse starts before elevation",()=>{
+  it("copies multiple bounded batches with exact IDs, flags, access and distances",async()=>{
+    const {store,topology}=staged(direct,topology=>{
+      const base=topology.ways[0]!;
+      const variants=[
+        {id:'source:with:"quotes"',edgeClass:"trail",accessState:"public",flags:["osm-highway:track","osm-highway:path"]},
+        {id:"track",edgeClass:"trail",accessState:"unknown",flags:["osm-highway:track"]},
+        {id:"other",edgeClass:"trail",accessState:"unknown",flags:["not-osm-highway:path"]},
+        {id:"restricted",edgeClass:"trail",accessState:"private",flags:["osm-highway:path"]},
+        {id:"legacy",edgeClass:undefined,accessState:"unknown",flags:["osm-highway:path"]},
+        {id:"street",edgeClass:"street",accessState:"public",flags:["osm-highway:residential"]},
+      ] as const;
+      for(const variant of variants) {
+        const size=variant.id.startsWith("source:")?2006:2;
+        topology.ways.push({...base,...variant,externalId:`way/${variant.id}`,flags:[...variant.flags],
+          nodeIds:Array.from({length:size},(_,index)=>base.nodeIds[1+index%2]!),
+          coordinates:Array.from({length:size},(_,index)=>base.coordinates[1+index%2]!)});
+      }
+    });
+    try {
+      // Exercise admission even if a previous stage conservatively retained a
+      // non-trail or restricted source record; missing edgeClass stays excluded.
+      const insert=store.database.prepare("INSERT INTO eligible_segments VALUES (?,?,?,?)");
+      for(const id of ["restricted","legacy","street"])insert.run(`${id}:0`,"osm-node-2","osm-node-3",17.125);
+      const expected=store.database.prepare("SELECT * FROM eligible_segments ORDER BY id").all().flatMap(link=>{
+        const id=String(link.id),way=topology.ways.find(way=>way.id===id.slice(0,id.lastIndexOf(":")))!;
+        return way.edgeClass==="trail"&&["public","unknown"].includes(way.accessState)?[
+          {physical_id:id,from_node:link.from_node,to_node:link.to_node,length_m:link.length_m,allowed:1,
+            hiking:Number(way.flags.some(flag=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track")),measured:0},
+        ]:[];
+      });
+      let copied:unknown;
+      const counts=await prepareSparsePortalCandidates(store,coverage,async()=>{
+        const exists=store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name='portal_links'").get();
+        if(exists&&store.database.prepare("SELECT count(*) AS n FROM portal_links").get()!.n===expected.length)
+          copied=store.database.prepare("SELECT * FROM portal_links ORDER BY physical_id").all();
+      });
+      expect(expected.length).toBeGreaterThan(2000);
+      expect(copied).toEqual(expected);
+      expect(counts).toEqual({candidateAccessPoints:3,eligibleAccessPoints:1});
+      expect(seedIds(store)).toEqual(["osm-node-1"]);
+    } finally {store.close();}
+  });
+
+  it("fails missing source ways without leaving temporary discovery state",async()=>{
+    const {store}=staged(direct);
+    try {
+      store.database.prepare("INSERT INTO eligible_segments VALUES (?,?,?,?)").run("absent:123","osm-node-1","osm-node-2",1);
+      await expect(prepareSparsePortalCandidates(store,coverage)).rejects.toThrow("Unknown source way for candidate segment absent:123");
+      expect(store.database.prepare("SELECT name FROM sqlite_temp_master WHERE type='table'").all()).toEqual([{name:"eligible_segments"}]);
+      store.database.exec("DELETE FROM eligible_segments WHERE id='absent:123'");
+      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:1});
+    } finally {store.close();}
+  });
+
+  it("cancels during bounded link loading and retries cleanly",async()=>{
+    const {store}=staged(direct,topology=>{
+      const way=topology.ways[0]!,ids=way.nodeIds,coordinates=way.coordinates;
+      way.nodeIds=Array.from({length:2006},(_,index)=>ids[index%3]!);
+      way.coordinates=Array.from({length:2006},(_,index)=>coordinates[index%3]!);
+    });
+    try {
+      let copiedRows=0;
+      await expect(prepareSparsePortalCandidates(store,coverage,async()=>{
+        const exists=store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name='portal_links'").get();
+        if(!exists)return;
+        copiedRows=Number(store.database.prepare("SELECT count(*) AS n FROM portal_links").get()!.n);
+        if(copiedRows)throw new Error("cancel link loading");
+      })).rejects.toThrow("cancel link loading");
+      expect(copiedRows).toBeGreaterThan(0);
+      expect(copiedRows).toBeLessThanOrEqual(1000);
+      expect(store.database.prepare("SELECT name FROM sqlite_temp_master WHERE type='table'").all()).toEqual([{name:"eligible_segments"}]);
+      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:1});
+    } finally {store.close();}
+  });
+
   it.each([direct,service,parking,top,heather])("preserves the full final portal identity and ranking for every admission path",async opl=>{
     const early=await deriveAtStage(opl,undefined,undefined,true);
     const legacy=await deriveAtStage(opl);
