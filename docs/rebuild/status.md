@@ -57,7 +57,15 @@ the evidence line.
   No full/browser suite or regional preparation is repeated. All task worktrees,
   branches, raw terrain authoring tools, audit exports and processes are removed;
   the user's review file, sources, metric caches, installed artifacts and jobs remain.
-- [ ] User rebuilds desired regions and installs their updates. Actual regional
+- [x] User reported Central Cascades Ready in 18m 56s after the performance and
+  terrain/evidence revisions: 6,522 access candidates, 3,091 sparse candidates,
+  463 terrain exclusions and 2,628 retained starts. The unchanged candidate graph
+  has 2,452,576 nodes / 2,440,075 segments; 768,898 retained segments compact to
+  25,346 nodes / 26,698 physical edges. Two reviewed approaches remain density
+  excluded and none terrain excluded. Pack size is 57,389,985 compressed /
+  173,756,416 installed bytes. This establishes Central build observations, not
+  installation, route-search acceptance or all-region completeness.
+- [ ] User rebuilds other desired regions and installs their updates. Actual regional
   retained counts, pack bytes, build/search times and Fort Ord/Ozette connectivity
   remain acceptance gates. No regional build or full/browser suite is repeated here.
 
@@ -105,9 +113,17 @@ assignment or clipping routes at start-selection boundaries.
   regional build or live SQLite inspection was performed; benchmark scratch and
   managed task worktrees are removed, preserving separate terrain work and the
   user-owned publication review.
-- [ ] Measure the next Central Cascades preparation with `build central-cascades
-  --rebuild`. The 20–25-minute goal remains unverified. Compare counts and cache
-  hits as well as stages; separate terrain-policy work may change retained input.
+- [x] User reported the next warm Central Cascades preparation completed in
+  18m 56s, beating the 20–25-minute target and reducing 31m 46s by 12m 50s (40.4%).
+  Import took 8m 27s, sparse candidate preparation 1m 19s, graph writing 1m 20s
+  and compression 1m 17s; final indexing rounded below one second. Writing plus
+  compression/indexing fell from 8m 32s to 2m 37s (69.3%); sparse preparation fell
+  from 4m 35s to 1m 19s (71.3%). Process peak was 601 MiB, container peak 4,096 MiB
+  and measured build disk peak 24,197 MiB. All 768,898 measurements were reused.
+  Candidate graph counts match the baseline, but terrain/evidence changes reduced
+  retained segments by 6.5% and changed start counts, so total savings are not an
+  isolated optimization comparison. This meets the warm Central target; cold
+  first-build time, other regions and installed-route acceptance remain unverified.
 
 Primary references: [Docker volumes](https://docs.docker.com/engine/storage/volumes/),
 SQLite [WAL synchronization and cache bounds](https://www.sqlite.org/pragma.html#pragma_synchronous),
