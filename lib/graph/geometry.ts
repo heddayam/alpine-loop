@@ -251,6 +251,7 @@ function indexRing(ring: ReadonlyArray<Position>) {
 export function prepareAreaGeometry(geometry: AreaGeometry): {
   containsPoint(point: Position): boolean;
   containsSegment(start: Position, end: Position): boolean;
+  intersectsSegment(start: Position, end: Position): boolean;
 } {
   const polygons = (geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates)
     .map((rings) => rings.map((ring) => indexRing(ring as unknown as Position[])));
@@ -277,31 +278,41 @@ export function prepareAreaGeometry(geometry: AreaGeometry): {
       return true;
     });
   };
+  function* indexedInteriorPoints(start: Position, end: Position): Generator<Position> {
+    const direction = subtract(end, start);
+    const squaredLength = direction[0] ** 2 + direction[1] ** 2;
+    // Near-parallel edges can contribute projections within 2*epsilon/length.
+    // Nonparallel intersections allow epsilon beyond each segment's endpoints.
+    const padding = GEOMETRY_EPSILON + Math.max(
+      squaredLength <= GEOMETRY_EPSILON ? 0 : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
+      GEOMETRY_EPSILON * Math.abs(direction[1]),
+    );
+    const south = Math.min(start[1], end[1]) - padding;
+    const north = Math.max(start[1], end[1]) + padding;
+    const parameters = [0, 1];
+    for (const rings of polygons) for (const query of rings) {
+      query(south, north, (edge) => {
+        if (edge.explicit) appendBoundaryParameters(start, direction, squaredLength, edge.start, edge.end, parameters);
+        return false;
+      });
+    }
+    yield* interiorPoints(start, end, parameters);
+  }
   return {
     containsPoint,
     containsSegment(start, end) {
       if (!containsPoint(start) || !containsPoint(end)) return false;
-      const direction = subtract(end, start);
-      const squaredLength = direction[0] ** 2 + direction[1] ** 2;
-      // Near-parallel edges can contribute projections within 2*epsilon/length.
-      // Nonparallel intersections allow epsilon beyond each segment's endpoints.
-      const padding = GEOMETRY_EPSILON + Math.max(
-        squaredLength <= GEOMETRY_EPSILON ? 0 : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
-        GEOMETRY_EPSILON * Math.abs(direction[1]),
-      );
-      const south = Math.min(start[1], end[1]) - padding;
-      const north = Math.max(start[1], end[1]) + padding;
-      const parameters = [0, 1];
-      for (const rings of polygons) for (const query of rings) {
-        query(south, north, (edge) => {
-          if (edge.explicit) appendBoundaryParameters(start, direction, squaredLength, edge.start, edge.end, parameters);
-          return false;
-        });
-      }
-      for (const point of interiorPoints(start, end, parameters)) {
+      for (const point of indexedInteriorPoints(start, end)) {
         if (!containsPoint(point)) return false;
       }
       return true;
+    },
+    intersectsSegment(start, end) {
+      if (Math.abs(start[0] - end[0]) <= GEOMETRY_EPSILON && Math.abs(start[1] - end[1]) <= GEOMETRY_EPSILON) return false;
+      for (const point of indexedInteriorPoints(start, end)) {
+        if (containsPoint(point)) return true;
+      }
+      return false;
     },
   };
 }
