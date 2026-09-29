@@ -42,8 +42,8 @@ enumeration or a bound on trail density and search complexity.
 
 ## Local pipeline
 
-`data regions` lists the pinned catalog. `data plan glacier-peak` previews the
-named trailhead footprint and routing support; `data build glacier-peak` builds it.
+`data regions` lists the pinned catalog. `data plan central-cascades` previews the
+named trailhead footprint and routing support; `data build central-cascades` builds it.
 The initial unit is a wilderness-sized hiking area with reviewed approaches, not
 an entire forest or an arbitrary coordinate box. Names, provenance, geometry and
 approach review are owned by one catalog in `data/coverage/regions/`.
@@ -153,6 +153,6 @@ disk usage and Full-search usefulness remain a separate acceptance gate.
 
 A 25-mile circle alone is about 1,963 square miles; even a tiny start area is not
 a tiny data build. Elevation tiles and source scans can dominate. Local topology
-may still be dense and budget-limited. Measure Glacier Peak before making
+may still be dense and budget-limited. Measure each restored area before making
 regional performance claims, using the existing pinned cache and no repeated
 regional build as a test.

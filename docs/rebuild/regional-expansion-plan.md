@@ -1,17 +1,19 @@
 # Coverage restoration and Washington expansion
 
 The target is **Washington-wide hiking coverage plus the Bay Area and nearby
-California coverage previously available**. Glacier Peak and Henry M. Jackson
-are the first two prepared areas, not the final product scope. This roadmap
+California coverage previously available**. Central Cascades now incorporates
+the Glacier Peak and Henry M. Jackson pilot footprints and all reviewed approaches. This roadmap
 replaces the former pack-registry, bootstrap and schema-6 activation instructions.
 The current architecture and commands are in [prepared coverage](prepared-coverage.md)
 and [README](../../README.md#developer-data-builds).
 
 ## Current availability and restoration baseline
 
-`data/coverage/regions/catalog.json` defines eleven named build selections: the
-two installed pilot areas plus nine restored historical coverage groups. The nine
-new definitions still require user-run builds, installation and route acceptance.
+`data/coverage/regions/catalog.json` defines nine named build selections. The
+pilot entries and production polygons are removed. Independent baseline fixtures
+retain their coverage obligations; a Central Cascades rebuild retires the old
+download entries only after successful preparation. New or consolidated definitions
+still require user-run builds, installation and route acceptance.
 Their retained boundaries and source records under `data/regions/` are now referenced
 by the shared builder; the obsolete pack registry and size table are removed.
 See [status](status.md) for actual built/installed evidence.
@@ -27,7 +29,7 @@ number of packs does not prescribe the number of new download areas.
 | Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Configured; build/install/acceptance pending |
 | Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Configured; build/install/acceptance pending |
 | Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Configured; build/install/acceptance pending |
-| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Broad group configured; two smaller areas installed; acceptance incomplete |
+| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Full pilot footprints/approaches consolidated; rebuild and acceptance pending |
 | North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Configured; build/install/acceptance pending |
 | Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Configured; build/install/acceptance pending |
 | Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
@@ -65,7 +67,7 @@ earlier prototype source samples, not the nine later completed regional builds.
   procedure below: approach checks, representative loop/lollipop and boundary
   routes, restrictions, memory/time/disk and overlap behavior. The source pins
   retain their original review dates; this restoration is not a current-conditions
-  audit. Independent full-trail completeness remains open for the pilot too.
+  audit. Independent full-trail completeness remains open.
 - Source-refresh/publication across a coherent generation remains a separate
   maintenance gate. A batch of builds is not an atomic generation refresh.
 

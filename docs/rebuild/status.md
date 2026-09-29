@@ -6,6 +6,48 @@ the evidence line.
 
 ## Active system design revision
 
+### Area consolidation and elevation gap repair — 2026-09-28
+
+- [x] Consolidate the complete Glacier Peak and Henry M. Jackson pilot start
+  footprints into Central Cascades, preserving all 28 distinct approach records
+  and effective radii. Delete the two pilot catalog entries and production
+  polygons; nine named build areas remain. Henry Coe in California is unchanged.
+  Independent fixtures preserve the old coverage obligation and review provenance.
+- [x] Guard the three reviewed Cascades seams with 24 complete pinned OSM ways
+  (8,869 coordinates). Full-line checks include segment interiors; negatives catch
+  a gap despite covered endpoints. The PCT's 15 segments intersecting the explicit
+  Yakama exclusion stay excluded. This is not a claim of exhaustive statewide
+  coverage or proof of every mapped trail's presence in compiled artifacts.
+- [x] Require replacement start/routing containment before source preparation;
+  retire predecessor entries only after successful audited publication. Updates
+  preserve the actual installed extents and switch atomically, while running/saved
+  pins retain older files. Missing or undeclared replacement coverage still fails.
+  The shared containment predicate handles only negligible overlay-rounding area;
+  actual holes and lost approaches remain failing tests.
+- [x] Consolidation verification: 83 runtime, installer, regional geometry and UI
+  tests; three release-contract tests; four seam tests; targeted ESLint and one
+  integrated TypeScript check passed. The first installer run was blocked by
+  sandboxed process identity inspection and the first UI fixture had an orphan
+  artifact; the corrected focused run passed with host process inspection enabled.
+  No full app/browser or regional build was run for consolidation.
+- [x] Diagnose the user-run North Cascades elevation failure. Central Cascades
+  published in the old batch; North stopped after 448.082 seconds on Depot Creek
+  segment `osm-way-1381017880:20`. The affected points are inside the precise US
+  border mask but outside valid 10 m DEM cells. Official 30 m USGS raster range
+  probes cover these and the historical Chilliwack void without changing the border.
+  [Resolution study](elevation-resolution-study.md) records source URLs, measured
+  size/grade/gain tradeoffs and the user's decision: keep 10 m primary, use 30 m
+  only for missing primary samples.
+- [ ] Implement and verify lazy backup acquisition, offline reuse and final
+  provenance/cache identity after sampling. No nodata substitution or trail removal.
+- [ ] User rebuilds the consolidated Central Cascades graph and retries the batch,
+  then updates the app/installed areas. The current published catalog still holds
+  the pre-consolidation Central graph and the two pilots until that successful build.
+
+Source/metric caches, published/installed artifacts and the user-owned publication
+review are preserved. Washington-wide inventory, full-trail completeness and
+representative end-to-end routes remain separate acceptance gates.
+
 ### Large-area extraction OOM repair — 2026-09-28
 
 The first user-run Central Cascades build failed in native extraction. Docker's

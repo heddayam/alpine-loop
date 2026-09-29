@@ -32,6 +32,13 @@ Washington geography is hardcoded in the loader. Each build verifies the entire
 explicit international support limit and exclusions. Source gaps fail before
 processing. Named areas select starts; they do not clip hiking routes.
 
+The catalog has nine build areas. Central Cascades incorporates the former
+Glacier Peak and Henry M. Jackson footprints and all 28 distinct reviewed
+approaches; those two pilot entries and production polygons are removed.
+Its `replaces` metadata retires their published entries only after an audited
+build preserves their full start and routing coverage. The app offers this as
+an atomic Update rather than requiring removal before downloading replacement data.
+
 Washington and California recipes share the compiler and preserve their reviewed
 restrictions. `regions/washington-restoration.md` and
 `regions/california-restoration.md` describe reused inputs, checkpoints and gaps.

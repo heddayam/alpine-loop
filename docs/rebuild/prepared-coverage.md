@@ -38,7 +38,7 @@ Candidates are preserved before global representative suppression.
 ## Developer workflow
 
 `npm run data -- regions` lists the pinned named catalog. `npm run data -- plan
-glacier-peak` previews start/routing geometry without downloads or source scans;
+central-cascades` previews start/routing geometry without downloads or source scans;
 replace `plan` with `build` to prepare it. Missing required US source coverage fails
 before work, while the explicit international limit clips Canadian support.
 
@@ -54,7 +54,10 @@ Verified action receipts skip source staging on unchanged inputs. Semantic audit
 receipts are tied to exact compressed content, graph identity, geometry, audit
 version and source provenance; publication hashes transport again before reuse.
 The final catalog activates atomically. Building another region adds it, while
-rebuilding one replaces its entry. Anonymous bbox entries are retired on first
+rebuilding one replaces its entry. A consolidated area declares the retired IDs it
+replaces and must contain their complete published start and routing geometry
+before preparation. Successful publication removes those entries and their regional
+provenance; prior immutable files remain available to pinned jobs. Anonymous bbox entries are retired on first
 named publication, without deleting pinned files. Conflicting retained source pins
 fail; updating pins requires a coherent generation rebuild.
 
@@ -89,7 +92,9 @@ by this implementation.
 Workers run outside HTTP lifetimes. Downloads verify declared sizes, checksum,
 and schema before atomic activation. The previous installation remains usable
 until the entire request is ready. Updates use one release for all selected
-sections. Removal changes references; it does not rewrite SQLite graphs.
+sections. Declared area replacements appear as updates, retain the old installation
+until atomic activation, and recheck containment against the actual installed
+version. Unrelated removals still require an explicit Remove action. Removal changes references; it does not rewrite SQLite graphs.
 Verified work survives pause, cancellation, and process interruption.
 
 ## Migration and retention

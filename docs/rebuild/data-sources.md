@@ -117,6 +117,15 @@ region without such a source gets generic portal names, not missing routes.
   direction-aware gain/loss, maximum elevation, and rolling-100 m grade.
 - Never calculate route elevation by calling a remote elevation API at request
   time.
+- Primary 10 m samples take precedence. If a sample is NoData, the developer
+  builder may acquire the official USGS 1-arc-second (nominal 30 m) product for
+  that owned tile and retry only the missing samples. This user-approved policy
+  preserves valid primary values; it does not interpolate a void, replace NoData
+  with zero, or remove trails. An unresolved sample still fails publication.
+  Backup pins use verified bytes/hash receipts and explicit resolution/provenance.
+  Metric keys and final artifact identity must include applicable backup inputs;
+  offline runs require the backup to be cached. See the measured tradeoffs in
+  [elevation resolution](elevation-resolution-study.md).
 
 ### Buildings (is this start in a neighbourhood)
 

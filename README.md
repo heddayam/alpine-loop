@@ -108,15 +108,16 @@ Automated tests do not fetch trail data or call external providers.
 
 The workflow is **choose named hiking areas → preview → build**. Run `data regions`
 for the configured names. The catalog restores the nine historical Washington and
-California groups alongside the two smaller Glacier Peak and Henry M. Jackson
-areas. A configured area becomes downloadable only after a successful build;
+California groups. Central Cascades includes the full Glacier Peak and Henry M.
+Jackson pilot footprints and reviewed approaches; those pilots are retired as
+separate builds and downloads. A configured area becomes downloadable only after a successful build;
 installation is a separate action in Coverage. See the [coverage roadmap](docs/rebuild/regional-expansion-plan.md)
 for built/installed acceptance and remaining Washington-wide gaps.
 
 Each footprint selects trailheads, including reviewed approach neighborhoods.
 A hike does not have to stay inside the named area. The broader restoration
 footprints reuse reviewed geographic groups; their first-build time is unmeasured
-and can exceed the two smaller wilderness areas. Forest aliases do not imply
+and can exceed the former wilderness pilot builds. Forest aliases do not imply
 coverage of an entire national forest.
 
 ```sh
@@ -194,7 +195,7 @@ caches remain. Reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.jso
 
 For native tooling, install `osmium-tool` and `uv`, run
 `uv sync --frozen --project tools/dem --python 3.12`, then use
-`npm run data -- plan glacier-peak` or `npm run data -- build glacier-peak`.
+`npm run data -- plan central-cascades` or `npm run data -- build central-cascades`.
 `npm run data -- inspect .local-data/releases/prepared/release.json` performs a full
 transport and graph audit. The bbox, discovery and network-ID commands are removed.
 

@@ -9,18 +9,22 @@ route acceptance are separate from this configuration work.
 | Named area | Retained footprint | Representative checkpoints |
 | --- | --- | --- |
 | North Cascades | `data/regions/north-cascades/boundary.geojson` v3 | 8: Baker Lake; Artist Point; Diablo/Ross; Rainy Pass; Stehekin approach; Methow/Twisp; west/east Pasayten |
-| Central Cascades | `data/regions/central-cascades/boundary.geojson` v2 | 9: White River; Phelps Creek; North Fork Sauk; West Cady; Stevens; Icicle; Snoqualmie; Cle Elum; Teanaway |
+| Central Cascades | `central-cascades.geojson`: historical v2 plus complete Glacier Peak/Henry M. Jackson pilot footprints | 28 distinct historical/USFS approach checkpoints, retaining all pilot neighborhoods |
 | Rainier–Goat Rocks | `data/regions/rainier-goat-rocks/boundary.geojson` v1 | 10: Longmire; Mowich; Sunrise; Ohanapecosh; Naches; Greenwater; White Pass; Pear Butte; Snowgrass; Walupt |
 | Southwest Cascades | `data/regions/southwest-cascades/boundary.geojson` v1 | 9: Ape Canyon; June Lake; Norway Pass; Stagman; Killen; Blue Lake; Lemei; Big Hollow; Rock Creek |
 | Olympic Peninsula | `data/regions/olympic-peninsula/boundary.geojson` v1 | 9: Ozette; Sol Duc; Hoh; Staircase; Quinault; Hurricane Hill; Elwha; Mount Townsend; Kestner |
 
 Coordinates are retained exactly from each group's committed `scenarios.json`.
 A 500 m registration neighborhood selects existing eligible access points;
-it does not create a portal or establish permission. These 45 checkpoints
+it does not create a portal or establish permission. These historical checkpoints
 are representative, not an exhaustive approach inventory. Previous scenario
 results predate the loop/lollipop pipeline and must be rechecked on the final
 artifacts. Named aliases describe included systems, not whole national forests.
-The existing Glacier Peak and Henry M. Jackson entries remain separate.
+The Glacier Peak and Henry M. Jackson build/download entries are retired into
+Central Cascades. Their full boundaries and reviewed approach neighborhoods are
+preserved, including the Lost Creek entry and Heather Lake’s 600 m neighborhood.
+Nearby historical and USFS checkpoint records remain distinct; only the identical
+shared Little Wenatchee Ford record is deduplicated.
 
 The historical boundaries were reviewed against the pinned August 1, 2026
 Washington OSM extract and retain their holes and detached pieces. Their
@@ -86,6 +90,28 @@ not newly excluded merely because they are tribal jurisdictions. Any future
 corridor admission requires exact geometry and relevant authority review.
 
 ## Remaining statewide gaps and acceptance
+
+The independent acceptance fixtures under `data/fixtures/coverage/` preserve
+the pre-consolidation footprints and approaches, plus 24 complete pinned OSM
+ways across North/Central, Central/Rainier and Rainier/Southwest. Tests compare
+full polygons and every line segment, including the middle between vertices.
+They preserve the explicit Yakama exclusion on PCT way 550208972; it is not
+treated as a missing connector or a traversable crossing. The earlier upper
+Cispus Blue Lake–Hamilton review remains historical evidence, not a new exhaustive
+source-line audit; its charter did not retain every way ID.
+
+This follows standard Boolean difference: required coverage minus the union of
+available start areas must be empty, except for explicitly recorded exclusions.
+[Coverage validity alone can still allow holes](https://postgis.net/docs/ST_CoverageInvalidEdges.html),
+so polygon adjacency is not a completeness test. The existing
+[polygon-clipping operations](https://github.com/mfogel/polygon-clipping) provide
+union/difference; no new geometry dependency is needed. The shared containment
+check tolerates only aggregate floating-point overlay residues up to 1e-14 square
+degrees (at most 0.000124 m²), with translated area accumulation. This addresses
+the [finite-precision containment issue](https://locationtech.github.io/jts/jts-faq.html#D7),
+not real holes. Regression negatives remove an interior hole and a middle section
+whose endpoints remain covered; both must fail. Future area changes must retain
+these obligations and add independently sourced seam/start evidence for their scope.
 
 Restoring these mountain-focused groups does not establish Washington-wide
 coverage. Explicit inventory work remains for Puget Sound/Whatcom lowlands,
