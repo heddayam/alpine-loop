@@ -8,7 +8,14 @@ import type { SourceSnapshot } from "../adapters";
 import type { BuildingCentroid } from "../osm/buildings";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
 
-export type ProgressiveGraphStoreOptions = { stagingPath: string; buildIdentity: string };
+export type ProgressiveGraphStoreOptions = { stagingPath: string; buildIdentity: string; deferLookupIndexes?: boolean };
+
+const lookupIndexes = {
+  ways: "CREATE INDEX IF NOT EXISTS way_nodes_node ON way_nodes(node_id,way_id)",
+  edges: `CREATE INDEX IF NOT EXISTS edges_physical ON edges(stable_physical_id,id);
+    CREATE INDEX IF NOT EXISTS edges_from ON edges(from_node);
+    CREATE INDEX IF NOT EXISTS edges_to ON edges(to_node)`,
+};
 
 function canonicalRecord<T extends { sourceRefs?: string[] }>(record: T): string {
   return JSON.stringify({ ...record, ...(record.sourceRefs ? { sourceRefs: [...new Set(record.sourceRefs)].sort() } : {}) });
@@ -44,31 +51,32 @@ export class ProgressiveGraphStore {
     this.database.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
       CREATE TABLE IF NOT EXISTS store_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,record TEXT NOT NULL) STRICT;
-      CREATE VIRTUAL TABLE IF NOT EXISTS nodes_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat);
       CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,external_id TEXT NOT NULL,edge_class TEXT NOT NULL,access_state TEXT NOT NULL,bidirectional INTEGER NOT NULL,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS way_nodes(way_id TEXT NOT NULL,node_id TEXT NOT NULL,ordinal INTEGER NOT NULL,PRIMARY KEY(way_id,ordinal)) STRICT;
-      CREATE INDEX IF NOT EXISTS way_nodes_node ON way_nodes(node_id,way_id);
       CREATE TABLE IF NOT EXISTS evidence(id TEXT PRIMARY KEY,kind TEXT NOT NULL,record TEXT NOT NULL) STRICT;
-      CREATE TABLE IF NOT EXISTS evidence_points(id INTEGER PRIMARY KEY,evidence_id TEXT NOT NULL,lon REAL NOT NULL,lat REAL NOT NULL) STRICT;
-      CREATE VIRTUAL TABLE IF NOT EXISTS evidence_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat);
-      CREATE UNIQUE INDEX IF NOT EXISTS evidence_points_unique ON evidence_points(evidence_id,lon,lat);
       CREATE TABLE IF NOT EXISTS buildings(id INTEGER PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,UNIQUE(lon,lat)) STRICT;
       CREATE VIRTUAL TABLE IF NOT EXISTS building_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat);
       CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS edges(id TEXT PRIMARY KEY,stable_physical_id TEXT NOT NULL,from_node TEXT NOT NULL,to_node TEXT NOT NULL,access_state TEXT NOT NULL,edge_class TEXT NOT NULL,record TEXT NOT NULL) STRICT;
-      CREATE INDEX IF NOT EXISTS edges_physical ON edges(stable_physical_id,id);
-      CREATE INDEX IF NOT EXISTS edges_from ON edges(from_node);
-      CREATE INDEX IF NOT EXISTS edges_to ON edges(to_node);
       CREATE TABLE IF NOT EXISTS access_points(id TEXT PRIMARY KEY,node_id TEXT NOT NULL,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS derived_portals(coverage_hash TEXT NOT NULL,id TEXT NOT NULL,node_id TEXT NOT NULL,record TEXT NOT NULL,PRIMARY KEY(coverage_hash,id)) STRICT;
       CREATE INDEX IF NOT EXISTS derived_portals_node ON derived_portals(coverage_hash,node_id);
     `);
+    if (!options.deferLookupIndexes) for (const sql of Object.values(lookupIndexes)) this.database.exec(sql);
     const row = this.database.prepare("SELECT value FROM store_meta WHERE key='buildIdentity'").get() as { value: string } | undefined;
     if (row && row.value !== options.buildIdentity) {
       this.database.close();
       throw new Error(`Progressive store identity mismatch: ${row.value} versus ${options.buildIdentity}`);
     }
     if (!row) this.database.prepare("INSERT INTO store_meta VALUES ('buildIdentity',?)").run(options.buildIdentity);
+  }
+
+  /** Bulk preparation can build lookup indexes once when each phase needs them. */
+  async prepareLookupIndexes(phase: keyof typeof lookupIndexes, checkpoint: () => Promise<void> = async () => {}): Promise<void> {
+    this.assertOpen();
+    await checkpoint();
+    this.database.exec(lookupIndexes[phase]);
+    await checkpoint();
   }
 
   private assertOpen(): void { if (this.closed) throw new Error("Progressive graph store is closed"); }
@@ -97,9 +105,7 @@ export class ProgressiveGraphStore {
   }
   putNode(node: NormalizedNode): void {
     this.assertOpen();
-    const prior = this.statement(`SELECT n.rowid,n.record,s.id AS spatial_id FROM nodes n
-      LEFT JOIN nodes_spatial s ON s.id=n.rowid WHERE n.id=?`).get(node.id) as {rowid:number;record:string;spatial_id:number|null}|undefined;
-    let spatialId: number | undefined;
+    const prior = this.statement("SELECT record FROM nodes WHERE id=?").get(node.id) as {record:string}|undefined;
     if (prior) {
       const existing = JSON.parse(prior.record) as NormalizedNode;
       const merged = mergeProvenance(canonicalRecord({...existing,elevationM:null}), canonicalRecord({...node,elevationM:null}));
@@ -107,13 +113,9 @@ export class ProgressiveGraphStore {
       const record = canonicalRecord({ ...JSON.parse(merged), elevationM: existing.elevationM });
       if (record !== prior.record) this.statement("UPDATE nodes SET record=? WHERE id=?").run(record, node.id);
       if (node.elevationM !== null) this.writeNodeElevation(node.id,node.elevationM,JSON.parse(record) as NormalizedNode);
-      if (prior.spatial_id === null) spatialId = prior.rowid;
     } else {
-      const inserted = this.statement("INSERT INTO nodes(id,lon,lat,record) VALUES (?,?,?,?)").run(node.id,node.lon,node.lat,canonicalRecord(node));
-      spatialId = Number(inserted.lastInsertRowid);
+      this.statement("INSERT INTO nodes(id,lon,lat,record) VALUES (?,?,?,?)").run(node.id,node.lon,node.lat,canonicalRecord(node));
     }
-    // Replay can repair an interrupted autocommit put without rewriting a complete index.
-    if (spatialId !== undefined) this.statement("INSERT OR IGNORE INTO nodes_spatial VALUES (?,?,?,?,?)").run(spatialId,node.lon,node.lon,node.lat,node.lat);
   }
   private writeNodeElevation(id: string, elevationM: number, node: NormalizedNode): void {
     if (!Number.isFinite(elevationM)) throw new Error(`Invalid elevation for ${id}`);
@@ -134,25 +136,11 @@ export class ProgressiveGraphStore {
       const row = this.statement("SELECT count(*) AS n FROM way_nodes WHERE way_id=?").get(way.id) as {n:number};
       if (row.n === way.nodeIds.length) return;
     }
-    {
-      const insert = this.statement("INSERT OR IGNORE INTO way_nodes VALUES (?,?,?)");
-      way.nodeIds.forEach((nodeId, ordinal) => insert.run(way.id,nodeId,ordinal));
-    }
+    this.statement("INSERT OR IGNORE INTO way_nodes SELECT ?,value,CAST(key AS INTEGER) FROM json_each(?)")
+      .run(way.id,JSON.stringify(way.nodeIds));
   }
   putPortalEvidence(item: NormalizedPortalEvidence): void {
     this.put("evidence", item.id, ["kind"], [item.kind], canonicalRecord(item));
-    {
-      const insert = this.statement("INSERT OR IGNORE INTO evidence_points(evidence_id,lon,lat) VALUES (?,?,?)");
-      const spatial = this.statement("INSERT INTO evidence_spatial VALUES (?,?,?,?,?)");
-      const coordinates = item.coordinates.length ? item.coordinates : item.nodeIds.flatMap((nodeId) => {
-        const row = this.statement("SELECT lon,lat FROM nodes WHERE id=?").get(nodeId) as {lon:number;lat:number}|undefined;
-        return row ? [[row.lon,row.lat] as const] : [];
-      });
-      for (const [lon,lat] of coordinates) {
-        const result = insert.run(item.id,lon,lat);
-        if (result.changes) { const id = Number(result.lastInsertRowid); spatial.run(id,lon,lon,lat,lat); }
-      }
-    }
   }
   putBuilding([lon,lat]: BuildingCentroid): void {
     this.assertOpen();
