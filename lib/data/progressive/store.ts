@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { canonicalTopologyJson } from "@/lib/graph/topology-hash";
 import { deriveProgressivePortals } from "./portals";
 import type { AreaGeometry } from "../area-geometry";
@@ -31,6 +31,8 @@ export class ProgressiveGraphStore {
   readonly stagingPath: string;
   readonly buildIdentity: string;
   private closed = false;
+  // Only fixed SQL from this store's methods is cached; no imported identities or records.
+  private readonly statements = new Map<string, StatementSync>();
 
   constructor(options: ProgressiveGraphStoreOptions) {
     mkdirSync(path.dirname(options.stagingPath), { recursive: true });
@@ -68,17 +70,22 @@ export class ProgressiveGraphStore {
   }
 
   private assertOpen(): void { if (this.closed) throw new Error("Progressive graph store is closed"); }
-  private put(table: "nodes" | "ways" | "evidence" | "sources" | "edges" | "access_points", id: string, columns: string[], values: Array<string | number | null>, record: string): boolean {
+  private statement(sql: string): StatementSync {
+    let statement = this.statements.get(sql);
+    if (!statement) { statement = this.database.prepare(sql); this.statements.set(sql, statement); }
+    return statement;
+  }
+  private put(table: "ways" | "evidence" | "sources" | "edges" | "access_points", id: string, columns: string[], values: Array<string | number | null>, record: string): boolean {
     this.assertOpen();
-    const prior = this.database.prepare(`SELECT record FROM ${table} WHERE id=?`).get(id) as { record: string } | undefined;
+    const prior = this.statement(`SELECT record FROM ${table} WHERE id=?`).get(id) as { record: string } | undefined;
     if (prior) {
       const merged = mergeProvenance(prior.record, record);
       if (merged === null) throw new Error(`Conflicting progressive ${table} record ${id}`);
-      if (merged !== prior.record) this.database.prepare(`UPDATE ${table} SET record=? WHERE id=?`).run(merged, id);
+      if (merged !== prior.record) this.statement(`UPDATE ${table} SET record=? WHERE id=?`).run(merged, id);
       return false;
     }
     const marks = Array(columns.length + 2).fill("?").join(",");
-    this.database.prepare(`INSERT INTO ${table}(id${columns.length ? `,${columns.join(",")}` : ""},record) VALUES (${marks})`).run(id, ...values, record);
+    this.statement(`INSERT INTO ${table}(id${columns.length ? `,${columns.join(",")}` : ""},record) VALUES (${marks})`).run(id, ...values, record);
     return true;
   }
   transaction<T>(action: () => T): T {
@@ -88,44 +95,55 @@ export class ProgressiveGraphStore {
   }
   putNode(node: NormalizedNode): void {
     this.assertOpen();
-    const prior = this.database.prepare("SELECT rowid,record FROM nodes WHERE id=?").get(node.id) as {rowid:number;record:string}|undefined;
+    const prior = this.statement(`SELECT n.rowid,n.record,s.id AS spatial_id FROM nodes n
+      LEFT JOIN nodes_spatial s ON s.id=n.rowid WHERE n.id=?`).get(node.id) as {rowid:number;record:string;spatial_id:number|null}|undefined;
+    let spatialId: number | undefined;
     if (prior) {
       const existing = JSON.parse(prior.record) as NormalizedNode;
       const merged = mergeProvenance(canonicalRecord({...existing,elevationM:null}), canonicalRecord({...node,elevationM:null}));
       if (merged === null) throw new Error(`Conflicting progressive nodes record ${node.id}`);
       const record = canonicalRecord({ ...JSON.parse(merged), elevationM: existing.elevationM });
-      if (record !== prior.record) this.database.prepare("UPDATE nodes SET record=? WHERE id=?").run(record, node.id);
-      if (node.elevationM !== null) this.setNodeElevation(node.id,node.elevationM);
+      if (record !== prior.record) this.statement("UPDATE nodes SET record=? WHERE id=?").run(record, node.id);
+      if (node.elevationM !== null) this.writeNodeElevation(node.id,node.elevationM,JSON.parse(record) as NormalizedNode);
+      if (prior.spatial_id === null) spatialId = prior.rowid;
     } else {
-      this.put("nodes", node.id, ["lon","lat"], [node.lon,node.lat], canonicalRecord(node));
+      const inserted = this.statement("INSERT INTO nodes(id,lon,lat,record) VALUES (?,?,?,?)").run(node.id,node.lon,node.lat,canonicalRecord(node));
+      spatialId = Number(inserted.lastInsertRowid);
     }
-    const row = this.database.prepare("SELECT rowid FROM nodes WHERE id=?").get(node.id) as {rowid:number};
-    this.database.prepare("INSERT OR IGNORE INTO nodes_spatial VALUES (?,?,?,?,?)").run(row.rowid,node.lon,node.lon,node.lat,node.lat);
+    // Replay can repair an interrupted autocommit put without rewriting a complete index.
+    if (spatialId !== undefined) this.statement("INSERT OR IGNORE INTO nodes_spatial VALUES (?,?,?,?,?)").run(spatialId,node.lon,node.lon,node.lat,node.lat);
+  }
+  private writeNodeElevation(id: string, elevationM: number, node: NormalizedNode): void {
+    if (!Number.isFinite(elevationM)) throw new Error(`Invalid elevation for ${id}`);
+    if (node.elevationM !== null && node.elevationM !== elevationM) throw new Error(`Conflicting elevation for ${id}`);
+    if (node.elevationM === null) this.statement("UPDATE nodes SET record=? WHERE id=?").run(canonicalRecord({...node,elevationM}),id);
   }
   setNodeElevation(id: string, elevationM: number): void {
     this.assertOpen();
     if (!Number.isFinite(elevationM)) throw new Error(`Invalid elevation for ${id}`);
-    const row = this.database.prepare("SELECT record FROM nodes WHERE id=?").get(id) as {record:string}|undefined;
+    const row = this.statement("SELECT record FROM nodes WHERE id=?").get(id) as {record:string}|undefined;
     if (!row) throw new Error(`Unknown progressive node ${id}`);
-    const node = JSON.parse(row.record) as NormalizedNode;
-    if (node.elevationM !== null && node.elevationM !== elevationM) throw new Error(`Conflicting elevation for ${id}`);
-    if (node.elevationM === null) this.database.prepare("UPDATE nodes SET record=? WHERE id=?").run(canonicalRecord({...node,elevationM}),id);
+    this.writeNodeElevation(id,elevationM,JSON.parse(row.record) as NormalizedNode);
   }
   putWay(way: NormalizedWay): void {
-    this.put("ways", way.id, ["external_id","edge_class","access_state","bidirectional"],
+    const inserted = this.put("ways", way.id, ["external_id","edge_class","access_state","bidirectional"],
       [way.externalId,way.edgeClass ?? "trail",way.accessState,Number(way.bidirectional)],canonicalRecord(way));
+    if (!inserted) {
+      const row = this.statement("SELECT count(*) AS n FROM way_nodes WHERE way_id=?").get(way.id) as {n:number};
+      if (row.n === way.nodeIds.length) return;
+    }
     {
-      const insert = this.database.prepare("INSERT OR IGNORE INTO way_nodes VALUES (?,?,?)");
+      const insert = this.statement("INSERT OR IGNORE INTO way_nodes VALUES (?,?,?)");
       way.nodeIds.forEach((nodeId, ordinal) => insert.run(way.id,nodeId,ordinal));
     }
   }
   putPortalEvidence(item: NormalizedPortalEvidence): void {
     this.put("evidence", item.id, ["kind"], [item.kind], canonicalRecord(item));
     {
-      const insert = this.database.prepare("INSERT OR IGNORE INTO evidence_points(evidence_id,lon,lat) VALUES (?,?,?)");
-      const spatial = this.database.prepare("INSERT INTO evidence_spatial VALUES (?,?,?,?,?)");
+      const insert = this.statement("INSERT OR IGNORE INTO evidence_points(evidence_id,lon,lat) VALUES (?,?,?)");
+      const spatial = this.statement("INSERT INTO evidence_spatial VALUES (?,?,?,?,?)");
       const coordinates = item.coordinates.length ? item.coordinates : item.nodeIds.flatMap((nodeId) => {
-        const row = this.database.prepare("SELECT lon,lat FROM nodes WHERE id=?").get(nodeId) as {lon:number;lat:number}|undefined;
+        const row = this.statement("SELECT lon,lat FROM nodes WHERE id=?").get(nodeId) as {lon:number;lat:number}|undefined;
         return row ? [[row.lon,row.lat] as const] : [];
       });
       for (const [lon,lat] of coordinates) {
@@ -136,9 +154,10 @@ export class ProgressiveGraphStore {
   }
   putBuilding([lon,lat]: BuildingCentroid): void {
     this.assertOpen();
-    this.database.prepare("INSERT OR IGNORE INTO buildings(lon,lat) VALUES (?,?)").run(lon,lat);
-    const row = this.database.prepare("SELECT id FROM buildings WHERE lon=? AND lat=?").get(lon,lat) as {id:number};
-    this.database.prepare("INSERT OR IGNORE INTO building_spatial VALUES (?,?,?,?,?)").run(row.id,lon,lon,lat,lat);
+    const inserted = this.statement("INSERT OR IGNORE INTO buildings(lon,lat) VALUES (?,?)").run(lon,lat);
+    const row = inserted.changes ? {id:Number(inserted.lastInsertRowid)} : this.statement(`SELECT b.id FROM buildings b
+      LEFT JOIN building_spatial s ON s.id=b.id WHERE b.lon=? AND b.lat=? AND s.id IS NULL`).get(lon,lat) as {id:number}|undefined;
+    if (row) this.statement("INSERT OR IGNORE INTO building_spatial VALUES (?,?,?,?,?)").run(row.id,lon,lon,lat,lat);
   }
   putSource(source: SourceSnapshot): void {
     const durable = { ...source };
@@ -153,6 +172,7 @@ export class ProgressiveGraphStore {
   putAccessPoint(point: NormalizedAccessPoint): void {
     this.put("access_points",point.id,["node_id"],[point.nodeId],canonicalRecord(point));
   }
+  // Iterators need independent statement lifetimes so callers can interleave reads.
   *iterateNodes(): Iterable<NormalizedNode> {
     this.assertOpen();
     for (const row of this.database.prepare("SELECT record FROM nodes ORDER BY id").iterate() as Iterable<{record:string}>) yield JSON.parse(row.record) as NormalizedNode;
@@ -166,7 +186,7 @@ export class ProgressiveGraphStore {
     for (const row of this.database.prepare("SELECT record FROM edges ORDER BY id").iterate() as Iterable<{record:string}>) yield JSON.parse(row.record) as CompiledEdge;
   }
   derivePortals(coverage: AreaGeometry, checkpoint?: () => Promise<void>): Promise<number> { return deriveProgressivePortals(this,coverage,checkpoint); }
-  close(): void { if (!this.closed) { this.database.close(); this.closed=true; } }
+  close(): void { if (!this.closed) { this.database.close(); this.statements.clear(); this.closed=true; } }
 }
 export function openProgressiveGraphStore(options: ProgressiveGraphStoreOptions): ProgressiveGraphStore {
   return new ProgressiveGraphStore(options);

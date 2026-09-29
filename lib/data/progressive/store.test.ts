@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { AreaGeometry } from "../area-geometry";
 import type { NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
 import { openProgressiveGraphStore } from "./store";
@@ -32,6 +32,101 @@ it("merges overlapping source provenance without duplicating context or weakenin
     expect(() => store.putNode({ ...node, elevationM: 121 })).toThrow("Conflicting elevation");
     expect(() => store.putWay({ ...way, accessState: "private" })).toThrow("Conflicting");
     expect(() => store.putPortalEvidence({ ...evidence, coordinates: [[1.1, 2]] })).toThrow("Conflicting");
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("reuses fixed import statements across new identities and overlapping replays", () => {
+  const store = openProgressiveGraphStore({ stagingPath: ":memory:", buildIdentity: "statement-fixture" });
+  const prepare = vi.spyOn(store.database, "prepare");
+  const put = (index: number, source: string) => {
+    const id = String(index);
+    const node: NormalizedNode = { id, externalId: `node/${id}`, lon: index, lat: 2, elevationM: null, flags: [], sourceRefs: [source] };
+    store.putNode(node);
+    store.putNode({ ...node, elevationM: 120 });
+    store.setNodeElevation(id, 120);
+    store.putWay({ id, externalId: `way/${id}`, nodeIds: [id], coordinates: [[index, 2]], name: null, accessState: "public", bidirectional: true, flags: [], sourceRefs: [source] });
+    store.putPortalEvidence({ id, externalId: `node/${id}`, kind: "parking", name: null, nodeIds: [id], coordinates: [], accessState: "public", sourceRefs: [source] });
+    store.putBuilding([index, 2]);
+  };
+  try {
+    put(0, "west");
+    put(0, "east");
+    const prepared = prepare.mock.calls.length;
+    expect(prepared).toBeGreaterThan(0);
+    for (let index = 1; index <= 25; index++) {
+      put(index, "west");
+      put(index, "east");
+      put(index, "east");
+    }
+    expect(prepare).toHaveBeenCalledTimes(prepared);
+    expect([...store.iterateNodes()]).toHaveLength(26);
+    expect([...store.iterateNodes()].every((node) => node.elevationM === 120 && node.sourceRefs.join() === "east,west")).toBe(true);
+  } finally {
+    prepare.mockRestore();
+    store.close();
+  }
+});
+
+it("rolls back imports and reuses statements without retaining rolled-back records", () => {
+  const store = openProgressiveGraphStore({ stagingPath: ":memory:", buildIdentity: "rollback-fixture" });
+  const node: NormalizedNode = { id: "a", externalId: "node/a", lon: 1, lat: 2, elevationM: null, flags: [], sourceRefs: ["west"] };
+  const put = () => {
+    store.putNode({ ...node, elevationM: 120, sourceRefs: ["east"] });
+    store.putNode({ ...node, id: "b", externalId: "node/b", lon: 2 });
+    store.putWay({ id: "trail", externalId: "way/trail", nodeIds: ["a", "b"], coordinates: [[1, 2], [2, 2]], name: null, accessState: "public", bidirectional: true, flags: [], sourceRefs: ["west"] });
+    store.putPortalEvidence({ id: "parking", externalId: "node/a", kind: "parking", name: null, nodeIds: ["a"], coordinates: [], accessState: "public", sourceRefs: ["west"] });
+    store.putBuilding([1, 2]);
+  };
+  try {
+    store.putNode(node);
+    expect(() => store.transaction(() => { put(); throw new Error("interrupted"); })).toThrow("interrupted");
+    expect([...store.iterateNodes()]).toEqual([node]);
+    const counts = { nodes_spatial: 1, ways: 0, way_nodes: 0, evidence: 0, evidence_points: 0, evidence_spatial: 0, buildings: 0, building_spatial: 0 };
+    for (const [table, count] of Object.entries(counts)) {
+      expect(store.database.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(count);
+    }
+    store.transaction(put);
+    store.transaction(put);
+    expect([...store.iterateNodes()][0]).toEqual({ ...node, elevationM: 120, sourceRefs: ["east", "west"] });
+    expect([...store.iterateNodes()]).toHaveLength(2);
+    for (const table of ["ways", "evidence", "evidence_points", "evidence_spatial", "buildings", "building_spatial"]) {
+      expect(store.database.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(1);
+    }
+    expect(store.database.prepare("SELECT count(*) AS n FROM way_nodes").get()!.n).toBe(2);
+    expect(() => store.putNode({ ...node, elevationM: 121 })).toThrow("Conflicting elevation");
+  } finally { store.close(); }
+});
+
+it("repairs incomplete derived rows after reopening and resolves evidence when nodes arrive later", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "network-resume-"));
+  const options = { stagingPath: path.join(root, "stage.sqlite"), buildIdentity: "resume-fixture" };
+  let store = openProgressiveGraphStore(options);
+  const node: NormalizedNode = { id: "a", externalId: "node/a", lon: 1, lat: 2, elevationM: null, flags: [], sourceRefs: ["west"] };
+  const way: NormalizedWay = { id: "trail", externalId: "way/trail", nodeIds: ["a", "b"], coordinates: [[1, 2], [2, 2]], name: null, accessState: "public", bidirectional: true, flags: [], sourceRefs: ["west"] };
+  const evidence: NormalizedPortalEvidence = { id: "parking", externalId: "node/b", kind: "parking", name: null, nodeIds: ["b"], coordinates: [], accessState: "public", sourceRefs: ["west"] };
+  try {
+    store.putNode(node);
+    store.putWay(way);
+    store.putBuilding([1, 2]);
+    store.putPortalEvidence(evidence);
+    expect(store.database.prepare("SELECT count(*) AS n FROM evidence_points").get()!.n).toBe(0);
+    store.database.exec("DELETE FROM nodes_spatial; DELETE FROM way_nodes WHERE ordinal=1; DELETE FROM building_spatial");
+    store.close();
+    store = openProgressiveGraphStore(options);
+    store.putNode(node);
+    store.putWay(way);
+    store.putBuilding([1, 2]);
+    expect(store.database.prepare("SELECT count(*) AS n FROM nodes_spatial").get()!.n).toBe(1);
+    expect(store.database.prepare("SELECT node_id,ordinal FROM way_nodes ORDER BY ordinal").all()).toEqual([{ node_id: "a", ordinal: 0 }, { node_id: "b", ordinal: 1 }]);
+    expect(store.database.prepare("SELECT count(*) AS n FROM building_spatial").get()!.n).toBe(1);
+    store.putNode({ ...node, id: "b", externalId: "node/b", lon: 2 });
+    store.putPortalEvidence(evidence);
+    store.putPortalEvidence(evidence);
+    expect(store.database.prepare("SELECT lon,lat FROM evidence_points").all()).toEqual([{ lon: 2, lat: 2 }]);
+    expect(store.database.prepare("SELECT count(*) AS n FROM evidence_spatial").get()!.n).toBe(1);
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });
