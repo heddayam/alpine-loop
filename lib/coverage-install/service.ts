@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
+import polygonClipping from 'polygon-clipping';
 import { downloadRequestSchema, type DownloadRequest, type DownloadPlan, type DataRelease, type DownloadCatalog } from '@/lib/contracts/releases';
 import { Store, DownloadError } from './store';
 import { containsCoverage } from '@/lib/graph/coverage-containment';
@@ -14,10 +15,29 @@ export type Options = {
     startWorker?: (root: string) => void;
     available?: () => Promise<number>;
 };
-/** A declared consolidation must preserve the actual installed start and route extents. */
+const lostCoverageMessage = 'Installation would remove existing sections or coverage. Area boundaries changed; select surrounding areas to preserve installed coverage. Remove them explicitly first to accept reduced coverage.';
+/** Boundary updates preserve selected coverage; retired areas still require one complete replacement. */
 function preservesInstalledCoverage(release: DataRelease, ids: string[], previous: Awaited<ReturnType<typeof loadInstallation>>) {
+    let selected: ReturnType<typeof selection> | undefined;
+    let routingGeometry: DataRelease['geometry'] | undefined;
     return !previous || previous.installation.sectionIds.every(id => {
-        if (ids.includes(id)) return true;
+        if (ids.includes(id)) {
+            if (release.partitioning !== 'local-areas' || previous.release.partitioning !== 'local-areas') return true;
+            const old = previous.release.sections.find(section => section.id === id);
+            const next = release.sections.find(section => section.id === id);
+            const oldGraph = previous.release.artifacts.find(artifact => old?.artifactIds.includes(artifact.id));
+            const nextGraph = release.artifacts.find(artifact => next?.artifactIds.includes(artifact.id));
+            if (!old || !next || !oldGraph || !nextGraph) return false;
+            if (JSON.stringify(old.geometry) === JSON.stringify(next.geometry) &&
+                JSON.stringify(oldGraph.geometry) === JSON.stringify(nextGraph.geometry)) return true;
+            selected ??= selection(release, ids);
+            if (!routingGeometry) {
+                const polygons = release.artifacts.filter(artifact => selected!.artifactIds.includes(artifact.id))
+                    .map(artifact => (artifact.geometry.type === 'Polygon' ? [artifact.geometry.coordinates] : artifact.geometry.coordinates) as Parameters<typeof polygonClipping.union>[0]);
+                routingGeometry = { type: 'MultiPolygon', coordinates: polygonClipping.union(polygons[0]!, ...polygons.slice(1)) };
+            }
+            return containsCoverage(selected.geometry, old.geometry) && containsCoverage(routingGeometry, oldGraph.geometry);
+        }
         if (release.partitioning !== 'local-areas' || previous.release.partitioning !== 'local-areas') return false;
         const old = previous.release.sections.find(section => section.id === id);
         const replacement = release.sections.find(section => ids.includes(section.id) && section.replaces?.includes(id));
@@ -106,7 +126,7 @@ export class DownloadService {
         const selected = selection(release, request.sectionIds);
         const installed = await loadInstallation(this.root);
         if (!preservesInstalledCoverage(release, selected.sectionIds, installed))
-            throw new DownloadError(409, 'Installation would remove existing sections. Remove them explicitly first.');
+            throw new DownloadError(409, lostCoverageMessage);
         const artifacts = release.artifacts.filter(a => selected.artifactIds.includes(a.id));
         let reusableBytes = 0, downloadBytes = 0, additionalBytes = 0;
         for (const artifact of artifacts) {
@@ -216,7 +236,7 @@ export async function runDownloadWorker(options: Options = {}) {
                     checkpoint();
                     const current = await loadInstallation(service.root);
                     if (!preservesInstalledCoverage(release, job.sectionIds, current))
-                        throw new DownloadError(409, 'Installed sections changed while downloading; review selection');
+                        throw new DownloadError(409, lostCoverageMessage);
                     await activate(service.root, release, job.sectionIds, installation => locked.tx(() => {
                         const latest = locked.get(job.id);
                         if (latest.status === 'pausing' || latest.status === 'cancelled') throw new DownloadStopped();

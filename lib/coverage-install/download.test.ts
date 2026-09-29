@@ -12,7 +12,7 @@ import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
 import { Store, currentProcessBirth } from './store';
 import { areaBounds } from '@/lib/graph/geometry';
 import { createPreparedSchema } from '@/lib/data/sqlite-writer';
-import { rectangle } from '@/lib/coverage/geometry';
+import { rectangle, subtractCoverage } from '@/lib/coverage/geometry';
 const paths: string[] = [];
 afterEach(async () => {
     for (const path of paths.splice(0))
@@ -82,6 +82,10 @@ describe('prepared coverage installation', () => {
             const clipped = structuredClone(next);
             clipped.artifacts[0]!.geometry = rectangle([0,0,.4,1]);
             await expect(service.makePlan({releaseId:clipped.id,sectionIds:['central']},clipped)).rejects.toThrow('Remove them explicitly');
+            const splitPilot = structuredClone(missing);
+            splitPilot.sections.push({id:'neighbor',geometry,artifactIds:[f.artifact.id],area:{maximumRouteMiles:40,bufferMiles:25}});
+            splitPilot.artifacts.push({...f.artifact,startGeometry:geometry,graphId:'graph-old',regionId:'neighbor'});
+            await expect(service.makePlan({releaseId:splitPilot.id,sectionIds:['central','neighbor']},splitPilot)).rejects.toThrow('Remove them explicitly');
             const undeclared = structuredClone(next); delete undeclared.sections[0]!.replaces;
             await expect(service.makePlan({releaseId:undeclared.id,sectionIds:['central']},undeclared)).rejects.toThrow('Remove them explicitly');
             await writeFile(join(f.source,'release.json'),JSON.stringify(next));
@@ -92,6 +96,54 @@ describe('prepared coverage installation', () => {
                 expect(service.get(job.id).status).toBe('completed');
                 expect((await loadInstallation(f.root))!.installation.sectionIds).toEqual(['central']);
                 expect((await loadInstallation(f.root,prior.installation.id))!.installation.sectionIds).toEqual(['pilot']);
+            },f.root);
+        } finally { service.close(); }
+    });
+    it('preserves same-ID coverage across a collective boundary update and rejects missing neighbors or holes', async () => {
+        const f = await fixture('old-central');
+        const area = {maximumRouteMiles:40,bufferMiles:25};
+        const oldStarts = rectangle([0,0,2,1]), oldRoutes = rectangle([-1,-1,3,2]);
+        f.release = dataReleaseSchema.parse({...f.release,id:'old-boundaries',partitioning:'local-areas',geometry:oldRoutes,
+            sections:[{id:'central',geometry:oldStarts,artifactIds:[f.artifact.id],area}],
+            artifacts:[{...f.artifact,geometry:oldRoutes,startGeometry:oldStarts,graphId:'old-central',regionId:'central'}]});
+        await writeFile(join(f.source,'release.json'),JSON.stringify(f.release));
+        expect((await install(f,['central'])).status).toBe('completed');
+        const prior = (await loadInstallation(f.root))!;
+        const mountain = await fixture('new-central'), lowland = await fixture('new-lowlands');
+        const mountainStarts = rectangle([0,0,1,1]), lowlandStarts = rectangle([1,0,2,1]);
+        const next = dataReleaseSchema.parse({...mountain.release,id:'new-boundaries',partitioning:'local-areas',geometry:oldRoutes,
+            sections:[{id:'central',geometry:mountainStarts,artifactIds:[mountain.artifact.id],area},
+                {id:'lowlands',geometry:lowlandStarts,artifactIds:[lowland.artifact.id],area}],
+            artifacts:[{...mountain.artifact,geometry:rectangle([-1,-1,1,2]),startGeometry:mountainStarts,graphId:'new-central',regionId:'central'},
+                {...lowland.artifact,geometry:rectangle([1,-1,3,2]),startGeometry:lowlandStarts,graphId:'new-lowlands',regionId:'lowlands'}]});
+        for (const prepared of [mountain,lowland])
+            await writeFile(join(f.source,prepared.artifact.path),await readFile(join(prepared.source,prepared.artifact.path)));
+        const service = new DownloadService(f.options);
+        try {
+            expect(await service.makePlan({releaseId:f.release.id,sectionIds:['central']},f.release)).toMatchObject({downloadBytes:0});
+            await expect(service.makePlan({releaseId:next.id,sectionIds:['central']},next)).rejects.toThrow('select surrounding areas');
+            // Geometry alone cannot implicitly retire an omitted region ID.
+            await expect(service.makePlan({releaseId:next.id,sectionIds:['lowlands']},next)).rejects.toThrow('Remove them explicitly');
+            for (const kind of ['starts','routes']) {
+                const hole = structuredClone(next);
+                if (kind === 'starts') {
+                    hole.sections[1]!.geometry = subtractCoverage(lowlandStarts,rectangle([1.4,.4,1.6,.6]))!;
+                    hole.artifacts[1]!.startGeometry = hole.sections[1]!.geometry;
+                } else hole.artifacts[1]!.geometry = subtractCoverage(hole.artifacts[1]!.geometry,rectangle([1.4,1.2,1.6,1.4]))!;
+                await expect(service.makePlan({releaseId:hole.id,sectionIds:['central','lowlands']},hole),kind).rejects.toThrow('select surrounding areas');
+                expect((await loadInstallation(f.root))!.installation).toEqual(prior.installation);
+            }
+            await writeFile(join(f.source,'release.json'),JSON.stringify(next));
+            await withInstallationPins([prior.installation.id],async()=>{
+                const job = await service.create({releaseId:next.id,sectionIds:['central','lowlands']});
+                expect((await loadInstallation(f.root))!.installation).toEqual(prior.installation);
+                await runDownloadWorker(f.options);
+                expect(service.get(job.id).status).toBe('completed');
+                expect((await loadInstallation(f.root))!.installation.sectionIds).toEqual(['central','lowlands']);
+                const retained = (await loadInstallation(f.root,prior.installation.id))!;
+                expect(retained.installation).toEqual(prior.installation);
+                expect(retained.release).toEqual(prior.release);
+                expect((await stat(join(f.root,'artifacts',`${f.artifact.id}.sqlite`))).size).toBe(f.artifact.bytes);
             },f.root);
         } finally { service.close(); }
     });
