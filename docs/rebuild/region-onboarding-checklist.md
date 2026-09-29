@@ -1,4 +1,10 @@
-# Region-pack onboarding checklist (schema 6)
+# Historical region-pack onboarding checklist (schema 6)
+
+**Superseded:** this document records the former regional builder. It is not the
+current execution procedure. Use the [coverage roadmap](regional-expansion-plan.md),
+[prepared coverage](prepared-coverage.md), and [developer build commands](../../README.md#developer-data-builds).
+Historical fixtures, source reviews and acceptance evidence below remain reference
+material; do not restore the registry, bootstrap commands or repeat-build workflow.
 
 Use this runbook for every new regional pack. It turns the approval gates in
 the [regional expansion roadmap](regional-expansion-plan.md) into the current,
@@ -7,7 +13,7 @@ repeatable build procedure. The governing product rules remain in the
 [data-sources.md](data-sources.md), and the rationale for topology-derived
 starts in the [access-point derivation plan](access-point-derivation-plan.md).
 
-This checklist describes the code as it exists now: schema 6, OSM-derived
+This checklist described the former code: schema 6, OSM-derived
 trail/street portals, cycle reachability, and nearby OSM building counts. Do not
 copy schema-5 population, parking-snap, or authority-line work from an older
 charter or status entry.

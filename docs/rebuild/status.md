@@ -6,6 +6,80 @@ the evidence line.
 
 ## Active system design revision
 
+### Coverage correctness and full geographic scope — 2026-09-28
+
+The user reaffirmed that the target is Washington-wide hiking coverage plus the
+Bay Area and nearby California areas previously available. The two-area pilot
+does not satisfy that scope. The rewritten [coverage roadmap](regional-expansion-plan.md)
+distinguishes historical coverage, current restoration and statewide gaps; obsolete
+pack-registry/activation instructions were removed, and the old onboarding checklist
+is explicitly historical. The user's untracked publication review remains untouched.
+
+- [x] Recover the historical baseline: Santa Cruz Mountains, Southern East Bay,
+  Monterey–Carmel, Henry Coe, Central Cascades, North Cascades, Rainier–Goat Rocks,
+  Southwest Cascades and Olympic Peninsula. These nine were built and activated
+  in later rebuild gates; August 4 archive tags describe earlier prototype samples.
+  Marin/Mount Tam and Tahoe–Eldorado were planned only. The historical Washington
+  groups did not cover every statewide hiking system.
+- [x] Diagnose the three approach omissions against bounded extracts of pinned
+  Washington 260801 OSM and isolated, hash-verified copies of finished packs.
+  No live/cache SQLite database was opened, and no regional/Docker build ran.
+  Top Lake Trail way 1356527414 and its approach track 428036699 are present;
+  trailhead node 3761092329 is 20.813 m along the path from junction 3761092325.
+  The exact-junction-only portal rule missed it. Heather's parking way 380176709
+  shares different vertices with approach track 5847190 and trail 380176708;
+  its hiking contact 3835171557 is 528.312 m from the USFS point and outside the
+  previous 500 m start neighborhood. Both Heather ways are present in the graph.
+  Lost Creek entrance node 12244685006 and trail way 372783759 are present, but
+  the start footprint omitted the entrance.
+- [x] Correct the regional inputs: add USFS Lost Creek Ridge recreation site 48232
+  as Glacier Peak's ninth reviewed approach; retain Heather's agency coordinate
+  with an explicitly reviewed 600 m registration neighborhood. These select
+  existing mapped starts and do not add trail connections or grant access.
+  Lost Creek evidence: [USFS recreation sites](https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0)
+  (`site_id=48232`, WGS84) and [the USFS Mountain Loop guide](https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd530006.pdf).
+- [x] Correct shared portal derivation, without region-name conditions. A mapped
+  trailhead can associate with a track approach through up to 250 m of selected,
+  non-restricted hiking edges, across source-way splits and branches. Parking
+  may touch its track and hiking path at different explicitly shared vertices;
+  no connecting edge is created and tracks remain walking links. Restricted
+  evidence/ways, unrelated nearby features, missing segments and unmarked track
+  junctions remain excluded. The compiler version changes so prior artifacts
+  cannot bypass the fix. Implementation: `08a2bc8`, `a19775f`.
+  Research basis: [OSM trailhead placement](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrailhead)
+  and [Dijkstra with a distance cutoff](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.shortest_paths.weighted.single_source_dijkstra_path_length.html).
+  Association uses undirected physical distance; route generation still enforces
+  travel direction. Tests use reduced pinned-source representations and synthetic
+  negatives; no unbounded network exploration is introduced.
+- [x] Add a general publication check: every reviewed approach must have a
+  public/unknown mapped start within its declared neighborhood in the final graph,
+  after start filtering and compaction. Missing entries stop publication with
+  named diagnostics; existing coverage remains active. Include the approach checks
+  in receipt identity so an unchanged-artifact shortcut cannot skip new expectations.
+  This verifies declared approaches, not an exhaustive inventory or loop feasibility.
+- [x] Fix replacement provenance: rebuilding one area drops its previous boundary/
+  approach sources from the retained catalog while preserving neighboring artifacts
+  and rejecting incompatible shared provider pins. A regression covers A+B →
+  revised A+B with unchanged B bytes. Historical global limitation text can still
+  accumulate; precise per-artifact limitation replacement belongs to release maintenance.
+- [ ] Rebuild and inspect corrected Glacier Peak and Henry M. Jackson packs;
+  verify the three starts and representative useful/boundary-crossing routes.
+  Independent full-trail/compaction completeness remains open.
+- [ ] Expansion prerequisite: remove Washington-specific longitude bounds and
+  hardcoded USFS wilderness provenance from the generic region loader, retaining
+  explicit source/border validation in the appropriate regional inputs.
+- [ ] Restore the four California coverage groups and remaining historical
+  Washington systems, then reconcile the full statewide inventory. Names, source
+  pins, approach inventories and acceptance are needed; the current catalog still
+  contains only two buildable areas.
+
+Verification: 20 focused portal/store tests, 20 regional runtime/catalog tests,
+targeted ESLint and one integrated TypeScript check passed. No UI change or
+repeated full suite/build. The completed task worktree is archived and its branch
+deleted; 25 MiB of diagnostic artifact/source copies were removed. Source caches,
+published/installed packs and saved searches remain intact. Real rebuilt-pack
+acceptance is still pending the user-run builds.
+
 ### Named regional preparation study — 2026-09-28
 
 The user requested a comprehensive design/cost study before another overhaul.

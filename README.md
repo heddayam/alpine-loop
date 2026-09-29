@@ -112,6 +112,9 @@ wilderness footprint and reviewed USFS approach neighborhoods, with remaining
 inventory limitations recorded in the catalog. The same footprint selects
 trailheads in Plan and Downloads; a hike does not have to enter the legal wilderness
 boundary. Forest aliases do not imply coverage of the entire national forest.
+These are the initial two areas. [The coverage roadmap](docs/rebuild/regional-expansion-plan.md)
+tracks Washington-wide expansion and restoration of Santa Cruz Mountains, Southern
+East Bay, Monterey–Carmel and Henry Coe.
 
 ```sh
 # Build tooling only; this does not process trail data.
@@ -160,6 +163,11 @@ only DEM tiles owning retained samples. It reuses segment metrics across overlap
 builds, then stores compact corridors with their full geometry and elevation profiles.
 Each named region remains an independent graph; overlapping regions never get stitched
 together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
+Before publication, each reviewed approach must have a mapped starting point in
+the final graph within its declared registration neighborhood. A missing start
+stops publication and names the approach to investigate; the previous release
+remains usable. This check does not establish a complete approach/trail inventory
+or guarantee a suitable loop from every start.
 
 Unchanged builds validate dependencies and reuse their artifact before normalization.
 Building another named region adds it; rebuilding the same ID replaces it. The first

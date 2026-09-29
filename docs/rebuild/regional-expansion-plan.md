@@ -1,325 +1,96 @@
-# Regional expansion roadmap and pack-onboarding protocol
+# Coverage restoration and Washington expansion
 
-This document is the authoritative plan for expanding Alpine Loop beyond the
-Santa Cruz Mountains. It defines the planned region catalog, the order and
-boundaries of upcoming packs, the local pack selector, and the approval
-protocol for activating a region. The product and route-generation invariants
-remain defined in [the implementation plan](implementation-plan.md), and source
-handling remains governed by [the data policy](data-sources.md).
+The target is **Washington-wide hiking coverage plus the Bay Area and nearby
+California coverage previously available**. Glacier Peak and Henry M. Jackson
+are the first two prepared areas, not the final product scope. This roadmap
+replaces the former pack-registry, bootstrap and schema-6 activation instructions.
+The current architecture and commands are in [prepared coverage](prepared-coverage.md)
+and [README](../../README.md#developer-data-builds).
 
-## Region catalog and pack selector
+## Current availability and restoration baseline
 
-Commit the product roadmap as `data/regions/registry.json`. The catalog is the
-source of truth for pack IDs and activation links; installed files alone never
-make a region searchable. The current catalog is:
+`data/coverage/regions/catalog.json` currently defines two buildable named areas.
+The user has built and installed both. Their coverage acceptance remains partial;
+see [status](status.md). Historical region definitions under `data/regions/` are
+review inputs, not active catalog entries or evidence of current availability.
 
-```json
-{
-  "version": 1,
-  "regions": [
-    {
-      "id": "santa-cruz-mountains",
-      "label": "Santa Cruz Mountains",
-      "displayOrder": 1,
-      "packId": "santa-cruz-mountains"
-    },
-    {
-      "id": "southern-east-bay",
-      "label": "Southern East Bay",
-      "displayOrder": 2,
-      "packId": "southern-east-bay"
-    },
-    {
-      "id": "monterey-carmel",
-      "label": "Monterey–Carmel",
-      "displayOrder": 3,
-      "packId": "monterey-carmel"
-    },
-    {
-      "id": "henry-coe",
-      "label": "Henry Coe",
-      "displayOrder": 4,
-      "packId": "henry-coe"
-    },
-    {
-      "id": "marin-mount-tam",
-      "label": "Marin & Mount Tam",
-      "displayOrder": 5
-    },
-    {
-      "id": "tahoe-eldorado",
-      "label": "Tahoe–Eldorado",
-      "displayOrder": 6
-    },
-    {
-      "id": "central-cascades",
-      "label": "Central Cascades",
-      "displayOrder": 7,
-      "packId": "central-cascades"
-    },
-    {
-      "id": "north-cascades",
-      "label": "North Cascades",
-      "displayOrder": 8
-    },
-    {
-      "id": "rainier-goat-rocks",
-      "label": "Rainier–Goat Rocks",
-      "displayOrder": 9
-    },
-    {
-      "id": "southwest-cascades",
-      "label": "Southwest Cascades",
-      "displayOrder": 10
-    },
-    {
-      "id": "olympic-peninsula",
-      "label": "Olympic Peninsula",
-      "displayOrder": 11
-    }
-  ]
-}
-```
+These nine groups were built and activated before the data cutover. The completion
+evidence remains in status Gates 3–4, 8–11 and 13–17, and their regional charters.
+Restore their hiking coverage through the current named-area pipeline; the old
+number of packs does not prescribe the number of new download areas.
 
-`packId` is an explicit publication link, not a discovery hint. Add it only
-after that region passes the activation gate below. The local `./alpine.sh`
-selector lists linked regions with registered builders, and the app discovers
-only valid installed, linked packs. Planned entries have no builder or size
-estimate yet and do not appear in that selector. The active workspace uses
-one geographic area across installed data; it has no per-pack selection.
-`GET /api/search/catalog` returns the reviewed search regions and exact
-coverage of installed packs. Validate the registry as `RegionRegistryV1` and
-keep pack paths and manifests strictly checked. Adding a planned entry does
-not change the search or route contracts.
+| Historical coverage group | Systems to account for | Current restoration |
+| --- | --- | --- |
+| Santa Cruz Mountains | Midpen/Santa Cruz systems, including Big Basin, Castle Rock, Henry Cowell, Nisene Marks, Bear Creek Redwoods, Sierra Azul and Rancho San Antonio | Not restored |
+| Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Not restored |
+| Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Not restored |
+| Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Not restored |
+| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Glacier Peak and Henry M. Jackson only; quality gaps open |
+| North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Not restored |
+| Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Not restored |
+| Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Not restored |
+| Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Not restored |
 
-## Expansion sequence
+The five historical Washington groups were mountain-focused. They do not establish
+statewide coverage: their charters excluded other Washington hiking systems.
+Maintain an explicit inventory of remaining statewide areas and gaps, including
+lowland and eastern-Washington systems, before claiming Washington complete.
+The existing wilderness-start eligibility and access rules continue to apply.
 
-### 1. Multi-pack foundation
+Marin/Mount Tam and Tahoe–Eldorado were planned, not previously activated.
+Keep them distinct from restoration obligations. The August 4 archive tags contain
+earlier prototype source samples, not the nine later completed regional builds.
 
-- Generalize Santa Cruz-specific pack loading, source-cache namespaces,
-  bootstrap dispatch, and regional audits without adding region branches to
-  the solver or public route contracts.
-- Discover and validate only the installed packs explicitly linked by the
-  catalog.
-- Current searches use one geographic area across eligible installed packs.
-  Catalog entries remain invisible to runtime until an audited pack is linked.
+## Execution order
 
-### 2. Southern East Bay
+1. **Coverage correctness first.** Resolve the diagnosed Top Lake, Heather Lake
+   and Lost Creek Ridge start omissions. Establish reusable approach checks,
+   representative loop/lollipop and boundary-route scenarios, and an independent
+   comparison against the final installed graph. Source proximity alone does not
+   establish trail completeness. Explain each omission as source absence,
+   restriction, intentional distance pruning, or a compiler/footprint defect.
+2. **Remove pilot-only assumptions.** The current region loader hardcodes a
+   Washington mainland longitude range and USFS wilderness provenance. Put
+   reviewed source/border scope and boundary provenance in the appropriate data
+   inputs so Olympic and California areas can use the same builder. Retain the
+   US-only border limit; fail explicitly for unsupported source coverage.
+3. **Restore coverage in Washington and California.** Review the existing
+   charters, source pins, restrictions and scenarios; turn the systems in the
+   table into intuitive named areas with complete approach inventories. Prepare
+   and accept each through the same pipeline. Reuse cached sources and metrics.
+   Track configured, built, installed and accepted separately. Do not revive
+   obsolete builders or require the user to select geographic coordinates.
+4. **Complete the Washington inventory.** Reconcile the restored catalog against
+   the statewide hiking-area inventory, recording intentional exclusions and
+   unresolved gaps. Forest aliases must not imply an entire forest is available.
+5. **Accept the expanded product and maintenance cycle.** Exercise whole-area
+   Full searches, saved work and GPX export; measure build memory/time/disk and
+   adjoining-area costs. Provide a coherent shared-source refresh/publication
+   workflow and a maintained prepared catalog for fresh installations.
 
-Use pack ID `southern-east-bay`.
+The next region must use the same small acceptance procedure as the pilot.
+Quality work should produce a repeatable procedure rather than indefinite manual
+polishing of two areas. The user runs regional/Docker builds; agent investigations
+use bounded fixture tests and finalized artifact copies unless directed otherwise.
 
-- Include Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol Regional
-  Wilderness, Ohlone Wilderness, Del Valle, and adjacent connected southern
-  Alameda trail systems.
-- Keep the Mission Peak–Sunol–Ohlone–Del Valle corridor whole across park and
-  watershed boundaries. Park or agency boundaries must not cut a connected,
-  loop-capable hiking network.
-- Exclude Mount Diablo, the Berkeley/Oakland hills, Henry Coe, and Stanislaus.
-- Derive starts from OSM portals. Use [EBRPD maps and GIS](https://www.ebparks.org/maps)
-  and [Ohlone Wilderness](https://www.ebparks.org/parks/ohlone) material only to
-  review exact restrictive exceptions and, when licensing permits, optional
-  entrance names; record every decision in the region charter.
-- Review the whole pack plus Pleasanton Ridge, Mission Peak, Sunol, Ohlone
-  Wilderness, and Del Valle as candidate pack-provided search regions.
+## Region definition and acceptance
 
-### 3. Monterey Peninsula and Carmel Valley
+- Choose a stable name, reviewed start footprint, approaches and explicit
+  exclusions. Named regions select starting points; their legal boundaries do
+  not clip hikes. Initial requests remain capped at 40 miles.
+- Verify provider coverage for the complete routing buffer and preserve source
+  provenance, licenses and reviewed restrictions. Reuse historical inputs only
+  after confirming they fit the current pipeline and are still obtainable.
+- Build an independent compact graph using the shared compiler. Overlap is
+  allowed; each start is searched through one owning graph. Do not stitch graphs
+  or add regional code to the solver.
+- Check the final artifact, eligible starts, representative routes and overlap
+  behavior. Record build/cache conditions and resource measurements. A successful
+  build or a shaded coverage polygon does not establish complete trail coverage.
+- Publish and install through the current prepared-release service. Keep running
+  and saved search references valid. Record the exact artifact and acceptance
+  evidence in status; keep generated data and databases out of Git.
 
-Use pack ID `monterey-carmel`.
-
-- Include Fort Ord National Monument, Palo Corona, Garland Ranch and Kahn
-  Ranch, Point Lobos, Garrapata, and only the northern Los Padres connections
-  necessary to keep included trail networks whole.
-- Exclude deep Big Sur, Ventana backcountry, and the broader Los Padres National
-  Forest. This is a multi-agency Monterey–Carmel pack, not a Los Padres-only
-  pack.
-- Preserve signed-trail-only and permit-dependent entrances as reviewed portal
-  metadata, never as independently created route starts. Begin review with [Fort
-  Ord](https://www.blm.gov/programs/national-conservation-lands/california/fort-ord-national-monument),
-  [Garland Ranch](https://www.mprpd.org/garland-ranch-regional-park), and [Palo
-  Corona](https://www.mprpd.org/palo-corona-regional-park).
-- Review the whole pack plus Fort Ord, Palo Corona, Garland Ranch, Point Lobos,
-  and Garrapata as candidate pack-provided search regions.
-
-### 4. Henry Coe
-
-Use pack ID `henry-coe` and the schema-6 workflow in the dedicated
-[region-onboarding checklist](region-onboarding-checklist.md).
-
-- Include the connected public hiking systems in Henry W. Coe State Park and
-  Coyote Lake–Harvey Bear Ranch County Park. Use their exact reviewed named-area
-  union as hard coverage; do not fill the concavity with surrounding ranches.
-- Exclude Grant, Pacheco, Coyote Ridge, Cañada de los Osos, Palassou, the Santa
-  Clara Valley network, and other disconnected South Diablo systems. They are
-  future charter decisions, not implied by the region label.
-- Derive starts entirely through the shared OSM portal pipeline. Authority
-  entrances are review anchors only; omit an entrance scenario when no eligible
-  derived portal lies within 500 m rather than creating or silently snapping a
-  start.
-- Review the whole pack, Henry W. Coe State Park, and Coyote Lake–Harvey Bear
-  Ranch as search regions. Exercise Coe Ranch, Hunting Hollow, Dowdy, Mendoza,
-  and Harvey Bear as route clusters.
-- The exact scope, source/license review, deferred entrance, hashes, and
-  measured acceptance evidence live in
-  `data/regions/henry-coe/charter.md`.
-
-### 5. Later catalog regions
-
-Keep Marin and Mount Tam and Tahoe–Eldorado as unlinked roadmap entries.
-Stanislaus, Grant/Pacheco expansion, and deep Big Sur/Ventana remain outside the
-catalog and current detailed roadmap.
-
-### 6. Washington Cascades family
-
-Use four overlapping hiking-network packs rather than one statewide Cascades
-pack or packs clipped to agency boundaries:
-
-1. **North Cascades** — Mount Baker, the Highway 20 corridor, the North
-   Cascades complex, and Pasayten/Methow.
-2. **Central Cascades** — Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee,
-   Stevens Pass and Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, and
-   Teanaway. Use pack ID `central-cascades`; this is the first Washington pack.
-3. **Rainier–Goat Rocks** — Mount Rainier, Naches/White Pass, and Goat Rocks.
-4. **Southwest Cascades** — Mount St. Helens, Mount Adams, and the southern
-   Gifford Pinchot systems.
-
-Central Cascades is activated. The other three have reserved catalog IDs
-`north-cascades`, `rainier-goat-rocks`, and `southwest-cascades` but no build or
-activation link. Their [planning brief](washington-cascades-packs.md) records
-proposed systems, seams, named-area candidates, source reviews, scenario
-clusters, and unresolved boundary decisions. It is the input to the first
-charter and extraction preflight, not a substitute for either.
-
-Central Cascades must include Napeequa Valley and the complete Glacier
-Peak–Alpine Lakes corridor even though that crosses the historic Wenatchee
-National Forest boundary. Begin its exact concave boundary with the complete
-Glacier Peak and Alpine Lakes wilderness networks, their public cross-crest
-approaches, and Teanaway. Exclude North Cascades National Park and Pasayten to
-the north, Mount Rainier and Goat Rocks to the south, disconnected Puget
-lowland systems, and the Columbia Basin. Deliberate overlap at future pack
-seams is preferable to cutting a loop-capable hiking network.
-
-Pin one dated Geofabrik Washington OSM snapshot for topology, named areas,
-portal evidence, and buildings, and reuse that immutable snapshot across the
-Washington family. Pin the USGS 3DEP 1/3-arc-second products intersecting each
-exact pack boundary. USFS and Washington DNR boundaries, trails, ownership,
-and recreation sites are review inputs only: they may support the committed
-boundary, restriction review, or cosmetic portal names, but must not replace
-OSM topology, create starts, or become live runtime dependencies. Do not scrape
-live alerts; only durable reviewed restrictions may enter a hash-pinned exact
-OSM-way removal file.
-
-Candidate Central Cascades search regions are the whole pack, Glacier Peak
-Wilderness, Alpine Lakes Wilderness, Teanaway Community Forest, and stable
-useful polygons for Napeequa/Chiwawa, Icicle/Enchantments, or Snoqualmie.
-Retain only candidates present in the pinned named-area inventory with useful
-eligible cycle-bearing portals. Exercise Napeequa–Little Giant/High Pass,
-Chiwawa/Spider Meadow, a west-side Glacier Peak access, Stevens Pass,
-Icicle/Enchantments, Snoqualmie/Alpine Lakes, Cle Elum, and Teanaway in the
-schema-6 checkpoint.
-
-### 7. Olympic Peninsula
-
-Reserve `olympic-peninsula` for the Olympic mountain, rainforest, and beach
-hiking networks and their public approaches across Olympic National Park and
-Olympic National Forest. Review the park/forest seam as a connected trail
-system rather than using agency boundaries as hard coverage. Keep Puget
-lowlands, offshore islands, and tribal lands without verified public access
-outside the proposed hard boundary. Include mapped beach trails, including
-Ozette's beach leg, in the coastal preflight. Tide timing is a documented
-limitation for later work; the static graph cannot establish passability at a
-particular time.
-The [Olympic planning brief](olympic-peninsula-pack.md) records the proposed
-systems, authority and access decisions, candidate areas, checkpoint clusters,
-and what must be measured before an exact boundary or source pin is committed.
-
-The catalog entry is planned only. Its builder, size estimate, and `packId`
-activation link follow the schema-6 regional onboarding protocol after a clean
-boundary extraction, source review, independent offline builds, route checks,
-and app verification.
-
-## Region-onboarding protocol
-
-Every new pack completes these gates in order. Record acceptance evidence in
-[the rebuild status](status.md), and activate only one region per focused
-change.
-
-### 1. Charter
-
-- Record the pack ID and name, intended users, included and excluded trail
-  systems, managing authorities, candidate reviewed search regions,
-  representative trailheads, and expected overlap with neighboring packs.
-- Organize boundaries around coherent connected hiking networks rather than
-  counties or convenient rectangles. Overlap between packs is allowed; do not
-  split a park or loop-capable network solely to avoid it.
-
-### 2. Boundary preflight
-
-- Commit a versioned Polygon or MultiPolygon coverage input. Exact pack
-  coverage remains the hard route-geometry boundary.
-- Use a separate padded download bounding box when source acquisition needs it;
-  the larger download area never changes runtime coverage.
-- Run an extraction spike and inspect boundary-crossing edges, connected
-  components, viable access points, cycle-bearing topology, and expected build
-  size. Adjust the polygon until exclusions are intentional and every reviewed
-  search region has useful loop-capable coverage.
-
-### 3. Sources and licensing
-
-- Pin topology and elevation sources with retrieval and upstream
-  dates, URLs, hashes, license terms, redistribution decisions, and adapter
-  versions. Pin every optional entrance overlay the same way.
-- Derive access portals from OSM topology. Record reviewed managing-authority
-  restrictions as exact OSM-way removals in a committed, hash-pinned regional
-  file; do not make a live authority line service an onboarding dependency.
-- Fail closed on OSM or optional entrance schema drift, empty expected responses,
-  undocumented fields, restriction conflicts, or unresolved licensing. Network
-  refresh remains explicit; offline rebuilds and automated tests use pinned
-  caches and committed fixtures.
-
-### 4. Pack implementation
-
-- Keep region-specific boundary, source configuration, reviewed search regions,
-  access expectations, and scenarios under `data/regions/<pack-id>/`.
-- Use the generic portal derivation pipeline. Region-specific access code is
-  limited to reviewed exact-way removals and an optional entrance-name reader;
-  do not add a line-matching authority adapter.
-- Keep the pack compiler, route algorithms, request schemas, UI copy, and
-  database tables region-independent.
-
-### 5. Build and QA
-
-- Build twice offline from identical cached inputs. Require identical data
-  version, manifest, database hash, and audit results.
-- Require zero audit errors, unattributed records, missing elevation, profile,
-  values, integrity failures, and unintended out-of-coverage
-  persisted edges.
-- Review restriction conflicts, portal access-state distribution, reachable
-  trail kilometres, disconnected components, viable cycle-bearing portals, and
-  reviewed-region ordering. Assert that previously walkable road connectors
-  remain in the published trail graph and that build-only road context does not.
-- Run representative Quick and Full searches across every major included
-  trail cluster. Include exact routes and deliberately impossible requests that
-  remain honestly labeled close matches.
-
-### 6. Activation
-
-- Add the catalog entry's `packId` only after the pack passes its build, audit,
-  solver, browser, and licensing review. Merely producing local pack files does
-  not activate it.
-- Verify installed coverage and reviewed-region discovery, access previews,
-  Quick search, Full search, saved Jobs, stale-version behavior, keyboard use,
-  and narrow-screen form controls.
-- Run two consecutive `npm run verify` and two consecutive `npm run
-  test:browser` passes. Record
-  the exact pack version and evidence in status.
-- Keep generated packs, downloads, caches, databases, and audit artifacts
-  ignored and out of Git.
-
-## Test expectations for the multi-pack foundation
-
-- Contract tests cover registry versioning, unique IDs and pack links, display
-  ordering, unlinked planned regions, malformed linked packs, and safe paths.
-- Backend tests exercise generic bootstrap dispatch, source/cache namespaces,
-  and geographic selection across installed packs without broadening filters.
-- UI and browser tests cover reviewed-region selection, result and saved-job
-  restoration across installed data, keyboard navigation, and mobile controls.
+Detailed historical inclusion/exclusion and access decisions remain in the
+`data/regions/*/charter.md` files, historical status and Git history. They are
+provenance for review, not instructions to restore old runtime mechanisms.

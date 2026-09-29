@@ -16,6 +16,11 @@ a catalog of known hikes. Users choose an area, physical route constraints,
 acceptable repetition, and whether unknown access is included. Requested route
 distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
+Coverage targets all Washington hiking areas and restoration of the previously
+available Bay Area/nearby California systems. Glacier Peak and Henry M. Jackson
+are the initial two areas. The [coverage roadmap](regional-expansion-plan.md)
+tracks historical coverage, current restoration and the remaining statewide scope.
+
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
 maximum; the band excludes starts within the minimum contour. A drawn boundary overrides those choices. These
