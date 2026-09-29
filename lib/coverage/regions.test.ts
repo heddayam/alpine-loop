@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, expect, it, vi } from "vitest";
@@ -6,15 +5,15 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
 import { planCoverageRegion } from "./plan";
-import { contentId, intersectCoverage, subtractCoverage, unionCoverage } from "./geometry";
+import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 
 vi.mock("node:fs/promises", async original => {
   const actual=await original<typeof import("node:fs/promises")>();
   return {...actual,readFile:vi.fn(actual.readFile)};
 });
 type Region=Awaited<ReturnType<typeof readCoverageRegion>>;
-type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];boundaryPath?:string;approaches:NonNullable<Region["reviewedApproaches"]>}>};
-type Ranges={properties:{source:{id:string};archiveSha256:string;derivation:{missingBroadLeafIds:string[];washingtonScope:Array<{path:string;sha256:string}>}};features:Array<{properties:{id:string;name:string;ancestry:string[]};geometry:AreaGeometry}>};
+type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];startLimitPath?:string;approaches:NonNullable<Region["reviewedApproaches"]>}>};
+type Ranges={properties:{source:{id:string};archiveSha256:string;derivation:{missingBroadLeafIds:string[]}};features:Array<{properties:{id:string;name:string;ancestry:string[]};geometry:AreaGeometry}>};
 let catalog:Catalog,ranges:Ranges,regions:Map<string,Region>;
 beforeAll(async()=>{
   catalog=JSON.parse(await readFile(path.resolve("data/coverage/regions/catalog.json"),"utf8"));
@@ -22,21 +21,39 @@ beforeAll(async()=>{
   regions=new Map(await Promise.all(catalog.regions.map(async({id})=>[id,await readCoverageRegion(id)] as const)));
 });
 
-it("pins named Standard leaves, ancestry and the actual Washington authoring scope",async()=>{
+it("pins named Standard leaves, ancestry and portable source attribution",()=>{
   expect(ranges.properties.source.id).toBe("gmba-standard-v2");
   expect(ranges.properties.archiveSha256).toBe("91b7a37e4331cea01fb8938d535d0fbfcec8aae4173e4b073e46e2896b74f198");
   expect(ranges.features).toHaveLength(127);
   expect(ranges.properties.derivation.missingBroadLeafIds).toEqual(["16221","17034","17156"]);
-  for(const source of ranges.properties.derivation.washingtonScope) {
-    expect(createHash("sha256").update(await readFile(path.resolve(source.path))).digest("hex")).toBe(source.sha256);
-  }
   const stuart=ranges.features.find(feature=>feature.properties.id==="17043")!;
   expect(stuart.properties.name).toBe("Stuart Range");
   expect(stuart.properties.ancestry).toContain("17039"); // Wenatchee Mountains is included, not excluded.
   expect(catalog.regions.find(region=>region.id==="central-cascades")!.rangeIds).toContain("17043");
-  for(const region of regions.values()) expect(region.sources![0]).toMatchObject({
-    id:"gmba-standard-v2",version:"2.0",license:"CC-BY-4.0",contentHash:`sha256:${contentId(ranges)}`,
-  });
+  for(const region of regions.values()) {
+    expect(region.sources![0]).toMatchObject({
+      id:"gmba-standard-v2",version:"2.0",license:"CC-BY-4.0",contentHash:`sha256:${contentId(ranges)}`,
+    });
+    for(const credit of ["Snethlage et al. (2022)","10.48601/earthenv-t9k2-1407","10.1038/s41597-022-01256-y","coordinate-quantized by Alpine Loop"])
+      expect(region.sources![0]!.dataset).toContain(credit);
+  }
+});
+
+it("reuses a full named leaf for a different territory without changing the source dataset",async()=>{
+  const oregon:[number,number]=[-118.30649444676988,45.61998033];
+  const blue=ranges.features.find(feature=>feature.properties.id==="16211")!;
+  expect(coordinateIsInsideArea(oregon,blue.geometry)).toBe(true);
+  expect(coordinateIsInsideArea(oregon,regions.get("blue-mountains")!.geometry)).toBe(false);
+  const cap={type:"Feature",geometry:rectangle([-118.4,45.5,-118.2,45.7])};
+  const changed=structuredClone(catalog);
+  changed.regions.push({...changed.regions.find(region=>region.id==="blue-mountains")!,
+    id:"oregon-blue-mountains",startLimitPath:"oregon-product-cap.geojson",approaches:[]});
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed))
+    .mockResolvedValueOnce(JSON.stringify(ranges)).mockResolvedValueOnce(JSON.stringify(cap));
+  const added=await readCoverageRegion("oregon-blue-mountains");
+  expect(coordinateIsInsideArea(oregon,added.geometry)).toBe(true);
+  expect(subtractCoverage(added.geometry,cap.geometry)).toBeNull();
+  expect(added.sources![0]).toEqual(regions.get("blue-mountains")!.sources![0]);
 });
 
 it("plans all sixteen cores offline with supported route buffers and explicit provenance",async()=>{
@@ -117,11 +134,27 @@ it("keeps exact California product caps while using only Standard core inside th
   expect(coordinateIsInsideArea([-121.577518,37.096626],coe.startLimitGeometry!)).toBe(true);
 });
 
+it("keeps California core and its boundary pin independent of reviewed approach neighborhoods",async()=>{
+  const coe=regions.get("henry-coe")!,outside:[number,number]=[-121.5,37.4];
+  const diablo=ranges.features.find(feature=>feature.properties.id==="17046")!;
+  expect(coordinateIsInsideArea(outside,diablo.geometry)).toBe(true);
+  expect(coordinateIsInsideArea(outside,coe.startLimitGeometry!)).toBe(false);
+  const changed=structuredClone(catalog),entry=changed.regions.find(region=>region.id==="henry-coe")!;
+  entry.approaches.push({...entry.approaches[0]!,id:"outside-audit-anchor",coordinates:outside});
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  const withAnchor=await readCoverageRegion("henry-coe");
+  expect(coordinateIsInsideArea(outside,withAnchor.startLimitGeometry!)).toBe(true);
+  expect(withAnchor.geometry).toEqual(coe.geometry);
+  expect(withAnchor.sources![1]).toEqual(coe.sources![1]);
+  expect(withAnchor.sources![2]!.contentHash).not.toBe(coe.sources![2]!.contentHash);
+});
+
 it.each([
   {patch:{rangeIds:[]},reason:"empty selection"},
   {patch:{rangeIds:["17043","17043"]},reason:"duplicate leaf"},
   {patch:{rangeIds:["../17043"]},reason:"invalid leaf ID"},
-  {patch:{boundaryPath:"central-cascades-boundary.geojson"},reason:"Washington boundary override"},
+  {patch:{boundaryPath:"central-cascades-boundary.geojson"},reason:"obsolete boundaryPath field"},
+  {patch:{startLimitPath:""},reason:"empty territory cap path"},
   {patch:{replaces:["glacier-peak"]},reason:"obsolete replacement promise"},
 ])("rejects $reason",async({patch})=>{
   const changed=structuredClone(catalog);

@@ -10,7 +10,7 @@
         "Midpen"
       ],
       "recipePath": "../recipes/california.json",
-      "boundaryPath": "../../regions/santa-cruz-mountains/boundary.geojson",
+      "startLimitPath": "../../regions/santa-cruz-mountains/boundary.geojson",
       "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
         "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
@@ -79,7 +79,7 @@
         "Del Valle"
       ],
       "recipePath": "../recipes/california.json",
-      "boundaryPath": "../../regions/southern-east-bay/boundary.geojson",
+      "startLimitPath": "../../regions/southern-east-bay/boundary.geojson",
       "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
         "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
@@ -170,7 +170,7 @@
         "Garrapata"
       ],
       "recipePath": "../recipes/california.json",
-      "boundaryPath": "../../regions/monterey-carmel/boundary.geojson",
+      "startLimitPath": "../../regions/monterey-carmel/boundary.geojson",
       "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
         "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
@@ -306,7 +306,7 @@
         "Coyote Lake–Harvey Bear Ranch County Park"
       ],
       "recipePath": "../recipes/california.json",
-      "boundaryPath": "../../regions/henry-coe/boundary.geojson",
+      "startLimitPath": "../../regions/henry-coe/boundary.geojson",
       "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
         "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
