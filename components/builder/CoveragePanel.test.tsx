@@ -123,6 +123,22 @@ it("updates retired areas to their declared replacement without removing install
   expect(fetcher.mock.calls.some(call => (call as unknown as [string,RequestInit?])[1]?.method === "DELETE")).toBe(false);
 });
 
+it("can explicitly remove installed predecessors before downloading their larger replacement", async () => {
+  const next = namedCatalog();
+  next.release.sections = [{ ...next.release.sections[0]!, id: "central", name: "Central Cascades", replaces: ["pilot-a", "pilot-b"] } as typeof next.release.sections[number]];
+  next.release.artifacts = [next.release.artifacts[0]!];
+  let removed = false;
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === "DELETE") { removed = true; return response({}); }
+    return response({ ...next, installed: removed ? null : { ...installation, sectionIds: ["pilot-a", "pilot-b"] } });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  render(<CoveragePanel {...props} selected={["central"]} onSelectionChange={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Remove selected coverage" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Download" })).toBeEnabled());
+  expect(fetcher).toHaveBeenCalledWith("/api/coverage", expect.objectContaining({ method: "DELETE", body: JSON.stringify({ sectionIds: ["pilot-a", "pilot-b"] }) }));
+});
+
 it("shows concise available and installed counts for map selection", async () => {
   const base = catalog.release!;
   const releaseGeometry = { type: "Polygon" as const, coordinates: [[[-123,46],[-120,46],[-120,49],[-123,49],[-123,46]]] };

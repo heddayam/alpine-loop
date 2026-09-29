@@ -46,7 +46,7 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
   const selectedIds = new Set(selected.map(id => replacementFor(id)?.id ?? id).filter((id) => sections.some((section) => section.id === id)));
   const selectedSections = sections.filter(({ id }) => selectedIds.has(id));
   const desired = [...new Set([...installedIds].map(id => replacementFor(id)?.id ?? id).concat([...selectedIds]))].sort();
-  const removable = [...selectedIds].filter((id) => installedIds.has(id));
+  const removable = [...new Set(selectedSections.flatMap(section => [section.id, ...(section.replaces ?? [])]))].filter(id => installedIds.has(id));
   const adding = [...selectedIds].some(id => !installedIds.has(id) && !updateIds.has(id));
   const updating = updateIds.size > 0;
   const hasChanges = adding || updating;
