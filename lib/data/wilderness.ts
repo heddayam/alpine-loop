@@ -20,11 +20,11 @@ import type { Coordinate, NormalizedAccessPoint, NormalizedNode } from "./types"
 export const BUILDING_RADIUS_M = 500;
 
 /**
- * Above this many buildings within `BUILDING_RADIUS_M`, the start is in a town
- * or a neighbourhood. Deliberately permissive: it keeps park gateways that sit
- * near a small settlement and only rejects genuinely built-up surroundings.
+ * Eligible starts have at most nine buildings within `BUILDING_RADIUS_M`.
+ * This measures their immediate surroundings independently of mountain or
+ * administrative boundaries. Ten or more buildings excludes the start.
  */
-export const MAXIMUM_NEARBY_BUILDINGS = 50;
+export const MAXIMUM_NEARBY_BUILDINGS = 10;
 
 export function accessPointIsWildEnough(
   candidate: { nearbyBuildingCount: number },

@@ -134,7 +134,7 @@ region without such a source gets generic portal names, not missing routes.
   `lib/data/osm/buildings.ts`. No second dataset, no raster, no Python.
 - Purpose: the product only ever wants wilderness starts, so this is one
   measurement and one rule, not a taxonomy the user picks from. An access point
-  is rejected when **50 or more buildings** sit within **500 m** of its snapped
+  is rejected when **10 or more buildings** sit within **500 m** of its snapped
   node (`lib/data/wilderness.ts`).
 - Only centroids are retained, rounded to five decimal places (about a metre,
   against a 500 m counting radius). The filtered `.pbf` and the export are
@@ -151,8 +151,9 @@ region without such a source gets generic portal names, not missing routes.
   - A population figure summed over kilometres describes the wrong thing. Fall
     Creek Fire Road and the Henry Cowell nature centre sat in near-identical
     population fields (380 and 368 people/km², both "populated") because Felton
-    is inside the radius. Buildings separate them 9 against 28, and both are
-    correctly kept.
+    is inside the radius. Buildings separate them 9 against 28. The current
+    stricter rule includes the first and excludes the second; the earlier
+    50-building rule included both.
   - Every start GHS-POP flagged as urban is also flagged by the building rule,
     so nothing is lost at the top end.
 - Deleting the raster path removed the pinned GHSL download, the tile-grid
