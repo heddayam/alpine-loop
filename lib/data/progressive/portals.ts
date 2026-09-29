@@ -20,7 +20,7 @@ function statement(db:DatabaseSync,sql:string):StatementSync {
 const one=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>statement(db,sql).get(...args) as Row|undefined;
 const rows=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>db.prepare(sql).iterate(...args) as Iterable<Row>;
 const run=(db:DatabaseSync,sql:string,...args:Array<string|number|null>)=>statement(db,sql).run(...args);
-function distance(a:[number,number],b:[number,number]):number {
+function distance(a:readonly [number,number],b:readonly [number,number]):number {
   const radians=Math.PI/180,deltaLat=(b[1]-a[1])*radians,deltaLon=(b[0]-a[0])*radians;
   const x=Math.sin(deltaLat/2)**2+Math.cos(a[1]*radians)*Math.cos(b[1]*radians)*Math.sin(deltaLon/2)**2;
   return 2*EARTH_RADIUS_M*Math.asin(Math.min(1,Math.sqrt(x)));
@@ -89,6 +89,38 @@ async function nearbyBuildings(db:DatabaseSync,lon:number,lat:number,checkpoint:
 function waysAt(db:DatabaseSync,nodeId:string):NormalizedWay[] {
   return [...rows(db,"SELECT DISTINCT w.record FROM ways w JOIN way_nodes x ON x.way_id=w.id WHERE x.node_id=? AND w.edge_class='trail' ORDER BY w.id",nodeId)]
     .map(({record})=>JSON.parse(String(record)) as NormalizedWay);
+}
+const allowedAccess=(item:{accessState:string})=>item.accessState==="public"||item.accessState==="unknown";
+const trackWay=(way:NormalizedWay)=>way.flags.includes("osm-highway:track");
+const hikingWay=(way:NormalizedWay)=>way.flags.some(flag=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track");
+function selectedSegment(db:DatabaseSync,way:NormalizedWay,index:number):boolean {
+  return Boolean(one(db,`SELECT 1 FROM edges e JOIN selected_edges s ON s.id=e.id
+    WHERE e.stable_physical_id=? AND e.access_state IN ('public','unknown') LIMIT 1`,`${way.id}:${index}`));
+}
+function selectedWayAt(db:DatabaseSync,way:NormalizedWay,nodeId:string):boolean {
+  return way.nodeIds.some((id,index)=>id===nodeId && ((index>0&&selectedSegment(db,way,index-1)) || (index<way.nodeIds.length-1&&selectedSegment(db,way,index))));
+}
+/** Trailhead signs may sit along their trail, rather than on its road junction. */
+async function hasNearbyTrackApproach(db:DatabaseSync,nodeId:string,checkpoint:()=>Promise<void>):Promise<boolean> {
+  const hasTrack=(id:string)=>waysAt(db,id).some(way=>allowedAccess(way)&&trackWay(way));
+  for(const way of waysAt(db,nodeId).filter(way=>allowedAccess(way)&&hikingWay(way))) {
+    if(!selectedWayAt(db,way,nodeId))continue;
+    if(hasTrack(nodeId))return true;
+    for(let origin=0;origin<way.nodeIds.length;origin++) {
+      if(way.nodeIds[origin]!==nodeId)continue;
+      for(const direction of [-1,1]) {
+        let length=0;
+        for(let index=origin+direction;index>=0&&index<way.nodeIds.length;index+=direction) {
+          await checkpoint();
+          const previous=index-direction;
+          length+=distance(way.coordinates[previous]!,way.coordinates[index]!);
+          if(length>250||!selectedSegment(db,way,Math.min(previous,index)))break;
+          if(hasTrack(way.nodeIds[index]!))return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive",reuseInclusive:boolean):{connectivity:number;outDegree:number} {
   const table=profile==="inclusive"&&reuseInclusive?"portal_components":`rank_${profile}`;
@@ -166,7 +198,9 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     if (++work%1000===0) await checkpoint();
     if(row.road_class==="street"||(await evidenceNear(db,Number(row.lon),Number(row.lat),250,checkpoint)).length) addCandidate(String(row.node_id),String(row.road_class) as "street"|"service-road",true);
   }
-  // Exact trailhead mapping on an OSM track/trail join is a valid service-road contact.
+  // Require an actual approach along the tagged trail, never a nearby unrelated track.
+  // OSM trailheads may be mapped along a highway, not necessarily at its junction:
+  // https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrailhead
   for(const row of rows(db,"SELECT e.record FROM evidence e WHERE e.kind='trailhead'")) {
     if (++work%1000===0) await checkpoint();
     const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
@@ -174,13 +208,13 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     const nodeId=item.nodeIds[0]!;if(!one(db,"SELECT 1 FROM portal_components WHERE id=?",nodeId))continue;
     const node=one(db,"SELECT record FROM nodes WHERE id=?",nodeId);
     if(!node || !item.externalId.startsWith("node/") || item.accessState==="private" || item.accessState==="closed" || item.accessState==="prohibited" || (JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
-    const incident=waysAt(db,nodeId).filter((way)=>!(["private","closed","prohibited"].includes(way.accessState)));
-    if(incident.some((way)=>way.flags.includes("osm-highway:track"))&&incident.some((way)=>way.flags.some((flag)=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track")))addCandidate(nodeId,"service-road",false);
+    if(await hasNearbyTrackApproach(db,nodeId,checkpoint))addCandidate(nodeId,"service-road",false);
   }
   // One parking feature creates at most one snapped candidate, even when its area has many vertices.
   for(const evidenceRow of rows(db,"SELECT id,record FROM evidence WHERE kind='parking'")) {
     if (++work%1000===0) await checkpoint();
     const item=JSON.parse(String(evidenceRow.record)) as NormalizedPortalEvidence;
+    if(!allowedAccess(item))continue;
     const coordinates=[...rows(db,"SELECT lon,lat FROM evidence_points WHERE evidence_id=?",String(evidenceRow.id))]
       .map(({lon,lat})=>[Number(lon),Number(lat)] as [number,number]);
     let roadClass:"street"|"service-road"|null=null;
@@ -199,7 +233,24 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
       }
       if(roadClass==="street")break;
     }
-    if(!roadClass)continue;
+    if(!roadClass) {
+      // A mapped parking area can join a track and hiking path at different
+      // vertices. Keep the start on that path; never manufacture a parking edge.
+      const tracks:Array<{id:string;coordinates:readonly [number,number]}>=[],trails:typeof tracks=[];
+      for(const nodeId of [...new Set(item.nodeIds)]) {
+        await checkpoint();
+        const incident=waysAt(db,nodeId).filter(allowedAccess);
+        const node=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);
+        if(!node)continue;
+        const contact={id:nodeId,coordinates:[Number(node.lon),Number(node.lat)] as const};
+        if(incident.some(trackWay))tracks.push(contact);
+        if(incident.some(way=>hikingWay(way)&&selectedWayAt(db,way,nodeId)))trails.push(contact);
+      }
+      const contacts=trails.map(trail=>({...trail,distance:Math.min(...tracks.map(track=>distance(track.coordinates,trail.coordinates)))}))
+        .filter(contact=>contact.distance<=250).sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
+      if(contacts[0])addCandidate(contacts[0].id,"service-road",false);
+      continue;
+    }
     let nearest:{id:string;distance:number}|null=null;
     for(const [lon,lat] of coordinates) {
       if (++work%1000===0) await checkpoint();
