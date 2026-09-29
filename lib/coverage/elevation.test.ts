@@ -8,6 +8,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { CoverageUnit } from "./types";
 import type { ThreeDepCollection } from "@/lib/data/elevation/collection";
 import { rectangle } from "./geometry";
+import { UvRasterioThreeDepElevationSampler } from "@/lib/data/elevation/uv-rasterio-sampler";
 import { geometryElevationFingerprint, describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";
 
 const refresh = vi.hoisted(() => vi.fn());
@@ -16,7 +17,7 @@ vi.mock("@/lib/data/elevation/collection", async (original) => ({
   refreshThreeDepCollection: refresh,
 }));
 const dirs: string[] = [];
-afterEach(async () => { refresh.mockReset(); await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))); });
+afterEach(async () => { refresh.mockReset(); vi.restoreAllMocks(); await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))); });
 
 const unit: CoverageUnit = {
   id: "cross-tile", geometry: rectangle([-121.8, 47.8, -121.2, 48.2]), status: "pending",
@@ -199,4 +200,100 @@ it("writes only required products to the disposable sampling collection",async()
   expect(selected.products.map(product=>product.productId)).toEqual(["one"]);
   expect(selected.products[0]!.filePath).toBe(value.firstPath);
   expect((JSON.parse(await readFile(value.cachedPath,"utf8")) as ThreeDepCollection).products).toHaveLength(2);
+});
+
+
+async function backupFixture(value: Awaited<ReturnType<typeof fixture>>, persist = false) {
+  const bytes = Buffer.from("30 m backup");
+  const file = path.join(value.preparationRoot, "backup.tif");
+  await writeFile(file, bytes);
+  const backup = product("backup", "USGS 1 Arc Second n48w122 20260101", file, bytes);
+  const data: ThreeDepCollection = { ...collection([backup]), sourceId: "usgs-3dep-1-arc-second", resolution: "1 arc-second (nominal 30 m)", dataset: "National Elevation Dataset (NED) 1 arc-second" };
+  const filePath = path.join(value.preparationRoot, "dem", "backup", "canonical", "collection.json");
+  if (persist) { await mkdir(path.dirname(filePath), { recursive: true }); await writeFile(filePath, JSON.stringify(data)); }
+  return { backup, data, file, filePath };
+}
+const southUnit = { ...unit, geometry: rectangle([-121.8, 47.8, -121.2, 47.9]) };
+const points: [number, number][] = [[-121.7, 47.85], [-121.6, 47.85], [-121.5, 47.85]];
+
+it("leaves valid 10 m samples and their cache identity unchanged without acquiring backup", async () => {
+  const value = await fixture();
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample").mockResolvedValue([100, 200, 300]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  const before = result.productFingerprint;
+  await expect(result.sampler.sample(points)).resolves.toEqual([100, 200, 300]);
+  expect(sample).toHaveBeenCalledOnce();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(result.productFingerprint).toBe(before);
+  expect(result.fingerprintForGeometry(points)).toBe(geometryElevationFingerprint([value.first])(points));
+  expect(result.limitations).toEqual([]);
+});
+
+it("acquires only a missing sample's owned 30 m tile and updates provenance, keys and resume identity", async () => {
+  const value = await fixture(), backup = await backupFixture(value);
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([100, null, 300]).mockResolvedValueOnce([210]);
+  refresh.mockResolvedValue({ collection: backup.data, collectionPath: backup.filePath });
+  const onBackup = vi.fn(async () => {});
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, false, elevationCache(), path.join(value.preparationRoot, "sample.json"), onBackup);
+  const before = result.productFingerprint, metricBefore = result.fingerprintForGeometry(points);
+  await expect(result.sampler.sample(points)).resolves.toEqual([100, 210, 300]);
+  expect(sample.mock.calls[1]![0]).toEqual([points[1]]);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(refresh.mock.calls[0]![0]).toMatchObject({ resolution: "1 arc-second (nominal 30 m)", latestOnly: true,
+    query: { dataset: "National Elevation Dataset (NED) 1 arc-second", nominalTile: "n48w122", bbox: [-122, 47, -121, 48] } });
+  expect(onBackup.mock.calls).toEqual([["-122,47"], [null]]);
+  expect(result.productFingerprint).not.toBe(before);
+  expect(result.fingerprintForGeometry(points)).not.toBe(metricBefore);
+  expect(result.source.dataset).toContain("30 m");
+  expect(result.limitations).toEqual([expect.stringContaining("only where the 10 m raster has NoData")]);
+  const persisted = JSON.parse(await readFile(backup.filePath, "utf8")) as ThreeDepCollection;
+  expect(persisted.resolution).toBe("1 arc-second (nominal 30 m)");
+  expect(persisted.products.map(item => item.productId)).toEqual(["backup"]);
+  const resumed = await describeCanonicalElevation(southUnit.geometry, value.cacheRoot, value.preparationRoot);
+  expect(resumed?.productFingerprint).toBe(result.productFingerprint);
+  expect(resumed?.source).toEqual(result.source);
+});
+
+it("uses a verified cached backup offline and preserves genuine remaining NoData", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true);
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([null, 200, null]).mockResolvedValueOnce([110, null]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  await expect(result.sampler.sample(points)).resolves.toEqual([110, 200, null]);
+  expect(sample.mock.calls[1]![0]).toEqual([points[0], points[2]]);
+  expect(refresh).not.toHaveBeenCalled();
+  expect((JSON.parse(await readFile(backup.filePath, "utf8")) as ThreeDepCollection).products).toHaveLength(1);
+});
+
+it("explains a missing offline backup without making a request", async () => {
+  const value = await fixture();
+  vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample").mockResolvedValue([null]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  await expect(result.sampler.sample([points[0]!])).rejects.toThrow("no verified cached 30 m backup");
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it("rejects changed backup bytes before reusing a prepared area's receipt", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true);
+  await writeFile(backup.file, "corrupt");
+  await expect(describeCanonicalElevation(southUnit.geometry, value.cacheRoot, value.preparationRoot)).rejects.toThrow("integrity validation");
+});
+
+it("includes only applicable backup content and the resolution policy in metric keys", () => {
+  const bytes = Buffer.from("tile");
+  const primary = product("primary", "n48w122", "a", bytes), backup = product("backup", "n48w122", "b", bytes);
+  const unrelated = product("far", "n50w122", "c", bytes);
+  const before = geometryElevationFingerprint([primary])(points);
+  expect(geometryElevationFingerprint([primary], [unrelated])(points)).toBe(before);
+  const after = geometryElevationFingerprint([primary], [backup])(points);
+  expect(after).not.toBe(before);
+  expect(geometryElevationFingerprint([primary], [unrelated, backup])(points)).toBe(after);
+  expect(geometryElevationFingerprint([primary], [{ ...backup, receipt: { ...backup.receipt, sha256: `sha256:${"2".repeat(64)}` } }])(points)).not.toBe(after);
+});
+
+it("does not accept a 30 m collection as the primary 10 m input", async () => {
+  const value = await fixture(), backup = await backupFixture(value);
+  await writeFile(value.cachedPath, JSON.stringify(backup.data));
+  await expect(elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow("Expected a 10 m primary");
 });
