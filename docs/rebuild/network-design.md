@@ -49,13 +49,38 @@ GMBA mountain ranges and foothills, completed by named surrounding areas. Califo
 preserves the four existing footprints. Historical mountain footprints and reviewed
 approaches remain included. Names, provenance and approach review belong to the
 catalog; each area loads one static boundary file. There is no runtime county
-registry, mountain classification, spatial clustering or boundary-generation step.
+registry, spatial clustering or boundary-generation step. Broad range outlines
+organize downloads; a separate pinned GMBA Standard input identifies mountain
+terrain without a new relief/elevation analysis pipeline.
 
 After normalization, the shared access discovery finds actual start candidates
 inside the start footprint and counts building centroids through a spatial index.
-Public/unknown starts with 0–9 buildings within 500 metres seed a bounded multi-source
-Dijkstra pass on an undirected lower-bound graph. No mountain rule applies.
-Candidate identities and parking snaps are frozen before pruning; final ranking
+Evidence belongs to actual mapped entrance nodes; parking nominates one hiking
+contact on its own feature, with a mapped road/track contact. There is no nearby-road
+test, disconnected trail snap or borrowing names/confidence from arbitrary signs
+within 250 m. Unmarked street-to-trail entrances remain candidates. A marked hiking
+approach may connect along at most 250 m of actual hiking paths to a track entrance.
+
+Public/unknown candidates with 0–9 buildings within 500 metres qualify if an
+undirected walking path reaches a mapped hiking link touching GMBA Standard terrain
+within 25 miles. Paths, walking-eligible tracks, bridleways, steps and
+footways/pedestrian ways with trail context seed terrain distance; ambiguous walking
+links and general-purpose roads cannot self-qualify. They can remain route/approach
+links. Mountain tracks remain eligible because the [OSM track definition](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack)
+includes forest, fire and recreation roads; the tag itself grants no access.
+The source mask is static,
+licensed and pinned in [hiking terrain](../../data/coverage/hiking-terrain.md).
+Low foothills can be omitted; this is a conservative product heuristic, not proof
+that every returned loop visits mountain terrain or that every useful hike is kept.
+
+One multi-source Dijkstra pass from terrain-link endpoints removes disconnected
+lowland candidates; the existing pass from surviving starts prunes nearby trails.
+The two passes reuse the same fixed arrays and indexed heap. No graph traversal
+per start or additional DEM acquisition is needed. The 25-mile limit follows the
+closed-walk bound above, preserving long connected valley approaches instead of
+requiring the entrance itself to be in mountains. Direction/access relaxation can
+retain extra candidates; route search still enforces the actual graph constraints.
+Candidate identities and parking nominations are frozen before pruning; final ranking
 and components run once on the measured graph. Any vertex on a
 closed walk of at most 50 miles must be within 25 miles of its start in that graph.
 A physical edge is retained only when both endpoint distances are finite and

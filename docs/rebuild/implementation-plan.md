@@ -18,11 +18,15 @@ distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
 Coverage targets all eligible starts in Washington and the exact previously
 available Bay Area/nearby California footprints. A start needs fewer than ten mapped
-buildings within 500 metres, regardless of mountain/foothill/lowland geography.
+buildings within 500 metres and a mapped hiking connection to published mountain
+terrain within the closed-route distance bound. Unmarked mountain entrances remain
+eligible; nearby unrelated parking or signs do not establish an entrance.
 Twelve Washington download groups follow published mountain ranges and their
 foothills, with named lowland, basin and coastal areas completing the territory.
 Historical approaches are retained; four California definitions remain unchanged.
 The catalog loads one pinned outline per area, with no county-assignment registry.
+Broad outlines organize downloads; the smaller GMBA Standard terrain input filters
+starts before elevation processing, including connected valley approaches.
 These outlines select starts and do not clip hikes. Boundary/source limitations
 and real-data acceptance remain explicit. The [coverage roadmap](regional-expansion-plan.md)
 tracks implementation separately from built, installed and verified coverage.

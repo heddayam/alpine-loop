@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, expect, it, vi } from "vitest";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
-import { coordinateIsInsideArea } from "@/lib/graph/geometry";
-import { listCoverageRegions, readCoverageRegion } from "./regions";
+import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometry";
+import { listCoverageRegions, readCoverageRegion, readHikingTerrain } from "./regions";
 import { planCoverageRegion } from "./plan";
 import { containsCoverage } from "@/lib/graph/coverage-containment";
 import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
@@ -22,6 +22,15 @@ beforeAll(async()=>{
   central=await readCoverageRegion("central-cascades");
 });
 const footprint=(region:BaselineRegion)=>unionCoverage([region.boundary.geometry,...region.approaches.map(point=>point.neighborhood)]);
+it("pins terrain separately from the broad download outlines and preserves mountain and lowland distinctions",async()=>{
+  const terrain=await readHikingTerrain(),prepared=prepareAreaGeometry(terrain.geometry);
+  expect(terrain.source).toMatchObject({id:"hiking-terrain-gmba-v2",version:"2.0",license:"CC-BY-4.0"});
+  expect(terrain.source.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  for(const point of [[-121.0756526,47.8662242],[-121.194,37.2]] as const)
+    expect(prepared.containsPoint(point)).toBe(true); // Cascades and Coe mountain terrain
+  for(const point of [[-122.33,47.61],[-120,47]] as const)
+    expect(prepared.containsPoint(point)).toBe(false); // Seattle and basin lowlands
+});
 function omittedApproaches(region:CoverageRegion):string[] {
   return baseline.flatMap(previous=>previous.approaches.filter(expected=>!region.reviewedApproaches?.some(actual=>
     actual.id===expected.id && actual.name===expected.name && actual.radiusMeters===expected.radiusMeters &&
@@ -31,6 +40,7 @@ function omittedApproaches(region:CoverageRegion):string[] {
 
 it("plans all sixteen areas offline with explicit provenance and a completely covered route buffer",async()=>{
   const entries=await listCoverageRegions();
+  const terrain=await readHikingTerrain();
   expect(entries.map(entry=>entry.id).sort()).toEqual([
     "central-cascades","henry-coe","monterey-carmel","north-cascades","olympic-peninsula",
     "rainier-goat-rocks","santa-cruz-mountains","southern-east-bay","southwest-cascades",
@@ -38,6 +48,8 @@ it("plans all sixteen areas offline with explicit provenance and a completely co
   ].sort());
   for(const {id} of entries) {
     const region=id===central.id?central:await readCoverageRegion(id),plan=planCoverageRegion(region);
+    // Exercise both inventories' overlays without repeating regional planning.
+    expect(intersectCoverage(terrain.geometry,plan.geometry),id).not.toBeNull();
     expect(subtractCoverage(plan.geometry,unionCoverage(region.recipe.sources.map(source=>source.geometry))),id).toBeNull();
     for(const exclusion of region.recipe.exclusions) expect(intersectCoverage(plan.geometry,exclusion.geometry),`${id}: ${exclusion.id}`).toBeNull();
     expect(region.sources?.map(source=>source.id)).toEqual([`region-boundary-${id}`,`region-approaches-${id}`]);
@@ -49,7 +61,7 @@ it("plans all sixteen areas offline with explicit provenance and a completely co
   const california=await readCoverageRegion("santa-cruz-mountains");
   expect(california.sources?.[0]?.authority).not.toBe("USDA Forest Service");
   expect(california.recipe.reviewedRegionIds.slice().sort()).toEqual(["henry-coe","monterey-carmel","santa-cruz-mountains","southern-east-bay"]);
-});
+},15000);
 
 it("preserves US trail coverage at the northern border and extends Southwest support into Oregon",async()=>{
   const north=planCoverageRegion(await readCoverageRegion("north-cascades"));

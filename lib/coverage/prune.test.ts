@@ -6,8 +6,8 @@ const databases: DatabaseSync[] = [];
 afterEach(()=>{databases.splice(0).forEach(db=>db.close());});
 function graph(nodes: Array<[string,number,number]>, links: Array<[string,string,string,number]>, seeds = ["s"]) {
   const db = new DatabaseSync(":memory:"); databases.push(db);
-  db.exec("CREATE TABLE nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL); CREATE TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT,to_node TEXT,length_m REAL); CREATE TEMP TABLE sparse_start_nodes(node_id TEXT PRIMARY KEY)");
-  const addNode=db.prepare("INSERT INTO nodes VALUES (?,?,?)"),addEdge=db.prepare("INSERT INTO eligible_segments VALUES (?,?,?,?)");
+  db.exec("CREATE TABLE nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL); CREATE TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT,to_node TEXT,length_m REAL,terrain_hiking INTEGER NOT NULL DEFAULT 1); CREATE TEMP TABLE sparse_start_nodes(node_id TEXT PRIMARY KEY)");
+  const addNode=db.prepare("INSERT INTO nodes VALUES (?,?,?)"),addEdge=db.prepare("INSERT INTO eligible_segments(id,from_node,to_node,length_m) VALUES (?,?,?,?)");
   seeds.forEach(id=>db.prepare("INSERT INTO sparse_start_nodes VALUES (?)").run(id));
   nodes.forEach(row=>addNode.run(...row));links.forEach(row=>addEdge.run(...row));return db;
 }
@@ -41,7 +41,7 @@ it("fails before allocating an over-budget graph and honors cancellation",async(
 });
 it("rejects a region with no potentially eligible start node",async()=>{
   const db=graph([["s",1,0],["a",2,0]],[["sa","s","a",1]],[]);
-  await expect(pruneWalkingGraph(db,50,async()=>{},32*1024**2)).rejects.toThrow("connect to the selected region");
+  await expect(pruneWalkingGraph(db,50,async()=>{},32*1024**2)).rejects.toThrow("connect to mountain hiking trails");
 });
 
 it("does not seed unqualified trail nodes inside the same geographic area",async()=>{
@@ -49,4 +49,21 @@ it("does not seed unqualified trail nodes inside the same geographic area",async
     [["sparse","s","a",1],["dense","dense","b",1]]);
   await pruneWalkingGraph(db,50,async()=>{},32*1024**2);
   expect(kept(db)).toEqual(["sparse"]);
+});
+
+it("preserves unmarked valley approaches at the distance bound and rejects disconnected lowland starts",async()=>{
+  const db=graph([["s",0,0],["a",1,0],["b",2,0],["lowland",0,0],["end",1,0],["far",3,0]],
+    [["approach","s","a",25],["mountain","a","b",1],["low","lowland","end",1],["too-far","far","a",26]],["s","lowland","far"]);
+  db.exec("UPDATE eligible_segments SET terrain_hiking=0 WHERE id!='mountain'; CREATE TEMP TABLE sparse_portal_candidates(node_id TEXT PRIMARY KEY); INSERT INTO sparse_portal_candidates SELECT node_id FROM sparse_start_nodes");
+  const result=await pruneWalkingGraph(db,50,async()=>{},32*1024**2);
+  expect(result).toMatchObject({seedNodes:1,terrainExcludedAccessPoints:2});
+  expect(db.prepare("SELECT node_id FROM sparse_portal_candidates").all()).toEqual([{node_id:"s"}]);
+  expect(db.prepare("SELECT node_id FROM terrain_excluded_start_nodes ORDER BY node_id").all()).toEqual([{node_id:"far"},{node_id:"lowland"}]);
+  expect(kept(db)).toEqual(["approach"]);
+});
+
+it("does not qualify a start from possible walking connectors alone",async()=>{
+  const db=graph([["s",0,0],["a",1,0]],[["connector","s","a",1]]);
+  db.exec("UPDATE eligible_segments SET terrain_hiking=0");
+  await expect(pruneWalkingGraph(db,50,async()=>{},32*1024**2)).rejects.toThrow("connect to mountain hiking trails");
 });

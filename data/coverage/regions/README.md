@@ -3,10 +3,12 @@
 The twelve Washington boundary files are static download groupings. GMBA's named
 ranges organize the mountain areas; EPA landscape regions allocate the remaining
 lowlands and margins. Their union preserves the complete previous Washington
-start footprint, including historical approach neighborhoods. A mountain mask,
-county membership, elevation threshold or this grouping's internal borders do not
-decide whether an access point is eligible. The shared start-selection policy and
-route-buffer planning remain separate. California's four entries are unchanged.
+start footprint, including historical approach neighborhoods. These organizational
+outlines are deliberately broad. The separate [GMBA Standard terrain mask](../hiking-terrain.md)
+filters sparse entrance candidates through actual trail connectivity, preserving
+connected valley approaches without treating all surrounding lowlands as mountain
+terrain. County membership, forest ownership and internal download borders do not
+grant access or clip routes. California's four download entries are unchanged.
 
 ## Sources and attribution
 

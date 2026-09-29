@@ -6,6 +6,66 @@ the evidence line.
 
 ## Active system design revision
 
+### Mountain entrances and evidence simplification — 2026-09-29
+
+- [x] Preserve the user's selected unmarked mountain entrances. Replace arbitrary
+  nearby evidence borrowing with actual entrance-node associations and one parking
+  feature nomination. Remove nearby-road detection and disconnected parking snaps;
+  retain the connected marked Top Lake approach and Heather Lake lot contacts.
+  Delete the unused schema-6 portal module and its tests (1,090 lines), updating
+  active guidance instead of keeping two implementations. The progressive entrance
+  implementation itself is 43 lines smaller before later performance integrations.
+- [x] Pin the licensed GMBA Standard v2 terrain separately from Broad download
+  groupings. Preserve all 276 polygons, 49 holes and 36,007 coordinates; use only
+  eight-decimal GEOS quantization, without simplifying or buffering the mask.
+  Source pins, dataset/paper credit and modification attribution travel in exported
+  graph provenance. No network, terrain raster, dependency, request setting or
+  schema change is required during ordinary preparation/runtime search.
+- [x] Filter sparse entrance candidates through one multi-source walking-distance
+  pass to hiking links touching terrain before elevation work. Reuse the existing
+  pruning arrays/heap for the subsequent surviving-start pass. Actual mountain
+  tracks qualify, preserving forest/fire-road hikes; ambiguous footways and ordinary
+  roads can provide approaches but cannot qualify terrain alone. Unknown access
+  remains included and density remains fewer than ten buildings within 500 m.
+  New policy/input identities rebuild artifacts while physical metrics stay reusable;
+  actual reviewed candidates rejected by terrain are named separately from density
+  exclusions, while missing/restricted topology still fails publication.
+- [x] Audit the current immutable Central artifact inside its Docker environment:
+  30,345 nodes, 32,015 physical edges and 3,684 starts. A compact-graph approximation
+  retains 3,043 / excludes 641 starts (17.4%); cycle-capable starts retain 1,371 /
+  exclude 154 (10.1%). All 26 reviewed neighborhoods containing an installed start
+  retain one; Stevens Pass PCT and Snow Lake were already absent in this artifact.
+  Track inclusion restores Tarpiscan, Wenas and legitimate mountain road loops;
+  Flowing Lake, Crescent Lake and Highline Canal lowland examples remain excluded.
+  Prior evidence labels can contain borrowed parking/sign data. Compact endpoints
+  can miss interior contacts or understate distances, so these are estimates of
+  terrain's effect, not the new compiler's output or measured search savings.
+  Export/analysis peak RSS stayed about 80 / 230 MiB; analysis took about one second.
+- [x] Offline terrain calibration: 39 of 45 reviewed WA/CA anchors are directly
+  inside, including all sampled Santa Cruz/East Bay and Cascades approaches.
+  Fort Ord, Ozette and four other anchors are outside; their actual trail connection
+  remains the deciding criterion. Five synthetic lowland controls are outside,
+  but geographical distance alone cannot establish rejection. Standard can omit
+  low foothills and this rule qualifies starts, not every route's terrain.
+- [x] Focused verification: 86 portal/store/publisher cases, 51 pruning/runtime
+  cases and 16 catalog cases pass. Independent review found an outside-endpoints
+  terrain crossing; the indexed contact predicate and compiler regression fix it.
+  Nine geometry cases and the final five terrain compiler cases / 24 pruning and
+  catalog cases pass; targeted ESLint and integrated TypeScript checking pass.
+  The initial all-area overlay test exceeded the five-second fixture timeout;
+  reuse the existing planning loop and give that geometric fixture 15 seconds.
+  No full/browser suite or regional preparation is repeated. All task worktrees,
+  branches, raw terrain authoring tools, audit exports and processes are removed;
+  the user's review file, sources, metric caches, installed artifacts and jobs remain.
+- [ ] User rebuilds desired regions and installs their updates. Actual regional
+  retained counts, pack bytes, build/search times and Fort Ord/Ozette connectivity
+  remain acceptance gates. No regional build or full/browser suite is repeated here.
+
+Implementation and source limitations: [network design](network-design.md),
+[hiking terrain](../../data/coverage/hiking-terrain.md). This supersedes the earlier
+no-mountain eligibility policy without changing complete download-territory
+assignment or clipping routes at start-selection boundaries.
+
 ### Regional preparation toward 20–25 minutes — 2026-09-29
 
 - [x] Record the user's warm Central Cascades baseline: 31m 46s, with 10m 17s
@@ -107,9 +167,10 @@ power failure; only reproducible working graph data changes synchronization.
 - [x] Preserve the user's baseline build, which finished Ready in about 49 minutes
   with compression taking 8m 18s. Archive completed worktrees, delete task branches,
   remove benchmark scratch, and preserve caches/artifacts and the user review file.
-- [ ] Measure real savings with the rebuilt data image and a fresh preparation.
-  A normal rerun of a completed region intentionally reuses its valid receipt;
-  optimization-only changes do not invalidate packs or elevation caches.
+- [x] Observe the user's rebuilt preparation: 31m 47s with a warm metric cache.
+  Stage measurements and attribution limits are recorded above; this is not a
+  controlled code-only speedup. A normal completed-region rerun intentionally
+  reuses its valid receipt; explicit `--rebuild` retains source/elevation caches.
 
 References: SQLite [grouped counts](https://www.sqlite.org/lang_aggfunc.html),
 [search-and-sort indexes](https://www.sqlite.org/queryplanner.html#searching_and_sorting_at_the_same_time),
@@ -143,9 +204,10 @@ These justify the retained mechanisms, not a prediction of regional speedup.
 - [x] Integrate focused commits, archive the SQL worktree, delete its branch and
   remove benchmark scratch. Preserve the running Docker build, source/DEM/metric
   caches, published artifacts and user-owned publication review.
-- [ ] Measure regional stage savings on the next normal build after rebuilding
-  the data image (`docker compose build data`). Existing running containers keep
-  their original code; do not restart them solely for this change.
+- [x] Observe context reading at 10m 18s in the completed user-run preparation,
+  against the earlier reported 16m 18s. Cache/other changes prevent isolating the
+  import change's contribution; see the observed run above. Existing running
+  containers keep their original code; do not restart them solely for this change.
 
 ### Mountain-led download boundaries — 2026-09-29
 

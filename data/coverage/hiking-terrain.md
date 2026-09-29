@@ -31,7 +31,9 @@ required citations are embedded in the GeoJSON:
 | Source CRS / encoding | WGS84 longitude/latitude / UTF-8 |
 | Source records | 6,717 |
 
-`properties.source` supplies the shared pack-source fields. Its review-date
+`properties.source` supplies the shared pack-source fields, including both required
+citations and modification credit in its dataset label so exported graphs retain
+the attribution. Its review-date
 timestamp is pinned to `2026-09-29T00:00:00Z`; `properties.retrievedAt` records the
 actual archive retrieval time. The runtime content hash is computed from the
 complete derived Feature, independently of the original archive hash.
@@ -99,8 +101,8 @@ in WGS84 Lambert azimuthal equal-area coordinates, using
 | Symmetric difference | 7,795.8536 m², approximately 0.0000018921% |
 | Measured Hausdorff distance | 0.000692 m |
 | Simplification tolerance | 0 m; no simplification |
-| Final GeoJSON bytes | 1,005,890 |
-| Final GeoJSON SHA-256 | `b110acb581066ba12f762bf2254e0b2a436d9d02797451a0254ed2a240af89be` |
+| Final GeoJSON bytes | 1,005,765 |
+| Final GeoJSON SHA-256 | `fd8ddf0d04fa31adc08c6db4f6edf53ff8c43b7a1f9bf8213560a3d5649c047c` |
 
 These are differences from the source geometry, not an accuracy assessment of
 the source itself. The final coordinate change is far below the requested

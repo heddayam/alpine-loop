@@ -5,6 +5,8 @@ import { assertValidAreaGeometry, type AreaGeometry } from "@/lib/data/area-geom
 import { contentId, unionCoverage } from "./geometry";
 import { readSourceRecipe } from "./recipe";
 import type { CoverageRegion } from "./types";
+import { areaGeometrySchema } from "@/lib/contracts/routes";
+import { packSourceSchema } from "@/lib/contracts/manifest";
 
 const catalogPath = path.resolve("data/coverage/regions/catalog.json");
 const provenanceSchema = z.object({
@@ -22,6 +24,13 @@ const catalogSchema = z.object({schemaVersion:z.literal(1),regions:z.array(z.obj
   limitations:z.array(z.string()),
 }).strict().refine(region=>!region.replaces?.includes(region.id),"A region cannot replace itself")).refine(regions=>new Set(regions.map(region=>region.id)).size===regions.length,"Region IDs must be unique")}).strict();
 async function catalog() { return catalogSchema.parse(JSON.parse(await readFile(catalogPath,"utf8"))); }
+
+/** Authored, GEOS-validated terrain, pinned independently of download outlines. */
+export async function readHikingTerrain() {
+  const feature=JSON.parse(await readFile(path.resolve("data/coverage/hiking-terrain.geojson"),"utf8"));
+  return {geometry:areaGeometrySchema.parse(feature.geometry),
+    source:packSourceSchema.parse({...feature.properties.source,contentHash:`sha256:${contentId(feature)}`})};
+}
 
 export async function listCoverageRegions():Promise<Array<{id:string;name:string}>> {
   return (await catalog()).regions.map(({id,name})=>({id,name}));

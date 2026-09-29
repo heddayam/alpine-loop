@@ -110,8 +110,10 @@ The workflow is **choose named hiking areas → preview → build**. Run `data r
 for the configured names: twelve Washington groups and the four existing California
 areas. Washington uses published mountain-range outlines, including foothills and
 approaches, with surrounding coastal, Puget and basin areas completing coverage.
-Access and **fewer than 10 mapped buildings within 500 metres** determine eligible
-starts; being inside a mountain range is not required. California retains its exact
+Starts require supported access, **fewer than 10 mapped buildings within 500 metres**,
+and a trail connection to the tighter GMBA Standard mountain terrain within the
+route-distance bound. Unmarked mountain entrances and connected valley approaches
+remain eligible. California retains its exact
 previous footprints. See the [region definitions](data/coverage/regions/README.md)
 for source provenance and geographic limits.
 
@@ -171,21 +173,23 @@ the affected old areas, then download the revised selection. The new areas prese
 the statewide start footprint and each start's route buffer; saved searches retain
 their pinned data.
 
-`plan` prints eligible start geometry and the surrounding routing extent. Requests
+`plan` prints the start-selection footprint and surrounding routing extent;
+the build determines eligible entrances from that footprint. Requests
 remain capped at **40 miles**; the conservative **25-mile buffer** also supports
 explicitly labeled close matches up to 50 miles. Missing US source coverage fails
 before processing. The declared international border and reviewed exclusions are
 hard routing limits. Download bytes become known after preparation.
 
-The builder extracts local trails and access/building context, finds sparse eligible
-starts, then prunes trails that cannot participate within their distance budget
+The builder extracts local trails and access/building context, finds sparse entrance
+candidates, filters them by mountain-trail connectivity, then prunes trails that
+cannot participate within their distance budget
 **before elevation work**. It requests only DEM tiles owning retained samples. It reuses segment metrics across overlapping
 builds, then stores compact corridors with their full geometry and elevation profiles.
 Each named region remains an independent graph; overlapping regions never get stitched
 together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
 Before publication, each reviewed approach must have a mapped starting point in
 the final graph within its declared registration neighborhood, or an actual mapped
-start explicitly excluded by the building rule and named in release limitations.
+start explicitly excluded by the density/terrain rules and named in release limitations.
 Missing topology still stops publication and names the approach to investigate; the
 previous release remains usable. Areas with no eligible starts stop before elevation.
 This check does not establish a complete approach/trail inventory

@@ -80,9 +80,12 @@ unlicensed inputs fail or remain rejected evidence.
 
 Derive route starts from the same pinned OSM extract as the hiking graph. During
 preparation, classify hiking ways plus only the road classes needed to detect
-where a drivable network touches a trail. Cluster those contacts into portals,
-rank them by reachable trail network and nearby trailhead/parking evidence, then
-discard every road, sidewalk, and evidence-only row before publishing the pack.
+where a drivable network touches a trail. Preserve actual entrance nodes, with
+evidence attached to their mapped node and parking nominated only through its
+own road/track and hiking contacts. No radius clustering, nearby-road guess or
+disconnected parking-to-trail snap remains. Unmarked street-to-trail entrances
+are included. Rank surviving starts by their prepared trail network, then
+discard every context-only road, sidewalk, and evidence row before publishing.
 The runtime graph remains trail-only.
 
 OSM access tags remain the baseline. Preserve `public` and `unknown` separately
@@ -96,10 +99,10 @@ and covered by a pinned content hash; a missing, duplicate, or conflicting targe
 fails the build. Do not call a live authority restriction service or spatially
 infer a restriction during a pack build.
 
-Official entrance points are optional cosmetic evidence. A validated, pinned
-entrance snapshot may rename or raise confidence on a nearby derived portal, but
-it cannot create a portal, change its access state, or add a connector edge. A
-region without such a source gets generic portal names, not missing routes.
+Official entrance snapshots remain independent review anchors in the named-area
+compiler. They cannot invent an entrance, grant access, add connectors or lend
+names/confidence to unrelated nearby starts. The old schema-6 overlay and clustered
+portal implementation has been removed; generated packs are schema 7.
 
 ### Elevation
 
@@ -133,13 +136,14 @@ region without such a source gets generic portal names, not missing routes.
   store records supported building centroids, deduplicated by source identity.
   Nodes, ways and supported relations count; explicit `building=no` does not.
   Unsupported relations remain disclosed in the context inventory and release.
-- An access point qualifies with **0–9 mapped buildings within 500 m** of its
-  snapped node (`lib/data/wilderness.ts`). This measures immediate surroundings;
-  mountainous terrain, administrative boundaries and forest membership are not
-  eligibility tests. Unknown access remains enabled by default.
+- An access point requires **0–9 mapped buildings within 500 m** of its
+  actual entrance node (`lib/data/wilderness.ts`). This measures immediate
+  surroundings; it is combined with the mountain connection below. Administrative
+  boundaries and forest membership are not access evidence. Unknown access remains
+  enabled by default.
 - Candidate discovery uses a SQLite spatial index followed by an exact distance
   check before distance pruning and elevation acquisition. The prepared candidates
-  retain their original snapping through final topology/ranking. Runtime search
+  retain their original nominations through final topology/ranking. Runtime search
   and map eligibility use the same threshold. Source snapshots and admission
   constants participate in preparation identity; changed policy rebuilds artifacts,
   while unchanged physical segment measurements remain reusable.
@@ -163,9 +167,26 @@ region without such a source gets generic portal names, not missing routes.
   cut about 35 MB per region from the source cache.
 - Sparse OSM evidence does not prove absence of buildings. The active source
   pipeline reports unsupported context and fails malformed/missing references;
-  a locally valid zero count is allowed. There is no population or mountain fallback.
+  a locally valid zero count is allowed. There is no population fallback.
   Historical source-wide building counts above are observations, not a completeness
   guarantee for every new Washington area.
+
+### Mountain terrain and connected approaches
+
+Use the static, licensed [GMBA Standard v2 mask](../../data/coverage/hiking-terrain.md)
+separately from the broad download outlines. A sparse public/unknown candidate
+must reach a hiking link touching this terrain within 25 walking miles, an
+admissible bound for the 50-mile closed-route exploration limit. Actual hiking
+paths and walking-eligible mountain tracks qualify; ambiguous footways and ordinary
+road links can provide approaches but cannot qualify terrain alone. Two multi-source
+distance passes reuse the existing pruning arrays and heap before DEM acquisition.
+No additional raster analysis, service, runtime dependency or user setting is added.
+
+This heuristic preserves unmarked and connected valley entrances; it can omit
+low foothills or source-disconnected trails. It qualifies starts, not the terrain
+of every returned route. The mask and policy participate in preparation identity
+and source provenance. Reviewed candidates excluded by either density or terrain
+are named in release limitations; missing/restricted topology still fails.
 
 ### Basemap
 
@@ -218,8 +239,8 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 Washington download outlines use pinned GMBA v2 Broad mountain-range polygons,
 EPA Level III ecoregions for surrounding territory, and retained approach
-footprints. These are organizational boundaries, not a mountain eligibility
-test. The [region definitions](../../data/coverage/regions/README.md) record
+footprints. These organize downloads; the separate Standard mask and trail
+connection filter determines mountain eligibility. The [region definitions](../../data/coverage/regions/README.md) record
 source hashes, attribution, assignments and the derivation recipe. Builds load
 the checked-in outlines directly; they do not download or regenerate them.
 

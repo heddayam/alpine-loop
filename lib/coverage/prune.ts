@@ -1,9 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export const PRUNING_ALGORITHM_VERSION = "sparse-start-undirected-distance-v2";
+export const PRUNING_ALGORITHM_VERSION = "mountain-start-undirected-distance-v3";
 
 /** Remove only segments that cannot belong to a closed route within the bound.
- * Only the frozen eligible access candidates seed the lower bound.
+ * Starts must first reach a hiking link in the pinned mountain terrain. Both
+ * distance passes share the same arrays and heap; no per-start graph walk.
  * Ignoring direction/access uncertainty only admits extra segments. Indexed heap
  * and CSR arrays have fixed sizes; no graph-sized JS objects or duplicate queue.
  */
@@ -43,32 +44,53 @@ export async function pruneWalkingGraph(db: DatabaseSync, maximumMeters: number,
     }
     return value;
   };
-  let seeds = 0;
-  for (const row of db.prepare(`SELECT p.k FROM pruning_nodes p JOIN sparse_start_nodes s ON s.node_id=p.id ORDER BY p.k`).iterate()) {
-    if (++work % 1000 === 0) await checkpoint();
-    const k = Number(row.k); best[k] = 0; offer(k); seeds++;
-  }
   let index = 0;
-  for (const row of db.prepare(`SELECT a.k AS a,b.k AS b,e.length_m FROM eligible_segments e
+  for (const row of db.prepare(`SELECT a.k AS a,b.k AS b,e.length_m,e.terrain_hiking FROM eligible_segments e
     JOIN pruning_nodes a ON a.id=e.from_node JOIN pruning_nodes b ON b.id=e.to_node ORDER BY e.id`).iterate()) {
     if (++work % 1000 === 0) await checkpoint();
     const a = Number(row.a), b = Number(row.b), meters = Number(row.length_m);
     if (!Number.isFinite(meters) || meters < 0) throw new Error("Invalid segment distance bound");
     from[index] = a; to[index] = b; length[index++] = meters;
+    if (Number(row.terrain_hiking)) for(const node of [a,b]) {
+      if(best[node]!==0) { best[node]=0;offer(node); }
+    }
     offsets[a + 1]++; offsets[b + 1]++;
   }
   for (let node = 1; node <= nodes; node++) offsets[node] += offsets[node - 1]!;
   const adjacency = new Uint32Array(segments * 2), cursor = offsets.slice(0, nodes);
   for (let edge = 0; edge < segments; edge++) { adjacency[cursor[from[edge]!]++] = edge; adjacency[cursor[to[edge]!]++] = edge; }
   const tolerance = Math.max(0.01, maximumMeters * 1e-9), radius = maximumMeters / 2 + tolerance;
-  while (size) {
-    if (++work % 1000 === 0) await checkpoint();
-    const node = pop(), distance = best[node]!;
-    for (let at = offsets[node]!; at < offsets[node + 1]!; at++) {
-      const edge = adjacency[at]!, next = from[edge] === node ? to[edge]! : from[edge]!, candidate = distance + length[edge]!;
-      if (candidate <= radius && candidate < best[next]!) { best[next] = candidate; offer(next); }
+  const walk = async () => {
+    while (size) {
+      if (++work % 1000 === 0) await checkpoint();
+      const node = pop(), distance = best[node]!;
+      for (let at = offsets[node]!; at < offsets[node + 1]!; at++) {
+        const edge = adjacency[at]!, next = from[edge] === node ? to[edge]! : from[edge]!, candidate = distance + length[edge]!;
+        if (candidate <= radius && candidate < best[next]!) { best[next] = candidate; offer(next); }
+      }
     }
+  };
+  await walk();
+  db.exec("CREATE TEMP TABLE terrain_excluded_start_nodes(node_id TEXT PRIMARY KEY) STRICT");
+  const exclude = db.prepare("INSERT INTO terrain_excluded_start_nodes VALUES (?)");
+  let terrainExcludedAccessPoints = 0;
+  for (const row of db.prepare(`SELECT s.node_id,p.k FROM sparse_start_nodes s JOIN pruning_nodes p ON p.id=s.node_id`).iterate()) {
+    if (++work % 1000 === 0) await checkpoint();
+    if (best[Number(row.k)]! > radius) { exclude.run(row.node_id); terrainExcludedAccessPoints++; }
   }
+  db.exec("DELETE FROM sparse_start_nodes WHERE node_id IN (SELECT node_id FROM terrain_excluded_start_nodes)");
+  best.fill(Infinity); position.fill(-1);
+  let seeds = 0;
+  for (const row of db.prepare(`SELECT p.k FROM pruning_nodes p JOIN sparse_start_nodes s ON s.node_id=p.id ORDER BY p.k`).iterate()) {
+    if (++work % 1000 === 0) await checkpoint();
+    const k = Number(row.k); best[k] = 0; offer(k); seeds++;
+  }
+  if (!seeds) throw new Error("No eligible access points connect to mountain hiking trails within the route distance");
+  // Frozen records are retained for approach audits, but excluded starts cannot
+  // reappear when the final graph is ranked.
+  const hasPrepared = db.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='sparse_portal_candidates'").get();
+  if (hasPrepared) db.exec("DELETE FROM sparse_portal_candidates WHERE node_id IN (SELECT node_id FROM terrain_excluded_start_nodes)");
+  await walk();
   // Write a separate membership table: never modify the table driving the iterator.
   db.exec("CREATE TEMP TABLE retained_segments(id TEXT PRIMARY KEY) STRICT");
   const insert = db.prepare("INSERT INTO retained_segments VALUES (?)");
@@ -81,5 +103,5 @@ export async function pruneWalkingGraph(db: DatabaseSync, maximumMeters: number,
   }
   db.exec("DELETE FROM eligible_segments WHERE id NOT IN (SELECT id FROM retained_segments); DROP TABLE retained_segments; DROP TABLE pruning_nodes");
   if (!retained) throw new Error("No eligible walking links connect to the selected region");
-  return { candidateNodes: nodes, candidateSegments: segments, seedNodes: seeds, retainedSegments: retained, pruningArrayBudgetBytes: estimatedBytes };
+  return { candidateNodes: nodes, candidateSegments: segments, seedNodes: seeds, terrainExcludedAccessPoints, retainedSegments: retained, pruningArrayBudgetBytes: estimatedBytes };
 }
