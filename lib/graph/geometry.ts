@@ -201,16 +201,21 @@ type BoundaryIndex = {
 function indexRing(ring: ReadonlyArray<Position>) {
   // Copy coordinates: preparation is a snapshot, with no global/query-result cache.
   const points = ring.map(([x, y]): Position => [x, y]);
+  let finiteEnvelope = true;
+  let west = Infinity, east = -Infinity;
   const edges: BoundaryEdge[] = points.map((end, index) => {
     const start = points[(index + points.length - 1) % points.length];
     const dx = end[0] - start[0], dy = end[1] - start[1];
     const squaredLength = dx * dx + dy * dy;
+    finiteEnvelope &&= Number.isFinite(squaredLength);
     // The exact predicates use cross/dot tolerances, not a coordinate tolerance.
     // Include both their perpendicular/endpoint allowance and parameter extension.
     const padding = GEOMETRY_EPSILON + Math.max(
       squaredLength <= GEOMETRY_EPSILON ? GEOMETRY_EPSILON : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
-      GEOMETRY_EPSILON * Math.abs(dy),
+      GEOMETRY_EPSILON * Math.max(Math.abs(dx), Math.abs(dy)),
     );
+    west = Math.min(west, Math.min(start[0], end[0]) - padding);
+    east = Math.max(east, Math.max(start[0], end[0]) + padding);
     return { start, end, south: Math.min(start[1], end[1]) - padding,
       north: Math.max(start[1], end[1]) + padding, explicit: index > 0 };
   }).sort((a, b) => (a.south + a.north) - (b.south + b.north));
@@ -229,7 +234,12 @@ function indexRing(ring: ReadonlyArray<Position>) {
     return { from, to, south, north };
   };
   const root = build(0, edges.length);
-  return (south: number, north: number, visit: (edge: BoundaryEdge) => boolean): boolean => {
+  // Reject distant rings before querying their interval trees. Match the exact
+  // cross/dot tolerances above; an unpadded coordinate envelope can miss a boundary.
+  // Nonfinite source coordinates retain the existing kernel's behavior.
+  const bounds: BoundingBox | undefined = finiteEnvelope && points.every(point => point.every(Number.isFinite))
+    ? [west, root.south, east, root.north] : undefined;
+  const query = (south: number, north: number, visit: (edge: BoundaryEdge) => boolean): boolean => {
     const query = (node: BoundaryIndex): boolean => {
       if (node.south > north || node.north < south) return false;
       if (node.children) return query(node.children[0]) || query(node.children[1]);
@@ -241,12 +251,20 @@ function indexRing(ring: ReadonlyArray<Position>) {
     };
     return query(root);
   };
+  return {bounds, query};
+}
+
+function envelopesOverlap(bounds: BoundingBox | undefined, west: number, south: number, east: number, north: number): boolean {
+  return !bounds || !(bounds[0] > east || bounds[1] > north || bounds[2] < west || bounds[3] < south);
 }
 
 /**
  * Prepare once for repeated checks, retaining the one-shot predicates' boundary rules.
  * Static y-interval indexing follows JTS IndexedPointInAreaLocator / SortedPackedIntervalRTree:
  * https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.html
+ * Ring envelopes short-circuit distant queries, as in JTS PreparedPolygon, while
+ * retaining this application's boundary tolerance and overlapping polygon rules.
+ * https://locationtech.github.io/jts/javadoc/org/locationtech/jts/geom/prep/PreparedPolygon.html
  */
 export function prepareAreaGeometry(geometry: AreaGeometry): {
   containsPoint(point: Position): boolean;
@@ -255,9 +273,10 @@ export function prepareAreaGeometry(geometry: AreaGeometry): {
 } {
   const polygons = (geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates)
     .map((rings) => rings.map((ring) => indexRing(ring as unknown as Position[])));
-  const relation = (point: Position, query: ReturnType<typeof indexRing>) => {
+  const relation = (point: Position, ring: ReturnType<typeof indexRing>) => {
+    if (!envelopesOverlap(ring.bounds, point[0], point[1], point[0], point[1])) return "outside";
     let inside = false;
-    const boundary = query(point[1], point[1], ({start, end}) => {
+    const boundary = ring.query(point[1], point[1], ({start, end}) => {
       if (coordinateIsOnSegment(point, start, end)) return true;
       if (edgeCrossesRay(point, start, end)) inside = !inside;
       return false;
@@ -285,13 +304,16 @@ export function prepareAreaGeometry(geometry: AreaGeometry): {
     // Nonparallel intersections allow epsilon beyond each segment's endpoints.
     const padding = GEOMETRY_EPSILON + Math.max(
       squaredLength <= GEOMETRY_EPSILON ? 0 : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
-      GEOMETRY_EPSILON * Math.abs(direction[1]),
+      GEOMETRY_EPSILON * Math.max(Math.abs(direction[0]), Math.abs(direction[1])),
     );
+    const west = Math.min(start[0], end[0]) - padding;
+    const east = Math.max(start[0], end[0]) + padding;
     const south = Math.min(start[1], end[1]) - padding;
     const north = Math.max(start[1], end[1]) + padding;
     const parameters = [0, 1];
-    for (const rings of polygons) for (const query of rings) {
-      query(south, north, (edge) => {
+    for (const rings of polygons) for (const ring of rings) {
+      if (Number.isFinite(squaredLength) && !envelopesOverlap(ring.bounds, west, south, east, north)) continue;
+      ring.query(south, north, (edge) => {
         if (edge.explicit) appendBoundaryParameters(start, direction, squaredLength, edge.start, edge.end, parameters);
         return false;
       });

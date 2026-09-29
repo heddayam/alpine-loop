@@ -161,4 +161,73 @@ describe("area geometry", () => {
     expect(prepareAreaGeometry(geometry).containsPoint([1, 1])).toBe(false);
     expect(prepareAreaGeometry({type: "Polygon", coordinates: [[]]}).containsSegment([0, 0], [1, 1])).toBe(false);
   });
+
+  it("keeps envelope rejection conservative for cross/dot tolerances and parallel projections", () => {
+    const shapes: Polygon[] = [polygonWithHole,
+      {type: "Polygon", coordinates: [[[0, 0], [2e-5, 0], [2e-5, 2e-5], [0, 2e-5], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1e-6, 0], [0, 1e-6], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [4, 0], [4, 0], [4, 4], [0, 4]]]},
+    ];
+    for (const geometry of shapes) {
+      const prepared = prepareAreaGeometry(geometry);
+      for (const ring of geometry.coordinates) for (let i = 1; i < ring.length; i++) {
+        const a = ring[i - 1], b = ring[i];
+        const dx = b[0] - a[0], dy = b[1] - a[1], length = Math.hypot(dx, dy);
+        // Longer edges accept perpendicular and endpoint offsets much larger
+        // than epsilon when their squared length is just above the tiny-edge rule.
+        const allowance = length > 1e-5 ? 1e-10 / length : 1e-10;
+        for (const offset of [0, allowance * 0.5, allowance * 1.5, allowance * 3]) {
+          const start: [number, number] = [(a[0] + b[0]) / 2 - dy / (length || 1) * offset,
+            (a[1] + b[1]) / 2 + dx / (length || 1) * offset];
+          const end: [number, number] = [b[0] + dx / (length || 1) * offset, b[1] + dy / (length || 1) * offset];
+          expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+          expect(prepared.containsPoint(end)).toBe(coordinateIsInsideArea(end, geometry));
+          expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+          expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+        }
+      }
+    }
+  });
+
+  it("preserves holes, overlapping islands and outside-endpoint crossings with prepared envelopes", () => {
+    const geometry: MultiPolygon = {type: "MultiPolygon", coordinates: [
+      polygonWithHole.coordinates,
+      [[[5, 0], [12, 0], [12, 3], [5, 3], [5, 0]]].map(ring => ring.reverse()),
+      [[[20, 0], [20.00001, 0], [20.00001, 10], [20, 10], [20, 0]]],
+    ]};
+    const prepared = prepareAreaGeometry(geometry);
+    const cases: Array<[[number, number], [number, number]]> = [
+      [[-5, 5], [25, 5]], [[15, 5], [25, 5]], [[4.5, 5], [5.5, 5]],
+      [[-1, 1], [1, -1]], [[-1, 0], [11, 0]], [[1, 1], [11, 1]],
+      [[5, 5], [5, 5]], [[19, 11], [21, 11]], [[12, 0], [20, 0]],
+    ];
+    for (const [start, end] of cases) {
+      expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+      expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+      expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+    }
+    expect(prepared.intersectsSegment([15, 5], [25, 5])).toBe(true);
+    expect(prepared.intersectsSegment([-1, 1], [1, -1])).toBe(false);
+  });
+
+  it("retains exact predicate behavior for empty, degenerate and nonfinite input", () => {
+    const shapes: Polygon[] = [
+      {type: "Polygon", coordinates: [[]]},
+      {type: "Polygon", coordinates: [[[0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1, 1], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [NaN, 0], [1, 1], [0, 1]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [Infinity, 0], [1, 1], [0, 1]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1e200, 0], [1e200, 1], [0, 1]]]},
+    ];
+    const points: [number, number][] = [[0, 0], [1e-11, 0], [0.5, 0.5], [-1, 1], [2, 2],
+      [NaN, 0], [0, Infinity], [2e200, 0]];
+    for (const geometry of shapes) {
+      const prepared = prepareAreaGeometry(geometry);
+      for (const start of points) for (const end of points) {
+        expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+        expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+        expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+      }
+    }
+  });
 });
