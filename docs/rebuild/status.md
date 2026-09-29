@@ -48,6 +48,14 @@ the evidence line.
   mountain/valley routes remain acceptance evidence. Standard omits some low-relief
   terrain; missing mapped connections can exclude useful starts. Neither boundary
   shape nor fixture success establishes real-source trail completeness or speedups.
+- [x] User reported the revised Central Cascades build Ready in 20m 51s:
+  24,464 access candidates, 8,414 sparse candidates, 5,733 terrain exclusions,
+  2,681 eligible starts and 160 outside approach starts. Its 2,344,040 nodes /
+  2,332,226 candidate segments retain 782,929 segments, compacting to 25,834 nodes /
+  27,276 physical edges. Two reviewed approaches remain density excluded and none
+  terrain excluded. Pack size is 58,505,990 compressed / 177,188,864 installed bytes.
+  This observes preparation under the new policy; installation, useful routes and
+  completeness across all regions remain open.
 
 This supersedes Broad/EPA land assignment, the separate terrain mask and full
 historical polygon-containment obligations. See [range inputs](../../data/coverage/regions/README.md)
@@ -160,9 +168,22 @@ assignment or clipping routes at start-selection boundaries.
   remains active in the shared checkout. No full/browser suite or regional build
   is repeated. All owned benchmark containers, scripts, fixtures and task worktrees
   are removed; unrelated work, useful caches, installed packs and jobs are preserved.
-- [ ] Measure the next actual regional rebuild and its stage/count/cache evidence.
-  The prior 18m 56s Central result remains the full-build baseline; concurrent
-  mountain-area changes can change workload, so totals alone cannot isolate savings.
+- [x] Record the user's next actual Central build and completed JSON status:
+  20m 51s total, with import plus its new membership index taking 3m 27s versus
+  8m 27s previously (about 59% shorter). Fresh extraction/selection/filtering/reference
+  completion contributes about 3m 05s that the prior run skipped; elevation remains
+  almost entirely cached (25 measured / 782,904 reused segments). Subtracting that
+  source work gives about 17m 47s, a normalization of this run rather than a measured
+  repeat-build forecast. The concurrent named-core revision changes nominations
+  and adds approaches; retained segments increase 1.8% and eligible starts 2.0%.
+- [ ] Attribute the later-stage increase before claiming another speedup: writing
+  plus compression rises from 2m 37s to 4m 58s, while ranking and export also grow.
+  The small retained-graph increase alone does not establish an explanation. Peak
+  process-tree RSS is 2,806 MiB versus 601 MiB previously; it includes native child
+  processes used by fresh extraction, so it is not a measurement of Node alone.
+  Both container peaks reach 4,096 MiB; disk peak is now 25,950 MiB. Existing status
+  records cumulative memory peaks without phase/process attribution, so the cause
+  remains unverified. No new regional build, benchmark or live SQLite read is run.
 
 Primary references: SQLite [bulk INSERT SELECT](https://www.sqlite.org/lang_insert.html),
 [JSON table functions](https://www.sqlite.org/json1.html#jeach), and
