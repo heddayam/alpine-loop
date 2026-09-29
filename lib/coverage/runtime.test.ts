@@ -10,9 +10,11 @@ import type { DataRelease } from "@/lib/contracts/releases";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { CoverageRegion, CoverageRunnerContext } from "./types";
 import { filteredSourceLines } from "./source-filter";
-import { rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { contentId, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { buildCoverageRegion } from "./runtime";
-import { calculateEdgeMetricsBatch } from "@/lib/data/metrics";
+import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics";
+import { preparedReleaseId } from "@/lib/data/prepared-release";
+import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceRecipe } from "./recipe";
 
 vi.mock("@/lib/data/metrics", async original => { const actual=await original<typeof import("@/lib/data/metrics")>(); return {...actual,calculateEdgeMetricsBatch:vi.fn(actual.calculateEdgeMetricsBatch)}; });
@@ -69,6 +71,7 @@ async function pieces() {
       edges:db.prepare("SELECT * FROM edges ORDER BY id").all(),nodes:db.prepare("SELECT * FROM nodes ORDER BY id").all(),
       access:db.prepare("SELECT * FROM access_points ORDER BY id").all(),
       metadata:db.prepare("SELECT * FROM metadata ORDER BY key").all(),
+      sources:db.prepare("SELECT * FROM sources ORDER BY id").all(),
     });expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(db.prepare("PRAGMA freelist_count").get()!.freelist_count).toBe(0); }
     finally {db.close();}
@@ -316,4 +319,131 @@ it("reuses geometry measurements after source segment ordinals change",async()=>
   const input=recipe();input.sources[0]!.sha256=changed.contentHash;
   vi.mocked(calculateEdgeMetricsBatch).mockClear();await build(startArea,context(),input);
   expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+});
+
+const fallbackLimitation="30 m elevation fills missing 10 m samples; primary values remain unchanged.";
+async function dynamicElevation(options:{sampleValue?:number|null;onSample?:()=>void}={}) {
+  const state={fallback:false};
+  const primary={...source,id:"dem"},backup={...source,id:"dem-with-backup",contentHash:`sha256:${"3".repeat(64)}` as const,
+    dataset:"10 m primary with 30 m NoData backup",retrievedAt:"2026-09-25T00:00:00Z"};
+  let reportBackup:((tile:string|null)=>Promise<void>)|undefined;
+  const sample=vi.fn(async(coordinates:ReadonlyArray<readonly[number,number]>)=>{
+    await reportBackup?.("-122,47");
+    state.fallback=true;
+    options.onSample?.();
+    await reportBackup?.(null);
+    return coordinates.map(()=>options.sampleValue===undefined?100:options.sampleValue);
+  });
+  const elevation={
+    get source(){return state.fallback?backup:primary;},
+    get productFingerprint(){return state.fallback?"fixture-dem-with-backup":"fixture-dem";},
+    get limitations(){return state.fallback?[fallbackLimitation]:[];},
+    fingerprintForGeometry:()=>state.fallback?"fixture-dem-with-backup":"fixture-dem",
+    sampler:{algorithmVersion:"fixture",sample},
+  };
+  const {elevationFor,describeCanonicalElevation}=await import("./elevation");
+  vi.mocked(elevationFor).mockImplementation(async(_unit,_cacheRoot,_preparationRoot,_offline,_cache,_samplePath,onBackup)=>{
+    reportBackup=onBackup;
+    return elevation;
+  });
+  vi.mocked(describeCanonicalElevation).mockImplementation(async()=>({source:elevation.source,productFingerprint:elevation.productFingerprint}));
+  return {state,elevation,sample};
+}
+function metricsCache<T>(action:(db:DatabaseSync)=>T):T {
+  const db=new DatabaseSync(path.join(root,"stage/metrics.sqlite"));
+  try {return action(db);} finally {db.close();}
+}
+const cachedMetrics=()=>metricsCache(db=>db.prepare("SELECT id,fingerprint,value FROM metrics ORDER BY id,fingerprint").all());
+const clearReceipts=()=>rm(path.join(root,"stage/regions"),{recursive:true,force:true});
+const metricFingerprint=(geometry:ReadonlyArray<readonly[number,number]>,elevation:string)=>contentId({geometry,
+  algorithm:PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION,sampler:"fixture",elevation});
+
+it("pins elevation acquired during measurement in graph bytes, identity, receipt and disclosures, then resumes without sampling",async()=>{
+  const {elevation,sample}=await dynamicElevation(), stages:string[]=[];
+  const ctx=context();ctx.report=async update=>{if(update.stage)stages.push(update.stage);};
+  await build(startArea,ctx);
+  const result=await release(),[piece]=await pieces();
+  const receiptFile=(await readdir(path.join(root,"stage/regions")))[0]!;
+  const receipt=JSON.parse(await readFile(path.join(root,"stage/regions",receiptFile),"utf8")) as {release:DataRelease;elevationFingerprint:string};
+  expect(sample).toHaveBeenCalled();
+  expect(receipt.elevationFingerprint).toBe("fixture-dem-with-backup");
+  expect(result.sources.find(source=>source.id===elevation.source.id)?.contentHash).toBe(elevation.source.contentHash);
+  expect(result.sources.some(source=>source.id==="dem")).toBe(false);
+  expect(piece!.sources).toContainEqual(expect.objectContaining({id:elevation.source.id,content_hash:elevation.source.contentHash}));
+  expect(receipt.release.sources).toEqual(result.sources);
+  expect(result.builtAt).toBe(elevation.source.retrievedAt);
+  expect(result.limitations).toContain(fallbackLimitation);
+  expect(receipt.release.limitations).toContain(fallbackLimitation);
+  const identity=(fingerprint:string)=>preparedReleaseId({...receipt.release,area:{id:"first-region",name:"First region",
+    inputFingerprint:contentId({declared:receiptFile.slice(0,-5),elevationFingerprint:fingerprint}),
+    startGeometry:startArea,maximumRouteMiles:40,bufferMiles:25}});
+  expect(result.artifacts[0]!.graphId).toBe(identity("fixture-dem-with-backup"));
+  expect(result.artifacts[0]!.graphId).not.toBe(identity("fixture-dem"));
+  expect(piece!.metadata).toContainEqual({key:"releaseId",value:result.artifacts[0]!.graphId});
+  expect(stages).toContain("Acquiring 30 m elevation backup for -122,47");
+  expect(stages[stages.indexOf("Acquiring 30 m elevation backup for -122,47")+1]).toBe("Measuring retained trails: First region");
+  const {elevationFor}=await import("./elevation");
+  vi.mocked(elevationFor).mockClear();sample.mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build();
+  expect(await release()).toEqual(result);
+  expect(elevationFor).not.toHaveBeenCalled();expect(sample).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  await expectNoScratch();
+});
+
+it("rekeys newly sampled metrics after fallback acquisition without relabeling reused primary values",async()=>{
+  await build();
+  const before=cachedMetrics(),removed=String(before[0]!.fingerprint);
+  metricsCache(db=>db.prepare("DELETE FROM metrics WHERE fingerprint=?").run(removed));
+  await clearReceipts();
+  await dynamicElevation();
+  vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build();
+  const measured=vi.mocked(calculateEdgeMetricsBatch).mock.calls.flatMap(call=>call[0]);
+  expect(measured).toHaveLength(1);
+  const after=cachedMetrics();
+  expect(after).toHaveLength(before.length);
+  expect(after.map(row=>row.fingerprint)).not.toContain(removed);
+  expect(after.map(row=>row.fingerprint)).toContain(metricFingerprint(measured[0]!,"fixture-dem-with-backup"));
+  for(const prior of before.slice(1)) expect(after).toContainEqual(prior);
+});
+
+it.each([{elevationProfile:null},{elevationProfile:[]}])("remeasures an old cached row with missing profile $elevationProfile instead of poisoning a retry",async({elevationProfile})=>{
+  await build();
+  const first=cachedMetrics()[0]!,metric=JSON.parse(String(first.value)) as EdgeMetrics;
+  metricsCache(db=>db.prepare("UPDATE metrics SET value=? WHERE fingerprint=?").run(JSON.stringify({...metric,elevationProfile}),String(first.fingerprint)));
+  await clearReceipts();
+  vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build();
+  expect(vi.mocked(calculateEdgeMetricsBatch).mock.calls.flatMap(call=>call[0])).toHaveLength(1);
+  expect(cachedMetrics().every(row=>JSON.parse(String(row.value)).elevationProfile.length>0)).toBe(true);
+});
+
+it("retains a valid legacy segment measurement even if its geometry cache row has a missing profile",async()=>{
+  await build();
+  const geometry=[[-121.26,47.51],[-121.24,47.51]] as [number,number][];
+  const key=metricFingerprint(geometry,"fixture-dem"),first=cachedMetrics().find(row=>row.fingerprint===key)!;
+  const value=JSON.parse(String(first.value)) as EdgeMetrics;
+  metricsCache(db=>{
+    db.prepare("INSERT INTO metrics VALUES(?,?,?)").run("osm-way-101:0",key,String(first.value));
+    db.prepare("UPDATE metrics SET value=? WHERE id='geometry' AND fingerprint=?").run(JSON.stringify({...value,elevationProfile:null}),key);
+  });
+  await clearReceipts();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build();
+  expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(cachedMetrics().find(row=>row.id==="geometry"&&row.fingerprint===key)?.value).toBe(first.value);
+});
+
+it.each(["missing samples","cancellation"])("does not cache incomplete metrics or replace publication after %s during fallback sampling",async failure=>{
+  await build();
+  const prior=await readFile(path.join(root,"release/release.json"),"utf8");
+  const before=cachedMetrics(),removed=String(before[0]!.fingerprint);
+  metricsCache(db=>db.prepare("DELETE FROM metrics WHERE fingerprint=?").run(removed));
+  await clearReceipts();
+  const controller=new AbortController();
+  await dynamicElevation(failure==="missing samples"?{sampleValue:null}:{onSample:()=>controller.abort()});
+  await expect(build(startArea,{...context(),signal:controller.signal})).rejects.toThrow(failure==="missing samples"?/Missing elevation on osm-way-101:[0-9]+/:"Coverage build interrupted");
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(prior);
+  expect(cachedMetrics()).toEqual(before.slice(1));
+  expect(await readdir(path.join(root,"stage/regions"))).toEqual([]);
+  await expectNoScratch();
 });

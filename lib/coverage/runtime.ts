@@ -145,22 +145,25 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         }
         demGeometry = unionCoverage([...tiles].sort().map(key => { const [x,y] = key.split(",").map(Number); return rectangle([x!,y!,x!+1,y!+1]); }));
         await report(`Verifying or acquiring ${tiles.size} elevation tiles`,{requiredDemTiles:tiles.size});
-        const elevation = await elevationFor({...unit,geometry:demGeometry},cacheRoot,root,recipe.offline,dem,path.join(scratch,"sample-dem.json"));
+        const elevation = await elevationFor({...unit,geometry:demGeometry},cacheRoot,root,recipe.offline,dem,path.join(scratch,"sample-dem.json"),
+          async (tile:string|null)=>report(tile ? `Acquiring 30 m elevation backup for ${tile}` : `Measuring retained trails: ${area.name}`));
+        await report(`Measuring retained trails: ${area.name}`);
+        const measured = await prepareMetrics(store,path.join(root,"metrics.sqlite"),elevation,check);
+        // Sampling can acquire NoData backup products. Pin the final inventory in
+        // graph identity, provenance and the resume receipt only after it finishes.
         elevationFingerprint = elevation.productFingerprint;
         const sources: DataRelease["sources"] = [...raws.map(raw => raw.source),...inputs.restrictions.map(file => file.snapshot)].filter(source => memberSources.has(source.id)).map(durable);
         sources.push(durable(elevation.source));
         for (const source of region.sources ?? []) if (!sources.some(prior => prior.id === source.id)) sources.push(source);
         sources.sort((a,b)=>a.id.localeCompare(b.id));
         for (const source of sources) store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:""});
-        const limitations = [...recipe.limitations,
+        const limitations = [...recipe.limitations,...(elevation.limitations??[]),
           ...(unsupportedBuildings ? [`The local context contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in its context inventory.`] : []),
           "Access and building context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.",
           "Regional graphs preserve supported routes within the configured distance budget; missing source trails may still exist."];
         const options = {databasePath,outputRoot,geometry:area.geometry,sources,regions:[searchRegion(sources)],
           builtAt:sources.map(source => source.retrievedAt).sort().at(-1)!,compilerVersion:BUILD_VERSION,metricAlgorithmVersion:METRIC_VERSION,
           limitations,checkpoint:check,publish:false,area:identity(elevationFingerprint)};
-        await report(`Measuring retained trails: ${area.name}`);
-        const measured = await prepareMetrics(store,path.join(root,"metrics.sqlite"),elevation,check);
         await report(`Checking retained source membership: ${area.name}`,measured);
         const member = store.database.prepare("SELECT 1 FROM eligible_segments WHERE id=?");
         for (const raw of raws) await reconcileInventory(raw,store,area.geometry,check,id=>Boolean(member.get(id)),inputs.restrictions);
@@ -280,28 +283,41 @@ async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore
   let pending: Part[] = [], measuredSegments = 0, reusedSegments = 0;
   const eligible = store.database.prepare("SELECT 1 FROM eligible_segments WHERE id=?");
   const get = cache.prepare("SELECT value FROM metrics WHERE id=? AND fingerprint=?"), put = cache.prepare("INSERT OR REPLACE INTO metrics VALUES(?,?,?)");
+  const readMetric = (id:string,fingerprint:string):EdgeMetrics|undefined => {
+    const cached=get.get(id,fingerprint);
+    const value=cached?JSON.parse(String(cached.value)) as EdgeMetrics:undefined;
+    // Failed builds from older runtimes could commit NoData metrics. Those rows
+    // are misses, including when a valid legacy segment-keyed value still exists.
+    return value?.elevationProfile?.length ? value : undefined;
+  };
+  const fingerprintFor = (part:Part) => {
+    const geometry=part.way.coordinates.slice(part.segment,part.segment+2);
+    return contentId({geometry,algorithm:METRIC_VERSION,sampler:elevation.sampler.algorithmVersion,elevation:elevation.fingerprintForGeometry(geometry)});
+  };
   const flush = async () => {
     const values: EdgeMetrics[] = [], missing: number[] = [], fingerprints: string[] = [];
     for (let i=0;i<pending.length;i++) {
-      const part = pending[i]!, geometry = part.way.coordinates.slice(part.segment,part.segment+2);
-      const fingerprint = contentId({geometry,algorithm:METRIC_VERSION,sampler:elevation.sampler.algorithmVersion,elevation:elevation.fingerprintForGeometry(geometry)});
+      const part = pending[i]!, fingerprint = fingerprintFor(part);
       fingerprints[i] = fingerprint;
-      const cached = get.get("geometry",fingerprint) ?? get.get(part.id,fingerprint);
-      if (cached) { values[i] = JSON.parse(String(cached.value)); reusedSegments++; } else missing.push(i);
+      const cached = readMetric("geometry",fingerprint) ?? readMetric(part.id,fingerprint);
+      if (cached) { values[i] = cached; reusedSegments++; } else missing.push(i);
     }
     if (missing.length) {
       const measured = await calculateEdgeMetricsBatch(missing.map(i=>{const part=pending[i]!;return part.way.coordinates.slice(part.segment,part.segment+2);}),{...elevation.sampler, sample:async coordinates=>{await check(); const samples=await elevation.sampler.sample(coordinates); await check(); return samples;}});
-      missing.forEach((i,j)=>{values[i]=measured[j]!;}); measuredSegments += missing.length;
+      // Only newly measured values depend on products discovered by this batch.
+      // A reused primary-only value keeps its original key, even if sampling a
+      // different segment acquires a backup for the same owned tile.
+      missing.forEach((i,j)=>{values[i]=measured[j]!;fingerprints[i]=fingerprintFor(pending[i]!);}); measuredSegments += missing.length;
     }
+    for (const [i,part] of pending.entries()) if (!values[i]?.elevationProfile?.length) throw new Error(`Missing elevation on ${part.id}`);
     cache.exec("BEGIN");
     try { pending.forEach((_part,i)=>put.run("geometry",fingerprints[i]!,JSON.stringify(values[i]))); cache.exec("COMMIT"); }
     catch (error) { cache.exec("ROLLBACK"); throw error; }
     store.transaction(()=>{
       for (const [i,part] of pending.entries()) {
         const metric = values[i]!;
-        if (!metric.elevationProfile) throw new Error(`Missing elevation on ${part.id}`);
-        store.setNodeElevation(part.way.nodeIds[part.segment]!,metric.elevationProfile[0]!.elevationMeters);
-        store.setNodeElevation(part.way.nodeIds[part.segment+1]!,metric.elevationProfile.at(-1)!.elevationMeters);
+        store.setNodeElevation(part.way.nodeIds[part.segment]!,metric.elevationProfile![0]!.elevationMeters);
+        store.setNodeElevation(part.way.nodeIds[part.segment+1]!,metric.elevationProfile!.at(-1)!.elevationMeters);
         for (const edge of compiledEdgesForSegment(part.way,part.segment,part.way.coordinates.slice(part.segment,part.segment+2),metric)) store.putEdge(edge);
       }
     });
