@@ -6,6 +6,36 @@ the evidence line.
 
 ## Active system design revision
 
+### Regional import overhead — 2026-09-29
+
+- [x] Reuse fixed SQL statements for the working graph store and remove duplicate
+  node lookups and complete derived-row writes. Statement lifetime is bounded by
+  the store; no node/record cache grows with the import. Preserve provenance and
+  elevation conflicts, rollback, partial-import repair and late evidence resolution.
+- [x] Prepare each routing boundary once during import with a static y-interval
+  index, following JTS's prepared point-in-area approach. Reuse the exact existing
+  predicates, including holes, islands, concavities and tolerance rules; remove
+  per-segment coordinate slicing. No pack schema, cache identity, dependencies or
+  user controls changed.
+- [x] Verification: 50 focused offline cases pass (8 geometry, 6 store, 36 runtime),
+  plus targeted ESLint and `npm run typecheck`. Differential tests cover small
+  edges, boundary tolerances, replay and recovery. Independent predicate review
+  found no omitted candidates in its bounded threshold check. No full build or
+  repeated full test suite was run.
+- [x] Bounded synthetic measurements: 800 overlapping five-node ways replayed
+  twice (8,000 node puts plus other context) took 320 ms before / 96 ms after in
+  memory, with identical hashes of all nine affected tables. For 2,000 generated
+  short segments per boundary, linear / indexed checks took 117 / 4.6 ms for
+  Central Cascades (2,017 vertices), 24.7 / 5.0 ms for North Cascades, and 2.85 /
+  2.94 ms for a rectangle. Every result matched; Central's index setup took 1.2 ms.
+  These are single microbenchmarks, not end-to-end build measurements.
+- [x] Integrate focused commits, archive the SQL worktree, delete its branch and
+  remove benchmark scratch. Preserve the running Docker build, source/DEM/metric
+  caches, published artifacts and user-owned publication review.
+- [ ] Measure regional stage savings on the next normal build after rebuilding
+  the data image (`docker compose build data`). Existing running containers keep
+  their original code; do not restart them solely for this change.
+
 ### Mountain-led download boundaries — 2026-09-29
 
 - [x] Replace Washington's county grouping with twelve static mountain-led and
