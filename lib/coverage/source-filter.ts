@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { areaGeometryBounds, type AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
@@ -69,9 +69,16 @@ async function* osmium(args: string[], checkpoint: () => Promise<void>): AsyncGe
  * Osmium extract selects ways with a node inside: context-only segments crossing
  * the entire buffer with both endpoints outside, and enclosing polygons without
  * an inside vertex, can be absent. A closed route within the distance budget has
- * every vertex inside the routing buffer; complete ways preserve its references.
+ * every vertex inside the routing buffer. Complete only matching objects from
+ * the original source so unrelated large relations cannot expand local work.
+ * Simple extraction supplies local node IDs; two parent scans recover every
+ * incident way and its direct relations, even on Osmium versions whose simple
+ * selector only checks the first way node or relation member. Keep node seeds
+ * out of getid's reference closure to avoid duplicating its dense node ID table.
  * https://docs.osmcode.org/osmium/latest/osmium-extract.html
  * https://docs.osmcode.org/osmium/latest/osmium-tags-filter.html
+ * https://docs.osmcode.org/osmium/latest/osmium-getparents.html
+ * https://docs.osmcode.org/osmium/latest/osmium-getid.html
  */
 export async function* filteredSourceLines(
   sourceFile: string,
@@ -91,13 +98,51 @@ export async function* filteredSourceLines(
     }));
     const polygon = path.join(temporary, "context.geojson");
     await writeFile(polygon, JSON.stringify({ type: "Feature", properties: {}, geometry: envelope }));
-    const input = path.join(temporary, "context.osm.pbf");
-    // Complete building relations only; unrelated regional boundaries can be enormous.
+    const partial = path.join(temporary, "partial.osm.pbf");
+    const parents = path.join(temporary, "parents.osm.pbf");
+    const context = path.join(temporary, "context.osm.pbf");
+    const seeds = path.join(temporary, "seeds.osm.pbf");
+    const references = path.join(temporary, "reference-seeds.osm.opl");
+    const completed = path.join(temporary, "completed.osm.pbf");
     for await (const unused of osmium(["extract", sourceFile, "--polygon", polygon,
-      "--strategy", "smart", "-S", "types=multipolygon", "-S", "tags=building", "--output", input], checkpoint)) void unused;
+      "--strategy", "simple", "--output", partial], checkpoint)) void unused;
+    // getparents rejects an empty ID list. Read just one object rather than
+    // converting the entire local extract to text or inspecting PBF internals.
+    let hasObjects = false;
+    for await (const unused of osmium(["cat", partial, "--output-format", "opl"], checkpoint)) {
+      void unused;
+      hasObjects = true;
+      break;
+    }
+    if (!hasObjects) return;
+
+    // Each scan resolves one parent level: local nodes -> ways -> direct relations.
+    // Do not complete unrelated relation members before filtering their tags.
+    await onStage?.("Selecting local trails and context");
+    for (const [selected, output] of [[partial, parents], [parents, context]]) {
+      for await (const unused of osmium(["getparents", sourceFile, "--id-osm-file", selected!,
+        "--add-self", "--output", output!], checkpoint)) void unused;
+      await rm(selected!, { force: true });
+    }
 
     await onStage?.("Filtering local trails and context");
-    yield* osmium(["tags-filter", input, ...CONTEXT_FILTERS, "--output-format", "opl"], checkpoint);
+    for await (const unused of osmium(["tags-filter", context, ...CONTEXT_FILTERS,
+      "--omit-referenced", "--output", seeds], checkpoint)) void unused;
+    await rm(context, { force: true });
+    for await (const unused of osmium(["cat", seeds, "--object-type", "way", "--object-type", "relation",
+      "--output-format", "opl", "--output", references], checkpoint)) void unused;
+    if ((await stat(references)).size === 0) {
+      yield* osmium(["cat", seeds, "--output-format", "opl"], checkpoint);
+      return;
+    }
+
+    await onStage?.("Completing selected trail and context references");
+    for await (const unused of osmium(["getid", sourceFile, "--id-osm-file", references,
+      "--add-referenced", "--output", completed], checkpoint)) void unused;
+    await rm(references, { force: true });
+    // Both files contain unchanged objects from the same immutable source. Merge
+    // deduplicates overlap while preserving standalone evidence nodes and order.
+    yield* osmium(["merge", seeds, completed, "--output-format", "opl"], checkpoint);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

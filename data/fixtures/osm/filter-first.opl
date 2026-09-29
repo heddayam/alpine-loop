@@ -23,6 +23,9 @@ n40 T x1 y1
 n41 T x2 y2
 n50 T x-1 y0.005
 n51 T x1 y0.005
+n60 T x0.2 y0.001
+n61 T x0.001 y0.001
+n62 T x0.2 y0.002
 w1 Thighway=path,oneway:foot=-1,foot=private Nn1,n2
 w2 Thighway=footway Nn2,n3
 w3 Thighway=track Nn3,n4
@@ -35,11 +38,15 @@ w9 Thighway=steps Nn9,n10
 w10 Thighway=pedestrian,surface=dirt Nn10,n11
 w11 Thighway=footway,footway=sidewalk Nn11,n12
 w12 Thighway=primary Nn12,n13
-w20 T Nn30,n31,n32
-w21 T Nn30,n33,n32
+w20 T Nn32,n31,n30
+w21 T Nn33,n30
+w22 T Nn33,n32
+w23 T Nn30,n40
+w24 T Nn41,n30
 w30 Tnatural=water Nn40,n41
 w31 Thighway=primary Nn40,n41
 w32 Thighway=footway Nn40,n41
 w40 Thighway=primary Nn50,n51
-r1 Ttype=multipolygon,building=yes Mw20@outer,w21@outer
-r2 Ttype=multipolygon,natural=water Mw30@outer
+w41 Thighway=path,foot=designated Nn60,n61,n62
+r1 Ttype=multipolygon,building=yes Mw22@outer,w20@outer,w21@outer
+r2 Ttype=multipolygon,natural=water Mw23@outer,w30@outer,w24@outer

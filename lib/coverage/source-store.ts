@@ -23,7 +23,7 @@ function componentBounds(area: AreaGeometry, context: number): string {
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v5";
+export const NORMALIZATION_VERSION = "source-normalization-v6";
 const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
 export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
   `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;
