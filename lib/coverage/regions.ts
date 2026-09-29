@@ -10,15 +10,17 @@ const catalogPath = path.resolve("data/coverage/regions/catalog.json");
 const provenanceSchema = z.object({
   authority:z.string().min(1), dataset:z.string().min(1), url:z.url(), license:z.string().min(1),
 }).strict();
+const regionIdSchema=z.string().regex(/^[a-z0-9-]+$/);
 const catalogSchema = z.object({schemaVersion:z.literal(1),regions:z.array(z.object({
-  id:z.string().regex(/^[a-z0-9-]+$/), name:z.string().min(1), aliases:z.array(z.string()),
+  id:regionIdSchema, name:z.string().min(1), aliases:z.array(z.string()),
+  replaces:z.array(regionIdSchema).min(1).refine(ids=>new Set(ids).size===ids.length,"Replacement IDs must be unique").optional(),
   recipePath:z.string(), boundaryPath:z.string(), reviewedAt:z.iso.datetime(),
   boundarySource:provenanceSchema, approachSource:provenanceSchema,
   approachRadiusMeters:z.number().positive().max(1000),
   approaches:z.array(z.object({id:z.string().min(1),name:z.string().min(1),coordinates:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)]),radiusMeters:z.number().positive().max(1000).optional(),basis:z.string().min(1),url:z.url().nullable()}).strict()).min(1)
     .refine(points=>new Set(points.map(point=>point.id)).size===points.length,"Approach IDs must be unique within an area"),
   limitations:z.array(z.string()),
-}).strict()).refine(regions=>new Set(regions.map(region=>region.id)).size===regions.length,"Region IDs must be unique")}).strict();
+}).strict().refine(region=>!region.replaces?.includes(region.id),"A region cannot replace itself")).refine(regions=>new Set(regions.map(region=>region.id)).size===regions.length,"Region IDs must be unique")}).strict();
 async function catalog() { return catalogSchema.parse(JSON.parse(await readFile(catalogPath,"utf8"))); }
 
 export async function listCoverageRegions():Promise<Array<{id:string;name:string}>> {
@@ -50,7 +52,7 @@ export async function readCoverageRegion(id:string):Promise<CoverageRegion> {
   const recipe=await readSourceRecipe(path.resolve(directory,entry.recipePath));
   recipe.limitations=[...recipe.limitations,...entry.limitations];
   const provenance={version:entry.reviewedAt,retrievedAt:entry.reviewedAt};
-  return {id:entry.id,name:entry.name,aliases:entry.aliases,geometry,recipe,
+  return {id:entry.id,name:entry.name,aliases:entry.aliases,geometry,recipe,...(entry.replaces?{replaces:entry.replaces}:{}),
     reviewedApproaches:entry.approaches.map(point=>({id:point.id,name:point.name,coordinates:point.coordinates,radiusMeters:point.radiusMeters??entry.approachRadiusMeters})),sources:[
     {...provenance,...entry.boundarySource,id:`region-boundary-${id}`,contentHash:`sha256:${contentId(feature)}`},
     {...provenance,...entry.approachSource,id:`region-approaches-${id}`,contentHash:`sha256:${contentId({approaches:entry.approaches,radiusMeters:entry.approachRadiusMeters})}`},

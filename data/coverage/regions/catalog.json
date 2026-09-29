@@ -2,270 +2,6 @@
   "schemaVersion": 1,
   "regions": [
     {
-      "id": "glacier-peak",
-      "name": "Glacier Peak area",
-      "aliases": [
-        "Glacier Peak Wilderness",
-        "Mount Baker-Snoqualmie National Forest",
-        "Okanogan-Wenatchee National Forest"
-      ],
-      "recipePath": "../recipes/washington.json",
-      "boundaryPath": "glacier-peak.geojson",
-      "reviewedAt": "2026-09-28T00:00:00Z",
-      "approachRadiusMeters": 500,
-      "approaches": [
-        {
-          "id": "5357010357",
-          "name": "Downey Creek trailhead",
-          "coordinates": [
-            -121.22291487131737,
-            48.25950577384695
-          ],
-          "basis": "Enjoy a relatively gentle grade following Downey Creek into the Glacier Peak Wilderness.  Several steep creek crossings can be challenging during high water.  Big trees and occasional views of surrounding peaks are features of this route.  Find camping spots at about mile 3 and at the end of the trail at Bachelor Creek, mile 6.6. The Downey Creek trail is the southern end of the cross-country mountaineering route called the Ptarmigan Traverse",
-          "url": null
-        },
-        {
-          "id": "5346010357",
-          "name": "Suiattle trailhead",
-          "coordinates": [
-            -121.19211486331501,
-            48.24810577664694
-          ],
-          "basis": "The Suiattle trail winds its way above the Suiattle River through a recent burn, old growth forest and some mature forest recovering from an old burn from the 1920's. The Suiattle Trail ends just beyond Canyon Creek, where it intersects with the Pacific Crest Trail.",
-          "url": null
-        },
-        {
-          "id": "11303010357",
-          "name": "North Fork Sauk trailhead",
-          "coordinates": [
-            -121.28821483238441,
-            48.05790575565364
-          ],
-          "basis": "Access to the North Fork Sauk Trail 649. This 9-mile 1 way trail gains about 5,000 feet of elevation by the time it interests with the Pacific Crest Trail near White Pass. Begin in impressive old-growth forest, immediately entering the Glacier Peak Wilderness. Find campsites and backcountry toilets in 3.5 miles at Red Creek, 2,800 feet, and five miles at Mackinaw Shelter, 2,950 feet. This is the main route for climbing Glacier Peak and accesses Pilot Ridge Trail 652 as part of the popular Pilot Ridge Loop.",
-          "url": null
-        },
-        {
-          "id": "48232",
-          "name": "Lost Creek Ridge trailhead",
-          "coordinates": [
-            -121.33288424882707,
-            48.09445575270973
-          ],
-          "basis": "USFS recreation site 48232; Lost Creek Ridge Trail 646 enters Glacier Peak Wilderness. The pinned OSM entrance node 12244685006 lies within the reviewed approach neighborhood.",
-          "url": "https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd530006.pdf"
-        },
-        {
-          "id": "6307.005511",
-          "name": "White River trailhead",
-          "coordinates": [
-            -120.94502475155335,
-            47.962805788175615
-          ],
-          "basis": "This is a popular trailhead located upriver from Lake Wenatchee that provides access to: Indian Creek Trail #1502, White River Trail #1507, Mount David Trail #1521, and Boulder Creek Trail #1562. These trails are all within the Glacier Peak Wilderness.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59069"
-        },
-        {
-          "id": "6279.005511",
-          "name": "Phelps Creek trailhead",
-          "coordinates": [
-            -120.83501476237457,
-            48.08320580702007
-          ],
-          "basis": "This trailhead provides access to the Phelps Creek Trail #1511 which enters the Glacier Peak Wilderness at 2.6 miles. This trailhead also accesses Carne Mountain Trail #1508.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58939"
-        },
-        {
-          "id": "6278.005511",
-          "name": "Trinity trailhead",
-          "coordinates": [
-            -120.8500047621596,
-            48.07197180474025
-          ],
-          "basis": "This trailhead provides access to Buck Creek Trail #1513 and Chiwawa River Trail #1550 within the Glacier Peak Wilderness. There is a vault toilet at the trailhead. The trailhead borders private land. Please respect private property and stay on the trail in this area.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59027"
-        },
-        {
-          "id": "5112010416",
-          "name": "Entiat River trailhead",
-          "coordinates": [
-            -120.65021471664457,
-            48.02460582402954
-          ],
-          "basis": "Provides access to Entiat River Trail #1400 (and numerous side trails). Trail enters Glacier Peak Wilderness 4 miles from the trailhead.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=57963"
-        },
-        {
-          "id": "5278010416",
-          "name": "Little Wenatchee Ford trailhead",
-          "coordinates": [
-            -121.08761476440273,
-            47.917015769962624
-          ],
-          "basis": "This trailhead provides access to the Little Wenatchee Trail #1525, Cady Creek Trail #1501, and Cady Ridge Trail #1532, which enter the Henry M Jackson Wilderness, and the Poe Mountain Trail #1520 which travels along the border of the Glacier Peak Wilderness. The Little Wenatchee Trail #1525 travels through Henry M. Jackson Wilderness to meet the Pacific Crest Trail within Glacier Peak Wilderness.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58865"
-        }
-      ],
-      "limitations": [
-        "Trailheads within the wilderness footprint and nine reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
-        "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations. They select existing eligible access points; they never create access or imply that roads or trails are currently open."
-      ],
-      "boundarySource": {
-        "authority": "USDA Forest Service",
-        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
-        "dataset": "USFS Wilderness boundary; generalized trailhead-selection footprint",
-        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0"
-      },
-      "approachSource": {
-        "authority": "USDA Forest Service",
-        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
-        "dataset": "Reviewed USFS recreation-site approaches",
-        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0"
-      }
-    },
-    {
-      "id": "henry-m-jackson",
-      "name": "Henry M. Jackson area",
-      "aliases": [
-        "Henry M. Jackson Wilderness",
-        "Henry M Jackson Wilderness"
-      ],
-      "recipePath": "../recipes/washington.json",
-      "boundaryPath": "henry-m-jackson.geojson",
-      "reviewedAt": "2026-09-28T00:00:00Z",
-      "approachRadiusMeters": 500,
-      "approaches": [
-        {
-          "id": "11198010357",
-          "name": "Blanca Lake trailhead",
-          "coordinates": [
-            -121.3122368012565,
-            47.91417274513159
-          ],
-          "basis": "Provides access to: Blanca Lake Trail 1052 which accesses  Wild Sky Wilderness and Henry M. Jackson Wilderness.",
-          "url": null
-        },
-        {
-          "id": "11201010357",
-          "name": "North Fork Skykomish trailhead",
-          "coordinates": [
-            -121.27779279849068,
-            47.9263947495907
-          ],
-          "basis": "Provides access to: North Fork Skykomish Trail 1051, Quartz Creek Trail 1050, and West Cady Ridge Trail 1054. These trails access Wild Sky Wilderness and Henry M. Jackson Wilderness.",
-          "url": null
-        },
-        {
-          "id": "11308010357",
-          "name": "Elliot Creek–Goat Lake trailhead",
-          "coordinates": [
-            -121.41131485185738,
-            48.05370574183054
-          ],
-          "basis": "The Elliot Creek Goat Lake trailhead accesses a 10.4 mile loop trail leading to beautiful Goat Lake in the Henery M. Jackson Wilderness.  The lower Elliot Creek trail follows the creek, the upper part of the loop is mostly on a long closed road bed. No campfires are allowed. No camping within 200 feet of the lake.",
-          "url": null
-        },
-        {
-          "id": "5278010416",
-          "name": "Little Wenatchee Ford trailhead",
-          "coordinates": [
-            -121.08761476440273,
-            47.917015769962624
-          ],
-          "basis": "This trailhead provides access to the Little Wenatchee Trail #1525, Cady Creek Trail #1501, and Cady Ridge Trail #1532, which enter the Henry M Jackson Wilderness, and the Poe Mountain Trail #1520 which travels along the border of the Glacier Peak Wilderness. The Little Wenatchee Trail #1525 travels through Henry M. Jackson Wilderness to meet the Pacific Crest Trail within Glacier Peak Wilderness.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58865"
-        },
-        {
-          "id": "6305.005511",
-          "name": "Top Lake trailhead",
-          "coordinates": [
-            -121.07901475400686,
-            47.880105768846185
-          ],
-          "basis": "This trailhead provides access to the Top Lake Trail #1506 which accesses Top Lake within the Henry M. Jackson Wilderness.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59025"
-        },
-        {
-          "id": "6304.005511",
-          "name": "Heather Lake trailhead (Wenatchee)",
-          "radiusMeters": 600,
-          "coordinates": [
-            -121.07008374985806,
-            47.86915976921309
-          ],
-          "basis": "This trailhead provides access to Heather Lake Trail #1526 within the Henry M. Jackson Wilderness. A reviewed 600 m neighborhood includes the mapped parking/trail entrance (OSM node 3835171557), 528 m from this USFS point; the agency coordinate is retained.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58793"
-        },
-        {
-          "id": "11194010357",
-          "name": "Meadow Creek trailhead",
-          "coordinates": [
-            -121.20779276283254,
-            47.827505751800736
-          ],
-          "basis": "Provides access to Meadow Creek Trail 1057 which accesses Wild Sky and Henry M. Jackson Wildernesses.",
-          "url": null
-        },
-        {
-          "id": "5420.004841",
-          "name": "Bald Eagle trailhead",
-          "coordinates": [
-            -121.28806482413287,
-            48.0243757538375
-          ],
-          "basis": "This trail provides access to both the Henry M. Jackson Wilderness and Glacier Peak Wilderness, ending at the junction with the Pacific Crest Trail at Dishpan Gap. From the Bald Eagle Trailhead follow an old logging road for approximately 2.5 miles. About a half mile past the end of the old road, the trail enters Henry M Jackson Wilderness and opens into Curry Gap. Just south of Curry Gap is a junction for the Quartz Creek Trail 1050, heading to Road 63 on the Skykomish Ranger District. The left fork continues east and ascends toward Bald Eagle and Long John Mountains with views of Sloan Peak. The trail passes over June Mountain reaches the junction with Pilot Ridge Trail 651 on the left. Bald Eagle trail continues to the Pacific Crest Trail at Dishpan Gap 9.5 miles from the trailhead. Water is scarce along this trail in late summer and fall. Near Long John Mountain you'll find some nice places to camp, but you may have to search to find water.",
-          "url": null
-        },
-        {
-          "id": "6303.005511",
-          "name": "Lake Minotaur trailhead",
-          "coordinates": [
-            -121.02973973311003,
-            47.827878771315795
-          ],
-          "basis": "This trailhead provides access to the Lake Minotaur Route Trail #1517 which accesses the Henry M. Jackson Wilderness.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58849"
-        },
-        {
-          "id": "5339010357",
-          "name": "Barlow Pass trailhead",
-          "coordinates": [
-            -121.44230655039965,
-            48.02680573694982
-          ],
-          "basis": "This is the access point for The Old Monte Cristo Townsite, Poodle Dog Pass-Silver Lake-Twin Lakes Trail #708 and Glacier Basin Trail 719 which access Henry M Jackson Wilderness via Old Monte Cristo Townsite Trail.",
-          "url": null
-        },
-        {
-          "id": "6301.005511",
-          "name": "Smithbrook trailhead",
-          "coordinates": [
-            -121.0766597348637,
-            47.802503764757674
-          ],
-          "basis": "This trailhead provides access to the Smithbrook Trail #1590 which is a short spur that connects to the Pacific Crest Trail #2000 within the Henry M. Jackson Wilderness. This trailhead is not recommended for stock trucks or stock trailers. The Pacific Crest - Stevens Pass North Trailhead provides better parking for stock users accessing the Pacific Crest Trail #2000.",
-          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58993"
-        }
-      ],
-      "limitations": [
-        "Trailheads within the wilderness footprint and eleven reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
-        "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations, with a reviewed 600 m neighborhood for Heather Lake's displaced agency point. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
-        "The North Fork Skykomish approach also covers the nearby Quartz Creek and West Cady trailheads. Little Wenatchee Ford is shared with the Glacier Peak area.",
-        "Stevens Pass North is not included as a reviewed approach: USFS recreation-site record 6300.005511 has mismatched Snoqualmie Pass coordinates and directions. A corrected location requires separate review."
-      ],
-      "boundarySource": {
-        "authority": "USDA Forest Service",
-        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
-        "dataset": "USFS Wilderness boundary; generalized trailhead-selection footprint",
-        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0"
-      },
-      "approachSource": {
-        "authority": "USDA Forest Service",
-        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
-        "dataset": "Reviewed USFS recreation-site approaches",
-        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0"
-      }
-    },
-    {
       "id": "santa-cruz-mountains",
       "name": "Santa Cruz Mountains area",
       "aliases": [
@@ -744,22 +480,31 @@
         "Icicle Creek",
         "Teanaway",
         "Cle Elum",
-        "Lake Wenatchee"
+        "Lake Wenatchee",
+        "Glacier Peak",
+        "Glacier Peak area",
+        "Henry M. Jackson",
+        "Henry M. Jackson area",
+        "Glacier Peak Wilderness",
+        "Mount Baker-Snoqualmie National Forest",
+        "Okanogan-Wenatchee National Forest",
+        "Henry M. Jackson Wilderness",
+        "Henry M Jackson Wilderness"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "../../regions/central-cascades/boundary.geojson",
+      "boundaryPath": "central-cascades.geojson",
       "reviewedAt": "2026-09-28T00:00:00Z",
       "boundarySource": {
-        "authority": "Alpine Loop / OpenStreetMap contributors",
-        "dataset": "Reviewed Central Cascades hiking footprint retained from the Washington 2026-08-01 source",
+        "authority": "Alpine Loop / OpenStreetMap contributors / USDA Forest Service",
+        "dataset": "Union of the historical Central Cascades OSM-derived footprint and pinned USFS Glacier Peak and Henry M. Jackson wilderness footprints; component source URLs, original properties and one filled sub-resolution interior sliver are documented in central-cascades.geojson.",
         "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
-        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+        "license": "Open Data Commons Open Database License (ODbL) 1.0 for the retained OSM-derived footprint/checkpoints; https://www.openstreetmap.org/copyright. US federal government public-domain geographic data for USFS wilderness boundaries and recreation sites, retained with attribution."
       },
       "approachSource": {
-        "authority": "Alpine Loop / OpenStreetMap contributors",
-        "dataset": "Reviewed Central Cascades representative trailhead checkpoints",
-        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
-        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+        "authority": "Alpine Loop / OpenStreetMap contributors / USDA Forest Service",
+        "dataset": "Nine retained OSM-era Central Cascades checkpoints plus nineteen distinct reviewed USFS recreation-site approaches; each approach basis identifies its origin.",
+        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0 for the retained OSM-derived footprint/checkpoints; https://www.openstreetmap.org/copyright. US federal government public-domain geographic data for USFS wilderness boundaries and recreation sites, retained with attribution."
       },
       "approachRadiusMeters": 500,
       "approaches": [
@@ -852,11 +597,210 @@
           ],
           "basis": "Retained representative Teanaway Community Forest checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
           "url": null
+        },
+        {
+          "id": "5357010357",
+          "name": "Downey Creek trailhead",
+          "coordinates": [
+            -121.22291487131737,
+            48.25950577384695
+          ],
+          "basis": "Reviewed USFS recreation-site record 5357010357. Enjoy a relatively gentle grade following Downey Creek into the Glacier Peak Wilderness.  Several steep creek crossings can be challenging during high water.  Big trees and occasional views of surrounding peaks are features of this route.  Find camping spots at about mile 3 and at the end of the trail at Bachelor Creek, mile 6.6. The Downey Creek trail is the southern end of the cross-country mountaineering route called the Ptarmigan Traverse",
+          "url": null
+        },
+        {
+          "id": "5346010357",
+          "name": "Suiattle trailhead",
+          "coordinates": [
+            -121.19211486331501,
+            48.24810577664694
+          ],
+          "basis": "Reviewed USFS recreation-site record 5346010357. The Suiattle trail winds its way above the Suiattle River through a recent burn, old growth forest and some mature forest recovering from an old burn from the 1920's. The Suiattle Trail ends just beyond Canyon Creek, where it intersects with the Pacific Crest Trail.",
+          "url": null
+        },
+        {
+          "id": "11303010357",
+          "name": "North Fork Sauk trailhead",
+          "coordinates": [
+            -121.28821483238441,
+            48.05790575565364
+          ],
+          "basis": "Reviewed USFS recreation-site record 11303010357. Access to the North Fork Sauk Trail 649. This 9-mile 1 way trail gains about 5,000 feet of elevation by the time it interests with the Pacific Crest Trail near White Pass. Begin in impressive old-growth forest, immediately entering the Glacier Peak Wilderness. Find campsites and backcountry toilets in 3.5 miles at Red Creek, 2,800 feet, and five miles at Mackinaw Shelter, 2,950 feet. This is the main route for climbing Glacier Peak and accesses Pilot Ridge Trail 652 as part of the popular Pilot Ridge Loop.",
+          "url": null
+        },
+        {
+          "id": "48232",
+          "name": "Lost Creek Ridge trailhead",
+          "coordinates": [
+            -121.33288424882707,
+            48.09445575270973
+          ],
+          "basis": "Reviewed USFS recreation-site record 48232. USFS recreation site 48232; Lost Creek Ridge Trail 646 enters Glacier Peak Wilderness. The pinned OSM entrance node 12244685006 lies within the reviewed approach neighborhood.",
+          "url": "https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd530006.pdf"
+        },
+        {
+          "id": "6307.005511",
+          "name": "White River trailhead",
+          "coordinates": [
+            -120.94502475155335,
+            47.962805788175615
+          ],
+          "basis": "Reviewed USFS recreation-site record 6307.005511. This is a popular trailhead located upriver from Lake Wenatchee that provides access to: Indian Creek Trail #1502, White River Trail #1507, Mount David Trail #1521, and Boulder Creek Trail #1562. These trails are all within the Glacier Peak Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59069"
+        },
+        {
+          "id": "6279.005511",
+          "name": "Phelps Creek trailhead",
+          "coordinates": [
+            -120.83501476237457,
+            48.08320580702007
+          ],
+          "basis": "Reviewed USFS recreation-site record 6279.005511. This trailhead provides access to the Phelps Creek Trail #1511 which enters the Glacier Peak Wilderness at 2.6 miles. This trailhead also accesses Carne Mountain Trail #1508.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58939"
+        },
+        {
+          "id": "6278.005511",
+          "name": "Trinity trailhead",
+          "coordinates": [
+            -120.8500047621596,
+            48.07197180474025
+          ],
+          "basis": "Reviewed USFS recreation-site record 6278.005511. This trailhead provides access to Buck Creek Trail #1513 and Chiwawa River Trail #1550 within the Glacier Peak Wilderness. There is a vault toilet at the trailhead. The trailhead borders private land. Please respect private property and stay on the trail in this area.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59027"
+        },
+        {
+          "id": "5112010416",
+          "name": "Entiat River trailhead",
+          "coordinates": [
+            -120.65021471664457,
+            48.02460582402954
+          ],
+          "basis": "Reviewed USFS recreation-site record 5112010416. Provides access to Entiat River Trail #1400 (and numerous side trails). Trail enters Glacier Peak Wilderness 4 miles from the trailhead.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=57963"
+        },
+        {
+          "id": "5278010416",
+          "name": "Little Wenatchee Ford trailhead",
+          "coordinates": [
+            -121.08761476440273,
+            47.917015769962624
+          ],
+          "basis": "Reviewed USFS recreation-site record 5278010416. This trailhead provides access to the Little Wenatchee Trail #1525, Cady Creek Trail #1501, and Cady Ridge Trail #1532, which enter the Henry M Jackson Wilderness, and the Poe Mountain Trail #1520 which travels along the border of the Glacier Peak Wilderness. The Little Wenatchee Trail #1525 travels through Henry M. Jackson Wilderness to meet the Pacific Crest Trail within Glacier Peak Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58865"
+        },
+        {
+          "id": "11198010357",
+          "name": "Blanca Lake trailhead",
+          "coordinates": [
+            -121.3122368012565,
+            47.91417274513159
+          ],
+          "basis": "Reviewed USFS recreation-site record 11198010357. Provides access to: Blanca Lake Trail 1052 which accesses  Wild Sky Wilderness and Henry M. Jackson Wilderness.",
+          "url": null
+        },
+        {
+          "id": "11201010357",
+          "name": "North Fork Skykomish trailhead",
+          "coordinates": [
+            -121.27779279849068,
+            47.9263947495907
+          ],
+          "basis": "Reviewed USFS recreation-site record 11201010357. Provides access to: North Fork Skykomish Trail 1051, Quartz Creek Trail 1050, and West Cady Ridge Trail 1054. These trails access Wild Sky Wilderness and Henry M. Jackson Wilderness.",
+          "url": null
+        },
+        {
+          "id": "11308010357",
+          "name": "Elliot Creek–Goat Lake trailhead",
+          "coordinates": [
+            -121.41131485185738,
+            48.05370574183054
+          ],
+          "basis": "Reviewed USFS recreation-site record 11308010357. The Elliot Creek Goat Lake trailhead accesses a 10.4 mile loop trail leading to beautiful Goat Lake in the Henery M. Jackson Wilderness.  The lower Elliot Creek trail follows the creek, the upper part of the loop is mostly on a long closed road bed. No campfires are allowed. No camping within 200 feet of the lake.",
+          "url": null
+        },
+        {
+          "id": "6305.005511",
+          "name": "Top Lake trailhead",
+          "coordinates": [
+            -121.07901475400686,
+            47.880105768846185
+          ],
+          "basis": "Reviewed USFS recreation-site record 6305.005511. This trailhead provides access to the Top Lake Trail #1506 which accesses Top Lake within the Henry M. Jackson Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=59025"
+        },
+        {
+          "id": "6304.005511",
+          "name": "Heather Lake trailhead (Wenatchee)",
+          "coordinates": [
+            -121.07008374985806,
+            47.86915976921309
+          ],
+          "basis": "Reviewed USFS recreation-site record 6304.005511. This trailhead provides access to Heather Lake Trail #1526 within the Henry M. Jackson Wilderness. A reviewed 600 m neighborhood includes the mapped parking/trail entrance (OSM node 3835171557), 528 m from this USFS point; the agency coordinate is retained.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58793",
+          "radiusMeters": 600
+        },
+        {
+          "id": "11194010357",
+          "name": "Meadow Creek trailhead",
+          "coordinates": [
+            -121.20779276283254,
+            47.827505751800736
+          ],
+          "basis": "Reviewed USFS recreation-site record 11194010357. Provides access to Meadow Creek Trail 1057 which accesses Wild Sky and Henry M. Jackson Wildernesses.",
+          "url": null
+        },
+        {
+          "id": "5420.004841",
+          "name": "Bald Eagle trailhead",
+          "coordinates": [
+            -121.28806482413287,
+            48.0243757538375
+          ],
+          "basis": "Reviewed USFS recreation-site record 5420.004841. This trail provides access to both the Henry M. Jackson Wilderness and Glacier Peak Wilderness, ending at the junction with the Pacific Crest Trail at Dishpan Gap. From the Bald Eagle Trailhead follow an old logging road for approximately 2.5 miles. About a half mile past the end of the old road, the trail enters Henry M Jackson Wilderness and opens into Curry Gap. Just south of Curry Gap is a junction for the Quartz Creek Trail 1050, heading to Road 63 on the Skykomish Ranger District. The left fork continues east and ascends toward Bald Eagle and Long John Mountains with views of Sloan Peak. The trail passes over June Mountain reaches the junction with Pilot Ridge Trail 651 on the left. Bald Eagle trail continues to the Pacific Crest Trail at Dishpan Gap 9.5 miles from the trailhead. Water is scarce along this trail in late summer and fall. Near Long John Mountain you'll find some nice places to camp, but you may have to search to find water.",
+          "url": null
+        },
+        {
+          "id": "6303.005511",
+          "name": "Lake Minotaur trailhead",
+          "coordinates": [
+            -121.02973973311003,
+            47.827878771315795
+          ],
+          "basis": "Reviewed USFS recreation-site record 6303.005511. This trailhead provides access to the Lake Minotaur Route Trail #1517 which accesses the Henry M. Jackson Wilderness.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58849"
+        },
+        {
+          "id": "5339010357",
+          "name": "Barlow Pass trailhead",
+          "coordinates": [
+            -121.44230655039965,
+            48.02680573694982
+          ],
+          "basis": "Reviewed USFS recreation-site record 5339010357. This is the access point for The Old Monte Cristo Townsite, Poodle Dog Pass-Silver Lake-Twin Lakes Trail #708 and Glacier Basin Trail 719 which access Henry M Jackson Wilderness via Old Monte Cristo Townsite Trail.",
+          "url": null
+        },
+        {
+          "id": "6301.005511",
+          "name": "Smithbrook trailhead",
+          "coordinates": [
+            -121.0766597348637,
+            47.802503764757674
+          ],
+          "basis": "Reviewed USFS recreation-site record 6301.005511. This trailhead provides access to the Smithbrook Trail #1590 which is a short spur that connects to the Pacific Crest Trail #2000 within the Henry M. Jackson Wilderness. This trailhead is not recommended for stock trucks or stock trailers. The Pacific Crest - Stevens Pass North Trailhead provides better parking for stock users accessing the Pacific Crest Trail #2000.",
+          "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58993"
         }
       ],
       "limitations": [
-        "This restoration reuses the reviewed Central Cascades start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
-        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage."
+        "This consolidated selection preserves the historical Central Cascades footprint, both full pilot wilderness footprints, and 28 reviewed approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped. A hike need not enter a wilderness.",
+        "Approach neighborhoods use a 500 m registration tolerance, with the reviewed 600 m neighborhood for Heather Lake’s displaced agency point. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
+        "USFS boundaries are generalized to about 11 metres and are not legal surveys. The historical OSM-derived footprint and checkpoints are retained review evidence; their provenance differs from the USFS wilderness boundaries and recreation sites.",
+        "The North Fork Skykomish USFS approach also covers nearby Quartz Creek and West Cady trailheads. Little Wenatchee Ford is one shared USFS checkpoint; nearby historical checkpoints remain distinct.",
+        "USFS Stevens Pass North record 6300.005511 remains excluded because its coordinates and directions point to Snoqualmie. The separately reviewed historical Stevens Pass checkpoint is retained and does not validate that agency record.",
+        "Historical route scenarios require rechecking against the loop/lollipop graph; previous results do not establish current coverage."
+      ],
+      "replaces": [
+        "glacier-peak",
+        "henry-m-jackson"
       ]
     },
     {
