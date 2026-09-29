@@ -9,10 +9,12 @@ and [README](../../README.md#developer-data-builds).
 
 ## Current availability and restoration baseline
 
-`data/coverage/regions/catalog.json` currently defines two buildable named areas.
-The user has built and installed both. Their coverage acceptance remains partial;
-see [status](status.md). Historical region definitions under `data/regions/` are
-review inputs, not active catalog entries or evidence of current availability.
+`data/coverage/regions/catalog.json` defines eleven named build selections: the
+two installed pilot areas plus nine restored historical coverage groups. The nine
+new definitions still require user-run builds, installation and route acceptance.
+Their retained boundaries and source records under `data/regions/` are now referenced
+by the shared builder; the obsolete pack registry and size table are removed.
+See [status](status.md) for actual built/installed evidence.
 
 These nine groups were built and activated before the data cutover. The completion
 evidence remains in status Gates 3–4, 8–11 and 13–17, and their regional charters.
@@ -21,15 +23,15 @@ number of packs does not prescribe the number of new download areas.
 
 | Historical coverage group | Systems to account for | Current restoration |
 | --- | --- | --- |
-| Santa Cruz Mountains | Midpen/Santa Cruz systems, including Big Basin, Castle Rock, Henry Cowell, Nisene Marks, Bear Creek Redwoods, Sierra Azul and Rancho San Antonio | Not restored |
-| Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Not restored |
-| Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Not restored |
-| Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Not restored |
-| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Glacier Peak and Henry M. Jackson only; quality gaps open |
-| North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Not restored |
-| Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Not restored |
-| Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Not restored |
-| Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Not restored |
+| Santa Cruz Mountains | Midpen/Santa Cruz systems, including Big Basin, Castle Rock, Henry Cowell, Nisene Marks, Bear Creek Redwoods, Sierra Azul and Rancho San Antonio | Configured; build/install/acceptance pending |
+| Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Configured; build/install/acceptance pending |
+| Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Configured; build/install/acceptance pending |
+| Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Configured; build/install/acceptance pending |
+| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Broad group configured; two smaller areas installed; acceptance incomplete |
+| North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Configured; build/install/acceptance pending |
+| Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Configured; build/install/acceptance pending |
+| Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
+| Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Configured; build/install/acceptance pending |
 
 The five historical Washington groups were mountain-focused. They do not establish
 statewide coverage: their charters excluded other Washington hiking systems.
@@ -41,37 +43,50 @@ Marin/Mount Tam and Tahoe–Eldorado were planned, not previously activated.
 Keep them distinct from restoration obligations. The August 4 archive tags contain
 earlier prototype source samples, not the nine later completed regional builds.
 
-## Execution order
+## Current implementation and next gates
 
-1. **Coverage correctness first.** Resolve the diagnosed Top Lake, Heather Lake
-   and Lost Creek Ridge start omissions. Establish reusable approach checks,
-   representative loop/lollipop and boundary-route scenarios, and an independent
-   comparison against the final installed graph. Source proximity alone does not
-   establish trail completeness. Explain each omission as source absence,
-   restriction, intentional distance pruning, or a compiler/footprint defect.
-2. **Remove pilot-only assumptions.** The current region loader hardcodes a
-   Washington mainland longitude range and USFS wilderness provenance. Put
-   reviewed source/border scope and boundary provenance in the appropriate data
-   inputs so Olympic and California areas can use the same builder. Retain the
-   US-only border limit; fail explicitly for unsupported source coverage.
-3. **Restore coverage in Washington and California.** Review the existing
-   charters, source pins, restrictions and scenarios; turn the systems in the
-   table into intuitive named areas with complete approach inventories. Prepare
-   and accept each through the same pipeline. Reuse cached sources and metrics.
-   Track configured, built, installed and accepted separately. Do not revive
-   obsolete builders or require the user to select geographic coordinates.
-4. **Complete the Washington inventory.** Reconcile the restored catalog against
-   the statewide hiking-area inventory, recording intentional exclusions and
-   unresolved gaps. Forest aliases must not imply an entire forest is available.
-5. **Accept the expanded product and maintenance cycle.** Exercise whole-area
-   Full searches, saved work and GPX export; measure build memory/time/disk and
-   adjoining-area costs. Provide a coherent shared-source refresh/publication
-   workflow and a maintained prepared catalog for fresh installations.
+- The generic loader reads each area's boundary/approach attribution from data.
+  Washington's full mainland and maritime IBC support limit is explicit in its
+  recipe; California uses its own verified provider extent. Southwest Cascades
+  includes a separately pinned Oregon source, as requested, to preserve its full
+  route buffer. Source gaps still fail instead of silently shrinking coverage.
+- The restored definitions reuse reviewed geographic footprints, exact-way access
+  restrictions and source-linked representative approach checkpoints. Those
+  checkpoints are not complete trailhead inventories. Larger historical groups
+  are practical restoration selections, with unmeasured first-build costs; the
+  ten-minute target remains to be tested. They need not become a permanent
+  partition if measured preparation cost justifies smaller natural areas.
+- `data plan REGION [REGION...]` preflights explicit selections without source
+  processing. `data build REGION [REGION...]` builds them sequentially, stops on
+  failure/pause, and publishes each successful area independently. Coverage can
+  install several published areas in one download job. No graph stitching or
+  separate California/ Washington compiler is introduced.
+- Next, the user builds and installs the new definitions. Apply the acceptance
+  procedure below: approach checks, representative loop/lollipop and boundary
+  routes, restrictions, memory/time/disk and overlap behavior. The source pins
+  retain their original review dates; this restoration is not a current-conditions
+  audit. Independent full-trail completeness remains open for the pilot too.
+- Source-refresh/publication across a coherent generation remains a separate
+  maintenance gate. A batch of builds is not an atomic generation refresh.
 
-The next region must use the same small acceptance procedure as the pilot.
-Quality work should produce a repeatable procedure rather than indefinite manual
-polishing of two areas. The user runs regional/Docker builds; agent investigations
-use bounded fixture tests and finalized artifact copies unless directed otherwise.
+## Washington inventory still to reconcile
+
+Restoring the five mountain-focused groups is not Washington-wide completion.
+The following are explicit inventory work, not silently omitted or advertised
+as available. Boundaries, authoritative approach evidence, provider buffers and
+representative routes must be reviewed before adding buildable entries.
+
+| Remaining system inventory | What must be reconciled |
+| --- | --- |
+| Puget lowlands, islands and Chuckanut | Eligible rural starts outside the historical mountain footprints; retain the shared built-up start rule |
+| Southwest lowlands, Willapa Hills and remaining Columbia Gorge | Systems beyond Southwest Cascades' retained starts; Oregon source support does not automatically add starts |
+| Okanogan Highlands, Kettle/Colville and northeast Washington | Historical North Cascades coverage does not establish these systems; check Idaho/Canada buffer needs and preserve US-only scope |
+| Spokane-area systems and southeast Washington/Blue Mountains | New natural-area definitions, approach and source review; Oregon/Idaho support where needed |
+| Columbia Basin, canyon and eastern foothill systems | Inventory eligible networks and gaps without claiming that every mapped urban path is a wilderness start |
+
+This is a regional reconciliation checklist, not an exhaustive official statewide
+trail inventory. Existing exclusions requiring further permission/source review
+remain explicit; forest aliases never imply an entire forest is installed.
 
 ## Region definition and acceptance
 

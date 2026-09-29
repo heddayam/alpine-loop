@@ -264,6 +264,983 @@
         "dataset": "Reviewed USFS recreation-site approaches",
         "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0"
       }
+    },
+    {
+      "id": "santa-cruz-mountains",
+      "name": "Santa Cruz Mountains area",
+      "aliases": [
+        "Santa Cruz Mountains",
+        "Midpeninsula",
+        "Midpen"
+      ],
+      "recipePath": "../recipes/california.json",
+      "boundaryPath": "../../regions/santa-cruz-mountains/boundary.geojson",
+      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "boundarySource": {
+        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Retained reviewed Santa Cruz Mountains selection geometry; historical build boundary reused as the eligible-start footprint",
+        "url": "https://github.com/heddayam/alpine-loop/blob/f90786d8ec910037f6c27293c8a5159407e6b984/data/regions/santa-cruz-mountains/boundary.geojson",
+        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+      },
+      "approachRadiusMeters": 500,
+      "limitations": [
+        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
+        "The initial three State Parks direction anchors do not inventory every Midpen preserve, Nisene Marks, or other Santa Cruz Mountains approach."
+      ],
+      "approachSource": {
+        "authority": "California State Parks",
+        "dataset": "Official park-page directions destinations reviewed 2026-09-29; representative approach anchors only",
+        "url": "https://www.parks.ca.gov/",
+        "license": "Published location facts with source attribution; official pages and maps are not redistributed."
+      },
+      "approaches": [
+        {
+          "id": "castle-rock-directions",
+          "name": "Castle Rock State Park directions",
+          "coordinates": [
+            -122.0980668375132,
+            37.232555191977696
+          ],
+          "basis": "Exact destination coordinate in the official park page Get directions link, retrieved 2026-09-29. A representative park approach, not an independently created route start or a complete entrance inventory.",
+          "url": "https://www.parks.ca.gov/?page_id=538"
+        },
+        {
+          "id": "henry-cowell-directions",
+          "name": "Henry Cowell Redwoods State Park directions",
+          "coordinates": [
+            -122.064,
+            37.0401
+          ],
+          "basis": "Exact destination coordinate in the official park page Get directions link, retrieved 2026-09-29. A representative park approach, not an independently created route start or a complete entrance inventory.",
+          "url": "https://www.parks.ca.gov/?page_id=546"
+        },
+        {
+          "id": "big-basin-directions",
+          "name": "Big Basin Redwoods State Park directions",
+          "coordinates": [
+            -122.22203,
+            37.17159
+          ],
+          "basis": "Exact destination coordinate in the official park page Get directions link, retrieved 2026-09-29. A representative park approach, not an independently created route start or a complete entrance inventory.",
+          "url": "https://www.parks.ca.gov/?page_id=540"
+        }
+      ]
+    },
+    {
+      "id": "southern-east-bay",
+      "name": "Southern East Bay area",
+      "aliases": [
+        "Southern East Bay",
+        "Pleasanton Ridge",
+        "Mission Peak",
+        "Sunol",
+        "Del Valle"
+      ],
+      "recipePath": "../recipes/california.json",
+      "boundaryPath": "../../regions/southern-east-bay/boundary.geojson",
+      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "boundarySource": {
+        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Retained reviewed Southern East Bay selection geometry; historical build boundary reused as the eligible-start footprint",
+        "url": "https://github.com/heddayam/alpine-loop/blob/6a04065b4a5d2f1a67c8a2f78348d333ff5dc01b/data/regions/southern-east-bay/boundary.geojson",
+        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+      },
+      "approachRadiusMeters": 500,
+      "limitations": [
+        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
+        "The synthetic Ohlone Wilderness QA point is deliberately excluded from reviewed approaches; Ohlone remains inside the retained regional footprint."
+      ],
+      "approachSource": {
+        "authority": "East Bay Regional Park District",
+        "dataset": "Five retained official EBRPD entrance review anchors from the committed regional scenarios",
+        "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json",
+        "license": "Retained EBRPD location facts for local evaluation. The pinned source records no affirmative redistribution license; review before external distribution."
+      },
+      "approaches": [
+        {
+          "id": "pleasanton-ridge-foothill",
+          "name": "Foothill Road Staging Area",
+          "coordinates": [
+            -121.8815061965,
+            37.6145243526
+          ],
+          "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
+          "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "mission-peak-stanford",
+          "name": "Stanford Avenue Park Entrance",
+          "coordinates": [
+            -121.9084791072,
+            37.5044639584
+          ],
+          "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
+          "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "vargas-plateau-morrison-canyon",
+          "name": "Vargas Plateau Staging Area",
+          "coordinates": [
+            -121.9321342635,
+            37.5752020221
+          ],
+          "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
+          "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "sunol-geary-road",
+          "name": "Sunol Main Entrance",
+          "coordinates": [
+            -121.8340647261,
+            37.515502941
+          ],
+          "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
+          "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "del-valle-east-beach",
+          "name": "East Swim Beach Parking",
+          "coordinates": [
+            -121.697152193,
+            37.585111116
+          ],
+          "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
+          "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
+        }
+      ]
+    },
+    {
+      "id": "monterey-carmel",
+      "name": "Monterey–Carmel area",
+      "aliases": [
+        "Monterey",
+        "Carmel Valley",
+        "Fort Ord",
+        "Palo Corona",
+        "Garland Ranch",
+        "Point Lobos",
+        "Garrapata"
+      ],
+      "recipePath": "../recipes/california.json",
+      "boundaryPath": "../../regions/monterey-carmel/boundary.geojson",
+      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "boundarySource": {
+        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Retained reviewed Monterey–Carmel selection geometry; historical build boundary reused as the eligible-start footprint",
+        "url": "https://github.com/heddayam/alpine-loop/blob/d72bb43a6b22db841664a841048498b11645425e/data/regions/monterey-carmel/boundary.geojson",
+        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+      },
+      "approachRadiusMeters": 500,
+      "limitations": [
+        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed."
+      ],
+      "approachSource": {
+        "authority": "Bureau of Land Management / Monterey Peninsula Regional Park District / California State Parks",
+        "dataset": "Ten retained source-linked entrance records from the reviewed Monterey–Carmel overlay",
+        "url": "https://github.com/heddayam/alpine-loop/blob/2976a7c78d0038e31f664a9149ad95b2d4ed1265/data/regions/monterey-carmel/official-sources/reviewed-access.json",
+        "license": "Human-reviewed location facts retained for local evaluation; BLM material is a US government work, while MPRPD and State Parks derivative reuse requires review."
+      },
+      "approaches": [
+        {
+          "id": "fort-ord-creekside-terrace",
+          "name": "Creekside Terrace Trailhead (signed trails only)",
+          "coordinates": [
+            -121.691299623,
+            36.6267347865
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, signed-trails-only. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/14/query?where=FET_NAME%20IN%20(%27Badger%20Hills%20Trailhead%27%2C%27Creekside%20Terrace%20Trailhead%27)&outFields=OBJECTID%2CFET_NAME%2CFET_TYPE%2CFET_SUBTYPE%2CADM_UNIT_CD%2CADMIN_ST%2CLAT%2CLONG%2CWEB_DISPLAY%2CUNIT_NAME&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "fort-ord-badger-hills",
+          "name": "Badger Hills Trailhead (signed trails only)",
+          "coordinates": [
+            -121.7135240602,
+            36.5858781503
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, signed-trails-only. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://gis.blm.gov/arcgis/rest/services/recreation/BLM_Natl_Recs_pts/MapServer/14/query?where=FET_NAME%20IN%20(%27Badger%20Hills%20Trailhead%27%2C%27Creekside%20Terrace%20Trailhead%27)&outFields=OBJECTID%2CFET_NAME%2CFET_TYPE%2CFET_SUBTYPE%2CADM_UNIT_CD%2CADMIN_ST%2CLAT%2CLONG%2CWEB_DISPLAY%2CUNIT_NAME&returnGeometry=true&outSR=4326&f=json"
+        },
+        {
+          "id": "garland-ranch-main",
+          "name": "Garland Ranch main entrance",
+          "coordinates": [
+            -121.767713,
+            36.509276
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, permit-free. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.mprpd.org/garland-ranch-regional-park"
+        },
+        {
+          "id": "kahn-ranch-hitchcock-canyon",
+          "name": "Kahn Ranch via Hitchcock Canyon Road (permit required)",
+          "coordinates": [
+            -121.7352,
+            36.4568
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, permit-required. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.mprpd.org/garland-ranch-regional-park"
+        },
+        {
+          "id": "palo-corona-rancho-canada",
+          "name": "Palo Corona Rancho Canada entrance",
+          "coordinates": [
+            -121.888643,
+            36.538635
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, permit-free, designated-trails-only. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.mprpd.org/palo-corona-park-rules"
+        },
+        {
+          "id": "palo-corona-west-gate",
+          "name": "Palo Corona Highway 1 west gate (permit required)",
+          "coordinates": [
+            -121.9136,
+            36.5312
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, permit-required, designated-trails-only. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.mprpd.org/palo-corona-park-rules"
+        },
+        {
+          "id": "palo-corona-south-bank-east-gate",
+          "name": "Palo Corona South Bank east gate (walk/bike permit-free; parking permit required)",
+          "coordinates": [
+            -121.8694,
+            36.5381
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use, walk-bike-permit-free, parking-permit-required, designated-trails-only. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.mprpd.org/palo-corona-park-rules"
+        },
+        {
+          "id": "point-lobos-main",
+          "name": "Point Lobos main entrance",
+          "coordinates": [
+            -121.937059,
+            36.515632
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.parks.ca.gov/?page_id=571"
+        },
+        {
+          "id": "garrapata-gate-8",
+          "name": "Garrapata gate 8 (Soberanes Canyon and Soberanes Point)",
+          "coordinates": [
+            -121.9241845,
+            36.454479
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.parks.ca.gov/?page_id=579"
+        },
+        {
+          "id": "garrapata-gate-9",
+          "name": "Garrapata gate 9 (Soberanes Point)",
+          "coordinates": [
+            -121.9256823,
+            36.4520623
+          ],
+          "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use. Used as an approach anchor only, not an access grant or current-condition assertion.",
+          "url": "https://www.parks.ca.gov/pages/579/files/Garrapata.pdf"
+        }
+      ]
+    },
+    {
+      "id": "henry-coe",
+      "name": "Henry Coe area",
+      "aliases": [
+        "Henry W. Coe State Park",
+        "Coyote Lake–Harvey Bear Ranch County Park"
+      ],
+      "recipePath": "../recipes/california.json",
+      "boundaryPath": "../../regions/henry-coe/boundary.geojson",
+      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "boundarySource": {
+        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Retained reviewed Henry Coe selection geometry; historical build boundary reused as the eligible-start footprint",
+        "url": "https://github.com/heddayam/alpine-loop/blob/3c88577593e365f3377eec1480fdb2c50a3fd1ce/data/regions/henry-coe/boundary.geojson",
+        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+      },
+      "approachRadiusMeters": 500,
+      "limitations": [
+        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
+        "Coyote Lake main entrance remains deferred: the historical review found no eligible derived portal within 500 m. Its omission must not be treated as proof that the entrance has no hiking access."
+      ],
+      "approachSource": {
+        "authority": "California State Parks / Santa Clara County Parks",
+        "dataset": "Five authority-published entrance review anchors retained in the Henry Coe charter and scenarios",
+        "url": "https://www.parks.ca.gov/?page_id=561",
+        "license": "Reviewed entrance-location facts with authority attribution; no authority map or dataset is redistributed."
+      },
+      "approaches": [
+        {
+          "id": "coe-ranch-headquarters",
+          "name": "Coe Ranch Entrance",
+          "coordinates": [
+            -121.5458297,
+            37.1878465
+          ],
+          "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
+          "url": "https://www.parks.ca.gov/?page_id=561"
+        },
+        {
+          "id": "hunting-hollow",
+          "name": "Hunting Hollow Trailhead",
+          "coordinates": [
+            -121.467091,
+            37.076211
+          ],
+          "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
+          "url": "https://www.parks.ca.gov/?page_id=561"
+        },
+        {
+          "id": "dowdy-ranch",
+          "name": "Dowdy Ranch Entrance",
+          "coordinates": [
+            -121.356932,
+            37.112289
+          ],
+          "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
+          "url": "https://www.parks.ca.gov/?page_id=561"
+        },
+        {
+          "id": "mendoza-ranch",
+          "name": "Mendoza Ranch Entrance",
+          "coordinates": [
+            -121.520235,
+            37.069972
+          ],
+          "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
+          "url": "https://parks.santaclaracounty.gov/locations/coyote-lake-harvey-bear-ranch-county-park"
+        },
+        {
+          "id": "harvey-bear-ranch",
+          "name": "Harvey Bear Entrance",
+          "coordinates": [
+            -121.577518,
+            37.096626
+          ],
+          "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
+          "url": "https://parks.santaclaracounty.gov/locations/coyote-lake-harvey-bear-ranch-county-park"
+        }
+      ]
+    },
+    {
+      "id": "north-cascades",
+      "name": "North Cascades",
+      "aliases": [
+        "Mount Baker",
+        "Highway 20",
+        "Pasayten",
+        "Methow Valley",
+        "Stehekin"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "../../regions/north-cascades/boundary.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "boundarySource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed North Cascades hiking footprint retained from the Washington 2026-08-01 source",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachSource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed North Cascades representative trailhead checkpoints",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "historical-baker-lake",
+          "name": "Bayview Loop Trail trailhead",
+          "coordinates": [
+            -121.6798848,
+            48.6785495
+          ],
+          "basis": "Retained representative Baker Lake/Baker River checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-hannegan-artist-point",
+          "name": "Artist Point Trailhead",
+          "coordinates": [
+            -121.6921444,
+            48.8464471
+          ],
+          "basis": "Retained representative Hannegan/Artist Point checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-diablo-ross-lake",
+          "name": "Happy Creek Trailhead",
+          "coordinates": [
+            -121.055839,
+            48.7285621
+          ],
+          "basis": "Retained representative Diablo/Ross Lake checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-rainy-maple-pass",
+          "name": "Rainy Pass Trailhead",
+          "coordinates": [
+            -120.7357846,
+            48.5152487
+          ],
+          "basis": "Retained representative Rainy/Maple Pass checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-stehekin-foot-approach",
+          "name": "War Creek Trailhead",
+          "coordinates": [
+            -120.4165727,
+            48.3583436
+          ],
+          "basis": "Retained representative Stehekin pedestrian approach checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-methow-twisp",
+          "name": "Scatter Creek Trailhead",
+          "coordinates": [
+            -120.5198575,
+            48.435146
+          ],
+          "basis": "Retained representative Methow/Twisp River checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-pasayten-west",
+          "name": "Harts Pass Trailhead",
+          "coordinates": [
+            -120.6700596,
+            48.7212919
+          ],
+          "basis": "Retained representative Pasayten west approach checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-pasayten-east",
+          "name": "Chewuch Trail Q0 trailhead",
+          "coordinates": [
+            -120.0196714,
+            48.8230506
+          ],
+          "basis": "Retained representative Pasayten east approach checkpoint from data/regions/north-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        }
+      ],
+      "limitations": [
+        "This restoration reuses the reviewed North Cascades start footprint and 8 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
+        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage."
+      ]
+    },
+    {
+      "id": "central-cascades",
+      "name": "Central Cascades",
+      "aliases": [
+        "Alpine Lakes",
+        "Icicle Creek",
+        "Teanaway",
+        "Cle Elum",
+        "Lake Wenatchee"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "../../regions/central-cascades/boundary.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "boundarySource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Central Cascades hiking footprint retained from the Washington 2026-08-01 source",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachSource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Central Cascades representative trailhead checkpoints",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "historical-east-glacier-peak-white-river",
+          "name": "White River Trailhead",
+          "coordinates": [
+            -120.9449109,
+            47.9629325
+          ],
+          "basis": "Retained representative East Glacier Peak–White River checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-chiwawa-spider-meadow",
+          "name": "Phelps Creek Trailhead",
+          "coordinates": [
+            -120.83493,
+            48.0829138
+          ],
+          "basis": "Retained representative Chiwawa–Spider Meadow checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-west-glacier-peak-north-fork-sauk",
+          "name": "North Fork Sauk Trailhead",
+          "coordinates": [
+            -121.28793,
+            48.0583431
+          ],
+          "basis": "Retained representative West Glacier Peak checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-west-cady-north-fork",
+          "name": "North Fork Skykomish Trailhead",
+          "coordinates": [
+            -121.2769283,
+            47.9267716
+          ],
+          "basis": "Retained representative West Cady Ridge–North Fork Skykomish checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-stevens-pass",
+          "name": "Stevens Pass Pacific Crest Trail access",
+          "coordinates": [
+            -121.0895,
+            47.7465
+          ],
+          "basis": "Retained representative Stevens Pass checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-icicle-enchantments",
+          "name": "Stuart Lake Trailhead",
+          "coordinates": [
+            -120.8207727,
+            47.5277884
+          ],
+          "basis": "Retained representative Icicle Creek–Enchantments checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-snoqualmie-alpine-lakes",
+          "name": "Snow Lake Trailhead",
+          "coordinates": [
+            -121.4235243,
+            47.4455622
+          ],
+          "basis": "Retained representative Snoqualmie–Alpine Lakes checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-cle-elum-pete-lake",
+          "name": "Pete Lake Trail trailhead",
+          "coordinates": [
+            -121.186917,
+            47.4341573
+          ],
+          "basis": "Retained representative Cle Elum–Salmon la Sac/Pete Lake checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-teanaway-west-fork",
+          "name": "Middle Fork Teanaway Trail trailhead",
+          "coordinates": [
+            -120.960625,
+            47.2982778
+          ],
+          "basis": "Retained representative Teanaway Community Forest checkpoint from data/regions/central-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        }
+      ],
+      "limitations": [
+        "This restoration reuses the reviewed Central Cascades start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
+        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage."
+      ]
+    },
+    {
+      "id": "rainier-goat-rocks",
+      "name": "Rainier–Goat Rocks",
+      "aliases": [
+        "Mount Rainier",
+        "Norse Peak",
+        "William O. Douglas",
+        "Goat Rocks",
+        "White Pass"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "../../regions/rainier-goat-rocks/boundary.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "boundarySource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Rainier–Goat Rocks hiking footprint retained from the Washington 2026-08-01 source",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachSource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Rainier–Goat Rocks representative trailhead checkpoints",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "historical-longmire-paradise",
+          "name": "Wonderland Trail: Longmire Trailhead",
+          "coordinates": [
+            -121.81253,
+            46.7501122
+          ],
+          "basis": "Retained representative Longmire–Paradise checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-mowich-carbon",
+          "name": "Mowich Lake Trailhead",
+          "coordinates": [
+            -121.864831,
+            46.9332678
+          ],
+          "basis": "Retained representative Mowich–Carbon checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-sunrise-white-river",
+          "name": "Sunrise Rim Trailhead",
+          "coordinates": [
+            -121.641863,
+            46.9140604
+          ],
+          "basis": "Retained representative Sunrise–White River checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-ohanapecosh",
+          "name": "Silver Falls Loop Trailhead",
+          "coordinates": [
+            -121.566791,
+            46.737104
+          ],
+          "basis": "Retained representative Ohanapecosh checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-chinook-naches",
+          "name": "Naches Peak Loop Trailhead",
+          "coordinates": [
+            -121.517898,
+            46.8670056
+          ],
+          "basis": "Retained representative Chinook–Naches Pass checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-greenwater-norse-peak",
+          "name": "Greenwater Lakes Trailhead",
+          "coordinates": [
+            -121.4750453,
+            47.1056817
+          ],
+          "basis": "Retained representative Greenwater–Norse Peak checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-white-pass",
+          "name": "White Pass Trailhead North",
+          "coordinates": [
+            -121.3822263,
+            46.6452556
+          ],
+          "basis": "Retained representative White Pass checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-william-o-douglas-pear-butte",
+          "name": "Pear Butte Trailhead",
+          "coordinates": [
+            -121.3064702,
+            46.8141079
+          ],
+          "basis": "Retained representative William O. Douglas–Pear Butte checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-goat-rocks-snowgrass",
+          "name": "Snowgrass Hikers' Trailhead",
+          "coordinates": [
+            -121.518893,
+            46.4639429
+          ],
+          "basis": "Retained representative Goat Rocks–Snowgrass checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-goat-rocks-walupt",
+          "name": "Walupt Lake Trailhead",
+          "coordinates": [
+            -121.4711144,
+            46.4229681
+          ],
+          "basis": "Retained representative Goat Rocks–Walupt Lake checkpoint from data/regions/rainier-goat-rocks/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        }
+      ],
+      "limitations": [
+        "This restoration reuses the reviewed Rainier–Goat Rocks start footprint and 10 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
+        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage."
+      ]
+    },
+    {
+      "id": "southwest-cascades",
+      "name": "Southwest Cascades",
+      "aliases": [
+        "Mount St. Helens",
+        "Mount Adams",
+        "Indian Heaven",
+        "Trapper Creek",
+        "Silver Star",
+        "Upper Cispus"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "../../regions/southwest-cascades/boundary.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "boundarySource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Southwest Cascades hiking footprint retained from the Washington 2026-08-01 source",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachSource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Southwest Cascades representative trailhead checkpoints",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "historical-ape-canyon-loowit",
+          "name": "Ape Canyon Trailhead parking way/65069378",
+          "coordinates": [
+            -122.092329,
+            46.165278
+          ],
+          "basis": "Retained representative Loowit east feeder and volcanic circuit checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-june-lake-loowit",
+          "name": "June Lake Trailhead parking way/439071688",
+          "coordinates": [
+            -122.156895,
+            46.137063
+          ],
+          "basis": "Retained representative Loowit south feeder checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-mount-margaret-boundary",
+          "name": "Norway Pass Trailhead",
+          "coordinates": [
+            -122.08246,
+            46.305338
+          ],
+          "basis": "Retained representative Mount Margaret and eastern Boundary Trail checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-adams-south-stagman",
+          "name": "Stagman Ridge Trailhead",
+          "coordinates": [
+            -121.597287,
+            46.140186
+          ],
+          "basis": "Retained representative Mount Adams south and west approaches checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-adams-north-killen",
+          "name": "Killen Creek Trailhead",
+          "coordinates": [
+            -121.55234,
+            46.288305
+          ],
+          "basis": "Retained representative Mount Adams north approaches checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-upper-cispus-blue-lake",
+          "name": "Blue Lake ORV Trailhead parking way/716832243",
+          "coordinates": [
+            -121.73118,
+            46.396063
+          ],
+          "basis": "Retained representative Upper Cispus Blue Lake–Valley Trail loops checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-indian-heaven-lemei",
+          "name": "Lemei Trailhead",
+          "coordinates": [
+            -121.685829,
+            46.028666
+          ],
+          "basis": "Retained representative Indian Heaven Wilderness checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-trapper-creek-big-hollow",
+          "name": "Big Hollow Trailhead",
+          "coordinates": [
+            -121.97989,
+            45.926158
+          ],
+          "basis": "Retained representative Trapper Creek Wilderness checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-silver-star-tarbell",
+          "name": "Rock Creek Trailhead",
+          "coordinates": [
+            -122.321364,
+            45.764257
+          ],
+          "basis": "Retained representative Silver Star–Tarbell connected trails checkpoint from data/regions/southwest-cascades/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        }
+      ],
+      "limitations": [
+        "This restoration reuses the reviewed Southwest Cascades start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
+        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage."
+      ]
+    },
+    {
+      "id": "olympic-peninsula",
+      "name": "Olympic Peninsula",
+      "aliases": [
+        "Olympic Mountains",
+        "Ozette",
+        "Sol Duc",
+        "Hoh",
+        "Quinault",
+        "Staircase",
+        "Buckhorn"
+      ],
+      "recipePath": "../recipes/washington.json",
+      "boundaryPath": "../../regions/olympic-peninsula/boundary.geojson",
+      "reviewedAt": "2026-09-28T00:00:00Z",
+      "boundarySource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Olympic Peninsula hiking footprint retained from the Washington 2026-08-01 source",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachSource": {
+        "authority": "Alpine Loop / OpenStreetMap contributors",
+        "dataset": "Reviewed Olympic Peninsula representative trailhead checkpoints",
+        "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
+        "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
+      },
+      "approachRadiusMeters": 500,
+      "approaches": [
+        {
+          "id": "historical-ozette-triangle",
+          "name": "Ozette trail parking",
+          "coordinates": [
+            -124.66889,
+            48.15519
+          ],
+          "basis": "Retained representative Ozette beach-and-boardwalk triangle checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-sol-duc-lovers-lane",
+          "name": "Sol Duc Trailhead",
+          "coordinates": [
+            -123.83487,
+            47.95487
+          ],
+          "basis": "Retained representative Sol Duc checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-hoh-rainforest",
+          "name": "Hoh River Trailhead",
+          "coordinates": [
+            -123.93439,
+            47.86047
+          ],
+          "basis": "Retained representative Hoh rainforest checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-staircase-rapids",
+          "name": "Staircase Rapids Trailhead",
+          "coordinates": [
+            -123.33099,
+            47.5162
+          ],
+          "basis": "Retained representative Staircase checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-quinault-rainforest",
+          "name": "Quinault Rain Forest Trailhead",
+          "coordinates": [
+            -123.86198,
+            47.45988
+          ],
+          "basis": "Retained representative Quinault rainforest checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-hurricane-ridge",
+          "name": "Hurricane Hill Trailhead",
+          "coordinates": [
+            -123.51782,
+            47.97661
+          ],
+          "basis": "Retained representative Hurricane Ridge checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-elwha-olympic-hot-springs-road",
+          "name": "Olympic Hot Springs Road trailhead",
+          "coordinates": [
+            -123.60052,
+            48.00286
+          ],
+          "basis": "Retained representative Elwha checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-buckhorn-mount-townsend",
+          "name": "Mount Townsend Upper Trailhead",
+          "coordinates": [
+            -123.0357,
+            47.85615
+          ],
+          "basis": "Retained representative Buckhorn checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        },
+        {
+          "id": "historical-quinault-kestner-homestead",
+          "name": "Kestner Homestead trailhead",
+          "coordinates": [
+            -123.81765,
+            47.50864
+          ],
+          "basis": "Retained representative Quinault Kestner Homestead checkpoint from data/regions/olympic-peninsula/scenarios.json. The coordinate is review evidence from the pinned OSM-era regional audit; it is not a complete approach inventory or current access permission. The rebuilt graph must independently contain an eligible start nearby.",
+          "url": null
+        }
+      ],
+      "limitations": [
+        "This restoration reuses the reviewed Olympic Peninsula start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
+        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage.",
+        "Mapped coastal trails do not certify tide or surf passability. Unreviewed tribal corridors outside the retained Olympic footprint remain explicit coverage exclusions."
+      ]
     }
   ]
 }

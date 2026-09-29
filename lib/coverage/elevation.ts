@@ -1,7 +1,7 @@
 import { densifyGeometry } from "@/lib/data/metrics";
 import type { Coordinate } from "@/lib/data/types";
 import { createHash } from "node:crypto";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { readElevationSourceConfig, readPinnedThreeDepCollection } from "@/lib/data/elevation/source";
 import { refreshThreeDepCollection, readThreeDepCollection, type ThreeDepCollection } from "@/lib/data/elevation/collection";
@@ -13,7 +13,6 @@ import type { CoverageUnit } from "./types";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { ElevationSampler, SourceSnapshot } from "@/lib/data/adapters";
 import { intersectCoverage, rectangle } from "./geometry";
-import registry from "@/data/regions/registry.json";
 
 type Product = ThreeDepCollection["products"][number];
 export type ElevationCache = {
@@ -86,7 +85,9 @@ async function canonicalFor(unit: CoverageUnit, cacheRoot: string, preparationRo
   }
   const state = cache.canonical;
   const pinned = new Map<string, Product>();
-  for (const { id: region } of registry.regions.filter(region => "packId" in region)) {
+  // Retained source configs are cache hints, not a second publication catalog.
+  const inputs = await readdir(path.resolve("data/regions"), {withFileTypes:true});
+  for (const region of inputs.filter(entry=>entry.isDirectory()).map(entry=>entry.name).sort()) {
     let config;
     try { config = await readElevationSourceConfig(path.resolve(`data/regions/${region}/elevation-source.json`)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }

@@ -1,8 +1,12 @@
 import { expect,it } from "vitest";
 import { sourceRecipeSchema, readSourceRecipe } from "./recipe";
-it("keeps the Washington source recipe explicitly pinned",async()=>{
+it("pins Washington and its Oregon buffer source to the same upstream snapshot",async()=>{
   const recipe=await readSourceRecipe("data/coverage/recipes/washington.json");
-  expect(recipe.sources[0]!.sha256).toBe("sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e");
+  expect(Object.fromEntries(recipe.sources.map(source=>[source.config.id,source.sha256]))).toEqual({
+    "geofabrik-washington-osm":"sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "geofabrik-oregon-osm":"sha256:777d9898e1cf0a80b73b2c503028fe0c15120f6547ae692cc48d6fae26b0847e",
+  });
+  expect(new Set(recipe.sources.map(source=>Date.parse(source.config.upstreamTimestamp))).size).toBe(1);
   expect(recipe.memoryLimitMiB).toBe(4096);expect(recipe.reviewedRegionIds.length).toBeGreaterThan(0);
 });
 

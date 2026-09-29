@@ -81,7 +81,7 @@ evaluation-only review decisions; a public distribution needs those resolved.
 The existing sample-owner DEM selection remains authoritative: historical
 per-region elevation bboxes/products seed reusable cached inputs but do not
 constrain the new 25-mile support graph. Needed sample-owner tiles beyond the old
-footprint are resolved by the shared 3DEP path. The canonical inventory contains
+footprint are resolved by the shared 3DEP path. The canonical inventory can retain
 both California and Washington products; an area's metric identity includes only
 its relevant products, and its sampler opens only those required tiles.
 
@@ -92,3 +92,58 @@ area restored, build and inspect its artifact, explain missing reviewed approach
 run representative loop/lollipop searches from the retained scenario clusters,
 and verify restricted ways remain excluded. Those real-data gates have not been
 run as part of this catalog change.
+
+## Preserve exclusions when adding the route buffer
+
+Two derived product exclusions preserve explicitly reviewed Henry Coe policy
+outside the prior reviewed start footprint. The shared recipe references
+`../canada-de-los-osos-exclusion.geojson` and `../palassou-ridge-exclusion.geojson`.
+
+Both source shapes were exported from the existing pinned Norcal PBF (SHA-256
+215f18449e6cd190200a7dc1188a63dba2bec1f20fb3d1637c4f11c1f9134342), using
+`osmium getid --add-referenced --remove-tags` for way/79436065 and
+relation/20575981, then `osmium export --geometry-types=polygon --stop-on-error`.
+The raw polygons had 108 and 214 vertices. No PBF download or database was used.
+
+The raw reserve boundary overlaps the old Coe footprint by approximately
+0.944 km². CDFW's linked management plan records a transfer of about 200 acres
+for a State Parks entrance. The raw Palassou polygon overlaps by approximately
+3,402 m² of boundary slivers. Consequently these are conservative product exclusions, not whole-property bans.
+Each final exclusion is the exact mapped polygon MINUS the retained reviewed
+Henry Coe footprint. This keeps the prior reviewed entrance/park geometry and
+restricts only previously excluded land introduced by the routing-buffer expansion.
+The final files record both the original geometry hash and exact retained boundary
+file hash, derivation, original OSM tags, policy sources and limitations.
+
+Policy evidence reviewed:
+
+- Henry Coe charter's explicit exclusions and authority responsibilities:
+  `data/regions/henry-coe/charter.md`, lines 56–61 and 86–89.
+- CDFW management plan, PDF page 6, states informal public access is not allowed;
+  page 5 records the State Parks transfer:
+  https://nrm.dfg.ca.gov/FileHandler.ashx?DocumentID=84909&inline=
+- Current county-hosted Coyote Lake map labels Palassou Open Space "No Public
+  Access": https://files.santaclaracounty.gov/exjcpb1516/2025-04/easy-trails-coyote-lake-harvey-bear-ranch.pdf
+- Pinned Palassou OSM relation tags access=no and hiking=no.
+
+Do not infer fresh legal access within the retained Coe footprint. Normal OSM
+access classification and the existing exact-way restrictions still apply.
+The CDFW property webpage includes an unrelated Gray Lodge content block; that
+block was not used as evidence. Its linked property-specific management plan
+was used. Official CDFW GIS metadata was found, but no current exact property
+boundary was downloaded or substituted in this bounded pass.
+
+Other explicit access-policy concerns found in the retained CA charters:
+
+- Southern East Bay permits only the signed Ohlone corridor across SFPUC
+  watershed; it does not authorize off-corridor travel. Do not blanket-exclude
+  the whole watershed, because that would remove the intended public corridor.
+- Monterey's Fort Ord review limits travel to signed/map-listed trails and
+  excludes Army-closed land. This needs a targeted signed-trail/closed-land
+  review before broader completeness is claimed; do not exclude all Fort Ord
+  or promote unknown OSM ways to public access.
+- Broad omissions such as Mount Diablo, Pacheco, Ventana and unrelated lowland
+  systems were product-scope choices, not evidence of a hiking prohibition.
+
+The existing 78 exact-way restrictions remain in force. No other guessed
+polygon or blanket rule for unknown access was added. The extraction scratch files were deleted.

@@ -7,7 +7,16 @@
       "sha256": "sha256:215f18449e6cd190200a7dc1188a63dba2bec1f20fb3d1637c4f11c1f9134342"
     }
   ],
-  "exclusions": [],
+  "exclusions": [
+    {
+      "id": "canada-de-los-osos",
+      "geometryPath": "../canada-de-los-osos-exclusion.geojson"
+    },
+    {
+      "id": "palassou-ridge",
+      "geometryPath": "../palassou-ridge-exclusion.geojson"
+    }
+  ],
   "reviewedRegionIds": [
     "santa-cruz-mountains",
     "southern-east-bay",

@@ -106,50 +106,53 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-The workflow is **choose a named hiking area → preview → build**. Available areas
-are `glacier-peak` and its southern neighbor `henry-m-jackson`. Each includes its
-wilderness footprint and reviewed USFS approach neighborhoods, with remaining
-inventory limitations recorded in the catalog. The same footprint selects
-trailheads in Plan and Downloads; a hike does not have to enter the legal wilderness
-boundary. Forest aliases do not imply coverage of the entire national forest.
-These are the initial two areas. [The coverage roadmap](docs/rebuild/regional-expansion-plan.md)
-tracks Washington-wide expansion and restoration of Santa Cruz Mountains, Southern
-East Bay, Monterey–Carmel and Henry Coe.
+The workflow is **choose named hiking areas → preview → build**. Run `data regions`
+for the configured names. The catalog restores the nine historical Washington and
+California groups alongside the two smaller Glacier Peak and Henry M. Jackson
+areas. A configured area becomes downloadable only after a successful build;
+installation is a separate action in Coverage. See the [coverage roadmap](docs/rebuild/regional-expansion-plan.md)
+for built/installed acceptance and remaining Washington-wide gaps.
+
+Each footprint selects trailheads, including reviewed approach neighborhoods.
+A hike does not have to stay inside the named area. The broader restoration
+footprints reuse reviewed geographic groups; their first-build time is unmeasured
+and can exceed the two smaller wilderness areas. Forest aliases do not imply
+coverage of an entire national forest.
 
 ```sh
 # Build tooling only; this does not process trail data.
 docker compose build data
 docker compose run --rm data scripts/data.ts regions
 
-# Immediate geometry preview: no downloads or source processing.
-docker compose run --rm data scripts/data.ts plan glacier-peak
+# Preview several areas without downloads or source processing.
+docker compose run --rm data scripts/data.ts plan santa-cruz-mountains henry-coe
 
-# Prepare the region, using the source cache from this checkout's earlier builds.
+# California reuses the retained default .cache/sources cache.
+# Explicit selections run one at a time.
+docker compose run --rm data scripts/data.ts build \
+  santa-cruz-mountains southern-east-bay monterey-carmel henry-coe
+
+# Washington restoration, alongside any existing pilot builds:
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build glacier-peak
+  data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks southwest-cascades olympic-peninsula
 
 # In another terminal:
 npm run data -- status --watch
 ```
 
-To add Henry M. Jackson alongside an existing Glacier Peak build, rebuild the data
-image so it includes the new catalog entry, then prepare only the new area:
+All requested names and route-buffer source coverage are validated before any
+build starts. Duplicate names are rejected. A failure or pause stops the sequence;
+areas already published remain available. Repeat the command to reuse completed
+artifacts and cached inputs. Each area publishes separately; this is not an atomic
+batch release. The status report describes the current/last area, and the command
+prints a completion summary for each. Planning several areas prints one JSON
+object per area.
 
-```sh
-docker compose build data
-docker compose run --rm \
-  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build henry-m-jackson
-```
-
-This preserves Glacier Peak's published artifact and reuses shared source and metric
-caches. Little Wenatchee Ford is deliberately included in both start footprints;
-installing both areas searches each shared start through one graph. Bounded
-adjacent-area checks preserve Glacier Peak's starts and sampled shared-start routes;
-complete trail/approach coverage remains open (see `docs/rebuild/status.md`). In
-Coverage, select **Henry M. Jackson area** and choose **Download**. Glacier Peak
-stays installed. Preparing data does not install it automatically.
+Adding an area preserves neighboring published artifacts. In Coverage, select the
+new areas, review their sizes, and choose **Download**; several selections share
+one download job. Existing installed areas remain installed. Overlapping areas
+search each shared start through one owning graph.
 
 `plan` prints eligible start geometry and the surrounding routing extent. Requests
 remain capped at **40 miles**; the conservative **25-mile buffer** also supports
@@ -181,6 +184,8 @@ ten minutes for a first useful region is the **acceptance target, not a measured
 guarantee**. Status records stage timings, work counts and measured memory/disk peaks;
 first-download time and warm reuse should be evaluated separately.
 
+Use the default `.cache/sources` for the retained California source/DEM cache and
+the shown shared-source override for this checkout's Washington/Oregon cache.
 A fresh clone can omit the source-cache override. Ctrl+C stops at a checkpoint;
 repeat the command to reuse verified work. Incomplete imports restart normalization.
 Temporary build files and child processes are cleaned up; useful source/DEM/metric
@@ -194,8 +199,8 @@ For native tooling, install `osmium-tool` and `uv`, run
 transport and graph audit. The bbox, discovery and network-ID commands are removed.
 
 After publication, rebuild/start the app with
-`docker compose up --detach --build app`. Open **Coverage**, choose **Glacier Peak
-area**, review its size and select **Download**. The page remains the normal app at
+`docker compose up --detach --build app`. Open **Coverage**, select the
+areas you built, review their sizes and select **Download**. The page remains the normal app at
 `http://localhost:3000`; there is no networks HTML page. Building the app alone does
 not prepare or install trail data. Saved results and settings remain separate.
 

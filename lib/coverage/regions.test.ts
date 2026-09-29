@@ -2,6 +2,42 @@ import { expect, it } from "vitest";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
 import { planCoverageRegion } from "./plan";
+import { intersectCoverage, subtractCoverage, unionCoverage } from "./geometry";
+
+it("plans every restored area offline with explicit provenance and a completely covered route buffer",async()=>{
+  const entries=await listCoverageRegions();
+  expect(entries.map(entry=>entry.id).sort()).toEqual([
+    "central-cascades","glacier-peak","henry-coe","henry-m-jackson","monterey-carmel",
+    "north-cascades","olympic-peninsula","rainier-goat-rocks","santa-cruz-mountains",
+    "southern-east-bay","southwest-cascades",
+  ]);
+  for(const {id} of entries) {
+    const region=await readCoverageRegion(id),plan=planCoverageRegion(region);
+    expect(subtractCoverage(plan.geometry,unionCoverage(region.recipe.sources.map(source=>source.geometry))),id).toBeNull();
+    for(const exclusion of region.recipe.exclusions) expect(intersectCoverage(plan.geometry,exclusion.geometry),`${id}: ${exclusion.id}`).toBeNull();
+    expect(region.reviewedApproaches?.length,id).toBeGreaterThan(0);
+    expect(region.sources?.map(source=>source.id)).toEqual([`region-boundary-${id}`,`region-approaches-${id}`]);
+    for(const source of region.sources??[]) {
+      expect(source.license.length,id).toBeGreaterThan(0);
+      expect(source.contentHash,id).toMatch(/^sha256:[a-f0-9]{64}$/);
+    }
+  }
+  const california=await readCoverageRegion("santa-cruz-mountains");
+  expect(california.sources?.[0]?.authority).not.toBe("USDA Forest Service");
+  expect(california.recipe.reviewedRegionIds.slice().sort()).toEqual(["henry-coe","monterey-carmel","santa-cruz-mountains","southern-east-bay"]);
+});
+
+it("preserves US trail coverage at the northern border and extends Southwest support into Oregon",async()=>{
+  const north=planCoverageRegion(await readCoverageRegion("north-cascades"));
+  expect(coordinateIsInsideArea([-121.4077738,48.9998624],north.geometry)).toBe(true);
+  expect(coordinateIsInsideArea([-121.7736891,48.99766],north.geometry)).toBe(false);
+  const olympic=planCoverageRegion(await readCoverageRegion("olympic-peninsula"));
+  expect(coordinateIsInsideArea([-123.36,48.43],olympic.geometry)).toBe(false); // Victoria, Canada
+  expect(coordinateIsInsideArea([-124.66889,48.15519],olympic.startGeometry)).toBe(true); // Ozette
+  const southwest=planCoverageRegion(await readCoverageRegion("southwest-cascades"));
+  expect(coordinateIsInsideArea([-122,45.5],southwest.geometry)).toBe(true); // Oregon buffer, not a new start area
+  expect(coordinateIsInsideArea([-122,45.5],southwest.startGeometry)).toBe(false);
+});
 
 it("resolves a pinned named footprint with real approaches and no live services",async()=>{
   expect(await listCoverageRegions()).toContainEqual({id:"glacier-peak",name:"Glacier Peak area"});

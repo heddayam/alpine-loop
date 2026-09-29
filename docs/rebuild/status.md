@@ -6,6 +6,55 @@ the evidence line.
 
 ## Active system design revision
 
+### Named-area restoration and sequential builds — 2026-09-28
+
+- [x] Replace the generic loader's hardcoded Washington/USFS assumptions with
+  explicit boundary and approach provenance. Preserve the pilot IDs and reviewed
+  locations; recipes remain responsible for provider/support geography.
+- [x] Configure the nine historical coverage groups alongside Glacier Peak and
+  Henry M. Jackson: eleven named selections, 88 representative approach checks.
+  Existing regional geometries are referenced rather than duplicated. These are
+  configured inputs, not nine completed new builds or a statewide-completeness claim.
+- [x] Add sequential explicit multi-area `plan`/`build` selection. Resolve and plan
+  every selection before preparation; reject duplicates, stop on failure/pause,
+  and publish each successful area independently. Each result preserves the
+  single-area output shape. Multi-area installation already shares one download job.
+- [x] Add Oregon support as explicitly selected by the user. The 252,076,488-byte
+  Geofabrik `oregon-260801` extract matches Washington's upstream timestamp
+  `2026-08-01T20:21:21Z`. SHA-256
+  `777d9898e1cf0a80b73b2c503028fe0c15120f6547ae692cc48d6fae26b0847e`
+  and provider MD5 were verified; one copy is cached under the ignored shared
+  source root. Provider polygon metadata retains the historical-extent caveat.
+- [x] Remove the obsolete pack registry, size table and registry schema/tests.
+  Retained elevation configs are cache hints discovered from source-input folders;
+  the named-area catalog is the sole developer availability list.
+- [x] Final integrated geometry, source, exclusion and compiler fixture checks.
+- [ ] User-run builds, installation, route/approach acceptance and measured costs
+  for the nine new definitions. No regional/Docker build was run by the agent.
+- [ ] Reconcile the remaining Washington inventory recorded in the roadmap.
+  Puget/island, lowland, eastern and southeastern systems are still outstanding.
+  Source-refresh generations and full-trail completeness remain separate gates.
+
+The California recipe retains all 78 reviewed exact-way restrictions. Restoration
+also preserves explicit exclusions for unreviewed extensions beyond prior Henry Coe
+and Olympic coverage. Source polygons are geographic evidence, not new access
+permissions. The region restoration notes describe derivations and unresolved
+signed-corridor/authority review. Larger historical groups have unmeasured first-build
+costs; the ten-minute target is not yet established for them.
+
+Verification: 70 focused tests across catalog geometry, source recipes, planning,
+compiler runtime, elevation cache and CLI passed. The first integrated run found
+one obsolete source-order assertion (Washington-only); it now verifies both pins
+and their shared timestamp, and its three-test file passed on rerun. All other
+69 tests passed on the initial run. One TypeScript check and targeted ESLint passed;
+no repeated full suite, app build or browser suite for this data/CLI change.
+
+Completed task worktrees were archived and branches removed. Diagnostic handoff
+files and transient extracts were deleted. Useful source/DEM/metric caches,
+installed releases, saved work and the user-owned publication review remain intact.
+Source download and small geometry review only; no live SQLite reads or regional
+processing. The additional Oregon payload remains cached for the user's builds.
+
 ### Coverage correctness and full geographic scope — 2026-09-28
 
 The user reaffirmed that the target is Washington-wide hiking coverage plus the
@@ -67,13 +116,12 @@ is explicitly historical. The user's untracked publication review remains untouc
   starts; rebuilt-artifact evidence below.
 - [ ] Representative useful/boundary-crossing routes on the rebuilt packs and
   independent full-trail/compaction completeness remain open.
-- [ ] Expansion prerequisite: remove Washington-specific longitude bounds and
+- [x] Expansion prerequisite: remove Washington-specific longitude bounds and
   hardcoded USFS wilderness provenance from the generic region loader, retaining
   explicit source/border validation in the appropriate regional inputs.
 - [ ] Restore the four California coverage groups and remaining historical
-  Washington systems, then reconcile the full statewide inventory. Names, source
-  pins, approach inventories and acceptance are needed; the current catalog still
-  contains only two buildable areas.
+  Washington systems, then reconcile the full statewide inventory. Eleven definitions are now configured;
+  nine new real builds, acceptance and full statewide reconciliation remain.
 
 Verification: 20 focused portal/store tests, 20 regional runtime/catalog tests,
 targeted ESLint and one integrated TypeScript check passed. No UI change or
