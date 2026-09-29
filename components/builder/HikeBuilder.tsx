@@ -57,7 +57,9 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const [catalog, setCatalog] = useState<SearchCatalog>();
   const [catalogError, setCatalogError] = useState("");
   const [drawnBounds, setDrawnBounds] = useState<Bounds | null>(null);
-  const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
+  const [selectedRegions, setSelectedRegions] = useState<SearchCatalog["regions"]>([]);
+  const selectedRegionIds = selectedRegions.map(({ id }) => id);
+  const unavailableRegions = selectedRegions.filter(region => catalog && !catalog.regions.some(({ id }) => id === region.id));
   const [driveDraft, setDriveDraft] = useState<DriveTimeDraft>({ originText: "", originSuggestions: [], minDurationMinutes: 0, durationMinutes: 30, state: "idle" });
   const preferences = usePreferences();
   const { settings: appSettings, loaded: settingsLoaded, error: settingsError } = preferences;
@@ -90,10 +92,20 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     coverageCatalogRequest.current = controller;
     void requestJson("/api/search/catalog", { signal: controller.signal }).then((raw) => {
       const next = searchCatalogSchema.parse(raw);
-      if (!controller.signal.aborted) { setCatalog(next); setCatalogError(""); }
+      if (!controller.signal.aborted) {
+        setCatalog(next);
+        setCatalogError("");
+        setSelectedRegions(current => current.map(region => {
+          // Older catalogs prefixed region IDs with their release. Only map an
+          // existing selected option to an exact semantic ID in the new catalog.
+          const separator = region.id.indexOf("::");
+          const semanticId = separator > 0 ? region.id.slice(separator + 2) : region.id;
+          return next.regions.find(({ id }) => id === region.id)
+            ?? next.regions.find(({ id }) => id === semanticId) ?? region;
+        }));
+      }
     }).catch((error: unknown) => { if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Map data is unavailable."); });
   }, []);
-  useEffect(() => () => coverageCatalogRequest.current?.abort(), []);
   const [panel, setPanel] = useState<"plan" | "results" | "route">("plan");
   const [mapExpanded, setMapExpanded] = useState(false);
   const operation = useRef<AbortController | null>(null);
@@ -105,13 +117,9 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const ready = settingsLoaded && Boolean(catalog?.coverages.length);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void requestJson("/api/search/catalog", { signal: controller.signal }).then((raw) => {
-      const next = searchCatalogSchema.parse(raw);
-      if (!controller.signal.aborted) setCatalog(next);
-    }).catch((error: unknown) => { if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Map data is unavailable."); });
-    return () => controller.abort();
-  }, []);
+    refreshCoverageCatalog();
+    return () => coverageCatalogRequest.current?.abort();
+  }, [refreshCoverageCatalog]);
   useEffect(() => () => { operation.current?.abort(); originRequestSequenceRef.current += 1; }, []);
 
   // Draft edits cancel pending view work without changing a completed snapshot.
@@ -248,6 +256,10 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
 
   const prepareRequest = (): SearchIntent | null => {
     if (!ready) return null;
+    if (!drawnBounds && unavailableRegions.length) {
+      setValidationErrors(["Download the unavailable regions again or remove their filters before searching."]);
+      return null;
+    }
     const parsed = parseSearchCriteria(values);
     if (!parsed.success) { setValidationErrors(parsed.errors); return null; }
     if (!drawnBounds && driveDraft.originText.trim() && !driveDraft.origin) {
@@ -348,7 +360,16 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
                 <select id="drive-duration" className="control" value={driveDraft.durationMinutes} onChange={(event) => { const durationMinutes = Number(event.currentTarget.value); setDriveDraft((current) => ({ ...current, durationMinutes })); editDraft(); }}>{DRIVE_TIME_DURATIONS_MINUTES.map((minutes) => <option value={minutes} key={minutes}>{minutes} minutes</option>)}</select>
               </div>
 
-              <RegionMultiSelect options={catalog?.regions ?? []} selected={selectedRegionIds} disabled={!catalog} onChange={(ids) => { setSelectedRegionIds(ids); editDraft(); }} />
+              <RegionMultiSelect options={catalog?.regions ?? []} selected={selectedRegionIds} disabled={!catalog} onChange={(ids) => {
+                setSelectedRegions([...unavailableRegions, ...(catalog?.regions.filter(({ id }) => ids.includes(id)) ?? [])]);
+                editDraft();
+              }} />
+              {unavailableRegions.length ? <div className="note-error" role="alert">
+                <p>Selected regions are unavailable. Download them again or remove their filters.</p>
+                {unavailableRegions.map(({ id, name }) => <button key={id} type="button" className="btn-link" onClick={() => {
+                  setSelectedRegions(current => current.filter(region => region.id !== id)); editDraft();
+                }}>Remove {name} filter</button>)}
+              </div> : null}
               {driveDraft.error ? <p className="note-error" role="alert">{driveDraft.error}</p> : null}
 
               <section className="boundary-block" aria-labelledby="boundary-title">
@@ -410,7 +431,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
             {catalog && !catalog.coverages.length ? <p className="note-error" role="status">No hiking data is installed. <button className="btn-link" type="button" onClick={openCoverage}>Install coverage</button> to search.</p> : null}
             {validationErrors.length ? <div className="validation-errors" role="alert"><strong>Check your route settings:</strong><ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
             <div className="builder-action-buttons">
-              <button className="btn btn-primary" type="button" disabled={!ready || batchLaunching} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
+              <button className="btn btn-primary" type="button" disabled={!ready || batchLaunching || (!drawnBounds && unavailableRegions.length > 0)} onClick={() => void launchBatch()}>{batchLaunching ? "Starting…" : "Full search"}</button>
             </div>
             <div className="action-legend">Every eligible trailhead · up to ten exact routes per start</div>
             {generationMessage ? <p className="generation-status" role="status" aria-live="polite">{generationMessage}</p> : null}

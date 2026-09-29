@@ -73,6 +73,61 @@ describe("geographic workspace", () => {
     expect(posts).toHaveLength(1);
     expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ area: { mode: "named-regions", regionIds: ["castle-rock", "sunol"] }, criteria: request.criteria });
   });
+  it.each([false, true])("retains a selected region when installed coverage refreshes (legacy IDs: %s)", async (legacy) => {
+    vi.restoreAllMocks();
+    let updated = false;
+    mockBaseFetch(url => {
+      if (url === "/api/search/catalog") return json(!updated && legacy ? { ...catalog, regions: catalog.regions.map(region => ({ ...region, id: `old-release::${region.id}` })) } : catalog);
+      if (url === "/api/coverage") return json({ release: null, installed: { id: updated ? "new-installation" : "old-installation", releaseId: updated ? "new-release" : "old-release", createdAt: "2026-09-01T00:00:00Z", sectionIds: ["castle-rock"], artifactIds: [], geometry: catalog.coverages[0] }, jobs: [], error: null });
+    });
+    render(<HikeBuilder />);
+    await chooseRegions();
+    await userEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    await screen.findByText("No trail downloads available yet.");
+    await userEvent.click(screen.getByRole("button", { name: /Back to planning/ }));
+    updated = true;
+    await userEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/search/catalog")).toHaveLength(2));
+    await userEvent.click(screen.getByRole("button", { name: /Back to planning/ }));
+    expect(screen.getByRole("button", { name: "Regions: 2 regions selected" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    const post = vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body)).area.regionIds).toEqual(["castle-rock", "sunol"]);
+  });
+  it("keeps a removed region filter explicit and blocks drive-time search until it is removed", async () => {
+    vi.restoreAllMocks();
+    let removed = false;
+    mockBaseFetch(url => {
+      if (url === "/api/search/catalog") return json(removed ? { ...catalog, regions: [catalog.regions[1]] } : catalog);
+      if (url === "/api/coverage") return json({ release: null, installed: { id: removed ? "remaining-installation" : "full-installation", releaseId: "release", createdAt: "2026-09-01T00:00:00Z", sectionIds: removed ? ["sunol"] : ["castle-rock", "sunol"], artifactIds: [], geometry: catalog.coverages[0] }, jobs: [], error: null });
+    });
+    render(<HikeBuilder />);
+    await userEvent.click(await screen.findByRole("button", { name: "Regions: Choose regions" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Castle Rock" }));
+    await userEvent.keyboard("{Escape}");
+    fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
+    await userEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    await screen.findByText("No trail downloads available yet.");
+    await userEvent.click(screen.getByRole("button", { name: /Back to planning/ }));
+    removed = true;
+    await userEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/search/catalog")).toHaveLength(2));
+    await userEvent.click(screen.getByRole("button", { name: /Back to planning/ }));
+    expect(await screen.findByText("Selected regions are unavailable. Download them again or remove their filters.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Full search" })).toBeDisabled();
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")).toBe(false);
+    // Selecting another available region must not silently erase the missing filter.
+    await userEvent.click(screen.getByRole("button", { name: "Regions: Choose regions" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Sunol" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: "Full search" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Castle Rock filter" }));
+    await userEvent.click(screen.getByRole("button", { name: "Full search" }));
+    await screen.findByRole("dialog", { name: "Jobs" });
+    const post = vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: ["sunol"] });
+  });
   it("drawn bounds override origin and regions, while unresolved origin never broadens a search", async () => {
     render(<HikeBuilder />);
     await chooseRegions();

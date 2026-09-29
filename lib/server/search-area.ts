@@ -40,24 +40,32 @@ export async function withPinnedSearchInstallation<T>(read: (installed: SearchIn
   }
   throw new Error("Installed coverage changed during discovery.");
 }
+function selectableRegions({ installation, release }: SearchInstallation) {
+  if (release.partitioning === "local-areas") {
+    const installed = new Set(installation.sectionIds);
+    return release.regions.filter(region => installed.has(region.id));
+  }
+  const bounds = areaBounds(installation.geometry);
+  return release.regions.filter(region => boundsOverlap(bounds, eligibleAreaBounds(region.geometry, true)));
+}
 export async function searchCatalog(): Promise<SearchCatalog> {
   return withPinnedSearchInstallation(async installed => {
     if (!installed) return { regions: [], coverages: [], display: { center: [-122, 38], zoom: 7 } };
-    const { installation, release } = installed;
+    const { installation } = installed;
     const bounds = areaBounds(installation.geometry);
     return {
-      regions: release.regions.filter(region => boundsOverlap(bounds, eligibleAreaBounds(region.geometry, true)))
-        .map(({ id, name }) => ({ id: namespacedId(release.id, id), name })),
+      regions: selectableRegions(installed).map(({ id, name }) => ({ id, name })),
       coverages: [installation.geometry],
       display: { center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2], zoom: 7 },
     };
   });
 }
-function namedArea(regionIds: string[], installed: SearchInstallation) {
+function namedArea(regionIds: string[], installed: SearchInstallation, restorePinned = false) {
+  const available = restorePinned ? installed.release.regions : selectableRegions(installed);
   const regions = [...new Set(regionIds)].map(id => {
-    const region = installed.release.regions.find(region => region.id === id
-      || namespacedId(installed.release.id, region.id) === id || region.aliases.includes(id));
-    if (!region) throw new ServerApiError("REGION_NOT_FOUND", "The selected region is unavailable.", 404);
+    const region = available.find(region => region.id === id || (restorePinned
+      && (namespacedId(installed.release.id, region.id) === id || region.aliases.includes(id))));
+    if (!region) throw new ServerApiError("REGION_NOT_FOUND", "A selected region is not downloaded or is no longer available. Update your region selection.", 404);
     return region;
   });
   return regions.length ? {
@@ -98,6 +106,6 @@ export async function restorePlanArea(area: SearchArea, plan: SearchPlan): Promi
   if (!area.regionIds.length || (area.mode === "named-regions" ? plan.area.filterGeometry : plan.area.refinementGeometry)) return plan;
   const installed = await loadInstallation(undefined, id);
   if (!installed) throw new ServerApiError("DATA_UNAVAILABLE", "The saved installation is unavailable. Start a new search.", 503);
-  const named = namedArea(area.regionIds, installed)!;
+  const named = namedArea(area.regionIds, installed, true)!;
   return { ...plan, area: { ...plan.area, ...(area.mode === "named-regions" ? { filterGeometry: named.geometry } : { refinementGeometry: named.geometry }) } };
 }

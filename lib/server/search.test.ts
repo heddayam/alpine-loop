@@ -7,7 +7,7 @@ import { fixturePackSeed } from "@/lib/data/fixture-pack";
 import { withPublicationLock } from "@/lib/coverage-install";
 import { PreparedGraphRepository } from "@/lib/graph";
 import { mapData } from "./map";
-import { drawnArea, resolveSearchPlan, searchCatalog } from "./search-area";
+import { drawnArea, resolveSearchPlan, restorePlanArea, searchCatalog } from "./search-area";
 import { openSearchSession } from "./search";
 import { RouteSolverProcess } from "./route-solver-process";
 import { preparedInstallation } from "./__fixtures__/prepared-installation";
@@ -90,7 +90,7 @@ describe("geographic search with prepared installation storage and compute", () 
     }
   });
 
-  it("pins map readers and resolves canonical region IDs plus legacy aliases from release metadata", async () => {
+  it("pins map readers and restores legacy region IDs only against the saved release", async () => {
     const original = PreparedGraphRepository.prototype.getAccessPointCandidates;
     let started!: () => void, release!: () => void;
     const entered = new Promise<void>(resolve => { started = resolve; });
@@ -103,9 +103,13 @@ describe("geographic search with prepared installation storage and compute", () 
     finally { release(); candidates.mockRestore(); }
     await running;
     expect(await pins()).toEqual([]);
-    const canonical = await resolveSearchPlan({ ...request, area: { mode: "named-regions", regionIds: ["fixture-release::osm:relation/1001"] } }, signal());
-    const alias = await resolveSearchPlan({ ...request, area: { mode: "named-regions", regionIds: ["fixture-pack::osm:relation/1001"] } }, signal());
-    expect(alias).toEqual(canonical);
+    const canonical = await resolveSearchPlan({ ...request, area: { mode: "named-regions", regionIds: ["osm:relation/1001"] } }, signal());
+    for (const id of ["fixture-release::osm:relation/1001", "fixture-pack::osm:relation/1001"]) {
+      const area = { mode: "named-regions" as const, regionIds: [id] };
+      await expect(resolveSearchPlan({ ...request, area }, signal())).rejects.toMatchObject({ code: "REGION_NOT_FOUND" });
+      const restored = await restorePlanArea(area, { ...canonical, area: { label: canonical.area.label } });
+      expect(restored).toEqual(canonical);
+    }
     expect(canonical.installationId).toBe("fixture-installation");
   });
 
@@ -134,7 +138,7 @@ describe("geographic search with prepared installation storage and compute", () 
 
   it("offers geographic discovery and viewport data with opaque identities", async () => {
     const catalog = searchCatalogSchema.parse(await searchCatalog());
-    expect(catalog.regions.map(({ id }) => id)).toEqual(["fixture-release::osm:relation/1001"]);
+    expect(catalog.regions.map(({ id }) => id)).toEqual(["osm:relation/1001"]);
     expect(catalog).not.toHaveProperty("packs");
     const map = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`));
     expect(map.accessPoints.length).toBeGreaterThan(0);
@@ -144,6 +148,50 @@ describe("geographic search with prepared installation storage and compute", () 
     const overview = await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}&trails=0`));
     expect(overview.accessPoints).toEqual(map.accessPoints);
     expect(overview.trailNetwork.features).toEqual([]);
+  });
+
+  it("keeps local region IDs stable and excludes uninstalled overlapping neighbors", async () => {
+    const oldRelease = JSON.parse(await readFile(join(root, "releases", "fixture-release.json"), "utf8"));
+    const oldInstallation = JSON.parse(await readFile(join(root, "installations", "fixture-installation.json"), "utf8"));
+    const geometry = oldRelease.regions[0].geometry;
+    const installedArtifact = { ...oldRelease.artifacts[0], startGeometry: geometry, graphId: oldRelease.id, regionId: "redwood" };
+    const neighborArtifact = { ...installedArtifact, id: "a".repeat(64), path: `objects/${"a".repeat(64)}.sqlite.gz`, regionId: "neighbor" };
+    const release = { ...oldRelease, id: "local-release-one", partitioning: "local-areas", regions: [
+      { ...oldRelease.regions[0], id: "redwood" },
+      { ...oldRelease.regions[0], id: "neighbor", name: "Overlapping neighbor", aliases: [] },
+    ], artifacts: [installedArtifact, neighborArtifact], sections: [
+      { id: "redwood", geometry, artifactIds: [installedArtifact.id], area: { maximumRouteMiles: 40, bufferMiles: 25 } },
+      { id: "neighbor", geometry, artifactIds: [neighborArtifact.id], area: { maximumRouteMiles: 40, bufferMiles: 25 } },
+    ] };
+    const installation = { ...oldInstallation, id: "local-installation-one", releaseId: release.id, sectionIds: ["redwood"] };
+    const activate = async () => {
+      await writeFile(join(root, "releases", `${release.id}.json`), JSON.stringify(release));
+      await writeFile(join(root, "installations", `${installation.id}.json`), JSON.stringify(installation));
+      await writeFile(join(root, "current.json"), JSON.stringify({ installationId: installation.id }));
+    };
+    await activate();
+    expect((await searchCatalog()).regions).toEqual([{ id: "redwood", name: oldRelease.regions[0].name }]);
+    const selected = { ...request, area: { mode: "named-regions" as const, regionIds: ["redwood"] } };
+    const before = await resolveSearchPlan(selected, signal());
+    for (const area of [
+      { mode: "named-regions" as const, regionIds: ["neighbor"] },
+      { mode: "drive-time" as const, origin: { lon: -122.16, lat: 37.16, label: "Home" }, durationMinutes: 30 as const, regionIds: ["redwood", "neighbor"] },
+    ]) await expect(resolveSearchPlan({ ...request, area }, signal())).rejects.toMatchObject({ code: "REGION_NOT_FOUND" });
+    release.id = "local-release-two";
+    installation.id = "local-installation-two";
+    installation.releaseId = release.id;
+    await activate();
+    expect((await searchCatalog()).regions.map(({ id }) => id)).toEqual(["redwood"]);
+    const after = await resolveSearchPlan(selected, signal());
+    expect(after.area).toEqual(before.area);
+    expect(after.installationId).toBe("local-installation-two");
+    const restored = await restorePlanArea({ mode: "named-regions", regionIds: ["local-release-one::redwood"] }, {
+      ...before, area: { label: before.area.label },
+    });
+    expect(restored).toEqual(before);
+    await expect(restorePlanArea({ mode: "named-regions", regionIds: ["other-release::redwood"] }, {
+      ...before, area: { label: before.area.label },
+    })).rejects.toMatchObject({ code: "REGION_NOT_FOUND" });
   });
 
   it("preserves the complete map response from the former graph reader across the prepared graph", async () => {
