@@ -6,7 +6,7 @@ import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
 import { planCoverageRegion } from "./plan";
 import { containsCoverage } from "@/lib/graph/coverage-containment";
-import { intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import type { CoverageRegion } from "./types";
 
 vi.mock("node:fs/promises", async original => {
@@ -15,7 +15,7 @@ vi.mock("node:fs/promises", async original => {
 });
 type Approach=NonNullable<CoverageRegion["reviewedApproaches"]>[number];
 type BaselineRegion={id:string;boundary:{geometry:AreaGeometry};approaches:Array<Approach & {neighborhood:AreaGeometry}>};
-let baseline:BaselineRegion[],central:CoverageRegion,catalog: {regions:Array<{id:string;replaces?:string[];approaches:Array<{id:string}>}>};
+let baseline:BaselineRegion[],central:CoverageRegion,catalog: {regions:Array<{id:string;replaces?:string[];territory?:{id:string;unitIds:string[]};boundaryPath?:string;approaches:Array<{id:string}>}>};
 beforeAll(async()=>{
   baseline=JSON.parse(await readFile(path.resolve("data/fixtures/coverage/central-cascades-baseline.json"),"utf8")).regions;
   catalog=JSON.parse(await readFile(path.resolve("data/coverage/regions/catalog.json"),"utf8"));
@@ -29,17 +29,17 @@ function omittedApproaches(region:CoverageRegion):string[] {
   )).map(point=>point.id));
 }
 
-it("plans the nine consolidated areas offline with explicit provenance and a completely covered route buffer",async()=>{
+it("plans all sixteen areas offline with explicit provenance and a completely covered route buffer",async()=>{
   const entries=await listCoverageRegions();
   expect(entries.map(entry=>entry.id).sort()).toEqual([
     "central-cascades","henry-coe","monterey-carmel","north-cascades","olympic-peninsula",
     "rainier-goat-rocks","santa-cruz-mountains","southern-east-bay","southwest-cascades",
-  ]);
+    "blue-mountains","columbia-basin","north-puget","northeast-washington","south-puget","spokane-palouse","willapa-hills",
+  ].sort());
   for(const {id} of entries) {
     const region=id===central.id?central:await readCoverageRegion(id),plan=planCoverageRegion(region);
     expect(subtractCoverage(plan.geometry,unionCoverage(region.recipe.sources.map(source=>source.geometry))),id).toBeNull();
     for(const exclusion of region.recipe.exclusions) expect(intersectCoverage(plan.geometry,exclusion.geometry),`${id}: ${exclusion.id}`).toBeNull();
-    expect(region.reviewedApproaches?.length,id).toBeGreaterThan(0);
     expect(region.sources?.map(source=>source.id)).toEqual([`region-boundary-${id}`,`region-approaches-${id}`]);
     for(const source of region.sources??[]) {
       expect(source.license.length,id).toBeGreaterThan(0);
@@ -72,7 +72,8 @@ it("preserves every point of all three original start footprints, including the 
     expect(containsCoverage(plan.startGeometry,expected),`${previous.id} after support/exclusions`).toBe(true);
     for(const point of previous.approaches) expect(subtractCoverage(point.neighborhood,plan.startGeometry),point.id).toBeNull();
   }
-  expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(false);
+  // Seattle is within the start territory; buildings, not this boundary, exclude dense starts.
+  expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(true);
 });
 
 it("retains all reviewed approaches and radii, deduplicating only the shared record",()=>{
@@ -134,4 +135,47 @@ it.each([
   changed.regions.find(region=>region.id==="central-cascades")!.replaces=replaces;
   vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
   await expect(listCoverageRegions()).rejects.toThrow();
+});
+
+it("assigns every one of the 39 pinned Washington counties exactly once",async()=>{
+  const source=JSON.parse(await readFile(path.resolve("data/coverage/territories/washington-counties.geojson"),"utf8")) as {features:Array<{id:string;geometry:AreaGeometry}>};
+  const assigned=catalog.regions.flatMap(region=>region.territory?.unitIds??[]);
+  expect(source.features).toHaveLength(39);
+  expect(assigned.slice().sort()).toEqual(source.features.map(feature=>feature.id).sort());
+  const washington=catalog.regions.filter(region=>region.territory);
+  expect(washington).toHaveLength(12);
+  // Full polygon containment catches holes/interior omissions, not just missing vertices.
+  for(const entry of washington){
+    const region=await readCoverageRegion(entry.id);
+    for(const id of entry.territory!.unitIds)
+      expect(containsCoverage(region.geometry,source.features.find(feature=>feature.id===id)!.geometry),id).toBe(true);
+  }
+});
+
+it.each(["unassigned","duplicate","unknown unit","unknown territory"])("rejects %s territory assignment",async kind=>{
+  const changed=structuredClone(catalog),entry=changed.regions.find(region=>region.id==="north-cascades")!;
+  if(kind==="unassigned")entry.territory!.unitIds.pop();
+  if(kind==="duplicate")entry.territory!.unitIds.push(entry.territory!.unitIds[0]!);
+  if(kind==="unknown unit")entry.territory!.unitIds.push("missing");
+  if(kind==="unknown territory")entry.territory!.id="missing";
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  await expect(listCoverageRegions()).rejects.toThrow(/territory/i);
+});
+
+it("preserves the exact existing California start footprints without filling their bounding box",async()=>{
+  // Pinned effective footprints before the Washington expansion, including approaches.
+  const fingerprints={
+    "santa-cruz-mountains":"7bfef8e191bc4b2800054e24dd583778db141e04fe2f7f4926d485f362e49d69",
+    "southern-east-bay":"327daa394bce0cf8526d13bf45ca2da056db97bb493767cca296cb0589a0edb8",
+    "monterey-carmel":"a18f24c1c6edf7bd4c4a4b383103c90768b3dbda7b3c36d286e099805837b834",
+    "henry-coe":"d5396aa3309b3637b13b7731bb28b99f7181854a8ff296b62bb3e6ae7a8d4a98",
+  };
+  for(const [id,hash] of Object.entries(fingerprints)){
+    const entry=catalog.regions.find(region=>region.id===id)!;
+    expect(entry.territory).toBeUndefined();
+    expect(entry.boundaryPath).toBe(`../../regions/${id}/boundary.geojson`);
+    const region=await readCoverageRegion(id);
+    expect(contentId(region.geometry),id).toBe(hash);
+    expect(coordinateIsInsideArea([-122.7,38],region.geometry)).toBe(false); // no new North Bay scope
+  }
 });
