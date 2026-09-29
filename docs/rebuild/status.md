@@ -62,9 +62,11 @@ is explicitly historical. The user's untracked publication review remains untouc
   and rejecting incompatible shared provider pins. A regression covers A+B →
   revised A+B with unchanged B bytes. Historical global limitation text can still
   accumulate; precise per-artifact limitation replacement belongs to release maintenance.
-- [ ] Rebuild and inspect corrected Glacier Peak and Henry M. Jackson packs;
-  verify the three starts and representative useful/boundary-crossing routes.
-  Independent full-trail/compaction completeness remains open.
+- [x] User rebuilt and installed corrected Glacier Peak and Henry M. Jackson
+  packs. Verify all declared approach neighborhoods and the three exact corrected
+  starts; rebuilt-artifact evidence below.
+- [ ] Representative useful/boundary-crossing routes on the rebuilt packs and
+  independent full-trail/compaction completeness remain open.
 - [ ] Expansion prerequisite: remove Washington-specific longitude bounds and
   hardcoded USFS wilderness provenance from the generic region loader, retaining
   explicit source/border validation in the appropriate regional inputs.
@@ -77,8 +79,34 @@ Verification: 20 focused portal/store tests, 20 regional runtime/catalog tests,
 targeted ESLint and one integrated TypeScript check passed. No UI change or
 repeated full suite/build. The completed task worktree is archived and its branch
 deleted; 25 MiB of diagnostic artifact/source copies were removed. Source caches,
-published/installed packs and saved searches remain intact. Real rebuilt-pack
-acceptance is still pending the user-run builds.
+published/installed packs and saved searches remain intact. Rebuilt-pack start
+acceptance subsequently passed; route/completeness acceptance remains partial.
+
+User-run rebuild/update verification: the app's coverage API reports both areas
+active on `release-ced3161b417c45e6c031d0a89456a291`, using `compact-regions-v2`.
+Its installed artifact IDs exactly match the published catalog. Finalized artifact
+copies were checked against declared raw sizes/SHA-256, queried immutably, and
+deleted immediately; no live/cache SQLite files were opened.
+
+- Glacier Peak artifact `e973cbb649777255366a6c2a4587f11f971ea67138ff30bed22f9dc0918113c8`:
+  5,982,160 compressed bytes, 17,580,032 raw bytes, 15 access records; all nine
+  declared approach neighborhoods have mapped starts. The exact Lost Creek Ridge
+  start `portal:osm-node-12244685006` exists and is public. Its nearest-cycle
+  lower bound is 20,505.70 m; that is not a guarantee of a feasible requested hike.
+- Henry M. Jackson artifact `843fa0d229898e88ee27d77c5732de58f028f0e3cd5eb7ec17b8d1d967d56619`:
+  2,003,031 compressed bytes, 5,976,064 raw bytes, 17 access records; all eleven
+  declared neighborhoods have mapped starts. Top Lake `portal:osm-node-3761092329`
+  and Heather Lake `portal:osm-node-3835171557` exist and are public. Top Lake's
+  nearest-cycle lower bound is 17,598.61 m. Heather's inclusive minimum stem is
+  null: no reachable physical cycle in this prepared graph, so the approach fix
+  does not promise a loop/lollipop result there.
+- The latest Henry build report records 102.272 seconds with all 33,750 segment
+  metrics reused and 607,764,480 bytes (about 580 MiB) sampled process-tree RSS.
+  Its 4 GiB cgroup figure is read from `memory.peak`, not the configured limit,
+  but reports the cgroup's lifetime high-water mark including file/kernel memory.
+  No initial baseline or memory-events delta is recorded. It cannot establish
+  an OOM, an attributable working-memory requirement, or cold-build performance;
+  see [Linux cgroup memory accounting](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory).
 
 ### Named regional preparation study — 2026-09-28
 
