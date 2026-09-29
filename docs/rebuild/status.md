@@ -74,6 +74,53 @@ Implementation and source limitations: [network design](network-design.md),
 no-mountain eligibility policy without changing complete download-territory
 assignment or clipping routes at start-selection boundaries.
 
+### Further bounded import optimization — 2026-09-29
+
+- [x] Profile a production-equivalent synthetic import using the committed Central
+  routing boundary and clipped terrain: 1,600 ways, 94,384 physical segments,
+  95,984 node puts and 1,200 shared-node duplicates. SQL writes/commits and exact
+  geometry predicates dominate this sample; warm source decoding is a small share.
+  The actual clipped terrain has 27 polygons / 3,326 vertices, not the full mask's
+  276 polygons. No source download or live regional SQLite inspection was performed.
+- [x] Delete unused staging node/evidence spatial indexes and evidence-point rows,
+  including their unique index and replay bookkeeping. Portal discovery already
+  reads canonical evidence and actual node associations. Preserve building spatial
+  queries/repair, provenance conflicts, elevation checks and transaction rollback.
+  Bulk-insert ordered way memberships with fixed SQL and json_each; create way
+  and edge lookup indexes once at their first read phases. Independent callers
+  retain eager indexing. Batches remain bounded at 1,000 operations.
+- [x] Add conservative prepared ring-envelope rejection before exact predicates.
+  Retain inclusive boundaries, holes, overlapping polygons, tiny/degenerate edges,
+  endpoint tolerances and positive-length terrain contact. No geometry is simplified,
+  no public interface changes, and no imported-identity/query-result cache is added.
+- [x] In isolated one-CPU, 1 GiB Linux containers, the same uninstrumented import
+  takes 2,218 ms before / 893 ms after (59.7% shorter), including deferred index
+  creation. Both produce identical business records and admissions, SHA-256
+  e0b6e2e490dad26b89cc6c90b1a4a6c25c36961b7fc49ab2d77364a09a4ac414.
+  Process peaks are 263.8 / 264.4 MiB, including fixture construction/clipping.
+  Instrumented passes take 2,016 / 857 ms. These are bounded synthetic measurements;
+  they do not establish total regional build time or additive savings.
+- [x] Avoid changes unsupported by the samples: copying an 83 MB synthetic source
+  database costs 287 ms versus a 102 ms median warm-read improvement; increasing
+  batches to 4,000 is slower in the alternating host sample. Insert-first improves
+  fresh writes but slows duplicate replay from 365 to 637 ms, so select-first remains.
+  No new cache storage, worker pool, dependency, pack schema or data identity is added.
+- [x] Verification: 12 geometry, 81 store/portal and 44 regional compiler cases pass;
+  targeted ESLint and TypeScript checking pass in an isolated coherent worktree
+  containing only these performance commits. The separate mountain-area revision
+  remains active in the shared checkout. No full/browser suite or regional build
+  is repeated. All owned benchmark containers, scripts, fixtures and task worktrees
+  are removed; unrelated work, useful caches, installed packs and jobs are preserved.
+- [ ] Measure the next actual regional rebuild and its stage/count/cache evidence.
+  The prior 18m 56s Central result remains the full-build baseline; concurrent
+  mountain-area changes can change workload, so totals alone cannot isolate savings.
+
+Primary references: SQLite [bulk INSERT SELECT](https://www.sqlite.org/lang_insert.html),
+[JSON table functions](https://www.sqlite.org/json1.html#jeach), and
+[JTS prepared polygons](https://locationtech.github.io/jts/javadoc/org/locationtech/jts/geom/prep/PreparedPolygon.html).
+Envelope rejection follows the established broad-phase practice but preserves
+this application's exact tolerances and overlapping-polygon semantics.
+
 ### Regional preparation toward 20–25 minutes — 2026-09-29
 
 - [x] Record the user's warm Central Cascades baseline: 31m 46s, with 10m 17s
