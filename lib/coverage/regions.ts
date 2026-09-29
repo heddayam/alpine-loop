@@ -1,20 +1,24 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { areaGeometryBounds, assertValidAreaGeometry, type AreaGeometry } from "@/lib/data/area-geometry";
+import { assertValidAreaGeometry, type AreaGeometry } from "@/lib/data/area-geometry";
 import { contentId, unionCoverage } from "./geometry";
 import { readSourceRecipe } from "./recipe";
-import { routingEnvelope } from "./plan";
 import type { CoverageRegion } from "./types";
 
 const catalogPath = path.resolve("data/coverage/regions/catalog.json");
+const provenanceSchema = z.object({
+  authority:z.string().min(1), dataset:z.string().min(1), url:z.url(), license:z.string().min(1),
+}).strict();
 const catalogSchema = z.object({schemaVersion:z.literal(1),regions:z.array(z.object({
   id:z.string().regex(/^[a-z0-9-]+$/), name:z.string().min(1), aliases:z.array(z.string()),
   recipePath:z.string(), boundaryPath:z.string(), reviewedAt:z.iso.datetime(),
-  approachSourceUrl:z.url(), approachRadiusMeters:z.number().positive().max(1000),
-  approaches:z.array(z.object({id:z.string(),name:z.string(),coordinates:z.tuple([z.number(),z.number()]),radiusMeters:z.number().positive().max(1000).optional(),basis:z.string(),url:z.url().nullable()}).strict()).min(1),
+  boundarySource:provenanceSchema, approachSource:provenanceSchema,
+  approachRadiusMeters:z.number().positive().max(1000),
+  approaches:z.array(z.object({id:z.string().min(1),name:z.string().min(1),coordinates:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)]),radiusMeters:z.number().positive().max(1000).optional(),basis:z.string().min(1),url:z.url().nullable()}).strict()).min(1)
+    .refine(points=>new Set(points.map(point=>point.id)).size===points.length,"Approach IDs must be unique within an area"),
   limitations:z.array(z.string()),
-}).strict())}).strict();
+}).strict()).refine(regions=>new Set(regions.map(region=>region.id)).size===regions.length,"Region IDs must be unique")}).strict();
 async function catalog() { return catalogSchema.parse(JSON.parse(await readFile(catalogPath,"utf8"))); }
 
 export async function listCoverageRegions():Promise<Array<{id:string;name:string}>> {
@@ -45,14 +49,10 @@ export async function readCoverageRegion(id:string):Promise<CoverageRegion> {
   const geometry=unionCoverage([boundary,...entry.approaches.map(point=>neighborhood(point.coordinates,point.radiusMeters??entry.approachRadiusMeters))]);
   const recipe=await readSourceRecipe(path.resolve(directory,entry.recipePath));
   recipe.limitations=[...recipe.limitations,...entry.limitations];
-  // The pinned international line is only reviewed for mainland Washington.
-  // Fail explicitly instead of treating its polygon-closing extensions as borders.
-  const extent=areaGeometryBounds(routingEnvelope(geometry));
-  if(extent[0]<-123.09069954599994 || extent[2]>-117.02523197753003) throw new Error("Region extends beyond the reviewed Washington mainland border; review its support boundary first");
-  const provenance={authority:"USDA Forest Service",version:entry.reviewedAt,retrievedAt:entry.reviewedAt,license:"US federal government public-domain geographic data; boundary and recreation metadata retained with attribution"};
+  const provenance={version:entry.reviewedAt,retrievedAt:entry.reviewedAt};
   return {id:entry.id,name:entry.name,aliases:entry.aliases,geometry,recipe,
     reviewedApproaches:entry.approaches.map(point=>({id:point.id,name:point.name,coordinates:point.coordinates,radiusMeters:point.radiusMeters??entry.approachRadiusMeters})),sources:[
-    {...provenance,id:`region-boundary-${id}`,dataset:"USFS Wilderness boundary; generalized trailhead-selection footprint",url:feature.properties.sourceUrl,contentHash:`sha256:${contentId(feature)}`},
-    {...provenance,id:`region-approaches-${id}`,dataset:"Reviewed USFS recreation-site approaches",url:entry.approachSourceUrl,contentHash:`sha256:${contentId({approaches:entry.approaches,radiusMeters:entry.approachRadiusMeters})}`},
+    {...provenance,...entry.boundarySource,id:`region-boundary-${id}`,contentHash:`sha256:${contentId(feature)}`},
+    {...provenance,...entry.approachSource,id:`region-approaches-${id}`,contentHash:`sha256:${contentId({approaches:entry.approaches,radiusMeters:entry.approachRadiusMeters})}`},
   ]};
 }

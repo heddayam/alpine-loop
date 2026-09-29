@@ -12,7 +12,6 @@
       "recipePath": "../recipes/washington.json",
       "boundaryPath": "glacier-peak.geojson",
       "reviewedAt": "2026-09-28T00:00:00Z",
-      "approachSourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0",
       "approachRadiusMeters": 500,
       "approaches": [
         {
@@ -109,7 +108,19 @@
       "limitations": [
         "Trailheads within the wilderness footprint and nine reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
         "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations. They select existing eligible access points; they never create access or imply that roads or trails are currently open."
-      ]
+      ],
+      "boundarySource": {
+        "authority": "USDA Forest Service",
+        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
+        "dataset": "USFS Wilderness boundary; generalized trailhead-selection footprint",
+        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0"
+      },
+      "approachSource": {
+        "authority": "USDA Forest Service",
+        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
+        "dataset": "Reviewed USFS recreation-site approaches",
+        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0"
+      }
     },
     {
       "id": "henry-m-jackson",
@@ -121,7 +132,6 @@
       "recipePath": "../recipes/washington.json",
       "boundaryPath": "henry-m-jackson.geojson",
       "reviewedAt": "2026-09-28T00:00:00Z",
-      "approachSourceUrl": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0",
       "approachRadiusMeters": 500,
       "approaches": [
         {
@@ -241,7 +251,19 @@
         "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations, with a reviewed 600 m neighborhood for Heather Lake's displaced agency point. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
         "The North Fork Skykomish approach also covers the nearby Quartz Creek and West Cady trailheads. Little Wenatchee Ford is shared with the Glacier Peak area.",
         "Stevens Pass North is not included as a reviewed approach: USFS recreation-site record 6300.005511 has mismatched Snoqualmie Pass coordinates and directions. A corrected location requires separate review."
-      ]
+      ],
+      "boundarySource": {
+        "authority": "USDA Forest Service",
+        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
+        "dataset": "USFS Wilderness boundary; generalized trailhead-selection footprint",
+        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0"
+      },
+      "approachSource": {
+        "authority": "USDA Forest Service",
+        "license": "US federal government public-domain geographic data; boundary and recreation metadata retained with attribution",
+        "dataset": "Reviewed USFS recreation-site approaches",
+        "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0"
+      }
     }
   ]
 }
