@@ -9,6 +9,8 @@ export type CoverageRegion = {
   id: string;
   name: string;
   geometry: AreaGeometry;
+  /** Product territory for nominating approaches; it never clips hiking routes. */
+  startLimitGeometry?: AreaGeometry;
   recipe: SourceRecipe;
   aliases?: string[];
   sources?: DataRelease["sources"];
