@@ -1,0 +1,103 @@
+# Washington restoration inputs
+
+These entries restore named **start footprints** through the current independent
+regional builder. They do not restore the old pack compiler or turn old hard
+route boundaries into new route limits. Source pins, cached measurements and
+reviewed access restrictions remain reusable. Builds, installation and real
+route acceptance are separate from this configuration work.
+
+| Named area | Retained footprint | Representative checkpoints |
+| --- | --- | --- |
+| North Cascades | `data/regions/north-cascades/boundary.geojson` v3 | 8: Baker Lake; Artist Point; Diablo/Ross; Rainy Pass; Stehekin approach; Methow/Twisp; west/east Pasayten |
+| Central Cascades | `data/regions/central-cascades/boundary.geojson` v2 | 9: White River; Phelps Creek; North Fork Sauk; West Cady; Stevens; Icicle; Snoqualmie; Cle Elum; Teanaway |
+| Rainier–Goat Rocks | `data/regions/rainier-goat-rocks/boundary.geojson` v1 | 10: Longmire; Mowich; Sunrise; Ohanapecosh; Naches; Greenwater; White Pass; Pear Butte; Snowgrass; Walupt |
+| Southwest Cascades | `data/regions/southwest-cascades/boundary.geojson` v1 | 9: Ape Canyon; June Lake; Norway Pass; Stagman; Killen; Blue Lake; Lemei; Big Hollow; Rock Creek |
+| Olympic Peninsula | `data/regions/olympic-peninsula/boundary.geojson` v1 | 9: Ozette; Sol Duc; Hoh; Staircase; Quinault; Hurricane Hill; Elwha; Mount Townsend; Kestner |
+
+Coordinates are retained exactly from each group's committed `scenarios.json`.
+A 500 m registration neighborhood selects existing eligible access points;
+it does not create a portal or establish permission. These 45 checkpoints
+are representative, not an exhaustive approach inventory. Previous scenario
+results predate the loop/lollipop pipeline and must be rechecked on the final
+artifacts. Named aliases describe included systems, not whole national forests.
+The existing Glacier Peak and Henry M. Jackson entries remain separate.
+
+The historical boundaries were reviewed against the pinned August 1, 2026
+Washington OSM extract and retain their holes and detached pieces. Their
+provenance is described as an Alpine Loop/OpenStreetMap footprint decision,
+not as a USFS legal wilderness boundary. Olympic's four parts include its
+mountain/forest core and reviewed northern, southern and Kalaloch coastal
+sections. No beach crossing, tide passability or closed loop is invented.
+
+## Border and provider coverage
+
+The [reviewed IBC mask](../washington-ibc-border.md) now follows the maritime
+border as well as the mainland. It excludes Canadian land reached by the
+Olympic buffer while preserving the prior mainland checks. The current
+Washington source polygon fully covers the masked envelopes for North,
+Central, Rainier–Goat Rocks and Olympic. The source polygon itself is unchanged.
+
+Southwest's conservative buffer has an actual Oregon-land gap, with bounds
+approximately `[-123.0453,45.3141,-120.8994,46.1472]` before adding an adjacent
+provider. The user authorized the separately pinned Oregon source to preserve
+that buffer; this area must not be made buildable by silently clipping it to
+the Washington source or state boundary. An offline check with the pinned Oregon provider confirms the union
+covers all five planned buffers, with all 45 representative coordinates
+inside their start footprints. The Oregon point `[-122,45.5]` is retained in
+Southwest routing coverage and is outside its eligible start footprint.
+
+## Preserve the prior access-related exclusions
+
+The Olympic charter deliberately withheld unreviewed tribal approaches. Moving
+its boundary from a hard route limit to a start selector would otherwise bring
+those corridors into the new buffer. The Washington recipe therefore retains
+the existing Yakama exclusion and adds explicitly scoped Makah, Quileute, Hoh
+and Quinault polygons. Each new exclusion is the reservation geometry **minus
+the previously reviewed Olympic footprint**, preserving previously included
+park/coast geometry. This is a conservative product decision, not a declaration
+that tribal lands are closed or permits cannot authorize recreation.
+
+| Exclusion input | Pinned OSM relation/version |
+| --- | --- |
+| `makah-exclusion.geojson` | 3439903 / 39 |
+| `quileute-exclusion.geojson` | 6125774 / 11 |
+| `hoh-exclusion.geojson` | 6123687 / 13 |
+| `quinault-exclusion.geojson` | 7684703 / 8 |
+
+Derivation used `osmium getid --add-referenced --remove-tags`, followed by
+`osmium export --geometry-types=polygon --add-unique-id=type_id`, on the existing
+359,826,867-byte PBF after verifying SHA-256
+`3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e`.
+The derived GeoJSON stores its source URL/hash, full source-geometry hash,
+retained-footprint file hash and policy basis. Polygon subtraction uses the
+existing coverage geometry module without coordinate smoothing or rounding.
+Temporary extracts were removed; no new OSM or DEM acquisition was performed
+for these exclusions. Reintersection finds no overlap with the old footprint
+for Makah, Quileute or Hoh; Quinault has only floating-point boundary slivers
+totalling `5.01e-18` square degrees (far below a square millimetre). All nine
+Olympic representative coordinates remain eligible in the planned footprint.
+
+[NPS Mora/Rialto](https://www.nps.gov/olym/planyourvisit/visiting-mora-and-rialto.htm)
+distinguishes tribal First Beach from park Second/Third Beaches. [Makah's
+visitor information](https://makah.com/attractions/) identifies its permit
+requirement. These support the need for jurisdiction-specific review; neither
+source is encoded as a blanket public-access denial. Lower Elwha/Jamestown are
+not newly excluded merely because they are tribal jurisdictions. Any future
+corridor admission requires exact geometry and relevant authority review.
+
+## Remaining statewide gaps and acceptance
+
+Restoring these mountain-focused groups does not establish Washington-wide
+coverage. Explicit inventory work remains for Puget Sound/Whatcom lowlands,
+San Juan and other islands, Kitsap, southwest coastal/Willapa systems, and
+central/eastern Washington including the Columbia Basin, Spokane/Selkirk and
+Blue Mountains. These are gap categories, not claims that any particular trail
+is missing from an installed graph. Nearby source data alone is not restored
+start coverage.
+
+Before accepting each group, confirm final approach starts, independent
+trail/connectivity comparisons, representative loop/lollipop results and
+cross-boundary routes. Preserve coastal tide limitations, access exclusions,
+unknown-access choice and provenance. Record cached versus cold acquisition,
+processing duration and resource peaks; the five larger historical footprints
+have no measured runtime guarantee in the current pipeline.
