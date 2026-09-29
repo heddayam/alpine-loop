@@ -12,6 +12,7 @@ export type CoverageRegion = {
   recipe: SourceRecipe;
   aliases?: string[];
   sources?: DataRelease["sources"];
+  reviewedApproaches?: Array<{id: string; name: string; coordinates: [number, number]; radiusMeters: number}>;
 };
 
 export const coverageUnitSchema = z.object({

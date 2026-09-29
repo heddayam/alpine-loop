@@ -14,6 +14,8 @@ it("resolves a pinned named footprint with real approaches and no live services"
   }
   expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(false);
   expect(region.sources).toHaveLength(2);
+  // Retain the mapped Lost Creek Ridge entrance outside the legal wilderness.
+  expect(coordinateIsInsideArea([-121.3366962,48.0937555],plan.startGeometry)).toBe(true);
   await expect(readCoverageRegion("../washington")).rejects.toThrow("Unknown region");
 });
 
@@ -36,6 +38,8 @@ it("plans neighboring areas with a shared approach and distinct eligible starts"
   expect(coordinateIsInsideArea(downey,second.geometry)).toBe(true);
   // Reject the mislocated USFS Stevens Pass North record, which points to Snoqualmie.
   expect(coordinateIsInsideArea([-121.4154977,47.4284097],second.startGeometry)).toBe(false);
+  // Heather's mapped parking/trail contact lies 528 m from the agency point.
+  expect(coordinateIsInsideArea([-121.0756526,47.8662242],second.startGeometry)).toBe(true);
   expect(jackson.sources?.map(source=>source.id)).toEqual([
     "region-boundary-henry-m-jackson","region-approaches-henry-m-jackson",
   ]);

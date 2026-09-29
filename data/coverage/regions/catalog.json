@@ -46,6 +46,16 @@
           "url": null
         },
         {
+          "id": "48232",
+          "name": "Lost Creek Ridge trailhead",
+          "coordinates": [
+            -121.33288424882707,
+            48.09445575270973
+          ],
+          "basis": "USFS recreation site 48232; Lost Creek Ridge Trail 646 enters Glacier Peak Wilderness. The pinned OSM entrance node 12244685006 lies within the reviewed approach neighborhood.",
+          "url": "https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd530006.pdf"
+        },
+        {
           "id": "6307.005511",
           "name": "White River trailhead",
           "coordinates": [
@@ -97,7 +107,7 @@
         }
       ],
       "limitations": [
-        "Trailheads within the wilderness footprint and eight reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
+        "Trailheads within the wilderness footprint and nine reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
         "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations. They select existing eligible access points; they never create access or imply that roads or trails are currently open."
       ]
     },
@@ -167,11 +177,12 @@
         {
           "id": "6304.005511",
           "name": "Heather Lake trailhead (Wenatchee)",
+          "radiusMeters": 600,
           "coordinates": [
             -121.07008374985806,
             47.86915976921309
           ],
-          "basis": "This trailhead provides access to Heather Lake Trail #1526 within the Henry M. Jackson Wilderness.",
+          "basis": "This trailhead provides access to Heather Lake Trail #1526 within the Henry M. Jackson Wilderness. A reviewed 600 m neighborhood includes the mapped parking/trail entrance (OSM node 3835171557), 528 m from this USFS point; the agency coordinate is retained.",
           "url": "https://www.fs.usda.gov/recarea/okawen/recarea/?recid=58793"
         },
         {
@@ -227,7 +238,7 @@
       ],
       "limitations": [
         "Trailheads within the wilderness footprint and eleven reviewed approach neighborhoods; this is not a complete inventory of every approach. Selecting this area does not require a hike to enter the wilderness.",
-        "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
+        "Approach neighborhoods use a 500 m registration tolerance around pinned USFS locations, with a reviewed 600 m neighborhood for Heather Lake's displaced agency point. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
         "The North Fork Skykomish approach also covers the nearby Quartz Creek and West Cady trailheads. Little Wenatchee Ford is shared with the Glacier Peak area.",
         "Stevens Pass North is not included as a reviewed approach: USFS recreation-site record 6300.005511 has mismatched Snoqualmie Pass coordinates and directions. A corrected location requires separate review."
       ]

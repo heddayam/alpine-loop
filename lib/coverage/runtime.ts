@@ -33,7 +33,7 @@ import type { NormalizedWay } from "@/lib/data/types";
 import { coordinateIsInsideArea, lineIsInsideArea } from "@/lib/graph/geometry";
 import type { CoverageRegion, CoverageRunnerContext, CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
-const BUILD_VERSION = `compact-regions-v1:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
+const BUILD_VERSION = `compact-regions-v2:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
 type ReferenceAudit = Awaited<ReturnType<typeof auditOfficialTrailReferences>>;
 type Receipt = { release: DataRelease; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"] };
 const durable = (source: SourceSnapshot) => { const { localPath, ...value } = source; void localPath; return value; };
@@ -51,7 +51,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     if (previous && previous.partitioning !== "local-areas") throw new Error("Remove the old network release before publishing named regions");
     const inputs = await preparationInputs(recipe, session, area.geometry);
     const declared = contentId({id:area.id, startGeometry:area.startGeometry, geometry:area.geometry, maximumRouteMiles:area.maximumRouteMiles,
-      sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [],
+      sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [], reviewedApproaches:region.reviewedApproaches ?? [],
       recipe, compiler:BUILD_VERSION, metric:METRIC_VERSION, topology:CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION});
     const receipts = path.join(root, "regions"), receiptPath = path.join(receipts, `${declared}.json`);
     await mkdir(receipts, {recursive:true});
@@ -169,6 +169,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           const compact = await compactPreparedGraph(db,check);
           await report(`Analyzing loops and approaches: ${area.name}`,compact);
           await writeProgressiveTopology(db,check);
+          await report(`Checking reviewed approach starts: ${area.name}`);
+          await checkReviewedApproaches(db,region,check);
           db.prepare("INSERT INTO metadata VALUES ('schemaVersion','7')").run();
           db.prepare("INSERT INTO metadata VALUES ('releaseId',?)").run(preparedReleaseId(options));
           const add = db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)");
@@ -208,7 +210,13 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     const results = [prepared];
     if (previous) {
       const sections = previous.sections.filter(section => section.id !== area.id && section.artifactIds.some(id=>previous!.artifacts.some(artifact=>artifact.id===id && artifact.regionId))), ids = new Set(sections.flatMap(section=>section.artifactIds));
-      if (sections.length) results.unshift({...previous,sections,artifacts:previous.artifacts.filter(artifact=>ids.has(artifact.id)),geometry:unionCoverage(previous.artifacts.filter(artifact=>ids.has(artifact.id)).map(artifact=>artifact.geometry))});
+      // These two sources belong only to the replaced region. Retained artifacts
+      // still pin every shared provider/restriction source through the merge below.
+      const replacedSources = new Set([`region-boundary-${area.id}`,`region-approaches-${area.id}`]);
+      if (sections.length) results.unshift({...previous,sections,
+        regions:previous.regions.filter(region=>sections.some(section=>section.id===region.id)),
+        sources:previous.sources.filter(source=>!replacedSources.has(source.id)),
+        artifacts:previous.artifacts.filter(artifact=>ids.has(artifact.id)),geometry:unionCoverage(previous.artifacts.filter(artifact=>ids.has(artifact.id)).map(artifact=>artifact.geometry))});
     }
     const sources = new Map<string,DataRelease["sources"][number]>();
     for (const source of [...results.flatMap(result=>result.sources),...referenceSources]) {
@@ -233,6 +241,21 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     if (scratch) await rm(scratch,{recursive:true,force:true});
     await session.close();
   }
+}
+
+/** Reviewed neighborhoods must contain actual starts in the final graph. */
+async function checkReviewedApproaches(db: DatabaseSync, region: CoverageRegion, checkpoint: () => Promise<void>) {
+  const starts=db.prepare("SELECT n.lon,n.lat FROM access_points a JOIN nodes n ON n.id=a.node_id WHERE a.access_state IN ('public','unknown')");
+  const missing:string[]=[];
+  for(const approach of region.reviewedApproaches??[]) {
+    await checkpoint();
+    let matched=false;
+    for(const row of starts.iterate()) {
+      if(distanceMeters(approach.coordinates,[Number(row.lon),Number(row.lat)])<=approach.radiusMeters) {matched=true;break;}
+    }
+    if(!matched) missing.push(`${approach.name} (${approach.radiusMeters} m)`);
+  }
+  if(missing.length) throw new Error(`Reviewed approaches have no mapped starting point in the final graph: ${missing.join(", ")}. Review source topology and the start footprint before publishing.`);
 }
 
 async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore>, cachePath: string, elevation: Awaited<ReturnType<typeof elevationFor>>, check: () => Promise<void>) {

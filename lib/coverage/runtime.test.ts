@@ -110,6 +110,33 @@ it("adding an overlapping area reuses segment measurements and preserves prior b
   expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
   expect(await readFile(path.join(root,"release",artifact.path))).toEqual(bytes);
 });
+it("replaces one area's reviewed provenance without changing its installed neighbor",async()=>{
+  const {localPath,...metadata}=source; void localPath;
+  const first=(changed=false)=>({id:"first-region",name:"First region",geometry:startArea,recipe:recipe(),sources:
+    ["boundary","approaches"].map(kind=>({...metadata,id:`region-${kind}-first-region`,
+      contentHash:`sha256:${(changed?"2":"1").repeat(64)}`,retrievedAt:changed?"2026-09-25T00:00:00Z":metadata.retrievedAt}))});
+  await buildCoverageRegion(first(),context()); await build(secondArea);
+  const before=await release(),neighbor=before.artifacts.find(artifact=>artifact.regionId==="second-region")!;
+  const unchanged=await readFile(path.join(root,"release",neighbor.path));
+  await buildCoverageRegion(first(true),context());
+  const after=await release();
+  expect(after.sections).toHaveLength(2);
+  expect(after.regions.map(region=>region.id)).toEqual(["first-region","second-region"]);
+  expect(after.sources.filter(source=>source.id.startsWith("region-")).map(source=>source.contentHash)).toEqual([`sha256:${"2".repeat(64)}`,`sha256:${"2".repeat(64)}`]);
+  expect(after.artifacts.find(artifact=>artifact.regionId==="second-region")).toEqual(neighbor);
+  expect(await readFile(path.join(root,"release",neighbor.path))).toEqual(unchanged);
+});
+it("checks every reviewed approach after final start filtering and preserves publication on failure",async()=>{
+  const region={id:"first-region",name:"First region",geometry:startArea,recipe:recipe(),reviewedApproaches:[
+    {id:"mapped",name:"Mapped entry",coordinates:[-121.26,47.51] as [number,number],radiusMeters:500},
+  ]};
+  await buildCoverageRegion(region,context());
+  const before=await release();
+  region.reviewedApproaches.push({id:"missing",name:"Missing entrance",coordinates:[-121.25,47.54],radiusMeters:500});
+  await expect(buildCoverageRegion(region,context())).rejects.toThrow("Reviewed approaches have no mapped starting point in the final graph: Missing entrance (500 m)");
+  expect(await release()).toEqual(before);
+  await expectNoScratch();
+});
 it("cancellation leaves the prior catalog active and removes scratch",async()=>{
   await build();const prior=await readFile(path.join(root,"release/release.json"),"utf8");
   const paused=context();paused.report=async update=>{if(update.stage?.startsWith("Prepared "))throw new Error("paused after area");};
