@@ -11,14 +11,36 @@ import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { areaBounds } from "@/lib/graph/geometry";
 
-type Row = { id: string; refs: string; tags: string; kind: string; coordinates: string };
+type Row = { id: string; refs: string; tags: string; kind: string; coordinates: string; minx: number; maxx: number; miny: number; maxy: number };
+type WalkingEntry = {way:NormalizedWay; nodes:NormalizedNode[]};
+export type CoverageContextEntry =
+  | ({kind:"way"} & WalkingEntry)
+  | {kind:"building"; centroid:readonly [number,number]}
+  | {kind:"evidence"; evidence:NormalizedPortalEvidence};
+type Envelope = readonly [east:number,west:number,north:number,south:number];
 type Node = { id: string; lon: number; lat: number; tags: string };
-function componentBounds(area: AreaGeometry, context: number): string {
+function componentEnvelopes(area: AreaGeometry, context: number): Envelope[] {
   const polygons=area.type==="Polygon"?[area.coordinates]:area.coordinates;
-  return JSON.stringify(polygons.map(coordinates=>{
+  return polygons.map(coordinates=>{
     const [w,s,e,n]=areaBounds({type:"Polygon",coordinates});
-    return [e+context,w-context,n+context,s-context];
-  }));
+    return [e+context,w-context,n+context,s-context] as const;
+  });
+}
+const componentBounds = (area: AreaGeometry, context: number) => JSON.stringify(componentEnvelopes(area,context));
+function intersectsEnvelopes(row: Row, envelopes: readonly Envelope[]): boolean {
+  return envelopes.some(([east,west,north,south])=>row.minx<=east&&row.maxx>=west&&row.miny<=north&&row.maxy>=south);
+}
+function walkingEntry(row: Row, tags: Record<string,string>, refs: string[], coordinates: [number,number][], sourceId: string): WalkingEntry {
+  const direction=osmFootDirection(tags);
+  if(direction==="reverse") {refs=[...refs].reverse();coordinates=[...coordinates].reverse();}
+  const nodes=refs.map((id,index)=>({id:`osm-node-${id}`,externalId:`node/${id}`,lon:coordinates[index]![0],lat:coordinates[index]![1],elevationM:null,flags:[],sourceRefs:[sourceId]}));
+  return {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map(node=>node.id),coordinates,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.kind as NormalizedWay["edgeClass"],sourceRefs:[sourceId],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
+}
+function* portalEvidence(externalId: string, tags: Record<string,string>, nodeIds: string[], coordinates: [number,number][], sourceId: string): Generator<NormalizedPortalEvidence> {
+  for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-${externalId.replace("/","-")}`,externalId,kind,name:tags.name??null,nodeIds,coordinates,accessState:osmAccessState(tags),sourceRefs:[sourceId]};
+}
+function nodeBuilding(row: Node, tags: Record<string,string>): readonly [number,number] | null {
+  return isBuilding(tags) ? buildingCentroidOf({type:"Point",coordinates:[row.lon,row.lat]}) : null;
 }
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
@@ -214,6 +236,9 @@ export class CoverageSourceStore {
     }
   }
   private *nearbyWays(area: AreaGeometry, contextDegrees=0.01): Generator<Row> {
+    yield* this.nearbyWayRows(componentEnvelopes(area,contextDegrees));
+  }
+  private *nearbyWayRows(envelopes: readonly Envelope[]): Generator<Row> {
     if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
     // IN deduplicates identities when component envelopes overlap. CROSS JOIN
     // keeps spatial lookup first; exact bounds remove RTree rounding false positives.
@@ -223,7 +248,7 @@ export class CoverageSourceStore {
         AND s.miny<=json_extract(b.value,'$[2]') AND s.maxy>=json_extract(b.value,'$[3]')
         AND candidate.minx<=json_extract(b.value,'$[0]') AND candidate.maxx>=json_extract(b.value,'$[1]')
         AND candidate.miny<=json_extract(b.value,'$[2]') AND candidate.maxy>=json_extract(b.value,'$[3]'))
-      ORDER BY w.id`).iterate(componentBounds(area,contextDegrees)) as Iterable<Row>;
+      ORDER BY w.id`).iterate(JSON.stringify(envelopes)) as Iterable<Row>;
   }
   private *nearbyPoints(table: "nodes" | "relation_buildings", area: AreaGeometry): Generator<Node> {
     if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
@@ -234,40 +259,61 @@ export class CoverageSourceStore {
         ${table==="nodes"?"AND candidate.tags!=''":""}) ORDER BY p.id`).iterate(componentBounds(area,0.01)) as Iterable<Node>;
   }
 
-  *ways(area: AreaGeometry, contextDegrees=0.01): Generator<{way:NormalizedWay; nodes:NormalizedNode[]}> {
-    for(const raw of this.nearbyWays(area,contextDegrees)) {
-      const row=raw as Row;
+  /** Read the regional import context once, retaining independent walking/context envelopes. */
+  *context(area: AreaGeometry, walkingArea: AreaGeometry = area): Generator<CoverageContextEntry> {
+    for(const row of this.nearbyPoints("nodes",area)) {
+      const tags=parseOplTags(row.tags),centroid=nodeBuilding(row,tags);
+      if(centroid) yield {kind:"building",centroid};
+      for(const evidence of portalEvidence(`node/${row.id}`,tags,[`osm-node-${row.id}`],[[row.lon,row.lat]],this.source.id))
+        yield {kind:"evidence",evidence};
+    }
+    for(const row of this.nearbyPoints("relation_buildings",area)) yield {kind:"building",centroid:[row.lon,row.lat]};
+    const contextBounds=componentEnvelopes(area,0.01), walkingBounds=walkingArea===area ? contextBounds : componentEnvelopes(walkingArea,0.01);
+    const sameBounds=walkingBounds===contextBounds || JSON.stringify(walkingBounds)===JSON.stringify(contextBounds);
+    const envelopes=sameBounds ? contextBounds : [...contextBounds,...walkingBounds];
+    for(const row of this.nearbyWayRows(envelopes)) {
+      const context=sameBounds||intersectsEnvelopes(row,contextBounds), walking=!["building","evidence"].includes(row.kind)&&(sameBounds||intersectsEnvelopes(row,walkingBounds));
+      const tags=JSON.parse(row.tags) as Record<string,string>;
+      const building=context&&isBuilding(tags), evidence=context&&osmPortalEvidenceKinds(tags).length>0;
+      if(!walking&&!building&&!evidence) continue;
+      const coordinates=JSON.parse(row.coordinates) as [number,number][];
+      const refs=walking||evidence ? JSON.parse(row.refs) as string[] : [];
+      if(walking) yield {kind:"way",...walkingEntry(row,tags,refs,coordinates,this.source.id)};
+      if(building) {
+        const centroid=buildingCentroidOf({type:"LineString",coordinates});
+        if(centroid) yield {kind:"building",centroid};
+      }
+      if(evidence) for(const item of portalEvidence(`way/${row.id}`,tags,refs.map(id=>`osm-node-${id}`),coordinates,this.source.id))
+        yield {kind:"evidence",evidence:item};
+    }
+  }
+
+  *ways(area: AreaGeometry, contextDegrees=0.01): Generator<WalkingEntry> {
+    for(const row of this.nearbyWays(area,contextDegrees)) {
       if(["building","evidence"].includes(row.kind)) continue;
-      const tags=JSON.parse(row.tags) as Record<string,string>,direction=osmFootDirection(tags);
-      let refs=JSON.parse(row.refs) as string[], coords=JSON.parse(row.coordinates) as [number,number][];
-      if(direction==="reverse") {refs=refs.reverse();coords=coords.reverse();}
-      const nodes=refs.map((id,index)=>({id:`osm-node-${id}`,externalId:`node/${id}`,lon:coords[index]![0],lat:coords[index]![1],elevationM:null,flags:[],sourceRefs:[this.source.id]}));
-      yield {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map((node)=>node.id),coordinates:coords,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.kind as NormalizedWay["edgeClass"],sourceRefs:[this.source.id],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
+      yield walkingEntry(row,JSON.parse(row.tags),JSON.parse(row.refs),JSON.parse(row.coordinates),this.source.id);
     }
   }
   *evidence(area: AreaGeometry): Generator<NormalizedPortalEvidence> {
     // OSM node tags are compact OPL strings; coordinates filter the local context first.
-    for(const raw of this.nearbyPoints("nodes",area)) {
-      const row=raw as Node,tags=parseOplTags(row.tags);
-      for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-node-${row.id}`,externalId:`node/${row.id}`,kind,name:tags.name??null,nodeIds:[`osm-node-${row.id}`],coordinates:[[row.lon,row.lat]],accessState:osmAccessState(tags),sourceRefs:[this.source.id]};
-    }
-    for(const raw of this.nearbyWays(area)) {
-      const row=raw as Row,tags=JSON.parse(row.tags) as Record<string,string>;
-      for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-way-${row.id}`,externalId:`way/${row.id}`,kind,name:tags.name??null,nodeIds:(JSON.parse(row.refs) as string[]).map((id)=>`osm-node-${id}`),coordinates:JSON.parse(row.coordinates),accessState:osmAccessState(tags),sourceRefs:[this.source.id]};
+    for(const row of this.nearbyPoints("nodes",area))
+      yield* portalEvidence(`node/${row.id}`,parseOplTags(row.tags),[`osm-node-${row.id}`],[[row.lon,row.lat]],this.source.id);
+    for(const row of this.nearbyWays(area)) {
+      const tags=JSON.parse(row.tags) as Record<string,string>;
+      if(osmPortalEvidenceKinds(tags).length)
+        yield* portalEvidence(`way/${row.id}`,tags,(JSON.parse(row.refs) as string[]).map(id=>`osm-node-${id}`),JSON.parse(row.coordinates),this.source.id);
     }
   }
   *buildings(area: AreaGeometry): Generator<readonly [number,number]> {
-    for (const raw of this.nearbyPoints("nodes",area)) {
-      if (!isBuilding(parseOplTags(String(raw.tags)))) continue;
-      const centroid = buildingCentroidOf({ type: "Point", coordinates: [Number(raw.lon), Number(raw.lat)] });
-      if (centroid) yield centroid;
+    for(const row of this.nearbyPoints("nodes",area)) {
+      const centroid=nodeBuilding(row,parseOplTags(row.tags));
+      if(centroid) yield centroid;
     }
-    for (const row of this.nearbyPoints("relation_buildings",area)) yield [Number(row.lon), Number(row.lat)];
-    for(const raw of this.nearbyWays(area)) {
-      if(!isBuilding(JSON.parse(String(raw.tags)) as Record<string,string>)) continue;
-      const points=JSON.parse(String(raw.coordinates)) as [number,number][];
-      const centroid = buildingCentroidOf({ type: "LineString", coordinates: points });
-      if (centroid) yield centroid;
+    for(const row of this.nearbyPoints("relation_buildings",area)) yield [row.lon,row.lat];
+    for(const row of this.nearbyWays(area)) {
+      if(!isBuilding(JSON.parse(row.tags) as Record<string,string>)) continue;
+      const centroid=buildingCentroidOf({type:"LineString",coordinates:JSON.parse(row.coordinates)});
+      if(centroid) yield centroid;
     }
   }
 }

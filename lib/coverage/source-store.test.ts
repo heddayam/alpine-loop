@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
+import { CoverageSourceStore, sourceStoreFileName, type CoverageContextEntry } from "./source-store";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
@@ -70,6 +70,7 @@ describe("compact coverage source", () => {
     expect(()=>[...store.ways(area)]).toThrow("completed verified import");
     expect(()=>[...store.evidence(area)]).toThrow("completed verified import");
     expect(()=>[...store.buildings(area)]).toThrow("completed verified import");
+    expect(()=>[...store.context(area)]).toThrow("completed verified import");
     store.db.exec("INSERT OR REPLACE INTO ways(id,kind) VALUES('999','trail')");
     await store.import(async () => {}, { lines: lines() });
     expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/10","way/11","way/12","way/13"]);
@@ -167,6 +168,73 @@ describe("compact coverage source", () => {
     expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/30'").get()?.disposition).toBe("unsupported");
     store.db.exec("UPDATE inventory SET reason='changed'");
     await expect(store.import(async () => {})).rejects.toThrow("failed seal verification");
+  });
+
+  it("streams mixed walking/building/evidence context once with the original memberships and ordering", async () => {
+    const store=make();
+    await store.import(async()=>{}, {lines:lines([
+      ...fixtures,
+      "n50 Tbuilding=hut,amenity=parking,information=trailhead,barrier=gate,tourism=information x-1.005 y0",
+      "n51 Tbuilding=yes,highway=trailhead x-1.011 y0",
+      "n52 Tbuilding=no,highway=trailhead x0.5 y0",
+      "n53 T x4 y0", "n54 T x5 y0",
+      "w40 Thighway=path,oneway:foot=-1,access=private,foot=yes,building=hut,amenity=parking,information=trailhead,barrier=gate,tourism=information,name=Shared Nn1,n2,n3,n4,n1",
+      "w41 Thighway=residential Nn2,n5", "w42 Thighway=service Nn5,n6",
+      "w43 Tbuilding=no,amenity=parking Nn2,n3", "w44 Tbuilding=yes Nn1,n2,n3,n4,n1",
+      "w45 Thighway=path,amenity=parking Nn53,n54",
+      "r99 Ttype=multipolygon,building=yes Mw999@outer",
+    ])});
+    const overlapping:AreaGeometry={type:"MultiPolygon",coordinates:[
+      [[[-1,-1],[1,-1],[1,1],[-1,1],[-1,-1]]],
+      [[[0.5,-1],[2,-1],[2,1],[0.5,1],[0.5,-1]]],
+    ]};
+    const contexts=[
+      {context:overlapping,walking:overlapping},
+      {context:overlapping,walking:structuredClone(overlapping)},
+      {context:overlapping,walking:rectangle([-0.1,-0.1,0.1,0.1])},
+      // Keep independent queries correct even when the walking envelope is outside the context.
+      {context:overlapping,walking:rectangle([4,-0.1,5,0.1])},
+      {context:rectangle([-0.001,-0.001,0.001,0.001]),walking:overlapping},
+    ];
+    for(const {context,walking} of contexts) {
+      const expected={ways:[...store.ways(walking)],buildings:[...store.buildings(context)],evidence:[...store.evidence(context)]};
+      const entries=[...store.context(context,walking)];
+      expect({
+        ways:entries.flatMap(entry=>entry.kind==="way" ? [{way:entry.way,nodes:entry.nodes}] : []),
+        buildings:entries.flatMap(entry=>entry.kind==="building" ? [entry.centroid] : []),
+        evidence:entries.flatMap(entry=>entry.kind==="evidence" ? [entry.evidence] : []),
+      }).toEqual(expected);
+    }
+    const entries=[...store.context(overlapping)];
+    const walking=entries.find(entry=>entry.kind==="way"&&entry.way.externalId==="way/40");
+    expect(walking).toMatchObject({kind:"way",way:{bidirectional:false,accessState:"public",nodeIds:["osm-node-1","osm-node-4","osm-node-3","osm-node-2","osm-node-1"]}});
+    expect(entries.filter(entry=>entry.kind==="evidence"&&entry.evidence.externalId==="way/40")).toEqual([
+      "parking","trailhead","information","gate",
+    ].map(kind=>({kind:"evidence",evidence:expect.objectContaining({kind,nodeIds:["osm-node-1","osm-node-2","osm-node-3","osm-node-4","osm-node-1"],coordinates:[[0,0],[1,0],[1,1],[0,1],[0,0]]})})));
+    expect(entries.filter(entry=>entry.kind==="evidence"&&entry.evidence.externalId==="node/50")).toHaveLength(4);
+    expect(entries.some(entry=>entry.kind==="evidence"&&entry.evidence.externalId==="node/51")).toBe(false);
+    expect(entries.filter(entry=>entry.kind==="way"&&entry.way.externalId==="way/40")).toHaveLength(1);
+    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/99'").get()?.disposition).toBe("unsupported");
+  });
+
+  it("reads way geometry once and reduces nearby-way/tagged-node selections from three/two to one", async () => {
+    const store=make();
+    await store.import(async()=>{}, {lines:lines([...fixtures,"w40 Thighway=path,building=yes,amenity=parking,information=trailhead,barrier=gate,tourism=information Nn1,n2,n3,n4,n1"])});
+    const queries=vi.spyOn(store.db,"prepare"),parses=vi.spyOn(JSON,"parse");
+    const geometryReads=()=>parses.mock.calls.filter(([value])=>value==="[[0,0],[1,0],[1,1],[0,1],[0,0]]").length;
+    Array.from(store.ways(area));Array.from(store.buildings(area));Array.from(store.evidence(area));
+    const count=(prefix:string)=>queries.mock.calls.filter(([sql])=>sql.startsWith(prefix)).length;
+    expect(count("SELECT w.*")).toBe(3);
+    expect(count("SELECT p.* FROM nodes")).toBe(2);
+    expect(geometryReads()).toBe(3);
+    queries.mockClear();parses.mockClear();
+    const entries:CoverageContextEntry[]=[...store.context(area)];
+    expect(entries).not.toHaveLength(0);
+    expect(count("SELECT w.*")).toBe(1);
+    expect(count("SELECT p.* FROM nodes")).toBe(1);
+    expect(count("SELECT p.* FROM relation_buildings")).toBe(1);
+    expect(geometryReads()).toBe(1);
+    queries.mockRestore();parses.mockRestore();
   });
 
   it("binds persisted stores and filenames to source, normalization version, and bounded geometry", async () => {
