@@ -26,6 +26,8 @@ export const releaseSectionSchema = z.object({
   name: z.string().min(1).optional(),
   geometry: areaGeometrySchema,
   artifactIds: z.array(digest).min(1),
+  /** Retired area IDs whose coverage is preserved by this independent graph. */
+  replaces: z.array(identity).min(1).optional(),
   area: z.object({
     maximumRouteMiles: z.literal(MAX_ROUTE_DISTANCE_MILES),
     bufferMiles: z.literal(PREPARATION_BUFFER_MILES),
@@ -62,6 +64,11 @@ export const dataReleaseSchema = z.object({
     context.addIssue({ code: "custom", message: "Release artifact and section identities must be unique" });
   }
   for (const section of release.sections) {
+    if (section.replaces && (release.partitioning !== "local-areas" ||
+      new Set(section.replaces).size !== section.replaces.length ||
+      section.replaces.some(id => release.sections.some(active => active.id === id)))) {
+      context.addIssue({ code: "custom", message: `Area ${section.id} has invalid replacement identities` });
+    }
     if (new Set(section.artifactIds).size !== section.artifactIds.length || section.artifactIds.some((id) => !artifacts.has(id))) {
       context.addIssue({ code: "custom", message: `Section ${section.id} has invalid artifact references` });
     }
@@ -77,6 +84,10 @@ export const dataReleaseSchema = z.object({
         context.addIssue({ code: "custom", message: `Region ${section.id} has inconsistent graph ownership` });
       }
     }
+  }
+  const retired = release.sections.flatMap(section => section.replaces ?? []);
+  if (new Set(retired).size !== retired.length) {
+    context.addIssue({ code: "custom", message: "A retired area must have one replacement" });
   }
   if (release.partitioning === "connected-networks" || release.partitioning === "local-areas") {
     const references = release.sections.flatMap(section => section.artifactIds);
