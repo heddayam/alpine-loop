@@ -149,16 +149,82 @@ unexplained pipeline loss.
   source compatibility, artifact preservation, and independent graph ownership.
   Targeted ESLint and `git diff --check` passed. No repeated full verification,
   browser run, Docker image build, real regional build, or OSM/DEM acquisition.
-- [ ] User-run neighboring build/install/search acceptance: preserve Glacier
-  Peak's artifact, measure marginal bytes and preparation/cache reuse, confirm
-  real shared starts and representative boundary routes. README gives the exact
-  Docker command, including rebuilding the tooling image to load this catalog.
+- [x] User-run neighboring build/install, artifact preservation, marginal bytes,
+  cache reuse and bounded shared-start search checks; evidence below.
+- [ ] Independent boundary-route and final-graph completeness acceptance, including
+  the two configured Henry M. Jackson approaches missing from its access points.
 
 Build correction: the new test accessed optional `CoverageRegion.sources` without
 narrowing, failing the app's TypeScript check despite passing Vitest. Optional
 chaining now preserves the equality assertion (missing provenance still fails).
 The two region tests pass. The Docker retry was canceled at the user's request;
 the user will rerun the production build.
+
+### Plan/Downloads integration and neighboring-area acceptance — 2026-09-28
+
+- [x] Plan lists installed named areas using stable region IDs, so an unrelated
+  publication does not invalidate a selection. Removed areas remain visible as
+  unavailable filters; searches cannot silently widen until those filters are
+  removed or the areas reinstalled. Historical release-prefixed IDs remain
+  restorable against saved installations. Integrated `773fe6c`.
+- [x] Downloads distinguishes new areas, unchanged installed areas and actual
+  artifact updates. Actions are Download, Update, or Download and update;
+  publishing an unrelated region no longer makes unchanged data appear outdated.
+  The summary describes download bytes and resulting active data, excluding old
+  installations retained by saved searches. Integrated `a2298b9`.
+- [x] Focused offline verification: 37 server/Plan tests and 18 download-panel
+  tests, targeted ESLint, and one integrated `npm run typecheck` pass. The browser
+  size-label assertion was updated to match the more precise active-data wording.
+  Both desktop/mobile download/pause flows then passed at 1280/390 px; screenshots
+  inspected. No repeated full suite or production build.
+
+The user's completed release `release-4691aadbbe67dc8d719541b0b02fdc2b` contains
+both areas. Glacier Peak's artifact is unchanged. Henry M. Jackson's artifact
+`d862238578f600d6421d47912df04ba3129df0c5e5775117f14e4061bf776e01`
+is 2,000,763 compressed bytes / 5,971,968 raw bytes, with 474 nodes and 516 physical
+edges. The reported build took 110.633 seconds, retained 33,750 of 525,419 candidate
+segments, reused all retained segment metrics, and spent 4.653 seconds compacting.
+This measures a build with existing source/DEM/metric caches, not cold acquisition.
+
+Bounded acceptance used isolated copies of finalized artifacts, never Docker's
+live database or WAL files:
+
+- [x] Both artifacts match their raw size/hash; SQLite integrity and foreign-key
+  checks pass. Access-point counts are 13 for Glacier Peak, 15 for Henry M. Jackson,
+  and 26 unique records together. All previous Glacier Peak records are preserved.
+- [x] Representative single-start solver probes: North Fork Skykomish yields eight
+  exact routes (10–30 miles, at most 35% repeat), North Fork Sauk two (20–40 miles,
+  35%), and Elliot Creek one (2–12 miles, 50%). Smithbrook yields a labeled close
+  match for 10–25 miles / 50%; an impossible 0.1–0.2-mile request yields none.
+  Exact results have closed geometry and meet the requested distance interval;
+  all have zero directed-validation rejections. Per-probe times were 0–311 ms.
+  Some probes reached candidate/archive limits: these are usefulness samples,
+  not exhaustive enumeration or whole-area Full-search performance measurements.
+- [x] Little Wenatchee Ford yields the same four exact route geometry/topology/
+  distance signatures with Glacier Peak alone and both packs installed (10–30
+  miles, at most 35% repeat). This checks stable ownership, not graph stitching.
+- [x] Isolated real-pack install lifecycle: A → A+B downloads only B's 2,000,763
+  bytes and leaves A's file unchanged. Removing B retains its old installation
+  while a saved-job reference exists; deleting that reference reclaims B.
+  The user's actual installation and saved searches were not modified.
+- [ ] Henry M. Jackson approach gaps: nine of eleven declared neighborhoods have
+  final access points within 500 m. Top Lake and Heather Lake (Wenatchee) do not;
+  their nearest installed start is Little Wenatchee, 4.16 km and 5.48 km away.
+  Determine whether source mapping, access eligibility or compilation explains
+  the omissions before claiming complete coverage. Glacier Peak's eight configured
+  neighborhoods pass, but its previously identified Lost Creek Ridge gap remains.
+- [ ] Build memory: the Henry report records a 4,196,126,720-byte process-tree RSS
+  peak and a 4,294,967,296-byte cgroup peak (the configured 4 GiB limit), despite
+  successful completion. Stage-specific attribution is unavailable; neither an
+  OOM nor a cause is established. Investigate before making a low-memory claim.
+  The reported 5,189,812,224-byte disk peak includes shared caches, not just this pack.
+
+No regional build, Docker build/restart, source download, or production data
+mutation was performed for this pass. Full cold-build acceptance, independent
+trail/compaction completeness and source-generation refresh remain open.
+Both completed task worktrees are archived and their branches deleted. Temporary
+acceptance copies, installation fixtures and browser output were removed after
+recording this evidence; source/DEM/metric caches and user data were retained.
 
 ### Local preparation with a distance budget — 2026-09-28
 

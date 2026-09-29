@@ -47,7 +47,7 @@ for (const width of [1280, 390]) test(`coverage can be downloaded and paused at 
   await expect(dialog.getByText(/2 areas selected/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Draw trailhead filter" })).not.toBeVisible();
   await expect(dialog.getByText(/512 KiB/)).toBeVisible();
-  await expect(dialog.getByText(/2.0 MiB on device/)).toBeVisible();
+  await expect(dialog.getByText(/2.0 MiB active trail data after download/)).toBeVisible();
   await expect(dialog.getByText(/Downloads include surrounding trails for hikes up to 40 miles/)).toBeVisible();
   await dialog.getByRole("button", { name: "Show selected area" }).click();
   if (width <= 600) await page.getByRole("button", { name: "Show panel", exact: true }).click();

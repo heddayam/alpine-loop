@@ -30,10 +30,11 @@ cd alpine-loop
 ```
 
 Open [localhost:3000](http://localhost:3000). In **Coverage**, beside Settings,
-select map sections, review their download and disk sizes, and download them.
+choose named hiking areas, review their download and active-data sizes, and download them.
 You can pause or resume downloads and keep searching the current installation.
-The whole selection activates after verification. Named hiking regions remain
-search filters; they are separate from download sections.
+The download activates after verification. Downloaded areas become available in
+Plan, where they filter starting points. Their surrounding trail data lets hikes
+continue beyond the selected area.
 
 Set `ALPINE_COVERAGE_CATALOG` to a maintained HTTPS `release.json` URL, or use a
 local developer release. Docker defaults to `.local-data/releases/prepared`.
@@ -46,12 +47,12 @@ modeled.
 
 ### Manage your data
 
-Use Coverage to add, update, or remove sections. Updates replace all selected
-coverage with one compatible release. Verified downloads survive interruption;
-running and saved searches retain their referenced installation. Previously
-built regional packs require a one-time reinstall. Saved route geometry,
-metadata, and GPX exports remain readable; legacy files are preserved until
-replacement coverage has been verified.
+Use Coverage to add, update, or remove areas. Each area shows **Available**,
+**Downloaded**, or **Update available**. Selecting a new area adds it to your
+existing coverage; removing an area is a separate action. Updates reuse unchanged
+files and activate one compatible installation. Verified downloads survive
+interruption; running and saved searches retain their referenced installation.
+Active trail-data sizes exclude older files retained for those searches.
 
 | Data | Location |
 | --- | --- |
@@ -141,10 +142,11 @@ docker compose run --rm \
 
 This preserves Glacier Peak's published artifact and reuses shared source and metric
 caches. Little Wenatchee Ford is deliberately included in both start footprints;
-installing both areas searches each shared start through one graph. Regional
-trail completeness and real adjacent-area build/install/search acceptance remain
-open. In Coverage, keep Glacier Peak selected, add **Henry M. Jackson area**, and
-apply the download/update. Preparing data does not install it automatically.
+installing both areas searches each shared start through one graph. Bounded
+adjacent-area checks preserve Glacier Peak's starts and sampled shared-start routes;
+complete trail/approach coverage remains open (see `docs/rebuild/status.md`). In
+Coverage, select **Henry M. Jackson area** and choose **Download**. Glacier Peak
+stays installed. Preparing data does not install it automatically.
 
 `plan` prints eligible start geometry and the surrounding routing extent. Requests
 remain capped at **40 miles**; the conservative **25-mile buffer** also supports
