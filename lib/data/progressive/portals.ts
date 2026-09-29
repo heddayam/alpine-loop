@@ -1,9 +1,10 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
+import { DistanceQueue } from "@/lib/graph/sqlite-records";
 import type { AreaGeometry } from "../area-geometry";
 import { BUILDING_RADIUS_M } from "../wilderness";
-import type { NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
+import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 import { selectProgressiveEdges } from "./publish";
 
@@ -92,7 +93,7 @@ function waysAt(db:DatabaseSync,nodeId:string):NormalizedWay[] {
 }
 const allowedAccess=(item:{accessState:string})=>item.accessState==="public"||item.accessState==="unknown";
 const trackWay=(way:NormalizedWay)=>way.flags.includes("osm-highway:track");
-const hikingWay=(way:NormalizedWay)=>way.flags.some(flag=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track");
+const hikingWay=(way:Pick<NormalizedWay,"flags">)=>way.flags.some(flag=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track");
 function selectedSegment(db:DatabaseSync,way:NormalizedWay,index:number):boolean {
   return Boolean(one(db,`SELECT 1 FROM edges e JOIN selected_edges s ON s.id=e.id
     WHERE e.stable_physical_id=? AND e.access_state IN ('public','unknown') LIMIT 1`,`${way.id}:${index}`));
@@ -100,25 +101,29 @@ function selectedSegment(db:DatabaseSync,way:NormalizedWay,index:number):boolean
 function selectedWayAt(db:DatabaseSync,way:NormalizedWay,nodeId:string):boolean {
   return way.nodeIds.some((id,index)=>id===nodeId && ((index>0&&selectedSegment(db,way,index-1)) || (index<way.nodeIds.length-1&&selectedSegment(db,way,index))));
 }
-/** Trailhead signs may sit along their trail, rather than on its road junction. */
+/** Bounded Dijkstra follows the selected hiking topology across source-way splits.
+ * Direction is irrelevant to association; route search still enforces direction.
+ */
 async function hasNearbyTrackApproach(db:DatabaseSync,nodeId:string,checkpoint:()=>Promise<void>):Promise<boolean> {
-  const hasTrack=(id:string)=>waysAt(db,id).some(way=>allowedAccess(way)&&trackWay(way));
-  for(const way of waysAt(db,nodeId).filter(way=>allowedAccess(way)&&hikingWay(way))) {
-    if(!selectedWayAt(db,way,nodeId))continue;
-    if(hasTrack(nodeId))return true;
-    for(let origin=0;origin<way.nodeIds.length;origin++) {
-      if(way.nodeIds[origin]!==nodeId)continue;
-      for(const direction of [-1,1]) {
-        let length=0;
-        for(let index=origin+direction;index>=0&&index<way.nodeIds.length;index+=direction) {
-          await checkpoint();
-          const previous=index-direction;
-          length+=distance(way.coordinates[previous]!,way.coordinates[index]!);
-          if(length>250||!selectedSegment(db,way,Math.min(previous,index)))break;
-          if(hasTrack(way.nodeIds[index]!))return true;
-        }
+  const pending=new DistanceQueue(),distances=new Map([[nodeId,0]]);
+  pending.push({nodeId,distance:0});
+  while(pending.size) {
+    await checkpoint();
+    const current=pending.pop()!;
+    if(current.distance!==distances.get(current.nodeId))continue;
+    let hikingContact=false;
+    for(const row of rows(db,`SELECT e.record FROM edges e JOIN selected_edges s ON s.id=e.id
+      WHERE (e.from_node=? OR e.to_node=?) AND e.access_state IN ('public','unknown')`,current.nodeId,current.nodeId)) {
+      const edge=JSON.parse(String(row.record)) as CompiledEdge;
+      if(!hikingWay(edge))continue;
+      hikingContact=true;
+      if(!Number.isFinite(edge.lengthM)||edge.lengthM<0)throw new Error(`Invalid hiking segment distance: ${edge.id}`);
+      const next=edge.fromNode===current.nodeId?edge.toNode:edge.fromNode,length=current.distance+edge.lengthM;
+      if(length<=250&&length<(distances.get(next)??Infinity)) {
+        distances.set(next,length);pending.push({nodeId:next,distance:length});
       }
     }
+    if(hikingContact&&waysAt(db,current.nodeId).some(way=>allowedAccess(way)&&trackWay(way)))return true;
   }
   return false;
 }

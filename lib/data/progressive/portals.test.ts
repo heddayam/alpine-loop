@@ -119,6 +119,38 @@ describe("explicit hiking starts reached by walking tracks", () => {
     expect(points).toEqual([]);
   });
 
+  it("follows a connected approach when a mapper splits its path into separate ways", async () => {
+    const { points } = await derive(top, topology => {
+      const way = topology.ways.find(way => way.id === "osm-way-1356527414")!;
+      const middle = { ...topology.nodes[0]!, id: "split", externalId: "node/split", lon: -121.07710, lat: 47.88137 };
+      topology.nodes.push(middle);
+      topology.ways.push({ ...way, id: "osm-way-split", externalId: "way/split", nodeIds: [way.nodeIds[0]!, middle.id], coordinates: [way.coordinates[0]!, [middle.lon, middle.lat]] });
+      way.nodeIds[0] = middle.id;
+      way.coordinates[0] = [middle.lon, middle.lat];
+    });
+    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092329"]);
+  });
+
+  it("finds the bounded approach through a branch regardless of way grouping or discovery order", async () => {
+    const { points } = await derive(top, topology => {
+      const way = topology.ways.find(way => way.id === "osm-way-1356527414")!;
+      const junction = topology.nodes.find(node => node.id === "osm-node-3761092325")!;
+      const sign = topology.nodes.find(node => node.id === "osm-node-3761092329")!;
+      const branch = { ...sign, id: "branch", externalId: "node/branch", lon: -121.07714, lat: 47.88148 };
+      const detour = { ...sign, id: "detour", externalId: "node/detour", lon: -121.079, lat: 47.8822 };
+      const deadEnd = { ...sign, id: "dead-end", externalId: "node/dead-end", lon: -121.0772, lat: 47.8819 };
+      topology.nodes.push(branch, detour, deadEnd);
+      // First source way takes a >250m detour; another branch reaches the same
+      // track contact within250m, and a third branch has no track contact.
+      way.nodeIds = [sign.id, detour.id, junction.id];
+      way.coordinates = [[sign.lon, sign.lat], [detour.lon, detour.lat], [junction.lon, junction.lat]];
+      for (const [id, nodes] of [["branch", [sign, branch]], ["approach", [branch, junction]], ["dead-end", [branch, deadEnd]]] as const) {
+        topology.ways.push({ ...way, id: `osm-way-${id}`, externalId: `way/${id}`, nodeIds: nodes.map(node => node.id), coordinates: nodes.map(node => [node.lon, node.lat]) });
+      }
+    });
+    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092329"]);
+  });
+
   it("does not promote an unmarked track/path junction", async () => {
     expect((await derive(top, topology => { topology.portalEvidence = []; })).points).toEqual([]);
   });
