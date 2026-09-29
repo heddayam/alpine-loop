@@ -11,16 +11,19 @@
       ],
       "recipePath": "../recipes/california.json",
       "boundaryPath": "../../regions/santa-cruz-mountains/boundary.geojson",
-      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
-        "dataset": "Retained reviewed Santa Cruz Mountains selection geometry; historical build boundary reused as the eligible-start footprint",
-        "url": "https://github.com/heddayam/alpine-loop/blob/f90786d8ec910037f6c27293c8a5159407e6b984/data/regions/santa-cruz-mountains/boundary.geojson",
-        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Selected GMBA Standard Basic mountain core; retained California footprint limits start nominations",
+        "url": "https://www.earthenv.org/mountains",
+        "license": "GMBA CC BY 4.0; retained OpenStreetMap-derived product scope ODbL 1.0."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the retained California product footprint, including its historical approach neighborhoods.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required.",
         "The initial three State Parks direction anchors do not inventory every Midpen preserve, Nisene Marks, or other Santa Cruz Mountains approach."
       ],
       "approachSource": {
@@ -60,6 +63,9 @@
           "basis": "Exact destination coordinate in the official park page Get directions link, retrieved 2026-09-29. A representative park approach, not an independently created route start or a complete entrance inventory.",
           "url": "https://www.parks.ca.gov/?page_id=540"
         }
+      ],
+      "rangeIds": [
+        "11806"
       ]
     },
     {
@@ -74,16 +80,19 @@
       ],
       "recipePath": "../recipes/california.json",
       "boundaryPath": "../../regions/southern-east-bay/boundary.geojson",
-      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
-        "dataset": "Retained reviewed Southern East Bay selection geometry; historical build boundary reused as the eligible-start footprint",
-        "url": "https://github.com/heddayam/alpine-loop/blob/6a04065b4a5d2f1a67c8a2f78348d333ff5dc01b/data/regions/southern-east-bay/boundary.geojson",
-        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Selected GMBA Standard Basic mountain core; retained California footprint limits start nominations",
+        "url": "https://www.earthenv.org/mountains",
+        "license": "GMBA CC BY 4.0; retained OpenStreetMap-derived product scope ODbL 1.0."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the retained California product footprint, including its historical approach neighborhoods.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required.",
         "The synthetic Ohlone Wilderness QA point is deliberately excluded from reviewed approaches; Ohlone remains inside the retained regional footprint."
       ],
       "approachSource": {
@@ -143,6 +152,9 @@
           "basis": "Official entrance coordinate retained in data/regions/southern-east-bay/scenarios.json and its charter, reviewed 2026-08-07. Used only to select and check existing OSM-derived starts; current access is not inferred.",
           "url": "https://services2.arcgis.com/jeEP9c9zZoQQwtck/arcgis/rest/services/EBRPD_Park_Entrances/FeatureServer/1/query?where=PARK%20IN%20(%27Mission%20Peak%27%2C%27Ohlone%27%2C%27Pleasanton%20Ridge%27%2C%27Vargas%20Plateau%27%2C%27Sunol%27%2C%27Del%20Valle%27)&outFields=GlobalID%2CUNIQUE_ID%2CPARK%2CNAME%2CWALKING%2CENTRANCE%2CCLOSED%2CPARKING&returnGeometry=true&outSR=4326&f=json"
         }
+      ],
+      "rangeIds": [
+        "17046"
       ]
     },
     {
@@ -159,16 +171,19 @@
       ],
       "recipePath": "../recipes/california.json",
       "boundaryPath": "../../regions/monterey-carmel/boundary.geojson",
-      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
-        "dataset": "Retained reviewed Monterey–Carmel selection geometry; historical build boundary reused as the eligible-start footprint",
-        "url": "https://github.com/heddayam/alpine-loop/blob/d72bb43a6b22db841664a841048498b11645425e/data/regions/monterey-carmel/boundary.geojson",
-        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Selected GMBA Standard Basic mountain core; retained California footprint limits start nominations",
+        "url": "https://www.earthenv.org/mountains",
+        "license": "GMBA CC BY 4.0; retained OpenStreetMap-derived product scope ODbL 1.0."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the retained California product footprint, including its historical approach neighborhoods.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "Bureau of Land Management / Monterey Peninsula Regional Park District / California State Parks",
@@ -277,6 +292,10 @@
           "basis": "Exact entrance record retained in official-sources/reviewed-access.json, reviewed 2026-08-07. Historical conditions: day-use. Used as an approach anchor only, not an access grant or current-condition assertion.",
           "url": "https://www.parks.ca.gov/pages/579/files/Garrapata.pdf"
         }
+      ],
+      "rangeIds": [
+        "17050",
+        "19576"
       ]
     },
     {
@@ -288,17 +307,19 @@
       ],
       "recipePath": "../recipes/california.json",
       "boundaryPath": "../../regions/henry-coe/boundary.geojson",
-      "reviewedAt": "2026-09-29T02:04:57.000Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Alpine Loop contributors / OpenStreetMap contributors",
-        "dataset": "Retained reviewed Henry Coe selection geometry; historical build boundary reused as the eligible-start footprint",
-        "url": "https://github.com/heddayam/alpine-loop/blob/3c88577593e365f3377eec1480fdb2c50a3fd1ce/data/regions/henry-coe/boundary.geojson",
-        "license": "Repository-reviewed selection geometry; OpenStreetMap-derived geometry retains ODbL 1.0 attribution. This is not an official land-manager boundary."
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; Alpine Loop contributors / OpenStreetMap contributors",
+        "dataset": "Selected GMBA Standard Basic mountain core; retained California footprint limits start nominations",
+        "url": "https://www.earthenv.org/mountains",
+        "license": "GMBA CC BY 4.0; retained OpenStreetMap-derived product scope ODbL 1.0."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Representative approach review only; all eligible mapped starts inside the retained footprint remain candidates. A new-build completeness audit has not been completed.",
-        "Coyote Lake main entrance remains deferred: the historical review found no eligible derived portal within 500 m. Its omission must not be treated as proof that the entrance has no hiking access."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the retained California product footprint, including its historical approach neighborhoods.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "California State Parks / Santa Clara County Parks",
@@ -357,6 +378,9 @@
           "basis": "Authority-published entrance coordinate retained in data/regions/henry-coe/charter.md and scenarios.json, reviewed 2026-08-08. An approach anchor only; seasonal, parking and permit conditions require trip-time checking.",
           "url": "https://parks.santaclaracounty.gov/locations/coyote-lake-harvey-bear-ranch-county-park"
         }
+      ],
+      "rangeIds": [
+        "17046"
       ]
     },
     {
@@ -370,13 +394,12 @@
         "Stehekin"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "north-cascades-boundary.geojson",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachSource": {
         "authority": "Alpine Loop / OpenStreetMap contributors",
@@ -468,11 +491,38 @@
         }
       ],
       "limitations": [
-        "This restoration reuses the reviewed North Cascades start footprint and 8 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
-        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage.",
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
+      ],
+      "rangeIds": [
+        "16936",
+        "16937",
+        "16938",
+        "16939",
+        "16940",
+        "16941",
+        "16942",
+        "16967",
+        "16969",
+        "16970",
+        "16971",
+        "16972",
+        "16973",
+        "16984",
+        "16985",
+        "16986",
+        "16987",
+        "16989",
+        "16990",
+        "16991",
+        "16993",
+        "16994",
+        "16995",
+        "16997",
+        "16999",
+        "17001"
       ]
     },
     {
@@ -495,13 +545,12 @@
         "Henry M Jackson Wilderness"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "central-cascades-boundary.geojson",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachSource": {
         "authority": "Alpine Loop / OpenStreetMap contributors / USDA Forest Service",
@@ -794,19 +843,46 @@
         }
       ],
       "limitations": [
-        "This consolidated selection preserves the historical Central Cascades footprint, both full pilot wilderness footprints, and 28 reviewed approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped. A hike need not enter a wilderness.",
-        "Approach neighborhoods use a 500 m registration tolerance, with the reviewed 600 m neighborhood for Heather Lake’s displaced agency point. They select existing eligible access points; they never create access or imply that roads or trails are currently open.",
-        "USFS boundaries are generalized to about 11 metres and are not legal surveys. The historical OSM-derived footprint and checkpoints are retained review evidence; their provenance differs from the USFS wilderness boundaries and recreation sites.",
-        "The North Fork Skykomish USFS approach also covers nearby Quartz Creek and West Cady trailheads. Little Wenatchee Ford is one shared USFS checkpoint; nearby historical checkpoints remain distinct.",
-        "USFS Stevens Pass North record 6300.005511 remains excluded because its coordinates and directions point to Snoqualmie. The separately reviewed historical Stevens Pass checkpoint is retained and does not validate that agency record.",
-        "Historical route scenarios require rechecking against the loop/lollipop graph; previous results do not establish current coverage.",
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
-      "replaces": [
-        "glacier-peak",
-        "henry-m-jackson"
+      "rangeIds": [
+        "16944",
+        "16945",
+        "16947",
+        "16948",
+        "16956",
+        "16957",
+        "16958",
+        "16959",
+        "16960",
+        "16961",
+        "16962",
+        "16975",
+        "16976",
+        "16977",
+        "16978",
+        "16979",
+        "16980",
+        "16981",
+        "16982",
+        "17012",
+        "17013",
+        "17014",
+        "17015",
+        "17016",
+        "17018",
+        "17032",
+        "17036",
+        "17038",
+        "17040",
+        "17041",
+        "17042",
+        "17043",
+        "17044",
+        "19110"
       ]
     },
     {
@@ -820,13 +896,12 @@
         "White Pass"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "rainier-goat-rocks-boundary.geojson",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachSource": {
         "authority": "Alpine Loop / OpenStreetMap contributors",
@@ -938,11 +1013,23 @@
         }
       ],
       "limitations": [
-        "This restoration reuses the reviewed Rainier–Goat Rocks start footprint and 10 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
-        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage.",
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
+      ],
+      "rangeIds": [
+        "17020",
+        "17023",
+        "17024",
+        "17025",
+        "17026",
+        "17027",
+        "17028",
+        "17029",
+        "17033",
+        "17035",
+        "17037"
       ]
     },
     {
@@ -957,13 +1044,12 @@
         "Upper Cispus"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "southwest-cascades-boundary.geojson",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachSource": {
         "authority": "Alpine Loop / OpenStreetMap contributors",
@@ -1065,11 +1151,15 @@
         }
       ],
       "limitations": [
-        "This restoration reuses the reviewed Southwest Cascades start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
-        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage.",
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
+      ],
+      "rangeIds": [
+        "17019",
+        "17021",
+        "17030"
       ]
     },
     {
@@ -1085,13 +1175,12 @@
         "Buckhorn"
       ],
       "recipePath": "../recipes/washington.json",
-      "boundaryPath": "olympic-peninsula-boundary.geojson",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachSource": {
         "authority": "Alpine Loop / OpenStreetMap contributors",
@@ -1193,12 +1282,33 @@
         }
       ],
       "limitations": [
-        "This restoration reuses the reviewed Olympic Peninsula start footprint and 9 representative approach checkpoints. It is not an exhaustive trailhead inventory or a claim that every trail is mapped.",
-        "Historical route scenarios require rechecking against the new loop/lollipop graph; previous results do not establish current coverage.",
-        "Mapped coastal trails do not certify tide or surf passability. Unreviewed tribal corridors outside the retained Olympic footprint remain explicit coverage exclusions.",
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required.",
+        "Mapped coastal trails do not certify tide or surf passability. Unreviewed tribal corridors outside the retained Olympic footprint remain explicit coverage exclusions."
+      ],
+      "rangeIds": [
+        "17178",
+        "17179",
+        "17180",
+        "17181",
+        "17182",
+        "17183",
+        "17185",
+        "17186",
+        "17187",
+        "17188",
+        "17189",
+        "17190",
+        "17192",
+        "17193",
+        "17194",
+        "17195",
+        "17196",
+        "17197",
+        "17199",
+        "17200"
       ]
     },
     {
@@ -1211,18 +1321,19 @@
         "North Puget Lowlands"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1231,7 +1342,9 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "north-puget-boundary.geojson"
+      "rangeIds": [
+        "17155"
+      ]
     },
     {
       "id": "south-puget",
@@ -1242,18 +1355,19 @@
         "Thurston County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1262,7 +1376,11 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "south-puget-boundary.geojson"
+      "rangeIds": [
+        "17017",
+        "17203",
+        "17204"
+      ]
     },
     {
       "id": "willapa-hills",
@@ -1274,18 +1392,19 @@
         "Wahkiakum County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1294,7 +1413,9 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "willapa-hills-boundary.geojson"
+      "rangeIds": [
+        "17206"
+      ]
     },
     {
       "id": "northeast-washington",
@@ -1307,18 +1428,19 @@
         "Stevens County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1327,7 +1449,18 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "northeast-washington-boundary.geojson"
+      "rangeIds": [
+        "16160",
+        "16161",
+        "16163",
+        "16166",
+        "16167",
+        "16198",
+        "16206",
+        "16207",
+        "16208",
+        "16209"
+      ]
     },
     {
       "id": "spokane-palouse",
@@ -1339,18 +1472,19 @@
         "Whitman County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1359,7 +1493,12 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "spokane-palouse-boundary.geojson"
+      "rangeIds": [
+        "16228",
+        "16229",
+        "16230",
+        "16243"
+      ]
     },
     {
       "id": "columbia-basin",
@@ -1372,18 +1511,19 @@
         "Adams County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1392,7 +1532,17 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "columbia-basin-boundary.geojson"
+      "rangeIds": [
+        "16217",
+        "16218",
+        "16219",
+        "16220",
+        "16222",
+        "16223",
+        "16225",
+        "16226",
+        "16227"
+      ]
     },
     {
       "id": "blue-mountains",
@@ -1405,18 +1555,19 @@
         "Columbia County"
       ],
       "recipePath": "../recipes/washington.json",
-      "reviewedAt": "2026-09-29T16:56:01Z",
+      "reviewedAt": "2026-09-29T00:00:00Z",
       "boundarySource": {
-        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Environmental Protection Agency; U.S. Census Bureau; OpenStreetMap contributors; USDA Forest Service",
-        "dataset": "Pinned mountain-led download grouping from GMBA broad ranges, EPA residual landscape regions, and the complete prior statewide start-coverage obligation. Exact inputs, range IDs and derivation are recorded in the referenced boundary GeoJSON.",
+        "authority": "Global Mountain Biodiversity Assessment / EarthEnv; U.S. Census Bureau; International Boundary Commission; retained OpenStreetMap / USDA Forest Service scope",
+        "dataset": "Selected GMBA Standard Basic mountain core; pinned Washington statewide scope and US boundary limit start nominations",
         "url": "https://www.earthenv.org/mountains",
-        "license": "GMBA CC BY 4.0 (dataset and publication citations retained in the boundary); EPA, Census and USDA Forest Service public-domain sources; retained OpenStreetMap-derived coverage ODbL 1.0. These organizational extents are not legal access grants."
+        "license": "GMBA CC BY 4.0; Census and USDA Forest Service public domain; retained OpenStreetMap-derived scope ODbL 1.0; IBC mapping provenance is pinned separately."
       },
       "approachRadiusMeters": 500,
       "limitations": [
-        "Mountain-led geography organizes downloads. Shared access, topology and building-density rules determine eligible starts; foothills, valleys, islands and lowlands remain assigned without a mountain threshold.",
-        "GMBA broad polygons include surrounding terrain; EPA ecoregions allocate remaining supported locations. Source boundaries are generalized and do not establish precise legal limits, current access or complete trail mapping.",
-        "These revised definitions preserve the complete prior statewide start footprint collectively. Their preparation cost, final source/trail completeness and representative routes remain unverified until rebuilt."
+        "GMBA Standard Basic leaves define the mountain core. Low foothills and low-relief hiking landscapes omitted by this inventory can be excluded; source boundaries are not trail-scale surveys.",
+        "Reviewed approach coordinates and radii remain audit anchors and never add terrain or automatically enlarge the mountain core.",
+        "Start nominations remain inside the pinned Washington statewide scope on the US side; neighboring-state routing support does not create Oregon or Idaho starts.",
+        "This changes the selected core and does not promise complete historical start or route retention. Data builds and representative-route acceptance remain required."
       ],
       "approachSource": {
         "authority": "OpenStreetMap contributors / Geofabrik GmbH",
@@ -1425,7 +1576,10 @@
         "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright"
       },
       "approaches": [],
-      "boundaryPath": "blue-mountains-boundary.geojson"
+      "rangeIds": [
+        "16211"
+      ]
     }
-  ]
+  ],
+  "startLimitPath": "../../fixtures/coverage/washington-start-coverage.geojson"
 }

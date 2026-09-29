@@ -1,115 +1,123 @@
-# Pinned hiking-area boundaries
+# Pinned Standard mountain cores
 
-The twelve Washington boundary files are static download groupings. GMBA's named
-ranges organize the mountain areas; EPA landscape regions allocate the remaining
-lowlands and margins. Their union preserves the complete previous Washington
-start footprint, including historical approach neighborhoods. These organizational
-outlines are deliberately broad. The separate [GMBA Standard terrain mask](../hiking-terrain.md)
-filters sparse entrance candidates through actual trail connectivity, preserving
-connected valley approaches without treating all surrounding lowlands as mountain
-terrain. County membership, forest ownership and internal download borders do not
-grant access or clip routes. California's four download entries are unchanged.
+[`catalog.json`](catalog.json) selects named GMBA Standard Basic leaf IDs from one
+shared [`mountain-ranges.geojson`](../mountain-ranges.geojson) FeatureCollection.
+Each leaf retains its official ID, name and complete `Path_ID` ancestry. The
+catalog's explicit `rangeIds` are the selection authority; an ancestry shorthand
+must not replace them. For example, Central Cascades includes the Wenatchee
+Mountains descendants, including Stuart Range (17043, ancestor 17039).
 
-## Sources and attribution
+`CoverageRegion.geometry` is the union of the selected Standard leaves within the
+product scope. Reviewed approaches remain audit anchors; they do not enlarge the
+mountain core. The previous Broad outlines, EPA lowland allocations, retained
+historical mountain footprints and separate dissolved terrain mask are removed.
+This intentionally contracts the core and does not promise the former coverage.
+Aliases remain useful names; they do not assert that a new core fully replaces a
+historical pilot pack.
 
-- **GMBA Mountain Inventory v2.0, broad basic ranges**, WGS84, reviewed
-  2026-09-29. [Official dataset](https://www.earthenv.org/mountains),
-  [pinned archive](https://data.earthenv.org/mountains/broad/GMBA_Inventory_v2.0_broad_basic.zip),
-  42,672,594 bytes, SHA-256
-  `638bae59339fb45ffe190079aa2fabdcd1d05fd00353863e9509bd7b16004ae0`.
-  CC BY 4.0. Cite Snethlage et al. (2022),
-  [GMBA Mountain Inventory v2](https://doi.org/10.48601/earthenv-t9k2-1407) and
-  [A hierarchical inventory of the world's mountains for global comparative mountain science](https://doi.org/10.1038/s41597-022-01256-y).
-  The broad inventory includes surrounding landscape and support polygons. Here
-  it supplies organizational extents, not a claim that every included location is
-  mountainous. Basic records are selected through their `Path_ID` ancestry.
-- **EPA Washington Level III Ecoregions**, metadata date 2012-05-08, public domain.
-  [Pinned archive](https://dmap-prod-oms-edc.s3.us-east-1.amazonaws.com/ORD/Ecoregions/wa/wa_eco_l3.zip),
-  [metadata](https://dmap-prod-oms-edc.s3.us-east-1.amazonaws.com/ORD/Ecoregions/wa/wa_eco_l3.htm),
-  1,175,130 bytes, SHA-256
-  `e665f5a691b006feaf0c2d0ec8394c4e6d03de127267a21e054ae5bec4e6dae3`.
-  Source NAD83 Albers coordinates were transformed to EPSG:4326 using pyshp 3.1.6
-  and pyproj 3.8.0.
-- **Preserved statewide obligation**:
-  `data/fixtures/coverage/washington-start-coverage.geojson`, the union of the
-  twelve effective Washington start footprints at commit `8e95bc3`. Its source
-  is the Census 2025 statewide boundary plus retained historical OSM/USFS
-  footprints and approach neighborhoods. Census and USFS sources are public
-  domain; OSM-derived boundaries retain ODbL 1.0 attribution. This fixture is a
-  regression baseline, not a runtime county registry. Each boundary records its
-  SHA-256 and attribution. Historical mountain inputs' properties and hashes are
-  also embedded in their successor boundary files.
+## Source and attribution
 
-## Range grouping
+- **GMBA Mountain Inventory v2.0, Standard Basic**, WGS84, retrieved 2026-09-29.
+  [Official dataset](https://www.earthenv.org/mountains),
+  [pinned archive](https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_basic.zip),
+  39,330,067 bytes, SHA-256
+  `91b7a37e4331cea01fb8938d535d0fbfcec8aae4173e4b073e46e2896b74f198`.
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Derived by clipping
+  and coordinate quantization; no endorsement implied. Cite Snethlage et al.
+  (2022), [GMBA Mountain Inventory v2](https://doi.org/10.48601/earthenv-t9k2-1407)
+  and [A hierarchical inventory of the world's mountains for global comparative
+  mountain science](https://doi.org/10.1038/s41597-022-01256-y).
+- The shared FeatureCollection pins the archive and shapefile byte lengths and
+  SHA-256 hashes, scope-input hashes, citations, authoring parameters and measured
+  precision effect. Pack provenance uses `gmba-standard-v2` with the entire parsed
+  FeatureCollection's content hash. `region-boundary-<id>` separately hashes the
+  leaf selection and product cap; `region-approaches-<id>` hashes the audit anchors.
 
-IDs below include descendants, except for the stated exclusions. Each boundary
-also pins the actual selected leaf IDs, names and full ancestry, so the inputs
-remain inspectable without downloading the source.
+## Product scope and selected leaves
 
-| Download ID | GMBA ancestry / leaf selection |
-| --- | --- |
-| `central-cascades` | 16955, 16974, 16943, 16946, 17011 except 17017, 17039; plus 17032, 17036, 17038 |
-| `north-cascades` | 15510, excluding the Central selection |
-| `rainier-goat-rocks` | 17022, 17020, 17031, excluding 17032, 17034, 17036, 17038 |
-| `southwest-cascades` | 17019, 17021, 17030 |
-| `olympic-peninsula` | 11688 |
-| `willapa-hills` | 17206 |
-| `northeast-washington` | 16165, 11635, 11830 |
-| `blue-mountains` | 12545 |
-| `spokane-palouse` | 16228, 16229, 16230, 16243 |
-| `columbia-basin` | 16216, 16224 |
-| `north-puget` | 17153, 17155, 17156 |
-| `south-puget` | 17203, 17204, 17017, 17034 |
+Washington uses one shared start limit:
+[`washington-start-coverage.geojson`](../../fixtures/coverage/washington-start-coverage.geojson),
+intersected with the recipe's
+[`washington-us-limit.geojson`](../washington-us-limit.geojson). The first fixture
+preserves the state product scope, derived from Census 2025, historical OSM/USFS
+footprints and approach neighborhoods. It is a cap on eligible start nomination,
+not an instruction to include all its lowlands. Census and USFS material is public
+domain; OSM-derived scope retains ODbL 1.0 attribution. The US limit follows the
+International Boundary Commission source pinned in that file. Washington leaves
+are clipped to both scope geometries during authoring. Route-support buffers may
+extend into Oregon or Idaho; eligible Washington starts remain within the cap.
 
-## Reproduction and coverage checks
+California keeps the four original `data/regions/<id>/boundary.geojson` files
+unchanged. Their historical reviewed approach neighborhoods remain part of each
+start-limit cap (32-vertex spherical circles, original radii), preserving the
+exact former effective-footprint hashes. Each core is the selected Standard
+leaves intersected with its cap. A shared Diablo Range leaf does not extend East
+Bay or Henry Coe into one another's full footprint; no Bay region expands into
+the North Bay. California is the only catalog scope with a `boundaryPath`.
 
-1. Read the selected GMBA basic polygons and group them as above. Union the
-   pre-county North, Central, Rainier, Southwest and Olympic boundary geometries
-   and their unchanged reviewed approach neighborhoods into their respective
-   groups. The retained inputs are identified in each file's `retainedFootprint`.
-   Approach circles use the existing 32-vertex spherical calculation, 500 m by
-   default and 600 m for the reviewed Heather approach. Clip every group to the
-   complete statewide obligation.
-2. Subtract that aggregate from the obligation. Intersect the remainder with EPA
-   `US_L3CODE` polygons: 1 (Coast Range) goes to Olympic north of 47 degrees and
-   Willapa south of it; 2 (Puget Lowland) goes to North Puget north of 47.6 degrees
-   and South Puget south of it; 10 goes to Columbia Basin; 11 to Blue Mountains;
-   15 and 77 to Northeast Washington; 3, 4 and 9 to Southwest Cascades. The last
-   three residuals occur in the south. Divider lines belong to both closed
-   intersections; they organize downloads and never exclude starts.
-3. Assign each remaining connected part outside EPA to the nearest resulting
-   group, measured from its representative point in EPSG:5070 using GEOS distance;
-   break exact ties by ascending download ID. This repairs source shoreline and
-   state-edge differences, not mountain classification: 1,400 parts totaling
-   0.020504108813109795 square degrees. Per-file counts and areas are pinned.
-4. Use a robust polygon overlay implementation during authoring (these files used
-   Shapely 2.1.2/GEOS). Normalize the valid raw derived geometry with an outward
-   buffer of 3e-7 degrees, mitre joins and `mitre_limit=2`, **then** topology-preserving
-   valid-output `set_precision` on a shared 1e-7-degree grid. Buffering first keeps
-   thin input pieces before quantization. This follows the established
-   [GEOS precision-reduction approach](https://libgeos.org/doxygen/classgeos_1_1precision_1_1GeometryPrecisionReducer.html)
-   for [finite-precision overlay failures](https://locationtech.github.io/jts/jts-faq.html#D3).
-   It is one authoring policy for all twelve outlines, not runtime smoothing or a
-   new dependency. Each boundary pins compact-JSON raw and final geometry hashes
-   and the measured effect under `authoringPrecision`.
-5. Require every output to pass `assertValidAreaGeometry`, and compare complete
-   polygons rather than vertices or bounding boxes. All twelve outputs contain
-   their raw inputs and lie within an 8e-7-degree buffer of them (less than 0.09 m
-   using the conservative latitude conversion). The largest measured output-vertex
-   distance from raw geometry is 7.226436178839424e-7 degrees. Final aggregate
-   missing area against the statewide obligation is zero; added area is
-   1.4937681813483016e-5 square degrees, distributed along the boundary. This tiny
-   outward allowance is far below the source map scale and avoids false holes
-   from mixed-source numerical precision. Runtime polygon union and baseline
-   containment both succeed. Preserve the historical Central/pilot footprints,
-   all reviewed approach neighborhoods and the four California effective-footprint
-   hashes. Plan all sixteen areas offline to check source coverage and US-only
-   exclusions.
+| Download ID | Selected Standard leaves |
+| --- | ---: |
+| `north-cascades` | 26 |
+| `central-cascades` | 34 |
+| `rainier-goat-rocks` | 11 |
+| `southwest-cascades` | 3 |
+| `olympic-peninsula` | 20 |
+| `north-puget` | 1 |
+| `south-puget` | 3 |
+| `willapa-hills` | 1 |
+| `northeast-washington` | 10 |
+| `spokane-palouse` | 4 |
+| `columbia-basin` | 9 |
+| `blue-mountains` | 1 |
+| `santa-cruz-mountains` | 1 |
+| `southern-east-bay` | 1 |
+| `monterey-carmel` | 2 |
+| `henry-coe` | 1 |
 
-Historical footprints can overlap neighboring groupings. They are deliberately
-retained; the files do not claim a disjoint tessellation or legal access rights.
-Source boundaries have scale and vintage limitations and do not prove every
-trail is mapped. Boundary area alone does not predict build time or pack size:
-those require real-data builds and depend on the buffered rectangle, trail
-network and source preparation. Raw archives and temporary authoring tools are
-not committed.
+The dataset contains 127 distinct leaves: 123 Washington and four California.
+Washington selections carry forward the actual named leaf selection from the
+previous catalog, restricted to leaves present in Standard and intersecting the
+scope. Standard has no record for Whidbey Island Group (17156), Highline-West
+Seattle (17034), or Frenchman Hills (16221). Gulf Islands (17153), Christina Range
+(16157), Bonnington Range (16184) and Southern Blue Mountains (nn) (19566) have no
+positive-area Standard intersection with the Washington scope. These seven IDs
+are omitted explicitly, without a Broad substitute.
+
+## Reproduction and validation
+
+1. Verify the official archive hash and read its root Standard Basic shapefile;
+   ignore `__MACOSX` sidecars. The source contains 6,717 records. Read leaf IDs
+   from `GMBA_V2_ID`, names from `MapName` and ancestor IDs from `Path_ID`.
+2. Select Washington leaf IDs listed in the catalog, intersect each source
+   geometry with the pinned state/US scope, and retain all positive-area polygon
+   parts and holes. California selects every Standard leaf with positive-area
+   intersection with an effective cap; clip shared California leaves to the union
+   of those caps. The loader intersects them with each individual cap.
+3. Require valid source and overlay geometries with GEOS. This derivation used
+   pyshp 3.1.6, Shapely 2.1.2/GEOS 3.13.1 and pyproj 3.8.0/PROJ 9.8.1. No repairs,
+   terrain buffers, simplification or minimum-area filter were needed. Apply
+   `set_precision` with `valid_output` at a 1e-8-degree grid, normalize, and orient
+   exterior rings counterclockwise and holes clockwise. Keep one MultiPolygon
+   Feature per leaf with only `id`, `name` and `ancestry` leaf properties.
+4. Check the quantized geometries remain valid. All 180 polygon parts, 11 holes
+   and 21,967 coordinates survive precision reduction. In a WGS84 Lambert azimuthal
+   equal-area projection centered at 43°N, 120°W, the source clipped union is
+   100,169,780,983.73431 m². Its symmetric difference from the quantized union is
+   1,477.127103473976 m² (0.000001474623473234741%). This is coordinate precision,
+   not a claim of survey accuracy. Do not re-overlay the quantized Washington
+   leaves with unrounded cap edges at runtime: that can create numerical slivers.
+5. Run the offline region tests. They plan all 16 cores against recipe source
+   coverage and country exclusions, check source pins and mountain controls,
+   exclude Arlington and Mount Vernon from Central, preserve exact California
+   caps, and prevent starts from expanding to Oregon, Idaho, Canada or North Bay.
+   They do not prove that any particular approach has a qualifying trail connection.
+
+Standard can omit low foothills, valley approaches and worthwhile low-relief hiking
+areas. A reviewed point outside the core is not automatically a failed start: the
+runtime may nominate an approach within its cap and require an actual hiking
+connection to the core. Conversely, an audit anchor is not an access override.
+The pinned state cap also excludes the very northern US Chilliwack approach used
+as a route-buffer control; its route-support inclusion is not start eligibility.
+These geometries establish neither current access nor route quality. Build cost
+and real start retention require separate real-data validation. Raw archives and
+temporary authoring tools are not committed.
