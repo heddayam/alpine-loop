@@ -40,6 +40,23 @@ input so it can be adjusted without changing app or solver code.
   semantics and limitations. No legacy broad importer remains.
 - Interpret hiking-relevant highway/path/foot/access/oneway/route/relation tags
   through a versioned adapter with fixture tests.
+- Local extraction uses sequential native scans: select geographic nodes, recover
+  their ways and then direct parent relations, filter relevant objects, and
+  complete their references from the original pinned PBF. Original IDs and tags
+  are retained. The two parent scans correct old Osmium `simple` selection, which
+  can inspect only the first way node or relation member. Building geometry uses
+  direct outer way members; arbitrary nested outer relations remain unsupported.
+  Node seeds are excluded from `getid`'s input and merged back afterward, avoiding
+  a second large node-ID table. Consumed intermediate files are deleted promptly.
+  This replaces `smart -S tags=building`: Docker's Osmium 1.15 ignores the `tags`
+  option (introduced in 1.16), and broad multipolygon completion exceeded 4 GiB.
+  The tradeoff is more sequential source scans for a lower memory peak, without
+  a statewide normalized cache or a new source download.
+  Primary references: [Osmium changelog](https://github.com/osmcode/osmium-tool/blob/v1.19.1/CHANGELOG.md),
+  [parent selection](https://docs.osmcode.org/osmium/latest/osmium-getparents.html),
+  [reference completion](https://docs.osmcode.org/osmium/latest/osmium-getid.html),
+  [sorted merge](https://docs.osmcode.org/osmium/latest/osmium-merge.html), and
+  [ID-table allocation](https://github.com/osmcode/libosmium/blob/v2.18.0/include/osmium/index/id_set.hpp).
 - Use Overpass only for small manual QA queries while developing an adapter, not
   for a pack build dependency or at runtime.
 - The main OSM API is an editing API and is not an appropriate bulk data or

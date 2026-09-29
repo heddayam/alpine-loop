@@ -6,6 +6,50 @@ the evidence line.
 
 ## Active system design revision
 
+### Large-area extraction OOM repair — 2026-09-28
+
+The first user-run Central Cascades build failed in native extraction. Docker's
+OOM event identifies container `alpine-loop-data-run-7d85ef0d0347`; its build report
+records SIGKILL at 2.792 seconds and a 4 GiB cgroup peak. The warning was also real:
+Docker has Osmium 1.15.0/libosmium 2.18.0, while `smart -S tags=building` requires
+Osmium 1.16 or newer. The ignored option allowed unrelated multipolygon completion.
+
+- [x] Research installed-version behavior before changing extraction. `simple`
+  alone is also incorrect in this version: only the first way node and first
+  relation member are tested. `complete_ways` avoids that omission but a capped
+  extraction probe reached 3,946 MiB sampled RSS and subsequent `getid` was killed.
+- [x] Use geographic node selection plus two sequential parent scans; tag-filter
+  before reference completion; exclude node seeds from `getid`'s copied ID tables
+  and merge unchanged seed objects back into the completed stream. This preserves
+  original identities and direct-way building multipolygons, without a native
+  upgrade, a statewide normalized cache, a higher Docker limit, or parallel scans.
+  The source normalization version changes to v6; segment metric caches remain
+  reusable. Consumed intermediate files are removed immediately.
+- [x] The revised nonempty extraction pipeline passed against the actual pinned
+  Washington source and exact Central Cascades route buffer in the existing Docker
+  image at the unchanged 4 GiB cap: 19.867 seconds, 2,549,178,368 bytes sampled
+  process-tree RSS, 2,607,124,480 bytes cgroup peak (2.43 GiB). Memory `max`, `oom`
+  and `oom_kill` counters remained zero from start to finish. It streamed 9,801,054
+  nodes, 1,273,430 ways and 600 relations; no records were accumulated in JS memory.
+  Extraction staging was empty afterward. No normalization, SQLite, elevation,
+  route search or pack publication ran in either diagnostic probe.
+- [x] Final checks: 38 source-filter/source-store tests and 18 compiler-runtime
+  tests passed; targeted ESLint and one integrated TypeScript check passed.
+  The committed regression fixture also passed in Docker's Osmium 1.15.0:
+  41 unique objects with complete way references, preserved access/direction tags,
+  interior-node trail selection, outside-first-member building completion, and no
+  unrelated multipolygon expansion. Empty selection also passed; scratch was empty
+  after both fixture cases. The temporary containers, scripts and task worktree
+  were cleaned up; useful caches and the user's publication review were preserved.
+- [ ] User reruns the full regional build. Extraction measurements do not establish
+  complete-build time, peak resource use or geographic acceptance.
+
+Primary-source reasoning and limitations are recorded in
+[data sources](data-sources.md). Tests must preserve a trail with only an interior
+node inside the envelope, a building whose first member is wholly outside, original
+IDs/tags, empty and standalone-node selections, missing-reference failure, and
+child/file cleanup on cancellation, failure and early iterator return.
+
 ### Named-area restoration and sequential builds — 2026-09-28
 
 - [x] Replace the generic loader's hardcoded Washington/USFS assumptions with
