@@ -6,6 +6,46 @@ the evidence line.
 
 ## Active system design revision
 
+### Ranking, metric reuse and compression overhead — 2026-09-29
+
+- [x] Aggregate component sizes once per access profile, instead of recounting
+  them for every start. Union each physical link once per profile and skip parent
+  writes that already point at the root. Keep directed degrees and public/unknown
+  ranking unchanged. Reuse prepared geometry for candidate admission and final
+  selected-edge checks. Counts remain in disposable SQLite tables, not a graph
+  cache on the JS heap.
+- [x] Skip valid geometry-metric cache replacements; retain measurements, legacy
+  promotions and invalid-row repair. Reuse the backup inventory's fingerprint
+  function until its shared immutable product-array snapshot changes. Same-size
+  replacements and acquisitions by another sampler refresh keys and provenance.
+  Separate `Writing prepared graph` from `Ranking retained access points` in logs.
+- [x] Replace compression's temporary physical-only direction index with
+  `(physical_edge_key,id)` and reuse narrow direction records within the existing
+  2,048-member / 8 MiB corridor bounds. Preserve query ordering, LIMIT 3 checks,
+  direction, float accumulation, stable IDs, cancellation and graph output.
+- [x] Verification: 132 focused cases pass across portals/store/publisher,
+  compaction and runtime/elevation; one optional local rasterio fixture is absent.
+  Three selected end-to-end runtime cases pass after integration, along with
+  targeted ESLint and `npm run typecheck`. No full suite or regional build repeated.
+- [x] Disposable synthetic comparisons preserve exact output hashes: full portal
+  derivation on 1,500 nodes / 2,998 directed edges / 150 starts with Central's
+  boundary took 296 / 117 ms before/after. On 4,000 metric lookups, inventory work
+  took 67.9 / 1.85 ms and warm-cache read/parse/write took 15.35 / 6.95 ms. File-backed
+  compression of 2,500 segments took 222 / 220 ms: no meaningful end-to-end gain
+  established at that size. Its combined benchmark process peaked at 226 MB RSS.
+- [x] Preserve the user's baseline build, which finished Ready in about 49 minutes
+  with compression taking 8m 18s. Archive completed worktrees, delete task branches,
+  remove benchmark scratch, and preserve caches/artifacts and the user review file.
+- [ ] Measure real savings with the rebuilt data image and a fresh preparation.
+  A normal rerun of a completed region intentionally reuses its valid receipt;
+  optimization-only changes do not invalidate packs or elevation caches.
+
+References: SQLite [grouped counts](https://www.sqlite.org/lang_aggfunc.html),
+[search-and-sort indexes](https://www.sqlite.org/queryplanner.html#searching_and_sorting_at_the_same_time),
+and [REPLACE semantics](https://www.sqlite.org/lang_conflict.html); Princeton's
+[union-find with path compression](https://algs4.cs.princeton.edu/15uf/WeightedQuickUnionPathCompressionUF.java.html).
+These justify the retained mechanisms, not a prediction of regional speedup.
+
 ### Regional import overhead — 2026-09-29
 
 - [x] Reuse fixed SQL statements for the working graph store and remove duplicate
