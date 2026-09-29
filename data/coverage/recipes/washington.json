@@ -10,6 +10,11 @@
       "configPath": "../sources/oregon.json",
       "geometryPath": "../oregon-source.geojson",
       "sha256": "sha256:777d9898e1cf0a80b73b2c503028fe0c15120f6547ae692cc48d6fae26b0847e"
+    },
+    {
+      "configPath": "../sources/idaho.json",
+      "geometryPath": "../idaho-source.geojson",
+      "sha256": "sha256:6cb0ef33774b5580d618749b0b0a54d4f7a0b1bc0674e1df2bfa73024ea0f7b8"
     }
   ],
   "exclusions": [
