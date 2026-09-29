@@ -40,16 +40,18 @@ function coordinateIsOnSegment(point: Position, start: Position, end: Position):
   return dot <= squaredLength + GEOMETRY_EPSILON;
 }
 
+function edgeCrossesRay(point: Position, start: Position, end: Position): boolean {
+  return (start[1] > point[1]) !== (end[1] > point[1]) &&
+    point[0] < ((end[0] - start[0]) * (point[1] - start[1])) / (end[1] - start[1]) + start[0];
+}
+
 function pointRingRelation(point: Position, ring: ReadonlyArray<Position>): "outside" | "inside" | "boundary" {
   let inside = false;
   for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
     const start = ring[previous];
     const end = ring[index];
     if (coordinateIsOnSegment(point, start, end)) return "boundary";
-    if (
-      (start[1] > point[1]) !== (end[1] > point[1]) &&
-      point[0] < ((end[0] - start[0]) * (point[1] - start[1])) / (end[1] - start[1]) + start[0]
-    ) {
+    if (edgeCrossesRay(point, start, end)) {
       inside = !inside;
     }
   }
@@ -101,30 +103,35 @@ function segmentBoundaryParameters(start: Position, end: Position, ring: Readonl
   const direction = subtract(end, start);
   const directionLength = direction[0] ** 2 + direction[1] ** 2;
   for (let index = 1; index < ring.length; index += 1) {
-    const boundaryStart = ring[index - 1];
-    const boundaryEnd = ring[index];
-    const boundaryDirection = subtract(boundaryEnd, boundaryStart);
-    const denominator = cross(direction, boundaryDirection);
-    const offset = subtract(boundaryStart, start);
-    if (Math.abs(denominator) <= GEOMETRY_EPSILON) {
-      if (Math.abs(cross(offset, direction)) > GEOMETRY_EPSILON || directionLength <= GEOMETRY_EPSILON) continue;
-      for (const point of [boundaryStart, boundaryEnd]) {
-        const pointOffset = subtract(point, start);
-        const value = (pointOffset[0] * direction[0] + pointOffset[1] * direction[1]) / directionLength;
-        if (value > 0 && value < 1) parameters.push(value);
-      }
-      continue;
-    }
-    const alongRoute = cross(offset, boundaryDirection) / denominator;
-    const alongBoundary = cross(offset, direction) / denominator;
-    if (
-      alongRoute >= -GEOMETRY_EPSILON && alongRoute <= 1 + GEOMETRY_EPSILON &&
-      alongBoundary >= -GEOMETRY_EPSILON && alongBoundary <= 1 + GEOMETRY_EPSILON
-    ) {
-      parameters.push(Math.min(1, Math.max(0, alongRoute)));
-    }
+    appendBoundaryParameters(start, direction, directionLength, ring[index - 1], ring[index], parameters);
   }
   return parameters;
+}
+
+function appendBoundaryParameters(
+  start: Position, direction: Position, directionLength: number,
+  boundaryStart: Position, boundaryEnd: Position, parameters: number[],
+): void {
+  const boundaryDirection = subtract(boundaryEnd, boundaryStart);
+  const denominator = cross(direction, boundaryDirection);
+  const offset = subtract(boundaryStart, start);
+  if (Math.abs(denominator) <= GEOMETRY_EPSILON) {
+    if (Math.abs(cross(offset, direction)) > GEOMETRY_EPSILON || directionLength <= GEOMETRY_EPSILON) return;
+    for (const point of [boundaryStart, boundaryEnd]) {
+      const pointOffset = subtract(point, start);
+      const value = (pointOffset[0] * direction[0] + pointOffset[1] * direction[1]) / directionLength;
+      if (value > 0 && value < 1) parameters.push(value);
+    }
+    return;
+  }
+  const alongRoute = cross(offset, boundaryDirection) / denominator;
+  const alongBoundary = cross(offset, direction) / denominator;
+  if (
+    alongRoute >= -GEOMETRY_EPSILON && alongRoute <= 1 + GEOMETRY_EPSILON &&
+    alongBoundary >= -GEOMETRY_EPSILON && alongBoundary <= 1 + GEOMETRY_EPSILON
+  ) {
+    parameters.push(Math.min(1, Math.max(0, alongRoute)));
+  }
 }
 
 function* segmentInteriorPoints(start: Position, end: Position, geometry: AreaGeometry): Generator<Position> {
@@ -132,7 +139,12 @@ function* segmentInteriorPoints(start: Position, end: Position, geometry: AreaGe
     0,
     1,
     ...boundaryRings(geometry).flatMap((ring) => segmentBoundaryParameters(start, end, ring)),
-  ].sort((left, right) => left - right);
+  ];
+  yield* interiorPoints(start, end, parameters);
+}
+
+function* interiorPoints(start: Position, end: Position, parameters: number[]): Generator<Position> {
+  parameters.sort((left, right) => left - right);
   for (let index = 1; index < parameters.length; index += 1) {
     const from = parameters[index - 1];
     const to = parameters[index];
@@ -169,6 +181,129 @@ export function lineIsInsideArea(coordinates: ReadonlyArray<Position>, geometry:
     if (!segmentIsInsideArea(coordinates[index - 1], coordinates[index], geometry)) return false;
   }
   return true;
+}
+
+type BoundaryEdge = {
+  start: Position;
+  end: Position;
+  south: number;
+  north: number;
+  explicit: boolean;
+};
+type BoundaryIndex = {
+  south: number;
+  north: number;
+  from: number;
+  to: number;
+  children?: readonly [BoundaryIndex, BoundaryIndex];
+};
+
+function indexRing(ring: ReadonlyArray<Position>) {
+  // Copy coordinates: preparation is a snapshot, with no global/query-result cache.
+  const points = ring.map(([x, y]): Position => [x, y]);
+  const edges: BoundaryEdge[] = points.map((end, index) => {
+    const start = points[(index + points.length - 1) % points.length];
+    const dx = end[0] - start[0], dy = end[1] - start[1];
+    const squaredLength = dx * dx + dy * dy;
+    // The exact predicates use cross/dot tolerances, not a coordinate tolerance.
+    // Include both their perpendicular/endpoint allowance and parameter extension.
+    const padding = GEOMETRY_EPSILON + Math.max(
+      squaredLength <= GEOMETRY_EPSILON ? GEOMETRY_EPSILON : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
+      GEOMETRY_EPSILON * Math.abs(dy),
+    );
+    return { start, end, south: Math.min(start[1], end[1]) - padding,
+      north: Math.max(start[1], end[1]) + padding, explicit: index > 0 };
+  }).sort((a, b) => (a.south + a.north) - (b.south + b.north));
+  const build = (from: number, to: number): BoundaryIndex => {
+    if (to - from > 8) {
+      const middle = (from + to) >>> 1;
+      const left = build(from, middle), right = build(middle, to);
+      return { from, to, south: Math.min(left.south, right.south),
+        north: Math.max(left.north, right.north), children: [left, right] };
+    }
+    let south = Infinity, north = -Infinity;
+    for (let i = from; i < to; i++) {
+      south = Math.min(south, edges[i].south);
+      north = Math.max(north, edges[i].north);
+    }
+    return { from, to, south, north };
+  };
+  const root = build(0, edges.length);
+  return (south: number, north: number, visit: (edge: BoundaryEdge) => boolean): boolean => {
+    const query = (node: BoundaryIndex): boolean => {
+      if (node.south > north || node.north < south) return false;
+      if (node.children) return query(node.children[0]) || query(node.children[1]);
+      for (let i = node.from; i < node.to; i++) {
+        const edge = edges[i];
+        if (edge.south <= north && edge.north >= south && visit(edge)) return true;
+      }
+      return false;
+    };
+    return query(root);
+  };
+}
+
+/**
+ * Prepare once for repeated checks, retaining the one-shot predicates' boundary rules.
+ * Static y-interval indexing follows JTS IndexedPointInAreaLocator / SortedPackedIntervalRTree:
+ * https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.html
+ */
+export function prepareAreaGeometry(geometry: AreaGeometry): {
+  containsPoint(point: Position): boolean;
+  containsSegment(start: Position, end: Position): boolean;
+} {
+  const polygons = (geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates)
+    .map((rings) => rings.map((ring) => indexRing(ring as unknown as Position[])));
+  const relation = (point: Position, query: ReturnType<typeof indexRing>) => {
+    let inside = false;
+    const boundary = query(point[1], point[1], ({start, end}) => {
+      if (coordinateIsOnSegment(point, start, end)) return true;
+      if (edgeCrossesRay(point, start, end)) inside = !inside;
+      return false;
+    });
+    return boundary ? "boundary" : inside ? "inside" : "outside";
+  };
+  const containsPoint = (point: Position): boolean => {
+    if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
+    return polygons.some((rings) => {
+      const outer = rings[0] ? relation(point, rings[0]) : "outside";
+      if (outer === "outside") return false;
+      if (outer === "boundary") return true;
+      for (let i = 1; i < rings.length; i++) {
+        const hole = relation(point, rings[i]);
+        if (hole === "boundary") return true;
+        if (hole === "inside") return false;
+      }
+      return true;
+    });
+  };
+  return {
+    containsPoint,
+    containsSegment(start, end) {
+      if (!containsPoint(start) || !containsPoint(end)) return false;
+      const direction = subtract(end, start);
+      const squaredLength = direction[0] ** 2 + direction[1] ** 2;
+      // Near-parallel edges can contribute projections within 2*epsilon/length.
+      // Nonparallel intersections allow epsilon beyond each segment's endpoints.
+      const padding = GEOMETRY_EPSILON + Math.max(
+        squaredLength <= GEOMETRY_EPSILON ? 0 : 2 * GEOMETRY_EPSILON / Math.sqrt(squaredLength),
+        GEOMETRY_EPSILON * Math.abs(direction[1]),
+      );
+      const south = Math.min(start[1], end[1]) - padding;
+      const north = Math.max(start[1], end[1]) + padding;
+      const parameters = [0, 1];
+      for (const rings of polygons) for (const query of rings) {
+        query(south, north, (edge) => {
+          if (edge.explicit) appendBoundaryParameters(start, direction, squaredLength, edge.start, edge.end, parameters);
+          return false;
+        });
+      }
+      for (const point of interiorPoints(start, end, parameters)) {
+        if (!containsPoint(point)) return false;
+      }
+      return true;
+    },
+  };
 }
 
 const EARTH_RADIUS_METERS = 6_371_008.8;

@@ -33,7 +33,7 @@ import { sourceRecipeSchema } from "./recipe";
 import { pruneWalkingGraph, PRUNING_ALGORITHM_VERSION } from "./prune";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { NormalizedWay } from "@/lib/data/types";
-import { coordinateIsInsideArea, lineIsInsideArea } from "@/lib/graph/geometry";
+import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometry";
 import type { CoverageRegion, CoverageRunnerContext, CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
 const BUILD_VERSION = `compact-regions-v2:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
@@ -106,6 +106,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       let demGeometry: AreaGeometry, elevationFingerprint: string;
       try {
         await report(`Reading walking links and access context: ${area.name}`);
+        const boundary = prepareAreaGeometry(area.geometry);
         const memberSources = new Set<string>();
         let pending: Array<() => void> = [], work = 0, unsupportedBuildings = 0;
         const flush = () => { if (pending.length) store.transaction(() => { for (const write of pending) write(); }); pending = []; };
@@ -123,8 +124,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
             if (current.edgeClass === "trail" && ["public", "unknown"].includes(current.accessState)) {
               for (let segment = 0; segment < current.nodeIds.length - 1; segment++) {
                 if (++work % 1000 === 0) await check();
-                if (lineIsInsideArea(current.coordinates.slice(segment,segment+2),area.geometry)) {
-                  const a = current.coordinates[segment]!, b = current.coordinates[segment+1]!;
+                const a = current.coordinates[segment]!, b = current.coordinates[segment+1]!;
+                if (boundary.containsSegment(a,b)) {
                   if (enqueue(() => { eligible.run(`${current.id}:${segment}`,current.nodeIds[segment]!,current.nodeIds[segment+1]!,distanceMeters(a,b)*(1-1e-10)); })) await check();
                 }
               }
