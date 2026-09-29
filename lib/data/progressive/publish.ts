@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
-import { edgeInsideCoverage, type AreaGeometry } from "../area-geometry";
+import type { AreaGeometry } from "../area-geometry";
+import { prepareAreaGeometry } from "@/lib/graph/geometry";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 
@@ -22,11 +23,14 @@ export async function selectProgressiveEdges(store: ProgressiveGraphStore, cover
   const db=store.database;
   db.exec("DROP TABLE IF EXISTS temp.selected_edges; CREATE TEMP TABLE selected_edges(id TEXT PRIMARY KEY) STRICT;");
   const add=db.prepare("INSERT INTO selected_edges VALUES (?)");
+  const boundary=prepareAreaGeometry(coverage);
   let rejected=0;
   for (const edge of store.iterateEdges()) {
     if (++work%1000===0) await checkpoint();
     if (edge.edgeClass !== "trail") continue;
-    if (edgeInsideCoverage(edge,coverage)) add.run(edge.id);
+    let inside=edge.geometry.length>=2;
+    for(let i=1;inside&&i<edge.geometry.length;i++) inside=boundary.containsSegment(edge.geometry[i-1]!,edge.geometry[i]!);
+    if (inside) add.run(edge.id);
     else rejected++;
   }
   return rejected;

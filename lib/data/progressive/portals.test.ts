@@ -72,6 +72,30 @@ async function deriveAtStage(opl:string,adjust?: (topology:NormalizedTopology)=>
   } finally {store.close();}
 }
 
+it("shares component counts across starts while preserving access profiles and directed degrees", async () => {
+  const opl=`n1 x-122 y48
+n2 x-121.999 y48
+n3 x-121.998 y48
+n4 x-121.997 y48
+n5 x-121.99 y48
+n6 x-121.989 y48
+w1 Thighway=path,foot=yes,oneway:foot=yes Nn1,n2
+w2 Thighway=path Nn2,n3
+w3 Thighway=path,foot=private Nn3,n4
+w4 Thighway=path,foot=yes Nn5,n6
+w10 Thighway=residential Nn1,n2,n3,n4,n5,n6`;
+  const {points}=await deriveAtStage(opl);
+  expect(points.map(point=>[point.nodeId,point.knownConnectivity,point.inclusiveConnectivity,
+    point.knownOutDegree,point.inclusiveOutDegree,point.trailComponentId])).toEqual([
+    ["osm-node-1",2,3,1,1,"trail-component:osm-node-1"],
+    ["osm-node-2",2,3,0,1,"trail-component:osm-node-1"],
+    ["osm-node-3",0,3,0,1,"trail-component:osm-node-1"],
+    ["osm-node-4",0,0,0,0,"trail-component:osm-node-1"],
+    ["osm-node-5",2,2,1,1,"trail-component:osm-node-5"],
+    ["osm-node-6",2,2,1,1,"trail-component:osm-node-5"],
+  ]);
+});
+
 function detachTrack(topology: NormalizedTopology) {
   const way = topology.ways.find(way => way.flags.includes("osm-highway:track"))!;
   const old = topology.nodes.find(node => node.id === way.nodeIds.at(-1))!;

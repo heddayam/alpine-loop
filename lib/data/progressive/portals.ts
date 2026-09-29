@@ -1,6 +1,6 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
-import { coordinateIsInsideArea } from "@/lib/graph/geometry";
+import { prepareAreaGeometry } from "@/lib/graph/geometry";
 import { DistanceQueue } from "@/lib/graph/sqlite-records";
 import type { AreaGeometry } from "../area-geometry";
 import { densifyGeometry, distanceMeters } from "../metrics";
@@ -48,7 +48,7 @@ export class DiskUnion {
     let root=id;
     for(;;){const row=this.getParent.get(root) as {parent:string}|undefined;if(!row)throw new Error(`Unknown union node ${root}`);if(row.parent===root)break;root=row.parent;}
     let current=id;
-    while(current!==root){const parent=(this.getParent.get(current) as {parent:string}).parent;this.setParent.run(root,current);current=parent;}
+    while(current!==root){const parent=(this.getParent.get(current) as {parent:string}).parent;if(parent===root)break;this.setParent.run(root,current);current=parent;}
     return root;
   }
   union(a:string,b:string):void {
@@ -142,7 +142,8 @@ function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive",reuse
   const root=one(db,`SELECT parent FROM ${table} WHERE id=?`,nodeId);
   if(!root)return {connectivity:0,outDegree:0};
   // Component construction compresses every parent before ranking.
-  const count=one(db,`SELECT count(*) AS n FROM ${table} WHERE parent=?`,String(root.parent));
+  const count=one(db,"SELECT n FROM portal_component_counts WHERE profile=? AND parent=?",
+    profile==="inclusive"&&reuseInclusive?"all":profile,String(root.parent));
   const condition=profile==="known"?"e.access_state='public'":"e.access_state IN ('public','unknown')";
   const out=one(db,`SELECT count(*) AS n FROM edges e JOIN selected_edges s ON s.id=e.id WHERE e.from_node=? AND ${condition}`,nodeId);
   const incident=one(db,`SELECT 1 AS n FROM edges e JOIN selected_edges s ON s.id=e.id WHERE (e.from_node=? OR e.to_node=?) AND ${condition} LIMIT 1`,nodeId,nodeId);
@@ -156,9 +157,12 @@ async function rankComponents(db:DatabaseSync,profile:"known"|"inclusive",checkp
     CREATE INDEX rank_${profile}_parent ON rank_${profile}(parent);`);
   const union=new DiskUnion(db,`rank_${profile}`);
   const condition=profile==="known"?"e.access_state='public'":"e.access_state IN ('public','unknown')";
-  for(const edge of rows(db,`SELECT e.from_node,e.to_node FROM edges e JOIN selected_edges s ON s.id=e.id WHERE ${condition}`))
+  // Connectivity is undirected: one selected direction suffices per physical link.
+  for(const edge of rows(db,`SELECT e.from_node,e.to_node FROM edges e JOIN selected_edges s ON s.id=e.id WHERE ${condition} GROUP BY e.stable_physical_id`))
     { if (++work%1000===0) await checkpoint(); union.union(String(edge.from_node),String(edge.to_node)); }
   for(const row of rows(db,`SELECT id FROM rank_${profile}`)) { if (++work%1000===0) await checkpoint(); union.find(String(row.id)); }
+  // Aggregate once per profile, not once per trailhead in the same component.
+  run(db,`INSERT INTO portal_component_counts SELECT ?,parent,count(*) FROM rank_${profile} GROUP BY parent`,profile);
 }
 
 /** Candidate admission needs local links and context, not elevation or graph-wide ranking. */
@@ -184,6 +188,7 @@ async function linksFromMeasuredEdges(db:DatabaseSync,checkpoint:()=>Promise<voi
 }
 async function discoverPortalCandidates(db:DatabaseSync,coverage:AreaGeometry,checkpoint:()=>Promise<void>):Promise<void> {
   let work=0;
+  const boundary=prepareAreaGeometry(coverage);
   db.exec(`DROP TABLE IF EXISTS temp.road_nodes; CREATE TEMP TABLE road_nodes(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
     INSERT INTO road_nodes SELECT x.node_id,CASE WHEN max(w.edge_class='street') THEN 'street' ELSE 'service-road' END
     FROM way_nodes x JOIN ways w ON w.id=x.way_id WHERE w.edge_class IN ('street','service-road') AND w.access_state NOT IN (${restricted}) GROUP BY x.node_id;
@@ -193,7 +198,7 @@ async function discoverPortalCandidates(db:DatabaseSync,coverage:AreaGeometry,ch
     if(prior){if(roadClass==="street"&&prior.road_class!=="street")run(db,"UPDATE portal_candidates SET road_class='street' WHERE node_id=?",nodeId);return;}
     const nodeRow=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);if(!nodeRow)return;
     const lon=Number(nodeRow.lon),lat=Number(nodeRow.lat);
-    if(!coordinateIsInsideArea([lon,lat],coverage))return;
+    if(!boundary.containsPoint([lon,lat]))return;
     run(db,"INSERT INTO portal_candidates VALUES (?,?)",nodeId,roadClass);
   };
   for(const row of rows(db,"SELECT r.node_id,r.road_class,n.lon,n.lat FROM road_nodes r JOIN portal_trail_nodes c ON c.id=r.node_id JOIN nodes n ON n.id=r.node_id ORDER BY r.node_id")) {
@@ -358,12 +363,14 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   }
   const union=new DiskUnion(db,"portal_components");
   for(const edge of rows(db,"SELECT a,b FROM trail_links")) { if (++work%1000===0) await checkpoint(); union.union(String(edge.a),String(edge.b)); }
-  db.exec("CREATE TEMP TABLE component_stats(root TEXT PRIMARY KEY,min_id TEXT NOT NULL,length_m REAL NOT NULL DEFAULT 0) STRICT;");
+  db.exec(`CREATE TEMP TABLE component_stats(root TEXT PRIMARY KEY,min_id TEXT NOT NULL,length_m REAL NOT NULL DEFAULT 0) STRICT;
+    CREATE TEMP TABLE portal_component_counts(profile TEXT NOT NULL,parent TEXT NOT NULL,n INTEGER NOT NULL,PRIMARY KEY(profile,parent)) WITHOUT ROWID;`);
   for(const row of rows(db,"SELECT id FROM portal_components ORDER BY id")) {
     if (++work%1000===0) await checkpoint();
     const id=String(row.id),root=union.find(id);
     run(db,"INSERT INTO component_stats(root,min_id,length_m) VALUES (?,?,0) ON CONFLICT(root) DO UPDATE SET min_id=min(min_id,excluded.min_id)",root,id);
   }
+  run(db,"INSERT INTO portal_component_counts SELECT 'all',parent,count(*) FROM portal_components GROUP BY parent");
   for(const row of rows(db,"SELECT a,length_m FROM trail_links")) { if (++work%1000===0) await checkpoint(); run(db,"UPDATE component_stats SET length_m=length_m+? WHERE root=?",Number(row.length_m),union.find(String(row.a))); }
   const reuseInclusive=!one(db,`SELECT 1 FROM edges e JOIN selected_edges s ON s.id=e.id WHERE e.access_state NOT IN ('public','unknown') LIMIT 1`);
   await rankComponents(db,"known",checkpoint);
@@ -393,6 +400,6 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   } finally {
     statementCaches.delete(db);
     clearDiscovery(db);
-    for (const table of ["rank_known","rank_inclusive","component_stats","trail_links","portal_components"]) db.exec(`DROP TABLE IF EXISTS temp.${table}`);
+    for (const table of ["rank_known","rank_inclusive","component_stats","portal_component_counts","trail_links","portal_components"]) db.exec(`DROP TABLE IF EXISTS temp.${table}`);
   }
 }
