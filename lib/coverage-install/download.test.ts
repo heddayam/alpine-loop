@@ -12,6 +12,7 @@ import { downloadArtifact, DownloadStopped, verifyArtifact } from './download';
 import { Store, currentProcessBirth } from './store';
 import { areaBounds } from '@/lib/graph/geometry';
 import { createPreparedSchema } from '@/lib/data/sqlite-writer';
+import { rectangle } from '@/lib/coverage/geometry';
 const paths: string[] = [];
 afterEach(async () => {
     for (const path of paths.splice(0))
@@ -57,6 +58,43 @@ async function install(f: Awaited<ReturnType<typeof fixture>>, sections = ['a'])
     }
 }
 describe('prepared coverage installation', () => {
+    it('atomically replaces retired areas while preserving pinned old graphs and rejecting lost coverage', async () => {
+        const f = await fixture('graph-old');
+        const area = {maximumRouteMiles:40,bufferMiles:25};
+        f.release = dataReleaseSchema.parse({...f.release,id:'old-catalog',partitioning:'local-areas',
+            sections:[{id:'pilot',geometry,artifactIds:[f.artifact.id],area}],
+            artifacts:[{...f.artifact,startGeometry:geometry,graphId:'graph-old',regionId:'pilot'}]});
+        await writeFile(join(f.source,'release.json'),JSON.stringify(f.release));
+        expect((await install(f,['pilot'])).status).toBe('completed');
+        const prior = (await loadInstallation(f.root))!;
+        const fresh = await fixture('graph-new','replacement');
+        const larger = rectangle([-1,-1,2,2]);
+        const next = dataReleaseSchema.parse({...fresh.release,id:'new-catalog',partitioning:'local-areas',geometry:larger,
+            sections:[{id:'central',geometry:larger,artifactIds:[fresh.artifact.id],area,replaces:['pilot']}],
+            artifacts:[{...fresh.artifact,geometry:larger,startGeometry:larger,graphId:'graph-new',regionId:'central'}]});
+        await writeFile(join(f.source,fresh.artifact.path),await readFile(join(fresh.source,fresh.artifact.path)));
+        const service = new DownloadService(f.options);
+        try {
+            const missing = structuredClone(next);
+            missing.sections[0]!.geometry = rectangle([0,0,.4,1]);
+            missing.artifacts[0]!.startGeometry = missing.sections[0]!.geometry;
+            await expect(service.makePlan({releaseId:missing.id,sectionIds:['central']},missing)).rejects.toThrow('Remove them explicitly');
+            const clipped = structuredClone(next);
+            clipped.artifacts[0]!.geometry = rectangle([0,0,.4,1]);
+            await expect(service.makePlan({releaseId:clipped.id,sectionIds:['central']},clipped)).rejects.toThrow('Remove them explicitly');
+            const undeclared = structuredClone(next); delete undeclared.sections[0]!.replaces;
+            await expect(service.makePlan({releaseId:undeclared.id,sectionIds:['central']},undeclared)).rejects.toThrow('Remove them explicitly');
+            await writeFile(join(f.source,'release.json'),JSON.stringify(next));
+            await withInstallationPins([prior.installation.id],async()=>{
+                const job = await service.create({releaseId:next.id,sectionIds:['central']});
+                expect((await loadInstallation(f.root))!.installation.id).toBe(prior.installation.id);
+                await runDownloadWorker(f.options);
+                expect(service.get(job.id).status).toBe('completed');
+                expect((await loadInstallation(f.root))!.installation.sectionIds).toEqual(['central']);
+                expect((await loadInstallation(f.root,prior.installation.id))!.installation.sectionIds).toEqual(['pilot']);
+            },f.root);
+        } finally { service.close(); }
+    });
     it('treats an unpublished local catalog as empty while retaining malformed-catalog errors', async () => {
         const f = await fixture();
         await rm(join(f.source, 'release.json'));

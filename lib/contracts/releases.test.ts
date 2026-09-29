@@ -29,3 +29,9 @@ it("rejects missing or mismatched local graph ownership and inadequate buffer me
     expect(dataReleaseSchema.safeParse(changed).success).toBe(false);
   }
 });
+it("allows only unambiguous retirement of inactive local area IDs",()=>{
+  const withReplacements=(replaces:string[])=>({...release,sections:[{...release.sections[0]!,replaces}]});
+  expect(dataReleaseSchema.parse(withReplacements(["pilot-a","pilot-b"])).sections[0]!.replaces).toEqual(["pilot-a","pilot-b"]);
+  for(const ids of [["area-a"],["pilot-a","pilot-a"],[]]) expect(dataReleaseSchema.safeParse(withReplacements(ids)).success).toBe(false);
+  expect(dataReleaseSchema.safeParse({...withReplacements(["pilot"]),partitioning:"geographic"}).success).toBe(false);
+});

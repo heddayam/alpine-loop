@@ -5,7 +5,7 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
 import { planCoverageRegion } from "./plan";
-import { intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { containsCoverage, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import type { CoverageRegion } from "./types";
 
 vi.mock("node:fs/promises", async original => {
@@ -21,21 +21,6 @@ beforeAll(async()=>{
   central=await readCoverageRegion("central-cascades");
 });
 const footprint=(region:BaselineRegion)=>unionCoverage([region.boundary.geometry,...region.approaches.map(point=>point.neighborhood)]);
-// Polygon intersections can differ in their last floating-point bits. Compare
-// aggregate residual area, not vertices or envelopes; 1e-14 square degrees is
-// under 0.0001 m² here. Translate each ring before shoelace accumulation.
-const AREA_TOLERANCE=1e-14;
-function omittedArea(expected:AreaGeometry,actual:AreaGeometry):number {
-  const missing=subtractCoverage(expected,actual);
-  if(!missing) return 0;
-  const polygons=missing.type==="Polygon"?[missing.coordinates]:missing.coordinates;
-  return polygons.reduce((total,polygon)=>total+polygon.reduce((area,ring,index)=>{
-    const [x,y]=ring[0]!;
-    let signed=0;
-    for(let i=1;i<ring.length;i++) signed+=(ring[i-1]![0]-x)*(ring[i]![1]-y)-(ring[i]![0]-x)*(ring[i-1]![1]-y);
-    return area+(index===0?1:-1)*Math.abs(signed/2);
-  },0),0);
-}
 function omittedApproaches(region:CoverageRegion):string[] {
   return baseline.flatMap(previous=>previous.approaches.filter(expected=>!region.reviewedApproaches?.some(actual=>
     actual.id===expected.id && actual.name===expected.name && actual.radiusMeters===expected.radiusMeters &&
@@ -82,8 +67,8 @@ it("preserves every point of all three original start footprints, including the 
   expect(plan).toMatchObject({id:"central-cascades",name:"Central Cascades",maximumRouteMiles:40,bufferMiles:25});
   for(const previous of baseline) {
     const expected=footprint(previous);
-    expect(omittedArea(expected,central.geometry),previous.id).toBeLessThan(AREA_TOLERANCE);
-    expect(omittedArea(expected,plan.startGeometry),`${previous.id} after support/exclusions`).toBeLessThan(AREA_TOLERANCE);
+    expect(containsCoverage(central.geometry,expected),previous.id).toBe(true);
+    expect(containsCoverage(plan.startGeometry,expected),`${previous.id} after support/exclusions`).toBe(true);
     for(const point of previous.approaches) expect(subtractCoverage(point.neighborhood,plan.startGeometry),point.id).toBeNull();
   }
   expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(false);
@@ -112,7 +97,7 @@ it("detects a removed approach even if the retained boundary still covers its lo
 
 it("detects an omitted pilot footprint when only its approaches are added to the historical Central boundary",()=>{
   const incomplete=unionCoverage([baseline[0]!.boundary.geometry,...baseline.flatMap(region=>region.approaches.map(point=>point.neighborhood))]);
-  for(const pilot of baseline.slice(1)) expect(omittedArea(footprint(pilot),incomplete),pilot.id).toBeGreaterThan(AREA_TOLERANCE);
+  for(const pilot of baseline.slice(1)) expect(containsCoverage(incomplete,footprint(pilot)),pilot.id).toBe(false);
 });
 
 it("detects an interior hole even when all original wilderness boundary vertices remain covered",()=>{
@@ -122,7 +107,7 @@ it("detects an interior hole even when all original wilderness boundary vertices
   const damaged=subtractCoverage(central.geometry,hole)!;
   const rings=glacier.boundary.geometry.type==="Polygon"?glacier.boundary.geometry.coordinates:glacier.boundary.geometry.coordinates.flat();
   expect(rings.flat().every(point=>coordinateIsInsideArea(point,damaged))).toBe(true);
-  expect(omittedArea(footprint(glacier),damaged)).toBeGreaterThan(AREA_TOLERANCE);
+  expect(containsCoverage(damaged,footprint(glacier))).toBe(false);
 });
 
 it("exposes explicit replacements and aliases with mixed boundary/approach provenance",async()=>{

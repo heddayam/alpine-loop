@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { downloadRequestSchema, type DownloadRequest, type DownloadPlan, type DataRelease, type DownloadCatalog } from '@/lib/contracts/releases';
 import { Store, DownloadError } from './store';
+import { containsCoverage } from '@/lib/coverage/geometry';
 import { activate, cleanupInstallations, publishInstallation, coverageRoot, loadInstallation, selection, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, loadRelease, requireDisk, verifyArtifact, verifyCompressedArtifact } from './download';
 export type Options = {
@@ -13,6 +14,21 @@ export type Options = {
     startWorker?: (root: string) => void;
     available?: () => Promise<number>;
 };
+/** A declared consolidation must preserve the actual installed start and route extents. */
+function preservesInstalledCoverage(release: DataRelease, ids: string[], previous: Awaited<ReturnType<typeof loadInstallation>>) {
+    return !previous || previous.installation.sectionIds.every(id => {
+        if (ids.includes(id)) return true;
+        if (release.partitioning !== 'local-areas' || previous.release.partitioning !== 'local-areas') return false;
+        const old = previous.release.sections.find(section => section.id === id);
+        const replacement = release.sections.find(section => ids.includes(section.id) && section.replaces?.includes(id));
+        if (!old || !replacement || !containsCoverage(replacement.geometry, old.geometry)) return false;
+        const graph = release.artifacts.find(artifact => replacement.artifactIds.includes(artifact.id));
+        return Boolean(graph && old.artifactIds.every(id => {
+            const artifact = previous.release.artifacts.find(item => item.id === id);
+            return artifact && containsCoverage(graph.geometry, artifact.geometry);
+        }));
+    });
+}
 export function startDownloadWorker(root: string) {
     const failed = (error: Error) => {
         const store = new Store(root);
@@ -89,7 +105,7 @@ export class DownloadService {
             throw new DownloadError(409, 'Catalog release changed; review the current catalog');
         const selected = selection(release, request.sectionIds);
         const installed = await loadInstallation(this.root);
-        if (installed?.installation.sectionIds.some(id => !selected.sectionIds.includes(id)))
+        if (!preservesInstalledCoverage(release, selected.sectionIds, installed))
             throw new DownloadError(409, 'Installation would remove existing sections. Remove them explicitly first.');
         const artifacts = release.artifacts.filter(a => selected.artifactIds.includes(a.id));
         let reusableBytes = 0, downloadBytes = 0, additionalBytes = 0;
@@ -199,7 +215,7 @@ export async function runDownloadWorker(options: Options = {}) {
                 await withPublicationLock(service.root, async (locked) => {
                     checkpoint();
                     const current = await loadInstallation(service.root);
-                    if (current?.installation.sectionIds.some(id => !job.sectionIds.includes(id)))
+                    if (!preservesInstalledCoverage(release, job.sectionIds, current))
                         throw new DownloadError(409, 'Installed sections changed while downloading; review selection');
                     await activate(service.root, release, job.sectionIds, installation => locked.tx(() => {
                         const latest = locked.get(job.id);

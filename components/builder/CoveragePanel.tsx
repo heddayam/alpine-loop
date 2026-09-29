@@ -38,14 +38,16 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
   const visibleSections = sections.filter(section => regionName(section).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const installedIds = new Set(installed?.sectionIds ?? []);
   const installedArtifacts = new Set(installed?.artifactIds ?? []);
-  const updateIds = new Set(sections.filter(section => installedIds.has(section.id) && section.artifactIds.some(id => !installedArtifacts.has(id))).map(section => section.id));
-  const additionalCount = sections.filter(({ id }) => !installedIds.has(id)).length;
-  const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id));
-  const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
+  const replacementFor = (id: string) => sections.find(section => section.replaces?.includes(id));
+  const replacing = sections.filter(section => section.replaces?.some(id => installedIds.has(id)));
+  const updateIds = new Set(sections.filter(section => replacing.includes(section) || installedIds.has(section.id) && section.artifactIds.some(id => !installedArtifacts.has(id))).map(section => section.id));
+  const additionalCount = sections.filter(({ id }) => !installedIds.has(id) && !updateIds.has(id)).length;
+  const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id) && !replacementFor(id));
+  const selectedIds = new Set(selected.map(id => replacementFor(id)?.id ?? id).filter((id) => sections.some((section) => section.id === id)));
   const selectedSections = sections.filter(({ id }) => selectedIds.has(id));
-  const desired = [...new Set([...installedIds, ...selectedIds])].sort();
+  const desired = [...new Set([...installedIds].map(id => replacementFor(id)?.id ?? id).concat([...selectedIds]))].sort();
   const removable = [...selectedIds].filter((id) => installedIds.has(id));
-  const adding = [...selectedIds].some(id => !installedIds.has(id));
+  const adding = [...selectedIds].some(id => !installedIds.has(id) && !updateIds.has(id));
   const updating = updateIds.size > 0;
   const hasChanges = adding || updating;
   const downloadable = !unavailableInstalled.length && hasChanges;
@@ -92,6 +94,7 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
           {!selectedIds.size && !namedList ? <span className="coverage-selection">Select {unit === "area" ? "an" : "a"} {unit} on the map.</span> : null}
           {selectedIds.size || updating ? <div className="coverage-selection" role="status">{selectedIds.size ? `${selectedIds.size} ${unit}${selectedIds.size === 1 ? "" : "s"} selected` : "Update downloaded trails"} · {hasChanges ? <>up to {bytes(downloadBytes)} download · {bytes(activeBytes)} active trail data after download</> : <>{bytes(activeBytes)} selected trail data</>}</div> : null}
           {adding && updating ? <span className="coverage-selection">Includes updates to {updateIds.size} downloaded {unit}{updateIds.size === 1 ? "" : "s"}.</span> : null}
+          {replacing.map(section => <span className="coverage-selection" key={section.id}>{regionName(section)} includes your earlier downloaded areas. They stay available until the update finishes.</span>)}
           {selectedIds.size > 0 && release.limitations.some(value => /international border|US-only|United States.only/i.test(value)) ? <span className="coverage-selection">US trails only. Routes stop at the international border.</span> : null}
           {selectedSections.some(({ network }) => network?.sourceBoundaryLimited) ? <span className="coverage-selection">Trails may continue beyond the available data.</span> : null}
           <div className="action-row">

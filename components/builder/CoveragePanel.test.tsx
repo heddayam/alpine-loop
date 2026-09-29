@@ -107,6 +107,22 @@ it("requires explicit removal when a new catalog drops previously installed sect
   expect(fetcher).toHaveBeenCalledWith("/api/coverage", expect.objectContaining({ method: "DELETE", body: JSON.stringify({ sectionIds: ["retired"] }) }));
 });
 
+it("updates retired areas to their declared replacement without removing installed coverage first", async () => {
+  const next = namedCatalog();
+  next.release.sections = [{ ...next.release.sections[0]!, id: "central-cascades", name: "Central Cascades", replaces: ["pilot-a", "pilot-b"] } as typeof next.release.sections[number]];
+  next.release.artifacts = [next.release.artifacts[0]!];
+  next.installed = { ...installation, sectionIds: ["pilot-a", "pilot-b"] };
+  const fetcher = vi.fn(async (url: string) => response(url.endsWith("/jobs") ? job : next));
+  vi.stubGlobal("fetch", fetcher);
+  render(<CoveragePanel {...props} selected={[]} onSelectionChange={vi.fn()} />);
+  expect(await screen.findByRole("button", { name: "Update" })).toBeEnabled();
+  expect(screen.getByText("Central Cascades includes your earlier downloaded areas. They stay available until the update finishes.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: /Remove unavailable/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Update" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/coverage/jobs", expect.objectContaining({ body: JSON.stringify({ releaseId: next.release.id, sectionIds: ["central-cascades"] }) })));
+  expect(fetcher.mock.calls.some(call => (call as unknown as [string,RequestInit?])[1]?.method === "DELETE")).toBe(false);
+});
+
 it("shows concise available and installed counts for map selection", async () => {
   const base = catalog.release!;
   const releaseGeometry = { type: "Polygon" as const, coordinates: [[[-123,46],[-120,46],[-120,49],[-123,49],[-123,46]]] };

@@ -19,7 +19,7 @@ import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import { applyRestriction } from "@/lib/data/curated-access";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as METRIC_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { containsCoverage, contentId, intersectCoverage, rectangle, unionCoverage } from "./geometry";
 import { NORMALIZATION_VERSION } from "./source-store";
 import { elevationCache, elevationFor, describeCanonicalElevation } from "./elevation";
 import { reconcileInventory } from "./inventory";
@@ -54,10 +54,10 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     const retiredIds = new Set(region.replaces ?? []);
     for (const section of previous?.sections ?? []) {
       if (!retiredIds.has(section.id)) continue;
-      if (subtractCoverage(section.geometry, area.startGeometry))
+      if (!containsCoverage(area.startGeometry, section.geometry))
         throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete eligible-start coverage`);
       for (const artifact of previous!.artifacts.filter(artifact => section.artifactIds.includes(artifact.id)))
-        if (subtractCoverage(artifact.geometry, area.geometry))
+        if (!containsCoverage(area.geometry, artifact.geometry))
           throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete routing coverage`);
     }
     const inputs = await preparationInputs(recipe, session, area.geometry);
