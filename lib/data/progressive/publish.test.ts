@@ -15,6 +15,8 @@ import { createPreparedSchema } from "../sqlite-writer";
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import { writeProgressiveTopology } from "../testing/progressive-topology";
 import { writeProgressiveTopology as writeCompactHints } from "./topology";
+import { compactPreparedGraph } from "../compact-prepared-graph";
+import { rebuildPreparedSpatialIndexes } from "../prepared-spatial-index";
 
 const builtAt="2026-01-01T00:00:00.000Z";
 function stageSource(store:ProgressiveGraphStore){store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:"fixture"});}
@@ -395,4 +397,45 @@ it("preserves stable graph keys when another source network is prepared independ
     expect(other.edges.some(edge=>original.edges.some(prior=>prior.edge_key===edge.edge_key))).toBe(false);
     expect(other.edges.some(edge=>original.edges.some(prior=>prior.physical_edge_key===edge.physical_edge_key))).toBe(false);
   } finally {rmSync(directory,{recursive:true,force:true});}
+});
+
+it.each([false,true])("defers spatial indexes until the final compact graph with stable keys %s",async(stableKeys)=>{
+  const directory=mkdtempSync(path.join(tmpdir(),"prepared-deferred-spatial-"));
+  const store=openProgressiveGraphStore({stagingPath:path.join(directory,"stage.sqlite"),buildIdentity:"deferred-spatial"});
+  const ordinary=new DatabaseSync(":memory:"),deferred=new DatabaseSync(":memory:");
+  try {
+    const {nodes,edges,points}=fixture();stageSource(store);
+    nodes.forEach(node=>store.putNode(node));edges.forEach(edge=>store.putEdge(edge));points.forEach(point=>store.putAccessPoint(point));
+    const coverage=manifest("deferred",0.02).coverage.boundary;
+    await selectProgressiveEdges(store,coverage);
+    for (const [db,spatialIndexes] of [[ordinary,true],[deferred,false]] as const) {
+      createPreparedSchema(db);db.exec("PRAGMA foreign_keys=ON");
+      const inserted=await insertGraph(store,db,topologySha256(coverage),new Set(["fixture"]),async()=>{},stableKeys,{spatialIndexes});
+      if (!spatialIndexes) {
+        expect(inserted).toEqual({nodeCount:5,edgeCount:10,accessCount:2});
+        expect(db.prepare("SELECT * FROM node_spatial").all()).toEqual([]);
+        expect(db.prepare("SELECT * FROM edge_spatial").all()).toEqual([]);
+      }
+      await compactPreparedGraph(db,async()=>{},{spatialIndexes});
+      if (!spatialIndexes) {
+        expect(db.prepare("SELECT * FROM node_spatial").all()).toEqual([]);
+        expect(db.prepare("SELECT * FROM edge_spatial").all()).toEqual([]);
+        await rebuildPreparedSpatialIndexes(db,async()=>{});
+      }
+      await writeCompactHints(db,async()=>{});
+      expect(db.prepare("PRAGMA integrity_check").get()!.integrity_check).toBe("ok");
+      expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(db.prepare("SELECT rtreecheck('node_spatial') AS n,rtreecheck('edge_spatial') AS e").get()).toEqual({n:"ok",e:"ok"});
+      expect(db.prepare(`SELECT e.id FROM edges e JOIN edge_spatial s ON s.row_id=e.edge_key
+        JOIN json_each(e.geometry) p
+        WHERE s.min_lon>json_extract(p.value,'$[0]') OR s.max_lon<json_extract(p.value,'$[0]')
+          OR s.min_lat>json_extract(p.value,'$[1]') OR s.max_lat<json_extract(p.value,'$[1]')`).all()).toEqual([]);
+    }
+    // Rtree shadow tables describe an insertion-dependent tree shape, not graph data.
+    // Compare every logical graph table, including both final spatial indexes.
+    for (const row of ordinary.prepare("SELECT name FROM pragma_table_list WHERE schema='main' AND type IN ('table','virtual') AND name NOT LIKE 'sqlite_%' ORDER BY name").all()) {
+      const name=String(row.name);
+      expect(deferred.prepare(`SELECT * FROM ${name} ORDER BY 1`).all(),name).toEqual(ordinary.prepare(`SELECT * FROM ${name} ORDER BY 1`).all());
+    }
+  } finally {ordinary.close();deferred.close();store.close();rmSync(directory,{recursive:true,force:true});}
 });

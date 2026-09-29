@@ -5,17 +5,12 @@ import type { AreaGeometry } from "../area-geometry";
 import { prepareAreaGeometry } from "@/lib/graph/geometry";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "../types";
 import type { ProgressiveGraphStore } from "./store";
+import { preparedEdgeBounds } from "../prepared-spatial-index";
 
 /** Stable across independently prepared networks; uniqueness is checked in SQLite and at export. */
 export function stableGraphKey(kind: "node" | "physical" | "edge", id: string): number {
   return Number.parseInt(createHash("sha256").update(`${kind}\0${id}`).digest("hex").slice(0, 13), 16) || 1;
 }
-function bounds(geometry: CompiledEdge["geometry"]): [number,number,number,number] {
-  let minLon=Infinity,maxLon=-Infinity,minLat=Infinity,maxLat=-Infinity;
-  for (const [lon,lat] of geometry) { minLon=Math.min(minLon,lon);maxLon=Math.max(maxLon,lon);minLat=Math.min(minLat,lat);maxLat=Math.max(maxLat,lat); }
-  return [minLon,maxLon,minLat,maxLat];
-}
-
 /** Selects whole directed segments; the source union in the staging DB is never clipped. */
 export async function selectProgressiveEdges(store: ProgressiveGraphStore, coverage: AreaGeometry, checkpoint: () => Promise<void> = async () => {}): Promise<number> {
   let work=0;
@@ -36,7 +31,8 @@ export async function selectProgressiveEdges(store: ProgressiveGraphStore, cover
   return rejected;
 }
 
-export async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>, stableKeys = false): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
+/** Regional preparation may defer spatial writes until after graph compression. */
+export async function insertGraph(store: ProgressiveGraphStore, output: DatabaseSync, coverageHash: string, sourceIds: ReadonlySet<string>, checkpoint: () => Promise<void>, stableKeys = false, {spatialIndexes=true}:{spatialIndexes?:boolean}={}): Promise<{nodeCount:number;edgeCount:number;accessCount:number}> {
   let work=0;
   await checkpoint();
   const stage=store.database;
@@ -51,7 +47,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
     stage.exec("INSERT OR IGNORE INTO used_nodes SELECT from_node FROM edges WHERE id IN (SELECT id FROM selected_edges);");
     stage.exec("INSERT OR IGNORE INTO used_nodes SELECT to_node FROM edges WHERE id IN (SELECT id FROM selected_edges);");
     const insertNode=output.prepare("INSERT INTO nodes VALUES (?,?,?,?,?,?)");
-    const spatialNode=output.prepare("INSERT INTO node_spatial VALUES (?,?,?,?,?)");
+    const spatialNode=spatialIndexes?output.prepare("INSERT INTO node_spatial VALUES (?,?,?,?,?)"):undefined;
     let nodeCount=0;
     for (const row of stage.prepare("SELECT n.record FROM nodes n JOIN used_nodes u ON u.id=n.id ORDER BY n.id").iterate() as Iterable<{record:string}>) {
       if (++work%1000===0) await checkpoint();
@@ -61,7 +57,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       nodeCount++;
       const key=stableKeys?stableGraphKey("node",node.id):nodeCount;
       insertNode.run(node.id,key,node.lon,node.lat,node.elevationM,JSON.stringify(node.flags));
-      spatialNode.run(key,node.lon,node.lon,node.lat,node.lat);
+      spatialNode?.run(key,node.lon,node.lon,node.lat,node.lat);
     }
     const nodeKey=output.prepare("SELECT node_key FROM nodes WHERE id=?");
     const insertPhysical=output.prepare("INSERT INTO physical_edges VALUES (?,?,?,?,?)");
@@ -93,7 +89,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
     const endpoint=output.prepare("SELECT lon,lat,elevation_m FROM nodes WHERE id=?");
     const physicalKey=output.prepare("SELECT physical_edge_key FROM physical_edges WHERE stable_physical_id=?");
     const insertEdge=output.prepare("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    const spatialEdge=output.prepare("INSERT INTO edge_spatial VALUES (?,?,?,?,?)");
+    const spatialEdge=spatialIndexes?output.prepare("INSERT INTO edge_spatial VALUES (?,?,?,?,?)"):undefined;
     let edgeCount=0;
     for (const row of selected) {
       if (++work%1000===0) await checkpoint();
@@ -119,7 +115,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
         edge.gainM,edge.lossM,edge.maxElevationM,edge.maxSustainedGradePct,
         JSON.stringify(edge.elevationProfile.map(({distanceMeters,elevationMeters})=>[distanceMeters,elevationMeters])),
         edge.accessState,edge.edgeClass,JSON.stringify(edge.sourceRefs),JSON.stringify(edge.flags));
-      spatialEdge.run(key,...bounds(edge.geometry));
+      if (spatialEdge) spatialEdge.run(key,...preparedEdgeBounds(edge.geometry));
     }
     const insertAccess=output.prepare("INSERT INTO access_points(id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     const usedNode=stage.prepare("SELECT 1 FROM used_nodes WHERE id=?");

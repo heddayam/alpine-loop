@@ -4,10 +4,11 @@ import { compactPreparedGraph } from "./compact-prepared-graph";
 import { createPreparedSchema } from "./sqlite-writer";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import { writeProgressiveTopology } from "./progressive/topology";
+import { rebuildPreparedSpatialIndexes } from "./prepared-spatial-index";
 
 const databases:DatabaseSync[]=[];
 afterEach(()=>{for(const db of databases.splice(0))db.close();});
-function fixture() {
+function fixture({spatialIndexes=true}:{spatialIndexes?:boolean}={}) {
   const db=new DatabaseSync(":memory:");databases.push(db);createPreparedSchema(db);db.exec("PRAGMA foreign_keys=ON");
   let nodeKey=0,physicalKey=0,edgeKey=0;
   const positions=new Map<string,[number,number,number]>();
@@ -15,7 +16,7 @@ function fixture() {
     const key=++nodeKey,lon=key/1000,lat=0;
     positions.set(id,[lon,lat,elevation]);
     db.prepare("INSERT INTO nodes VALUES(?,?,?,?,?,?)").run(id,key,lon,lat,elevation,JSON.stringify(flags));
-    db.prepare("INSERT INTO node_spatial VALUES(?,?,?,?,?)").run(key,lon,lon,lat,lat);
+    if (spatialIndexes) db.prepare("INSERT INTO node_spatial VALUES(?,?,?,?,?)").run(key,lon,lon,lat,lat);
   };
   const access=(id:string)=>db.prepare(`INSERT INTO access_points VALUES(?,?,?,'trailhead','public','high',NULL,'[]',0,0,0,0,0,0,'component','street',NULL,NULL,NULL)`).run(`access-${id}`,id,id);
   const add=(a:string,b:string,options:{oneway?:boolean;flags?:string[];access?:string;length?:number;profile?:Array<[number,number]>;gain?:number;loss?:number}={})=>{
@@ -31,7 +32,7 @@ function fixture() {
       db.prepare("INSERT INTO edges VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(`edge-${ek}`,ek,key,backwards?b:a,backwards?a:b,
         JSON.stringify(backwards?[...geometry].reverse():geometry),length,backwards?loss:gain,backwards?gain:loss,Math.max(...profile.map(p=>p[1])),null,
         JSON.stringify(backwards?[...profile].reverse().map(([d,e])=>[length-d,e]):profile),options.access??"public","trail",'["fixture"]',JSON.stringify(options.flags??["osm-feature:way/1"]));
-      db.prepare("INSERT INTO edge_spatial VALUES(?,?,?,?,?)").run(ek,Math.min(pa[0],pb[0]),Math.max(pa[0],pb[0]),0,0);
+      if (spatialIndexes) db.prepare("INSERT INTO edge_spatial VALUES(?,?,?,?,?)").run(ek,Math.min(pa[0],pb[0]),Math.max(pa[0],pb[0]),0,0);
     }
   };
   return {db,node,access,add};
@@ -82,13 +83,14 @@ describe("persistent junction graph",()=>{
     expect(db.prepare("SELECT inclusive_minimum_stem_m FROM access_points WHERE node_id='a'").get()!.inclusive_minimum_stem_m).toBe(0);
     integrity(db);
   });
-  it("retains unanchored rings, parallel paths and directed cycle legality",async()=>{
-    const {db,node,access,add}=fixture();
+  it.each([true,false])("retains unanchored rings, parallel paths and directed cycle legality with spatial indexes %s",async(spatialIndexes)=>{
+    const {db,node,access,add}=fixture({spatialIndexes});
     for(const id of ["a","b","c","d","x","y","z"])node(id);
     access("a");add("a","b",{oneway:true});add("b","c",{oneway:true});add("c","d",{oneway:true});add("d","a",{oneway:true});
     add("x","y");add("y","z");add("z","x");
     const before=routes(db,"a");
-    expect(await compactPreparedGraph(db,async()=>{})).toEqual({beforeNodes:7,beforePhysicalEdges:7,nodes:4,physicalEdges:4});
+    expect(await compactPreparedGraph(db,async()=>{},{spatialIndexes})).toEqual({beforeNodes:7,beforePhysicalEdges:7,nodes:4,physicalEdges:4});
+    if (!spatialIndexes) await rebuildPreparedSpatialIndexes(db,async()=>{});
     expect(routes(db,"a")).toEqual(before);
     expect(db.prepare("SELECT count(*) AS n FROM physical_edges WHERE from_node_key=to_node_key").get()!.n).toBe(0);
     integrity(db);
@@ -139,15 +141,54 @@ describe("persistent junction graph",()=>{
     for(const row of edges)expect(JSON.parse(String(row.elevation_profile))).toEqual([[0,0],[60,0],[120,0]]);
     integrity(db);
   });
-  it("bounds long corridors and rolls back cancellation without losing source rows",async()=>{
-    const {db,node,add}=fixture();for(let index=0;index<=2050;index++)node(`n${String(index).padStart(4,"0")}`);
+  it.each([true,false])("bounds long corridors and rolls back cancellation without losing source rows with spatial indexes %s",async(spatialIndexes)=>{
+    const {db,node,add}=fixture({spatialIndexes});for(let index=0;index<=2050;index++)node(`n${String(index).padStart(4,"0")}`);
     for(let index=0;index<2050;index++)add(`n${String(index).padStart(4,"0")}`,`n${String(index+1).padStart(4,"0")}`);
     let checks=0;
-    await expect(compactPreparedGraph(db,async()=>{if(++checks===4)throw new Error("cancelled");})).rejects.toThrow("cancelled");
+    await expect(compactPreparedGraph(db,async()=>{if(++checks===4)throw new Error("cancelled");},{spatialIndexes})).rejects.toThrow("cancelled");
     expect(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n).toBe(2051);
-    const counts=await compactPreparedGraph(db,async()=>{});
+    const counts=await compactPreparedGraph(db,async()=>{},{spatialIndexes});
+    if (!spatialIndexes) await rebuildPreparedSpatialIndexes(db,async()=>{});
     expect(counts.nodes).toBe(3);expect(counts.physicalEdges).toBe(2);
     expect(db.prepare("SELECT max(json_array_length(elevation_profile)) AS n FROM edges").get()!.n).toBe(2049);
+    integrity(db);
+  });
+  it("rejects deferred compaction on populated indexes and preserves caller transactions",async()=>{
+    const {db,node,add}=fixture();node("a");node("b");add("a","b");
+    await expect(compactPreparedGraph(db,async()=>{},{spatialIndexes:false})).rejects.toThrow("requires empty spatial indexes");
+    integrity(db);
+    db.exec("BEGIN");
+    await expect(rebuildPreparedSpatialIndexes(db,async()=>{})).rejects.toThrow("no active transaction");
+    expect(db.isTransaction).toBe(true);db.exec("ROLLBACK");
+  });
+  it("rolls back a cancelled index rebuild before atomically replacing stale rows",async()=>{
+    const {db,node,add}=fixture();node("a");node("b");node("c");add("a","b");add("b","c");
+    await compactPreparedGraph(db,async()=>{});
+    db.exec("DELETE FROM node_spatial; DELETE FROM edge_spatial; INSERT INTO node_spatial VALUES(999,1,1,2,2); INSERT INTO edge_spatial VALUES(999,3,3,4,4)");
+    const beforeNodes=db.prepare("SELECT * FROM node_spatial").all(),beforeEdges=db.prepare("SELECT * FROM edge_spatial").all();
+    let checks=0;
+    await expect(rebuildPreparedSpatialIndexes(db,async()=>{if (++checks===2) throw new Error("cancelled index rebuild");})).rejects.toThrow("cancelled index rebuild");
+    expect(db.isTransaction).toBe(false);
+    expect(db.prepare("SELECT * FROM node_spatial").all()).toEqual(beforeNodes);
+    expect(db.prepare("SELECT * FROM edge_spatial").all()).toEqual(beforeEdges);
+    await rebuildPreparedSpatialIndexes(db,async()=>{});
+    expect(db.prepare("SELECT * FROM node_spatial WHERE row_id=999").get()).toBeUndefined();
+    expect(db.prepare("SELECT * FROM edge_spatial WHERE row_id=999").get()).toBeUndefined();
+    integrity(db);
+  });
+  it("bounds index rebuild work and rolls back an interrupted partial batch",async()=>{
+    const {db,node}=fixture({spatialIndexes:false});
+    for (let index=0;index<1001;index++) node(`n${String(index).padStart(4,"0")}`);
+    let checks=0;
+    await expect(rebuildPreparedSpatialIndexes(db,async()=>{
+      if (++checks===2) {
+        expect(db.prepare("SELECT count(*) AS n FROM node_spatial").get()!.n).toBe(999);
+        throw new Error("cancelled partial indexes");
+      }
+    })).rejects.toThrow("cancelled partial indexes");
+    expect(db.prepare("SELECT count(*) AS n FROM node_spatial").get()!.n).toBe(0);
+    expect(db.isTransaction).toBe(false);
+    await rebuildPreparedSpatialIndexes(db,async()=>{});
     integrity(db);
   });
 });

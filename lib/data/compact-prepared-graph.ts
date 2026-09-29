@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { topologySha256, canonicalTopologyJson } from "@/lib/graph/topology-hash";
 import { maximumSustainedGradePct } from "./metrics";
 import { stableGraphKey } from "./progressive/publish";
+import { preparedEdgeBounds } from "./prepared-spatial-index";
 
 type Link = { physical_edge_key: number; other: string };
 type Direction = { id: string; from_node: string; to_node: string; signature: string; bytes: number; length_m: number };
@@ -18,8 +19,10 @@ const MAX_CORRIDOR_BYTES = 8 * 1024 * 1024;
  * Unlike ring-removing simplifiers, retain two anchors on an otherwise closed chain.
  * SQL holds adjacency/visited state; JS holds only one bounded corridor at a time.
  */
-export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promise<void>) {
+export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promise<void>, {spatialIndexes=true}:{spatialIndexes?:boolean}={}) {
   if (db.isTransaction) throw new Error("Graph compaction requires no active transaction");
+  if (!spatialIndexes && (db.prepare("SELECT 1 FROM node_spatial LIMIT 1").get() || db.prepare("SELECT 1 FROM edge_spatial LIMIT 1").get()))
+    throw new Error("Deferred graph compaction requires empty spatial indexes");
   const counts = () => ({nodes:Number(db.prepare("SELECT count(*) AS n FROM nodes").get()!.n),
     physicalEdges:Number(db.prepare("SELECT count(*) AS n FROM physical_edges").get()!.n)});
   const before = counts();
@@ -67,8 +70,8 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
     const nodeKey = db.prepare("SELECT node_key FROM nodes WHERE id=?");
     const insertPhysical = db.prepare("INSERT INTO physical_edges VALUES(?,?,?,?,?)");
     const insertEdge = db.prepare("INSERT INTO edges VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    const insertSpatial = db.prepare("INSERT INTO edge_spatial VALUES(?,?,?,?,?)");
-    const removeSpatial = db.prepare("DELETE FROM edge_spatial WHERE row_id IN (SELECT edge_key FROM compact_directions WHERE physical_edge_key=?)");
+    const insertSpatial = spatialIndexes?db.prepare("INSERT INTO edge_spatial VALUES(?,?,?,?,?)"):undefined;
+    const removeSpatial = spatialIndexes?db.prepare("DELETE FROM edge_spatial WHERE row_id IN (SELECT edge_key FROM compact_directions WHERE physical_edge_key=?)"):undefined;
     const removeEdges = db.prepare("DELETE FROM edges WHERE id IN (SELECT id FROM compact_directions WHERE physical_edge_key=?)");
     const removePhysical = db.prepare("DELETE FROM physical_edges WHERE physical_edge_key=?");
     const merge = async (chain:Member[]) => {
@@ -108,11 +111,9 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
         insertEdge.run(edgeId,edgeKey,key,members[0]!.from,members.at(-1)!.to,JSON.stringify(geometry),length,gain,loss,maximum,
           maximumSustainedGradePct(profile),JSON.stringify(profile.map(({distanceMeters,elevationMeters})=>[distanceMeters,elevationMeters])),
           metadata!.access_state,metadata!.edge_class,metadata!.source_refs,metadata!.flags);
-        let w=Infinity,e=-Infinity,s=Infinity,n=-Infinity;
-        for(const [lon,lat] of geometry){w=Math.min(w,lon);e=Math.max(e,lon);s=Math.min(s,lat);n=Math.max(n,lat);}
-        insertSpatial.run(edgeKey,w,e,s,n);
+        if (insertSpatial) insertSpatial.run(edgeKey,...preparedEdgeBounds(geometry));
       }
-      for(const member of chain){removeSpatial.run(member.key);removeEdges.run(member.key);removePhysical.run(member.key);}
+      for(const member of chain){removeSpatial?.run(member.key);removeEdges.run(member.key);removePhysical.run(member.key);}
     };
     const pending=db.prepare("SELECT id FROM compact_anchors WHERE done=0 ORDER BY id LIMIT 1");
     const complete=db.prepare("UPDATE compact_anchors SET done=1 WHERE id=?");
@@ -140,8 +141,8 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
         await merge(chain);
       }
     }
-    db.exec(`DELETE FROM node_spatial WHERE row_id IN (SELECT node_key FROM nodes WHERE id NOT IN (SELECT id FROM compact_anchors));
-      DELETE FROM nodes WHERE id NOT IN (SELECT id FROM compact_anchors);`);
+    if (spatialIndexes) db.exec("DELETE FROM node_spatial WHERE row_id IN (SELECT node_key FROM nodes WHERE id NOT IN (SELECT id FROM compact_anchors));");
+    db.exec("DELETE FROM nodes WHERE id NOT IN (SELECT id FROM compact_anchors);");
     await checkpoint();
     const after=counts();
     db.exec("COMMIT");
