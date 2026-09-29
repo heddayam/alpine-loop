@@ -8,7 +8,7 @@ import type { CoverageRunnerContext, CoverageRunResult } from "@/lib/coverage/ty
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { inspectPreparedRelease } from "@/lib/data/prepared-release";
 
-const usage = "Usage: data regions | plan REGION | build REGION | inspect release.json | status [report.json] [--watch]";
+const usage = "Usage: data regions | plan REGION [REGION...] | build REGION [REGION...] | inspect release.json | status [report.json] [--watch]";
 
 async function withProgress(statusFile: string, action: (context: CoverageRunnerContext) => Promise<CoverageRunResult>) {
   const controller = new AbortController(), started = Date.now();
@@ -71,17 +71,27 @@ export async function runDataCommand(argv: readonly string[]): Promise<void> {
   const [file, ...options] = args;
   if (!file || file.startsWith("--")) throw new Error(usage);
   if (command === "plan" || command === "build") {
-    if (options.length || !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(file)) throw new Error(usage);
-    const region = await readCoverageRegion(file);
-    if (command === "plan") {
-      process.stdout.write(`${JSON.stringify({ ...planCoverageRegion(region), downloadBytes: null,
-        note: "Download size and first-build duration are unknown until preparation. No source data was processed.", limitations: region.recipe.limitations }, null, 2)}\n`);
-    } else {
-      const {result, progress} = await withProgress(statusFile, context => buildCoverageRegion(region, context));
-      const releasePath = path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared", "release.json");
-      process.stderr.write(`${result.status === "completed" ? "Completed" : "Paused"} ${region.name} in ${Math.floor(progress.elapsedMs / 60000)}m ${Math.floor(progress.elapsedMs / 1000) % 60}s.\n`);
-      process.stdout.write(`${JSON.stringify({...result, region:{id:region.id,name:region.name}, summary:progress,
-        ...(result.status === "completed" && result.snapshot ? {releasePath, next:"Open Coverage in the app and download this region."} : {})}, null, 2)}\n`);
+    if (args.some(id => !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(id))) throw new Error(usage);
+    if (new Set(args).size !== args.length) throw new Error("Choose each region only once.");
+    // Reject every invalid selection before preparation or status writes begin.
+    const selections = [];
+    for (const id of args) {
+      const region = await readCoverageRegion(id);
+      selections.push({region, plan:planCoverageRegion(region)});
+    }
+    for (const {region, plan} of selections) {
+      if (command === "plan") {
+        process.stdout.write(`${JSON.stringify({ ...plan, downloadBytes: null,
+          note: "Download size and first-build duration are unknown until preparation. No source data was processed.", limitations: region.recipe.limitations }, null, 2)}\n`);
+      } else {
+        // One active build at a time; stream results rather than retaining packs.
+        const {result, progress} = await withProgress(statusFile, context => buildCoverageRegion(region, context));
+        const releasePath = path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared", "release.json");
+        process.stderr.write(`${result.status === "completed" ? "Completed" : "Paused"} ${region.name} in ${Math.floor(progress.elapsedMs / 60000)}m ${Math.floor(progress.elapsedMs / 1000) % 60}s.\n`);
+        process.stdout.write(`${JSON.stringify({...result, region:{id:region.id,name:region.name}, summary:progress,
+          ...(result.status === "completed" && result.snapshot ? {releasePath, next:"Open Coverage in the app and download this region."} : {})}, null, 2)}\n`);
+        if (result.status !== "completed") break;
+      }
     }
   } else if (command === "inspect" && !options.length) {
     process.stdout.write(`${JSON.stringify(await inspectPreparedRelease(file), null, 2)}\n`);

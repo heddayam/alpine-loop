@@ -27,6 +27,11 @@ afterEach(async () => { vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllEn
 
 it.each([
   ["build", "recipe.json"],
+  ["build", "glacier-peak", "--all"],
+  ["build", "glacier-peak", "../unreviewed"],
+  ["plan", "glacier-peak", "--all"],
+  ["build", "glacier-peak", "glacier-peak"],
+  ["plan", "glacier-peak", "glacier-peak"],
   ["build", "catalog.json", "--network", "network-old"],
   ["build", "recipe.json", "--bbox", "1,2,3"],
   ["build", "recipe.json", "--bbox", "1,2,3,NaN"],
@@ -90,4 +95,77 @@ it("does not report a paused build as completed", async () => {
   await runDataCommand(["build","glacier-peak"]);
   expect(JSON.parse(await readFile(path.join(root,"status.json"),"utf8")).status).toBe("paused");
   expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining("Paused Glacier Peak area"));
+});
+
+
+const neighbor = {...region, id:"henry-m-jackson", name:"Henry M. Jackson area"};
+function namedSelection() {
+  vi.mocked(readCoverageRegion).mockImplementation(async id => {
+    const selected = [region, neighbor].find(region => region.id === id);
+    if (!selected) throw new Error(`Unknown region: ${id}`);
+    return selected;
+  });
+}
+it.each(["plan", "build"])("rejects an unknown later region before any %s output or preparation", async command => {
+  namedSelection();
+  await expect(runDataCommand([command, region.id, "unknown-region"])).rejects.toThrow("Unknown region");
+  expect(buildCoverageRegion).not.toHaveBeenCalled();
+  expect(process.stdout.write).not.toHaveBeenCalled();
+  await expect(readFile(path.join(root,"status.json"))).rejects.toMatchObject({code:"ENOENT"});
+});
+it("plans every selected area before beginning any build", async () => {
+  vi.mocked(readCoverageRegion).mockImplementation(async id => id === region.id ? region : {
+    ...neighbor, geometry:rectangle([-121.5,89.8,-121.4,89.9]),
+  });
+  await expect(runDataCommand(["build", region.id, neighbor.id])).rejects.toThrow("pole");
+  expect(buildCoverageRegion).not.toHaveBeenCalled();
+  await expect(readFile(path.join(root,"status.json"))).rejects.toMatchObject({code:"ENOENT"});
+});
+it("prints all selected plans in order without preparation or progress writes", async () => {
+  namedSelection();
+  await runDataCommand(["plan", neighbor.id, region.id]);
+  const plans = vi.mocked(process.stdout.write).mock.calls.map(([raw]) => JSON.parse(String(raw)));
+  expect(plans.map(plan => plan.id)).toEqual([neighbor.id, region.id]);
+  expect(plans.every(plan => plan.maximumRouteMiles === 40 && plan.bufferMiles === 25)).toBe(true);
+  expect(buildCoverageRegion).not.toHaveBeenCalled();
+  await expect(readFile(path.join(root,"status.json"))).rejects.toMatchObject({code:"ENOENT"});
+});
+it("preflights all regions and waits for each build before starting the next", async () => {
+  namedSelection();
+  let finishFirst!: () => void;
+  let enteredFirst!: () => void;
+  const pending = new Promise<void>(resolve => { finishFirst = resolve; });
+  const entered = new Promise<void>(resolve => { enteredFirst = resolve; });
+  const events: string[] = [];
+  vi.mocked(buildCoverageRegion).mockImplementation(async selected => {
+    expect(vi.mocked(readCoverageRegion).mock.calls.map(([id]) => id)).toEqual([neighbor.id, region.id]);
+    events.push(`start:${selected.id}`);
+    if (selected.id === neighbor.id) { enteredFirst(); await pending; }
+    events.push(`finish:${selected.id}`);
+    return {status:"completed",snapshot:null,completedUnits:1,units:[]};
+  });
+  const running = runDataCommand(["build", neighbor.id, region.id]);
+  await entered;
+  expect(events).toEqual([`start:${neighbor.id}`]);
+  expect(buildCoverageRegion).toHaveBeenCalledTimes(1);
+  finishFirst();
+  await running;
+  expect(events).toEqual([`start:${neighbor.id}`, `finish:${neighbor.id}`, `start:${region.id}`, `finish:${region.id}`]);
+  const outputs = vi.mocked(process.stdout.write).mock.calls.map(([raw]) => JSON.parse(String(raw)));
+  expect(outputs.map(output => output.region.id)).toEqual([neighbor.id, region.id]);
+  expect(outputs.every(output => output.status === "completed" && output.summary.status === "completed")).toBe(true);
+});
+it.each(["failure", "pause"])("does not begin later regions after a %s", async outcome => {
+  namedSelection();
+  vi.mocked(buildCoverageRegion).mockImplementation(async () => {
+    if (outcome === "failure") throw new Error("Preparation failed");
+    return {status:"paused",snapshot:null,completedUnits:0,units:[]};
+  });
+  const running = runDataCommand(["build", region.id, neighbor.id]);
+  if (outcome === "failure") await expect(running).rejects.toThrow("Preparation failed");
+  else await running;
+  expect(buildCoverageRegion).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(buildCoverageRegion).mock.calls[0]![0].id).toBe(region.id);
+  const status = JSON.parse(await readFile(path.join(root,"status.json"),"utf8"));
+  expect(status.status).toBe(outcome === "failure" ? "failed" : "paused");
 });
