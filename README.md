@@ -108,15 +108,16 @@ Automated tests do not fetch trail data or call external providers.
 
 The workflow is **choose named hiking areas → preview → build**. Run `data regions`
 for the configured names: twelve Washington groups and the four existing California
-areas. Washington's 39 counties are all assigned; names organize downloads, while
-access and **fewer than 10 mapped buildings within 500 metres** determine eligible
-starts. Quiet foothill and lowland starts qualify too. California retains its exact
-previous footprints. See the [territory definitions](data/coverage/territories/README.md)
-for grouping and boundary limitations.
+areas. Washington uses published mountain-range outlines, including foothills and
+approaches, with surrounding coastal, Puget and basin areas completing coverage.
+Access and **fewer than 10 mapped buildings within 500 metres** determine eligible
+starts; being inside a mountain range is not required. California retains its exact
+previous footprints. See the [region definitions](data/coverage/regions/README.md)
+for source provenance and geographic limits.
 
 Central Cascades preserves the Glacier Peak and Henry M. Jackson pilot footprints
 and approaches. Areas become downloadable after a successful build, then install
-through Coverage. Larger start territories increase source-processing costs; build
+through Coverage. Large start areas increase source-processing costs; build
 times and artifact sizes need measurement. The ten-minute target is not established
 for these expanded areas. Forest aliases do not promise entire-forest coverage.
 
@@ -133,12 +134,12 @@ docker compose run --rm data scripts/data.ts plan santa-cruz-mountains henry-coe
 docker compose run --rm data scripts/data.ts build \
   santa-cruz-mountains southern-east-bay monterey-carmel henry-coe
 
-# Rebuild the expanded existing Washington groups:
+# Rebuild Washington mountain areas:
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
   data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks southwest-cascades olympic-peninsula
 
-# Additional Washington groups, also built sequentially:
+# Surrounding areas and other Washington ranges, also built sequentially:
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
   data scripts/data.ts build north-puget south-puget willapa-hills \
@@ -160,6 +161,15 @@ Adding an area preserves neighboring published artifacts. In Coverage, select th
 new areas, review their sizes, and choose **Download**; several selections share
 one download job. Existing installed areas remain installed. Overlapping areas
 search each shared start through one owning graph.
+
+When updating from the previous county-based areas, start coverage can move to a
+neighboring group. Build and select those neighbors together with the updated area.
+Installation refuses an update that would lose existing start or routing coverage;
+some old rectangular route buffers include corners outside the new buffers even
+when all new areas are selected. If Coverage still reports a loss, explicitly remove
+the affected old areas, then download the revised selection. The new areas preserve
+the statewide start footprint and each start's route buffer; saved searches retain
+their pinned data.
 
 `plan` prints eligible start geometry and the surrounding routing extent. Requests
 remain capped at **40 miles**; the conservative **25-mile buffer** also supports

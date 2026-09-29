@@ -19,10 +19,12 @@ distance may be up to 40 miles; longer close matches remain explicitly labeled.
 Coverage targets all eligible starts in Washington and the exact previously
 available Bay Area/nearby California footprints. A start needs fewer than ten mapped
 buildings within 500 metres, regardless of mountain/foothill/lowland geography.
-Twelve Washington download groups assign all 39 counties, adding the preserved
-historical footprints and approaches; four California definitions remain unchanged.
-County lines organize downloads and do not clip hikes. Generalized boundary/source
-limitations and real-data acceptance remain explicit. The [coverage roadmap](regional-expansion-plan.md)
+Twelve Washington download groups follow published mountain ranges and their
+foothills, with named lowland, basin and coastal areas completing the territory.
+Historical approaches are retained; four California definitions remain unchanged.
+The catalog loads one pinned outline per area, with no county-assignment registry.
+These outlines select starts and do not clip hikes. Boundary/source limitations
+and real-data acceptance remain explicit. The [coverage roadmap](regional-expansion-plan.md)
 tracks implementation separately from built, installed and verified coverage.
 
 An area can be drawn, named, or based on typical driving time. Named regions

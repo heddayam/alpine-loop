@@ -216,6 +216,13 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
 
+Washington download outlines use pinned GMBA v2 Broad mountain-range polygons,
+EPA Level III ecoregions for surrounding territory, and retained approach
+footprints. These are organizational boundaries, not a mountain eligibility
+test. The [region definitions](../../data/coverage/regions/README.md) record
+source hashes, attribution, assignments and the derivation recipe. Builds load
+the checked-in outlines directly; they do not download or regenerate them.
+
 The [prepared coverage design](prepared-coverage.md) is the forward path:
 add independently reviewed coverage intent and verified provider extent to
 a coherent release. Existing pack definitions below remain migration

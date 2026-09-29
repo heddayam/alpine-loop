@@ -47,10 +47,10 @@ The offshore limit removes that corner before source validation. This is a
 fixed, reviewed scope decision; the planner does not automatically clip missing
 source geometry or overlook small gaps.
 
-The [pinned Census county geometry](territories/washington-counties.geojson)
-contains all 39 Washington counties. Its westernmost vertex is Clallam County's
+The [statewide start-coverage baseline](../fixtures/coverage/washington-start-coverage.geojson)
+preserves the former county inventory and historical footprints. Its westernmost vertex is
 `[-124.76306800030036, 48.17628299983627]`, well east of the offshore cap.
-The cap therefore removes no part of those declared county territories. The
+The cap therefore removes no part of that declared start coverage. The original
 county data is generalized at 1:500,000 scale and does not define an exact
 coastline or prove a complete real-world trail inventory. Its raw-response hash
 is `sha256:de4849583453e0e5de34c2577a51b216ffb1c5d24bfd11859bbd7b5d2dbaa52b`.

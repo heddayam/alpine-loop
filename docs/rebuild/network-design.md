@@ -44,10 +44,12 @@ enumeration or a bound on trail density and search complexity.
 
 `data regions` lists the pinned catalog. `data plan central-cascades` previews the
 named trailhead footprint and routing support; `data build central-cascades` builds it.
-Named download groups cover the complete declared territory. Washington assigns
-all 39 pinned county polygons; California preserves the four existing footprints.
-Historical boundaries and reviewed approaches remain included. Names, provenance,
-geometry and approach review are owned by one catalog in `data/coverage/regions/`.
+Named download groups cover the complete declared territory. Washington follows
+GMBA mountain ranges and foothills, completed by named surrounding areas. California
+preserves the four existing footprints. Historical mountain footprints and reviewed
+approaches remain included. Names, provenance and approach review belong to the
+catalog; each area loads one static boundary file. There is no runtime county
+registry, mountain classification, spatial clustering or boundary-generation step.
 
 After normalization, the shared access discovery finds actual start candidates
 inside the start footprint and counts building centroids through a spatial index.

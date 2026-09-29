@@ -47,8 +47,10 @@ recipe. Plan and Downloads use that same eligible-start footprint. Preparation
 extracts local ways/context, discovers and freezes eligible starts with fewer than
 ten mapped buildings within 500 metres, then prunes by an admissible distance bound
 before DEM work. It reuses measured segment metrics, persists compact corridors and
-audits. Washington uses all 39 county units assigned across twelve downloads;
-California retains four exact existing footprints. County lines select starts only.
+audits. Washington uses twelve mountain-led and surrounding download areas;
+California retains four exact existing footprints. Each area reads one pinned
+boundary. A statewide geometric regression checks for omitted territory; county
+unit loading and assignment machinery are removed.
 Unsupported building relations and density-excluded reviewed approaches are disclosed;
 missing topology remains a publication error.
 Schema 7 geometry/profile records are unchanged. Each artifact carries its stable

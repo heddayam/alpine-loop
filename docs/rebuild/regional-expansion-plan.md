@@ -36,12 +36,12 @@ number of packs does not prescribe the number of new download areas.
 | Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
 | Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Configured; build/install/acceptance pending |
 
-The historical Washington polygons were mountain-focused. The current definitions
-union them with all 39 pinned Census county polygons, assigned once across twelve
-groups. This closes unassigned territorial gaps and retains old approach obligations.
-Eligibility is fewer than ten mapped buildings within 500 metres plus the existing
-access/topology rules, including quiet lowlands and foothills. Complete county
-assignment is not a claim of complete source trails or built/installed coverage.
+Washington now uses published GMBA mountain outlines, including foothills and
+retained historical approaches, with surrounding lowland, coastal and basin areas
+completing the territory. County-based grouping is superseded. Eligibility remains
+fewer than ten mapped buildings within 500 metres plus the existing access/topology
+rules. Whole-geometry tests guard the previously accepted statewide extent; this
+does not establish complete source trails or built/installed coverage.
 
 Marin/Mount Tam and Tahoe–Eldorado were planned, not previously activated.
 Keep them distinct from restoration obligations. The August 4 archive tags contain
@@ -74,26 +74,27 @@ earlier prototype source samples, not the nine later completed regional builds.
 - Source-refresh/publication across a coherent generation remains a separate
   maintenance gate. A batch of builds is not an atomic generation refresh.
 
-## Washington territory assignment and acceptance
+## Washington geography and acceptance
 
-The [pinned county definitions](../../data/coverage/territories/README.md) document
-all assignments and provenance. Catalog validation rejects a missing unit, duplicate
-assignment or unknown unit. Existing groups cover their whole assigned counties;
-seven new groups cover the remaining islands, lowlands and eastern territory:
+The [region definitions](../../data/coverage/regions/README.md) record the published
+range IDs, surrounding-area derivation and source hashes. The app loads one pinned
+boundary per region. The county collection, assignment registry and unit validation
+are removed; a whole-state geometry fixture detects gaps across the complete set.
 
-- North Puget Islands; South Puget Sound; Willapa Hills and Lower Columbia.
-- Northeast Washington; Spokane and Palouse; Columbia Basin.
-- Blue Mountains and Walla Walla.
+North/Central Cascades, Rainier–Goat Rocks, Southwest Cascades, Olympics, Willapa,
+the northeastern ranges and Blue Mountains form the mountain groups. North/South
+Puget, Spokane–Palouse and Columbia Basin retain surrounding eligible starts.
+Mountain outlines organize downloads; no new terrain-based eligibility rule applies.
+Existing historical mountain footprints and reviewed approaches remain included.
 
-The original five groups also expand to their west/east foothills and lowlands.
-Census mapping geometry is generalized; shorelines, small islands and margins still
-need source-start acceptance. The precise IBC mask and reviewed exclusions remain
-hard routing limits. Preserve explicit permission/source-review exclusions.
+Generalized shorelines and mapped source omissions remain limitations. The precise
+IBC mask and reviewed exclusions remain hard routing limits. Preserve explicit
+permission/source-review exclusions. Build and update the surrounding areas too when
+moving from the former county extents: some starts now belong to another named area.
 
 Real-data build time, memory, bytes, installation, route generation and independent
-source completeness are still acceptance work. The rectangular routing buffers
-can make large county groups expensive even after early sparse-start filtering.
-Future measured regrouping must preserve every unit and existing coverage obligation.
+source completeness remain acceptance work. Long ranges can still produce large
+rectangular preparation buffers; natural borders alone do not establish speedups.
 
 ## Region definition and acceptance
 

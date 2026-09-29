@@ -6,6 +6,54 @@ the evidence line.
 
 ## Active system design revision
 
+### Mountain-led download boundaries — 2026-09-29
+
+- [x] Replace Washington's county grouping with twelve static mountain-led and
+  surrounding-area outlines. Pin GMBA v2 Broad range ancestry and EPA Level III
+  ecoregions, retain historical mountain footprints and reviewed approaches, and
+  allocate shoreline/source-edge residuals without dropping start coverage.
+  California's four entries remain unchanged. Mountain geography groups downloads;
+  the 0–9 buildings within 500 m rule still decides start eligibility.
+- [x] Delete the county registry, assignment/validation code and superseded Central
+  boundary. The catalog requires one direct boundary file per area. No new runtime
+  dependency, boundary generator, request control or graph schema is introduced.
+- [x] Guard changed same-ID installations using collective selected start and route
+  coverage. Unchanged geometry uses the existing fast path; retired pilots still
+  require one declared complete replacement. Publication can remain sequential;
+  installation switches atomically and saved jobs keep their old pins. All 27
+  focused installer tests and targeted lint pass.
+- [x] Verify all sixteen plans offline, the complete Washington geometry obligation,
+  historical Central/pilot footprints, reviewed approaches, unchanged California
+  fingerprints, retained trail seams and adjacent source support. The 25 focused
+  regional/seam/source tests pass; one initial sample was outside the old footprint,
+  so it was replaced with the existing Friday Harbor checkpoint and the affected
+  case passed. `npm run typecheck` and targeted ESLint pass. Installer verification
+  above adds 27 cases; no full test suite was repeated.
+- [x] Normalize authored outlines with one GEOS precision policy, resolving observed
+  floating-point overlay failures without runtime fallback code. The shared grid
+  and small outward allowance preserve every baseline point; all outputs are within
+  0.09 m of their raw inputs. All twelve files total 670,635 bytes. Runtime union,
+  baseline containment and installed-route comparison complete without exceptions.
+  Source hashes, measured effects and primary references are pinned with the data.
+- [x] Integrate focused commits and archive/remove completed worktrees and branches.
+  Remove temporary authoring downloads, tools and scripts. No worker remains;
+  root configuration and lockfile are unchanged. Preserve the user-owned untracked
+  publication review.
+- [ ] User rebuilds the data/app images and desired areas, then installs updates.
+  Build/select surrounding areas as needed when starts move between groups;
+  old rectangular route-buffer corners can still require explicit removal before
+  installing revised areas. The aggregate new routing footprint omits about
+  0.29665 square degrees of old offshore/southern Oregon rectangle corners; do not
+  expand start areas merely to retain those overestimates. Start coverage and the
+  25-mile buffer guarantee remain required.
+  Existing caches, prepared/installed artifacts and saved jobs are preserved.
+- [ ] Real-data completeness and performance acceptance remain pending: no regional
+  build, full app build or browser suite was run for this boundary revision.
+
+Sources, derivation and limitations are in the [region definitions](../../data/coverage/regions/README.md).
+This supersedes county-based grouping below, while retaining its statewide
+coverage obligation and early sparse-start preparation.
+
 ### Sparse starts and complete territory assignment — 2026-09-28
 
 - [x] Apply the user's explicit rule: 0–9 mapped buildings within 500 metres;
@@ -55,7 +103,7 @@ the evidence line.
 - [ ] Real-data start/trail completeness, shoreline/boundary margins, representative
   loops/lollipops and performance acceptance across the expanded territory.
 
-Inputs, tradeoffs and commands are in [territory definitions](../../data/coverage/territories/README.md),
+Current inputs, tradeoffs and commands are in [region definitions](../../data/coverage/regions/README.md),
 [network design](network-design.md), [coverage roadmap](regional-expansion-plan.md)
 and [README](../../README.md#developer-data-builds). User caches, prepared/installed
 artifacts, saved jobs and the untracked publication review are preserved.
