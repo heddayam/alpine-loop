@@ -110,7 +110,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       await importLocalSources(session, inputs, area.geometry);
       scratch = await mkdtemp(path.join(scratchRoot, ".region-"));
       const databasePath = path.join(scratch, "region.sqlite");
-      const store = openProgressiveGraphStore({stagingPath:path.join(scratch,"stage.sqlite"), buildIdentity:area.id});
+      const store = openProgressiveGraphStore({stagingPath:path.join(scratch,"stage.sqlite"), buildIdentity:area.id, deferLookupIndexes:true});
       let demGeometry: AreaGeometry, elevationFingerprint: string;
       try {
         await report(`Reading walking links and access context: ${area.name}`);
@@ -156,6 +156,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           }
         }
         flush(); await check();
+        await report(`Indexing walking link memberships: ${area.name}`);
+        await store.prepareLookupIndexes("ways",check);
         await report(`Finding sparse access points: ${area.name}`);
         const candidates=await prepareSparsePortalCandidates(store,area.startGeometry,check);
         await report(`Found ${candidates.eligibleAccessPoints} sparse entrance candidates: ${area.name}`,candidates);
@@ -176,6 +178,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           async (tile:string|null)=>report(tile ? `Acquiring 30 m elevation backup for ${tile}` : `Measuring retained trails: ${area.name}`));
         await report(`Measuring retained trails: ${area.name}`);
         const measured = await prepareMetrics(store,path.join(root,"metrics.sqlite"),elevation,check);
+        await report(`Indexing measured trails: ${area.name}`,measured);
+        await store.prepareLookupIndexes("edges",check);
         // Sampling can acquire NoData backup products. Pin the final inventory in
         // graph identity, provenance and the resume receipt only after it finishes.
         elevationFingerprint = elevation.productFingerprint;
