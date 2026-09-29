@@ -419,6 +419,22 @@ it("pins elevation acquired during measurement in graph bytes, identity, receipt
   await expectNoScratch();
 });
 
+it("reuses valid geometry metrics without rewriting cache rows or changing the prepared graph",async()=>{
+  await build();
+  const before=cachedMetrics(), beforeRelease=await release(), beforePieces=await pieces();
+  metricsCache(db=>db.exec(`CREATE TABLE metric_writes(id TEXT,fingerprint TEXT);
+    CREATE TRIGGER record_metric_write AFTER INSERT ON metrics BEGIN
+      INSERT INTO metric_writes VALUES (new.id,new.fingerprint);
+    END;`));
+  await clearReceipts();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build();
+  expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(metricsCache(db=>db.prepare("SELECT * FROM metric_writes").all())).toEqual([]);
+  expect(cachedMetrics()).toEqual(before);
+  expect(await release()).toEqual(beforeRelease);
+  expect(await pieces()).toEqual(beforePieces);
+});
+
 it("rekeys newly sampled metrics after fallback acquisition without relabeling reused primary values",async()=>{
   await build();
   const before=cachedMetrics(),removed=String(before[0]!.fingerprint);

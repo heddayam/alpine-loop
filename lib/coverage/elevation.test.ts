@@ -8,6 +8,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { CoverageUnit } from "./types";
 import type { ThreeDepCollection } from "@/lib/data/elevation/collection";
 import { rectangle } from "./geometry";
+import * as coverageGeometry from "./geometry";
 import { UvRasterioThreeDepElevationSampler } from "@/lib/data/elevation/uv-rasterio-sampler";
 import { geometryElevationFingerprint, describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";
 
@@ -264,6 +265,51 @@ it("uses a verified cached backup offline and preserves genuine remaining NoData
   expect(sample.mock.calls[1]![0]).toEqual([points[0], points[2]]);
   expect(refresh).not.toHaveBeenCalled();
   expect((JSON.parse(await readFile(backup.filePath, "utf8")) as ThreeDepCollection).products).toHaveLength(1);
+});
+
+it("reuses the relevant backup inventory across metric fingerprints", async () => {
+  const value = await fixture();
+  await backupFixture(value, true);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  const intersections = vi.spyOn(coverageGeometry, "intersectCoverage");
+  const before = result.fingerprintForGeometry(points);
+  expect(intersections).toHaveBeenCalled();
+  intersections.mockClear();
+  expect(result.fingerprintForGeometry(points)).toBe(before);
+  expect(result.fingerprintForGeometry([...points].reverse())).toBe(before);
+  expect(result.limitations).toHaveLength(1);
+  expect(intersections).not.toHaveBeenCalled();
+});
+
+it("refreshes an existing sampler's metric keys and provenance after another sampler acquires backup", async () => {
+  const value = await fixture(), backup = await backupFixture(value), cache = elevationCache();
+  const observer = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true, cache);
+  const before = observer.fingerprintForGeometry(points), sourceBefore = observer.source;
+  const writer = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, false, cache);
+  vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([null, 200, 300]).mockResolvedValueOnce([110]);
+  refresh.mockResolvedValue({ collection: backup.data, collectionPath: backup.filePath });
+  await expect(writer.sampler.sample(points)).resolves.toEqual([110, 200, 300]);
+  expect(observer.fingerprintForGeometry(points)).not.toBe(before);
+  expect(observer.fingerprintForGeometry(points)).toBe(writer.fingerprintForGeometry(points));
+  expect(observer.source).not.toEqual(sourceBefore);
+  expect(observer.source).toEqual(writer.source);
+  expect(observer.productFingerprint).toBe(writer.productFingerprint);
+  expect(observer.limitations).toEqual(writer.limitations);
+});
+
+it("invalidates a same-size backup replacement without retaining stale metric keys or source identity", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true), cache = elevationCache();
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true, cache);
+  const before = result.fingerprintForGeometry(points), sourceBefore = result.source;
+  const replacement = {...backup.backup, productId:"replacement",
+    receipt:{...backup.backup.receipt,sha256:`sha256:${"2".repeat(64)}`,retrievedAt:"2026-09-25T00:00:00.000Z"}};
+  cache.backup!.products = [replacement];
+  expect(result.fingerprintForGeometry(points)).not.toBe(before);
+  expect(result.fingerprintForGeometry(points)).toBe(geometryElevationFingerprint([value.first], [replacement])(points));
+  expect(result.source.contentHash).not.toBe(sourceBefore.contentHash);
+  expect(result.source.retrievedAt).toBe(replacement.receipt.retrievedAt);
+  expect(result.productFingerprint).toBe(result.source.contentHash);
 });
 
 it("explains a missing offline backup without making a request", async () => {

@@ -179,6 +179,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         for (const raw of raws) await reconcileInventory(raw,store,area.geometry,check,id=>Boolean(member.get(id)),inputs.restrictions);
         await report(`Ranking retained access points: ${area.name}`);
         await store.derivePortals(area.geometry,check);
+        await report(`Writing prepared graph: ${area.name}`);
         const db = new DatabaseSync(databasePath);
         try {
           db.exec("PRAGMA foreign_keys=ON;PRAGMA journal_mode=DELETE;PRAGMA cache_size=-16384;PRAGMA temp_store=FILE");
@@ -318,11 +319,13 @@ async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore
     return contentId({geometry,algorithm:METRIC_VERSION,sampler:elevation.sampler.algorithmVersion,elevation:elevation.fingerprintForGeometry(geometry)});
   };
   const flush = async () => {
-    const values: EdgeMetrics[] = [], missing: number[] = [], fingerprints: string[] = [];
+    const values: EdgeMetrics[] = [], missing: number[] = [], writes: number[] = [], fingerprints: string[] = [];
     for (let i=0;i<pending.length;i++) {
       const part = pending[i]!, fingerprint = fingerprintFor(part);
       fingerprints[i] = fingerprint;
-      const cached = readMetric("geometry",fingerprint) ?? readMetric(part.id,fingerprint);
+      const geometryCached = readMetric("geometry",fingerprint);
+      const cached = geometryCached ?? readMetric(part.id,fingerprint);
+      if (!geometryCached) writes.push(i);
       if (cached) { values[i] = cached; reusedSegments++; } else missing.push(i);
     }
     if (missing.length) {
@@ -333,9 +336,13 @@ async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore
       missing.forEach((i,j)=>{values[i]=measured[j]!;fingerprints[i]=fingerprintFor(pending[i]!);}); measuredSegments += missing.length;
     }
     for (const [i,part] of pending.entries()) if (!values[i]?.elevationProfile?.length) throw new Error(`Missing elevation on ${part.id}`);
-    cache.exec("BEGIN");
-    try { pending.forEach((_part,i)=>put.run("geometry",fingerprints[i]!,JSON.stringify(values[i]))); cache.exec("COMMIT"); }
-    catch (error) { cache.exec("ROLLBACK"); throw error; }
+    // Valid geometry hits are already durable. Only measurements and legacy-key
+    // promotions need writes; invalid geometry rows are repaired by either path.
+    if (writes.length) {
+      cache.exec("BEGIN");
+      try { writes.forEach(i=>put.run("geometry",fingerprints[i]!,JSON.stringify(values[i]))); cache.exec("COMMIT"); }
+      catch (error) { cache.exec("ROLLBACK"); throw error; }
+    }
     store.transaction(()=>{
       for (const [i,part] of pending.entries()) {
         const metric = values[i]!;

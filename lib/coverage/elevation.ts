@@ -15,7 +15,9 @@ import type { ElevationSampler, SourceSnapshot } from "@/lib/data/adapters";
 import { intersectCoverage, rectangle } from "./geometry";
 
 type Product = ThreeDepCollection["products"][number];
-type Inventory = { products: Product[]; template?: ThreeDepCollection };
+// Replace product arrays when inventory changes so every sampler sharing the
+// inventory can invalidate its derived fingerprints without scanning each call.
+type Inventory = { products: readonly Product[]; template?: ThreeDepCollection };
 const BACKUP_POLICY = "usgs-3dep-10m-primary-30m-nodata-v1";
 const BACKUP_LIMITATION = "Elevation uses USGS 10 m data, with USGS 30 m data only where the 10 m raster has NoData. These lower-resolution samples can affect elevation gain and grade estimates.";
 export type ElevationCache = {
@@ -157,12 +159,12 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
       state.template ??= downloaded.collection;
       const product = absoluteProducts(downloaded.collection, downloaded.collectionPath)
         .filter((item) => tile(item) === key).sort((a, b) => a.productId.localeCompare(b.productId))[0];
-      if (product) state.products.push(product);
+      if (product) state.products = [...state.products, product];
     }
   }
   // Tile ownership makes sampling independent of array order. Keep the saved
   // collection and content identity canonical as well, across request orders.
-  const selected = state.products.sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
+  const selected = state.products = [...state.products].sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
   const missing = missingDemTiles(unit, selected);
   if (!state.template || missing.length) throw new Error(`3DEP products do not cover required one-degree tiles: ${missing.join(", ")}`);
   const collection: ThreeDepCollection = { ...state.template, products: selected };
@@ -173,7 +175,16 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
   if (samplerCollectionPath) await writeJsonAtomically(samplerCollectionPath, {...collection, products:required});
   const primary = new UvRasterioThreeDepElevationSampler(samplerCollectionPath ?? cachedPath, { tileOwnership: true });
   const describe = () => describeInitialized(unit.geometry, cachedPath, state, backup.state)!;
-  const relevantBackup = () => backup.state.products.filter(product => tileIntersectsCoverage(tile(product), unit.geometry));
+  let fingerprintProducts: readonly Product[] | undefined, relevantProducts: Product[] = [];
+  let fingerprint = geometryElevationFingerprint(required);
+  const relevantBackup = () => {
+    if (fingerprintProducts !== backup.state.products) {
+      relevantProducts = backup.state.products.filter(product => tileIntersectsCoverage(tile(product), unit.geometry));
+      fingerprint = geometryElevationFingerprint(required, relevantProducts);
+      fingerprintProducts = backup.state.products;
+    }
+    return relevantProducts;
+  };
   const backupSamplePath = samplerCollectionPath ? `${samplerCollectionPath}.backup.json` : path.join(preparationRoot, "dem", "backup", "sample-dem.json");
   const sampler: ElevationSampler = {
     algorithmVersion: primary.algorithmVersion,
@@ -200,8 +211,7 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
           const product = absoluteProducts(downloaded.collection, downloaded.collectionPath).find(product => tile(product) === key);
           if (!product) throw new Error(`No 30 m elevation backup covers tile ${key}`);
           backup.state.template ??= downloaded.collection;
-          backup.state.products.push(product);
-          backup.state.products.sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? ""));
+          backup.state.products = [...backup.state.products, product].sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? ""));
           await writeJsonAtomically(backup.cachedPath, { ...backup.state.template, products: backup.state.products });
         } finally { await onBackup?.(null); }
       }
@@ -213,16 +223,13 @@ export async function elevationFor(unit: CoverageUnit, cacheRoot: string, prepar
       return values;
     },
   };
-  let fingerprintInventory = "", fingerprint = geometryElevationFingerprint(required);
   return {
     sampler,
     get source() { return describe().source; },
     get productFingerprint() { return describe().productFingerprint; },
     get limitations() { return relevantBackup().length ? [BACKUP_LIMITATION] : []; },
     fingerprintForGeometry: coordinates => {
-      const products = relevantBackup();
-      const inventory = JSON.stringify(products.map(product => [tile(product), product.productId, product.receipt.sha256]));
-      if (inventory !== fingerprintInventory) { fingerprintInventory = inventory; fingerprint = geometryElevationFingerprint(required, products); }
+      relevantBackup();
       return fingerprint(coordinates);
     },
   };
@@ -262,7 +269,7 @@ function describeInitialized(geometry: AreaGeometry, cachedPath: string, state: 
 /** Describe already verified products without downloading DEM for water or empty graph areas. */
 export async function describeCanonicalElevation(geometry: AreaGeometry, cacheRoot: string, preparationRoot: string, cache = elevationCache()): Promise<{source:SourceSnapshot;productFingerprint:string}|null> {
   const { state, cachedPath } = await canonicalFor({ id: "description", geometry, status: "pending" }, cacheRoot, preparationRoot, cache);
-  state.products.sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
+  state.products = [...state.products].sort((a, b) => (tile(a) ?? "").localeCompare(tile(b) ?? "") || a.productId.localeCompare(b.productId));
   if (missingDemTiles({id:"description",geometry,status:"pending"}, state.products).length) return null;
   const backup = await backupFor(geometry, preparationRoot, cache);
   const described = describeInitialized(geometry, cachedPath, state, backup.state);
