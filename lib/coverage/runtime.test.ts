@@ -43,7 +43,7 @@ beforeEach(async () => {
   vi.mocked(inspectPinnedOsmSnapshot).mockResolvedValue(source);
   vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(source);
   const { elevationFor, describeCanonicalElevation } = await import("./elevation");
-  vi.mocked(elevationFor).mockResolvedValue({ source: { ...source, id: "dem" }, productFingerprint: "fixture-dem", fingerprintForGeometry: () => "fixture-dem", sampler: { algorithmVersion: "fixture", sample: async (coordinates) => coordinates.map(() => 100) } } as Awaited<ReturnType<typeof elevationFor>>);
+  vi.mocked(elevationFor).mockResolvedValue({ source: { ...source, id: "dem" }, productFingerprint: "fixture-dem", fingerprintForGeometry: () => "fixture-dem", limitations: [], sampler: { algorithmVersion: "fixture", sample: async (coordinates) => coordinates.map(() => 100) } });
   vi.mocked(describeCanonicalElevation).mockResolvedValue({source:{...source,id:"dem"},productFingerprint:"fixture-dem"});
   fixtureLines = [...(await readFile(source.localPath,"utf8")).trim().split("\n"),...secondNetwork];
   vi.mocked(filteredSourceLines).mockImplementation(async function* () { yield* fixtureLines; });

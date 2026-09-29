@@ -20,7 +20,15 @@ The official USGS 1-arc-second n50w12220180202 product returns valid values at
 all four points and at the earlier Chilliwack void. It is 55,903,776 bytes.
 Product ID: `5df04fb8e4b02caea0f4ffaf`.
 [Pinned source URL](https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/historical/n50w122/USGS_1_n50w122_20180202.tif).
-No full backup tile was downloaded or pinned in the app.
+The implemented fallback subsequently acquired and verified this one full tile
+for a two-point integration check. Its SHA-256 is
+`8f91194123173f0924118f7148fcaa98b18d052c07a4b9c930a5c55226e6a220`.
+The original valid sample stayed exactly 837.034668 m; the missing sample became
+836.936523 m. A second, network-disabled sampler returned identical values and
+the resume descriptor retained the final source identity. All nine primary
+product pins were preserved. The complete check took 7.867 seconds and peaked
+at 536,768,512 cgroup bytes; it did not run graph preparation or publication.
+The useful tile and its separate backup collection remain cached for the retry.
 
 ## Bounded comparison
 
@@ -62,3 +70,9 @@ and finalize artifact identity after any fallback acquisition. Never synthesize
 zero elevations, silently interpolate across voids, or drop US trails to finish
 a build. An all-30 m implementation should instead replace the active source
 policy and revalidate gain/grade behavior before acceptance.
+
+The implemented cache conservatively includes available backup pins for each
+owned tile. Acquiring a new backup can cause one-time remeasurement of otherwise
+valid primary-only cached segments in that tile. Unaffected tile keys stay valid;
+subsequent builds reuse the final composite keys. This avoids claiming a cached
+measurement used a source it did not use.

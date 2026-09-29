@@ -38,8 +38,23 @@ the evidence line.
   [Resolution study](elevation-resolution-study.md) records source URLs, measured
   size/grade/gain tradeoffs and the user's decision: keep 10 m primary, use 30 m
   only for missing primary samples.
-- [ ] Implement and verify lazy backup acquisition, offline reuse and final
-  provenance/cache identity after sampling. No nodata substitution or trail removal.
+- [x] Implement lazy backup acquisition, offline reuse and final provenance/cache
+  identity after sampling. Valid 10 m samples remain unchanged; remaining NoData
+  still fails. Incomplete metric-cache rows from failed older builds are misses,
+  and new incomplete rows fail before cache commit. No trail removal or fabricated
+  elevations. Twenty-six elevation/collection and 33 runtime tests passed, plus
+  targeted ESLint. Integrated typechecking caught one missing test-fixture field;
+  the fixture now explicitly supplies the new limitations member, and the final
+  integrated TypeScript check and targeted lint passed.
+- [x] Verify the actual Depot Creek failure using two coordinates in the existing
+  Docker image: 837.034668 m stayed unchanged and the missing sample became
+  836.936523 m. One verified 55,903,776-byte backup tile was acquired. Offline
+  sampling and resume identity matched, all nine primary product pins survived,
+  and the check took 7.867 seconds with 536,768,512 bytes peak cgroup memory.
+  The backup remains cached for the user's retry; no regional build ran. The
+  diagnostic container/scripts and completed agent worktrees were removed.
+- [x] Keep explicit removal of installed retired pilots available before a larger
+  replacement download. Both focused predecessor/removal UI cases and lint passed.
 - [ ] User rebuilds the consolidated Central Cascades graph and retries the batch,
   then updates the app/installed areas. The current published catalog still holds
   the pre-consolidation Central graph and the two pilots until that successful build.
