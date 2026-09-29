@@ -14,6 +14,7 @@ for (const seam of fixture.seams) {
     const regions=await Promise.all(seam.regionIds.map(readCoverageRegion));
     const plans=regions.map(planCoverageRegion);
     const eligibleStarts=unionCoverage(plans.map(plan=>plan.startGeometry));
+    const routingSupport=unionCoverage(plans.map(plan=>plan.geometry));
     const lines=fixture.features.filter(feature=>feature.properties.seam===seam.id);
     expect(lines).toHaveLength(expectedCounts[seam.id]!);
     for(const feature of lines) {
@@ -32,10 +33,12 @@ for (const seam of fixture.seams) {
       }
       // Mask only the fixture's explicit policy carve-out; do not infer continuity
       // through it or tolerate other missing sections of these reviewed ways.
-      const coverage=excluded ? unionCoverage([eligibleStarts,excluded]) : eligibleStarts;
+      // Mountain cores select starts; a reviewed trail can traverse a valley or
+      // another core. Preserve its complete routing support, not a land tessellation.
+      const coverage=excluded ? unionCoverage([routingSupport,excluded]) : routingSupport;
       const outside=coordinates.slice(1).flatMap((end,index)=>segmentIsInsideArea(coordinates[index]!,end,coverage)
         ? [] : [{segment:index,from:coordinates[index],to:end}]);
-      expect(outside,`${feature.id} ${feature.properties.name}: lost eligible-start coverage`).toEqual([]);
+      expect(outside,`${feature.id} ${feature.properties.name}: lost routing support`).toEqual([]);
       expect(plans.some(plan=>lineIsInsideArea(coordinates,excluded ? unionCoverage([plan.geometry,excluded]) : plan.geometry)),
         `${feature.id} ${feature.properties.name}: no independent graph covers the complete non-excluded line`).toBe(true);
     }

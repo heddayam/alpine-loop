@@ -1,12 +1,13 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { rectangle, unionCoverage } from "./geometry";
 import { filteredSourceLines } from "./source-filter";
+import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 
 vi.mock("node:child_process", async (original) => {
   const actual = await original<typeof import("node:child_process")>();
@@ -139,6 +140,21 @@ async function finishChild(child: ReturnType<typeof pendingChild>, code = 0) {
 }
 const stages = ["extract", "cat", "getparents", "getparents", "tags-filter", "cat", "getid", "merge"].map((command, index) => ({ command, index }));
 describe("filter process lifetime", () => {
+  it("pads an L-shaped addition without filling the old core's bounding rectangle",async()=>{
+    const directory=await root(),child=pendingChild();
+    const result=collect(filteredSourceLines(fixture,directory,unionCoverage([
+      rectangle([0,0,1,.1]),rectangle([0,0,.1,1]),
+    ]),async()=>{}));
+    const rejected=expect(result).rejects.toThrow("osmium extract failed");
+    await vi.waitFor(()=>expect(child.listenerCount("close")).toBe(1));
+    const args=vi.mocked(spawn).mock.calls.at(-1)![1] as string[];
+    const {geometry}=JSON.parse(await readFile(args[args.indexOf("--polygon")+1]!,"utf8"));
+    expect(coordinateIsInsideArea([.8,.8],geometry)).toBe(false);
+    expect(coordinateIsInsideArea([.8,.105],geometry)).toBe(true);
+    expect(coordinateIsInsideArea([.105,.8],geometry)).toBe(true);
+    await finishChild(child,1);await rejected;
+    expect(await readdir(directory)).toEqual([]);
+  });
   it("stops the nonempty probe after one object and awaits its exit before scanning parents", async () => {
     const directory = await root(), extraction = pendingChild(), probe = pendingChild(), parents = pendingChild();
     probe.kill.mockImplementation(() => true);

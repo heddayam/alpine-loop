@@ -16,7 +16,6 @@ import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics"
 import { preparedReleaseId } from "@/lib/data/prepared-release";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceRecipe } from "./recipe";
-import { readHikingTerrain } from "./regions";
 
 vi.mock("@/lib/data/metrics", async original => { const actual=await original<typeof import("@/lib/data/metrics")>(); return {...actual,calculateEdgeMetricsBatch:vi.fn(actual.calculateEdgeMetricsBatch)}; });
 vi.mock("@/lib/data/progressive/topology", async original => { const actual=await original<typeof import("@/lib/data/progressive/topology")>();return {...actual,writeProgressiveTopology:vi.fn(actual.writeProgressiveTopology)}; });
@@ -27,7 +26,6 @@ vi.mock("@/lib/data/elevation/uv-rasterio-sampler",async importOriginal=>{
 });
 vi.mock("@/lib/data/osm/source", async (importOriginal) => ({...await importOriginal<typeof import("@/lib/data/osm/source")>(), readOsmSourceConfig: vi.fn(), inspectPinnedOsmSnapshot: vi.fn(), readPinnedOsmSnapshot: vi.fn(), refreshPinnedOsmSnapshot: vi.fn() }));
 vi.mock("./elevation", () => ({ elevationFor: vi.fn(), describeCanonicalElevation: vi.fn(), elevationCache: () => ({}) }));
-vi.mock("./regions",()=>({readHikingTerrain:vi.fn()}));
 const source: SourceSnapshot = { id: "fixture", authority: "Alpine Loop", dataset: "Synthetic progressive loop", version: "1", retrievedAt: "2026-09-24T00:00:00Z", url: "https://example.invalid/progressive", license: "CC0-1.0", contentHash: `sha256:${"1".repeat(64)}`, localPath: path.resolve("data/fixtures/source/osm/progressive.opl") };
 let root: string;
 let fixtureLines: string[];
@@ -44,8 +42,6 @@ beforeEach(async () => {
   const { inspectPinnedOsmSnapshot, readPinnedOsmSnapshot } = await import("@/lib/data/osm/source");
   vi.mocked(inspectPinnedOsmSnapshot).mockResolvedValue(source);
   vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(source);
-  const {localPath,...terrainSource}=source;void localPath;
-  vi.mocked(readHikingTerrain).mockResolvedValue({geometry:rectangle([-123,46,-119,49]),source:{...terrainSource,id:"hiking-terrain-fixture"}});
   const { elevationFor, describeCanonicalElevation } = await import("./elevation");
   vi.mocked(elevationFor).mockResolvedValue({ source: { ...source, id: "dem" }, productFingerprint: "fixture-dem", fingerprintForGeometry: () => "fixture-dem", limitations: [], sampler: { algorithmVersion: "fixture", sample: async (coordinates) => coordinates.map(() => 100) } });
   vi.mocked(describeCanonicalElevation).mockResolvedValue({source:{...source,id:"dem"},productFingerprint:"fixture-dem"});
@@ -122,23 +118,21 @@ it("retains a start with nine nearby buildings",async()=>{
 });
 it("filters lowland starts before elevation while preserving an unmarked valley approach and reporting reviewed exclusions",async()=>{
   // The first loop's entrance is outside terrain, connected to its mountain end.
-  vi.mocked(readHikingTerrain).mockResolvedValue({...await readHikingTerrain(),geometry:rectangle([-121.245,47.50,-121.235,47.52])});
-  const input=region("both",consolidatedArea);
+  const input=region("both",rectangle([-121.245,47.50,-121.235,47.52]));
   input.reviewedApproaches=[{id:"lowland",name:"Lowland entrance",coordinates:[-121.12,47.51],radiusMeters:100}];
   await buildCoverageRegion(input,context());
   const measured=vi.mocked(calculateEdgeMetricsBatch).mock.calls.flatMap(([geometries])=>geometries.flat());
   expect(measured.every(([lon])=>lon< -121.2)).toBe(true);
   const result=await release(),[piece]=await pieces();
   expect(piece!.access.some(point=>point.confidence==="low" && point.node_id==="osm-node-1")).toBe(true);
-  expect(result.sources.some(source=>source.id==="hiking-terrain-fixture")).toBe(true);
+  expect(result.sources.some(source=>source.id==="region-boundary-both")).toBe(true);
   expect(result.limitations).toContain("Reviewed approaches excluded because no mountain hiking trail is reachable within the route-distance bound: Lowland entrance.");
 });
 it("fails an all-lowland selection before elevation and preserves the published neighbor",async()=>{
-  vi.mocked(readHikingTerrain).mockResolvedValue({...await readHikingTerrain(),geometry:rectangle([-121.27,47.50,-121.23,47.55])});
   await build();
   const prior=await release(),{elevationFor}=await import("./elevation");
   vi.mocked(elevationFor).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
-  await expect(build(secondArea)).rejects.toThrow("connect to mountain hiking trails");
+  await expect(build(rectangle([-121.02,47.50,-121.01,47.52]))).rejects.toThrow("connect to mountain hiking trails");
   expect(elevationFor).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
   expect(await release()).toEqual(prior);
   await expectNoScratch();
@@ -154,26 +148,53 @@ it("preserves mountain fire-road hikes but ambiguous walking links cannot qualif
   expect(elevationFor).not.toHaveBeenCalled();expect(await release()).toEqual(prior);
 });
 it("retains an entrance when its trail crosses narrow terrain with all source nodes outside",async()=>{
-  vi.mocked(readHikingTerrain).mockResolvedValue({...await readHikingTerrain(),geometry:rectangle([-121.252,47.5099,-121.248,47.5101])});
-  await build();
+  await build(rectangle([-121.252,47.5099,-121.248,47.5101]));
   expect((await pieces())[0]!.access.some(point=>point.node_id==="osm-node-1")).toBe(true);
 });
-it("includes terrain pins in checkpoint identity but reuses unchanged segment measurements",async()=>{
-  await build();const before=await release();
-  const terrain=await readHikingTerrain();
-  vi.mocked(readHikingTerrain).mockResolvedValue({...terrain,source:{...terrain.source,contentHash:`sha256:${"2".repeat(64)}`}});
+it("includes named mountain pins in checkpoint identity but reuses unchanged segment measurements",async()=>{
+  const input=region("first-region");
+  await buildCoverageRegion(input,context());const before=await release();
+  input.sources![0]!.contentHash=`sha256:${"2".repeat(64)}`;
   vi.mocked(calculateEdgeMetricsBatch).mockClear();
-  await build();
+  await buildCoverageRegion(input,context());
   expect((await release()).id).not.toBe(before.id);
-  expect((await release()).sources.find(source=>source.id==="hiking-terrain-fixture")!.contentHash).toBe(`sha256:${"2".repeat(64)}`);
+  expect((await release()).sources.find(source=>source.id==="region-boundary-first-region")!.contentHash).toBe(`sha256:${"2".repeat(64)}`);
   expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+});
+it("completes routes going away from an outside approach without nominating support-area entrances, and resumes the derived extent",async()=>{
+  fixtureLines=["n1 T x-121.57 y47.51","n2 T x-121.045 y47.51","n3 T x-121.571 y47.51",
+    "n11 Thighway=trailhead x-121.80 y47.51","n12 T x-121.69 y47.54",
+    "w500 Thighway=residential Nn3,n1","w501 Thighway=path,foot=yes Nn1,n2",
+    "w502 Thighway=path,foot=yes Nn1,n11,n12,n1"];
+  const input=region("approach",rectangle([-121.05,47.50,-121.04,47.52]));
+  await buildCoverageRegion(input,context());
+  const first=await release(),[piece]=await pieces();
+  expect(piece!.access.map(row=>row.node_id)).toEqual(["osm-node-1"]);
+  expect(piece!.edges.flatMap(row=>JSON.parse(String(row.geometry))).some(point=>point[0]===-121.80)).toBe(true);
+  expect(first.sections[0]!.geometry).not.toEqual(input.geometry);
+  const {elevationFor}=await import("./elevation");
+  vi.mocked(elevationFor).mockClear();vi.mocked(filteredSourceLines).mockClear();
+  await buildCoverageRegion(input,context());
+  expect(await release()).toEqual(first);
+  expect(elevationFor).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();
+});
+it("rejects a new approach's missing route support before DEM and preserves published data",async()=>{
+  await build();const prior=await release();
+  fixtureLines=["n1 T x-121.57 y47.51","n2 T x-121.045 y47.51","n3 T x-121.571 y47.51",
+    "w500 Thighway=residential Nn3,n1","w501 Thighway=path,foot=yes Nn1,n2"];
+  const input=region("gap",rectangle([-121.05,47.50,-121.04,47.52]));
+  input.recipe.sources[0]!.geometry=rectangle([-121.7,46,-119,49]);
+  const {elevationFor}=await import("./elevation");vi.mocked(elevationFor).mockClear();
+  await expect(buildCoverageRegion(input,context())).rejects.toThrow("complete 25-mile route buffer");
+  expect(elevationFor).not.toHaveBeenCalled();expect(await release()).toEqual(prior);
+  await expectNoScratch();
 });
 it("fails an all-dense selection before acquiring elevation and preserves the published neighbor",async()=>{
   fixtureLines.push(...buildingsAt(-121.12,47.51,10));
   await build();
   const prior=await release(),{elevationFor}=await import("./elevation");
   vi.mocked(elevationFor).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
-  await expect(build(secondArea)).rejects.toThrow("No eligible access points in Second region");
+  await expect(build(secondArea)).rejects.toThrow("connect to mountain hiking trails");
   expect(elevationFor).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
   expect(await release()).toEqual(prior);
   await expectNoScratch();

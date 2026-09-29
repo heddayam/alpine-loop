@@ -6,6 +6,55 @@ the evidence line.
 
 ## Active system design revision
 
+### Named Standard mountain cores and connected approaches — 2026-09-29
+
+- [x] Replace twelve Washington Broad/EPA boundary files and the separate terrain
+  mask/document with one licensed GMBA Standard Basic inventory: 127 full named
+  leaves, 721,719 bytes, SHA-256
+  `ede170c4e2a6626e6db4ee324bdd753788d91c72c31dd0423adbd4a83c1aeb4a`.
+  Full source extents remain reusable across state borders; generic product caps
+  select cores and nomination territory. Dataset/paper credit and modification
+  attribution travel in exported provenance. No per-city exclusions, raster,
+  new dependency, request setting or graph-schema change is added.
+- [x] Remove automatic anchor enlargement of mountain cores. Preserve reviewed
+  anchors as source checks and California's exact historical nomination caps;
+  Washington's pinned state/US scope limits nomination without clipping routes.
+  Central excludes Arlington Airport and Mount Vernon while retaining reviewed
+  mountain controls. A generic Oregon cap reuses an existing full Standard leaf.
+- [x] Qualify frozen sparse entrances through hiking/possible walking links to
+  the selected core; ordinary roads never establish an approach. Share one bounded
+  CSR/Dijkstra implementation across disposable sequential passes. Register only
+  actual outside entrances with 500 m neighborhoods, then complete their individual
+  25-mile routing envelopes. Import additions without another nomination pass;
+  source gaps fail before DEM. Physical metric caches remain reusable.
+- [x] Hash/reconstruct derived geometry in completed receipts and verify all
+  final-extent source pins before reuse. Normalize only additional support when
+  needed, padding the actual extraction polygon rather than its merged bounding
+  box. Deduplicate overlapping unsupported-building inventory records and source
+  provenance. Saved/running installations and the prior publication remain intact
+  on failure; intentionally narrower installed coverage requires explicit removal.
+- [x] Verification: 188 unique focused cases pass across region/catalog (15),
+  planning/pruning (22), runtime/filtering (74), source-cache/prepared-release (46),
+  installer (27), and source seams (4). The unsupported-disclosure case passes
+  after final deduplication. Type checking, targeted ESLint, diff checking and one
+  production build pass. macOS installer checks required unsandboxed read-only
+  process identity; their initial sandbox failure was environmental. A concurrent
+  indexing integration briefly lacked its implementation during an earlier runtime
+  run; the integrated cases subsequently pass. No regional build or full/browser
+  suite is repeated. All task worktrees, branches, raw authoring files and tools
+  are removed; preserve the user's review file, source/metric caches and pinned data.
+- [ ] User rebuilds desired areas and explicitly replaces old installed broad
+  versions. Actual retained starts, bytes, build/search costs and representative
+  mountain/valley routes remain acceptance evidence. Standard omits some low-relief
+  terrain; missing mapped connections can exclude useful starts. Neither boundary
+  shape nor fixture success establishes real-source trail completeness or speedups.
+
+This supersedes Broad/EPA land assignment, the separate terrain mask and full
+historical polygon-containment obligations. See [range inputs](../../data/coverage/regions/README.md)
+and [the build commands](../../README.md#developer-data-builds). Repository cleanup
+is mainly boundary data and authoring policy; the compiler adds two-stage support
+completion to avoid losing routes from outside approaches.
+
 ### Mountain entrances and evidence simplification — 2026-09-29
 
 - [x] Preserve the user's selected unmarked mountain entrances. Replace arbitrary
@@ -70,7 +119,7 @@ the evidence line.
   remain acceptance gates. No regional build or full/browser suite is repeated here.
 
 Implementation and source limitations: [network design](network-design.md),
-[hiking terrain](../../data/coverage/hiking-terrain.md). This supersedes the earlier
+[hiking terrain](../../data/coverage/regions/README.md). This supersedes the earlier
 no-mountain eligibility policy without changing complete download-territory
 assignment or clipping routes at start-selection boundaries.
 

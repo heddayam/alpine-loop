@@ -108,20 +108,20 @@ Automated tests do not fetch trail data or call external providers.
 
 The workflow is **choose named hiking areas → preview → build**. Run `data regions`
 for the configured names: twelve Washington groups and the four existing California
-areas. Washington uses published mountain-range outlines, including foothills and
-approaches, with surrounding coastal, Puget and basin areas completing coverage.
+areas. All areas use one pinned **GMBA Standard** mountain-range inventory.
 Starts require supported access, **fewer than 10 mapped buildings within 500 metres**,
-and a trail connection to the tighter GMBA Standard mountain terrain within the
-route-distance bound. Unmarked mountain entrances and connected valley approaches
-remain eligible. California retains its exact
-previous footprints. See the [region definitions](data/coverage/regions/README.md)
-for source provenance and geographic limits.
+and a hiking connection to their selected mountain core within 25 miles. Unmarked
+mountain entrances and connected valley approaches remain eligible; ordinary roads
+cannot establish that connection. Washington's state scope and the previous four
+California territories limit entrance nomination. See the
+[range definitions](data/coverage/regions/README.md) for provenance and limits.
 
-Central Cascades preserves the Glacier Peak and Henry M. Jackson pilot footprints
-and approaches. Areas become downloadable after a successful build, then install
-through Coverage. Large start areas increase source-processing costs; build
-times and artifact sizes need measurement. The ten-minute target is not established
-for these expanded areas. Forest aliases do not promise entire-forest coverage.
+The displayed boundary is the mountain core plus small neighborhoods around actual
+admitted approach entrances. Each entrance receives complete routing support;
+those boundaries never clip hikes. Reviewed approach anchors check topology and
+cannot enlarge the core. Areas become downloadable after a successful build.
+Build costs and retained start counts need measurement; a tighter outline alone
+does not establish a speedup. Forest aliases do not promise entire-forest coverage.
 
 ```sh
 # Build tooling only; this does not process trail data.
@@ -164,21 +164,17 @@ new areas, review their sizes, and choose **Download**; several selections share
 one download job. Existing installed areas remain installed. Overlapping areas
 search each shared start through one owning graph.
 
-When updating from the previous county-based areas, start coverage can move to a
-neighboring group. Build and select those neighbors together with the updated area.
-Installation refuses an update that would lose existing start or routing coverage;
-some old rectangular route buffers include corners outside the new buffers even
-when all new areas are selected. If Coverage still reports a loss, explicitly remove
-the affected old areas, then download the revised selection. The new areas preserve
-the statewide start footprint and each start's route buffer; saved searches retain
-their pinned data.
+These mountain definitions intentionally remove former lowland coverage.
+Rebuild an area, then explicitly remove its old installed version in Coverage
+before downloading the revised version if the coverage-loss guard rejects Update.
+Saved searches retain their pinned data. No overlap or compatibility pack is needed.
 
-`plan` prints the start-selection footprint and surrounding routing extent;
-the build determines eligible entrances from that footprint. Requests
-remain capped at **40 miles**; the conservative **25-mile buffer** also supports
-explicitly labeled close matches up to 50 miles. Missing US source coverage fails
-before processing. The declared international border and reviewed exclusions are
-hard routing limits. Download bytes become known after preparation.
+`plan` prints the mountain core and initial discovery/routing extent. `build`
+discovers and freezes connected approaches, then completes their route coverage.
+Requests remain capped at **40 miles**; every admitted entrance gets a conservative
+**25-mile buffer** supporting labeled close matches up to 50 miles. Missing US source
+coverage fails before DEM work. The international border and reviewed exclusions
+are hard routing limits. Download bytes become known after preparation.
 
 The builder extracts local trails and access/building context, finds sparse entrance
 candidates, filters them by mountain-trail connectivity, then prunes trails that

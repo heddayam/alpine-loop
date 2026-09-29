@@ -42,15 +42,16 @@ central-cascades` previews start/routing geometry without downloads or source sc
 replace `plan` with `build` to prepare it. Missing required US source coverage fails
 before work, while the explicit international limit clips Canadian support.
 
-One catalog owns the boundary, reviewed approach neighborhoods, names, aliases and
-recipe. Plan and Downloads use that same eligible-start footprint. Preparation
-extracts local ways/context, discovers and freezes eligible starts with fewer than
-ten mapped buildings within 500 metres, then prunes by an admissible distance bound
-before DEM work. It reuses measured segment metrics, persists compact corridors and
-audits. Washington uses twelve mountain-led and surrounding download areas;
-California retains four exact existing footprints. Each area reads one pinned
-boundary. A statewide geometric regression checks for omitted territory; county
-unit loading and assignment machinery are removed.
+One catalog owns named Standard range selections, product nomination limits,
+reviewed anchors, aliases and source recipe. `plan` previews the mountain core and
+initial discovery/routing buffer; actual approaches are known only after preparing
+the graph. Preparation freezes sparse entrances connected through hiking links,
+adds their registration neighborhoods and complete route support, then prunes
+before DEM work. It reuses measured segment metrics and persists compact corridors.
+One pinned Standard inventory replaces twelve Broad/EPA outlines and the separate
+terrain mask. Washington and existing California product territories cap nomination,
+not routes. Published Downloads geometry reflects the completed core plus admitted
+approaches. Conservative terrain and source omissions remain disclosed.
 Unsupported building relations and density-excluded reviewed approaches are disclosed;
 missing topology remains a publication error.
 Schema 7 geometry/profile records are unchanged. Each artifact carries its stable

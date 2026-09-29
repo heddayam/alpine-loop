@@ -23,30 +23,30 @@ import { applyRestriction } from "@/lib/data/curated-access";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as METRIC_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import { containsCoverage } from "@/lib/graph/coverage-containment";
-import { contentId, intersectCoverage, rectangle, unionCoverage } from "./geometry";
+import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { NORMALIZATION_VERSION } from "./source-store";
 import { elevationCache, elevationFor, describeCanonicalElevation } from "./elevation";
 import { reconcileInventory } from "./inventory";
 import { auditOfficialTrailReferences, officialSourceEnvelope } from "./references";
 import { preparationSession, preparationInputs, importLocalSources } from "./preparation";
-import { planCoverageRegion } from "./plan";
+import { expandCoveragePlan, planCoverageRegion } from "./plan";
 import { sourceRecipeSchema } from "./recipe";
-import { readHikingTerrain } from "./regions";
-import { pruneWalkingGraph, PRUNING_ALGORITHM_VERSION } from "./prune";
+import { qualifyMountainStarts, pruneWalkingGraph, PRUNING_ALGORITHM_VERSION } from "./prune";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { NormalizedWay } from "@/lib/data/types";
 import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometry";
 import type { CoverageRegion, CoverageRunnerContext, CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
-const BUILD_VERSION = `compact-regions-v2:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
+const BUILD_VERSION = `named-mountain-regions-v3:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
 const HIKING_HIGHWAYS=new Set(["path","track","bridleway","steps","footway","pedestrian"].map(kind=>`osm-highway:${kind}`));
 type ReferenceAudit = Awaited<ReturnType<typeof auditOfficialTrailReferences>>;
-type Receipt = { release: DataRelease; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"] };
+type Receipt = { release: DataRelease; approaches: [number,number][]; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"] };
 const durable = (source: SourceSnapshot) => { const { localPath, ...value } = source; void localPath; return value; };
 
 /** One named place is an independently usable graph, with reusable physical measurements. */
 export async function buildCoverageRegion(region: CoverageRegion, context: CoverageRunnerContext, buildOptions: {rebuild?:boolean} = {}): Promise<CoverageRunResult> {
-  const recipe = sourceRecipeSchema.parse(region.recipe), area = planCoverageRegion({...region, recipe});
+  const recipe = sourceRecipeSchema.parse(region.recipe), initialArea = planCoverageRegion({...region, recipe});
+  let area = initialArea;
   const session = await preparationSession(recipe, context);
   const {root, scratchRoot, outputRoot, cacheRoot, raws, units, check, report} = session;
   let scratch: string | undefined;
@@ -66,13 +66,11 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         if (!containsCoverage(area.geometry, artifact.geometry))
           throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete routing coverage`);
     }
-    const terrain=await readHikingTerrain();
-    const terrainGeometry=intersectCoverage(terrain.geometry,area.geometry);
-    if(!terrainGeometry) throw new Error(`No mountain hiking terrain occurs inside ${area.name}'s route buffer`);
-    const inputs = await preparationInputs(recipe, session, area.geometry);
+    let inputs = await preparationInputs(recipe, session, area.geometry);
     const declared = contentId({id:area.id, startGeometry:area.startGeometry, geometry:area.geometry, maximumRouteMiles:area.maximumRouteMiles,
       sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [], reviewedApproaches:region.reviewedApproaches ?? [],
-      recipe, startPolicy:{buildingRadiusMeters:BUILDING_RADIUS_M,maximumNearbyBuildingsExclusive:MAXIMUM_NEARBY_BUILDINGS,terrain:terrain.source},
+      recipe, startLimitGeometry:region.startLimitGeometry,
+      startPolicy:{buildingRadiusMeters:BUILDING_RADIUS_M,maximumNearbyBuildingsExclusive:MAXIMUM_NEARBY_BUILDINGS},
       compiler:BUILD_VERSION, metric:METRIC_VERSION, topology:CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION});
     const receipts = path.join(root, "regions"), receiptPath = path.join(receipts, `${declared}.json`);
     await mkdir(receipts, {recursive:true});
@@ -87,26 +85,39 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       try { cached = JSON.parse(await readFile(receiptPath, "utf8")); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     }
-    let prepared: DataRelease | undefined, referenceAudits: ReferenceAudit[] = [], referenceSources: DataRelease["sources"] = [];
+    let prepared: DataRelease | undefined, approaches: [number,number][] = [], referenceAudits: ReferenceAudit[] = [], referenceSources: DataRelease["sources"] = [];
     if (cached) {
       const stored = dataReleaseSchema.parse(cached.release);
+      if (!Array.isArray(cached.approaches) || cached.approaches.some(point =>
+        !Array.isArray(point) || point.length!==2 || !point.every(Number.isFinite) ||
+        (region.startLimitGeometry && !coordinateIsInsideArea(point,region.startLimitGeometry))))
+        throw new Error(`Invalid region checkpoint approaches: ${area.id}`);
+      area = expandCoveragePlan(initialArea,recipe,cached.approaches);
+      unit.geometry=area.geometry;
       if (stored.sections.length !== 1 || stored.sections[0]!.id !== area.id || stored.artifacts.length !== 1 ||
         stored.id !== preparedReleaseId({...stored, area:identity(cached.elevationFingerprint)}) ||
         contentId(stored.geometry) !== contentId(area.geometry) || contentId(stored.sections[0]!.geometry) !== contentId(area.startGeometry))
         throw new Error(`Region checkpoint identity failed verification: ${area.id}. Run build ${area.id} --rebuild to prepare it again while retaining source and elevation caches.`);
       await report(`Verifying cached elevation: ${area.name}`);
+      // Approaches can add another provider. Verify every final-extent pin even
+      // when the completed receipt avoids all normalization and graph work.
+      inputs = await preparationInputs(recipe,session,area.geometry);
       const actual = await describeCanonicalElevation(cached.demGeometry, cacheRoot, root, dem);
       if (actual?.productFingerprint === cached.elevationFingerprint) {
         const artifact = stored.artifacts[0]!, file = path.join(outputRoot, artifact.path);
         if (artifact.graphId !== stored.id || (await stat(file)).size !== artifact.compressedBytes || await sha256File(file) !== cached.compressedHash)
           throw new Error(`Region checkpoint failed verification: ${area.id}`);
         prepared = {...stored, regions:[searchRegion(stored.sources)], sections:[{...stored.sections[0]!, name:area.name}]};
+        approaches=cached.approaches;
         referenceAudits = cached.references; referenceSources = cached.referenceSources;
         unit.status = "prepared";
         await report(`Reused ${area.name}`, {reusedRegions:1});
       }
     }
     if (!prepared) {
+      area = initialArea;
+      unit.geometry=area.geometry;
+      if(cached) inputs=await preparationInputs(recipe,session,area.geometry);
       await importLocalSources(session, inputs, area.geometry);
       scratch = await mkdtemp(path.join(scratchRoot, ".region-"));
       const databasePath = path.join(scratch, "region.sqlite");
@@ -114,58 +125,91 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       let demGeometry: AreaGeometry, elevationFingerprint: string;
       try {
         await report(`Reading walking links and access context: ${area.name}`);
-        const boundary = prepareAreaGeometry(area.geometry);
-        const mountain = prepareAreaGeometry(terrainGeometry);
+        const mountain = prepareAreaGeometry(initialArea.startGeometry);
         const memberSources = new Set<string>();
-        let pending: Array<() => void> = [], work = 0, unsupportedBuildings = 0;
+        let pending: Array<() => void> = [], work = 0;
         const flush = () => { if (pending.length) store.transaction(() => { for (const write of pending) write(); }); pending = []; };
         const enqueue = (write: () => void) => { pending.push(write); if (pending.length < 1000) return false; flush(); return true; };
-        store.database.exec("CREATE TEMP TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,terrain_hiking INTEGER NOT NULL) STRICT");
-        const eligible = store.database.prepare("INSERT OR IGNORE INTO eligible_segments VALUES (?,?,?,?,?)");
-        for (const raw of raws) {
-          unsupportedBuildings += Number(raw.db.prepare("SELECT count(*) AS n FROM inventory WHERE disposition='unsupported'").get()!.n);
-          const sourceCoverage = intersectCoverage(area.geometry, recipe.sources.find(source => source.config.id === raw.source.id)!.geometry)!;
-          for (const entry of raw.context(area.geometry,sourceCoverage)) {
-            if (entry.kind === "building") {
-              if (enqueue(() => store.putBuilding(entry.centroid))) await check();
-              memberSources.add(raw.source.id);
-              continue;
+        store.database.exec(`CREATE TEMP TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,approach_link INTEGER NOT NULL,core_hiking INTEGER NOT NULL) STRICT;
+          CREATE TEMP TABLE unsupported_buildings(id TEXT PRIMARY KEY) STRICT`);
+        const unsupported=store.database.prepare("INSERT OR IGNORE INTO unsupported_buildings VALUES (?)");
+        const eligible = store.database.prepare("INSERT OR IGNORE INTO eligible_segments VALUES (?,?,?,?,?,?)");
+        const loadContext = async (readGeometry: AreaGeometry, selected: typeof raws) => {
+          const boundary = prepareAreaGeometry(area.geometry);
+          for (const raw of selected) {
+            for(const row of raw.db.prepare("SELECT id FROM inventory WHERE disposition='unsupported'").iterate()) {
+              if(++work%1000===0) await check();
+              unsupported.run(row.id);
             }
-            if (entry.kind === "evidence") {
-              if (enqueue(() => store.putPortalEvidence(entry.evidence))) await check();
-              entry.evidence.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
-              continue;
-            }
-            const {way,nodes}=entry;
-            for (const node of nodes) if (enqueue(() => store.putNode(node))) await check();
-            let current = way;
-            for (const file of inputs.restrictions) { const rule = file.restrictions.find(rule => rule.externalId === current.externalId); if (rule) current = applyRestriction(current,rule,file.snapshot.id); }
-            if (enqueue(() => store.putWay(current))) await check();
-            if (current.edgeClass === "trail" && ["public", "unknown"].includes(current.accessState)) {
-              const hiking=current.flags.some(flag=>HIKING_HIGHWAYS.has(flag)) && !current.flags.includes("possible-walking-link");
-              for (let segment = 0; segment < current.nodeIds.length - 1; segment++) {
-                if (++work % 1000 === 0) await check();
-                const a = current.coordinates[segment]!, b = current.coordinates[segment+1]!;
-                if (boundary.containsSegment(a,b)) {
-                  const terrainHiking=Number(hiking && (mountain.containsPoint(a)||mountain.containsPoint(b)||mountain.intersectsSegment(a,b)));
-                  if (enqueue(() => { eligible.run(`${current.id}:${segment}`,current.nodeIds[segment]!,current.nodeIds[segment+1]!,distanceMeters(a,b)*(1-1e-10),terrainHiking); })) await check();
+            const sourceCoverage = intersectCoverage(readGeometry, recipe.sources.find(source => source.config.id === raw.source.id)!.geometry);
+            if (!sourceCoverage) continue;
+            for (const entry of raw.context(readGeometry,sourceCoverage)) {
+              if (entry.kind === "building") {
+                if (enqueue(() => store.putBuilding(entry.centroid))) await check();
+                memberSources.add(raw.source.id);
+                continue;
+              }
+              if (entry.kind === "evidence") {
+                if (enqueue(() => store.putPortalEvidence(entry.evidence))) await check();
+                entry.evidence.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
+                continue;
+              }
+              const {way,nodes}=entry;
+              for (const node of nodes) if (enqueue(() => store.putNode(node))) await check();
+              let current = way;
+              for (const file of inputs.restrictions) { const rule = file.restrictions.find(rule => rule.externalId === current.externalId); if (rule) current = applyRestriction(current,rule,file.snapshot.id); }
+              if (enqueue(() => store.putWay(current))) await check();
+              if (current.edgeClass === "trail" && ["public", "unknown"].includes(current.accessState)) {
+                const approachLink=current.flags.some(flag=>HIKING_HIGHWAYS.has(flag));
+                const hiking=approachLink && !current.flags.includes("possible-walking-link");
+                for (let segment = 0; segment < current.nodeIds.length - 1; segment++) {
+                  if (++work % 1000 === 0) await check();
+                  const a = current.coordinates[segment]!, b = current.coordinates[segment+1]!;
+                  if (boundary.containsSegment(a,b)) {
+                    const coreHiking=Number(hiking && (mountain.containsPoint(a)||mountain.containsPoint(b)||mountain.intersectsSegment(a,b)));
+                    if (enqueue(() => { eligible.run(`${current.id}:${segment}`,current.nodeIds[segment]!,current.nodeIds[segment+1]!,distanceMeters(a,b)*(1-1e-10),Number(approachLink),coreHiking); })) await check();
+                  }
                 }
               }
+              current.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
             }
-            current.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
           }
-        }
-        flush(); await check();
+          flush(); await check();
+        };
+        await loadContext(area.geometry,raws);
         await report(`Indexing walking link memberships: ${area.name}`);
         await store.prepareLookupIndexes("ways",check);
         await report(`Finding sparse access points: ${area.name}`);
-        const candidates=await prepareSparsePortalCandidates(store,area.startGeometry,check);
+        const discoveryGeometry=region.startLimitGeometry ? intersectCoverage(area.geometry,region.startLimitGeometry) : area.geometry;
+        if(!discoveryGeometry) throw new Error(`No approach discovery area remains for ${area.name}`);
+        const candidates=await prepareSparsePortalCandidates(store,discoveryGeometry,check);
         await report(`Found ${candidates.eligibleAccessPoints} sparse entrance candidates: ${area.name}`,candidates);
         if(!candidates.eligibleAccessPoints)
           throw new Error(`No eligible access points in ${area.name}: starts require fewer than ${MAXIMUM_NEARBY_BUILDINGS} mapped buildings within ${BUILDING_RADIUS_M} m and supported access. Elevation was not acquired; prior published areas are unchanged.`);
         await report(`Selecting mountain entrances and nearby trails: ${area.name}`);
-        const pruned = await pruneWalkingGraph(store.database,area.bufferMiles*2*1609.344,check,Math.min(512,recipe.memoryLimitMiB/2)*1024**2);
-        await report(`Planning elevation for ${pruned.retainedSegments} retained segments`,{...pruned,eligibleAccessPoints:pruned.seedNodes});
+        const budget=Math.min(512,recipe.memoryLimitMiB/2)*1024**2;
+        const qualified = await qualifyMountainStarts(store.database,area.bufferMiles*2*1609.344,check,budget);
+        approaches=[];
+        for(const row of store.database.prepare(`SELECT n.lon,n.lat FROM sparse_start_nodes s JOIN nodes n ON n.id=s.node_id ORDER BY s.node_id`).iterate()) {
+          if(++work%1000===0) await check();
+          const point:[number,number]=[Number(row.lon),Number(row.lat)];
+          if(!mountain.containsPoint(point)) approaches.push(point);
+        }
+        area=expandCoveragePlan(initialArea,recipe,approaches);
+        unit.geometry=area.geometry;
+        const additional=subtractCoverage(area.geometry,initialArea.geometry);
+        if(additional) {
+          await report(`Completing route coverage for ${approaches.length} outside entrances: ${area.name}`);
+          // Freeze membership before extending support: distant approaches may
+          // have loops going away from the core, but support cannot nominate starts.
+          inputs=await preparationInputs(recipe,session,area.geometry);
+          const begin=raws.length;
+          await importLocalSources(session,{...inputs,snapshots:inputs.snapshots.filter(snapshot=>
+            intersectCoverage(additional,recipe.sources.find(source=>source.config.id===snapshot.id)!.geometry))},additional);
+          await loadContext(additional,raws.slice(begin));
+        }
+        const pruned = await pruneWalkingGraph(store.database,area.bufferMiles*2*1609.344,check,budget);
+        await report(`Planning elevation for ${pruned.retainedSegments} retained segments`,{...pruned,terrainExcludedAccessPoints:qualified.terrainExcludedAccessPoints,approachAccessPoints:approaches.length,eligibleAccessPoints:pruned.seedNodes});
         const tiles = new Set<string>();
         for (const row of store.database.prepare(`SELECT a.lon AS x,a.lat AS y,b.lon AS x2,b.lat AS y2 FROM eligible_segments e
           JOIN nodes a ON a.id=e.from_node JOIN nodes b ON b.id=e.to_node`).iterate()) {
@@ -183,16 +227,17 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         // Sampling can acquire NoData backup products. Pin the final inventory in
         // graph identity, provenance and the resume receipt only after it finishes.
         elevationFingerprint = elevation.productFingerprint;
-        const sources: DataRelease["sources"] = [...raws.map(raw => raw.source),...inputs.restrictions.map(file => file.snapshot)].filter(source => memberSources.has(source.id)).map(durable);
+        const sources: DataRelease["sources"] = [...new Map([...raws.map(raw => raw.source),...inputs.restrictions.map(file => file.snapshot)]
+          .filter(source => memberSources.has(source.id)).map(source=>[source.id,durable(source)])).values()];
         sources.push(durable(elevation.source));
-        sources.push(terrain.source);
         for (const source of region.sources ?? []) if (!sources.some(prior => prior.id === source.id)) sources.push(source);
         sources.sort((a,b)=>a.id.localeCompare(b.id));
         for (const source of sources) store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:""});
+        const unsupportedBuildings=Number(store.database.prepare("SELECT count(*) AS n FROM unsupported_buildings").get()!.n);
         const limitations = [...recipe.limitations,...(elevation.limitations??[]),
           ...(unsupportedBuildings ? [`The local context contains ${unsupportedBuildings} unsupported building relations. Building-based trailhead filtering may be incomplete; individual reasons are recorded in its context inventory.`] : []),
           "Access and building context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.",
-          "Starts must connect within 25 walking miles to a mapped hiking trail touching GMBA Standard mountain terrain. Unknown access is included; low foothills omitted by this conservative terrain mask can be excluded. This qualifies starts, not every generated route's terrain.",
+          "Starts must connect through hiking links within 25 walking miles to a mapped hiking trail touching this area's GMBA Standard mountain core. Ordinary roads do not establish mountain approaches. Unknown access is included; low foothills and disconnected source trails can be excluded. This qualifies starts, not every generated route's terrain.",
           "Regional graphs preserve supported routes within the configured distance budget; missing source trails may still exist."];
         const options = {databasePath,outputRoot,geometry:area.geometry,sources,regions:[searchRegion(sources)],
           builtAt:sources.map(source => source.retrievedAt).sort().at(-1)!,compilerVersion:BUILD_VERSION,metricAlgorithmVersion:METRIC_VERSION,
@@ -238,6 +283,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       } finally { store.close(); await rm(scratch,{recursive:true,force:true}); scratch=undefined; }
       await report(`Comparing independent trail references: ${area.name}`);
       for (const raw of raws) {
+        const referenceCoverage=intersectCoverage(raw.geometry,area.geometry)!;
         let compared = false;
         for (const reviewed of recipe.reviewedRegionIds) {
           try {
@@ -251,12 +297,12 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
             });
             if (!snapshot) continue;
             referenceSources.push(durable(snapshot)); compared = true;
-            referenceAudits.push(await auditOfficialTrailReferences({checkpoint:check,osm:raw,coverage:area.geometry,installedCoverage:area.geometry,officialSnapshot:snapshot,sourceEnvelope:officialSourceEnvelope(config)}));
+            referenceAudits.push(await auditOfficialTrailReferences({checkpoint:check,osm:raw,coverage:referenceCoverage,installedCoverage:area.geometry,officialSnapshot:snapshot,sourceEnvelope:officialSourceEnvelope(config)}));
           } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         }
-        if (!compared) referenceAudits.push(await auditOfficialTrailReferences({checkpoint:check,osm:raw,coverage:area.geometry,installedCoverage:area.geometry}));
+        if (!compared) referenceAudits.push(await auditOfficialTrailReferences({checkpoint:check,osm:raw,coverage:referenceCoverage,installedCoverage:area.geometry}));
       }
-      await writeJsonAtomically(receiptPath,{release:prepared,compressedHash:await sha256File(path.join(outputRoot,prepared.artifacts[0]!.path)),demGeometry,elevationFingerprint,references:referenceAudits,referenceSources} satisfies Receipt);
+      await writeJsonAtomically(receiptPath,{release:prepared,approaches,compressedHash:await sha256File(path.join(outputRoot,prepared.artifacts[0]!.path)),demGeometry,elevationFingerprint,references:referenceAudits,referenceSources} satisfies Receipt);
       unit.status = "prepared";
       await report(`Prepared ${area.name}`,{compressedBytes:prepared.artifacts[0]!.compressedBytes,installedBytes:prepared.artifacts[0]!.bytes});
     }

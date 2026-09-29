@@ -1,22 +1,21 @@
 # Coverage restoration and Washington expansion
 
-The target is **Washington-wide hiking coverage plus the Bay Area and nearby
-California coverage previously available**. Central Cascades now incorporates
-the Glacier Peak and Henry M. Jackson pilot footprints and all reviewed approaches. This roadmap
-replaces the former pack-registry, bootstrap and schema-6 activation instructions.
-The current architecture and commands are in [prepared coverage](prepared-coverage.md)
+The target is mountain hiking coverage across Washington and the previously
+available Bay Area/nearby California territory. One published GMBA Standard
+inventory defines named cores, with graph-connected approach entrances.
+Former Broad/EPA lowland assignment and full historical polygon-containment
+obligations are superseded. Reviewed approaches remain source audit anchors.
+Current architecture and commands are in [prepared coverage](prepared-coverage.md)
 and [README](../../README.md#developer-data-builds).
 
 ## Current availability and restoration baseline
 
 `data/coverage/regions/catalog.json` defines sixteen named build selections:
 twelve Washington groups and the four historical California areas. The
-pilot entries and production polygons are removed. Independent baseline fixtures
-retain their coverage obligations; a Central Cascades rebuild retires the old
-download entries only after successful preparation. New or consolidated definitions
-still require user-run builds, installation and route acceptance.
-Their retained boundaries and source records under `data/regions/` are now referenced
-by the shared builder; the obsolete pack registry and size table are removed.
+pilot entries are removed. Historical fixtures retain provenance, rather than an
+obligation to preserve broad lowland geometry. Revised definitions require user-run
+builds, installation and route acceptance. California's existing footprints remain
+nomination caps; their core geometry comes from the same Standard inventory.
 See [status](status.md) for actual built/installed evidence.
 
 These nine groups were built and activated before the data cutover. The completion
@@ -30,7 +29,7 @@ number of packs does not prescribe the number of new download areas.
 | Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Configured; build/install/acceptance pending |
 | Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Configured; build/install/acceptance pending |
 | Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Configured; build/install/acceptance pending |
-| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Full pilot footprints/approaches consolidated; rebuild and acceptance pending |
+| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Named Standard core with reviewed pilot anchors; rebuild and acceptance pending |
 | North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Configured; build/install/acceptance pending |
 | Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Configured; build/install/acceptance pending |
 | Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
@@ -49,13 +48,14 @@ earlier prototype source samples, not the nine later completed regional builds.
 
 ## Current implementation and next gates
 
-- The generic loader reads each area's boundary/approach attribution from data.
+- The generic loader reads each area's Standard range selection, nomination cap
+  and approach attribution from data.
   Washington's full mainland and maritime IBC support limit is explicit in its
   recipe; California uses its own verified provider extent. Southwest Cascades
   includes the separately pinned Oregon source; eastern groups use matching Idaho
   inputs. The surveyed US border extends across both providers. Real source gaps
   still fail instead of silently shrinking coverage.
-- The restored definitions reuse reviewed geographic footprints, exact-way access
+- The definitions reuse historical nomination territory, exact-way access
   restrictions and source-linked representative approach checkpoints. Those
   checkpoints are not complete trailhead inventories. Larger historical groups
   are practical restoration selections, with unmeasured first-build costs; the
@@ -76,21 +76,18 @@ earlier prototype source samples, not the nine later completed regional builds.
 
 ## Washington geography and acceptance
 
-The [region definitions](../../data/coverage/regions/README.md) record the published
-range IDs, surrounding-area derivation and source hashes. The app loads one pinned
-boundary per region. The county collection, assignment registry and unit validation
-are removed; a whole-state geometry fixture detects gaps across the complete set.
+The [range definitions](../../data/coverage/regions/README.md) record named Standard
+leaf IDs and source hashes. All sixteen areas use those published cores; small
+Puget/basin groups represent the named mountain portions rather than assigning all
+lowlands. Actual hiking connectivity determines outside approaches. No per-city
+boundary rule is needed. Unknown access and reviewed restrictive removals remain.
 
-North/Central Cascades, Rainier–Goat Rocks, Southwest Cascades, Olympics, Willapa,
-the northeastern ranges and Blue Mountains form the mountain groups. North/South
-Puget, Spokane–Palouse and Columbia Basin retain surrounding eligible starts.
-Mountain outlines organize downloads; no new terrain-based eligibility rule applies.
-Existing historical mountain footprints and reviewed approaches remain included.
-
-Generalized shorelines and mapped source omissions remain limitations. The precise
-IBC mask and reviewed exclusions remain hard routing limits. Preserve explicit
-permission/source-review exclusions. Build and update the surrounding areas too when
-moving from the former county extents: some starts now belong to another named area.
+The surveyed US border and reviewed exclusions are hard routing limits. Core
+polygons plus registered entrance neighborhoods select starts; complete routing
+buffers do not depend on installing an adjacent graph. Overlapping artifacts
+remain independently usable. Tightening the product scope intentionally supersedes
+complete statewide-land containment; real trails, approaches and seams require
+representative acceptance rather than a land-area completeness claim.
 
 Real-data build time, memory, bytes, installation, route generation and independent
 source completeness remain acceptance work. Long ranges can still produce large
@@ -98,7 +95,7 @@ rectangular preparation buffers; natural borders alone do not establish speedups
 
 ## Region definition and acceptance
 
-- Choose a stable name, reviewed start footprint, approaches and explicit
+- Choose a stable name, published Standard range IDs, product territory and explicit
   exclusions. Named regions select starting points; their legal boundaries do
   not clip hikes. Initial requests remain capped at 40 miles.
 - Verify provider coverage for the complete routing buffer and preserve source

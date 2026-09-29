@@ -173,20 +173,21 @@ portal implementation has been removed; generated packs are schema 7.
 
 ### Mountain terrain and connected approaches
 
-Use the static, licensed [GMBA Standard v2 mask](../../data/coverage/hiking-terrain.md)
-separately from the broad download outlines. A sparse public/unknown candidate
-must reach a hiking link touching this terrain within 25 walking miles, an
-admissible bound for the 50-mile closed-route exploration limit. Actual hiking
-paths and walking-eligible mountain tracks qualify; ambiguous footways and ordinary
-road links can provide approaches but cannot qualify terrain alone. Two multi-source
-distance passes reuse the existing pruning arrays and heap before DEM acquisition.
-No additional raster analysis, service, runtime dependency or user setting is added.
+Use one static, licensed [GMBA Standard Basic inventory](../../data/coverage/regions/README.md)
+for named mountain cores and eligibility. A sparse public/unknown entrance must
+reach an unambiguous hiking link touching its selected core through hiking links
+within 25 miles. Ambiguous footways may connect approaches; ordinary roads do not.
+Unmarked entrances remain eligible. Reviewed anchors cannot create entrances.
 
-This heuristic preserves unmarked and connected valley entrances; it can omit
-low foothills or source-disconnected trails. It qualifies starts, not the terrain
-of every returned route. The mask and policy participate in preparation identity
-and source provenance. Reviewed candidates excluded by either density or terrain
-are named in release limitations; missing/restricted topology still fails.
+Freeze admission before extending route support. Display the core plus 500 m
+registration neighborhoods around actual admitted outside entrances, and include
+25-mile routing envelopes around those entrances. Normalize only additional
+support, then prune before DEM acquisition. One bounded multi-source Dijkstra
+implementation serves both passes; arrays do not persist across them. The data,
+product nomination scope and admission policy participate in artifact/receipt
+identity. Physical metrics remain reusable. Conservative GMBA foothill omissions
+and missing mapped connections are explicit limits; reviewed policy exclusions
+are distinguished from unexplained missing topology.
 
 ### Basemap
 
@@ -237,12 +238,11 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
 
-Washington download outlines use pinned GMBA v2 Broad mountain-range polygons,
-EPA Level III ecoregions for surrounding territory, and retained approach
-footprints. These organize downloads; the separate Standard mask and trail
-connection filter determines mountain eligibility. The [region definitions](../../data/coverage/regions/README.md) record
-source hashes, attribution, assignments and the derivation recipe. Builds load
-the checked-in outlines directly; they do not download or regenerate them.
+Choose published GMBA Standard range IDs in the catalog and pin their Basic
+features in the single inventory. Product territory, provider coverage and reviewed
+access restrictions remain separate inputs. The [range definitions](../../data/coverage/regions/README.md)
+record hashes, attribution and the authoring recipe. Ordinary builds load committed
+inputs without acquiring or regenerating mountain boundaries.
 
 The [prepared coverage design](prepared-coverage.md) is the forward path:
 add independently reviewed coverage intent and verified provider extent to
@@ -254,7 +254,7 @@ onboarding/activation gates are defined in the [regional expansion
 roadmap](regional-expansion-plan.md). At the data layer, adding a region should
 require only:
 
-1. a new versioned coverage polygon and manifest seed;
+1. a stable catalog name, published Standard range IDs and product territory;
 2. a pinned OSM extract plus any reviewed exact-way removals, optional
    entrance-name overlay, and optional pinned official-trail supplement;
 3. the same topology, elevation, metric, validation, and publish pipeline;

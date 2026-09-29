@@ -16,20 +16,20 @@ a catalog of known hikes. Users choose an area, physical route constraints,
 acceptable repetition, and whether unknown access is included. Requested route
 distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
-Coverage targets all eligible starts in Washington and the exact previously
-available Bay Area/nearby California footprints. A start needs fewer than ten mapped
-buildings within 500 metres and a mapped hiking connection to published mountain
-terrain within the closed-route distance bound. Unmarked mountain entrances remain
-eligible; nearby unrelated parking or signs do not establish an entrance.
-Twelve Washington download groups follow published mountain ranges and their
-foothills, with named lowland, basin and coastal areas completing the territory.
-Historical approaches are retained; four California definitions remain unchanged.
-The catalog loads one pinned outline per area, with no county-assignment registry.
-Broad outlines organize downloads; the smaller GMBA Standard terrain input filters
-starts before elevation processing, including connected valley approaches.
-These outlines select starts and do not clip hikes. Boundary/source limitations
-and real-data acceptance remain explicit. The [coverage roadmap](regional-expansion-plan.md)
-tracks implementation separately from built, installed and verified coverage.
+Coverage targets mountain hiking starts in Washington and the previously available
+Bay Area/nearby California territory. One pinned GMBA Standard Basic inventory
+supplies named mountain cores for all sixteen download areas. Washington's state
+scope and the four existing California footprints limit approach nomination;
+these product limits never clip routes. Broad outlines, EPA residual allocation
+and the separate terrain mask are removed.
+
+A start needs fewer than ten mapped buildings within 500 metres and a hiking
+connection to its selected core within 25 miles. Unmarked entrances remain
+eligible; ordinary roads cannot establish mountain approaches. Preparation freezes
+actual eligible entrances, adds only their registration neighborhoods to the core,
+and completes each entrance's route buffer before elevation work. Reviewed anchors
+audit source topology rather than enlarging the core. Low foothills omitted by
+GMBA and unmapped/disconnected trails remain explicit limitations.
 
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
@@ -114,7 +114,7 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 ## Local data and preparation
 
 Schema 7 remains the prepared graph record representation. Developers select a
-pinned named hiking area with reviewed approaches and prepare its surrounding graph. A 25-mile geographic buffer
+pinned named mountain core and prepare its graph plus connected approaches. A 25-mile geographic buffer around every admitted start
 covers closed routes up to the 50-mile close-match exploration bound; requested
 hikes remain limited to 40 miles. Source gaps fail before preparation, and explicit
 exclusions remain hard boundaries. Geographic search filters still select starts

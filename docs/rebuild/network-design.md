@@ -44,42 +44,47 @@ enumeration or a bound on trail density and search complexity.
 
 `data regions` lists the pinned catalog. `data plan central-cascades` previews the
 named trailhead footprint and routing support; `data build central-cascades` builds it.
-Named download groups cover the complete declared territory. Washington follows
-GMBA mountain ranges and foothills, completed by named surrounding areas. California
-preserves the four existing footprints. Historical mountain footprints and reviewed
-approaches remain included. Names, provenance and approach review belong to the
-catalog; each area loads one static boundary file. There is no runtime county
-registry, spatial clustering or boundary-generation step. Broad range outlines
-organize downloads; a separate pinned GMBA Standard input identifies mountain
-terrain without a new relief/elevation analysis pipeline.
+Named downloads select published GMBA Standard Basic ranges from one pinned
+inventory. California's historical footprints and Washington's state scope cap
+approach nomination, independently of route support. No Broad outline, EPA residual
+assignment, separate terrain mask or per-city exclusion remains. Reviewed approach
+anchors are evidence checks, never automatic core enlargements. See the licensed
+[range definitions](../../data/coverage/regions/README.md).
 
 After normalization, the shared access discovery finds actual start candidates
-inside the start footprint and counts building centroids through a spatial index.
+inside the core's initial 25-mile discovery buffer and product territory, and counts building centroids through a spatial index.
 Evidence belongs to actual mapped entrance nodes; parking nominates one hiking
 contact on its own feature, with a mapped road/track contact. There is no nearby-road
 test, disconnected trail snap or borrowing names/confidence from arbitrary signs
 within 250 m. Unmarked street-to-trail entrances remain candidates. A marked hiking
 approach may connect along at most 250 m of actual hiking paths to a track entrance.
 
-Public/unknown candidates with 0–9 buildings within 500 metres qualify if an
-undirected walking path reaches a mapped hiking link touching GMBA Standard terrain
-within 25 miles. Paths, walking-eligible tracks, bridleways, steps and
-footways/pedestrian ways with trail context seed terrain distance; ambiguous walking
-links and general-purpose roads cannot self-qualify. They can remain route/approach
-links. Mountain tracks remain eligible because the [OSM track definition](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack)
-includes forest, fire and recreation roads; the tag itself grants no access.
-The source mask is static,
-licensed and pinned in [hiking terrain](../../data/coverage/hiking-terrain.md).
-Low foothills can be omitted; this is a conservative product heuristic, not proof
-that every returned loop visits mountain terrain or that every useful hike is kept.
+Public/unknown candidates with 0–9 buildings within 500 metres qualify through
+an undirected hiking path to a mapped hiking link touching this area's selected
+Standard core within 25 miles. Paths, walking-eligible tracks, bridleways, steps,
+and footways/pedestrian ways can connect approaches; ambiguous walking links never
+seed eligibility. Ordinary roads cannot establish mountain approaches. Mountain
+tracks remain eligible because the [OSM track definition](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack)
+includes forest/fire/recreation roads; the tag grants no access.
 
-One multi-source Dijkstra pass from terrain-link endpoints removes disconnected
-lowland candidates; the existing pass from surviving starts prunes nearby trails.
-The two passes reuse the same fixed arrays and indexed heap. No graph traversal
-per start or additional DEM acquisition is needed. The 25-mile limit follows the
-closed-walk bound above, preserving long connected valley approaches instead of
-requiring the entrance itself to be in mountains. Direction/access relaxation can
-retain extra candidates; route search still enforces the actual graph constraints.
+Two sequential bounded multi-source Dijkstra passes use one implementation, fixed
+CSR arrays and an indexed heap ([reference practice](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.shortest_paths.weighted.multi_source_dijkstra.html)).
+The first freezes eligible starts. Their actual outside-core nodes contribute
+500 m registration neighborhoods to the displayed/start-selection footprint;
+these neighborhoods never nominate additional starts. Each outside entrance also
+gets its own 25-mile route envelope. Normalize any additional support before the
+second, all-walking distance pass and DEM work. This preserves loops heading away
+from a valley start, which a core-only buffer could omit. Source gaps fail; the
+international limit and reviewed exclusions remain hard route boundaries.
+
+The arrays are disposable between passes; no per-start graph traversal or regional
+terrain raster is added. Extra source scans occur only when an admitted approach
+needs support outside the original envelope. Padding actual extraction polygons
+rather than their component bounding rectangles keeps an L-shaped extension from
+re-extracting its entire interior. Costs require real builds, not boundary area
+estimates. Low foothills/source-disconnected trails can be omitted, and eligibility
+does not require every generated route to enter the mountain core.
+
 Candidate identities and parking nominations are frozen before pruning; final ranking
 and components run once on the measured graph. Any vertex on a
 closed walk of at most 50 miles must be within 25 miles of its start in that graph.

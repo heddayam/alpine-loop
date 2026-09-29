@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { areaGeometryBounds, type AreaGeometry } from "@/lib/data/area-geometry";
+import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
 
 const CONTEXT_FILTERS = [
@@ -92,10 +92,19 @@ export async function* filteredSourceLines(
   try {
     await onStage?.("Extracting local trails and context");
     const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-    const envelope = unionCoverage(polygons.map((coordinates) => {
-      const [west, south, east, north] = areaGeometryBounds({ type: "Polygon", coordinates });
-      return rectangle([Math.max(-180, west - .01), Math.max(-90, south - .01), Math.min(180, east + .01), Math.min(90, north + .01)]);
-    }));
+    // Pad the actual extent, not each merged component's bounding rectangle.
+    // Otherwise an L-shaped support addition re-extracts the entire core.
+    // Expanded segment boxes conservatively cover nearby building/access context.
+    let envelope=geometry;
+    let padding: AreaGeometry[]=[];
+    const flush=()=>{if(padding.length) envelope=unionCoverage([envelope,...padding]);padding=[];};
+    for(const rings of polygons) for(const ring of rings) for(let i=1;i<ring.length;i++) {
+      const a=ring[i-1]!,b=ring[i]!;
+      padding.push(rectangle([Math.max(-180,Math.min(a[0],b[0])-.01),Math.max(-90,Math.min(a[1],b[1])-.01),
+        Math.min(180,Math.max(a[0],b[0])+.01),Math.min(90,Math.max(a[1],b[1])+.01)]));
+      if(padding.length>=256) flush();
+    }
+    flush();
     const polygon = path.join(temporary, "context.geojson");
     await writeFile(polygon, JSON.stringify({ type: "Feature", properties: {}, geometry: envelope }));
     const partial = path.join(temporary, "partial.osm.pbf");
