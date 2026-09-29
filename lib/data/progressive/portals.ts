@@ -60,22 +60,6 @@ export class DiskUnion {
   }
 }
 
-async function evidenceNear(db:DatabaseSync,lon:number,lat:number,radius:number,checkpoint:()=>Promise<void>):Promise<Array<{item:NormalizedPortalEvidence;distanceM:number}>> {
-  let work=0;
-  await checkpoint();
-  const [minLon,maxLon,minLat,maxLat]=box(lon,lat,radius);
-  const nearest=new Map<string,{item:NormalizedPortalEvidence;distanceM:number}>();
-  for(const row of rows(db,`SELECT e.record,p.lon,p.lat FROM evidence_spatial s JOIN evidence_points p ON p.id=s.id JOIN evidence e ON e.id=p.evidence_id
-    WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,minLon,maxLon,minLat,maxLat)) {
-    if (++work%1000===0) await checkpoint();
-    const measured=distance([lon,lat],[Number(row.lon),Number(row.lat)]);
-    if(measured>radius)continue;
-    const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
-    const old=nearest.get(item.id);
-    if(!old||measured<old.distanceM)nearest.set(item.id,{item,distanceM:measured});
-  }
-  return [...nearest.values()].sort((a,b)=>a.distanceM-b.distanceM||a.item.id.localeCompare(b.item.id));
-}
 async function nearbyBuildings(db:DatabaseSync,lon:number,lat:number,checkpoint:()=>Promise<void>):Promise<number> {
   let work=0;
   await checkpoint();
@@ -189,107 +173,80 @@ async function linksFromMeasuredEdges(db:DatabaseSync,checkpoint:()=>Promise<voi
 async function discoverPortalCandidates(db:DatabaseSync,coverage:AreaGeometry,checkpoint:()=>Promise<void>):Promise<void> {
   let work=0;
   const boundary=prepareAreaGeometry(coverage);
-  db.exec(`DROP TABLE IF EXISTS temp.road_nodes; CREATE TEMP TABLE road_nodes(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
+  db.exec(`CREATE TEMP TABLE road_nodes(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
     INSERT INTO road_nodes SELECT x.node_id,CASE WHEN max(w.edge_class='street') THEN 'street' ELSE 'service-road' END
     FROM way_nodes x JOIN ways w ON w.id=x.way_id WHERE w.edge_class IN ('street','service-road') AND w.access_state NOT IN (${restricted}) GROUP BY x.node_id;
-    DROP TABLE IF EXISTS temp.portal_candidates; CREATE TEMP TABLE portal_candidates(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;`);
+    CREATE TEMP TABLE portal_candidates(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
+    CREATE TEMP TABLE portal_evidence(node_id TEXT NOT NULL,evidence_id TEXT NOT NULL,PRIMARY KEY(node_id,evidence_id)) WITHOUT ROWID;`);
   const addCandidate=(nodeId:string,roadClass:"street"|"service-road")=>{
     const prior=one(db,"SELECT road_class FROM portal_candidates WHERE node_id=?",nodeId);
     if(prior){if(roadClass==="street"&&prior.road_class!=="street")run(db,"UPDATE portal_candidates SET road_class='street' WHERE node_id=?",nodeId);return;}
     const nodeRow=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);if(!nodeRow)return;
-    const lon=Number(nodeRow.lon),lat=Number(nodeRow.lat);
-    if(!boundary.containsPoint([lon,lat]))return;
+    if(!boundary.containsPoint([Number(nodeRow.lon),Number(nodeRow.lat)]))return;
     run(db,"INSERT INTO portal_candidates VALUES (?,?)",nodeId,roadClass);
   };
-  for(const row of rows(db,"SELECT r.node_id,r.road_class,n.lon,n.lat FROM road_nodes r JOIN portal_trail_nodes c ON c.id=r.node_id JOIN nodes n ON n.id=r.node_id ORDER BY r.node_id")) {
-    if (++work%1000===0) await checkpoint();
-    if(row.road_class==="street"||(await evidenceNear(db,Number(row.lon),Number(row.lat),250,checkpoint)).length) addCandidate(String(row.node_id),String(row.road_class) as "street"|"service-road");
-  }
-  // Require an actual approach along the tagged trail, never a nearby unrelated track.
-  // OSM trailheads may be mapped along a highway, not necessarily at its junction:
-  // https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrailhead
-  for(const row of rows(db,"SELECT e.record FROM evidence e WHERE e.kind='trailhead'")) {
+  // Names, confidence and entrance evidence belong to the actual mapped node.
+  for(const row of rows(db,"SELECT id,record FROM evidence WHERE kind!='parking' ORDER BY id")) {
     if (++work%1000===0) await checkpoint();
     const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
-    if(item.nodeIds.length!==1)continue;
-    const nodeId=item.nodeIds[0]!;if(!one(db,"SELECT 1 FROM portal_trail_nodes WHERE id=?",nodeId))continue;
-    const node=one(db,"SELECT record FROM nodes WHERE id=?",nodeId);
-    if(!node || !item.externalId.startsWith("node/") || item.accessState==="private" || item.accessState==="closed" || item.accessState==="prohibited" || (JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
-    if(await hasNearbyTrackApproach(db,nodeId,checkpoint))addCandidate(nodeId,"service-road");
+    if(!allowedAccess(item)||item.nodeIds.length!==1||!item.externalId.startsWith("node/"))continue;
+    const nodeId=item.nodeIds[0]!,node=one(db,"SELECT n.record FROM nodes n JOIN portal_trail_nodes t ON t.id=n.id WHERE n.id=?",nodeId);
+    if(!node||(JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
+    run(db,"INSERT INTO portal_evidence VALUES (?,?)",nodeId,String(row.id));
+    // Trailheads can lie along the mapped hiking approach, beyond its junction.
+    if(item.kind==="trailhead"&&await hasNearbyTrackApproach(db,nodeId,checkpoint))addCandidate(nodeId,"service-road");
   }
-  // One parking feature creates at most one snapped candidate, even when its area has many vertices.
-  for(const evidenceRow of rows(db,"SELECT id,record FROM evidence WHERE kind='parking'")) {
+  for(const row of rows(db,"SELECT r.node_id,r.road_class FROM road_nodes r JOIN portal_trail_nodes t ON t.id=r.node_id ORDER BY r.node_id")) {
+    if (++work%1000===0) await checkpoint();
+    if(row.road_class==="street"||one(db,`SELECT 1 FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id
+      WHERE p.node_id=? AND e.kind IN ('trailhead','gate') LIMIT 1`,String(row.node_id)))
+      addCandidate(String(row.node_id),String(row.road_class) as "street"|"service-road");
+  }
+  // A parking feature nominates one of its own selected hiking contacts. Its
+  // mapped road/track contact may be another vertex; no connector is invented.
+  for(const evidenceRow of rows(db,"SELECT id,record FROM evidence WHERE kind='parking' ORDER BY id")) {
     if (++work%1000===0) await checkpoint();
     const item=JSON.parse(String(evidenceRow.record)) as NormalizedPortalEvidence;
     if(!allowedAccess(item))continue;
-    const coordinates=[...rows(db,"SELECT lon,lat FROM evidence_points WHERE evidence_id=?",String(evidenceRow.id))]
-      .map(({lon,lat})=>[Number(lon),Number(lat)] as [number,number]);
-    let roadClass:"street"|"service-road"|null=null;
-    for(const nodeId of item.nodeIds) {
+    const approaches:Array<{coordinates:readonly [number,number];roadClass:"street"|"service-road"}>=[];
+    const trails:Array<{id:string;coordinates:readonly [number,number]}>=[];
+    for(const nodeId of new Set(item.nodeIds)) {
       if (++work%1000===0) await checkpoint();
-      const contact=one(db,"SELECT road_class FROM road_nodes WHERE node_id=?",nodeId);
-      if(contact?.road_class==="street"){roadClass="street";break;}
-      if(contact?.road_class==="service-road")roadClass="service-road";
+      const node=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);if(!node)continue;
+      const coordinates=[Number(node.lon),Number(node.lat)] as const,incident=waysAt(db,nodeId).filter(allowedAccess);
+      const road=one(db,"SELECT road_class FROM road_nodes WHERE node_id=?",nodeId);
+      if(road||incident.some(trackWay))approaches.push({coordinates,roadClass:road?.road_class==="street"?"street":"service-road"});
+      if(incident.some(way=>hikingWay(way)&&selectedWayAt(db,way,nodeId)))trails.push({id:nodeId,coordinates});
     }
-    if(!roadClass) for(const [lon,lat] of coordinates) {
-      if (++work%1000===0) await checkpoint();
-      for(const road of rows(db,`SELECT n.lon,n.lat,r.road_class FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN road_nodes r ON r.node_id=n.id
-        WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,...box(lon,lat,25))) {
-        if (++work%1000===0) await checkpoint();
-        if(distance([lon,lat],[Number(road.lon),Number(road.lat)])<=25){roadClass=road.road_class==="street"?"street":"service-road";if(roadClass==="street")break;}
-      }
-      if(roadClass==="street")break;
-    }
-    if(!roadClass) {
-      // A mapped parking area can join a track and hiking path at different
-      // vertices. Keep the start on that path; never manufacture a parking edge.
-      const tracks:Array<{id:string;coordinates:readonly [number,number]}>=[],trails:typeof tracks=[];
-      for(const nodeId of [...new Set(item.nodeIds)]) {
-        await checkpoint();
-        const incident=waysAt(db,nodeId).filter(allowedAccess);
-        const node=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);
-        if(!node)continue;
-        const contact={id:nodeId,coordinates:[Number(node.lon),Number(node.lat)] as const};
-        if(incident.some(trackWay))tracks.push(contact);
-        if(incident.some(way=>hikingWay(way)&&selectedWayAt(db,way,nodeId)))trails.push(contact);
-      }
-      const contacts=trails.map(trail=>({...trail,distance:Math.min(...tracks.map(track=>distance(track.coordinates,trail.coordinates)))}))
-        .filter(contact=>contact.distance<=250).sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
-      if(contacts[0])addCandidate(contacts[0].id,"service-road");
-      continue;
-    }
-    let nearest:{id:string;distance:number}|null=null;
-    for(const [lon,lat] of coordinates) {
-      if (++work%1000===0) await checkpoint();
-      for(const trail of rows(db,`SELECT n.id,n.lon,n.lat FROM nodes_spatial s JOIN nodes n ON n.rowid=s.id JOIN portal_trail_nodes c ON c.id=n.id
-        WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,...box(lon,lat,250))) {
-        if (++work%1000===0) await checkpoint();
-        const measured=distance([lon,lat],[Number(trail.lon),Number(trail.lat)]);
-        if(measured<=250&&(!nearest||measured<nearest.distance||(measured===nearest.distance&&String(trail.id)<nearest.id)))nearest={id:String(trail.id),distance:measured};
-      }
-    }
-    if(nearest)addCandidate(nearest.id,roadClass);
+    if(!approaches.length)continue;
+    const nomination=trails.map(trail=>({...trail,distance:Math.min(...approaches.map(approach=>distance(approach.coordinates,trail.coordinates)))}))
+      .sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id))[0];
+    if(!nomination)continue;
+    addCandidate(nomination.id,approaches.some(approach=>approach.roadClass==="street")?"street":"service-road");
+    run(db,"INSERT INTO portal_evidence VALUES (?,?)",nomination.id,String(evidenceRow.id));
   }
 }
 async function candidateRecord(db:DatabaseSync,row:Row,checkpoint:()=>Promise<void>):Promise<NormalizedAccessPoint> {
-    const node=JSON.parse(String(row.record)) as NormalizedNode,incident=waysAt(db,node.id),evidence=await evidenceNear(db,node.lon,node.lat,250,checkpoint);
-    const named=evidence.find(({item})=>item.kind==="trailhead"&&item.name?.trim())??evidence.find(({item})=>item.kind==="information"&&item.name?.trim())??evidence.find(({item})=>item.kind==="gate"&&item.name?.trim());
+    const node=JSON.parse(String(row.record)) as NormalizedNode,incident=waysAt(db,node.id);
+    const evidence=[...rows(db,"SELECT e.record FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id WHERE p.node_id=? ORDER BY e.id",node.id)]
+      .map(({record})=>JSON.parse(String(record)) as NormalizedPortalEvidence);
+    const named=evidence.find(item=>item.kind==="trailhead"&&item.name?.trim())??evidence.find(item=>item.kind==="information"&&item.name?.trim())??evidence.find(item=>item.kind==="gate"&&item.name?.trim());
     const trailName=incident.map(({name})=>name?.trim()).filter((name):name is string=>!!name).sort()[0];
-    const parking=evidence.filter(({item})=>item.kind==="parking").sort((a,b)=>a.distanceM-b.distanceM||a.item.id.localeCompare(b.item.id))[0];
+    const parking=evidence.find(item=>item.kind==="parking");
     const states=new Set(incident.map(({accessState})=>accessState));
     const accessState=( ["closed","prohibited","private","unknown","public"] as const).find((state)=>states.has(state))??"unknown";
-    return {id:`portal:${node.id}`,externalId:node.externalId,nodeId:node.id,name:named?.item.name??(trailName?`${trailName} trailhead`:"Trailhead"),kind:"trailhead",accessState,
-      confidence:evidence.some(({item})=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.item.externalId}`:null,
-      sourceRefs:[...new Set([...node.sourceRefs,...incident.flatMap(({sourceRefs})=>sourceRefs),...evidence.flatMap(({item})=>item.sourceRefs)])].sort(),
-      portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?.distanceM??null,nearbyBuildingCount:await nearbyBuildings(db,node.lon,node.lat,checkpoint)};
+    return {id:`portal:${node.id}`,externalId:node.externalId,nodeId:node.id,name:named?.name??(trailName?`${trailName} trailhead`:"Trailhead"),kind:"trailhead",accessState,
+      confidence:evidence.some(item=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.externalId}`:null,
+      sourceRefs:[...new Set([...node.sourceRefs,...incident.flatMap(({sourceRefs})=>sourceRefs),...evidence.flatMap(item=>item.sourceRefs)])].sort(),
+      portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?0:null,nearbyBuildingCount:await nearbyBuildings(db,node.lon,node.lat,checkpoint)};
 }
-const discoveryTables=["portal_candidates","road_nodes","portal_trail_nodes","portal_links"];
+const discoveryTables=["portal_evidence","portal_candidates","road_nodes","portal_trail_nodes","portal_links"];
 function clearDiscovery(db:DatabaseSync):void {
   for(const table of discoveryTables)db.exec(`DROP TABLE IF EXISTS temp.${table}`);
 }
 
 /** Freeze sparse local starts before distance pruning and expensive DEM work.
- * These records retain parking snaps even if another start's graph is pruned.
+ * These records retain parking nominations even if another start's graph is pruned.
  * Complete ranking is attached once, from the final measured topology.
  */
 export async function prepareSparsePortalCandidates(store:ProgressiveGraphStore,startGeometry:AreaGeometry,checkpoint:()=>Promise<void>=async()=>{}):Promise<{candidateAccessPoints:number;eligibleAccessPoints:number}> {

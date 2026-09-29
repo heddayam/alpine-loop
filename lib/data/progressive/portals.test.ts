@@ -227,16 +227,67 @@ const parking=`n1 x-122 y48
 n2 x-121.999 y48
 n3 x-121.999 y48.001
 n4 x-122.0001 y48
-n5 Tamenity=parking x-122.0001 y48.00001
+n5 x-122.0001 y48.00001
 n6 x-122.001 y48
 w1 Thighway=path Nn1,n2,n3,n1
-w2 Thighway=residential Nn6,n4`;
+w2 Thighway=residential Nn6,n4
+w3 Tamenity=parking Nn4,n1,n5,n4`;
 function addBuildings(store:ReturnType<typeof openProgressiveGraphStore>,count:number,lon=-122,lat=48) {
   for(let index=0;index<count;index++)store.putBuilding([lon+index*.000001,lat+.00001]);
 }
 function seedIds(store:ReturnType<typeof openProgressiveGraphStore>) {
   return store.database.prepare("SELECT node_id FROM sparse_start_nodes ORDER BY node_id").all().map(row=>String(row.node_id));
 }
+
+describe.each([false,true])("mapped entrance evidence (before elevation=%s)",early=>{
+  const derive=(opl:string,adjust?:(topology:NormalizedTopology)=>void)=>deriveAtStage(opl,adjust,undefined,early);
+  it("keeps an unmarked street entrance without borrowing nearby names, confidence or parking",async()=>{
+    const unrelated=`n10 Thighway=trailhead,name=Unrelated%20%trailhead x-122.00001 y48
+n11 Ttourism=information,name=Unrelated%20%sign x-122.00002 y48
+n12 Tamenity=parking,name=Unrelated%20%parking x-122.00003 y48
+n13 Tbarrier=gate,name=Unrelated%20%gate x-122.00004 y48`;
+    const {points}=await derive(`${direct}\n${unrelated}`,topology=>{
+      topology.portalEvidence!.forEach(item=>{item.sourceRefs=["unrelated-source"];});
+    });
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({nodeId:"osm-node-1",name:"Trailhead",confidence:"low",parkingEvidence:null,parkingDistanceM:null,portalRoadClass:"street"});
+    expect(points[0]!.sourceRefs).not.toContain("unrelated-source");
+  });
+
+  it.each(["road","hiking"])("requires an actual %s contact on the parking feature",async contact=>{
+    const opl=contact==="road"?parking.replace("Nn6,n4","Nn6,n7"):parking.replace("Nn4,n1,n5,n4","Nn4,n8,n5,n4");
+    const {points}=await derive(`${opl}\nn7 x-122.00011 y48\nn8 x-122.00001 y48`);
+    expect(points).toEqual([]);
+  });
+
+  it("does not admit a service junction using a nearby gate or information along the trail",async()=>{
+    const opl=direct.replace("highway=residential","highway=service").replace("n2 x","n2 Ttourism=information,name=Trail%20%sign x");
+    expect((await derive(`${opl}\nn10 Tbarrier=gate x-122.00001 y48`)).points).toEqual([]);
+  });
+
+  it("requires entrance evidence at the service junction itself",async()=>{
+    const opl=direct.replace("highway=residential","highway=service");
+    expect((await derive(opl.replace("n1 x","n1 Ttourism=information,name=Sign x"))).points).toEqual([]);
+    expect((await derive(opl.replace("n1 x","n1 Tbarrier=gate,name=Mapped%20%entrance x"))).points).toMatchObject([
+      {nodeId:"osm-node-1",name:"Mapped entrance",confidence:"medium",portalRoadClass:"service-road"},
+    ]);
+  });
+
+  it.each(["highway=trailhead","tourism=information","barrier=gate"])("ignores restricted %s evidence on an otherwise unmarked street entrance",async tag=>{
+    const {points}=await derive(direct.replace("n1 x",`n1 T${tag},name=Restricted,foot=private x`));
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({nodeId:"osm-node-1",name:"Trailhead",confidence:"low",parkingEvidence:null});
+  });
+
+  it("associates a multi-contact parking lot only with its one nomination",async()=>{
+    const opl=`${parking.replace("Nn4,n1,n5,n4","Nn4,n1,n2,n5,n4")}\nn7 x-121.998 y48.001\nw4 Thighway=residential Nn7,n3`;
+    const {points,originalEdges,edges}=await derive(opl);
+    expect(points.map(point=>point.nodeId)).toEqual(["osm-node-1","osm-node-3"]);
+    expect(points[0]).toMatchObject({confidence:"medium",parkingEvidence:"portal-evidence:way/3",parkingDistanceM:0});
+    expect(points[1]).toMatchObject({confidence:"low",parkingEvidence:null,parkingDistanceM:null});
+    expect(edges).toEqual(originalEdges);
+  });
+});
 
 describe("sparse starts before elevation",()=>{
   it.each([direct,service,parking,top,heather])("preserves the full final portal identity and ranking for every admission path",async opl=>{
@@ -282,18 +333,21 @@ describe("sparse starts before elevation",()=>{
     } finally {store.close();}
   });
 
-  it("freezes a parking snap before graph removal rather than selecting a replacement start",async()=>{
+  it("freezes a parking nomination before graph removal rather than selecting another contact",async()=>{
     const extra=`n11 x-121.9999 y48.0001
 n12 x-121.9989 y48.0001
 w11 Thighway=path Nn11,n12`;
-    const {store,measure}=staged(`${parking}\n${extra}`);
+    const {store,measure}=staged(`${parking}\n${extra}`,topology=>{
+      const parking=topology.portalEvidence!.find(item=>item.kind==="parking")!,contact=topology.nodes.find(node=>node.id==="osm-node-11")!;
+      parking.nodeIds.push(contact.id);parking.coordinates.push([contact.lon,contact.lat]);
+    });
     try {
       expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:1});
       expect(seedIds(store)).toEqual(["osm-node-1"]);
       measure(id=>!id.startsWith("osm-way-1:"));
       expect(await store.derivePortals(coverage)).toBe(0);
       expect(store.database.prepare("SELECT * FROM derived_portals").all()).toEqual([]);
-      // Legacy discovery would snap that parking feature to the second path.
+      // Rediscovery can nominate its other actual feature contact, but never a nearby path.
       store.database.exec("DROP TABLE sparse_portal_candidates; DROP TABLE sparse_start_nodes");
       expect(await store.derivePortals(coverage)).toBe(1);
       expect(store.database.prepare("SELECT node_id FROM derived_portals").get()!.node_id).toBe("osm-node-11");
