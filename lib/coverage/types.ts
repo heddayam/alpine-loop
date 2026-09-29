@@ -12,6 +12,8 @@ export type CoverageRegion = {
   recipe: SourceRecipe;
   aliases?: string[];
   sources?: DataRelease["sources"];
+  /** Retire these published areas only after this graph preserves their start coverage. */
+  replaces?: string[];
   reviewedApproaches?: Array<{id: string; name: string; coordinates: [number, number]; radiusMeters: number}>;
 };
 
