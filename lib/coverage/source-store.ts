@@ -23,10 +23,16 @@ function componentBounds(area: AreaGeometry, context: number): string {
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v6";
+export const NORMALIZATION_VERSION = "source-normalization-v7";
 const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
 export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
   `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;
+
+// OSM uses building=yes or a building type; building=no explicitly denies one.
+// https://wiki.openstreetmap.org/wiki/Tag:building%3Dno
+function isBuilding(tags: Record<string, string>): boolean {
+  return Boolean(tags.building) && tags.building !== "no";
+}
 
 class UnsupportedBuildingGeometry extends Error {}
 
@@ -153,22 +159,22 @@ export class CoverageSourceStore {
           if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
           putNode.run(id, lon, lat);
           const tags = parseOplTags(field("T"));
-          if (tags.building || osmPortalEvidenceKinds(tags).length) putContextNode.run(id, lon, lat, field("T"));
+          if (isBuilding(tags) || osmPortalEvidenceKinds(tags).length) putContextNode.run(id, lon, lat, field("T"));
         } else if (type === "w") {
           const tags = parseOplTags(field("T"));
           const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
           putSourceWay.run(id, JSON.stringify(refs));
           const kind = classifyOsmWay(tags);
-          const retained = kind || tags.building || osmPortalEvidenceKinds(tags).length;
+          const retained = kind || isBuilding(tags) || osmPortalEvidenceKinds(tags).length;
           if (retained) {
             if (refs.length < 2) throw new Error(`Source way/${id} has fewer than two nodes`);
             const coords = coordinates(refs);
             const bounds = coords.reduce(([w,s,e,n], [x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]);
-            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), kind ?? (tags.building ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
+            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), kind ?? (isBuilding(tags) ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
           }
         } else if (type === "r") {
           const tags = parseOplTags(field("T"));
-          if (tags.building && tags.building !== "no" && tags.type === "multipolygon") {
+          if (isBuilding(tags) && tags.type === "multipolygon") {
             try {
               const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
               const parts = outer.map((member) => {
@@ -252,13 +258,13 @@ export class CoverageSourceStore {
   }
   *buildings(area: AreaGeometry): Generator<readonly [number,number]> {
     for (const raw of this.nearbyPoints("nodes",area)) {
-      if (!parseOplTags(String(raw.tags)).building) continue;
+      if (!isBuilding(parseOplTags(String(raw.tags)))) continue;
       const centroid = buildingCentroidOf({ type: "Point", coordinates: [Number(raw.lon), Number(raw.lat)] });
       if (centroid) yield centroid;
     }
     for (const row of this.nearbyPoints("relation_buildings",area)) yield [Number(row.lon), Number(row.lat)];
     for(const raw of this.nearbyWays(area)) {
-      if(!JSON.parse(String(raw.tags)).building) continue;
+      if(!isBuilding(JSON.parse(String(raw.tags)) as Record<string,string>)) continue;
       const points=JSON.parse(String(raw.coordinates)) as [number,number][];
       const centroid = buildingCentroidOf({ type: "LineString", coordinates: points });
       if (centroid) yield centroid;

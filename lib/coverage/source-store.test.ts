@@ -132,6 +132,32 @@ describe("compact coverage source", () => {
     expect(store.db.prepare("SELECT count(*) AS n FROM nodes").get()?.n).toBe(1);
   });
 
+  it.each(["yes", "hut", "no"])("interprets building=%s consistently across nodes, ways and relations", async (building) => {
+    const store = make();
+    await store.import(async () => {}, { lines: lines([
+      ...fixtures.slice(0,4),
+      `n10 Tbuilding=${building} x2 y0`,
+      `n11 Tbuilding=${building},highway=trailhead x2 y1`,
+      `w20 Tbuilding=${building} Nn1,n2,n3,n4,n1`,
+      `w21 Tbuilding=${building},highway=path Nn1,n2,n3,n4,n1`,
+      `w22 Tbuilding=${building},amenity=parking Nn1,n2,n3,n4,n1`,
+      "w40 T Nn1,n2,n3,n4,n1",
+      `r30 Ttype=multipolygon,building=${building} Mw40@outer`,
+    ]) });
+    expect([...store.buildings(area)]).toEqual(building === "no" ? [] : [
+      [2,0], [2,1], [0.4,0.4], [0.4,0.4], [0.4,0.4], [0.4,0.4],
+    ]);
+    // An explicit non-building can still be a trailhead, parking area or trail.
+    expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/11", "way/22"]);
+    expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/21"]);
+    if (building === "no") {
+      expect(store.db.prepare("SELECT id FROM nodes ORDER BY id").all()).toEqual([{id:"11"}]);
+      expect(store.db.prepare("SELECT id,kind FROM ways ORDER BY id").all()).toEqual([
+        {id:"21",kind:"trail"}, {id:"22",kind:"evidence"},
+      ]);
+    }
+  });
+
   it("seals malformed building diagnostics and rounds node buildings as before", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines([
@@ -150,5 +176,9 @@ describe("compact coverage source", () => {
     await store.import(async () => {}, { lines: lines() });
     expect(()=>new CoverageSourceStore(file, source, rectangle([0,0,1,1]))).toThrow("fingerprint mismatch");
     expect(sourceStoreFileName(source,area)).not.toBe(sourceStoreFileName(source,rectangle([0,0,1,1])));
+    const identity = store.db.prepare("SELECT value FROM meta WHERE key='source'").get() as {value:string};
+    store.db.prepare("UPDATE meta SET value=? WHERE key='source'").run(identity.value.replace(/^source-normalization-v\d+:/, "source-normalization-v6:"));
+    expect(()=>new CoverageSourceStore(file, source, area)).toThrow("fingerprint mismatch");
+    expect(sourceStoreFileName(source,area)).not.toContain("source-normalization-v6");
   });
 });
