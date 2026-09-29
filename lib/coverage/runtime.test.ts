@@ -128,6 +128,39 @@ it("fails an all-dense selection before acquiring elevation and preserves the pu
 });
 async function expectNoScratch(){expect((await readdir(path.join(root,"stage"))).filter(file=>file.startsWith(".region-"))).toEqual([]);}
 
+it("accounts for external scratch, retains caches and cleans it after success or interruption",async()=>{
+  await build();
+  const before=await release(),graph=await pieces();
+  const scratchRoot=path.join(root,"external-scratch");
+  vi.stubEnv("ALPINE_BUILD_SCRATCH",scratchRoot);
+  let peakDisk=0,observedScratch=false;
+  const run=context();
+  run.report=async update=>{
+    peakDisk=Math.max(peakDisk,update.peakDiskBytes??0);
+    if(update.stage?.startsWith("Reading walking links")) {
+      const directories=await readdir(scratchRoot);
+      expect(directories).toHaveLength(1);
+      const directory=path.join(scratchRoot,directories[0]!);
+      expect((await stat(path.join(directory,"stage.sqlite"))).isFile()).toBe(true);
+      // Resource reporting must include temporary storage outside the cache root.
+      await writeFile(path.join(directory,"disk-accounting-fixture"),Buffer.alloc(2*1024**2));
+      observedScratch=true;
+    }
+  };
+  const input={id:"first-region",name:"First region",geometry:startArea,recipe:recipe()};
+  vi.mocked(calculateEdgeMetricsBatch).mockClear();vi.mocked(filteredSourceLines).mockClear();
+  await buildCoverageRegion(input,run,{rebuild:true});
+  expect(observedScratch).toBe(true);expect(peakDisk).toBeGreaterThanOrEqual(2*1024**2);
+  expect(await pieces()).toEqual(graph);expect(await release()).toEqual(before);
+  expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();
+  expect(await readdir(scratchRoot)).toEqual([]);
+  const interrupted=context();
+  interrupted.report=async update=>{if(update.stage?.startsWith("Compressing trail paths"))throw new Error("interrupted external scratch");};
+  await expect(buildCoverageRegion(input,interrupted,{rebuild:true})).rejects.toThrow("interrupted external scratch");
+  expect(await release()).toEqual(before);expect(await readdir(scratchRoot)).toEqual([]);
+  await expectNoScratch();
+});
+
 it("reuses immutable area bytes without elevation sampling or topology recomputation",async()=>{
   const {elevationFor}=await import("./elevation"), {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
   await build();const first=await release(),artifact=first.artifacts[0]!,modified=(await stat(path.join(root,"release",artifact.path))).mtimeMs;

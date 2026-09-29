@@ -13,10 +13,14 @@ services:
     environment:
       ALPINE_SOURCE_CACHE: /app/.cache/sources
       ALPINE_COVERAGE_ROOT: /app/.cache/build
+      ALPINE_BUILD_SCRATCH: /app/.build-scratch
       ALPINE_RELEASE_ROOT: /app/.local-data/releases/prepared
     volumes:
       - ./.cache:/app/.cache
       - ./.local-data/releases:/app/.local-data/releases
+      # Disposable databases stay on Docker's native filesystem. `run --rm`
+      # removes this anonymous volume along with its build container.
+      - /app/.build-scratch
 
   app:
     build:

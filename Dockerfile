@@ -31,7 +31,9 @@ COPY scripts ./scripts
 COPY data ./data
 COPY tools/dem/sample_dem.py ./tools/dem/
 RUN rm -rf /tmp/uv-cache \
-    && mkdir -p .local-data/runtime && chown node:node .local-data/runtime
+    && mkdir -p .local-data/runtime .build-scratch \
+    && chown node:node .local-data/runtime \
+    && chmod 1777 .build-scratch
 
 ENTRYPOINT ["node", "--import", "tsx"]
 CMD ["scripts/data.ts"]

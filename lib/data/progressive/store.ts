@@ -39,7 +39,9 @@ export class ProgressiveGraphStore {
     this.stagingPath = options.stagingPath;
     this.buildIdentity = options.buildIdentity;
     this.database = new DatabaseSync(options.stagingPath);
-    this.database.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA temp_store=FILE;
+    // Rebuildable working data: keep transactions atomic without a WAL sync on
+    // every small import batch. Cache memory stays bounded independently of size.
+    this.database.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
       CREATE TABLE IF NOT EXISTS store_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,record TEXT NOT NULL) STRICT;
       CREATE VIRTUAL TABLE IF NOT EXISTS nodes_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat);

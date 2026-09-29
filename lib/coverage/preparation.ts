@@ -11,8 +11,10 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { CoverageProgressUpdate, CoverageRunnerContext, CoverageUnit } from "./types";
 
 function preparationPaths() {
+  const root = path.resolve(process.env.ALPINE_COVERAGE_ROOT ?? ".cache/build");
   return {
-    root: path.resolve(process.env.ALPINE_COVERAGE_ROOT ?? ".cache/build"),
+    root,
+    scratchRoot: path.resolve(process.env.ALPINE_BUILD_SCRATCH ?? root),
     outputRoot: path.resolve(process.env.ALPINE_RELEASE_ROOT ?? ".local-data/releases/prepared"),
     cacheRoot: path.resolve(process.env.ALPINE_SOURCE_CACHE ?? ".cache/sources"),
   };
@@ -20,7 +22,11 @@ function preparationPaths() {
 export async function preparationSession(recipe: SourceRecipe, context: CoverageRunnerContext) {
   const paths = preparationPaths();
   await mkdir(paths.root, {recursive:true});
-  const resources = new CoverageResourceGuard({memoryLimitBytes:recipe.memoryLimitMiB * 1024 ** 2, diskPaths:[paths.root,paths.outputRoot]});
+  await mkdir(paths.scratchRoot, {recursive:true});
+  const diskPaths = [...new Set([paths.root,paths.outputRoot,paths.scratchRoot])];
+  // Count a configured scratch directory once even when it is under a cache root.
+  const resources = new CoverageResourceGuard({memoryLimitBytes:recipe.memoryLimitMiB * 1024 ** 2,
+    diskPaths:diskPaths.filter(directory => !diskPaths.some(parent => parent!==directory && directory.startsWith(path.join(parent,path.sep))))});
   const raws: CoverageSourceStore[] = [], units: CoverageUnit[] = [];
   resources.start();
   const measurements = (): CoverageProgressUpdate => ({peakMeasuredMemoryBytes:resources.peakMemoryBytes,peakCgroupMemoryBytes:resources.cgroupPeakBytes,peakDiskBytes:resources.peakDiskBytes});

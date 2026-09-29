@@ -203,7 +203,13 @@ docker compose run --rm --build \
 Compose's `--build` updates the data image; the CLI's `--rebuild` reruns graph
 preparation while keeping verified source/context, DEM and measurement caches.
 The previous published area remains available until the rebuild succeeds. This
-measures a warm preparation, so compare individual stages and cache-hit counts
+command also uses a disposable Docker volume for temporary graph databases,
+avoiding repeated writes through the Mac file share. It is removed with the
+container. Downloads, source context, elevation and measurement caches remain
+in the existing host directories. Outside Compose, `ALPINE_BUILD_SCRATCH` can
+select temporary storage; its default is the build-cache root.
+
+This measures a warm preparation, so compare individual stages and cache-hit counts
 with the previous run rather than treating the total as a cold-build comparison.
 
 Building another named region adds it; rebuilding the same ID replaces it. The first

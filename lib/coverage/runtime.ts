@@ -45,7 +45,7 @@ const durable = (source: SourceSnapshot) => { const { localPath, ...value } = so
 export async function buildCoverageRegion(region: CoverageRegion, context: CoverageRunnerContext, buildOptions: {rebuild?:boolean} = {}): Promise<CoverageRunResult> {
   const recipe = sourceRecipeSchema.parse(region.recipe), area = planCoverageRegion({...region, recipe});
   const session = await preparationSession(recipe, context);
-  const {root, outputRoot, cacheRoot, raws, units, check, report} = session;
+  const {root, scratchRoot, outputRoot, cacheRoot, raws, units, check, report} = session;
   let scratch: string | undefined;
   try {
     let previous: DataRelease | undefined;
@@ -102,7 +102,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     }
     if (!prepared) {
       await importLocalSources(session, inputs, area.geometry);
-      scratch = await mkdtemp(path.join(root, ".region-"));
+      scratch = await mkdtemp(path.join(scratchRoot, ".region-"));
       const databasePath = path.join(scratch, "region.sqlite");
       const store = openProgressiveGraphStore({stagingPath:path.join(scratch,"stage.sqlite"), buildIdentity:area.id});
       let demGeometry: AreaGeometry, elevationFingerprint: string;
