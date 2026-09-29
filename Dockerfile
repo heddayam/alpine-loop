@@ -78,6 +78,9 @@ RUN cp lib/data/metrics.ts lib/data/wilderness.ts /tmp/ \
 
 USER node
 
+# Next bundles API imports, but the download worker loads this pruned source tree.
+RUN node --import tsx -e "import('./lib/coverage-install/service.ts')"
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

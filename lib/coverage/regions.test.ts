@@ -5,7 +5,8 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
 import { planCoverageRegion } from "./plan";
-import { containsCoverage, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
+import { containsCoverage } from "@/lib/graph/coverage-containment";
+import { intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import type { CoverageRegion } from "./types";
 
 vi.mock("node:fs/promises", async original => {

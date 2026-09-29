@@ -6,6 +6,28 @@ the evidence line.
 
 ## Active system design revision
 
+### Download worker packaging repair — 2026-09-28
+
+- [x] Reproduce Central Cascades installation failing at zero bytes in the user's
+  running app image. The raw `tsx` worker imported the shared containment helper
+  from `lib/coverage`, which Docker deliberately removes. Next's bundled API
+  worked, but the child failed module resolution before its ready handshake.
+- [x] Move the containment implementation into `lib/graph/coverage-containment.ts`
+  and import it directly from installation, preparation and regional tests.
+  Delete the old implementation; preparation modules remain excluded from the
+  runtime image. Add an import check after pruning, as the production user, so
+  missing worker dependencies fail image creation. Preserve worker stderr in app
+  logs using Node's [inherited stdio](https://nodejs.org/api/child_process.html#optionsstdio).
+- [x] Thirty-eight installation/regional tests, integrated typechecking and
+  targeted ESLint pass. A network-disabled, 512 MiB container using the existing
+  production image with only the two repaired runtime files mounted loaded the
+  imports, received the real worker's ready IPC and observed exit code zero with
+  an empty temporary queue. The first probe awaited `close` after IPC disconnect;
+  corrected diagnostic waiting on `exit` passed. Temporary containers and queues
+  were removed. No user database, installed artifact or build cache was changed.
+- [ ] User rebuilds the app image and resumes the failed installation. Regional
+  graph rebuilding is unnecessary for this packaging fix.
+
 ### Area consolidation and elevation gap repair — 2026-09-28
 
 - [x] Consolidate the complete Glacier Peak and Henry M. Jackson pilot start

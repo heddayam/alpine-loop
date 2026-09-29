@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { downloadRequestSchema, type DownloadRequest, type DownloadPlan, type DataRelease, type DownloadCatalog } from '@/lib/contracts/releases';
 import { Store, DownloadError } from './store';
-import { containsCoverage } from '@/lib/coverage/geometry';
+import { containsCoverage } from '@/lib/graph/coverage-containment';
 import { activate, cleanupInstallations, publishInstallation, coverageRoot, loadInstallation, selection, withPublicationLock } from './index';
 import { downloadArtifact, DownloadStopped, loadRelease, requireDisk, verifyArtifact, verifyCompressedArtifact } from './download';
 export type Options = {
@@ -49,7 +49,7 @@ export function startDownloadWorker(root: string) {
             store.close();
         }
     };
-    const child = spawn(process.execPath, ['--import', 'tsx', resolve(/* turbopackIgnore: true */ process.cwd(), 'scripts/coverage-download-worker.ts'), root], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], env: process.env });
+    const child = spawn(process.execPath, ['--import', 'tsx', resolve(/* turbopackIgnore: true */ process.cwd(), 'scripts/coverage-download-worker.ts'), root], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'ignore', 'inherit', 'ipc'], env: process.env });
     child.once('error', failed);
     child.once('exit', (code, signal) => {
         if (code !== 0)

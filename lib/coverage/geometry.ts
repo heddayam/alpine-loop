@@ -19,23 +19,6 @@ export function intersectCoverage(a: AreaGeometry, b: AreaGeometry): AreaGeometr
 export function subtractCoverage(a: AreaGeometry, b: AreaGeometry): AreaGeometry | null {
   return shape(polygonClipping.difference(coordinates(a), coordinates(b)));
 }
-/** Overlay roundoff can leave sub-millimetre residues in otherwise contained polygons.
- * Bound the total omitted area, including holes; never substitute bbox/vertex checks.
- * 1e-14 square degrees is at most 0.000124 m², below input geometry precision.
- * https://locationtech.github.io/jts/jts-faq.html#D7
- */
-export function containsCoverage(outer: AreaGeometry, inner: AreaGeometry): boolean {
-  const missing = subtractCoverage(inner, outer);
-  if (!missing) return true;
-  const polygons = missing.type === "Polygon" ? [missing.coordinates] : missing.coordinates;
-  const area = polygons.reduce((total, polygon) => total + polygon.reduce((sum, ring, index) => {
-    const [x, y] = ring[0]!;
-    let signed = 0;
-    for (let i = 1; i < ring.length; i++) signed += (ring[i-1]![0]-x)*(ring[i]![1]-y) - (ring[i]![0]-x)*(ring[i-1]![1]-y);
-    return sum + (index === 0 ? 1 : -1) * Math.abs(signed / 2);
-  }, 0), 0);
-  return area <= 1e-14;
-}
 export function rectangle([west, south, east, north]: readonly number[]): AreaGeometry {
   return { type: "Polygon", coordinates: [[[west!, south!], [east!, south!], [east!, north!], [west!, north!], [west!, south!]]] };
 }
