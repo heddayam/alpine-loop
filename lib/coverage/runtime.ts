@@ -19,7 +19,7 @@ import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import { applyRestriction } from "@/lib/data/curated-access";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION as METRIC_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import { contentId, intersectCoverage, rectangle, unionCoverage } from "./geometry";
+import { contentId, intersectCoverage, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { NORMALIZATION_VERSION } from "./source-store";
 import { elevationCache, elevationFor, describeCanonicalElevation } from "./elevation";
 import { reconcileInventory } from "./inventory";
@@ -49,6 +49,17 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     try { previous = dataReleaseSchema.parse(JSON.parse(await readFile(path.join(outputRoot, "release.json"), "utf8"))); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     if (previous && previous.partitioning !== "local-areas") throw new Error("Remove the old network release before publishing named regions");
+    // A named replacement must preserve the effective footprint, including holes
+    // and route boundaries. This checks geometry, not source or trail completeness.
+    const retiredIds = new Set(region.replaces ?? []);
+    for (const section of previous?.sections ?? []) {
+      if (!retiredIds.has(section.id)) continue;
+      if (subtractCoverage(section.geometry, area.startGeometry))
+        throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete eligible-start coverage`);
+      for (const artifact of previous!.artifacts.filter(artifact => section.artifactIds.includes(artifact.id)))
+        if (subtractCoverage(artifact.geometry, area.geometry))
+          throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete routing coverage`);
+    }
     const inputs = await preparationInputs(recipe, session, area.geometry);
     const declared = contentId({id:area.id, startGeometry:area.startGeometry, geometry:area.geometry, maximumRouteMiles:area.maximumRouteMiles,
       sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [], reviewedApproaches:region.reviewedApproaches ?? [],
@@ -207,12 +218,16 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       unit.status = "prepared";
       await report(`Prepared ${area.name}`,{compressedBytes:prepared.artifacts[0]!.compressedBytes,installedBytes:prepared.artifacts[0]!.bytes});
     }
-    const results = [prepared];
+    // Replacement policy belongs to publication, not immutable graph identity.
+    // Reusing a receipt must still apply the region's current retirement policy.
+    const results = [{...prepared, sections:prepared.sections.map(section=>({...section,
+      ...(retiredIds.size ? {replaces:[...retiredIds].sort()} : {})}))}];
     if (previous) {
-      const sections = previous.sections.filter(section => section.id !== area.id && section.artifactIds.some(id=>previous!.artifacts.some(artifact=>artifact.id===id && artifact.regionId))), ids = new Set(sections.flatMap(section=>section.artifactIds));
-      // These two sources belong only to the replaced region. Retained artifacts
+      const replacedIds = new Set([area.id, ...retiredIds]);
+      const sections = previous.sections.filter(section => !replacedIds.has(section.id) && section.artifactIds.some(id=>previous!.artifacts.some(artifact=>artifact.id===id && artifact.regionId))), ids = new Set(sections.flatMap(section=>section.artifactIds));
+      // Regional provenance belongs only to the replaced regions. Retained artifacts
       // still pin every shared provider/restriction source through the merge below.
-      const replacedSources = new Set([`region-boundary-${area.id}`,`region-approaches-${area.id}`]);
+      const replacedSources = new Set([...replacedIds].flatMap(id=>[`region-boundary-${id}`,`region-approaches-${id}`]));
       if (sections.length) results.unshift({...previous,sections,
         regions:previous.regions.filter(region=>sections.some(section=>section.id===region.id)),
         sources:previous.sources.filter(source=>!replacedSources.has(source.id)),

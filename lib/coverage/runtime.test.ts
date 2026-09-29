@@ -8,9 +8,9 @@ import { writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { DataRelease } from "@/lib/contracts/releases";
 import type { SourceSnapshot } from "@/lib/data/adapters";
-import type { CoverageRunnerContext } from "./types";
+import type { CoverageRegion, CoverageRunnerContext } from "./types";
 import { filteredSourceLines } from "./source-filter";
-import { rectangle, unionCoverage } from "./geometry";
+import { rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { buildCoverageRegion } from "./runtime";
 import { calculateEdgeMetricsBatch } from "@/lib/data/metrics";
 import type { SourceRecipe } from "./recipe";
@@ -51,6 +51,10 @@ const context = (): CoverageRunnerContext => ({ signal: new AbortController().si
 const recipe = (): SourceRecipe => ({schemaVersion:1,sources:[{config:{schemaVersion:1,id:source.id,authority:source.authority,dataset:source.dataset,version:source.version,upstreamTimestamp:source.retrievedAt,url:source.url,expectedByteLength:100,license:source.license,attribution:"Fixture"},geometry:rectangle([-123,46,-119,49]),sha256:source.contentHash}],exclusions:[],reviewedRegionIds:[],memoryLimitMiB:4096,offline:true,limitations:[]});
 const startArea = rectangle([-121.27,47.50,-121.25,47.52]);
 const secondArea = rectangle([-121.13,47.50,-121.09,47.54]);
+const consolidatedArea = rectangle([-121.28,47.49,-121.08,47.55]);
+const region = (id:string, geometry=startArea): CoverageRegion => ({id,name:id,geometry,recipe:recipe(),sources:
+  ["boundary","approaches"].map(kind=>({id:`region-${kind}-${id}`,authority:source.authority,dataset:kind,
+    version:source.version,retrievedAt:source.retrievedAt,url:source.url,license:source.license,contentHash:source.contentHash}))});
 const build = (area = startArea, ctx = context(), input = recipe()) => buildCoverageRegion({id:area===startArea?"first-region":"second-region",name:area===startArea?"First region":"Second region",geometry:area,recipe:input},ctx);
 async function release(): Promise<DataRelease> {return JSON.parse(await readFile(path.join(root,"release/release.json"),"utf8"));}
 async function pieces() {
@@ -125,6 +129,82 @@ it("replaces one area's reviewed provenance without changing its installed neigh
   expect(after.sources.filter(source=>source.id.startsWith("region-")).map(source=>source.contentHash)).toEqual([`sha256:${"2".repeat(64)}`,`sha256:${"2".repeat(64)}`]);
   expect(after.artifacts.find(artifact=>artifact.regionId==="second-region")).toEqual(neighbor);
   expect(await readFile(path.join(root,"release",neighbor.path))).toEqual(unchanged);
+});
+it("retires two covered areas atomically while retaining a neighbor, provider pins, and every old blob",async()=>{
+  await buildCoverageRegion(region("pilot-one"),context());
+  await buildCoverageRegion(region("pilot-two",secondArea),context());
+  await buildCoverageRegion(region("neighbor"),context());
+  const before=await release(), files=await Promise.all(before.artifacts.map(artifact=>readFile(path.join(root,"release",artifact.path))));
+  const neighbor=before.artifacts.find(artifact=>artifact.regionId==="neighbor")!;
+  await buildCoverageRegion({...region("consolidated",consolidatedArea),replaces:["pilot-one","pilot-two"]},context());
+  const after=await release();
+  expect(after.sections.map(section=>section.id)).toEqual(["consolidated","neighbor"]);
+  expect(after.sections.find(section=>section.id==="consolidated")!.replaces).toEqual(["pilot-one","pilot-two"]);
+  expect(after.regions.map(region=>region.id)).toEqual(["consolidated","neighbor"]);
+  expect(after.artifacts.map(artifact=>artifact.regionId).sort()).toEqual(["consolidated","neighbor"]);
+  expect(after.artifacts.find(artifact=>artifact.regionId==="neighbor")).toEqual(neighbor);
+  expect(after.sources.filter(source=>source.id.startsWith("region-")).map(source=>source.id)).toEqual([
+    "region-approaches-consolidated","region-approaches-neighbor","region-boundary-consolidated","region-boundary-neighbor",
+  ]);
+  expect(after.sources.filter(source=>!source.id.startsWith("region-"))).toEqual(before.sources.filter(source=>!source.id.startsWith("region-")));
+  for (const [index,artifact] of before.artifacts.entries())
+    expect(await readFile(path.join(root,"release",artifact.path))).toEqual(files[index]);
+});
+it.each(["drop","hole","routing exclusion"])("refuses replacement with a coverage %s before source verification or preparation",async kind=>{
+  await buildCoverageRegion(region("pilot"),context());
+  const before=await readFile(path.join(root,"release/release.json"),"utf8");
+  const replacement={...region("consolidated",consolidatedArea),replaces:["pilot"]};
+  if(kind==="drop") replacement.geometry=secondArea;
+  if(kind==="hole") replacement.geometry=subtractCoverage(consolidatedArea,rectangle([-121.265,47.505,-121.255,47.515]))!;
+  if(kind==="routing exclusion") replacement.recipe.exclusions=[{id:"new-exclusion",geometry:rectangle([-121.4,47.6,-121.39,47.61])}];
+  const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source"), {elevationFor}=await import("./elevation");
+  vi.mocked(readPinnedOsmSnapshot).mockClear();vi.mocked(filteredSourceLines).mockClear();vi.mocked(elevationFor).mockClear();
+  await expect(buildCoverageRegion(replacement,context())).rejects.toThrow(kind==="routing exclusion"?"complete routing coverage":"complete eligible-start coverage");
+  expect(readPinnedOsmSnapshot).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();expect(elevationFor).not.toHaveBeenCalled();
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(before);
+  await expectNoScratch();
+});
+it("applies current retirement metadata to a reused graph and does not resurrect retired areas on later cached rebuilds",async()=>{
+  await buildCoverageRegion(region("pilot-one"),context());
+  await buildCoverageRegion(region("pilot-two",secondArea),context());
+  const replacement=region("consolidated",consolidatedArea);
+  await buildCoverageRegion(replacement,context());
+  const before=await release(), artifact=before.artifacts.find(artifact=>artifact.regionId==="consolidated")!;
+  const bytes=await readFile(path.join(root,"release",artifact.path));
+  const {elevationFor}=await import("./elevation"), {writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
+  vi.mocked(elevationFor).mockClear();vi.mocked(writeProgressiveTopology).mockClear();vi.mocked(filteredSourceLines).mockClear();
+  replacement.replaces=["pilot-one","pilot-two"];
+  await buildCoverageRegion(replacement,context());
+  const after=await release();
+  expect(after.sections).toEqual([expect.objectContaining({id:"consolidated",replaces:["pilot-one","pilot-two"]})]);
+  expect(after.artifacts).toEqual([artifact]);
+  await buildCoverageRegion(replacement,context());
+  expect(await release()).toEqual(after);
+  expect(await readFile(path.join(root,"release",artifact.path))).toEqual(bytes);
+  expect(elevationFor).not.toHaveBeenCalled();expect(writeProgressiveTopology).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();
+  await buildCoverageRegion(region("neighbor"),context());
+  expect((await release()).sections.find(section=>section.id==="consolidated")!.replaces).toEqual(["pilot-one","pilot-two"]);
+});
+it.each(["failed approach","cancelled publication"])("keeps pilot publication intact after %s",async kind=>{
+  await buildCoverageRegion(region("pilot"),context());
+  const before=await readFile(path.join(root,"release/release.json"),"utf8");
+  const replacement={...region("consolidated",consolidatedArea),replaces:["pilot"]};
+  const controller=new AbortController(), ctx={...context(),signal:controller.signal};
+  if(kind==="failed approach") replacement.reviewedApproaches=[{id:"missing",name:"Missing entrance",coordinates:[-121.2,47.52],radiusMeters:50}];
+  else ctx.report=async update=>{if(update.stage?.startsWith("Publishing ")) controller.abort();};
+  await expect(buildCoverageRegion(replacement,ctx)).rejects.toThrow(kind==="failed approach"?"Reviewed approaches have no mapped starting point":"Coverage build interrupted");
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(before);
+  await expectNoScratch();
+});
+it("keeps shared provider pin conflicts as errors during retirement",async()=>{
+  await buildCoverageRegion(region("pilot"),context());
+  await buildCoverageRegion(region("neighbor",secondArea),context());
+  const before=await release(), replacement={...region("consolidated",consolidatedArea),replaces:["pilot"]};
+  const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,contentHash:`sha256:${"2".repeat(64)}`});
+  replacement.recipe.sources[0]!.sha256=`sha256:${"2".repeat(64)}`;
+  await expect(buildCoverageRegion(replacement,context())).rejects.toThrow("Conflicting source metadata fixture");
+  expect(await release()).toEqual(before);
 });
 it("checks every reviewed approach after final start filtering and preserves publication on failure",async()=>{
   const region={id:"first-region",name:"First region",geometry:startArea,recipe:recipe(),reviewedApproaches:[
