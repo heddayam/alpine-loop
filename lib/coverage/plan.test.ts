@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { areaGeometryBounds } from "@/lib/data/area-geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
-import { rectangle } from "./geometry";
-import { planLocalCoverage } from "./plan";
+import { rectangle, subtractCoverage } from "./geometry";
+import { constrainCoverage, entranceNeighborhood, expandCoveragePlan, planLocalCoverage } from "./plan";
 import type { SourceRecipe } from "./recipe";
 
 const recipe = {
@@ -59,4 +59,55 @@ it("clips only the declared international limit, while rejecting missing US sour
   expect(coordinateIsInsideArea([-120.95,49.05],plan.geometry)).toBe(false);
   expect(coordinateIsInsideArea([-120.95,48.95],plan.startGeometry)).toBe(true);
   expect(()=>planLocalCoverage({...usRecipe,sources:[{...recipe.sources[0]!,geometry:rectangle([-121,45,-117,49])}]},borderStarts)).toThrow("complete 25-mile");
+});
+
+it("registers frozen outside entrances and extends their routes without bounding the whole enlarged footprint",()=>{
+  const plan={...planLocalCoverage(recipe,starts),name:"Mountain core"};
+  const before=structuredClone(plan);
+  function* entrances():Generator<readonly [number,number]> {yield [-121.1,48.1];yield [-121.9,47.65];}
+  const expanded=expandCoveragePlan(plan,recipe,entrances());
+  expect(expanded).toMatchObject({id:plan.id,name:plan.name,maximumRouteMiles:40,bufferMiles:25});
+  expect(subtractCoverage(plan.geometry,expanded.geometry)).toBeNull();
+  expect(subtractCoverage(plan.startGeometry,expanded.startGeometry)).toBeNull();
+  for(const point of [[-121.1,48.1],[-121.099,48.1],[-121.9,47.65]] as const)
+    expect(coordinateIsInsideArea(point,expanded.startGeometry)).toBe(true);
+  // A loop may head away from its entrance, beyond the old core buffer.
+  expect(coordinateIsInsideArea([-120.6,48.1],plan.geometry)).toBe(false);
+  expect(coordinateIsInsideArea([-120.6,48.1],expanded.geometry)).toBe(true);
+  expect(coordinateIsInsideArea([-120.6,48.1],expanded.startGeometry)).toBe(false);
+  // This corner would be swept in by buffering one bbox around core+entrances.
+  expect(coordinateIsInsideArea([-122,48.4],expanded.geometry)).toBe(false);
+  expect(plan).toEqual(before);
+  expect(expandCoveragePlan(plan,recipe,[])).toBe(plan);
+  expect(expandCoveragePlan(plan,recipe,[[-121.45,47.85]])).toBe(plan);
+});
+
+it("reapplies support and exclusions to entrance footprints and their route extensions",()=>{
+  const excluded=rectangle([-121.08,48.08,-121.06,48.12]);
+  const bounded={...recipe,supportedArea:{name:"Limit",geometry:rectangle([-125,45,-117,48.3])},exclusions:[{id:"hole",geometry:excluded}]};
+  const plan=planLocalCoverage(bounded,starts);
+  const expanded=expandCoveragePlan(plan,bounded,[[-121.1,48.1]]);
+  expect(coordinateIsInsideArea([-121.07,48.1],expanded.geometry)).toBe(false);
+  expect(coordinateIsInsideArea([-121.1,48.31],expanded.geometry)).toBe(false);
+  expect(coordinateIsInsideArea([-121.1,48.1],expanded.startGeometry)).toBe(true);
+  expect(()=>expandCoveragePlan(plan,bounded,[[-121.07,48.1]])).toThrow("outside supported coverage");
+  expect(()=>constrainCoverage(bounded,excluded)).toThrow("No supported start");
+});
+
+it("fails new source gaps rather than clipping entrance routing, and accepts adjoining coverage",()=>{
+  const source=rectangle([-125,45,-120.7,50]);
+  const local={...recipe,sources:[{...recipe.sources[0]!,geometry:source}]};
+  const plan=planLocalCoverage(local,starts);
+  expect(()=>expandCoveragePlan(plan,local,[[-121.1,48.1]])).toThrow("complete 25-mile");
+  const joined={...local,sources:[...local.sources,{...recipe.sources[0]!,geometry:rectangle([-120.7,45,-117,50])}]};
+  expect(coordinateIsInsideArea([-120.6,48.1],expandCoveragePlan(plan,joined,[[-121.1,48.1]]).geometry)).toBe(true);
+});
+
+it("keeps entrance neighborhoods finite and rejects invalid coordinates",()=>{
+  const neighborhood=entranceNeighborhood([-121,48]);
+  expect(coordinateIsInsideArea([-121,48],neighborhood)).toBe(true);
+  expect(coordinateIsInsideArea([-121,48.01],neighborhood)).toBe(false);
+  expect(()=>entranceNeighborhood([NaN,48])).toThrow("Invalid entrance");
+  expect(()=>entranceNeighborhood([-121,Infinity])).toThrow("Invalid entrance");
+  expect(()=>entranceNeighborhood([-121,48],Infinity)).toThrow("Invalid entrance");
 });
