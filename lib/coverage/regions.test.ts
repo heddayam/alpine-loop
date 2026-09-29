@@ -15,7 +15,7 @@ vi.mock("node:fs/promises", async original => {
 });
 type Approach=NonNullable<CoverageRegion["reviewedApproaches"]>[number];
 type BaselineRegion={id:string;boundary:{geometry:AreaGeometry};approaches:Array<Approach & {neighborhood:AreaGeometry}>};
-let baseline:BaselineRegion[],central:CoverageRegion,catalog: {regions:Array<{id:string;replaces?:string[];territory?:{id:string;unitIds:string[]};boundaryPath?:string;approaches:Array<{id:string}>}>};
+let baseline:BaselineRegion[],central:CoverageRegion,catalog: {regions:Array<{id:string;replaces?:string[];boundaryPath?:string;approaches:Array<{id:string}>}>};
 beforeAll(async()=>{
   baseline=JSON.parse(await readFile(path.resolve("data/fixtures/coverage/central-cascades-baseline.json"),"utf8")).regions;
   catalog=JSON.parse(await readFile(path.resolve("data/coverage/regions/catalog.json"),"utf8"));
@@ -72,8 +72,8 @@ it("preserves every point of all three original start footprints, including the 
     expect(containsCoverage(plan.startGeometry,expected),`${previous.id} after support/exclusions`).toBe(true);
     for(const point of previous.approaches) expect(subtractCoverage(point.neighborhood,plan.startGeometry),point.id).toBeNull();
   }
-  // Seattle is within the start territory; buildings, not this boundary, exclude dense starts.
-  expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(true);
+  // The mountain download no longer owns Seattle merely because it is in King County.
+  expect(coordinateIsInsideArea([-122.33,47.61],plan.startGeometry)).toBe(false);
 });
 
 it("retains all reviewed approaches and radii, deduplicating only the shared record",()=>{
@@ -137,29 +137,30 @@ it.each([
   await expect(listCoverageRegions()).rejects.toThrow();
 });
 
-it("assigns every one of the 39 pinned Washington counties exactly once",async()=>{
-  const source=JSON.parse(await readFile(path.resolve("data/coverage/territories/washington-counties.geojson"),"utf8")) as {features:Array<{id:string;geometry:AreaGeometry}>};
-  const assigned=catalog.regions.flatMap(region=>region.territory?.unitIds??[]);
-  expect(source.features).toHaveLength(39);
-  expect(assigned.slice().sort()).toEqual(source.features.map(feature=>feature.id).sort());
-  const washington=catalog.regions.filter(region=>region.territory);
-  expect(washington).toHaveLength(12);
-  // Full polygon containment catches holes/interior omissions, not just missing vertices.
-  for(const entry of washington){
-    const region=await readCoverageRegion(entry.id);
-    for(const id of entry.territory!.unitIds)
-      expect(containsCoverage(region.geometry,source.features.find(feature=>feature.id===id)!.geometry),id).toBe(true);
+it("covers the complete prior Washington territory with mountain and surrounding areas",async()=>{
+  const expected=JSON.parse(await readFile(path.resolve("data/fixtures/coverage/washington-start-coverage.geojson"),"utf8")) as {geometry:AreaGeometry};
+  const regions=await Promise.all(catalog.regions.filter(entry=>entry.boundaryPath?.endsWith("-boundary.geojson")).map(entry=>readCoverageRegion(entry.id)));
+  expect(regions).toHaveLength(12);
+  const actual=unionCoverage(regions.map(region=>region.geometry));
+  expect(containsCoverage(actual,expected.geometry)).toBe(true);
+  // A county inventory count cannot detect an interior gap; geometry containment can.
+  const hole=rectangle([-122.335,47.605,-122.325,47.615]);
+  expect(containsCoverage(expected.geometry,hole)).toBe(true);
+  expect(containsCoverage(subtractCoverage(actual,hole)!,expected.geometry)).toBe(false);
+  expect(regions.filter(region=>coordinateIsInsideArea([-122.33,47.61],region.geometry)).some(region=>region.id.includes("puget"))).toBe(true);
+  for(const point of [[-123.02,48.535],[-122.9,46.8],[-119.2,46.2],[-117.4,47.65]] as [number,number][]) {
+    expect(coordinateIsInsideArea(point,expected.geometry),`baseline: ${point}`).toBe(true);
+    expect(coordinateIsInsideArea(point,actual),String(point)).toBe(true);
   }
 });
 
-it.each(["unassigned","duplicate","unknown unit","unknown territory"])("rejects %s territory assignment",async kind=>{
-  const changed=structuredClone(catalog),entry=changed.regions.find(region=>region.id==="north-cascades")!;
-  if(kind==="unassigned")entry.territory!.unitIds.pop();
-  if(kind==="duplicate")entry.territory!.unitIds.push(entry.territory!.unitIds[0]!);
-  if(kind==="unknown unit")entry.territory!.unitIds.push("missing");
-  if(kind==="unknown territory")entry.territory!.id="missing";
+it("requires a direct boundary and rejects the superseded territory registry",async()=>{
+  const changed=structuredClone(catalog);
+  delete changed.regions.find(region=>region.id==="north-cascades")!.boundaryPath;
   vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
-  await expect(listCoverageRegions()).rejects.toThrow(/territory/i);
+  await expect(listCoverageRegions()).rejects.toThrow();
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({...catalog,territories:[]}));
+  await expect(listCoverageRegions()).rejects.toThrow();
 });
 
 it("preserves the exact existing California start footprints without filling their bounding box",async()=>{
@@ -172,7 +173,6 @@ it("preserves the exact existing California start footprints without filling the
   };
   for(const [id,hash] of Object.entries(fingerprints)){
     const entry=catalog.regions.find(region=>region.id===id)!;
-    expect(entry.territory).toBeUndefined();
     expect(entry.boundaryPath).toBe(`../../regions/${id}/boundary.geojson`);
     const region=await readCoverageRegion(id);
     expect(contentId(region.geometry),id).toBe(hash);

@@ -41,7 +41,7 @@ describe("Washington adjacent source support", () => {
     const supported = recipe.supportedArea!.geometry;
     expect(coordinateIsInsideArea([-125.3,46.45],supported)).toBe(false);
     expect(coordinateIsInsideArea([-125.3,46.3],supported)).toBe(true); // No new southern/Oregon cap.
-    // Westernmost vertex among all 39 pinned Census Washington county territories.
+    // Westernmost vertex of the preserved Washington start-coverage baseline.
     expect(coordinateIsInsideArea([-124.76306800030036,48.17628299983627],supported)).toBe(true);
     const start = rectangle([-122.1,47.9,-121.9,48.1]);
     expect(planLocalCoverage(recipe,start).bufferMiles).toBe(25);
