@@ -37,16 +37,21 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
   const regionName = (section: typeof sections[number]) => section.name ?? `Area ${sections.indexOf(section) + 1}`;
   const visibleSections = sections.filter(section => regionName(section).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const installedIds = new Set(installed?.sectionIds ?? []);
+  const installedArtifacts = new Set(installed?.artifactIds ?? []);
+  const updateIds = new Set(sections.filter(section => installedIds.has(section.id) && section.artifactIds.some(id => !installedArtifacts.has(id))).map(section => section.id));
   const additionalCount = sections.filter(({ id }) => !installedIds.has(id)).length;
   const unavailableInstalled = [...installedIds].filter((id) => !sections.some((section) => section.id === id));
   const selectedIds = new Set(selected.filter((id) => sections.some((section) => section.id === id)));
   const selectedSections = sections.filter(({ id }) => selectedIds.has(id));
   const desired = [...new Set([...installedIds, ...selectedIds])].sort();
   const removable = [...selectedIds].filter((id) => installedIds.has(id));
-  const updating = Boolean(installed && release && installed.releaseId !== release.id);
-  const downloadable = !unavailableInstalled.length && selectedIds.size > 0 && (updating || [...selectedIds].some((id) => !installedIds.has(id)));
+  const adding = [...selectedIds].some(id => !installedIds.has(id));
+  const updating = updateIds.size > 0;
+  const hasChanges = adding || updating;
+  const downloadable = !unavailableInstalled.length && hasChanges;
+  const actionLabel = adding && updating ? "Download and update" : updating ? "Update" : "Download";
   const request = release ? { releaseId: release.id, sectionIds: desired } : null;
-  const downloading = new Set(catalog?.jobs.filter(processingCoverage).flatMap((job) => job.sectionIds) ?? []);
+  const downloading = new Set(catalog?.jobs.filter(processingCoverage).flatMap(job => job.sectionIds.filter(id => !installedIds.has(id) || updateIds.has(id))) ?? []);
   const mapKey = JSON.stringify({
     features: { type: "FeatureCollection", features: [...(installed && unavailableInstalled.length ? [{ type: "Feature", geometry: installed.geometry, properties: { status: "installed" } }] : []), ...sections.map((section) => ({ type: "Feature", id: section.id, geometry: section.geometry,
       properties: { sectionId: section.id, status: selectedIds.has(section.id) ? "selected" : downloading.has(section.id) ? "downloading" : installedIds.has(section.id) ? "installed" : "available" } }))] },
@@ -54,10 +59,10 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
     ...focus,
   });
   useEffect(() => { onMapChange?.(JSON.parse(mapKey)); }, [mapKey, onMapChange]);
-  const selectedArtifacts = new Set(sections.filter(({id}) => updating ? desired.includes(id) : selectedIds.has(id)).flatMap(({artifactIds}) => artifactIds));
-  const selectedFiles = release?.artifacts.filter(({ id }) => selectedArtifacts.has(id)) ?? [];
-  const selectedBytes = selectedFiles.filter(({ id }) => !installed?.artifactIds.includes(id)).reduce((sum, file) => sum + file.compressedBytes, 0);
-  const installedBytes = selectedFiles.reduce((sum, file) => sum + file.bytes, 0);
+  const summaryArtifacts = new Set(sections.filter(({ id }) => hasChanges ? desired.includes(id) : selectedIds.has(id)).flatMap(({ artifactIds }) => artifactIds));
+  const summaryFiles = release?.artifacts.filter(({ id }) => summaryArtifacts.has(id)) ?? [];
+  const downloadBytes = summaryFiles.filter(({ id }) => !installedArtifacts.has(id)).reduce((sum, file) => sum + file.compressedBytes, 0);
+  const activeBytes = summaryFiles.reduce((sum, file) => sum + file.bytes, 0);
   const showSelectedArea = () => {
     const bounds = combinedBounds(selectedSections);
     if (!bounds) return;
@@ -80,17 +85,18 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
             <div className="coverage-region-list">{visibleSections.map(section => <label className="coverage-region" key={section.id}>
               <input type="checkbox" checked={selectedIds.has(section.id)} disabled={!onSelectionChange}
                 onChange={event => onSelectionChange?.(event.target.checked ? [...selectedIds, section.id] : [...selectedIds].filter(id => id !== section.id))} />
-              <span>{regionName(section)}{" "}<small>{downloading.has(section.id) ? "Downloading" : installedIds.has(section.id) ? "Downloaded" : "Available"}</small></span>
+              <span>{regionName(section)}{" "}<small>{downloading.has(section.id) ? "Downloading" : updateIds.has(section.id) ? "Update available" : installedIds.has(section.id) ? "Downloaded" : "Available"}</small></span>
             </label>)}</div>
             {!visibleSections.length ? <span>No matching regions.</span> : null}
           </section> : null}
           {!selectedIds.size && !namedList ? <span className="coverage-selection">Select {unit === "area" ? "an" : "a"} {unit} on the map.</span> : null}
-          {selectedIds.size || updating ? <div className="coverage-selection" role="status">{selectedIds.size ? `${selectedIds.size} ${unit}${selectedIds.size === 1 ? "" : "s"} selected` : "Update downloaded trails"} · up to {bytes(selectedBytes)} download · {bytes(installedBytes)} on device</div> : null}
+          {selectedIds.size || updating ? <div className="coverage-selection" role="status">{selectedIds.size ? `${selectedIds.size} ${unit}${selectedIds.size === 1 ? "" : "s"} selected` : "Update downloaded trails"} · {hasChanges ? <>up to {bytes(downloadBytes)} download · {bytes(activeBytes)} active trail data after download</> : <>{bytes(activeBytes)} selected trail data</>}</div> : null}
+          {adding && updating ? <span className="coverage-selection">Includes updates to {updateIds.size} downloaded {unit}{updateIds.size === 1 ? "" : "s"}.</span> : null}
           {selectedIds.size > 0 && release.limitations.some(value => /international border|US-only|United States.only/i.test(value)) ? <span className="coverage-selection">US trails only. Routes stop at the international border.</span> : null}
           {selectedSections.some(({ network }) => network?.sourceBoundaryLimited) ? <span className="coverage-selection">Trails may continue beyond the available data.</span> : null}
           <div className="action-row">
             {selectedIds.size ? <button type="button" className="btn" onClick={showSelectedArea}>Show selected area</button> : null}
-            {selectedIds.size || updating ? <button type="button" className="btn" disabled={busy || (updating ? unavailableInstalled.length > 0 : !downloadable)} onClick={() => request && void resource.start(request)}>{updating ? "Update" : "Download"}</button> : null}
+            {selectedIds.size || updating ? <button type="button" className="btn" disabled={busy || !downloadable} onClick={() => request && void resource.start(request)}>{actionLabel}</button> : null}
             {removable.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(removable)}>Remove selected coverage</button> : null}
             {unavailableInstalled.length ? <button type="button" className="btn" disabled={busy} onClick={() => void resource.remove(unavailableInstalled)}>Remove unavailable {unit}s ({unavailableInstalled.length})</button> : null}
           </div>
