@@ -115,6 +115,30 @@ describe("persistent junction graph",()=>{
     expect(reverse.loss_m).toBe(10.9);expect(reverse.max_sustained_grade_pct).toBe(10);
     integrity(db);
   });
+  it("splits at the serialized byte limit while preserving both corridor directions",async()=>{
+    const {db,node,add}=fixture();
+    for(const id of ["a","b","c","d","e"])node(id);
+    add("a","b");add("b","c");add("c","d");add("d","e");
+    // Valid JSON whitespace exercises stored-byte accounting without allocating
+    // hundreds of thousands of geometry/profile samples in this fixture.
+    db.prepare("UPDATE edges SET geometry=geometry||?").run(" ".repeat(1_400_000));
+    const sizes=db.prepare(`SELECT sum(length(geometry)+length(elevation_profile)) AS bytes
+      FROM edges GROUP BY physical_edge_key`).all().map(row=>Number(row.bytes));
+    expect(Math.max(...sizes)*2).toBeLessThan(8*1024*1024);
+    expect(Math.min(...sizes)*3).toBeGreaterThan(8*1024*1024);
+    expect(await compactPreparedGraph(db,async()=>{})).toEqual({beforeNodes:5,beforePhysicalEdges:4,nodes:3,physicalEdges:2});
+    expect(db.prepare("SELECT id FROM nodes ORDER BY id").all().map(row=>row.id)).toEqual(["a","c","e"]);
+    const edges=db.prepare("SELECT from_node,to_node,geometry,elevation_profile,length_m FROM edges ORDER BY from_node,to_node").all();
+    expect(edges.map(row=>[row.from_node,row.to_node,row.length_m])).toEqual([
+      ["a","c",120],["c","a",120],["c","e",120],["e","c",120],
+    ]);
+    expect(edges.map(row=>JSON.parse(String(row.geometry)))).toEqual([
+      [[0.001,0],[0.002,0],[0.003,0]],[[0.003,0],[0.002,0],[0.001,0]],
+      [[0.003,0],[0.004,0],[0.005,0]],[[0.005,0],[0.004,0],[0.003,0]],
+    ]);
+    for(const row of edges)expect(JSON.parse(String(row.elevation_profile))).toEqual([[0,0],[60,0],[120,0]]);
+    integrity(db);
+  });
   it("bounds long corridors and rolls back cancellation without losing source rows",async()=>{
     const {db,node,add}=fixture();for(let index=0;index<=2050;index++)node(`n${String(index).padStart(4,"0")}`);
     for(let index=0;index<2050;index++)add(`n${String(index).padStart(4,"0")}`,`n${String(index+1).padStart(4,"0")}`);

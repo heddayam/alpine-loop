@@ -7,7 +7,8 @@ type Link = { physical_edge_key: number; other: string };
 type Direction = { id: string; from_node: string; to_node: string; signature: string; bytes: number; length_m: number };
 type Edge = { id:string; edge_key:number; from_node:string; to_node:string; geometry:string; elevation_profile:string;
   length_m:number; gain_m:number; loss_m:number; max_elevation_m:number; access_state:string; edge_class:string; source_refs:string; flags:string };
-type Member = { key:number; from:string; to:string };
+type MemberDirection = Pick<Direction,"id"|"from_node"|"bytes">;
+type Member = { key:number; from:string; to:string; directions:MemberDirection[] };
 const MAX_CORRIDOR_EDGES = 2048;
 const MAX_CORRIDOR_BYTES = 8 * 1024 * 1024;
 
@@ -30,7 +31,7 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
       INSERT OR IGNORE INTO compact_links SELECT b.id,p.physical_edge_key,a.id FROM physical_edges p JOIN nodes a ON a.node_key=p.from_node_key JOIN nodes b ON b.node_key=p.to_node_key;
       CREATE TEMP TABLE compact_directions AS SELECT id,edge_key,physical_edge_key,from_node,to_node,length_m,
         length(geometry)+length(elevation_profile) AS bytes,json_array(access_state,edge_class,source_refs,flags) AS signature FROM edges;
-      CREATE INDEX compact_direction_physical ON compact_directions(physical_edge_key);
+      CREATE INDEX compact_direction_physical ON compact_directions(physical_edge_key,id);
       CREATE TEMP TABLE compact_anchors(id TEXT PRIMARY KEY,done INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
       CREATE INDEX compact_anchor_pending ON compact_anchors(done,id);
       INSERT OR IGNORE INTO compact_anchors(id) SELECT node_id FROM access_points;
@@ -56,6 +57,9 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
         b.filter(next => (edge.to_node===id ? next.from_node===id : next.to_node===id) && edge.signature===next.signature && next.length_m>0).length===1);
       if (!compatible(first,second) || !compatible(second,first)) anchor.run(id);
     }
+    // Retain only the direction IDs needed by this bounded corridor; signatures
+    // stay in SQLite after compatibility checks, and no graph-wide cache grows.
+    const memberDirections = db.prepare("SELECT id,from_node,bytes FROM compact_directions WHERE physical_edge_key=? ORDER BY id LIMIT 3");
     const unvisited = db.prepare("SELECT 1 FROM compact_remaining WHERE k=?");
     const mark = db.prepare("DELETE FROM compact_remaining WHERE k=?");
     const edge = db.prepare("SELECT * FROM edges WHERE id=?");
@@ -76,15 +80,15 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
       const first=chain[0]!,last=chain.at(-1)!;
       let inserted=false;
       for (const reverse of [false,true]) {
-        const members=reverse?[...chain].reverse().map(item=>({key:item.key,from:item.to,to:item.from})):chain;
-        const initial=(directions.all(members[0]!.key) as Direction[]).find(item=>item.from_node===members[0]!.from);
+        const members=reverse?[...chain].reverse().map(item=>({...item,from:item.to,to:item.from})):chain;
+        const initial=members[0]!.directions.find(item=>item.from_node===members[0]!.from);
         if(!initial) continue;
         let length=0,gain=0,loss=0,maximum=-Infinity;
         const geometry:Array<[number,number]>=[],profile:Array<{distanceMeters:number;elevationMeters:number}>=[];
         let metadata:Edge|undefined;
         for(const member of members) {
           if (++work%1000===0) await checkpoint();
-          const selected=(directions.all(member.key) as Direction[]).find(item=>item.from_node===member.from);
+          const selected=member.directions.find(item=>item.from_node===member.from);
           if(!selected) throw new Error("Compact corridor lost a directed continuation");
           const item=edge.get(selected.id) as Edge;
           metadata??=item;
@@ -120,16 +124,18 @@ export async function compactPreparedGraph(db:DatabaseSync, checkpoint:()=>Promi
       for(const first of anchorLinks.iterate(id) as Iterable<Link>) {
         if(!unvisited.get(first.physical_edge_key))continue;
         const chain:Member[]=[];let from=id,link=first,bytes=0;
+        let currentDirections=memberDirections.all(link.physical_edge_key) as MemberDirection[];
         for(;;) {
           if(++work%1000===0)await checkpoint();
-          mark.run(link.physical_edge_key);chain.push({key:link.physical_edge_key,from,to:link.other});
-          bytes+=(directions.all(link.physical_edge_key) as Direction[]).reduce((sum,item)=>sum+item.bytes,0);
+          mark.run(link.physical_edge_key);chain.push({key:link.physical_edge_key,from,to:link.other,directions:currentDirections});
+          bytes+=currentDirections.reduce((sum,item)=>sum+item.bytes,0);
           const to=link.other;
           if(isAnchor.get(to))break;
           const next=(links.all(to) as Link[]).find(item=>item.physical_edge_key!==link.physical_edge_key)!;
-          const nextBytes=(directions.all(next.physical_edge_key) as Direction[]).reduce((sum,item)=>sum+item.bytes,0);
+          const nextDirections=memberDirections.all(next.physical_edge_key) as MemberDirection[];
+          const nextBytes=nextDirections.reduce((sum,item)=>sum+item.bytes,0);
           if(next.other===id || chain.length>=MAX_CORRIDOR_EDGES || bytes+nextBytes>MAX_CORRIDOR_BYTES) {anchor.run(to);break;}
-          from=to;link=next;
+          from=to;link=next;currentDirections=nextDirections;
         }
         await merge(chain);
       }
