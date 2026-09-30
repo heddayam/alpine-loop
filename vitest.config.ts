@@ -8,7 +8,7 @@ export default defineConfig({
     maxWorkers: 1,
     // Native integration work needs scheduling headroom on a busy host.
     // Performance acceptance is asserted separately by the relevant fixtures.
-    testTimeout: 15_000,
+    testTimeout: 30_000,
     include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules/**", "legacy/**"],
   },
