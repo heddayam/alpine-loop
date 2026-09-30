@@ -6,6 +6,54 @@ the evidence line.
 
 ## Active system design revision
 
+### WTA-style regional setup — 2026-09-29
+
+- [x] Configure eleven Washington build/download districts using the accepted
+  WTA browsing names, alongside the four unchanged California areas. Redistribute
+  the same 123 Washington GMBA Standard leaves exactly once and preserve all 64
+  reviewed approach records, including their IDs, coordinates, basis, URLs and
+  radii. No source mountain geometry, nomination cap, eligibility policy, request
+  schema or graph schema changes. Each district remains one independent graph.
+- [x] Document whole-leaf district proxies, including Mount Daniel/Stuart and
+  Blanca Lake, and retain historical recipe IDs for pinned restrictions and
+  official-trail audits. Update developer commands and the active implementation
+  and restoration plans for fifteen configured areas. WTA names organize browsing;
+  GMBA cores and actual connected approaches determine eligible coverage.
+- [x] Integrated offline region/seam regressions pass 31/31. They conserve the
+  complete leaf/anchor inventory, pin unchanged source inputs and California
+  entries/caps/recipes, plan all fifteen supported buffers and preserve each
+  reviewed boundary trail inside at least one independent graph. CLI `regions`
+  lists the new selections; `node --import tsx scripts/data.ts plan` with all
+  fifteen IDs succeeds without source processing. The initial npm/tsx CLI wrapper
+  could not create its sandboxed IPC socket; the direct import uses the same
+  command implementation and needs no socket.
+- [x] Wire plain `alpine.sh` to a terminal area chooser: read current CLI names,
+  select one/many/all, default to preview and build only after the chosen action.
+  Non-terminal invocation prints help; explicit `app` retains app startup.
+  Expose `regions`, `plan`, `build` and `status` through the separate Compose
+  data service. Forward named selections, `--rebuild`, watch arguments and an
+  optional source-cache override;
+  retain existing settings and propagate Docker failures. All 32 offline
+  mock-Docker launcher tests pass, including nine real terminal interactions;
+  Bash syntax checks and a read-only shell/Compose audit pass. Help and incomplete
+  dispatch run before Docker or settings writes. No real data container or regional
+  build ran.
+- [x] Complete application verification: two consecutive `npm run verify` runs
+  pass lint, types, all 98 files / 990 tests and production app compilation.
+  Two `npm run test:browser` runs pass all 10 offline Chromium flows each.
+  Native SQLite/process integration fixtures exceeded the default five-second
+  timeout on a busy host (observed load average 37.08); the default fixture budget
+  is now fifteen seconds. All assertions and explicit performance bounds remain.
+  Final diff checks pass; completed task worktrees and branches are removed.
+- [ ] Explicitly build, install and accept desired regrouped areas. Existing
+  Central publication `release-49f55acd30d59a8bb3a1a045c7c7a60e` remains byte-identical
+  (release JSON SHA-256 `9ff0fbcbfaa2802c2a008e64d992b7b16b981b64cdfbeb9c318b1418cad9fb4d`),
+  with artifact `1f7afe4756cb5d8aeba4dd5d9e9d4fc5383f513297db3f82a397242578796044`.
+  Its original coverage, installed data, saved searches and verified caches remain
+  retained. No regional preparation, publication or installation is started by
+  this setup, as requested. Pack bytes, resource costs, real approaches and route
+  acceptance remain unmeasured for the regrouped districts.
+
 ### Conservative alternate entrance families — 2026-09-29
 
 - [x] Annotate short alternate entrances during the existing compact topology

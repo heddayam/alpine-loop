@@ -26,7 +26,7 @@ On Windows, use a WSL terminal with Docker integration enabled.
 ```sh
 git clone https://github.com/heddayam/alpine-loop.git
 cd alpine-loop
-./alpine.sh
+./alpine.sh app
 ```
 
 Open [localhost:3000](http://localhost:3000). In **Coverage**, beside Settings,
@@ -62,7 +62,7 @@ Active trail-data sizes exclude older files retained for those searches.
 | Docker coverage, searches, and settings | `alpine-runtime` Docker volume |
 
 `docker compose down` preserves runtime data; `docker compose down -v` deletes
-that volume. Restart with `./alpine.sh` or `docker compose up -d app`.
+that volume. Restart with `./alpine.sh app` or `docker compose up -d app`.
 
 ### Optional settings
 
@@ -106,9 +106,10 @@ Automated tests do not fetch trail data or call external providers.
 
 ### Developer data builds
 
-The workflow is **choose named hiking areas → preview → build**. Run `data regions`
-for the configured names: twelve Washington groups and the four existing California
-areas. All areas use one pinned **GMBA Standard** mountain-range inventory.
+The workflow is **choose named hiking areas → preview → build**. Run `./alpine.sh regions`
+for the configured names: eleven Washington regions following WTA's familiar
+regional organization and the four existing California areas. All areas use one
+pinned **GMBA Standard** mountain-range inventory.
 Starts require supported access, **fewer than 10 mapped buildings within 500 metres**,
 and a hiking connection to their selected mountain core within 25 miles. Unmarked
 mountain entrances and connected valley approaches remain eligible; ordinary roads
@@ -124,29 +125,39 @@ Build costs and retained start counts need measurement; a tighter outline alone
 does not establish a speedup. Forest aliases do not promise entire-forest coverage.
 
 ```sh
-# Build tooling only; this does not process trail data.
-docker compose build data
-docker compose run --rm data scripts/data.ts regions
+# Choose numbered areas interactively, then preview or build them.
+./alpine.sh
 
-# Preview several areas without downloads or source processing.
-docker compose run --rm data scripts/data.ts plan santa-cruz-mountains henry-coe
+# List all configured areas.
+./alpine.sh regions
+
+# Preview several areas without source-data downloads or processing.
+./alpine.sh plan santa-cruz-mountains henry-coe
 
 # California reuses the retained default .cache/sources cache.
 # Explicit selections run one at a time.
-docker compose run --rm data scripts/data.ts build \
+./alpine.sh build \
   santa-cruz-mountains southern-east-bay monterey-carmel henry-coe
 
-# All twelve Washington areas use the same mountain-core/approach policy.
-# Central Cascades reuses its verified artifact when inputs are unchanged.
-docker compose run --rm \
-  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks \
-  southwest-cascades olympic-peninsula north-puget south-puget willapa-hills \
-  northeast-washington spokane-palouse columbia-basin blue-mountains
+# All eleven Washington regions use the same mountain-core/approach policy.
+# Regrouped cores need new artifacts; verified source and metric caches are reusable.
+ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  ./alpine.sh build central-cascades central-washington eastern-washington \
+  issaquah-alps mount-rainier-area north-cascades olympic-peninsula \
+  puget-sound-and-islands snoqualmie-region south-cascades southwest-washington
 
 # In another terminal:
-npm run data -- status --watch
+./alpine.sh status --watch
 ```
+
+In a terminal, `./alpine.sh` opens the area chooser. Select numbers separated by
+spaces or commas, or `all`, then choose preview or build. Preview is the default;
+Enter at the area selection or `q` exits. Without a terminal, the launcher prints
+help. `./alpine.sh app` starts the app. The area commands run the separate data
+tools and automatically update their Docker image. `./alpine.sh help` lists the commands.
+The optional source-cache override is a path inside the container; `/app/.cache`
+maps to this checkout's `.cache` directory. Area commands preserve existing `.env`
+settings. `build` prepares a release; use Coverage in the app to download it.
 
 All requested names and route-buffer source coverage are validated before any
 build starts. Duplicate names are rejected. A failure or pause stops the sequence;
@@ -156,10 +167,20 @@ batch release. The status report describes the current/last area, and the comman
 prints a completion summary for each. Planning several areas prints one JSON
 object per area.
 
-The California and Washington commands above cover all sixteen configured areas.
+The California and Washington commands above cover all fifteen configured areas.
 Configuration and `plan` do not prepare data; run `build` explicitly when ready.
 All areas use the pinned Standard inventory, sparse connected entrance selection,
 actual approach registration, and complete per-start routing buffers described above.
+
+The Washington names follow [WTA's regional browsing convention](https://www.wta.org/our-work/about/trailblazer-mobile-app).
+Full named GMBA leaves define our cores; these are approximate hiking districts,
+not copies of WTA's hike assignments or a promise to include all lowland trails.
+Mountain Loop and Glacier Peak now belong to North Cascades; Issaquah Alps and
+Snoqualmie are separate from Central; Goat Rocks belongs to South Cascades; the
+Washington Gorge belongs to Southwest Washington. The catalog preserves the same
+selected mountain inventory and reviewed approaches. Existing published and
+installed Central data retains its original coverage until explicitly rebuilt
+and installed; editing the catalog does not relabel or change that artifact.
 
 Adding an area preserves neighboring published artifacts. In Coverage, select the
 new areas, review their sizes, and choose **Download**; several selections share
@@ -201,12 +222,11 @@ Unchanged builds validate dependencies and reuse their artifact before normaliza
 To test compiler changes or replace an invalid completed checkpoint, add `--rebuild`:
 
 ```sh
-docker compose run --rm --build \
-  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build central-cascades --rebuild
+ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
+  ./alpine.sh build central-cascades --rebuild
 ```
 
-Compose's `--build` updates the data image; the CLI's `--rebuild` reruns graph
+The launcher updates the data image; `--rebuild` reruns graph
 preparation while keeping verified source/context, DEM and measurement caches.
 The previous published area remains available until the rebuild succeeds. This
 command also uses a disposable Docker volume for temporary graph databases,

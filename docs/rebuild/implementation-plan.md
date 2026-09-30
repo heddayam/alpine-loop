@@ -18,8 +18,11 @@ distance may be up to 40 miles; longer close matches remain explicitly labeled.
 
 Coverage targets mountain hiking starts in Washington and the previously available
 Bay Area/nearby California territory. One pinned GMBA Standard Basic inventory
-supplies named mountain cores for all sixteen download areas. Washington's state
-scope and the four existing California footprints limit approach nomination;
+supplies named mountain cores for fifteen download areas: eleven Washington hiking
+districts following WTA's regional browsing convention and the four retained
+California areas. Full named leaves approximate these districts rather than
+reproducing WTA's per-hike assignments. Washington's state scope and the four
+existing California footprints limit approach nomination;
 these product limits never clip routes. Broad outlines, EPA residual allocation
 and the separate terrain mask are removed.
 

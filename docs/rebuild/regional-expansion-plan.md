@@ -10,9 +10,14 @@ and [README](../../README.md#developer-data-builds).
 
 ## Current availability and restoration baseline
 
-`data/coverage/regions/catalog.json` defines sixteen named build selections:
-twelve Washington groups and the four historical California areas. The
-pilot entries are removed. Historical fixtures retain provenance, rather than an
+`data/coverage/regions/catalog.json` defines fifteen named build selections:
+eleven Washington regions following the familiar [WTA regional browsing
+convention](https://www.wta.org/our-work/about/trailblazer-mobile-app) and the four
+historical California areas. Washington's choices are Central Cascades, Central
+Washington, Eastern Washington, Issaquah Alps, Mount Rainier Area, North Cascades,
+Olympic Peninsula, Puget Sound and Islands, Snoqualmie Region, South Cascades and
+Southwest Washington. The pilot entries are removed. Historical fixtures retain
+provenance, rather than an
 obligation to preserve broad lowland geometry. Revised definitions require user-run
 builds, installation and route acceptance. California's existing footprints remain
 nomination caps; their core geometry comes from the same Standard inventory.
@@ -29,18 +34,22 @@ number of packs does not prescribe the number of new download areas.
 | Southern East Bay | Pleasanton Ridge, Mission Peak, Vargas Plateau, Sunol, Ohlone corridor and Del Valle | Configured; build/install/acceptance pending |
 | Monterey–Carmel | Fort Ord, Palo Corona, Garland/Kahn Ranch, Point Lobos and Garrapata | Configured; build/install/acceptance pending |
 | Henry Coe | Henry W. Coe State Park and Coyote Lake–Harvey Bear Ranch | Configured; build/install/acceptance pending |
-| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Named Standard core with reviewed pilot anchors; rebuild and acceptance pending |
-| North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Configured; build/install/acceptance pending |
-| Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Configured; build/install/acceptance pending |
-| Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | Configured; build/install/acceptance pending |
+| Central Cascades | Glacier Peak, Napeequa/Chiwawa, Lake Wenatchee, Stevens/Leavenworth/Icicle, Alpine Lakes, Snoqualmie/Cle Elum, Teanaway and Wild Sky/Henry M. Jackson approaches | Regrouped across North/Central Cascades, Snoqualmie, Issaquah Alps and Central Washington; existing installed artifact preserved; new builds/acceptance pending |
+| North Cascades | Baker, Highway 20, North Cascades complex/Stehekin, Methow, Pasayten and Lake Chelan–Sawtooth approaches | Regrouped North Cascades; build/install/acceptance pending |
+| Rainier–Goat Rocks | Rainier, Norse Peak/Naches, William O. Douglas/White Pass and Goat Rocks | Mount Rainier Area and South Cascades; build/install/acceptance pending |
+| Southwest Cascades | St. Helens, Adams, southern Gifford Pinchot, upper Cispus, Indian Heaven/Trapper Creek and Silver Star–Tarbell | South Cascades and Southwest Washington; build/install/acceptance pending |
 | Olympic Peninsula | Mountain, rainforest and reviewed coastal systems, including the mapped Ozette beach loop | Configured; build/install/acceptance pending |
 
-Washington now uses published GMBA mountain outlines, including foothills and
-retained historical approaches, with surrounding lowland, coastal and basin areas
-completing the territory. County-based grouping is superseded. Eligibility remains
-fewer than ten mapped buildings within 500 metres plus the existing access/topology
-rules. Whole-geometry tests guard the previously accepted statewide extent; this
-does not establish complete source trails or built/installed coverage.
+Washington uses the same 123 selected published GMBA Standard leaves, regrouped
+into the eleven hiking districts. Selected mountain cores and actual connected
+approaches establish eligible coverage; the broad region names do not allocate
+all lowland, coastal or basin territory. Eligibility remains fewer than ten
+mapped buildings within 500 metres plus hiking connectivity to the selected core
+and existing access/topology rules. Offline tests preserve the selected leaf and
+reviewed-approach inventory; they do not establish complete source trails or
+built/installed coverage. Complete leaves can span several access districts, so
+Stuart Range and Mount Daniel assignments are documented proxies for regional
+browsing rather than exact WTA trailhead classifications.
 
 Marin/Mount Tam and Tahoe–Eldorado were planned, not previously activated.
 Keep them distinct from restoration obligations. The August 4 archive tags contain
@@ -51,16 +60,20 @@ earlier prototype source samples, not the nine later completed regional builds.
 - The generic loader reads each area's Standard range selection, nomination cap
   and approach attribution from data.
   Washington's full mainland and maritime IBC support limit is explicit in its
-  recipe; California uses its own verified provider extent. Southwest Cascades
-  includes the separately pinned Oregon source; eastern groups use matching Idaho
-  inputs. The surveyed US border extends across both providers. Real source gaps
+  recipe; California uses its own verified provider extent. Southern regions
+  include the separately pinned Oregon source; Eastern Washington uses matching
+  Idaho inputs. The surveyed US border extends across both providers. Real source gaps
   still fail instead of silently shrinking coverage.
+- Recipe `reviewedRegionIds` retain historical source-directory IDs for restrictive
+  access files and independent official-trail references. They are separate from
+  the current build/download names and must not be renamed without moving their
+  pinned source inputs.
 - The definitions reuse historical nomination territory, exact-way access
   restrictions and source-linked representative approach checkpoints. Those
-  checkpoints are not complete trailhead inventories. Larger historical groups
-  are practical restoration selections, with unmeasured first-build costs; the
-  ten-minute target remains to be tested. They need not become a permanent
-  partition if measured preparation cost justifies smaller natural areas.
+  checkpoints are not complete trailhead inventories. Familiar regional names
+  simplify browsing without adding another catalog or hidden download hierarchy.
+  Larger groups have unmeasured first-build costs; the ten-minute target remains
+  to be tested. Measured preparation cost can justify later physical regrouping.
 - `data plan REGION [REGION...]` preflights explicit selections without source
   processing. `data build REGION [REGION...]` builds them sequentially, stops on
   failure/pause, and publishes each successful area independently. Coverage can
@@ -77,9 +90,9 @@ earlier prototype source samples, not the nine later completed regional builds.
 ## Washington geography and acceptance
 
 The [range definitions](../../data/coverage/regions/README.md) record named Standard
-leaf IDs and source hashes. All sixteen areas use those published cores; small
-Puget/basin groups represent the named mountain portions rather than assigning all
-lowlands. Actual hiking connectivity determines outside approaches. No per-city
+leaf IDs and source hashes. All fifteen areas use those published cores;
+Puget and basin regions represent the named mountain portions rather than
+assigning all lowlands. Actual hiking connectivity determines outside approaches. No per-city
 boundary rule is needed. Unknown access and reviewed restrictive removals remain.
 
 The surveyed US border and reviewed exclusions are hard routing limits. Core
