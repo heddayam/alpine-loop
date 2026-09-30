@@ -1,4 +1,5 @@
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
+import { returnDistances } from './return-distances.js';
 
 type Options = {
   signal?: AbortSignal;
@@ -34,16 +35,32 @@ function* routesFromStart(
   query: SearchQuery,
   start: number,
   outgoing: readonly number[][],
+  incoming: readonly number[][],
   reverse: Int32Array,
 ): Generator<RouteCandidate | undefined> {
   const origin = graph.starts[start]!;
+  // Bounds sum in a different order from reconstructed routes. Only pruning
+  // receives this conservative roundoff margin; acceptance stays strict.
+  const margin = Number.EPSILON * 8 * graph.nodes.length * Math.max(1, query.distance[1]);
+  const lowerReturn = yield* returnDistances(graph, incoming, origin.node, query.distance[1] + margin);
+  const target = query.distance[0] + (query.distance[1] - query.distance[0]) / 2;
+  const frameFor = (node: number, distance: number, gain: number) => ({
+    node, next: 0, distance, gain,
+    // Discovery order alone: try projected round trips near the requested
+    // distance first. Every remaining legal choice is still explored.
+    choices: [...outgoing[node]!].sort((left, right) => {
+      const a = graph.edges[left]!, b = graph.edges[right]!;
+      return Math.abs(distance + a.distance + lowerReturn[a.to]! - target)
+        - Math.abs(distance + b.distance + lowerReturn[b.to]! - target) || left - right;
+    }),
+  });
   const path: number[] = [];
   const positions = new Map([[origin.node, 0]]);
   const usedTrails = new Set<number>();
-  const frames = [{ node: origin.node, next: 0, distance: 0, gain: 0 }];
+  const frames = [frameFor(origin.node, 0, 0)];
   while (frames.length) {
     const frame = frames[frames.length - 1]!;
-    const choices = outgoing[frame.node]!;
+    const choices = frame.choices;
     if (frame.next === choices.length) {
       frames.pop();
       if (path.length) {
@@ -59,32 +76,34 @@ function* routesFromStart(
     let route: RouteCandidate | undefined;
     // Nonnegative metrics make these necessary prefix conditions. Summation
     // follows original route order, including the return stem below.
-    if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1]) {
+    if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1]
+      && distance + lowerReturn[edge.to]! <= query.distance[1] + margin) {
       const attachment = positions.get(edge.to);
       if (attachment === undefined) {
         path.push(index);
         usedTrails.add(edge.trail);
         positions.set(edge.to, path.length);
-        frames.push({ node: edge.to, next: 0, distance, gain });
+        frames.push(frameFor(edge.to, distance, gain));
       } else {
-        const returning: number[] = [];
+        let returnCount = 0;
         let totalDistance = distance;
         let totalGain = gain;
         let repeatedDistance = 0;
         for (let part = attachment - 1; part >= 0; part--) {
           const back = reverse[path[part]!]!;
           if (back < 0) break;
-          returning.push(back);
+          returnCount++;
           totalDistance += graph.edges[back]!.distance;
           totalGain += graph.edges[back]!.gain;
           repeatedDistance += graph.edges[back]!.distance;
         }
         const repetition = repeatedDistance / totalDistance;
-        if (returning.length === attachment
+        if (returnCount === attachment
           && totalDistance >= query.distance[0] && totalDistance <= query.distance[1]
           && totalGain >= query.gain[0] && totalGain <= query.gain[1]
           && repetition <= query.repetition) {
-          const edges = [...path, index, ...returning];
+          const edges = [...path, index];
+          for (let part = attachment - 1; part >= 0; part--) edges.push(reverse[path[part]!]!);
           route = {
             id: `route-${start}-${edges.join('-')}`,
             start, edges, distance: totalDistance, gain: totalGain, repetition,
@@ -133,6 +152,7 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   if (!eligible.length) { yield { type: 'done', status: 'complete', progress: snapshot() }; return; }
 
   const outgoing = Array.from({ length: graph.nodes.length }, () => [] as number[]);
+  const incoming = Array.from({ length: graph.nodes.length }, () => [] as number[]);
   const directed = new Map<string, number>();
   const reverse = new Int32Array(graph.edges.length).fill(-1);
   for (const [index, edge] of graph.edges.entries()) {
@@ -143,7 +163,10 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
     const key = `${edge.trail}:${edge.reverse}`;
     if (directed.has(key)) throw new Error(`Duplicate trail direction ${key}`);
     directed.set(key, index);
-    if (includeUnknown || edge.access === 'public') outgoing[edge.from]!.push(index);
+    if (includeUnknown || edge.access === 'public') {
+      outgoing[edge.from]!.push(index);
+      incoming[edge.to]!.push(index);
+    }
     if (index % 8192 === 8191) {
       await pause();
       if (options.signal?.aborted) { yield stopped(); return; }
@@ -161,8 +184,10 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
     if (includeUnknown || other.access === 'public') reverse[index] = back;
   }
 
-  const active = eligible.map(start => ({ cursor: routesFromStart(graph, query, start, outgoing, reverse), attempted: false }));
+  const active = eligible.map(start => ({ cursor: routesFromStart(graph, query, start, outgoing, incoming, reverse), attempted: false }));
   let results = 0;
+  let yieldedAt = performance.now();
+  let firstPass = true;
   while (active.length) {
     for (let position = 0; position < active.length;) {
       if (options.signal?.aborted) { yield stopped(); return; }
@@ -185,8 +210,19 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
       }
       if (complete) active.splice(position, 1);
       else position++;
+      // Turns distribute work between starts; only elapsed time needs a timer.
+      // Sleeping after every small turn otherwise spends most wall time idle.
+      if (performance.now() - yieldedAt >= 8) {
+        yield { type: 'progress', progress: snapshot() };
+        await pause();
+        yieldedAt = performance.now();
+      }
+    }
+    if (firstPass && active.length) {
+      firstPass = false;
       yield { type: 'progress', progress: snapshot() };
       await pause();
+      yieldedAt = performance.now();
     }
   }
   yield { type: 'done', status: 'complete', progress: snapshot() };

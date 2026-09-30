@@ -83,6 +83,16 @@ describe('independent route oracle', () => {
     expect((await compare(graph, { ...query, distance: [forward, forward] })).length).toBeGreaterThan(0);
   });
 
+  it('preserves directed long outward paths with a short legal return and decimal return bounds', async () => {
+    const directed = fixture([[0, 1, 900, { oneWay: true }], [1, 2, 50, { oneWay: true }],
+      [2, 0, 50, { oneWay: true }], [1, 3, 50, { oneWay: true }]]);
+    expect(await compare(directed, { ...query, distance: [1_000, 1_000] })).toHaveLength(1);
+    const lengths = [1_296.97, 2_369.72, 1_787.45, 2_288.28];
+    const decimal = fixture(lengths.map((distance, index) => [index, (index + 1) % 4, distance, { oneWay: true }]));
+    const total = lengths.reduce((sum, value) => sum + value, 0);
+    expect(await compare(decimal, { ...query, distance: [total, total] })).toHaveLength(1);
+  });
+
   it('matches exhaustive enumeration on 64 weighted directed multigraphs and all their starts', async () => {
     let state = 0x9e3779b9;
     const random = () => { state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0; return state / 2 ** 32; };
