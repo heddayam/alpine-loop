@@ -1,8 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import type { AccessPointCandidate, ReconstructedDirectedEdge } from "@/lib/graph";
+import * as graph from "@/lib/graph";
+import type { AccessPointCandidate, AreaGeometry, ReconstructedDirectedEdge } from "@/lib/graph";
 
-import { validateReconstructedClosedRoute, type ClosedRouteValidationOptions } from "./closed-route-validation";
+import { prepareClosedRouteValidator, validateReconstructedClosedRoute, type ClosedRouteValidationOptions } from "./closed-route-validation";
 
 const positions: Record<string, [number, number]> = {
   s: [0, 0], h: [0.001, 0], a: [0.002, 0.001], b: [0.002, -0.001],
@@ -51,8 +52,8 @@ function start(nodeId = "s"): AccessPointCandidate {
   };
 }
 
-function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s", overrides: Partial<ClosedRouteValidationOptions> = {}) {
-  return validateReconstructedClosedRoute(edges, {
+function validationOptions(startNodeId = "s", overrides: Partial<ClosedRouteValidationOptions> = {}): ClosedRouteValidationOptions {
+  return {
     start: start(startNodeId),
     includeUncertainAccess: false,
     coverage: {
@@ -64,7 +65,11 @@ function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s", overrid
     fallbackSourceIds: ["fixture"],
     routeId: "closed_fixture",
     ...overrides,
-  });
+  };
+}
+
+function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s", overrides: Partial<ClosedRouteValidationOptions> = {}) {
+  return validateReconstructedClosedRoute(edges, validationOptions(startNodeId, overrides));
 }
 
 describe("closed-route reconstruction validation", () => {
@@ -289,5 +294,151 @@ describe("closed-route reconstruction validation", () => {
     const edges = [edge(40, 40, "s", "a"), edge(41, 41, "a", "b"), edge(42, 42, "b", "s")];
     edges[1]!.minimumElevationMeters = null;
     expect(validate(edges)).toEqual({ valid: false, reason: "incomplete-elevation" });
+  });
+});
+
+describe("prepared per-search closed-route validation", () => {
+  const loop = () => [edge(1, 1, "s", "a"), edge(2, 2, "a", "b"), edge(3, 3, "b", "s")];
+  const hole: AreaGeometry = {
+    type: "Polygon",
+    coordinates: [
+      [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]],
+      [[-0.1, -0.1], [-0.1, 0.1], [0.1, 0.1], [0.1, -0.1], [-0.1, -0.1]],
+    ],
+  };
+
+  test("matches one-shot validation for cold/warm loops, lollipops, and every failure category", () => {
+    const valid = loop();
+    const lollipop = [edge(4, 4, "s", "h"), edge(5, 5, "h", "a"), edge(6, 6, "a", "b"),
+      edge(7, 7, "b", "h"), edge(8, 4, "h", "s")];
+    const cases = [
+      valid, lollipop, [], [edge(9, 9, "h", "s")], valid.slice(0, 2),
+      [valid[0]!, valid[2]!],
+      [valid[0]!, { ...valid[1]!, accessState: "private" as const }, valid[2]!],
+      [valid[0]!, { ...valid[1]!, coordinates: [[2, 2], [3, 3]] as [number, number][] }, valid[2]!],
+      [valid[0]!, { ...valid[1]!, minimumElevationMeters: null }, valid[2]!],
+      [...valid, ...valid],
+    ];
+    const options = validationOptions();
+    const prepared = prepareClosedRouteValidator(options);
+    for (const edges of cases) {
+      for (const routeId of ["cold", "warm"]) {
+        expect(prepared(edges, routeId)).toEqual(validateReconstructedClosedRoute(edges, { ...options, routeId }));
+      }
+    }
+  });
+
+  test("reuses exact containment for shared and copied geometry while retaining distinct route IDs", () => {
+    const actualPrepare = graph.prepareAreaGeometry;
+    const segment = vi.fn<(start: readonly [number, number], end: readonly [number, number]) => boolean>();
+    const prepare = vi.spyOn(graph, "prepareAreaGeometry").mockImplementation((coverage) => {
+      const area = actualPrepare(coverage);
+      segment.mockImplementation(area.containsSegment);
+      return { ...area, containsSegment: segment };
+    });
+    try {
+      const prepared = prepareClosedRouteValidator(validationOptions());
+      const edges = loop();
+      expect(prepared(edges, "first").valid).toBe(true);
+      expect(segment).toHaveBeenCalledTimes(3);
+      const copies = structuredClone(edges);
+      const result = prepared(copies, "second");
+      expect(result.valid).toBe(true);
+      expect(segment).toHaveBeenCalledTimes(3);
+      expect(prepare).toHaveBeenCalledTimes(1);
+      if (result.valid) {
+        expect(result.value.route.id).toBe("second");
+        expect(result.value.edges).toBe(copies);
+      }
+    } finally {
+      prepare.mockRestore();
+    }
+  });
+
+  test("invalidates changed coordinates in place and accepts a restored line without ID assumptions", () => {
+    const options = validationOptions();
+    const prepared = prepareClosedRouteValidator(options);
+    const edges = loop();
+    const coordinates: [number, number][] = [[0, 0], [0.002, 0.001]];
+    edges[0]!.coordinates = coordinates;
+    expect(prepared(edges, "inside").valid).toBe(true);
+    coordinates[1]![0] = 2;
+    expect(prepared(edges, "moved")).toEqual({ valid: false, reason: "outside-coverage" });
+    coordinates[1]![0] = 0.002;
+    expect(prepared(edges, "restored")).toEqual(validateReconstructedClosedRoute(edges, { ...options, routeId: "restored" }));
+    edges[0]!.coordinates = [[0, 0], [-2, 0]];
+    expect(prepared(edges, "replaced")).toEqual({ valid: false, reason: "outside-coverage" });
+  });
+
+  test("retains exact hole, boundary, multipolygon, empty-line and nonfinite-coordinate behavior", () => {
+    const island: AreaGeometry = {
+      type: "MultiPolygon", coordinates: [hole.coordinates as number[][][], [[[2, 2], [3, 2], [3, 3], [2, 3], [2, 2]]]],
+    };
+    const lines: [number, number][][] = [
+      [[-0.5, 0], [0.5, 0]], // endpoints inside, segment crosses a hole
+      [[-1, -1], [1, -1]], // outer boundary is included
+      [[-0.1, -0.1], [0.1, -0.1]], // hole boundary is included
+      [[2.1, 2.1], [2.9, 2.9]], // a second polygon
+      [[0.5, 0.5], [2.1, 2.1]], // a gap between polygons
+      [], [[0.5, 0.5]], [[0.5, 0.5], [Number.NaN, 0]], [[0.5, 0.5], [Infinity, 0]],
+    ];
+    for (const coverage of [hole, island]) {
+      const options = validationOptions("s", { coverage });
+      const prepared = prepareClosedRouteValidator(options);
+      for (const coordinates of lines) {
+        const edges = loop().map((item) => ({ ...item, coordinates }));
+        const expected = validateReconstructedClosedRoute(edges, options);
+        expect(prepared(edges, options.routeId)).toEqual(expected);
+        expect(prepared(structuredClone(edges), options.routeId)).toEqual(expected);
+      }
+    }
+  });
+
+  test("keeps each prepared coverage snapshot isolated from other searches and caller mutations", () => {
+    const coverage: AreaGeometry = { type: "Polygon", coordinates: [[[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]] };
+    const options = validationOptions("s", { coverage });
+    const expected = validateReconstructedClosedRoute(loop(), options);
+    const prepared = prepareClosedRouteValidator(options);
+    const excluding = prepareClosedRouteValidator(validationOptions("s", { coverage: hole }));
+    expect(prepared(loop(), options.routeId)).toEqual(expected);
+    expect(excluding(loop(), "other-search")).toEqual({ valid: false, reason: "outside-coverage" });
+    coverage.coordinates[0] = [[2, 2], [3, 2], [3, 3], [2, 3], [2, 2]];
+    options.start.name = "Changed by caller";
+    options.start.sourceIds.push("new-source");
+    options.fallbackSourceIds = ["replacement"];
+    expect(validateReconstructedClosedRoute(loop(), options)).toEqual({ valid: false, reason: "outside-coverage" });
+    expect(prepared(loop(), options.routeId)).toEqual(expected);
+  });
+
+  test("never caches access, topology, metrics, or provenance with the geometry result", () => {
+    const options = validationOptions();
+    const prepared = prepareClosedRouteValidator(options);
+    const edges = loop();
+    expect(prepared(edges, "warm").valid).toBe(true);
+    edges[0]!.accessState = "closed";
+    expect(prepared(edges, "closed")).toEqual({ valid: false, reason: "illegal-access" });
+    edges[0]!.accessState = "public";
+    edges[0]!.fromNodeId = "wrong";
+    expect(prepared(edges, "direction")).toEqual({ valid: false, reason: "wrong-start" });
+    edges[0]!.fromNodeId = "s";
+    edges[0]!.minimumElevationMeters = null;
+    expect(prepared(edges, "elevation")).toEqual({ valid: false, reason: "incomplete-elevation" });
+    edges[0]!.minimumElevationMeters = 10;
+    edges[0]!.gainMeters = 25;
+    edges[0]!.sourceIds = ["updated-source"];
+    edges[0]!.elevationProfile = [{ distanceMeters: 0, elevationMeters: 10 }, { distanceMeters: 100, elevationMeters: 30 }];
+    expect(prepared(edges, "updated")).toEqual(validateReconstructedClosedRoute(edges, { ...options, routeId: "updated" }));
+  });
+
+  test("retains exact answers after overflowing its bounded geometry cache", () => {
+    const prepared = prepareClosedRouteValidator(validationOptions());
+    for (let index = 0; index < 4_100; index += 1) {
+      const coordinates: [number, number][] = [[0, 0], [index / 100_000, 0.001]];
+      expect(prepared(loop().map((item) => ({ ...item, coordinates })), `route-${index}`).valid).toBe(true);
+    }
+    const outside = loop();
+    outside[0]!.coordinates = [[2, 2], [3, 3]];
+    expect(prepared(outside, "outside")).toEqual({ valid: false, reason: "outside-coverage" });
+    expect(prepared(loop(), "again")).toEqual(validateReconstructedClosedRoute(loop(), validationOptions("s", { routeId: "again" })));
   });
 });

@@ -6,6 +6,7 @@ import type {
 import {
   edgeIsTraversable,
   lineIsInsideArea,
+  prepareAreaGeometry,
   type AccessPointCandidate,
   type AreaGeometry,
   type ReconstructedDirectedEdge,
@@ -42,6 +43,52 @@ export type ClosedRouteValidationOptions = {
   fallbackSourceIds: readonly string[];
   routeId: string;
 };
+
+const MAXIMUM_CACHED_GEOMETRIES = 4_096;
+const MAXIMUM_CACHED_COORDINATE_BYTES = 8 * 1_024 * 1_024;
+
+/**
+ * One search's fixed validation context. The prepared area copies its rings;
+ * geometry cache keys contain coordinates, so mutable caller-owned edges cannot
+ * reuse a stale containment result. Only containment is cached: all legal,
+ * topology, metric, and source checks run for every candidate.
+ */
+export function prepareClosedRouteValidator(
+  options: Omit<ClosedRouteValidationOptions, "routeId">,
+): (edges: readonly ReconstructedDirectedEdge[], routeId: string) => ClosedRouteValidationResult {
+  const area = prepareAreaGeometry(options.coverage);
+  const context = {
+    ...options,
+    start: { ...options.start, sourceIds: [...options.start.sourceIds] },
+    fallbackSourceIds: [...options.fallbackSourceIds],
+  };
+  const containment = new Map<string, boolean>();
+  let coordinateBytes = 0;
+  const containsLine = (coordinates: ReconstructedDirectedEdge["coordinates"]): boolean => {
+    const key = JSON.stringify(coordinates);
+    const cached = containment.get(key);
+    if (cached !== undefined) return cached;
+    let inside = coordinates.length >= 2;
+    for (let index = 1; inside && index < coordinates.length; index += 1) {
+      inside = area.containsSegment(coordinates[index - 1]!, coordinates[index]!);
+    }
+    // Bound both coordinate storage and Map overhead. Large individual lines
+    // are checked exactly but not retained; older entries leave in FIFO order.
+    const bytes = key.length * 2;
+    if (bytes <= MAXIMUM_CACHED_COORDINATE_BYTES) {
+      while (containment.size >= MAXIMUM_CACHED_GEOMETRIES
+        || coordinateBytes + bytes > MAXIMUM_CACHED_COORDINATE_BYTES) {
+        const oldest = containment.keys().next().value!;
+        containment.delete(oldest);
+        coordinateBytes -= oldest.length * 2;
+      }
+      containment.set(key, inside);
+      coordinateBytes += bytes;
+    }
+    return inside;
+  };
+  return (edges, routeId) => validateClosedRoute(edges, { ...context, routeId }, containsLine);
+}
 
 /** Peel the one permitted retrace, then require exactly one simple cycle. */
 function topologyFor(edges: readonly ReconstructedDirectedEdge[], startNodeId: string): { topology: ClosedRouteTopologyV3; physicalLoopId: string } | null {
@@ -105,6 +152,14 @@ export function validateReconstructedClosedRoute(
   edges: readonly ReconstructedDirectedEdge[],
   options: ClosedRouteValidationOptions,
 ): ClosedRouteValidationResult {
+  return validateClosedRoute(edges, options, (coordinates) => lineIsInsideArea(coordinates, options.coverage));
+}
+
+function validateClosedRoute(
+  edges: readonly ReconstructedDirectedEdge[],
+  options: ClosedRouteValidationOptions,
+  containsLine: (coordinates: ReconstructedDirectedEdge["coordinates"]) => boolean,
+): ClosedRouteValidationResult {
   if (edges.length === 0) return { valid: false, reason: "empty" };
   if (edges[0]!.fromNodeId !== options.start.nodeId) return { valid: false, reason: "wrong-start" };
   for (let index = 1; index < edges.length; index += 1) {
@@ -114,7 +169,7 @@ export function validateReconstructedClosedRoute(
   if (edges.some((edge) => !edgeIsTraversable(edge, options.includeUncertainAccess))) {
     return { valid: false, reason: "illegal-access" };
   }
-  if (edges.some((edge) => !lineIsInsideArea(edge.coordinates, options.coverage))) {
+  if (edges.some((edge) => !containsLine(edge.coordinates))) {
     return { valid: false, reason: "outside-coverage" };
   }
   const shape = topologyFor(edges, options.start.nodeId);
