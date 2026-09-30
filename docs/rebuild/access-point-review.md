@@ -28,12 +28,28 @@ Those questions can use one prepared record and one selector. They should not
 collapse into a confidence score or a single public/unknown/private value whose
 meaning changes between preparation, map, and search.
 
-Keep the accepted **fewer than ten buildings within 500 m** and **25-mile mountain
-association** policies in the first replacement. They decide which physically
-valid entrances this product offers. Removing density is a separate possible
-product revision, not a detector fix or a recall improvement under today's
-definition. A mountain association still selects starts without requiring every
-route to visit the core. Do not clip routes or add that constraint silently.
+The target is a replacement across preparation, regional selection, the map and
+Full search, not a narrow entrance repair. Existing rules must justify themselves
+as well as new ones. Implementation order and controlled comparisons are ways to
+establish the replacement's behavior, not reasons to shrink its intended scope.
+
+Recommend removing the **fewer than ten buildings within 500 m** veto from the
+target design. It measures mapped development, a current product preference; it
+does not establish entry or hiking quality. A village or visitor facility can
+have a useful mountain entrance, while a sparse contact can offer a poor hike.
+This is a reasoned product revision, not a measured detector-accuracy improvement.
+Test its effect on representative entrances, generated routes and Full-search
+cost, rather than retain it merely because it exists or delete it merely because
+fewer rules sound better.
+
+Hold today's density and **25-mile mountain association** constant when comparing
+old/new detector accuracy, then separately compare product fit with density
+removed. That experimental control does not make retention the desired end-state.
+Topology plus mountain association does not prove an appealing hike; inspect dense
+mountain entrances, sparse urban contacts and routes heading away from the core.
+If that reveals a real suitability failure, revise the responsible relevance rule
+rather than add an unrelated entrance heuristic. Region-association assumptions
+are open to the same scrutiny. Do not silently clip routes or require core visits.
 
 The concrete simplification is smaller than the first draft suggested: regional
 artifacts already contain frozen `access_points` rows. Use those rows plus their
@@ -399,7 +415,8 @@ Implementation has two focused behavior waves:
 1. Implement the source-role/foot-entry evaluator in the real compiler, with
    committed raw-source fixtures exercising its public seam. Replace nomination
    and passage semantics together, carrying barriers and directions through
-   publication, compaction, hints and final routes. Preserve relevance policy.
+   publication, compaction, hints and final routes. Hold relevance policy constant
+   for the detector comparison and evaluate the proposed density removal separately.
    This is one production implementation, not a parallel reference engine or
    an old-rule fallback. Explain changed fixture expectations explicitly.
 2. Consume the existing regional entrance rows for membership and profile-aware

@@ -18,10 +18,11 @@ the evidence line.
 - [x] Record the [coherent replacement recommendation](access-point-review.md):
   one mode-aware source topology and connected-entry proof, explicit prepared
   region membership, and one profile-aware start selector for map and search.
-  The initial proposed removal of the building-count veto was reconsidered:
-  retain density and the existing 25-mile association in the first replacement;
-  evaluate any later scope change separately. Existing application policy remains
-  unchanged. The review includes
+  Density removal remains the recommended target product revision, with its
+  effect on actual hike suitability and search cost to be evaluated. Holding
+  current density/mountain policy constant is a detector-comparison control,
+  not a decision to retain those rules in the end-state. Existing application
+  policy remains unchanged. The review includes
   cross-region precision/recall labels, holdouts, source-gap accounting,
   compatibility and implementation acceptance requirements.
 - [x] Verify baseline evidence with offline committed fixtures: topology audit
@@ -49,6 +50,16 @@ the evidence line.
   stack, relation engine or permanent legacy selector. Documentation/link checks
   pass; completed review worktrees/branches are removed. No app or data changes
   are part of this preflight, and no regional accuracy improvement is claimed.
+- [x] Incorporate the user's clarification: pursue realistic, justified ambition
+  across the whole app rather than reduce scope for caution's sake. The target
+  remains one replacement model for preparation, region membership, map and Full.
+  Existing heuristics must earn their place; implementation staging does not
+  protect them from removal. The revised recommendation distinguishes controlled
+  detector comparison from the intended product design and explicitly evaluates
+  dense mountain entrances, sparse urban contacts, generated-route suitability
+  and Full-search cost. Topology/mountain connection alone does not prove quality.
+  The preceding preflight reports are challenges to the earlier draft, not
+  authority for permanent density retention. This clarification changes docs only.
 - [ ] Implement and independently evaluate the replacement before adopting it.
   Existing entrance-policy/repair gates below remain pending. Synthetic fixture
   success and nearby reviewed anchors do not establish regional precision or
