@@ -342,7 +342,7 @@ export class SQLiteRouteJobStore {
         truncatedAccessPointCount: integer(row, "truncated_count"),
         elapsedMs: Math.max(0, ended - started),
       },
-      partial: failed > 0 || (status === "cancelled" && integer(row, "processed_count") < integer(row, "eligible_count")),
+      partial: failed > 0 || (status !== "completed" && integer(row, "processed_count") < integer(row, "eligible_count")),
       stale,
       createdAt: requiredString(row, "created_at"),
       updatedAt: requiredString(row, "updated_at"),

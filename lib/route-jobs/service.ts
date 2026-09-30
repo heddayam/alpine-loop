@@ -132,10 +132,13 @@ export class RouteJobService {
   }
 
   async results(id: string, cursorText?: string): Promise<RouteJobResultsPage> {
-    const job = await this.get(id);
+    const current = await this.get(id);
+    // Refresh after the asynchronous installation lookup so progress and rows
+    // describe the same durable checkpoint, including during an active search.
+    const job = current && this.#store.toPublic(id, current.stale);
     if (!job) throw new ServerApiError("ROUTE_JOB_NOT_FOUND", "That batch route job was not found.", 404);
-    if (!(["completed", "cancelled"] as const).includes(job.status as "completed" | "cancelled")) {
-      throw new ServerApiError("ROUTE_JOB_RESULTS_NOT_READY", "Results are available after the job completes or is cancelled.", 409);
+    if (job.status === "deleting") {
+      throw new ServerApiError("ROUTE_JOB_RESULTS_NOT_READY", "This job is being deleted.", 409);
     }
     const page = this.#store.pageResults(id, decodeResultCursor(cursorText), RESULT_PAGE_SIZE);
     return routeJobResultsPageV2Schema.parse({
@@ -189,11 +192,11 @@ export class RouteJobService {
       await yieldToEventLoop(signal);
 
       type Point = NonNullable<ReturnType<SQLiteRouteJobStore["nextAccessPoint"]>>;
+      type Outcome = { searched: Awaited<ReturnType<typeof session.searchAccessPoint>> } | { error: unknown };
+      type Task = { point: Point; outcome?: Outcome };
       const concurrency = Math.max(1, Math.min(8, Math.floor(session.concurrency ?? 1)));
-      const pending: Array<{
-        point: Point;
-        outcome: Promise<{ searched: Awaited<ReturnType<typeof session.searchAccessPoint>> } | { error: unknown }>;
-      }> = [];
+      const pending: Task[] = [];
+      const running = new Map<number, Promise<{ task: Task; outcome: Outcome }>>();
       const checkControl = () => {
         if (signal.aborted) throw signal.reason;
         const latest = this.#store.getControl(id);
@@ -201,33 +204,44 @@ export class RouteJobService {
       };
       for (;;) {
         checkControl();
-        // Claim at most one bounded window. Uncommitted running starts are
-        // reset to pending on restart, so a later completion cannot skip a gap.
-        while (pending.length < concurrency) {
+        // Keep workers busy across uneven starts, with at most two worker waves
+        // retained behind a slow checkpoint. Every uncommitted start is reset
+        // to pending on restart, so completed later starts cannot skip a gap.
+        while (running.size < concurrency && pending.length < concurrency * 2) {
           const point = this.#store.nextAccessPoint(id);
           if (!point) break;
-          pending.push({ point, outcome: session.searchAccessPoint(point.accessPointId, signal)
-            .then((searched) => ({ searched }), (error: unknown) => ({ error })) });
+          const task: Task = { point };
+          pending.push(task);
+          running.set(point.ordinal, session.searchAccessPoint(point.accessPointId, signal)
+            .then((searched) => ({ task, outcome: { searched } }), (error: unknown) => ({ task, outcome: { error } })));
         }
-        const task = pending.shift();
-        if (!task) break;
-        const outcome = await task.outcome;
+        if (running.size === 0) break;
+        const completed = await Promise.race(running.values());
+        running.delete(completed.task.point.ordinal);
+        completed.task.outcome = completed.outcome;
         checkControl();
-        const { point } = task;
         // Commit in access ordinal order, including failures. Geometry dedup
         // then chooses the same owner regardless of child completion order.
-        if ("error" in outcome) {
-          if (isCancellationError(outcome.error)) throw outcome.error;
-          this.#store.failAccessPoint(id, point.ordinal, errorMessage(outcome.error));
-        } else {
-          const { searched } = outcome;
-          const results: RouteJobResult[] = searched.exact.slice(0, 10).map((route) => ({
-            matchType: "exact", accessPointId: point.accessPointId, route,
-          }));
-          if (results.length === 0 && searched.nearMisses[0]) results.push({
-            matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
-          });
-          this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
+        for (;;) {
+          const task = pending[0];
+          if (!task?.outcome) break;
+          checkControl();
+          pending.shift();
+          const { point, outcome } = task;
+          if ("error" in outcome) {
+            if (isCancellationError(outcome.error)) throw outcome.error;
+            this.#store.failAccessPoint(id, point.ordinal, errorMessage(outcome.error));
+          } else {
+            const { searched } = outcome;
+            const results: RouteJobResult[] = searched.exact.slice(0, 10).map((route) => ({
+              matchType: "exact", accessPointId: point.accessPointId, route,
+            }));
+            if (results.length === 0 && searched.nearMisses[0]) results.push({
+              matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
+            });
+            this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
+          }
+          await yieldToEventLoop(signal);
         }
         await yieldToEventLoop(signal);
       }

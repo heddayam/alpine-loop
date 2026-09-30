@@ -136,6 +136,110 @@ describe("geographic search with prepared installation storage and compute", () 
     }
   });
 
+  it("assigns queued starts to whichever worker becomes free without overlapping requests", async () => {
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+    const started: Array<{ worker: number; id: string }> = [];
+    const releases = new Map<string, () => void>();
+    const workers: Array<{ searchAccessPoint: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = [];
+    const opened = vi.spyOn(RouteSolverProcess, "open").mockImplementation(async () => {
+      const worker = workers.length;
+      let busy = false;
+      const process = {
+        searchAccessPoint: vi.fn(async (id: string) => {
+          expect(busy).toBe(false);
+          busy = true;
+          started.push({ worker, id });
+          await new Promise<void>(resolve => { releases.set(id, resolve); });
+          busy = false;
+          return { exact: [], nearMisses: [], truncated: false };
+        }),
+        close: vi.fn(async () => undefined),
+      };
+      workers.push(process);
+      return process as unknown as RouteSolverProcess;
+    });
+    const plan = await resolveSearchPlan(request, signal());
+    const session = await openSearchSession({ request, plan, signal: signal() });
+    try {
+      const first = session.searchAccessPoint("fixture-installation::first", signal());
+      const second = session.searchAccessPoint("fixture-installation::second", signal());
+      const third = session.searchAccessPoint("fixture-installation::third", signal());
+      await vi.waitFor(() => expect(started).toEqual([{ worker: 0, id: "first" }, { worker: 1, id: "second" }]));
+      releases.get("second")!();
+      await second;
+      await vi.waitFor(() => expect(started).toEqual([
+        { worker: 0, id: "first" }, { worker: 1, id: "second" }, { worker: 1, id: "third" },
+      ]));
+      releases.get("third")!();
+      await third;
+      const fourth = session.searchAccessPoint("fixture-installation::fourth", signal());
+      await vi.waitFor(() => expect(started.at(-1)).toEqual({ worker: 1, id: "fourth" }));
+      releases.get("fourth")!();
+      releases.get("first")!();
+      await Promise.all([first, fourth]);
+      expect(opened).toHaveBeenCalledTimes(2);
+    } finally {
+      releases.forEach(release => release());
+      await session.close();
+      expect(workers.every(worker => worker.close.mock.calls.length === 1)).toBe(true);
+      opened.mockRestore();
+    }
+  });
+
+  it("cancels a queued start promptly and closes busy workers without admitting waiting work", async () => {
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "2");
+    const searches: string[] = [];
+    const closed = vi.fn(async () => undefined);
+    const opened = vi.spyOn(RouteSolverProcess, "open").mockImplementation(async () => ({
+      searchAccessPoint: async (id: string, signal: AbortSignal) => {
+        searches.push(id);
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+        return { exact: [], nearMisses: [], truncated: false };
+      },
+      close: closed,
+    }) as unknown as RouteSolverProcess);
+    const plan = await resolveSearchPlan(request, signal());
+    const session = await openSearchSession({ request, plan, signal: signal() });
+    try {
+      const first = session.searchAccessPoint("fixture-installation::first", signal()).catch(error => error);
+      const second = session.searchAccessPoint("fixture-installation::second", signal()).catch(error => error);
+      await vi.waitFor(() => expect(searches).toEqual(["first", "second"]));
+      const controller = new AbortController();
+      const third = session.searchAccessPoint("fixture-installation::third", controller.signal);
+      const rejected = expect(third).rejects.toMatchObject({ name: "AbortError" });
+      controller.abort();
+      await rejected;
+      const fourth = session.searchAccessPoint("fixture-installation::fourth", signal()).catch(error => error);
+      await session.close();
+      expect(await Promise.all([first, second, fourth])).toEqual([
+        expect.objectContaining({ name: "AbortError" }), expect.objectContaining({ name: "AbortError" }), expect.objectContaining({ name: "AbortError" }),
+      ]);
+      expect(searches).toEqual(["first", "second"]);
+      expect(closed).toHaveBeenCalledTimes(2);
+    } finally { await session.close(); opened.mockRestore(); }
+  });
+
+  it("replaces a failed worker and releases its slot for the next start", async () => {
+    vi.stubEnv("ALPINE_SOLVER_WORKERS", "1");
+    const close = vi.fn(async () => undefined);
+    const failing = { searchAccessPoint: vi.fn(async () => { throw new Error("Worker exited"); }), close };
+    const healthy = { searchAccessPoint: vi.fn(async () => ({ exact: [], nearMisses: [], truncated: false })), close };
+    const opened = vi.spyOn(RouteSolverProcess, "open")
+      .mockResolvedValueOnce(failing as unknown as RouteSolverProcess)
+      .mockResolvedValueOnce(healthy as unknown as RouteSolverProcess);
+    const plan = await resolveSearchPlan(request, signal());
+    const session = await openSearchSession({ request, plan, signal: signal() });
+    try {
+      await expect(session.searchAccessPoint("fixture-installation::first", signal())).rejects.toThrow("Worker exited");
+      expect(close).toHaveBeenCalledOnce();
+      await expect(session.searchAccessPoint("fixture-installation::second", signal())).resolves.toEqual({ exact: [], nearMisses: [], truncated: false });
+      expect(opened).toHaveBeenCalledTimes(2);
+    } finally { await session.close(); opened.mockRestore(); }
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
   it("offers geographic discovery and viewport data with opaque identities", async () => {
     const catalog = searchCatalogSchema.parse(await searchCatalog());
     expect(catalog.regions.map(({ id }) => id)).toEqual(["osm:relation/1001"]);

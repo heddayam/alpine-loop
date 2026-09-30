@@ -33,9 +33,30 @@ export async function openSearchSession({ request, plan: originalPlan, signal }:
   const lifetime = AbortSignal.any([signal, controller.signal]);
   const concurrency = solverWorkerCount();
   const slots = Array.from({ length: concurrency }, () => ({
-    session: undefined as RouteSolverProcess | undefined, tail: Promise.resolve(),
+    session: undefined as RouteSolverProcess | undefined,
+    busy: undefined as Promise<void> | undefined,
   }));
-  let nextSlot = 0;
+  const acquireSlot = async (signal: AbortSignal) => {
+    for (;;) {
+      signal.throwIfAborted();
+      const slot = slots.find(slot => !slot.busy);
+      if (slot) {
+        let available!: () => void;
+        slot.busy = new Promise<void>(resolve => { available = resolve; });
+        return { slot, release: () => { slot.busy = undefined; available(); } };
+      }
+      // Wait for any worker, rather than queuing behind a particular slow one.
+      // Waiting callers can cancel independently of the running requests.
+      await new Promise<void>((resolve, reject) => {
+        const aborted = () => reject(signal.reason);
+        signal.addEventListener("abort", aborted, { once: true });
+        void Promise.race(slots.map(slot => slot.busy!)).then(() => {
+          signal.removeEventListener("abort", aborted);
+          resolve();
+        });
+      });
+    }
+  };
   return {
     concurrency,
     async enumerateEligibleAccessPointIds(signal: AbortSignal) {
@@ -49,9 +70,9 @@ export async function openSearchSession({ request, plan: originalPlan, signal }:
       } finally { await session?.close(); }
     },
     async searchAccessPoint(id: string, signal: AbortSignal) {
-      const slot = slots[nextSlot++ % slots.length]!;
       const combined = AbortSignal.any([lifetime, signal]);
-      const operation = slot.tail.then(async () => {
+      const { slot, release } = await acquireSlot(combined);
+      try {
         combined.throwIfAborted();
         const [owner, localId] = splitNamespacedId(id);
         if (owner !== installationId) throw new Error("The starting point belongs to a different installation.");
@@ -69,14 +90,12 @@ export async function openSearchSession({ request, plan: originalPlan, signal }:
           slot.session = undefined;
           throw error;
         }
-      });
-      slot.tail = operation.then(() => undefined, () => undefined);
-      return operation;
+      } finally { release(); }
     },
     async close() {
       controller.abort(new DOMException("Search session closed", "AbortError"));
       await Promise.all(slots.map(async slot => {
-        await slot.tail;
+        await slot.busy;
         await slot.session?.close().catch(() => undefined);
         slot.session = undefined;
       }));

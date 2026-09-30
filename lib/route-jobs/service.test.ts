@@ -288,6 +288,51 @@ describe("RouteJobService", () => {
     store.close();
   });
 
+  it("publishes durable results and the matching progress snapshot while the next start runs", async () => {
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        enumerateEligibleAccessPointIds: async () => ["first", "second"],
+        searchAccessPoint: async (id) => {
+          if (id === "second") await blocked;
+          return { exact: [route(id)], nearMisses: [], truncated: false };
+        },
+        close: async () => undefined,
+      }),
+    });
+    const job = await service.create(regionWideRequest);
+    try {
+      await vi.waitFor(async () => expect((await service.get(job.id))?.progress.processedAccessPointCount).toBe(1));
+      const page = await service.results(job.id);
+      expect(page.job).toMatchObject({ status: "running", partial: true,
+        progress: { processedAccessPointCount: 1, exactRouteCount: 1 } });
+      expect(page.results.map(({ route }) => route.id)).toEqual(["first"]);
+    } finally { release(); await service.waitUntilIdle(); }
+    const completed = await service.results(job.id);
+    expect(completed.job).toMatchObject({ status: "completed", partial: false,
+      progress: { processedAccessPointCount: 2, exactRouteCount: 2 } });
+    expect(completed.results.map(({ route }) => route.id)).toEqual(["first", "second"]);
+    store.close();
+  });
+
+  it("retains readable checkpoints when the job fails before all starts are attempted", async () => {
+    const { service, store } = harness();
+    await service.waitUntilIdle();
+    const id = "00000000-0000-4000-8000-000000000013";
+    store.create(id, regionWideRequest, plan);
+    store.claimNext();
+    store.initializeAccessPoints(id, ["first", "second"]);
+    store.nextAccessPoint(id);
+    store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "first", route: route("first") }], false);
+    store.finish(id, "failed", "Search session stopped unexpectedly.");
+    const page = await service.results(id);
+    expect(page.job).toMatchObject({ status: "failed", partial: true,
+      progress: { processedAccessPointCount: 1, exactRouteCount: 1 } });
+    expect(page.results.map(({ route }) => route.id)).toEqual(["first"]);
+    store.close();
+  });
+
   it("looks up the current installation once when listing jobs", async () => {
     const { service, dependencies, store } = harness();
     await service.create(request);
@@ -356,16 +401,20 @@ describe("RouteJobService", () => {
     store.close();
   });
 
-  it("bounds parallel starts and checkpoints in ordinal order despite reversed completion", async () => {
+  it("refills free workers but bounds uncommitted starts and checkpoints in ordinal order", async () => {
     const releases = new Map<string, () => void>();
     const started: string[] = [];
+    let running = 0;
+    let maximumRunning = 0;
     const { service, store } = harness({
       openSearchSession: async () => ({
         concurrency: 2,
-        enumerateEligibleAccessPointIds: async () => ["first", "second", "third", "fourth"],
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third", "fourth", "fifth", "sixth"],
         searchAccessPoint: async (id) => {
           started.push(id);
+          maximumRunning = Math.max(maximumRunning, ++running);
           await new Promise<void>((resolve) => releases.set(id, resolve));
+          running--;
           // Identical geometry exercises deterministic first-start ownership.
           return { exact: [{ ...route("first"), id }], nearMisses: [], truncated: false };
         },
@@ -376,15 +425,23 @@ describe("RouteJobService", () => {
     const job = await service.create(regionWideRequest);
     await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
     releases.get("second")!();
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(completed).not.toHaveBeenCalled();
-    expect(started).toEqual(["first", "second"]);
-    releases.get("first")!();
+    await vi.waitFor(() => expect(started).toEqual(["first", "second", "third"]));
+    releases.get("third")!();
     await vi.waitFor(() => expect(started).toEqual(["first", "second", "third", "fourth"]));
     releases.get("fourth")!();
-    releases.get("third")!();
+    await vi.waitFor(() => expect(running).toBe(1));
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(completed).not.toHaveBeenCalled();
+    // Two worker waves are the memory bound even if the first start stalls.
+    expect(started).toEqual(["first", "second", "third", "fourth"]);
+    expect((await service.results(job.id)).results).toEqual([]);
+    releases.get("first")!();
+    await vi.waitFor(() => expect(started).toEqual(["first", "second", "third", "fourth", "fifth", "sixth"]));
+    releases.get("sixth")!();
+    releases.get("fifth")!();
     await service.waitUntilIdle();
-    expect(completed.mock.calls.map((call) => call[1])).toEqual([0, 1, 2, 3]);
+    expect(maximumRunning).toBe(2);
+    expect(completed.mock.calls.map((call) => call[1])).toEqual([0, 1, 2, 3, 4, 5]);
     expect((await service.results(job.id)).results.map(({ accessPointId }) => accessPointId)).toEqual(["first"]);
     store.close();
   });
@@ -407,16 +464,48 @@ describe("RouteJobService", () => {
       }),
     });
     const job = await service.create(regionWideRequest);
-    await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
+    await vi.waitFor(() => expect(started).toEqual(["first", "second", "third"]));
     await service[action](job.id);
     await service.waitUntilIdle();
     expect(close).toHaveBeenCalledOnce();
-    expect(started).toEqual(["first", "second"]);
+    expect(started).toEqual(["first", "second", "third"]);
     if (action === "delete") expect(await service.get(job.id)).toBeNull();
     else {
       expect(await service.get(job.id)).toMatchObject({ status: "cancelled", progress: { processedAccessPointCount: 0 } });
       expect((await service.results(job.id)).results).toEqual([]);
     }
+    store.close();
+  });
+
+  it("orders failed checkpoints with successful starts while refilling the failed worker", async () => {
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const started: string[] = [];
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        concurrency: 2,
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third"],
+        searchAccessPoint: async (id) => {
+          started.push(id);
+          if (id === "first") await blocked;
+          if (id === "second") throw new Error("Worker exited");
+          return { exact: [route(id)], nearMisses: [], truncated: false };
+        },
+        close: async () => undefined,
+      }),
+    });
+    const checkpoints: number[] = [];
+    const complete = store.completeAccessPoint.bind(store), fail = store.failAccessPoint.bind(store);
+    vi.spyOn(store, "completeAccessPoint").mockImplementation((...args) => { checkpoints.push(args[1]); complete(...args); });
+    vi.spyOn(store, "failAccessPoint").mockImplementation((...args) => { checkpoints.push(args[1]); fail(...args); });
+    const job = await service.create(regionWideRequest);
+    try {
+      await vi.waitFor(() => expect(started).toEqual(["first", "second", "third"]));
+      expect(checkpoints).toEqual([]);
+    } finally { release(); await service.waitUntilIdle(); }
+    expect(checkpoints).toEqual([0, 1, 2]);
+    expect(await service.get(job.id)).toMatchObject({ status: "completed", partial: true,
+      progress: { processedAccessPointCount: 3 }, error: "1 trailhead search failed. Available results are retained." });
     store.close();
   });
 
