@@ -70,11 +70,9 @@ function accessState(access: string | undefined, conditional: string | undefined
 }
 
 function footDirections(values: Record<string, string>): { forward: boolean; backward: boolean } {
-  // Ordinary road and track oneway describes vehicles. Only pedestrian ways
-  // inherit the generic tag when no foot-specific direction has been supplied.
-  const pedestrian = TRAIL_HIGHWAYS.has(values.highway ?? "")
-    || values.highway === "footway" || values.highway === "pedestrian";
-  const oneway = values["oneway:foot"] ?? (pedestrian ? values.oneway : undefined);
+  // Generic oneway certifies vehicle direction. On pedestrian ways its foot
+  // meaning is ambiguous; retain that uncertainty rather than invent a ban.
+  const oneway = values["oneway:foot"];
   let forward = oneway !== "-1";
   let backward = oneway !== "yes" && oneway !== "1";
   if (values["foot:forward"] === "no") forward = false;
@@ -93,8 +91,15 @@ function footState(values: Record<string, string>, direction?: "forward" | "back
 
 function directionalStates(values: Record<string, string>): readonly [AccessState, AccessState] {
   const allowed = footDirections(values);
-  return [allowed.forward ? footState(values, "forward") : "prohibited",
-    allowed.backward ? footState(values, "backward") : "prohibited"];
+  const pedestrian = TRAIL_HIGHWAYS.has(values.highway ?? "") || values.highway === "footway" || values.highway === "pedestrian";
+  return (["forward", "backward"] as const).map(direction => {
+    let state = allowed[direction] ? footState(values, direction) : "prohibited";
+    if (state !== "public" || !pedestrian || values["oneway:foot"] !== undefined
+      || values[`foot:${direction}`] !== undefined || values[`foot:${direction}:conditional`] !== undefined) return state;
+    const opposite = direction === "forward" ? values.oneway === "-1" : ["yes", "1"].includes(values.oneway ?? "");
+    if (opposite || values["oneway:conditional"] !== undefined || ["reversible", "alternating"].includes(values.oneway ?? "")) state = "unknown";
+    return state;
+  }) as [AccessState, AccessState];
 }
 
 export function osmAccessState(values: Record<string, string>): AccessState {
@@ -196,7 +201,7 @@ export function osmWayFlags(
   if (direction === "reverse") motorStates.reverse();
   const hasDirectionalMotor = motorStates.some(state => state !== osmMotorAccessState(values));
   const hasDirectionalAccess = ["foot", "access"].flatMap(mode => ["forward", "backward"].flatMap(direction => [`${mode}:${direction}`, `${mode}:${direction}:conditional`]))
-    .some(key => values[key] !== undefined);
+    .some(key => values[key] !== undefined) || oriented[0] !== oriented[1];
   return [
     `osm-feature:${featureId}`,
     `osm-highway:${values.highway}`,

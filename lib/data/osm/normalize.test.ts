@@ -84,7 +84,11 @@ describe("OSM tag classification", () => {
       expect(osmAccessState(forbidden)).toBe("prohibited");
       expect(osmWayFlags(forbidden, "way/1", osmFootDirection(forbidden))).toContain("foot-direction:none");
     }
-    expect(osmFootDirection({ highway: "path", oneway: "-1" })).toBe("reverse");
+    expect(osmFootDirection({ highway: "path", oneway: "-1" })).toBe("both");
+    expect(osmWayFlags({ highway:"path",oneway:"-1",foot:"yes" }, "way/0", "both"))
+      .toEqual(expect.arrayContaining(["foot-forward-access:unknown", "foot-backward-access:public"]));
+    expect(osmWayFlags({ highway:"path",oneway:"yes",foot:"yes","foot:backward":"yes" }, "way/0", "both"))
+      .not.toContain("foot-backward-access:unknown");
     expect(osmAccessState({ highway: "path", foot: "yes", "oneway:foot": "yes", "foot:forward": "no" })).toBe("prohibited");
     const reverse = { highway: "track", foot: "no", "foot:backward": "yes" };
     expect(osmAccessState(reverse)).toBe("public");
