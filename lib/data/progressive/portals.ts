@@ -1,16 +1,13 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
-import { prepareAreaGeometry } from "@/lib/graph/geometry";
-import { DistanceQueue } from "@/lib/graph/sqlite-records";
 import type { AreaGeometry } from "../area-geometry";
-import { densifyGeometry, distanceMeters } from "../metrics";
-import { accessPointIsWildEnough, BUILDING_RADIUS_M } from "../wilderness";
-import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
+import { BUILDING_RADIUS_M } from "../wilderness";
+import type { NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 import { selectProgressiveEdges } from "./publish";
+import { ConnectedEntryProof, type PreparedEntry } from "./entry-proof";
 
 const EARTH_RADIUS_M=6_371_008.8;
-const restricted="'private','closed','prohibited'";
 type Row=Record<string,string|number|null>;
 const statementCaches=new WeakMap<DatabaseSync,Map<string,StatementSync>>();
 function statement(db:DatabaseSync,sql:string):StatementSync {
@@ -72,55 +69,6 @@ async function nearbyBuildings(db:DatabaseSync,lon:number,lat:number,checkpoint:
     }
   return count;
 }
-function waysAt(db:DatabaseSync,nodeId:string):NormalizedWay[] {
-  return [...rows(db,"SELECT DISTINCT w.record FROM ways w JOIN way_nodes x ON x.way_id=w.id WHERE x.node_id=? AND w.edge_class='trail' ORDER BY w.id",nodeId)]
-    .map(({record})=>JSON.parse(String(record)) as NormalizedWay);
-}
-const allowedAccess=(item:{accessState:string})=>item.accessState==="public"||item.accessState==="unknown";
-const trackWay=(way:NormalizedWay)=>way.flags.includes("osm-highway:track");
-const hikingWay=(way:Pick<NormalizedWay,"flags">)=>way.flags.some(flag=>flag.startsWith("osm-highway:")&&flag!=="osm-highway:track");
-function selectedSegment(db:DatabaseSync,way:NormalizedWay,index:number):boolean {
-  return Boolean(one(db,"SELECT 1 FROM portal_links WHERE physical_id=? AND allowed=1",`${way.id}:${index}`));
-}
-function selectedWayAt(db:DatabaseSync,way:NormalizedWay,nodeId:string):boolean {
-  return way.nodeIds.some((id,index)=>id===nodeId && ((index>0&&selectedSegment(db,way,index-1)) || (index<way.nodeIds.length-1&&selectedSegment(db,way,index))));
-}
-/** Bounded Dijkstra follows the selected hiking topology across source-way splits.
- * Direction is irrelevant to association; route search still enforces direction.
- */
-async function hasNearbyTrackApproach(db:DatabaseSync,nodeId:string,checkpoint:()=>Promise<void>):Promise<boolean> {
-  const pending=new DistanceQueue(),distances=new Map([[nodeId,0]]);
-  pending.push({nodeId,distance:0});
-  while(pending.size) {
-    await checkpoint();
-    const current=pending.pop()!;
-    if(current.distance!==distances.get(current.nodeId))continue;
-    let hikingContact=false;
-    for(const link of rows(db,`SELECT * FROM portal_links
-      WHERE (from_node=? OR to_node=?) AND allowed=1 AND hiking=1`,current.nodeId,current.nodeId)) {
-      hikingContact=true;
-      let meters=Number(link.length_m);
-      if(!Number.isFinite(meters)||meters<0)throw new Error(`Invalid hiking segment distance: ${link.physical_id}`);
-      if(current.distance+meters>250)continue;
-      // eligible_segments carries a conservative distance bound. Only nearby
-      // approach links need the exact geometric length used by metric sampling.
-      if(!Number(link.measured)) {
-        const ends=one(db,`SELECT a.lon AS x,a.lat AS y,b.lon AS x2,b.lat AS y2 FROM nodes a,nodes b WHERE a.id=? AND b.id=?`,String(link.from_node),String(link.to_node));
-        if(!ends)throw new Error(`Missing candidate link endpoint: ${link.physical_id}`);
-        const geometry=densifyGeometry([[Number(ends.x),Number(ends.y)],[Number(ends.x2),Number(ends.y2)]]);
-        meters=0;
-        for(let index=1;index<geometry.length;index++)meters+=distanceMeters(geometry[index-1]!,geometry[index]!);
-        run(db,"UPDATE portal_links SET length_m=?,measured=1 WHERE physical_id=?",meters,String(link.physical_id));
-      }
-      const next=String(link.from_node)===current.nodeId?String(link.to_node):String(link.from_node),length=current.distance+meters;
-      if(length<=250&&length<(distances.get(next)??Infinity)) {
-        distances.set(next,length);pending.push({nodeId:next,distance:length});
-      }
-    }
-    if(hikingContact&&waysAt(db,current.nodeId).some(way=>allowedAccess(way)&&trackWay(way)))return true;
-  }
-  return false;
-}
 function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive",reuseInclusive:boolean):{connectivity:number;outDegree:number} {
   const table=profile==="inclusive"&&reuseInclusive?"portal_components":`rank_${profile}`;
   const root=one(db,`SELECT parent FROM ${table} WHERE id=?`,nodeId);
@@ -149,100 +97,17 @@ async function rankComponents(db:DatabaseSync,profile:"known"|"inclusive",checkp
   run(db,`INSERT INTO portal_component_counts SELECT ?,parent,count(*) FROM rank_${profile} GROUP BY parent`,profile);
 }
 
-/** Candidate admission needs local links and context, not elevation or graph-wide ranking. */
-function createPortalLinks(db:DatabaseSync):void {
-  db.exec(`CREATE TEMP TABLE portal_links(physical_id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,allowed INTEGER NOT NULL,hiking INTEGER NOT NULL,measured INTEGER NOT NULL) STRICT;`);
-}
-function indexPortalNodes(db:DatabaseSync):void {
-  db.exec(`CREATE INDEX portal_links_from ON portal_links(from_node);
-    CREATE INDEX portal_links_to ON portal_links(to_node);
-    CREATE TEMP TABLE portal_trail_nodes(id TEXT PRIMARY KEY) STRICT;
-    INSERT INTO portal_trail_nodes SELECT from_node FROM portal_links UNION SELECT to_node FROM portal_links;`);
-}
-async function linksFromMeasuredEdges(db:DatabaseSync,checkpoint:()=>Promise<void>):Promise<void> {
-  createPortalLinks(db);
-  let work=0;
-  for(const row of rows(db,"SELECT e.record FROM edges e JOIN selected_edges s ON s.id=e.id ORDER BY e.id")) {
-    if(++work%1000===0)await checkpoint();
-    const edge=JSON.parse(String(row.record)) as CompiledEdge;
-    run(db,`INSERT INTO portal_links VALUES (?,?,?,?,?,?,1) ON CONFLICT(physical_id) DO UPDATE SET
-      allowed=max(allowed,excluded.allowed),hiking=max(hiking,excluded.hiking)`,edge.stablePhysicalId,edge.fromNode,edge.toNode,edge.lengthM,Number(allowedAccess(edge)),Number(hikingWay(edge)));
-  }
-  indexPortalNodes(db);
-}
-async function discoverPortalCandidates(db:DatabaseSync,coverage:AreaGeometry,checkpoint:()=>Promise<void>):Promise<void> {
-  let work=0;
-  const boundary=prepareAreaGeometry(coverage);
-  db.exec(`CREATE TEMP TABLE road_nodes(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
-    INSERT INTO road_nodes SELECT x.node_id,CASE WHEN max(w.edge_class='street') THEN 'street' ELSE 'service-road' END
-    FROM way_nodes x JOIN ways w ON w.id=x.way_id WHERE w.edge_class IN ('street','service-road') AND w.access_state NOT IN (${restricted}) GROUP BY x.node_id;
-    CREATE TEMP TABLE portal_candidates(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL) STRICT;
-    CREATE TEMP TABLE portal_evidence(node_id TEXT NOT NULL,evidence_id TEXT NOT NULL,PRIMARY KEY(node_id,evidence_id)) WITHOUT ROWID;`);
-  const addCandidate=(nodeId:string,roadClass:"street"|"service-road")=>{
-    const prior=one(db,"SELECT road_class FROM portal_candidates WHERE node_id=?",nodeId);
-    if(prior){if(roadClass==="street"&&prior.road_class!=="street")run(db,"UPDATE portal_candidates SET road_class='street' WHERE node_id=?",nodeId);return;}
-    const nodeRow=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);if(!nodeRow)return;
-    if(!boundary.containsPoint([Number(nodeRow.lon),Number(nodeRow.lat)]))return;
-    run(db,"INSERT INTO portal_candidates VALUES (?,?)",nodeId,roadClass);
-  };
-  // Names, confidence and entrance evidence belong to the actual mapped node.
-  for(const row of rows(db,"SELECT id,record FROM evidence WHERE kind!='parking' ORDER BY id")) {
-    if (++work%1000===0) await checkpoint();
-    const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
-    if(!allowedAccess(item)||item.nodeIds.length!==1||!item.externalId.startsWith("node/"))continue;
-    const nodeId=item.nodeIds[0]!,node=one(db,"SELECT n.record FROM nodes n JOIN portal_trail_nodes t ON t.id=n.id WHERE n.id=?",nodeId);
-    if(!node||(JSON.parse(String(node.record)) as NormalizedNode).externalId!==item.externalId)continue;
-    run(db,"INSERT INTO portal_evidence VALUES (?,?)",nodeId,String(row.id));
-    // Trailheads can lie along the mapped hiking approach, beyond its junction.
-    if(item.kind==="trailhead"&&await hasNearbyTrackApproach(db,nodeId,checkpoint))addCandidate(nodeId,"service-road");
-  }
-  for(const row of rows(db,"SELECT r.node_id,r.road_class FROM road_nodes r JOIN portal_trail_nodes t ON t.id=r.node_id ORDER BY r.node_id")) {
-    if (++work%1000===0) await checkpoint();
-    if(row.road_class==="street"||one(db,`SELECT 1 FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id
-      WHERE p.node_id=? AND e.kind IN ('trailhead','gate') LIMIT 1`,String(row.node_id)))
-      addCandidate(String(row.node_id),String(row.road_class) as "street"|"service-road");
-  }
-  // A parking feature nominates one of its own selected hiking contacts. Its
-  // mapped road/track contact may be another vertex; no connector is invented.
-  for(const evidenceRow of rows(db,"SELECT id,record FROM evidence WHERE kind='parking' ORDER BY id")) {
-    if (++work%1000===0) await checkpoint();
-    const item=JSON.parse(String(evidenceRow.record)) as NormalizedPortalEvidence;
-    if(!allowedAccess(item))continue;
-    const approaches:Array<{coordinates:readonly [number,number];roadClass:"street"|"service-road"}>=[];
-    const trails:Array<{id:string;coordinates:readonly [number,number]}>=[];
-    for(const nodeId of new Set(item.nodeIds)) {
-      if (++work%1000===0) await checkpoint();
-      const node=one(db,"SELECT lon,lat FROM nodes WHERE id=?",nodeId);if(!node)continue;
-      const coordinates=[Number(node.lon),Number(node.lat)] as const,incident=waysAt(db,nodeId).filter(allowedAccess);
-      const road=one(db,"SELECT road_class FROM road_nodes WHERE node_id=?",nodeId);
-      if(road||incident.some(trackWay))approaches.push({coordinates,roadClass:road?.road_class==="street"?"street":"service-road"});
-      if(incident.some(way=>hikingWay(way)&&selectedWayAt(db,way,nodeId)))trails.push({id:nodeId,coordinates});
-    }
-    if(!approaches.length)continue;
-    const nomination=trails.map(trail=>({...trail,distance:Math.min(...approaches.map(approach=>distance(approach.coordinates,trail.coordinates)))}))
-      .sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id))[0];
-    if(!nomination)continue;
-    addCandidate(nomination.id,approaches.some(approach=>approach.roadClass==="street")?"street":"service-road");
-    run(db,"INSERT INTO portal_evidence VALUES (?,?)",nomination.id,String(evidenceRow.id));
-  }
-}
 async function candidateRecord(db:DatabaseSync,row:Row,checkpoint:()=>Promise<void>):Promise<NormalizedAccessPoint> {
-    const node=JSON.parse(String(row.record)) as NormalizedNode,incident=waysAt(db,node.id);
-    const evidence=[...rows(db,"SELECT e.record FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id WHERE p.node_id=? ORDER BY e.id",node.id)]
-      .map(({record})=>JSON.parse(String(record)) as NormalizedPortalEvidence);
-    const named=evidence.find(item=>item.kind==="trailhead"&&item.name?.trim())??evidence.find(item=>item.kind==="information"&&item.name?.trim())??evidence.find(item=>item.kind==="gate"&&item.name?.trim());
-    const trailName=incident.map(({name})=>name?.trim()).filter((name):name is string=>!!name).sort()[0];
-    const parking=evidence.find(item=>item.kind==="parking");
-    const states=new Set(incident.map(({accessState})=>accessState));
-    const accessState=( ["closed","prohibited","private","unknown","public"] as const).find((state)=>states.has(state))??"unknown";
-    return {id:`portal:${node.id}`,externalId:node.externalId,nodeId:node.id,name:named?.name??(trailName?`${trailName} trailhead`:"Trailhead"),kind:"trailhead",accessState,
-      confidence:evidence.some(item=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.externalId}`:null,
-      sourceRefs:[...new Set([...node.sourceRefs,...incident.flatMap(({sourceRefs})=>sourceRefs),...evidence.flatMap(item=>item.sourceRefs)])].sort(),
-      portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?0:null,nearbyBuildingCount:await nearbyBuildings(db,node.lon,node.lat,checkpoint)};
-}
-const discoveryTables=["portal_evidence","portal_candidates","road_nodes","portal_trail_nodes","portal_links"];
-function clearDiscovery(db:DatabaseSync):void {
-  for(const table of discoveryTables)db.exec(`DROP TABLE IF EXISTS temp.${table}`);
+  const node=JSON.parse(String(row.record)) as NormalizedNode,witness=JSON.parse(String(row.witness)) as PreparedEntry;
+  const evidence=[...rows(db,"SELECT e.record FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id WHERE p.node_id=? ORDER BY e.id",node.id)]
+    .map(({record})=>JSON.parse(String(record)) as NormalizedPortalEvidence);
+  const named=evidence.find(item=>item.kind==="trailhead"&&item.name?.trim())??evidence.find(item=>item.kind==="information"&&item.name?.trim())??evidence.find(item=>item.kind==="gate"&&item.name?.trim());
+  const parking=evidence.find(item=>item.kind==="parking");
+  const {kind,rootNodeId,departurePhysicalId,known}=witness;
+  return {id:`portal:${node.id}`,externalId:node.externalId,nodeId:node.id,name:named?.name??(witness.name?`${witness.name} trailhead`:"Trailhead"),kind:"trailhead",accessState:known?"public":"unknown",
+    confidence:evidence.some(item=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.externalId}`:null,
+    sourceRefs:[...new Set([...node.sourceRefs,...witness.sourceRefs,...evidence.flatMap(item=>item.sourceRefs)])].sort(),entryWitness:{kind,rootNodeId,departurePhysicalId,known},
+    portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?0:null,nearbyBuildingCount:await nearbyBuildings(db,node.lon,node.lat,checkpoint)};
 }
 
 /** Freeze sparse local starts before distance pruning and expensive DEM work.
@@ -254,57 +119,31 @@ export async function prepareSparsePortalCandidates(store:ProgressiveGraphStore,
   if(statementCaches.has(db))throw new Error("Portal derivation is already running");
   statementCaches.set(db,new Map());
   let complete=false;
+  const proof=new ConnectedEntryProof(db,checkpoint);
   try {
     db.exec("DROP TABLE IF EXISTS temp.sparse_start_nodes; DROP TABLE IF EXISTS temp.sparse_portal_candidates; DROP TABLE IF EXISTS temp.portal_candidate_audit;");
     await checkpoint();
-    createPortalLinks(db);
-    let work=0,previousId="",allowed=false,hiking=0;
-    let batch:Array<[string,number]>=[];
-    const flush=()=>{
-      if(!batch.length)return;
-      // Copy endpoints/distances inside SQLite; only bounded IDs and way flags
-      // cross the JS boundary. json_each preserves exact IDs without SQL quoting.
-      run(db,`INSERT INTO portal_links
-        SELECT e.id,e.from_node,e.to_node,e.length_m,1,json_extract(j.value,'$[1]'),0
-        FROM json_each(?) j JOIN eligible_segments e ON e.id=json_extract(j.value,'$[0]')
-        ORDER BY CAST(j.key AS INTEGER)`,JSON.stringify(batch));
-      batch=[];
-    };
-    for(const link of rows(db,"SELECT id FROM eligible_segments ORDER BY id")) {
-      if(++work%1000===0){flush();await checkpoint();}
-      const id=String(link.id),wayId=id.slice(0,id.lastIndexOf(":"));
-      if(wayId!==previousId) {
-        const record=one(db,"SELECT record FROM ways WHERE id=?",wayId);
-        if(!record)throw new Error(`Unknown source way for candidate segment ${id}`);
-        const way=JSON.parse(String(record.record)) as NormalizedWay;
-        allowed=way.edgeClass==="trail"&&allowedAccess(way);
-        hiking=allowed?Number(hikingWay(way)):0;previousId=wayId;
-      }
-      if(allowed)batch.push([id,hiking]);
-    }
-    flush();
-    await checkpoint();
-    indexPortalNodes(db);
-    await discoverPortalCandidates(db,startGeometry,checkpoint);
+    await proof.prepare("sparse");
+    await proof.discover(startGeometry);
+    let work=0;
     db.exec(`CREATE TEMP TABLE sparse_start_nodes(node_id TEXT PRIMARY KEY) STRICT;
-      CREATE TEMP TABLE sparse_portal_candidates(node_id TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
+      CREATE TEMP TABLE sparse_portal_candidates(node_id TEXT PRIMARY KEY,record TEXT NOT NULL,witness TEXT NOT NULL) STRICT;
       CREATE TEMP TABLE portal_candidate_audit(node_id TEXT PRIMARY KEY,nearby_building_count INTEGER NOT NULL,access_state TEXT NOT NULL) STRICT;`);
     let candidateAccessPoints=0,eligibleAccessPoints=0;
-    for(const row of rows(db,"SELECT c.node_id,c.road_class,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id")) {
+    for(const row of rows(db,"SELECT c.node_id,c.road_class,c.witness,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id")) {
       if(++work%1000===0)await checkpoint();
       candidateAccessPoints++;
       const point=await candidateRecord(db,row,checkpoint);
       run(db,"INSERT INTO portal_candidate_audit VALUES (?,?,?)",point.nodeId,point.nearbyBuildingCount!,point.accessState);
-      if(!allowedAccess(point)||!accessPointIsWildEnough({nearbyBuildingCount:point.nearbyBuildingCount!}))continue;
       run(db,"INSERT INTO sparse_start_nodes VALUES (?)",point.nodeId);
-      run(db,"INSERT INTO sparse_portal_candidates VALUES (?,?)",point.nodeId,JSON.stringify(point));
+      run(db,"INSERT INTO sparse_portal_candidates VALUES (?,?,?)",point.nodeId,JSON.stringify(point),String(row.witness));
       eligibleAccessPoints++;
     }
     await checkpoint();
     complete=true;
     return {candidateAccessPoints,eligibleAccessPoints};
   } finally {
-    clearDiscovery(db);
+    proof.clear();
     if(!complete)db.exec("DROP TABLE IF EXISTS temp.sparse_start_nodes; DROP TABLE IF EXISTS temp.sparse_portal_candidates; DROP TABLE IF EXISTS temp.portal_candidate_audit;");
     statementCaches.delete(db);
   }
@@ -317,6 +156,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   const db=store.database,coverageHash=topologySha256(coverage);
   if(statementCaches.has(db))throw new Error("Portal derivation is already running");
   statementCaches.set(db,new Map());
+  const proof=new ConnectedEntryProof(db,checkpoint);
   try {
   await selectProgressiveEdges(store,coverage,checkpoint);
   if (!one(db,"SELECT 1 FROM selected_edges LIMIT 1")) {
@@ -347,19 +187,22 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   await rankComponents(db,"known",checkpoint);
   if(!reuseInclusive)await rankComponents(db,"inclusive",checkpoint);
   const prepared=Boolean(one(db,"SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name='sparse_portal_candidates'"));
-  if(!prepared) {
-    await linksFromMeasuredEdges(db,checkpoint);
-    await discoverPortalCandidates(db,coverage,checkpoint);
-  }
+  await proof.prepare("measured");
+  if(!prepared) await proof.discover(coverage);
   run(db,"DELETE FROM derived_portals WHERE coverage_hash=?",coverageHash);
   let count=0;
   const candidates=prepared
-    ? rows(db,"SELECT record FROM sparse_portal_candidates ORDER BY node_id")
-    : rows(db,"SELECT c.node_id,c.road_class,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id");
+    ? rows(db,"SELECT record,witness FROM sparse_portal_candidates ORDER BY node_id")
+    : rows(db,"SELECT c.node_id,c.road_class,c.witness,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id");
   for(const row of candidates) {
     if(++work%1000===0)await checkpoint();
     const point=prepared?JSON.parse(String(row.record)) as NormalizedAccessPoint:await candidateRecord(db,row,checkpoint);
     if(!one(db,"SELECT 1 FROM portal_components WHERE id=?",point.nodeId))continue;
+    if(prepared && point.entryWitness) {
+      const finalWitness=proof.refresh(point.nodeId,JSON.parse(String(row.witness)) as PreparedEntry);
+      if(!finalWitness)continue;
+      point.entryWitness={...point.entryWitness,departurePhysicalId:finalWitness.departurePhysicalId};
+    }
     const component=one(db,"SELECT min_id,length_m FROM component_stats WHERE root=?",union.find(point.nodeId))!;
     const known=ranking(db,point.nodeId,"known",reuseInclusive),inclusive=ranking(db,point.nodeId,"inclusive",reuseInclusive);
     Object.assign(point,{knownConnectivity:known.connectivity,inclusiveConnectivity:inclusive.connectivity,knownOutDegree:known.outDegree,inclusiveOutDegree:inclusive.outDegree,
@@ -370,7 +213,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   return count;
   } finally {
     statementCaches.delete(db);
-    clearDiscovery(db);
+    proof.clear();
     for (const table of ["rank_known","rank_inclusive","component_stats","portal_component_counts","trail_links","portal_components"]) db.exec(`DROP TABLE IF EXISTS temp.${table}`);
   }
 }
