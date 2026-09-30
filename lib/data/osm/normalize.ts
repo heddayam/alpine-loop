@@ -24,6 +24,9 @@ export const OSM_PERMISSION_CONTEXT_KEYS = [
     [`${mode}:${direction}`, `${mode}:${direction}:conditional`])]),
   ...["oneway", "oneway:foot", "oneway:motorcar", "oneway:motor_vehicle", "oneway:vehicle"].flatMap(key => [key, `${key}:conditional`]),
 ];
+const PERMISSION_CONTEXT_KEYS = new Set(OSM_PERMISSION_CONTEXT_KEYS);
+const MOTOR_PERMISSION_CONTEXT_KEYS = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key !== "foot" && !key.startsWith("foot:") && !key.startsWith("oneway"));
+const FOOT_NODE_PERMISSION_KEYS = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key === "access" || key.startsWith("access:") || key === "foot" || key.startsWith("foot:") || key === "oneway:foot:conditional");
 
 function hasTrailContext(values: Record<string, string>): boolean {
   return values.footway === "trail"
@@ -145,7 +148,7 @@ export function osmFootDirection(values: Record<string, string>): "forward" | "r
 }
 
 function permissionFlags(values: Record<string, string>, includeUnknownMotor = true): string[] {
-  const motorFact = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key !== "foot" && !key.startsWith("foot:") && !key.startsWith("oneway"))
+  const motorFact = MOTOR_PERMISSION_CONTEXT_KEYS
     .some((key) => values[key] !== undefined);
   const flags = includeUnknownMotor || motorFact ? [`motor-access:${osmMotorAccessState(values)}`] : [];
   for (const key of OSM_PERMISSION_CONTEXT_KEYS)
@@ -155,11 +158,13 @@ function permissionFlags(values: Record<string, string>, includeUnknownMotor = t
 
 /** Object access (a private information board or parking POI) is not a crossing rule. */
 export function osmNodeFlags(values: Record<string, string>): string[] {
+  // Most referenced geometry nodes have no tags or crossing facts at all.
+  if (Object.keys(values).length === 0) return [];
   const barrier = values.barrier && values.barrier !== "no";
   const trailhead = values.highway === "trailhead" || values.information === "trailhead";
   const object = INFORMATION_VALUES.has(values.information ?? "") || values.tourism === "information"
     || values.amenity === "parking" || Boolean(values.building && values.building !== "no");
-  const footRule = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key === "access" || key.startsWith("access:") || key === "foot" || key.startsWith("foot:") || key === "oneway:foot:conditional")
+  const footRule = FOOT_NODE_PERMISSION_KEYS
     .some((key) => values[key] !== undefined);
   // Node directional tags have no incident-way orientation. Retain a known
   // restriction at the crossing rather than guessing which turns it controls.
@@ -180,7 +185,7 @@ export function osmNodeFlags(values: Record<string, string>): string[] {
 
 export function hasOsmNodeContext(values: Record<string, string>): boolean {
   return OSM_ARRIVAL_NODE_HIGHWAYS.some(highway => values.highway === highway) || values.barrier !== undefined || Object.keys(values).some((key) =>
-    OSM_PERMISSION_CONTEXT_KEYS.includes(key)
+    PERMISSION_CONTEXT_KEYS.has(key)
     || key.endsWith(":conditional"));
 }
 
