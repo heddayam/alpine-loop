@@ -2,35 +2,8 @@ import { distanceMeters } from "./metrics";
 import type { BuildingCentroid } from "./osm/buildings";
 import type { Coordinate, NormalizedAccessPoint, NormalizedNode } from "./types";
 
-/**
- * Whether an access point is somewhere people live.
- *
- * The product only ever wants wilderness starts, so this is one measurement and
- * one rule rather than a taxonomy the user picks from. Buildings within a short
- * walk are the most direct evidence available: they come out of the OSM extract
- * the pack already builds from, and unlike a wide-area population figure they
- * describe the immediate surroundings, which is what "is this in a
- * neighbourhood" actually asks.
- *
- * A wide-area population count could not make this distinction. Fall Creek Fire
- * Road and the Henry Cowell nature centre sit in near-identical population
- * fields because Felton is inside the radius, but one has 9 buildings within
- * 500 m and the other has 28.
- */
+/** Descriptive source context retained in packs; building density does not admit or reject an entrance. */
 export const BUILDING_RADIUS_M = 500;
-
-/**
- * Eligible starts have at most nine buildings within `BUILDING_RADIUS_M`.
- * This measures their immediate surroundings independently of mountain or
- * administrative boundaries. Ten or more buildings excludes the start.
- */
-export const MAXIMUM_NEARBY_BUILDINGS = 10;
-
-export function accessPointIsWildEnough(
-  candidate: { nearbyBuildingCount: number },
-): boolean {
-  return candidate.nearbyBuildingCount < MAXIMUM_NEARBY_BUILDINGS;
-}
 
 function cellKey(lon: number, lat: number, cellDegrees: number): string {
   return `${Math.floor(lon / cellDegrees)}:${Math.floor(lat / cellDegrees)}`;

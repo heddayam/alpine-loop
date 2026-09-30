@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  accessPointIsWildEnough,
   BUILDING_RADIUS_M,
   countNearbyBuildings,
-  MAXIMUM_NEARBY_BUILDINGS,
-} from "./wilderness";
+} from "./building-context";
 import type { BuildingCentroid } from "./osm/buildings";
 import type { NormalizedAccessPoint, NormalizedNode } from "./types";
 
@@ -23,21 +21,6 @@ function accessPoint(id: string, nodeId: string): NormalizedAccessPoint {
 function cluster(count: number, lon: number, lat: number): BuildingCentroid[] {
   return Array.from({ length: count }, (_, index) => [lon + index * 0.00001, lat] as const);
 }
-
-describe("accessPointIsWildEnough", () => {
-  it("is half-open at the threshold", () => {
-    expect(BUILDING_RADIUS_M).toBe(500);
-    expect(MAXIMUM_NEARBY_BUILDINGS).toBe(10);
-    expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS - 1 })).toBe(true);
-    expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS })).toBe(false);
-    expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS + 1 })).toBe(false);
-  });
-
-  it("keeps a start with a handful of neighbours", () => {
-    // The accepted rule admits nine nearby buildings and excludes ten.
-    expect(accessPointIsWildEnough({ nearbyBuildingCount: 9 })).toBe(true);
-  });
-});
 
 describe("countNearbyBuildings", () => {
   it("counts only buildings inside the radius", () => {

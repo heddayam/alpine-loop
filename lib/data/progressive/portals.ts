@@ -1,7 +1,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import type { AreaGeometry } from "../area-geometry";
-import { BUILDING_RADIUS_M } from "../wilderness";
+import { BUILDING_RADIUS_M } from "../building-context";
 import type { NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 import { selectProgressiveEdges } from "./publish";

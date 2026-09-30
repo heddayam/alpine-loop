@@ -19,7 +19,7 @@ import { areaGeometryBounds, edgeInsideCoverage, pointInArea, type AreaGeometry 
 import { validateAndSortNamedAreas } from "../named-areas";
 import { validateSearchRegions, type SearchRegionInput } from "../search-regions";
 import type { BuildingCentroid } from "../osm/buildings";
-import { accessPointIsWildEnough, countNearbyBuildings } from "../wilderness";
+import { countNearbyBuildings } from "../building-context";
 import { writePackDatabase } from "./sqlite-writer";
 import { buildClosedRouteTopology } from "./topology-compiler";
 import { topologySha256 } from "@/lib/graph/topology-hash";
@@ -295,7 +295,8 @@ function createAudit(
     // Surfaced so an implausible building join is obvious in the audit rather
     // than quietly filtering every access point out at query time.
     builtUpAccessPointCount: graph.accessPoints.filter(
-      ({ nearbyBuildingCount }) => !accessPointIsWildEnough({ nearbyBuildingCount: nearbyBuildingCount ?? 0 }),
+      // Historical audit bucket, never an admission predicate.
+      ({ nearbyBuildingCount }) => (nearbyBuildingCount ?? 0) >= 10,
     ).length,
   };
 }
