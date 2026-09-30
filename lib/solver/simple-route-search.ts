@@ -11,7 +11,7 @@ import {
   type InducedGraph,
 } from "@/lib/graph";
 
-import type { SolverBudget } from "./budget";
+import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
 import { contractCorridors, physicalKeyOf } from "./contract-corridors";
 import { stableHash } from "./route-identity";
 import { RouteSearchCancelledError } from "./control";
@@ -75,6 +75,7 @@ type Metrics = {
   gradeExperience?: GradeExperienceMetrics;
   trailNames: string[];
   repeated: number;
+  stemDistance: number;
   repeatedFraction: number;
   physicalLengths: Map<string, number>;
 };
@@ -86,6 +87,7 @@ type Candidate = {
   score: number;
   violations: string[];
   violationMagnitude: number;
+  retainedBytes: number;
 };
 
 function buildGraph(
@@ -227,16 +229,25 @@ export function searchSimpleRoutes(
     options.signal,
   );
   const truncationReasons = new Set<string>();
-  const seen = new Set<string>();
-  // The raw-candidate budget bounds this archive. Repeated approaches and
-  // directions compete within one physical cycle instead of crowding other
-  // loops out of a fixed top-score list.
+  // Repeated approaches and directions compete within one physical cycle.
+  // Work allowances can grow between attempts; this archive stays bounded.
   const archive = new Map<string, Candidate>();
+  let retainedBytes = 0;
+  let memoryLimited = false;
+  const maximumRetainedBytes = Math.min(options.budget.maximumRetainedBytes ?? CLOSED_ROUTE_BUDGET.maximumRetainedBytes,
+    CLOSED_ROUTE_BUDGET.maximumRetainedBytes);
   let expandedStates = 0;
   let candidateCount = 0;
   let validCandidateCount = 0;
   const maxMeters = request.distanceMiles.max * METERS_PER_MILE;
   const overlapLimit = options.maximumRouteOverlapFraction ?? 0.8;
+  // Contracted/prefix sums can round differently from original-edge validation.
+  // Allow only pruning bounds this conservative summation margin; completed
+  // candidates still use the exact requested ranges and original addition order.
+  const roundoff = (value: number, bound: number) => Number.EPSILON * 16 * Math.max(1, sourceGraph.edges.length)
+    * Math.max(1, Math.abs(value), Math.abs(bound));
+  const exceeds = (value: number, bound: number) => value > bound
+    && (!Number.isFinite(value) || value - bound > roundoff(value, bound));
 
   if (sourceGraph.edges.length > options.budget.maximumDirectedEdges) {
     truncationReasons.add("maximum-directed-edges");
@@ -251,10 +262,9 @@ export function searchSimpleRoutes(
     truncationReasons.add("deadline");
     return true;
   };
-  const exhausted = (stateCap = options.budget.maximumExpandedStates, candidateCap = options.budget.maximumRetainedCycles): boolean => {
+  const exhausted = (stateCap = options.budget.maximumExpandedStates): boolean => {
     if (expandedStates >= stateCap) truncationReasons.add("maximum-expanded-states");
-    if (candidateCount >= candidateCap) truncationReasons.add("maximum-raw-candidates");
-    return outOfTime() || expandedStates >= stateCap || candidateCount >= candidateCap;
+    return outOfTime() || expandedStates >= stateCap || memoryLimited;
   };
 
   const evaluate = (edges: readonly number[], attachment: number): Metrics => {
@@ -263,18 +273,25 @@ export function searchSimpleRoutes(
     let maximumElevation = Number.NEGATIVE_INFINITY;
     let repeated = 0;
     const physicalLengths = new Map<string, number>();
-    const visited = new Set<string>();
+    let stemDistance = 0;
     const names = new Set<string>();
     for (const [index, edge] of edges.entries()) {
-      distance += graph.length[edge]!;
-      gain += graph.gain[edge]!;
-      maximumElevation = Math.max(maximumElevation, graph.maximumElevation[edge]!);
-      if (visited.has(graph.physical[edge]!)) repeated += graph.length[edge]!;
-      visited.add(graph.physical[edge]!);
       // Diversity describes the loop itself; a common approach is not overlap
       // between two otherwise distinct physical loops.
       if (index >= attachment && index < edges.length - attachment) physicalLengths.set(graph.physical[edge]!, graph.length[edge]!);
-      for (const traversal of graph.traversals[edge]!) if (traversal.edge.trailName) names.add(traversal.edge.trailName);
+      // Preserve authoritative reconstruction's addition order at range edges.
+      for (const { edge: original } of graph.traversals[edge]!) {
+        distance += original.lengthMeters;
+        gain += original.gainMeters;
+        maximumElevation = Math.max(maximumElevation, original.maximumElevationMeters ?? -Infinity);
+        if (index < attachment) stemDistance += original.lengthMeters;
+        if (original.trailName) names.add(original.trailName);
+      }
+    }
+    // Validation peels inward stem edges from the route's end toward the loop.
+    for (let index = edges.length - 1; index >= edges.length - attachment; index -= 1) {
+      const chain = graph.traversals[edges[index]!]!;
+      for (let part = chain.length - 1; part >= 0; part -= 1) repeated += chain[part]!.edge.lengthMeters;
     }
     const elevation = request.steepestSustainedGradePct || request.gradeExperience
       ? routeElevationMetrics(edges.flatMap(edge => graph.traversals[edge]!.map(traversal => ({
@@ -282,22 +299,20 @@ export function searchSimpleRoutes(
       }))), Boolean(request.gradeExperience)) : null;
     return { distance, gain, maximumElevation, maximumGrade: elevation?.grade ?? 0,
       ...(elevation?.experience ? { gradeExperience: elevation.experience } : {}), trailNames: [...names],
-      repeated, repeatedFraction: distance > 0 ? repeated / distance : 0, physicalLengths };
+      repeated, stemDistance, repeatedFraction: distance > 0 ? repeated / distance : 0, physicalLengths };
   };
 
   const compareCandidate = (left: Candidate, right: Candidate): number => left.violations.length - right.violations.length
     || left.violationMagnitude - right.violationMagnitude || left.score - right.score || left.id.localeCompare(right.id);
-  const offer = (edges: number[], attachment: number, stemDistance: number): void => {
+  const offer = (edges: number[], attachment: number): void => {
     const identity = edges.map((edge) => graph.directed[edge]).join(",");
-    if (seen.has(identity)) return;
-    seen.add(identity);
     candidateCount += 1;
     const metrics = evaluate(edges, attachment);
     if (request.gradeExperience && !metrics.gradeExperience) return;
     const ranked = rankRouteMetrics({ distanceMeters: metrics.distance, elevationGainMeters: metrics.gain,
       maximumElevationMeters: metrics.maximumElevation, steepestSustainedGradePct: metrics.maximumGrade,
       gradeExperience: metrics.gradeExperience, trailNames: metrics.trailNames,
-      topology: { repeatedTrailFraction: metrics.repeatedFraction, sharedStemDistanceMeters: stemDistance },
+      topology: { repeatedTrailFraction: metrics.repeatedFraction, sharedStemDistanceMeters: metrics.stemDistance },
       startAccessPoint: { confidence: typeof start === "string" ? "high" : start.confidence } }, request);
     const violations = ranked.violations.map(({ constraint, value, min }) => {
       const side = value < min ? "below-minimum" : "above-maximum";
@@ -308,11 +323,26 @@ export function searchSimpleRoutes(
       return `${constraint}-${side}`;
     });
     if (ranked.exact) validCandidateCount += 1;
-    const candidate: Candidate = { id: identity, edges, metrics, score: ranked.score, violations,
-      violationMagnitude: ranked.violations.reduce((sum, item) => sum + item.normalizedDelta, 0) };
     const loopKey = JSON.stringify([...metrics.physicalLengths.keys()].sort());
+    // Account for retained arrays, strings, maps, and later materialized edge
+    // references. This is a payload allowance, not a JS-heap-size guarantee.
+    const candidateBytes = 512 + edges.length * 8 + identity.length * 2 + loopKey.length * 2
+      + edges.reduce((sum, edge) => sum + graph.traversals[edge]!.length * 8, 0)
+      + [...metrics.physicalLengths.keys()].reduce((sum, key) => sum + 56 + key.length * 2, 0)
+      + metrics.trailNames.reduce((sum, name) => sum + 32 + name.length * 2, 0);
+    const candidate: Candidate = { id: identity, edges, metrics, score: ranked.score, violations,
+      violationMagnitude: ranked.violations.reduce((sum, item) => sum + item.normalizedDelta, 0), retainedBytes: candidateBytes };
     const previous = archive.get(loopKey);
-    if (!previous || compareCandidate(candidate, previous) < 0) archive.set(loopKey, candidate);
+    if (previous && compareCandidate(candidate, previous) >= 0) return;
+    if (!previous && archive.size >= options.budget.maximumRetainedCycles) {
+      truncationReasons.add("maximum-retained-cycles"); memoryLimited = true; return;
+    }
+    const nextBytes = retainedBytes - (previous?.retainedBytes ?? 0) + candidateBytes;
+    if (nextBytes > maximumRetainedBytes) {
+      truncationReasons.add("candidate-memory-limit"); memoryLimited = true; return;
+    }
+    archive.set(loopKey, candidate);
+    retainedBytes = nextBytes;
   };
 
   // Exact matches have priority. Both passes use this one traversal; the
@@ -369,23 +399,23 @@ export function searchSimpleRoutes(
         const distance = distances.at(-1)! + graph.length[edge]!;
         const gain = gains.at(-1)! + graph.gain[edge]!;
         const elevation = Math.max(elevations.at(-1)!, graph.maximumElevation[edge]!);
-        if (exactOnly && (gain > maximumGain || elevation > maximumElevation)) continue;
+        if (exactOnly && (exceeds(gain, maximumGain) || elevation > maximumElevation)) continue;
         const attachment = positions.get(next);
         if (attachment !== undefined) {
           const backDistance = reverseDistances[attachment]!;
           if (!Number.isFinite(backDistance)) continue;
           const totalDistance = distance + backDistance;
-          if (totalDistance > explorationDistance) continue;
+          if (exceeds(totalDistance, explorationDistance)) continue;
           const totalGain = gain + reverseGains[attachment]!;
           const stemDistance = distances[attachment]!;
           // These are necessary exact-match conditions. Minimum ranges are
           // tested only on a completed route, never used to discard a prefix.
-          if (exactOnly && (totalDistance < minimumDistance || totalGain < minimumGain || totalGain > maximumGain
-            || stemDistance > maximumStem || backDistance > totalDistance * maximumRepeat + 1e-9)) continue;
-          offer([...path, edge, ...reverses.slice(0, attachment).reverse()], attachment, stemDistance);
+          if (exactOnly && (exceeds(minimumDistance, totalDistance) || exceeds(minimumGain, totalGain) || exceeds(totalGain, maximumGain)
+            || exceeds(stemDistance, maximumStem) || exceeds(backDistance, totalDistance * maximumRepeat))) continue;
+          offer([...path, edge, ...reverses.slice(0, attachment).reverse()], attachment);
           continue;
         }
-        if (!Number.isFinite(returnDistances[next]) || distance + returnDistances[next]! > explorationDistance) continue;
+        if (!Number.isFinite(returnDistances[next]) || exceeds(distance + returnDistances[next]!, explorationDistance)) continue;
         const reverse = graph.reverse.get(`${key}:${next}:${frame.node}`) ?? -1;
         const backDistance = reverseDistances.at(-1)! + (reverse < 0 ? Infinity : graph.length[reverse]!);
         const backGain = reverseGains.at(-1)! + (reverse < 0 ? Infinity : graph.gain[reverse]!);
@@ -394,11 +424,11 @@ export function searchSimpleRoutes(
         // Keep every alternative path within a block, including longer stems.
         const enteringBlock = path.length > 0 && edgeBlock[path.at(-1)!] !== edgeBlock[edge];
         if (enteringBlock && (!Number.isFinite(reverseDistances.at(-1)!) || (exactOnly
-          && (distances.at(-1)! > maximumStem || reverseDistances.at(-1)! > maxMeters * maximumRepeat
-            || gains.at(-1)! + reverseGains.at(-1)! > maximumGain)))) continue;
+          && (exceeds(distances.at(-1)!, maximumStem) || exceeds(reverseDistances.at(-1)!, maxMeters * maximumRepeat)
+            || exceeds(gains.at(-1)! + reverseGains.at(-1)!, maximumGain))))) continue;
         // Bridges can only be part of a stem; their reverse is mandatory.
         if (!blocks[edgeBlock[edge]!]!.cyclic && (!Number.isFinite(backDistance) || (exactOnly
-          && (distance > maximumStem || backDistance > maxMeters * maximumRepeat || gain + backGain > maximumGain)))) continue;
+          && (exceeds(distance, maximumStem) || exceeds(backDistance, maxMeters * maximumRepeat) || exceeds(gain + backGain, maximumGain))))) continue;
         path.push(edge);
         usedPhysical.add(key);
         positions.set(next, path.length);
@@ -411,22 +441,22 @@ export function searchSimpleRoutes(
         // cost. Used physical trails and all other prefix nodes are forbidden.
         // This also covers lollipops, unlike banning the whole prefix and
         // insisting on a new path directly to the start.
-        const canExtendStem = Number.isFinite(backDistance) && distance <= maximumStem
-          && backDistance <= maxMeters * maximumRepeat && gain + backGain <= maximumGain;
+        const canExtendStem = Number.isFinite(backDistance) && !exceeds(distance, maximumStem)
+          && !exceeds(backDistance, maxMeters * maximumRepeat) && !exceeds(gain + backGain, maximumGain);
         if (exactOnly && !canExtendStem) {
           const seeds: Array<[number, number]> = [];
           for (const [node, index] of positions) {
-            if (node !== next && Number.isFinite(reverseDistances[index]) && distances[index]! <= maximumStem
-              && reverseDistances[index]! <= maxMeters * maximumRepeat
-              && gains[index]! + reverseGains[index]! <= maximumGain) seeds.push([node, reverseDistances[index]!]);
+            if (node !== next && Number.isFinite(reverseDistances[index]) && !exceeds(distances[index]!, maximumStem)
+              && !exceeds(reverseDistances[index]!, maxMeters * maximumRepeat)
+              && !exceeds(gains[index]! + reverseGains[index]!, maximumGain)) seeds.push([node, reverseDistances[index]!]);
           }
           const residual = minimumReturnDistances(graph, phaseExhausted, () => { expandedStates += 1; }, {
-            seeds, target: next, maximumDistance: maxMeters - distance,
+            seeds, target: next, maximumDistance: maxMeters - distance + roundoff(distance, maxMeters),
             allows: edge => !usedPhysical.has(graph.physical[edge]!)
               && (!positions.has(graph.from[edge]!) || graph.from[edge] === next),
           });
           if (phaseExhausted()) return;
-          if (distance + residual[next]! > maxMeters) {
+          if (exceeds(distance + residual[next]!, maxMeters)) {
             positions.delete(next); usedPhysical.delete(key); path.pop();
             distances.pop(); gains.pop(); elevations.pop(); reverses.pop(); reverseDistances.pop(); reverseGains.pop();
             continue;

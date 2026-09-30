@@ -321,7 +321,7 @@ describe("searchSimpleRoutes", () => {
     }), { budget: { ...budget, maximumExpandedStates: 25_000 }, now: () => 0 });
     expect(result.candidates.length).toBeGreaterThanOrEqual(minimumExact);
     expect(result.diagnostics.expandedStates).toBeLessThanOrEqual(25_000);
-    expect(result.diagnostics.candidateCount).toBeLessThanOrEqual(budget.maximumRetainedCycles);
+    expect(result.candidates.length + result.nearCandidates.length).toBeLessThanOrEqual(budget.maximumRetainedCycles);
   });
 
   it("enforces the directed-edge load cap", () => {

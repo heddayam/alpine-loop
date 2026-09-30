@@ -36,6 +36,7 @@ export function searchCompletionForReasons(reasons: readonly string[], budget: S
   if (!reasons.length) return "exhausted";
   if (reasons.some(reason => !["deadline", "maximum-expanded-states", "exact-search-limit"].includes(reason))) return "limited";
   if (reasons.includes("deadline") && budget.deadlineMs >= MAXIMUM_SEARCH_DEADLINE_MS) return "limited";
+  if (reasons.includes("exact-search-limit") && budget.deadlineMs >= MAXIMUM_SEARCH_DEADLINE_MS) return "limited";
   if (reasons.some(reason => reason !== "deadline") && budget.maximumExpandedStates >= MAXIMUM_SEARCH_STATES) return "limited";
   return "retryable";
 }

@@ -158,6 +158,23 @@ function context(
 const solver = new ReachableGraphClosedRouteSolver({ pack: PACK });
 
 describe("ReachableGraphClosedRouteSolver", () => {
+  test("honors a later attempt's time allowance beyond the original fifteen-second cap", async () => {
+    const ctx = context([accessPoint()], fixtureGraph("loop"));
+    let clock = 0;
+    ctx.now = () => clock;
+    ctx.budget.deadlineMs = 30_000;
+    const read = ctx.repository.getReachableGraph.bind(ctx.repository);
+    vi.spyOn(ctx.repository, "getReachableGraph").mockImplementation(async query => {
+      const graph = await read(query);
+      clock = 20_000;
+      return graph;
+    });
+    const result = await solver.generate(request(), ctx);
+    expect(result.exact).toHaveLength(1);
+    expect(result.completion).toBe("exhausted");
+    expect(result.diagnostics.hardTruncationReasons).toEqual([]);
+  });
+
   test("applies 0/25/100 repetition and the shared-stem cap using exact physical edges", async () => {
     const point = accessPoint();
     const zero = await solver.generate(

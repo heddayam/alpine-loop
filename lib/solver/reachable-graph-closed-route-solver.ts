@@ -11,7 +11,7 @@ import {
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
 
-import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
+import { CLOSED_ROUTE_BUDGET, MAXIMUM_SEARCH_DEADLINE_MS, MAXIMUM_SEARCH_STATES, searchCompletionForReasons, type SolverBudget } from "./budget";
 import {
   prepareClosedRouteValidator,
   type ValidatedClosedRoute,
@@ -74,11 +74,15 @@ type RankedClosedRoute = ValidatedClosedRoute & {
 };
 
 function effectiveBudget(supplied: SolverBudget): SolverBudget {
+  for (const value of Object.values(supplied)) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error("Invalid solver budget");
+  }
   return {
     maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, CLOSED_ROUTE_BUDGET.maximumDirectedEdges),
-    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, CLOSED_ROUTE_BUDGET.maximumExpandedStates),
-    deadlineMs: Math.min(supplied.deadlineMs, CLOSED_ROUTE_BUDGET.deadlineMs),
+    maximumExpandedStates: Math.min(supplied.maximumExpandedStates, MAXIMUM_SEARCH_STATES),
+    deadlineMs: Math.min(supplied.deadlineMs, MAXIMUM_SEARCH_DEADLINE_MS),
     maximumRetainedCycles: Math.min(supplied.maximumRetainedCycles, CLOSED_ROUTE_BUDGET.maximumRetainedCycles),
+    maximumRetainedBytes: Math.min(supplied.maximumRetainedBytes ?? CLOSED_ROUTE_BUDGET.maximumRetainedBytes, CLOSED_ROUTE_BUDGET.maximumRetainedBytes),
   };
 }
 
@@ -311,7 +315,6 @@ export class ReachableGraphClosedRouteSolver {
     let graphQueryCount = 0;
     let maximumLoadedDirectedEdges = 0;
     let expandedStates = 0;
-    let rawCandidateCount = 0;
     let directedValidationRejectionCount = 0;
     let timeToFirstExactMs: number | undefined;
     const searchedStarts = new Set<string>();
@@ -320,7 +323,6 @@ export class ReachableGraphClosedRouteSolver {
       if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
       const remainingTime = deadlineAt - now();
       const remainingExpanded = budget.maximumExpandedStates - expandedStates;
-      const remainingRaw = budget.maximumRetainedCycles - rawCandidateCount;
       if (remainingTime <= 0) {
         hardTruncationReasons.add("deadline");
         break search;
@@ -329,19 +331,11 @@ export class ReachableGraphClosedRouteSolver {
         hardTruncationReasons.add("maximum-expanded-states");
         break search;
       }
-      if (remainingRaw <= 0) {
-        hardTruncationReasons.add("maximum-raw-candidates");
-        break search;
-      }
       const startsRemainingThisRound = feasible.length - startIndex;
       const startDeadlineAt = deadlineAt;
       const expansionAllocation = Math.max(
         1,
         Math.floor(remainingExpanded / Math.max(startsRemainingThisRound, 1)),
-      );
-      const rawAllocation = Math.max(
-        1,
-        Math.floor(remainingRaw / Math.max(startsRemainingThisRound, 1)),
       );
       const queryController = new AbortController();
       const abortForParent = () => queryController.abort(context.signal?.reason);
@@ -388,13 +382,14 @@ export class ReachableGraphClosedRouteSolver {
         feasibleStart.start,
         // Final validation precedes the user-visible limit/diversity decision.
         // The search archive has one best exact/close approach per physical loop.
-        { ...request, limit: rawAllocation },
+        { ...request, limit: budget.maximumRetainedCycles },
         {
         budget: {
           maximumDirectedEdges: budget.maximumDirectedEdges,
           maximumExpandedStates: expansionAllocation,
           deadlineMs: Math.max(1, Math.floor((startDeadlineAt - now()) * 0.7)),
-          maximumRetainedCycles: rawAllocation,
+          maximumRetainedCycles: budget.maximumRetainedCycles,
+          maximumRetainedBytes: budget.maximumRetainedBytes,
         },
         signal: context.signal,
         now,
@@ -403,7 +398,6 @@ export class ReachableGraphClosedRouteSolver {
       );
       this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
       expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
-      rawCandidateCount = Math.min(budget.maximumRetainedCycles, rawCandidateCount + generated.diagnostics.candidateCount);
       for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
       const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].map(candidate => {
         const keys = candidate.traversals.map(({ edge }) => edge.physicalEdgeKey);
@@ -415,12 +409,12 @@ export class ReachableGraphClosedRouteSolver {
         || left.candidate.score - right.candidate.score || left.routeId.localeCompare(right.routeId));
       const validationStartedAt = now();
       const validateRoute = prepareClosedRouteValidator({
-          start: feasibleStart.start,
-          includeUncertainAccess: request.includeUncertainAccess,
-          coverage: context.accessFilter.coverage,
-          sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
-          sourceConfidence: this.options.sourceConfidence ?? "high",
-          fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
+        start: feasibleStart.start,
+        includeUncertainAccess: request.includeUncertainAccess,
+        coverage: context.accessFilter.coverage,
+        sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
+        sourceConfidence: this.options.sourceConfidence ?? "high",
+        fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
       });
       const selectedAtStart: RankedClosedRoute[] = [];
       for (const { candidate, routeId } of orderedCandidates) {
@@ -482,6 +476,7 @@ export class ReachableGraphClosedRouteSolver {
     const truncationReasons = [...hardTruncationReasons].sort();
     const shortfallReasons = [...nonBudgetShortfallReasons].sort();
     return {
+      completion: searchCompletionForReasons(truncationReasons, budget),
       exact: exact.map(({ route }) => route),
       nearMisses: nearMisses.map(({ route, violations }) => ({ ...route, violations })),
       diagnostics: {
