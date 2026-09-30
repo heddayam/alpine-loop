@@ -309,6 +309,11 @@ it.each(["2026-09-23T12:00:00Z","2026-09-25T12:00:00Z"])("merges adjacent areas 
   await build();
   expect(await release()).toEqual(merged);
   expect(await readFile(path.join(root,"release",artifact.path))).toEqual(before);
+  const latestDate=[source.retrievedAt,neighborDate].sort().at(-1)!;
+  expect(merged.builtAt).toBe(latestDate);
+  await useAcquisitionDate("2026-09-22T12:00:00Z");
+  await buildCoverageRegion({id:"third-region",name:"Third region",geometry:startArea,recipe:recipe()},context());
+  expect((await release()).builtAt).toBe(latestDate);
 });
 it("retries a saved area receipt after a source-date publication conflict without repeating graph or elevation work",async()=>{
   await build();const prior=await readFile(path.join(root,"release/release.json"),"utf8");

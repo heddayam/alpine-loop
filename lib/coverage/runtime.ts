@@ -18,6 +18,7 @@ import { readOsmSourceConfig } from "@/lib/data/osm/source";
 import { readOfficialTrailSourceConfig, readPinnedOfficialTrailSnapshot, refreshPinnedOfficialTrailSnapshot } from "@/lib/data/official-trails/source";
 import { writeJsonAtomically } from "@/lib/data/source-cache";
 import { sha256File } from "@/lib/data/file-source";
+import { mergeCatalogSources } from "@/lib/data/source-metadata";
 import { calculateEdgeMetricsBatch, densifyGeometry, distanceMeters, type EdgeMetrics } from "@/lib/data/metrics";
 import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 import { applyRestriction } from "@/lib/data/curated-access";
@@ -322,14 +323,13 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         sources:previous.sources.filter(source=>!replacedSources.has(source.id)),
         artifacts:previous.artifacts.filter(artifact=>ids.has(artifact.id)),geometry:unionCoverage(previous.artifacts.filter(artifact=>ids.has(artifact.id)).map(artifact=>artifact.geometry))});
     }
-    const sources = new Map<string,DataRelease["sources"][number]>();
-    for (const source of [...results.flatMap(result=>result.sources),...referenceSources]) {
-      const prior = sources.get(source.id);
-      if (prior && JSON.stringify(prior) !== JSON.stringify(source)) throw new Error(`Conflicting source metadata ${source.id}`);
-      sources.set(source.id,source);
-    }
+    const sourceInputs = [...results.flatMap(result=>result.sources),...referenceSources];
+    const sources = mergeCatalogSources(sourceInputs);
     const geometry = unionCoverage(results.map(result=>result.geometry));
-    const release: DataRelease = {...prepared,id:"pending",geometry,builtAt:[...sources.values()].map(source=>source.retrievedAt).sort().at(-1)!,sources:[...sources.values()].sort((a,b)=>a.id.localeCompare(b.id)),
+    // Canonical source dates must not erase a retained graph's later acquisition.
+    const builtAt = [...results.map(result=>result.builtAt),...sourceInputs.map(source=>source.retrievedAt)]
+      .sort((a,b)=>Date.parse(a)-Date.parse(b)||a.localeCompare(b)).at(-1)!;
+    const release: DataRelease = {...prepared,id:"pending",geometry,builtAt,sources,
       regions:[...new Map(results.flatMap(result=>result.regions).map(region=>[region.id,region])).values()], sections:results.flatMap(result=>result.sections),artifacts:results.flatMap(result=>result.artifacts),
       limitations:[...new Set([...results.flatMap(result=>result.limitations),...referenceAudits.map(audit=>audit.limitation),"Independent reference comparisons are source proximity diagnostics; they do not establish installed official-feature membership."])]};
     release.sections.sort((a,b)=>a.id.localeCompare(b.id)); release.artifacts.sort((a,b)=>a.id.localeCompare(b.id)); release.regions.sort((a,b)=>a.id.localeCompare(b.id)); release.limitations.sort();
