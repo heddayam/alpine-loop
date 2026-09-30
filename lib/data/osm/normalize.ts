@@ -19,6 +19,7 @@ const ACCESS_ORDER: readonly AccessState[] = ["public", "unknown", "private", "p
 const MOTOR_MODES = ["motorcar", "motor_vehicle", "vehicle", "access"] as const;
 const PERMISSION_KEYS = ["foot", ...MOTOR_MODES];
 export const OSM_ARRIVAL_NODE_HIGHWAYS = ["turning_circle"] as const;
+export const OSM_WAY_CONTEXT_FILTERS = ["w/highway", "w/footway"] as const;
 export const OSM_PERMISSION_CONTEXT_KEYS = [
   ...PERMISSION_KEYS.flatMap(mode => [mode, `${mode}:conditional`, ...["forward", "backward"].flatMap(direction =>
     [`${mode}:${direction}`, `${mode}:${direction}:conditional`])]),
