@@ -55,7 +55,7 @@ export function HikeMap({
   selectedId: string | null;
   routeNotice: string;
   onRetryRoute?: () => void;
-  camera: { bounds: Bounds; revision: number; selectArea?: boolean };
+  camera: { bounds: Bounds; revision: number; selectArea?: boolean; padding?: number };
   onArea: (bounds: Bounds) => void;
   onViewport: (bounds: Bounds) => void;
   onDrawing: (drawing: boolean) => void;
@@ -111,6 +111,13 @@ export function HikeMap({
       maxZoom: 19,
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+    rectangle(leafletBounds(dataset.bounds), {
+      color: "#315e49",
+      weight: 2,
+      opacity: 0.65,
+      fillOpacity: 0.025,
+      interactive: false,
     }).addTo(map);
     outline.current = rectangle(leafletBounds(dataset.bounds), {
       color: "#536553",
@@ -255,7 +262,7 @@ export function HikeMap({
     if (camera.selectArea) changeDrawing(false);
     programmatic.current = true;
     map.fitBounds(leafletBounds(camera.bounds), {
-      padding: [40, 40],
+      padding: [camera.padding ?? 40, camera.padding ?? 40],
       animate: false,
     });
     programmatic.current = false;
@@ -329,10 +336,11 @@ export function HikeMap({
           )}
         </div>
       )}
-      {area && !drawing && (
+      {!drawing && (
         <span className="map-caption">
           {!editing && !!routes.length && "Dots mark starts on this page. "}
-          Dashed boundary selects starts. Routes may extend beyond it.
+          Trail data is available inside the solid border.
+          {area && " The dashed border selects starts; routes may extend beyond it."}
         </span>
       )}
     </section>

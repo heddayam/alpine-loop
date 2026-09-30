@@ -202,6 +202,7 @@ export function App() {
     bounds: Bounds;
     revision: number;
     selectArea?: boolean;
+    padding?: number;
   }>();
   const [distance, setDistance] = useState<[string, string]>(["5", "12"]);
   const [gain, setGain] = useState<[string, string]>(["0", "4000"]);
@@ -459,11 +460,12 @@ export function App() {
       if (!controller.signal.aborted) setBusy(false);
     }
   };
-  const moveTo = (bounds: Bounds, selectArea = false) =>
+  const moveTo = (bounds: Bounds, selectArea = false, padding = 40) =>
     setCamera((current) => ({
       bounds,
       revision: (current?.revision ?? 0) + 1,
       selectArea,
+      padding,
     }));
   const restoreDraft = (snapshot = search) => {
     if (!snapshot) return;
@@ -485,7 +487,7 @@ export function App() {
     setIncludeUnknown(snapshot.query.includeUnknown);
     setSelectedId(null);
     setHoveredId(null);
-    moveTo(snapshot.query.area);
+    moveTo(snapshot.query.area, false, 0);
   };
   const pickRoute = (id: string) => {
     const route = search?.routes.find((route) => route.id === id);
@@ -502,7 +504,7 @@ export function App() {
     const id = selectedId;
     setSelectedId(null);
     setHoveredId(null);
-    if (search) moveTo(search.query.area);
+    if (search) moveTo(search.query.area, false, 0);
     requestAnimationFrame(() =>
       document.getElementById(`route-${id}`)?.focus(),
     );
@@ -562,29 +564,44 @@ export function App() {
                       </button>
                     )}
                   </div>
-                  <label className="visually-hidden" htmlFor="place">
-                    Go to a region
-                  </label>
-                  <select
-                    id="place"
-                    value=""
-                    onChange={(event) => {
-                      const place = dataset.places[Number(event.target.value)];
-                      if (place) {
+                  {dataset.places.length === 1 ? (
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => {
                         setAreaMode("view");
-                        moveTo(place.bounds, true);
-                      }
-                    }}
-                  >
-                    <option value="" disabled>
-                      Go to a region…
-                    </option>
-                    {dataset.places.map((place, index) => (
-                      <option key={place.name} value={index}>
-                        {place.name}
-                      </option>
-                    ))}
-                  </select>
+                        moveTo(dataset.bounds, true);
+                      }}
+                    >
+                      Show available trails
+                    </button>
+                  ) : (
+                    <>
+                      <label className="visually-hidden" htmlFor="place">
+                        Go to a region
+                      </label>
+                      <select
+                        id="place"
+                        value=""
+                        onChange={(event) => {
+                          const place = dataset.places[Number(event.target.value)];
+                          if (place) {
+                            setAreaMode("view");
+                            moveTo(place.bounds, true);
+                          }
+                        }}
+                      >
+                        <option value="" disabled>
+                          Go to a region…
+                        </option>
+                        {dataset.places.map((place, index) => (
+                          <option key={place.name} value={index}>
+                            {place.name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   <p className="area-description">
                     {areaMode === "drawn"
                       ? "Starts inside your rectangle."
