@@ -15,7 +15,8 @@ vi.mock("node:fs/promises", async original => {
 });
 type Region=Awaited<ReturnType<typeof readCoverageRegion>>;
 type Approach={id:string;name:string;coordinates:[number,number];radiusMeters?:number;basis:string;url:string|null};
-type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];recipePath:string;startLimitPath?:string;approachRadiusMeters:number;approaches:Approach[]}>};
+type UnavailableApproach={id:string;sourceId:string;sourceHash:string;reviewedAt:string;reason:string};
+type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];recipePath:string;startLimitPath?:string;approachRadiusMeters:number;approaches:Approach[];unavailableApproaches?:UnavailableApproach[]}>};
 type Ranges={properties:{source:{id:string};archiveSha256:string;derivation:{missingBroadLeafIds:string[]}};features:Array<{properties:{id:string;name:string;ancestry:string[]};geometry:AreaGeometry}>};
 const washingtonIds=[
   "central-cascades","central-washington","eastern-washington","issaquah-alps","mount-rainier-area",
@@ -25,6 +26,9 @@ const californiaIds=regroupingBaseline.california.map(region=>region.id);
 const catalogDirectory=path.resolve("data/coverage/regions");
 const fileHash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
 const washingtonEntries=()=>catalog.regions.filter(region=>!californiaIds.includes(region.id));
+const southCascadesEntry=(input:Catalog)=>input.regions.find(region=>region.id==="south-cascades")!;
+const unavailableApproachIds=["historical-june-lake-loowit","historical-upper-cispus-blue-lake"];
+const washingtonSourcePin="sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e";
 let catalog:Catalog,ranges:Ranges,regions:Map<string,Region>;
 beforeAll(async()=>{
   catalog=JSON.parse(await readFile(path.resolve("data/coverage/regions/catalog.json"),"utf8"));
@@ -77,6 +81,99 @@ it("conserves every selected Washington mountain and reviewed approach through r
   }
   expect(fileHash(await readFile(path.resolve(catalogDirectory,regroupingBaseline.washingtonRecipe.path))))
     .toBe(regroupingBaseline.washingtonRecipe.sha256);
+});
+
+it("declares exactly the two reviewed South Cascades source gaps without changing the original anchors",()=>{
+  expect(catalog.regions).toHaveLength(15);
+  expect(catalog.regions.filter(entry=>entry.unavailableApproaches!==undefined).map(entry=>entry.id)).toEqual(["south-cascades"]);
+  const entry=southCascadesEntry(catalog),region=regions.get(entry.id)!;
+  expect(entry.unavailableApproaches!.map(review=>review.id)).toEqual(unavailableApproachIds);
+  const mapped=region.reviewedApproaches!.filter(point=>point.unavailableStart!==undefined);
+  expect(mapped.map(point=>point.id)).toEqual(unavailableApproachIds);
+  for(const {id,...review} of entry.unavailableApproaches!) {
+    expect(review).toMatchObject({sourceId:"geofabrik-washington-osm",sourceHash:washingtonSourcePin,reviewedAt:"2026-09-29T00:00:00-07:00"});
+    expect(review.reason).toContain("unavailable as a route start in this data version");
+    expect(region.recipe.sources.some(source=>source.config.id===review.sourceId&&source.sha256===review.sourceHash)).toBe(true);
+    const anchor=entry.approaches.find(point=>point.id===id)!;
+    expect(anchor).not.toHaveProperty("unavailableStart");
+    expect(region.reviewedApproaches!.find(point=>point.id===id)).toEqual({
+      id,name:anchor.name,coordinates:anchor.coordinates,radiusMeters:anchor.radiusMeters??entry.approachRadiusMeters,unavailableStart:review,
+    });
+    expect(contentId(anchor),id).toBe(regroupingBaseline.washingtonReviewedApproaches.find(point=>point.id===id)!.sha256);
+  }
+  for(const [id,input] of regions) if(id!==entry.id)
+    expect(input.reviewedApproaches?.some(point=>point.unavailableStart!==undefined),id).toBe(false);
+});
+
+it("keeps all fifteen original cores, boundaries, nomination limits and recipe policies when gap records are omitted",async()=>{
+  const withoutDeclarations=structuredClone(catalog);
+  delete southCascadesEntry(withoutDeclarations).unavailableApproaches;
+  for(const [id,reviewed] of regions) {
+    vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(withoutDeclarations));
+    const original=await readCoverageRegion(id);
+    if(id!=="south-cascades") {
+      expect(reviewed,id).toEqual(original);
+      continue;
+    }
+    expect(reviewed.geometry).toEqual(original.geometry);
+    expect(reviewed.startLimitGeometry).toEqual(original.startLimitGeometry);
+    expect(reviewed.recipe).toEqual(original.recipe);
+    expect(reviewed.sources!.slice(0,2)).toEqual(original.sources!.slice(0,2));
+    expect(reviewed.reviewedApproaches!.map(({id,name,coordinates,radiusMeters})=>({id,name,coordinates,radiusMeters}))).toEqual(original.reviewedApproaches);
+    expect(reviewed.sources![2]!.contentHash).not.toBe(original.sources![2]!.contentHash);
+    expect(original.sources![2]!.contentHash).toBe(`sha256:${contentId({approaches:southCascadesEntry(catalog).approaches,radiusMeters:southCascadesEntry(catalog).approachRadiusMeters})}`);
+  }
+});
+
+it.each([
+  {field:"reason",value:"The pinned parking polygon has no mapped trail contact; this route start is unavailable."},
+  {field:"reviewedAt",value:"2026-09-29T12:00:00-07:00"},
+])("pins unavailable-start $field only in approach provenance",async({field,value})=>{
+  const changed=structuredClone(catalog),entry=southCascadesEntry(changed);
+  Object.assign(entry.unavailableApproaches![0]!,{[field]:value});
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  const input=await readCoverageRegion(entry.id),original=regions.get(entry.id)!;
+  expect(input.geometry).toEqual(original.geometry);
+  expect(input.startLimitGeometry).toEqual(original.startLimitGeometry);
+  expect(input.recipe).toEqual(original.recipe);
+  expect(input.sources!.slice(0,2)).toEqual(original.sources!.slice(0,2));
+  expect(input.sources![2]!.contentHash).not.toBe(original.sources![2]!.contentHash);
+  expect(input.sources![2]!.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  expect(input.reviewedApproaches!.find(point=>point.id===entry.unavailableApproaches![0]!.id)!.unavailableStart).toHaveProperty(field,value);
+});
+
+it.each([
+  {name:"an unknown reviewed anchor",patch:{id:"not-a-reviewed-anchor"}},
+  {name:"a missing source ID",patch:{sourceId:""}},
+  {name:"a malformed review date",patch:{reviewedAt:"September 29, 2026"}},
+  {name:"a missing timezone",patch:{reviewedAt:"2026-09-29T00:00:00"}},
+  {name:"an unprefixed source hash",patch:{sourceHash:washingtonSourcePin.slice(7)}},
+  {name:"a short source hash",patch:{sourceHash:"sha256:1234"}},
+  {name:"a blank review reason",patch:{reason:"   "}},
+  {name:"an unknown review field",patch:{allowConnector:true}},
+])("rejects unavailable-start declarations with $name",async({patch})=>{
+  const changed=structuredClone(catalog);
+  Object.assign(southCascadesEntry(changed).unavailableApproaches![0]!,patch);
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  await expect(listCoverageRegions()).rejects.toThrow();
+});
+
+it("rejects duplicate unavailable-start declarations for the same reviewed anchor",async()=>{
+  const changed=structuredClone(catalog),entry=southCascadesEntry(changed);
+  entry.unavailableApproaches!.push({...entry.unavailableApproaches![0]!});
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  await expect(listCoverageRegions()).rejects.toThrow("Unavailable approach must identify one reviewed anchor");
+});
+
+it.each([
+  {name:"a stale recipe source hash",patch:{sourceHash:`sha256:${"a".repeat(64)}`}},
+  {name:"a source ID absent from the recipe",patch:{sourceId:"geofabrik-unconfigured-osm"}},
+  {name:"another configured source with the Washington hash",patch:{sourceId:"geofabrik-oregon-osm"}},
+])("rejects unavailable-start declarations against $name",async({patch})=>{
+  const changed=structuredClone(catalog);
+  Object.assign(southCascadesEntry(changed).unavailableApproaches![0]!,patch);
+  vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
+  await expect(readCoverageRegion("south-cascades")).rejects.toThrow(`Unavailable approach source pin differs: ${unavailableApproachIds[0]}`);
 });
 
 it("preserves exact California catalog entries, nomination caps and source recipes",async()=>{
