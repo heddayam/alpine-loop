@@ -67,6 +67,10 @@ export function createPackSchema(database: DatabaseSync): void {
         portal_road_class TEXT NOT NULL CHECK(portal_road_class IN ('street','service-road')),
         parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)
       ) STRICT;
+      CREATE TABLE entry_witnesses (
+        access_point_id TEXT PRIMARY KEY REFERENCES access_points(id) ON DELETE CASCADE,
+        record TEXT NOT NULL
+      ) STRICT;
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
         version TEXT NOT NULL, retrieved_at TEXT NOT NULL, url TEXT NOT NULL,
