@@ -341,12 +341,16 @@ export function searchSimpleRoutes(
         || a - b) });
       const frames = [frameFor(graph.start)];
       const explorationDistance = maxMeters * (exactOnly ? 1 : CLOSE_MATCH_DISTANCE_MULTIPLIER);
-      while (frames.length > 0 && !exhausted()) {
+      const phaseExhausted = (): boolean => {
+        if (exhausted()) return true;
         if (exactOnly && validCandidateCount === 0
           && (expandedStates >= options.budget.maximumExpandedStates * 0.9 || now() - startedAt >= options.budget.deadlineMs * 0.9)) {
           truncationReasons.add("exact-search-limit");
-          break;
+          return true;
         }
+        return false;
+      };
+      while (frames.length > 0 && !phaseExhausted()) {
         const frame = frames.at(-1)!;
         if (frame.next === frame.edges.length) {
           frames.pop();
@@ -416,11 +420,12 @@ export function searchSimpleRoutes(
               && reverseDistances[index]! <= maxMeters * maximumRepeat
               && gains[index]! + reverseGains[index]! <= maximumGain) seeds.push([node, reverseDistances[index]!]);
           }
-          const residual = minimumReturnDistances(graph, exhausted, () => { expandedStates += 1; }, {
+          const residual = minimumReturnDistances(graph, phaseExhausted, () => { expandedStates += 1; }, {
             seeds, target: next, maximumDistance: maxMeters - distance,
             allows: edge => !usedPhysical.has(graph.physical[edge]!)
               && (!positions.has(graph.from[edge]!) || graph.from[edge] === next),
           });
+          if (phaseExhausted()) return;
           if (distance + residual[next]! > maxMeters) {
             positions.delete(next); usedPhysical.delete(key); path.pop();
             distances.pop(); gains.pop(); elevations.pop(); reverses.pop(); reverseDistances.pop(); reverseGains.pop();
@@ -439,7 +444,7 @@ export function searchSimpleRoutes(
     for (const candidate of [...pool].sort(compareCandidate)) {
       checkCancellation();
       if (selected.length >= limit) break;
-      if (selected.every((other) => physicalOverlap(candidate.metrics, other.metrics) <= overlapLimit)) {
+      if (overlapLimit >= 1 || selected.every((other) => physicalOverlap(candidate.metrics, other.metrics) <= overlapLimit)) {
         selected.push(candidate);
       }
     }

@@ -143,7 +143,7 @@ function compareRanked(left: RankedClosedRoute, right: RankedClosedRoute): numbe
     || left.route.id.localeCompare(right.route.id);
 }
 
-function cycleEdges(route: RankedClosedRoute): readonly ReconstructedDirectedEdge[] {
+function cycleEdges(route: { edges: readonly GraphEdge[] }): readonly GraphEdge[] {
   let left = 0;
   let right = route.edges.length - 1;
   while (left < right && route.edges[left]!.physicalEdgeKey === route.edges[right]!.physicalEdgeKey
@@ -152,7 +152,7 @@ function cycleEdges(route: RankedClosedRoute): readonly ReconstructedDirectedEdg
   return route.edges.slice(left, right + 1);
 }
 
-function physicalOverlap(candidate: RankedClosedRoute, selected: RankedClosedRoute): number {
+function physicalOverlap(candidate: { edges: readonly GraphEdge[] }, selected: { edges: readonly GraphEdge[] }): number {
   const left = cycleEdges(candidate);
   const right = cycleEdges(selected);
   const lengths = new Map(left.map(edge => [edge.physicalEdgeKey, edge.lengthMeters]));
@@ -405,25 +405,34 @@ export class ReachableGraphClosedRouteSolver {
       expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
       rawCandidateCount = Math.min(budget.maximumRawCandidates, rawCandidateCount + generated.diagnostics.candidateCount);
       for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
-      const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].sort((left, right) =>
-        left.score - right.score
-        || left.id.localeCompare(right.id));
+      const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].map(candidate => {
+        const keys = candidate.traversals.map(({ edge }) => edge.physicalEdgeKey);
+        const forward = keys.join(">");
+        const backward = keys.reverse().join(">");
+        const signature = forward < backward ? forward : backward;
+        return { candidate, routeId: `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}` };
+      }).sort((left, right) => Number(left.candidate.violatedConstraints.length > 0) - Number(right.candidate.violatedConstraints.length > 0)
+        || left.candidate.score - right.candidate.score || left.routeId.localeCompare(right.routeId));
       const validationStartedAt = now();
-      for (const candidate of orderedCandidates) {
+      const selectedAtStart: RankedClosedRoute[] = [];
+      for (const { candidate, routeId } of orderedCandidates) {
         if (now() >= startDeadlineAt) {
           hardTruncationReasons.add("deadline");
           break;
         }
+        // Ranking uses the same metrics as authoritative validation. Once a
+        // better exact route is validated, an overlapping lower-ranked route
+        // cannot enter this start's greedy result set. Never let an unvalidated
+        // candidate suppress another route. Multi-start calls retain their
+        // existing cross-start selection policy.
+        if (feasible.length === 1 && candidate.violatedConstraints.length === 0
+          && selectedAtStart.some(other => physicalOverlap({ edges: candidate.traversals.map(({ edge }) => edge) }, other) > MAXIMUM_ALLOWED_OVERLAP)) continue;
         const reconstructed = reconstructTraversals(candidate.traversals);
         if (!reconstructed) {
           directedValidationRejectionCount += 1;
           this.options.onValidationRejection?.("missing-schema-3-edge-identity");
           continue;
         }
-        const forwardSignature = reconstructed.map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
-        const reverseSignature = [...reconstructed].reverse().map(({ physicalEdgeKey }) => physicalEdgeKey).join(">");
-        const signature = forwardSignature < reverseSignature ? forwardSignature : reverseSignature;
-        const routeId = `closed_${stableHash(`${feasibleStart.start.id}|${signature}`)}`;
         const validated = validateReconstructedClosedRoute(reconstructed, {
           start: feasibleStart.start,
           includeUncertainAccess: request.includeUncertainAccess,
@@ -448,6 +457,10 @@ export class ReachableGraphClosedRouteSolver {
         if (!previous || compareRanked(ranked, previous) < 0) candidates.set(routeId, ranked);
         if (ranked.exact && timeToFirstExactMs === undefined) {
           timeToFirstExactMs = Math.max(0, now() - startedAt);
+        }
+        if (ranked.exact) {
+          selectedAtStart.push(ranked);
+          if (feasible.length === 1 && selectedAtStart.length >= request.limit) break;
         }
       }
       this.options.onPhaseTiming?.("validation", Math.max(0, now() - validationStartedAt));
