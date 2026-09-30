@@ -143,6 +143,31 @@ Seattle (17034), or Frenchman Hills (16221). Gulf Islands (17153), Christina Ran
 positive-area Standard intersection with the Washington scope. These seven IDs
 are omitted explicitly, without a Broad substitute.
 
+## Reviewed starting-location gaps
+
+An unavailable starting location can be recorded in a region's
+`unavailableApproaches` list without changing its original audit anchor. Each
+entry must identify that anchor, the exact recipe source ID and SHA-256, a review
+date and a complete human-readable reason. Runtime preparation verifies the pin
+against the actual source input. A different snapshot requires a fresh review;
+an undeclared missing reviewed start still blocks publication.
+
+South Cascades records two gaps in Washington `washington-260801`
+(`sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e`):
+
+- June Lake Trailhead, parking `way/439071688`: the parking polygon has no mapped
+  road or trail node contacts. June Lake Trail meets a service road at
+  `node/1601936297`, but that entrance has no mapped trailhead or gate evidence.
+- Blue Lake ORV Trailhead, parking `way/716832243`: the parking polygon has no
+  mapped road or trail node contacts, and the nearby Valley Trail has no shared
+  node with the local access road.
+
+These findings come from the closed, verified normalized source snapshot. The
+declarations permit publication with explicit release limitations displayed in
+Coverage. They add no connectors or starting locations and do not change
+boundaries or eligibility. If a qualifying mapped start exists, it takes
+precedence over the declaration and remains available.
+
 ## Reproduction and validation
 
 1. Verify the official archive hash and read its root Standard Basic shapefile;

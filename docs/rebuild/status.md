@@ -6,6 +6,39 @@ the evidence line.
 
 ## Active system design revision
 
+### South Cascades reviewed starting-location gaps — 2026-09-29
+
+- [x] Diagnose the user-run failure using a network-disabled, read-only container
+  and the closed, verified normalized Washington snapshot. June Lake parking
+  `way/439071688` and Blue Lake ORV parking `way/716832243` share no member nodes
+  with mapped roads or trails. June Lake Trail meets a service road at
+  `node/1601936297`, without mapped trailhead/gate evidence. The nearby Blue Lake
+  trail does not meet its local access road. Neither gap is caused by final
+  graph compaction. No proximity connectors or eligibility changes are justified.
+- [x] Retain all original audit anchors and add two source-pinned unavailable
+  start reviews for South Cascades only. Both require Washington content hash
+  `3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e`.
+  Other region inputs, cores, nomination caps and eligibility remain unchanged.
+- [x] Verify publication records each actual unavailable start as a visible
+  limitation; valid mapped starts and existing density/terrain handling take
+  precedence. Reject stale pins before graph preparation and continue blocking
+  undeclared missing reviewed starts. Verify receipt reuse preserves limitations.
+  Integrated runtime/catalog checks pass 108/108; CoveragePanel checks pass
+  23/23. The 31 new fixture cases cover strict declarations, unchanged regional
+  geometry/anchors, actual-input validation, publication and receipt reuse,
+  matched-start and policy precedence, and complete reasons in Coverage.
+- [x] Complete offline integration checks twice and preserve the existing
+  published catalog/artifacts. `npm run verify` passes twice: 101 files / 1,094
+  tests, lint, types, MapLibre checks and production compilation.
+  `npm run test:browser` passes twice: 10/10 Chromium checks at desktop/mobile
+  sizes. The active catalog matches its pre-repair SHA-256 and all four published
+  compressed artifacts match their saved semantic receipt checksums. Completed
+  task worktrees/branches are removed; generated data remains ignored. The agent
+  does not run, publish or install South
+  Cascades. Retry through `./alpine.sh`, selecting South Cascades and build with
+  unchanged cache settings and without `--rebuild`. Source, elevation and segment
+  measurements can be reused; its unfinished region preparation repeats.
+
 ### Identical source acquisitions across regional publication — 2026-09-29
 
 - [x] Diagnose the user-run Mount Rainier publication failure after its completed
@@ -111,6 +144,12 @@ the evidence line.
   retained. No regional preparation, publication or installation is started by
   this setup, as requested. Pack bytes, resource costs, real approaches and route
   acceptance remain unmeasured for the regrouped districts.
+  Subsequent user-run builds published Central Cascades, Mount Rainier Area,
+  North Cascades and Snoqualmie Region in
+  `release-5b2601a283b9fe465ca43b7005a07fb2` (catalog SHA-256
+  `bac58ba7105f8ce2cdaff1f05092372bc9662d2c0d838f3c345fead6c7be4c3f`).
+  South Cascades stopped at reviewed-start checking before completing its
+  region receipt. Installation and route acceptance remain separate gates.
 
 ### Conservative alternate entrance families — 2026-09-29
 
