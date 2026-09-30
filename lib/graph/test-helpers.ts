@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { PreparedGraphDescriptor } from "./prepared-repository";
-import { packManifestSchema, type PackManifest } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, packManifestSchema, type PackManifest } from "@/lib/contracts";
 import { writePackDatabase } from "@/lib/data/testing/sqlite-writer";
 import { buildClosedRouteTopology } from "@/lib/data/testing/topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "@/lib/data/types";
@@ -95,7 +95,7 @@ export function writePreparedGraphFixture(
   return {
     releaseId: manifest.dataVersion, installationId: manifest.id,
     coverage: manifest.coverage.boundary,
-    artifacts: [{ path: databasePath, geometry: manifest.coverage.boundary }],
+    artifacts: [{ path: databasePath, geometry: manifest.coverage.boundary, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION }],
   };
 }
 
@@ -118,5 +118,8 @@ export function promoteGraphFixture(databasePath: string, releaseId: string): vo
         min(json_extract(j.value,'$[1]')),max(json_extract(j.value,'$[1]'))
         FROM edges e,json_each(e.geometry) j GROUP BY e.edge_key;`);
     database.prepare("INSERT INTO metadata(key,value) VALUES ('releaseId',?)").run(releaseId);
+    // These fixtures declare their start movements directly; they are not
+    // independent labels for source nomination accuracy.
+    database.prepare("INSERT INTO metadata(key,value) VALUES ('access_policy_version',?)").run(ACCESS_ENTRY_POLICY_VERSION);
   } finally { database.close(); }
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promoteGraphFixture } from "@/lib/graph/test-helpers";
-import { packManifestSchema, type CoverageInstallation, type DataRelease } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, packManifestSchema, type CoverageInstallation, type DataRelease } from "@/lib/contracts";
 import { compilePack } from "@/lib/data/testing/compiler";
 import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
 import { listSearchRegions, getSearchRegion } from "@/lib/data/named-area-catalog";
@@ -27,7 +27,8 @@ export async function preparedInstallation(root: string) {
     compilerVersion: manifest.compilerVersion, metricAlgorithmVersion: manifest.metricAlgorithmVersion,
     sources: manifest.sources, geometry: manifest.coverage.boundary, regions, limitations: [],
     sections: [{ id: "fixture-section", geometry: manifest.coverage.boundary, artifactIds: [id] }],
-    artifacts: [{ id, path: `objects/${id}.sqlite.gz`, compressedBytes: bytes.length, bytes: bytes.length, geometry: manifest.coverage.boundary }],
+    artifacts: [{ id, path: `objects/${id}.sqlite.gz`, compressedBytes: bytes.length, bytes: bytes.length, geometry: manifest.coverage.boundary,
+      regionId: regions[0]?.id, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION }],
   };
   const installation: CoverageInstallation = {
     id: "fixture-installation", releaseId, createdAt: manifest.builtAt, sectionIds: ["fixture-section"],

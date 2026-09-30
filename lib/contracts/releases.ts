@@ -18,7 +18,7 @@ export const releaseArtifactSchema = z.object({
   /** Immutable network graph identity, independent of the catalog release. */
   graphId: identity.optional(),
   /** Stable named region ownership, independent of artifact content hashes. */
-  regionId: identity.optional(),
+  regionId: z.string().trim().min(1).optional(),
   /** Absent on retained artifacts compiled under the earlier admission rules. */
   accessPolicyVersion: z.string().min(1).optional(),
 }).strict().refine((artifact) => artifact.path === `objects/${artifact.id}.sqlite.gz`, "Artifact path must match its SHA-256 identity");
