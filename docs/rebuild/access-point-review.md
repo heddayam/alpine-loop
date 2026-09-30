@@ -6,11 +6,15 @@ the second review; its reports challenge the earlier draft rather than supersede
 these decisions.
 This covers extraction, preparation, publication, installation, map presentation,
 geographic filtering, Full enumeration, and route feasibility across all regions.
-The replacement is implemented. Two full verification runs pass all 1,373 tests,
+The replacement and performance follow-up are implemented. Two full verification
+runs pass all 1,388 tests,
 lint, types and the application production build; two browser runs pass 11 cases
-each. The user-run regional rebuild and independently labeled accuracy evaluation
-remain acceptance work; no measured regional precision/recall improvement is
-claimed. Historical audit reports describe their pinned review snapshots.
+each. The user-run Central Cascades build and its sealed publication audit pass;
+the [preparation performance follow-up](access-review/preparation-performance.md)
+removes remaining building work and broad final refreshes. New regional timing
+and independently labeled accuracy evaluation remain acceptance work; no measured
+regional precision/recall improvement is claimed. Historical audit reports
+describe their pinned review snapshots.
 
 ## Implemented distinction
 
@@ -50,7 +54,8 @@ exception, parking invention, road-name rule or special ID. Restricted Discovery
 and path-only Alum Rock circles challenge the same rule. This is a source-function
 product assumption, not certified global vehicle reachability.
 
-Building density no longer vetoes entrance admission. The actual existing
+Building density no longer vetoes entrance admission, and production no longer
+collects or counts buildings. Historical metadata remains readable. The actual existing
 mountain association is **25 walking miles**. The shared helper halves its
 50-mile return-distance input; the earlier review mistook that input for the
 one-way limit. The independent 25-mile geographic route buffer is unchanged. Association
@@ -66,7 +71,10 @@ The initial implementation had a real sparse-stage regression: roughly 46% of
 a safe CPU sample was spent repeatedly preparing SQL statements. The correction
 caches statements, roots arrival propagation, narrows transition queries and
 avoids unused reachability during final frozen refresh. Bounded benchmarks check
-identical entrance records; final regional speed is pending the user's build.
+identical entrance records. The user's completed regional timings identified
+further dead building work and whole-source final refresh work; the linked
+performance follow-up records their removal. Updated regional speed is pending
+the user's next monitored build.
 The disposable diagnosis did not finish a regional pack. A later native-object
 diagnostic probe crashed that isolated process; that exit does not establish an
 ordinary build failure or memory exhaustion.

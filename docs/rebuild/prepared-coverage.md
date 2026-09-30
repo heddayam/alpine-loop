@@ -52,11 +52,17 @@ One pinned Standard inventory replaces twelve Broad/EPA outlines and the separat
 terrain mask. Washington and existing California product territories cap nomination,
 not routes. Published Downloads geometry reflects the completed core plus admitted
 approaches. Conservative terrain and source omissions remain disclosed.
-Unsupported building relations and density-excluded reviewed approaches are disclosed;
-missing topology remains a publication error.
+Mountain-excluded reviewed approaches and declared unavailable source connections
+are disclosed; missing undeclared topology remains a publication error. Building
+collection and density counting are absent from production preparation.
 Schema 7 geometry/profile records are unchanged. Each artifact carries its stable
 region ID and each section its human name. Display-label changes do not change the
 graph identity. Overlapping artifacts remain independent.
+
+The historical `nearby_building_count` column remains readable, but newly prepared
+entrances store null and current readers omit that unused metadata. Update the app
+before installing newly built artifacts. Existing artifacts retain their historical
+counts and remain readable; this performance change does not change entrance policy.
 
 Verified action receipts skip source staging on unchanged inputs. Semantic audit
 receipts are tied to exact compressed content, graph identity, geometry, audit

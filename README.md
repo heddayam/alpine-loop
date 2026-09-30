@@ -111,8 +111,8 @@ for the configured names: eleven Washington regions following WTA's familiar
 regional organization and the four existing California areas. All areas use one
 pinned **GMBA Standard** mountain-range inventory.
 Starts require a connected mapped pedestrian entrance and a hiking connection
-to their selected mountain core within 25 walking miles. Building density is
-descriptive context rather than an exclusion. Unmarked mountain entrances and
+to their selected mountain core within 25 walking miles. The builder does not
+collect or count buildings. Unmarked mountain entrances and
 connected valley approaches remain eligible; ordinary roads cannot establish
 the mountain connection. The shared distance helper receives a 50-mile
 return-distance budget and applies a 25-mile one-way association limit. The
@@ -202,7 +202,7 @@ Requests remain capped at **40 miles**; every admitted entrance gets a conservat
 coverage fails before DEM work. The international border and reviewed exclusions
 are hard routing limits. Download bytes become known after preparation.
 
-The builder extracts local trails and access/building context, finds sparse entrance
+The builder extracts local trails and access context, finds sparse entrance
 candidates, filters them by mountain-trail connectivity, then prunes trails that
 cannot participate within their distance budget
 **before elevation work**. It requests only DEM tiles owning retained samples. It reuses segment metrics across overlapping

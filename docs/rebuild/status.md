@@ -6,6 +6,48 @@ the evidence line.
 
 ## Active system design revision
 
+### Entrance preparation performance follow-up — 2026-09-30
+
+- [x] Audit the user's completed Central Cascades build and sealed publication
+  without starting a regional build or changing installed data. Sparse discovery
+  took 410,195 ms; final ranking took 527,068 ms, together 50.3% of its 31m03s
+  total. The 60,362 candidates precede mountain qualification; the published pack
+  contains 1,703 unique starts and valid witnesses. Raw/compressed hashes and its
+  semantic audit receipt match; integrity, foreign keys, departures and endpoint
+  foot passage checks pass. See the [performance report](access-review/preparation-performance.md).
+- [x] Remove leftover production building work completely: filtering, relation
+  completion, centroids, collection/storage, spatial indexes and per-candidate
+  counts. Normalization v15 invalidates obsolete context; downloaded originals,
+  DEM/measurement caches and published packs remain intact. Current nullable
+  legacy metadata reads round-trip through the production export/repository;
+  historical counts remain readable. The manual historical audit keeps its old
+  pinned parser in separate research scratch, outside production admission.
+- [x] Refresh fixed entrances through indexed original assertions and selected
+  departures, preserving frozen roles, source identities, directions, passage,
+  uncertainty and cancellation/retry. A disk-backed 100,507-node/502-start
+  comparison has identical full records/witnesses across six runs; median proof
+  preparation plus refresh falls 1,119.879 → 19.047 ms, with SQL method calls
+  406,062 → 7,564. This is a bounded phase benchmark, not a regional timing claim.
+- [x] Preserve ranked components while caching row statements safely and avoiding
+  rereads during union-find path compression. At 50,000 physical hiking links,
+  complete-record hashes match apart from the intentionally removed building
+  field; parent reads fall 849,996 → 599,999 and writes remain unchanged.
+  Ten committed original-source fixtures also preserve exact nonbuilding
+  movement/evidence and entrance identities through normalization v14 → v15.
+- [x] Complete full integration and browser verification twice on `846554b`:
+  both `npm run verify` runs pass all 1,388 tests in 114 files, lint, types,
+  MapLibre asset checks and production app builds. Both `npm run test:browser`
+  runs pass 11 desktop/mobile flows. The initial sandboxed run could not inspect
+  macOS process identities; the focused installation rerun and both complete host
+  runs pass without changing application code. All completed task worktrees and
+  branches are removed; unrelated active worktrees and the user's publication
+  review remain untouched. Regional builds stay reserved for the user.
+- [ ] Measure the updated regional build's timings and resources. The user
+  explicitly reserves the regional build to run and monitor it themselves.
+  Entrance policy and the effective 25-mile mountain association are unchanged;
+  the completed Central artifact remains valid. Update the app before consuming
+  newly prepared packs with omitted building metadata.
+
 ### Docker runtime packaging repair — 2026-09-30
 
 - [x] Remove the runtime preservation step for deleted `lib/data/wilderness.ts`;
@@ -121,8 +163,9 @@ the evidence line.
   authority for permanent density retention. This clarification changes docs only.
 - [x] Implement one connected-entry evaluator, mode/direction/node passage
   normalization, typed local arrival places, frozen publication witnesses and
-  versioned compatibility. Remove the building-density admission veto; retain
-  its descriptive counts. The actual existing mountain association is 25 walking
+  versioned compatibility. Remove the building-density admission veto; the
+  performance follow-up above also removes its leftover descriptive counting.
+  The actual existing mountain association is 25 walking
   miles: the shared helper halves its 50-mile return-distance input. The initial
   review's 50-mile wording was an interpretation error; behavior and route buffers
   are unchanged.
@@ -152,10 +195,12 @@ the evidence line.
   Its hand-built loop and arbitrary basemap location test UI behavior, not actual
   hike quality or surroundings. The QA server/tab and completed task worktrees
   are removed; installed packs, saved work and other active worktrees remain intact.
-- [ ] Complete the real rebuilt-pack publication/acceptance check. The user
-  explicitly requested to run and monitor the final regional build; leave it to
-  them. Old packs require rebuilding for new start selection, while installed
-  data, saved routes and verified downloads/elevation/metric caches are preserved.
+- [x] Complete a real rebuilt-pack publication check on the user's Central
+  Cascades build. Its sealed artifact and semantic receipt pass the independent
+  structural audit above. No regional precision/recall or quality claim follows.
+  The user retains control of the next monitored performance build. Old-policy
+  packs still require rebuilding for new starts; installed data, saved routes
+  and verified download/elevation/metric caches remain preserved.
 - [ ] Establish regional accuracy on fresh independently labeled held-out areas
   before claiming minimized false positives/negatives. Separate physical entry,
   permission, arrival claims, membership, product exclusions and source gaps.
@@ -187,7 +232,7 @@ the evidence line.
   start identity deliberately; do not transplant gate metadata. Do not describe
   these cases as absent hiking connections. Any
   refinement requires restrictive/interior/branch/distance regressions and the
-  mountain, access and route eligibility checks; density is now descriptive.
+  mountain, access and route eligibility checks; density no longer controls entry.
 - [ ] Implement the chosen repair, run required integration checks, and provide
   the user retry instructions. The failed area has no completed region receipt;
   retain source/elevation/measurement caches and existing publications. No real

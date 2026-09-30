@@ -5,6 +5,12 @@ source checks retain Top Lake, permitted Denny walking and actual outer interfac
 rejecting tested interior contacts. These are concrete regressions, not regional precision,
 recall, public car accessibility or route suitability.
 
+This report records its pinned implementation snapshot. The later
+[preparation performance follow-up](preparation-performance.md) removes production
+building collection and narrows frozen refreshes without changing entrance policy.
+The manual audit keeps building density solely as a historical research control,
+using the pinned parser from `204f8fb` in separate disposable scratch stores.
+
 ## Reproduction and scope
 
 Run against immutable retained PBFs; no downloads, existing pack/database reads,
