@@ -6,6 +6,33 @@ the evidence line.
 
 ## Active system design revision
 
+### Pinned OSM cache version recovery — 2026-09-29
+
+- [x] Diagnose the user-run build failure before any graph preparation or
+  publication. Default `.cache/sources` points Washington to `washington-260806`,
+  while the unchanged regional recipe requires `washington-260801`. The retained
+  `.cache/progressive-feasibility/shared-sources` Washington/Oregon/Idaho receipts
+  and all three complete file hashes match the configured August 1 pins.
+  The newly downloaded Oregon snapshot, older source files and published packs
+  are retained; no build is restarted by the agent.
+- [x] Distinguish a valid same-source cache for another version from malformed
+  pointers, wrong source identity and corrupt files. Online preparation acquires
+  the requested version for this typed mismatch or an absent input, with an
+  explicit Acquiring phase. Offline preparation rejects both. Matching-version
+  source mismatches, malformed receipts, path escapes, size/hash corruption and
+  acquired bytes inconsistent with the recipe continue to stop preparation.
+  Catalog versions and hashes remain unchanged.
+- [x] Forty integrated offline source/preparation/portability regressions pass;
+  they use fixture bytes and mocked acquisition without network or native graph
+  construction. A metadata-only check reproduces the real cache as the typed
+  version mismatch, including cached and configured versions in the message.
+- [x] `npm run verify` passes twice: 100 test files / 1,025 tests, lint, types,
+  MapLibre checks and production build. `npm run test:browser` passes twice:
+  10 / 10 Chromium checks at desktop/mobile widths. The published release JSON
+  remains byte-identical to the retained Central Cascades baseline. Temporary
+  task worktrees and branches are removed; source downloads and published data
+  are untouched by this repair.
+
 ### WTA-style regional setup — 2026-09-29
 
 - [x] Configure eleven Washington build/download districts using the accepted

@@ -251,8 +251,12 @@ first-download time and warm reuse should be evaluated separately.
 
 Use the default `.cache/sources` for the retained California source/DEM cache and
 the shown shared-source override for this checkout's Washington/Oregon cache.
-A fresh clone can omit the source-cache override. Ctrl+C stops at a checkpoint;
-repeat the command to reuse verified work. Incomplete imports restart normalization.
+A fresh clone can omit the source-cache override. An online build with a valid
+OSM cache pointing to another version acquires the configured snapshot; existing
+immutable downloads remain. Malformed or corrupt cached inputs still stop the
+build, and offline preparation does not acquire replacements.
+Ctrl+C stops at a checkpoint; repeat the command to reuse verified work.
+Incomplete imports restart normalization.
 Temporary build files and child processes are cleaned up; useful source/DEM/metric
 caches remain. Reports live at `${ALPINE_COVERAGE_ROOT:-.cache/build}/status.json`.
 `status --watch` refreshes every five seconds; it watches the report, not the process.
