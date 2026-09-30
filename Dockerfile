@@ -68,20 +68,20 @@ COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json /app/tsconfig.json ./
 
-# Only the shared metric and wilderness policies are needed by search workers.
-RUN cp lib/data/metrics.ts lib/data/wilderness.ts /tmp/ \
+# Only the shared metrics are needed by search workers from the data compiler.
+RUN cp lib/data/metrics.ts /tmp/ \
     && rm -rf lib/data lib/coverage lib/coverage-jobs lib/packs lib/server/__fixtures__ \
     && rm -f lib/graph/test-helpers.ts lib/graph/sqlite-repository.ts lib/graph/sqlite-closed-route-feasibility-repository.ts \
     && mkdir lib/data \
-    && mv /tmp/metrics.ts /tmp/wilderness.ts lib/data/ \
+    && mv /tmp/metrics.ts lib/data/ \
     && find lib -name '*.test.*' -delete \
     && mkdir -p .local-data/runtime .local-data/coverage \
     && chown -R node:node .local-data
 
 USER node
 
-# Next bundles API imports, but the download worker loads this pruned source tree.
-RUN node --import tsx -e "import('./lib/coverage-install/service.ts')"
+# Next bundles API imports, but both workers load this pruned source tree.
+RUN node --import tsx -e "Promise.all([import('./lib/coverage-install/service.ts'), import('./lib/server/route-solver-child.ts')])"
 
 EXPOSE 3000
 

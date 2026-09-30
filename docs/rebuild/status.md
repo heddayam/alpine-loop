@@ -6,6 +6,16 @@ the evidence line.
 
 ## Active system design revision
 
+### Docker runtime packaging repair — 2026-09-30
+
+- [x] Remove the runtime preservation step for deleted `lib/data/wilderness.ts`;
+  retain shared metrics and check both worker import trees after pruning.
+  `docker build --target runtime -t alpine-loop-runtime-check .` passes.
+  Disposable network-disabled containers pass production health/main-page
+  requests, search-worker IPC and empty download-worker execution as `node`.
+  Full verification was stopped and browser tests omitted at the user's request.
+  No application policy, pack schema or regional data changed.
+
 ### Route-search completeness, efficiency, and continuing results — 2026-09-30
 
 - [x] Implement shared route metrics/ranking, physical-cycle retention, iterative
