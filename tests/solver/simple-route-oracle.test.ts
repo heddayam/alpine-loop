@@ -199,6 +199,59 @@ describe("independent simple-route coverage oracle", () => {
     compareOracle(graph, criteria);
   });
 
+  it.each([
+    { side: "maximum", lengths: [1_296.97, 2_369.72, 1_787.45, 2_288.28], branch: 1_336.65 },
+    { side: "minimum", lengths: [2_574.95, 1_737.3, 104.38, 2_383.21], branch: 1_804.07 },
+  ])("preserves a $side distance-boundary match when corridor grouping changes floating-point addition", ({ side, lengths, branch }) => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "a", length: lengths[0]!, oneWay: true },
+      { id: 2, from: "a", to: "b", length: lengths[1]!, oneWay: true },
+      { id: 3, from: "b", to: "c", length: lengths[2]!, oneWay: true },
+      { id: 4, from: "c", to: "s", length: lengths[3]!, oneWay: true },
+      // The dead-end branch preserves a junction at a, making contraction group
+      // the remaining three cycle edges separately from its first edge.
+      { id: 5, from: "a", to: "dead", length: branch, oneWay: true },
+    ]);
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    const criteria = request({ distanceMiles: side === "maximum" ? meters(0, total) : meters(total, total + 500) });
+    expect(enumerateSimpleRoutes(graph, "s", criteria).filter(({ violations }) => violations.length === 0)).toHaveLength(1);
+    compareOracle(graph, criteria);
+    const result = searchSimpleRoutes(graph, "s", criteria, { budget, now: () => 0 });
+    expect(result.candidates[0]!.distanceMeters).toBe(total);
+  });
+
+  it("uses original-edge gain addition at an exact maximum after corridor contraction", () => {
+    const gains = [1_296.97, 2_369.72, 1_787.45, 2_288.28].map((value) => value / 10);
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "a", length: 1_000, gain: gains[0]!, oneWay: true },
+      { id: 2, from: "a", to: "b", length: 1_000, gain: gains[1]!, oneWay: true },
+      { id: 3, from: "b", to: "c", length: 1_000, gain: gains[2]!, oneWay: true },
+      { id: 4, from: "c", to: "s", length: 1_000, gain: gains[3]!, oneWay: true },
+      { id: 5, from: "a", to: "dead", length: 100, oneWay: true },
+    ]);
+    const total = gains.reduce((sum, gain) => sum + gain, 0);
+    const criteria = request({ elevationGainFeet: feet(0, total) });
+    expect(enumerateSimpleRoutes(graph, "s", criteria).filter(({ violations }) => violations.length === 0)).toHaveLength(1);
+    compareOracle(graph, criteria);
+    const result = searchSimpleRoutes(graph, "s", criteria, { budget, now: () => 0 });
+    expect(result.candidates[0]!.elevationGainMeters).toBe(total);
+  });
+
+  it("still labels an actually over-limit route close after conservative floating-point pruning", () => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "a", length: 100.1, oneWay: true },
+      { id: 2, from: "a", to: "b", length: 200.2, oneWay: true },
+      { id: 3, from: "b", to: "s", length: 300.3, oneWay: true },
+    ]);
+    const total = graph.edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
+    const criteria = request({ distanceMiles: meters(0, total - 1e-12) });
+    expect(enumerateSimpleRoutes(graph, "s", criteria)[0]!.violations).toContain("distance-above-maximum");
+    const result = searchSimpleRoutes(graph, "s", criteria, { budget, now: () => 0 });
+    expect(result.candidates).toEqual([]);
+    expect(result.nearCandidates[0]!.distanceMeters).toBe(total);
+    expect(result.nearCandidates[0]!.violatedConstraints).toContain("distance-above-maximum");
+  });
+
   it("does not lose a grade-minimum match whose sustained climb spans edge interiors", () => {
     const graph = oracleGraph([
       { id: 1, from: "s", to: "a", length: 75, oneWay: true, profile: [

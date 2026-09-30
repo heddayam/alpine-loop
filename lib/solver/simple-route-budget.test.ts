@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { enumerateSimpleRoutes, oracleGraph, physicalLoopKey, type PhysicalTrail } from "@/tests/solver/helpers/simple-route-oracle";
 import { searchSimpleRoutes } from "./simple-route-search";
+import { searchCompletionForReasons } from "./budget";
 import type { RouteSearchRequest } from "./types";
 
 const meters = (min: number, max: number) => ({ min: min / 1_609.344, max: max / 1_609.344 });
@@ -89,5 +90,82 @@ describe("route-search coverage within fixed work", () => {
     // outer traversal could yield its reserved part to close-match discovery.
     expect(result.diagnostics.truncationReasons).toContain("exact-search-limit");
     expect(result.diagnostics.expandedStates).toBeLessThanOrEqual(78);
+  });
+});
+
+describe("physical-cycle retention budgets", () => {
+  const criteria: RouteSearchRequest = {
+    distanceMiles: meters(500, 1_000), closedRoute: { maximumRepeatedTrailPct: 55 },
+    includeUncertainAccess: true, limit: 10,
+  };
+
+  it("can replace a worse direction at capacity and finish without a false limit", () => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "a", length: 200, gain: 25, reverseGain: 10 },
+      { id: 2, from: "a", to: "b", length: 200, gain: 25, reverseGain: 10 },
+      { id: 3, from: "b", to: "s", length: 200, gain: 25, reverseGain: 10 },
+    ]);
+    const result = searchSimpleRoutes(graph, "s", {
+      ...criteria, elevationGainFeet: { min: 0, max: 80 / 0.3048 },
+    }, { budget: { ...budget, maximumRetainedCycles: 1 }, now: () => 0 });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.elevationGainMeters).toBe(30);
+    expect(result.diagnostics.candidateCount).toBeGreaterThan(1);
+    expect(result.diagnostics.truncationReasons).toEqual([]);
+  });
+
+  it("does not spend the cycle allowance on repeated approaches before discovering a separate loop", () => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "p", length: 100 },
+      { id: 2, from: "s", to: "p", length: 110 },
+      { id: 3, from: "p", to: "a", length: 200 },
+      { id: 4, from: "a", to: "b", length: 200 },
+      { id: 5, from: "b", to: "p", length: 200 },
+      { id: 6, from: "s", to: "x", length: 280 },
+      { id: 7, from: "x", to: "y", length: 280 },
+      { id: 8, from: "y", to: "s", length: 280 },
+    ]);
+    const request = { ...criteria, distanceMiles: meters(750, 950) };
+    const expected = new Set(enumerateSimpleRoutes(graph, "s", request)
+      .filter(({ violations }) => violations.length === 0).map(({ loopKey }) => loopKey));
+    expect(expected).toEqual(new Set(["3,4,5", "6,7,8"]));
+    const result = searchSimpleRoutes(graph, "s", request, {
+      budget: { ...budget, maximumRetainedCycles: 2 }, now: () => 0,
+    });
+    expect(new Set(result.candidates.map(({ traversals }) => physicalLoopKey(traversals.map(({ edge }) => edge)))))
+      .toEqual(expected);
+    expect(result.diagnostics.candidateCount).toBeGreaterThan(2);
+    expect(result.diagnostics.truncationReasons).toEqual([]);
+    expect(searchCompletionForReasons(result.diagnostics.truncationReasons, budget)).toBe("exhausted");
+  });
+
+  it("reports a hard limit only when another distinct cycle exceeds the retention allowance", () => {
+    const trails: PhysicalTrail[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      trails.push(
+        { id: index * 3 + 1, from: "s", to: `a${index}`, length: 200 },
+        { id: index * 3 + 2, from: `a${index}`, to: `b${index}`, length: 200 },
+        { id: index * 3 + 3, from: `b${index}`, to: "s", length: 200 },
+      );
+    }
+    const retainedBudget = { ...budget, maximumRetainedCycles: 2 };
+    const result = searchSimpleRoutes(oracleGraph(trails), "s", criteria, { budget: retainedBudget, now: () => 0 });
+    expect(result.candidates).toHaveLength(2);
+    expect(result.diagnostics.truncationReasons).toContain("maximum-retained-cycles");
+    expect(result.diagnostics.truncationReasons).not.toContain("maximum-raw-candidates");
+    expect(searchCompletionForReasons(result.diagnostics.truncationReasons, retainedBudget)).toBe("limited");
+  });
+
+  it("reports candidate memory exhaustion without retaining an oversized first candidate", () => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "a", length: 200 },
+      { id: 2, from: "a", to: "b", length: 200 },
+      { id: 3, from: "b", to: "s", length: 200 },
+    ]);
+    const retainedBudget = { ...budget, maximumRetainedBytes: 1 };
+    const result = searchSimpleRoutes(graph, "s", criteria, { budget: retainedBudget, now: () => 0 });
+    expect(result.candidates).toEqual([]);
+    expect(result.diagnostics.truncationReasons).toContain("candidate-memory-limit");
+    expect(searchCompletionForReasons(result.diagnostics.truncationReasons, retainedBudget)).toBe("limited");
   });
 });
