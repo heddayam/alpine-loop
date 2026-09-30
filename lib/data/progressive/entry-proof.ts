@@ -188,6 +188,11 @@ export class ConnectedEntryProof {
         if (item.kind === "gate" && passage?.barrier && restricted(passage.motor as string | null) && this.get("SELECT 1 FROM entry_arrivals WHERE node_id=? LIMIT 1",node)) this.best(node, "entry_approach", "interface", boundary);
         continue;
       }
+      // Missing place foot metadata inherits the mapped hiking passage. An
+      // explicit unresolved foot condition is a used place assertion instead.
+      const placeFlags=(item as NormalizedPortalEvidence & {flags?:readonly string[]}).flags ?? [];
+      const placeFoot=footSegmentAccessState("public",[placeFlags]);
+      if(!usable(placeFoot))continue;
       let arrival: Row | undefined;
       for (const node of new Set(item.nodeIds)) {
         await this.step();
@@ -197,7 +202,7 @@ export class ConnectedEntryProof {
       if (!arrival) continue;
       for (const node of new Set(item.nodeIds)) {
         await this.step();
-        const witness = this.departure(node, arrival, "parking", true, true);
+        const witness = this.departure(node, arrival, "parking", placeFoot === "public", true);
         if (!witness) continue;
         witness.sourceRefs = references(witness.sourceRefs, item.sourceRefs);
         this.offer(node, witness, boundary);

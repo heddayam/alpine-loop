@@ -131,6 +131,26 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
     expect(edges).toEqual(originalEdges);
   });
 
+  it.each([
+    {flags:[],accessState:"public",known:true},
+    {flags:["motor-access:unknown"],accessState:"public",known:true},
+    {flags:["foot-access:public"],accessState:"public",known:true},
+    {flags:["foot-access:unknown","conditional:foot:yes @ (sunrise-sunset)"],accessState:"unknown",known:false},
+  ])("distinguishes missing parking foot metadata from an explicit $flags assertion",async({flags,accessState,known})=>{
+    const {points}=await derive(heather,topology=>{
+      Object.assign(topology.portalEvidence!.find(item=>item.kind==="parking")!,{flags});
+    });
+    expect(points).toMatchObject([{nodeId:"osm-node-3835171557",accessState,entryWitness:{kind:"parking",known}}]);
+    expect(points.filter(point=>point.accessState==="public")).toHaveLength(known?1:0);
+  });
+
+  it("rejects an explicit restricted parking foot assertion even if its broad state is unknown",async()=>{
+    const {points}=await derive(heather,topology=>{
+      Object.assign(topology.portalEvidence!.find(item=>item.kind==="parking")!,{accessState:"unknown",flags:["foot-access:private"]});
+    });
+    expect(points).toEqual([]);
+  });
+
   it.each(["track", "path", "evidence"] as const)("does not add a mapped trailhead through restricted %s", async kind => {
     const { points } = await derive(top, topology => {
       if (kind === "evidence") topology.portalEvidence![0]!.accessState = "private";
