@@ -136,15 +136,12 @@ docker compose run --rm data scripts/data.ts plan santa-cruz-mountains henry-coe
 docker compose run --rm data scripts/data.ts build \
   santa-cruz-mountains southern-east-bay monterey-carmel henry-coe
 
-# Rebuild Washington mountain areas:
+# All twelve Washington areas use the same mountain-core/approach policy.
+# Central Cascades reuses its verified artifact when inputs are unchanged.
 docker compose run --rm \
   -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks southwest-cascades olympic-peninsula
-
-# Surrounding areas and other Washington ranges, also built sequentially:
-docker compose run --rm \
-  -e ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
-  data scripts/data.ts build north-puget south-puget willapa-hills \
+  data scripts/data.ts build central-cascades north-cascades rainier-goat-rocks \
+  southwest-cascades olympic-peninsula north-puget south-puget willapa-hills \
   northeast-washington spokane-palouse columbia-basin blue-mountains
 
 # In another terminal:
@@ -158,6 +155,11 @@ artifacts and cached inputs. Each area publishes separately; this is not an atom
 batch release. The status report describes the current/last area, and the command
 prints a completion summary for each. Planning several areas prints one JSON
 object per area.
+
+The California and Washington commands above cover all sixteen configured areas.
+Configuration and `plan` do not prepare data; run `build` explicitly when ready.
+All areas use the pinned Standard inventory, sparse connected entrance selection,
+actual approach registration, and complete per-start routing buffers described above.
 
 Adding an area preserves neighboring published artifacts. In Coverage, select the
 new areas, review their sizes, and choose **Download**; several selections share

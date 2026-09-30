@@ -48,6 +48,20 @@ the evidence line.
   mountain/valley routes remain acceptance evidence. Standard omits some low-relief
   terrain; missing mapped connections can exclude useful starts. Neither boundary
   shape nor fixture success establishes real-source trail completeness or speedups.
+- [x] Setup for all sixteen areas requested 2026-09-29: all initial plans pass under
+  the current named Standard policy; the README groups all twelve Washington IDs
+  and four California IDs with their retained cache locations. Retired North
+  Cascades, Rainier–Goat Rocks, Southwest Cascades and Olympics from the developer
+  catalog and removed their obsolete published objects. The verified Central
+  artifact `1f7afe4756cb5d8aeba4dd5d9e9d4fc5383f513297db3f82a397242578796044`
+  remains installed and is the sole published area in
+  `release-49f55acd30d59a8bb3a1a045c7c7a60e`. Saved-search installation data and
+  verified source/metric caches remain retained. An initial North build was stopped
+  when the user clarified setup only; no replacement regional pack was published.
+  No build queue remains, and the interrupted status is explicitly paused.
+  `GET /api/coverage` confirms only Central available/installed, no active download,
+  and no catalog error; the app remains healthy. Actual builds and regional route
+  acceptance remain pending until builds are explicitly requested or run.
 - [x] User reported the revised Central Cascades build Ready in 20m 51s:
   24,464 access candidates, 8,414 sparse candidates, 5,733 terrain exclusions,
   2,681 eligible starts and 160 outside approach starts. Its 2,344,040 nodes /
