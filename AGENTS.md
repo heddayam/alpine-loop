@@ -1,50 +1,42 @@
-# Alpine Loop agent instructions
+# Alpine Loop
 
-This repository is a clean reboot. The product and technical decisions are in
-`docs/rebuild/implementation-plan.md`; the execution protocol is in
-`docs/rebuild/agent-runbook.md`. Read both files completely before changing the
-application.
+Work backward from the hiker's experience. The active user goal and
+`docs/goal.json` define acceptance. The old `docs/rebuild` plans are historical;
+do not resume their gates or carry their architecture into the replacement.
 
-## Required operating mode
+## Product
 
-- The primary agent is the integrator and owns the shared contracts, root
-  configuration, lockfile, and final verification.
-- Start at the first incomplete gate in `docs/rebuild/status.md`.
-- When a wave has independent work, proactively spawn the bounded subagents
-  prescribed by `docs/rebuild/agent-runbook.md` (at most three at once, leaving
-  one concurrency slot for the integrator). Do not wait for another request to
-  delegate.
-- Give each subagent exclusive file ownership and a concrete testable outcome.
-  Use short-lived `codex/<task>` branches or isolated worktrees. Integrate one
-  focused commit at a time, then remove its worktree and branch.
-- Do not ask subagents to redesign the product, API, route definitions, or data
-  contract. Escalate only a genuine contradiction or an unavailable required
-  data source.
-- Update `docs/rebuild/status.md` with evidence whenever a gate is completed.
-- Keep network access out of automated tests. Use committed fixtures.
-- Keep generated regional packs, raw downloads, caches, secrets, and databases
-  out of Git.
+- Generate loops and lollipops from trail data, with distance, elevation-gain,
+  and repeated-trail constraints. Never silently relax a constraint.
+- The visible or drawn area selects starts; it does not clip routes. Familiar
+  hiking-region names are navigation shortcuts. Include uncertain access by
+  default, label it, and allow its exclusion. Respect explicit prohibitions.
+- Search every eligible start, show diverse results progressively, distinguish
+  attempted starts from completed exploration, and disclose unfinished work.
+- Keep the current search alive while the server runs. Reopening the browser
+  reconnects. Restart recovery, old saved jobs, old APIs, and old data formats
+  are not compatibility requirements.
+- Washington first; California later. No universal mileage cap, mountain-core
+  qualification, drive-time service, or steepness controls in the first release.
+- Local launch acquires usable prepared data automatically. Hosted use starts
+  from a URL. Users never prepare OSM/elevation data or configure catalogs.
 
-## Product invariants
+## Execution
 
-- This is a hike-route generator, not a catalog of known hikes.
-- Drawn areas, named regions, and drive-time contours filter eligible access
-  points; they do not clip hiking routes. Exact installed-pack coverage is the
-  hard geometry boundary.
-- Unknown access is included by default and can be explicitly disabled.
-- Return exact matches separately from clearly labeled close matches; never relax
-  constraints silently.
-- Full search is the sole search workflow; retain up to ten exact routes per
-  eligible start, or a clearly labeled close match.
-- The active app is standard local Next.js plus MapLibre. Do not restore Sites,
-  ChatGPT/OpenAI hosting, Cloudflare Workers, D1, R2, vinext, or Vite hosting.
-- Pre-rebuild source is preserved by the `archive/pre-redo-*` tags. Keep legacy
-  source excluded from the active build and TypeScript configuration.
-
-## Git hygiene
-
-- `main` must remain releasable and have one clear purpose per commit.
-- Prefer `codex/<task>` branches, squash integration, and branch deletion after
-  merge. There may be at most one active integration branch.
-- Never leave completed worktrees behind.
-- Preserve the `archive/pre-redo-*` tags. They are the durable path to old work.
+- First deliver a complete small slice on real data. Freeze at least 20 realistic
+  benchmark queries across three Washington areas before optimizing.
+- The integrator owns shared models, root configuration, lockfile, integration,
+  and final verification. Delegate up to three independent tasks with exclusive
+  file ownership, a concrete outcome, and a focused commit in separate worktrees.
+- Use one active `codex/` integration branch. Preserve existing archive tags and
+  user-owned changes. Remove task worktrees and branches after integration.
+- Measure maintained app plus preparation/tooling code with `scripts/source-size.mjs`.
+  Moving code or compressing formatting does not count as simplification.
+- Keep tests focused on independent route correctness and real whole-app flows.
+  Automated tests are offline and use committed fixtures; real-data performance
+  measurements are separate. No test-count target or repeated full-suite ritual.
+- Keep generated datasets, downloads, caches, databases, and secrets out of Git.
+  Never open a live container's WAL database through the host filesystem.
+- No stack receives protected status. Add a dependency or subsystem only when
+  it earns its complexity for the confirmed product. Do not restore legacy
+  source as another active application.

@@ -1,0 +1,19 @@
+{
+  "objective": "Replace Alpine Loop with the smallest trustworthy app that finds useful constraint-based loop hikes, proven on real Washington data.",
+  "baseline": {
+    "commit": "ff3c69c57917f2bb649565aee6a89a437d6ca68c",
+    "archiveTag": "archive/before-product-rewrite-2026-09-30",
+    "sourceFiles": 212,
+    "sourceLines": 24063,
+    "maximumReplacementSourceLines": 12031,
+    "method": "Physical lines in first-party tracked .ts/.tsx/.js/.mjs/.py/.sh/.css files; exclude public vendored assets, .agents, .test/.spec files, tests/, testing/, __fixtures__/, and test-helpers.ts. Include application, preparation, research, scripts, and root code configuration. Normal readable formatting required."
+  },
+  "acceptance": {
+    "experience": ["area selection", "distance/gain/repetition", "loops and lollipops", "progressive comparison", "route inspection", "GPX", "browser reconnect while server lives"],
+    "setup": ["hosted URL", "one local command after prerequisites", "automatic usable data", "no user source processing or API keys"],
+    "quality": ["20 frozen real queries across 3 contrasting Washington areas", "independently verified qualifying routes", "independent exhaustive small-graph oracle", "honest constraints and completion"],
+    "performance": {"firstExactP90Ms": 5000, "allStartsAttemptedP90Ms": 60000, "cancelMs": 1000, "runtimeBytes": 1000000000},
+    "delivery": ["working replacement", "reproducible measurements", "brief architecture rationale", "concise setup", "one active application", "temporary scaffolding removed"]
+  },
+  "state": "First real-data slice in progress; no acceptance item is claimed complete."
+}
