@@ -1,13 +1,80 @@
 # Access points: one entry model for the whole application
 
-Review and recommendation, 2026-09-30. Initial audit baseline: `9fff8d7`;
+Implementation and review, 2026-09-30. Initial audit baseline: `9fff8d7`;
 preimplementation challenge baseline: `8185478`. The decisions below incorporate
 the second review; its reports challenge the earlier draft rather than supersede
 these decisions.
 This covers extraction, preparation, publication, installation, map presentation,
 geographic filtering, Full enumeration, and route feasibility across all regions.
-It recommends a replacement design; it does not change application behavior or
-claim measured precision/recall improvements.
+The replacement is implemented. Two full verification runs pass all 1,373 tests,
+lint, types and the application production build; two browser runs pass 11 cases
+each. The user-run regional rebuild and independently labeled accuracy evaluation
+remain acceptance work; no measured regional precision/recall improvement is
+claimed. Historical audit reports describe their pinned review snapshots.
+
+## Implemented distinction
+
+**Prepare a connected entrance once; select that recorded entrance everywhere.**
+“Prepared membership” means the entrance was admitted into that region's saved
+entrance list. Existing `access_points` rows are that list; a display outline is
+not membership and there is no second global catalog.
+
+```mermaid
+flowchart TD
+    S[Mapped ways, places and passage restrictions] --> P[One connected-entry proof]
+    P --> R[Prepared regional entrance rows and witnesses]
+    R --> F[One selector: membership, area and foot profile]
+    F --> M[Eligible map markers]
+    F --> J[Full search and saved jobs]
+    J --> G[One owning graph and its exact route coverage]
+```
+
+Final source-policy refinements supersede the earlier proposal where it described
+unknown-motor tracks as general arrival approaches. Ordinary road contacts root
+arrival when foot is usable or a motor direction is public/unknown; both modes
+hard restricted excludes them. Connected service approaches retain independent
+walking and vehicle passage. Tracks remain walking/hiking geometry, but generic
+arrival propagation requires affirmative motor permission in the used direction.
+This prevents an unknown-motor track chain from promoting interior hiking
+junctions, as original Sunol topology demonstrated.
+
+Mapped parking places and `highway=turning_circle` nodes supply typed local
+arrival-place authority at actual physical contacts. A contact requires usable
+foot permission or a public/unknown motor direction; both modes hard restricted
+excludes it. Actual node foot restrictions remain authoritative. Places cannot
+root on a path-only contact. Limited roads supply contacts only for typed places,
+never generic roots or invented foot links. Original Top Lake has
+a turning-circle track/path contact and a connected trailhead 20.8 m farther
+along the public-foot path; preserving those source facts requires no distance
+exception, parking invention, road-name rule or special ID. Restricted Discovery
+and path-only Alum Rock circles challenge the same rule. This is a source-function
+product assumption, not certified global vehicle reachability.
+
+Building density no longer vetoes entrance admission. The actual existing
+mountain association is **50 walking miles**, previously documented incorrectly
+as 25; the independent 25-mile geographic route buffer is unchanged. Association
+does not prove a known-only journey to a core or an appealing hike.
+
+The map and Full now use the same request selector, actual regional membership
+and requested-profile owner/cycle hints. Unresolved drive filters show no eligible
+markers; context trails remain visible. Publication retains policy-versioned
+entrance witnesses. Old packs require rebuilding for new starts, while saved
+geometry remains readable and unsupported unfinished old jobs stop explicitly.
+
+The initial implementation had a real sparse-stage regression: roughly 46% of
+a safe CPU sample was spent repeatedly preparing SQL statements. The correction
+caches statements, roots arrival propagation, narrows transition queries and
+avoids unused reachability during final frozen refresh. Bounded benchmarks check
+identical entrance records; final regional speed is pending the user's build.
+The disposable diagnosis did not finish a regional pack. A later native-object
+diagnostic probe crashed that isolated process; that exit does not establish an
+ordinary build failure or memory exhaustion.
+
+See the [implementation validation](access-review/implementation-validation.md)
+for committed original-source fixtures, cross-region diagnostic windows, density
+controls and bounded timings. Those windows were used to revise the policy and
+are **not untouched holdouts**. Candidate counts do not establish precision/recall.
+Fresh independently labeled reserved regions remain necessary for that claim.
 
 ## Recommendation
 
@@ -33,8 +100,8 @@ Full search, not a narrow entrance repair. Existing rules must justify themselve
 as well as new ones. Implementation order and controlled comparisons are ways to
 establish the replacement's behavior, not reasons to shrink its intended scope.
 
-Recommend removing the **fewer than ten buildings within 500 m** veto from the
-target design. It measures mapped development, a current product preference; it
+The implementation removes the **fewer than ten buildings within 500 m** veto.
+It measures mapped development, a former product preference; it
 does not establish entry or hiking quality. A village or visitor facility can
 have a useful mountain entrance, while a sparse contact can offer a poor hike.
 This is a reasoned product revision, not a measured detector-accuracy improvement.
@@ -42,7 +109,7 @@ Test its effect on representative entrances, generated routes and Full-search
 cost, rather than retain it merely because it exists or delete it merely because
 fewer rules sound better.
 
-Hold today's density and **25-mile mountain association** constant when comparing
+Hold historical density and the actual **50-mile mountain association** constant when comparing
 old/new detector accuracy, then separately compare product fit with density
 removed. That experimental control does not make retention the desired end-state.
 Topology plus mountain association does not prove an appealing hike; inspect dense
@@ -64,12 +131,12 @@ and a gate's location need not be an entrance's location. Implementation can
 proceed from these clarified rules and concrete fixtures. Independent regional
 labels are needed to claim improved accuracy, not to begin semantic implementation.
 
-## What the application currently does
+## What the audited baseline did
 
 The detailed independent reviews are [topology and permission](access-review/topology-audit.md),
 [geography and map](access-review/geography-audit.md), and
 [source semantics and evaluation](access-review/source-audit.md).
-The second-review challenges are [entry semantics](access-review/entry-preflight.md),
+The historical second-review challenges are [entry semantics](access-review/entry-preflight.md),
 [selection and ownership](access-review/selection-preflight.md), and
 [validation](access-review/validation-preflight.md).
 
@@ -79,7 +146,7 @@ The second-review challenges are [entry semantics](access-review/entry-preflight
 | Normalization | Exclusive trail/street/service/sidewalk class; one pedestrian access state | A foot-allowed road can lose its road identity; vehicle permissions and node crossing restrictions are not represented independently. |
 | Nomination | Street contact; evidence at service contact; trailhead within 250 m of track; one parking contact | Different source mapping forms receive different admission rules despite equivalent entry topology. |
 | Candidate permission | Worst access state of every incident trail way | A private branch can veto a public departure, while a foot-private gate can be ignored. |
-| Product relevance | Fewer than ten mapped buildings within 500 m; hiking connection within 25 miles to a GMBA core | These are intentional scope exclusions; keep them distinct from detection errors and mapping gaps. |
+| Product relevance | Fewer than ten mapped buildings within 500 m; actual hiking connection within 50 miles to a GMBA core | These were scope exclusions; old documentation incorrectly called the latter 25 miles. |
 | Preparation/publication | Freeze starts, add outside-start neighborhoods and support, prune, measure, compact | Frozen entrance rows already exist; runtime membership inferred from polygons can disagree with those rows. |
 | Installed overlap | Stable owner selected by geometry plus graph-node existence | Node existence does not prove that owner admitted the entrance. |
 | Named filtering | Expanded start polygon plus another 500 m runtime tolerance | Nearby starts from another installed region can satisfy the selected region without membership. |
@@ -103,14 +170,15 @@ heuristics inside the word hiking:
 
 | Source function | Role in the entry proof |
 | --- | --- |
-| Ordinary general-purpose road | Local arrival root; its walking and motor permissions stay independent. Limited-access road nodes are not automatic roadside transfer places. |
+| Ordinary general-purpose road | Local arrival root when foot is usable or motor passage is public/unknown in at least one direction; both modes hard restricted excludes. Limited-access road nodes are not automatic roadside transfer places. |
 | Service/access road or parking aisle | Approach link when connected to an arrival root/place; class alone is not an arrival root. |
 | Explicit sidewalk/crossing/access link | Pedestrian approach context, never a hiking seed or generated hike by itself. |
 | Path, bridleway, steps, track, non-sidewalk footway/pedestrian way | Hiking/walking role, subject to passage rules; ambiguous walking links still cannot seed mountain association. |
-| Track | Physical hiking/land-access roles remain separate from permission. Connected mapped track approaches may establish pedestrian entry; motor uncertainty alone cannot remove that role. A track-track junction is not automatically another start. |
+| Track | Walking/hiking geometry remains usable under foot rules. Generic arrival propagation requires affirmative motor permission in the used direction; unknown/private tracks do not promote interior junctions. A track-track junction is not automatically another start. |
 | Road with supported walking use | Preserve currently supported walking geometry separately from source road function. Hiking-route relation support is optional future adapter work, not a prerequisite or name-based promotion. |
 | Connected explicit trailhead | An assertion of a trip-start location requiring an actual connected, usable mapped approach and departure; the tag cannot grant permission or invent its approach. |
 | Parking area | A local place assertion at its actual hiking contact, supported by its mapped arrival contact and foot passage. It supplies no routed interior edge or legal parking guarantee. |
+| Turning-circle node | Typed local vehicle-arrival place only at its own usable road/service/track contact. Path-only and hard-restricted contacts cannot root arrival; no parking guarantee. |
 | Sign or interior gate | Observation or crossing rule; it is not an automatic trip-start root. |
 
 Represent pedestrian areas as areas/observations until supported walking
@@ -130,10 +198,9 @@ The finite witness rule is:
 2. Reach the proposed entry through actual approach-role links under the
    witness's ingress mode, observing direction and node restrictions. Walking
    through hiking-only links cannot spread arrival status into the interior.
-   Tracks retain physical land-access roles even when car permission is unknown
-   or private; prove the used foot movement rather than infer car reachability.
-   A usable track approach can establish an unmarked path exit. Source function,
-   not the presence of `motor_vehicle=yes`, defines that physical role.
+   Tracks retain foot geometry even when car permission is unknown or private;
+   generic arrival propagation requires affirmative motor permission in the used
+   direction. An actual typed arrival place can root its own usable contact.
    An explicitly asserted trailhead may validate its actual walking connection
    from that frontier along hiking links; this validates the asserted location
    without nominating every other visited hiking node.
@@ -239,10 +306,10 @@ new starts implicitly; changed nomination context requires explicit re-preparati
 Keep the GMBA cores as named destination geography. Use each region artifact's
 frozen entrance records as **explicit membership**, rather than adding a second
 catalog. Keep the current inclusive, undirected hiking/possible-link association:
-at most 25 miles to an unambiguous hiking link touching the core, measured with
+at most 50 walking miles to an unambiguous hiking link touching the core, measured with
 the current endpoint seeding. Ordinary roads cannot establish it. This is static
 destination association, not proof of a known-only directed journey to the core.
-Decouple the 25-mile policy constant from the route-support budget without
+Decouple the actual 50-mile policy constant from the route-support budget without
 changing its value or pretending it measures the exact core intersection.
 
 Named selection is membership in the prepared entrance set, including actual
@@ -318,8 +385,8 @@ New jobs pin policy, installation and owner meaning. Existing jobs do not curren
 pin enough to guarantee exact resumption after changing this algorithm. Stop
 unsupported unfinished jobs with a clear reason and preserve partial results,
 rather than retaining a permanent second selector or re-enumerating silently.
-Already recorded geometry/results stay readable. This migration needs a test;
-it is not an existing guarantee.
+Already recorded geometry/results stay readable. Policy-version migration and
+legacy unfinished-job stopping are now covered by integration fixtures.
 
 Use one selector for eligible map highlighting, counts, Full enumeration, and
 explicit-start validation. The viewport only limits rendering/data fetching;
@@ -430,8 +497,8 @@ against independently labeled windows/holdouts before calling the replacement
 more accurate; synthetic cases establish semantics rather than regional recall.
 Stop promotion for newly admitted known-forbidden passage, an invented connector,
 or an unexplained loss of a resolved in-policy entrance. Do not add another data
-source or subsystem merely to hide such a failure. No regional build is started
-by this review.
+source or subsystem merely to hide such a failure. The final full regional build
+is reserved for the user to run and monitor.
 
 Review evidence: the independent audits reran current offline suites totaling
 79 topology/normalization/filter cases and 62 geography/reader/search cases
@@ -442,8 +509,9 @@ complete this review; a labeled cross-region comparison remains future work.
 The second review reran 101/101 entry/source/compaction baseline cases and 63/63
 selection/reader/solver/job cases (with overlapping coverage between reviews),
 and reproduced two direction interpretation defects with direct offline probes.
-These do not implement or test the proposed replacement. The review changes
-documentation only and does not alter source/metric caches, packs or installations.
+Those historical baseline suites did not test the replacement. Current
+implementation evidence is recorded separately in the validation report and
+status; existing published packs and installations remain preserved.
 
 ## Primary sources and assumptions
 
@@ -459,7 +527,10 @@ documentation only and does not alter source/metric caches, packs or installatio
   [parking](https://wiki.openstreetmap.org/wiki/Tag:amenity=parking): trip-start
   places, mixed-use land-access roads and parking facilities describe different
   source facts; none supplies an arbitrary missing walking connector.
-- [OSM pedestrian direction](https://wiki.openstreetmap.org/wiki/Key:oneway#Interpretation_for_routing):
+- [OSM turning circles](https://wiki.openstreetmap.org/wiki/Tag:highway=turning_circle):
+  a mapped vehicle turning place is a local source-function fact; parking and
+  globally verified public arrival do not follow from its tag.
+- [OSM pedestrian direction](https://wiki.openstreetmap.org/wiki/Key:oneway:foot):
   generic oneway interpretation varies by way function; explicit foot direction
   is unambiguous. Preserve unresolved source ambiguity.
 - [GraphHopper foot access](https://github.com/graphhopper/graphhopper/blob/master/core/src/main/java/com/graphhopper/routing/util/parsers/FootAccessParser.java),

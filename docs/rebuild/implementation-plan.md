@@ -26,13 +26,26 @@ existing California footprints limit approach nomination;
 these product limits never clip routes. Broad outlines, EPA residual allocation
 and the separate terrain mask are removed.
 
-A start needs fewer than ten mapped buildings within 500 metres and a hiking
-connection to its selected core within 25 miles. Unmarked entrances remain
-eligible; ordinary roads cannot establish mountain approaches. Preparation freezes
-actual eligible entrances, adds only their registration neighborhoods to the core,
-and completes each entrance's route buffer before elevation work. Reviewed anchors
-audit source topology rather than enlarging the core. Low foothills omitted by
-GMBA and unmapped/disconnected trails remain explicit limitations.
+A start needs a connected source-supported pedestrian entrance and a hiking
+connection to its selected core within 50 walking miles. Building counts describe
+the surroundings and never veto an entrance. The 50-mile association is the
+existing inclusive graph-distance policy, previously documented incorrectly as
+25 miles; the separate 25-mile geographic route buffer remains unchanged.
+Ordinary roads and validated parking/vehicle-turnaround places establish local
+arrival context. Connected service approaches and affirmative-motor track
+approaches lead to hiking departures or mapped mode frontiers. Unknown/private
+tracks remain walking geometry without propagating generic arrival. Connected
+trip-start assertions retain their actual walking approach. Interior hiking
+junctions and isolated trailhead tags cannot establish
+arrival themselves. Foot passage, including actual node restrictions and direction,
+is evaluated independently of car and parking certainty. Unmarked entrances remain
+eligible; ordinary roads cannot establish mountain association. Preparation freezes
+actual eligible entrances, adds their registration neighborhoods to the display
+outline, and completes each entrance's route buffer before elevation work.
+Reviewed anchors audit source topology rather than enlarging the core. Low foothills
+omitted by GMBA and unmapped/disconnected trails remain explicit limitations.
+See the [whole-application entry model](access-point-review.md) for the policy,
+independent source evaluation and outstanding real-build acceptance.
 
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
@@ -111,7 +124,9 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 
 - `GET /api/search/catalog` provides named regions, installed coverage, and the
   initial map view. No installed coverage means data is unavailable.
-- `GET /api/map?bbox=...` supplies viewport access points and trails.
+- `POST /api/map` supplies viewport trails and eligible starts using the same
+  foot profile, exact area predicates and prepared region membership as Full.
+  An unresolved filter displays context trails without selectable starts.
 - `/api/route-jobs` and its detail, cancel, delete, and results operations retain
   version-2 jobs. Public records contain intent and area, not internal plans.
 
@@ -137,7 +152,10 @@ only and never clip a hike.
 
 Each local area has an independent immutable SQLite artifact. The catalog and
 installation distinguish eligible start coverage from buffered routing coverage.
-One graph owns each start; overlapping artifacts are never joined. An admissible graph-distance bound prunes before DEM work, and persisted corridors
+Prepared entrance rows establish region membership; display outlines do not.
+One deterministic graph that actually admitted the requested-profile entrance
+owns each start; overlapping artifacts are never joined. An admissible
+graph-distance bound prunes before DEM work, and persisted corridors
 retain geometry and metric profiles. Segment metric caches are reusable across
 overlapping builds, while topology is local to each artifact. Ambiguous footways are possible walking links without a global
 connectivity prerequisite; explicit sidewalks/crossings remain excluded and access
@@ -152,7 +170,10 @@ installation, download, and migration contracts. Its acceptance gates in status
 must pass before large-region feasibility or migration is declared complete.
 
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
-internal plan pins contributing data versions. One FIFO coordinator resumes
+internal plan pins contributing data versions and the entry-policy version. Jobs
+from an older entry policy keep saved geometry but unfinished execution stops;
+old packs require a rebuild before their starts can enter the shared selector.
+One FIFO coordinator resumes
 interrupted work from its first unfinished attempt, with the same allowance,
 while the pinned data remains available. Old saved geometry stays viewable when data changes. Cancellation and
 deletion take precedence over late worker completion.

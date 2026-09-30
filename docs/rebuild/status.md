@@ -71,7 +71,7 @@ the evidence line.
   effect on actual hike suitability and search cost to be evaluated. Holding
   current density/mountain policy constant is a detector-comparison control,
   not a decision to retain those rules in the end-state. Existing application
-  policy remains unchanged. The review includes
+  policy remained unchanged at that review snapshot. The review includes
   cross-region precision/recall labels, holdouts, source-gap accounting,
   compatibility and implementation acceptance requirements.
 - [x] Verify baseline evidence with offline committed fixtures: topology audit
@@ -109,10 +109,44 @@ the evidence line.
   and Full-search cost. Topology/mountain connection alone does not prove quality.
   The preceding preflight reports are challenges to the earlier draft, not
   authority for permanent density retention. This clarification changes docs only.
-- [ ] Implement and independently evaluate the replacement before adopting it.
-  Existing entrance-policy/repair gates below remain pending. Synthetic fixture
-  success and nearby reviewed anchors do not establish regional precision or
-  recall. Preserve installed packs, saved work and source/metric caches.
+- [x] Implement one connected-entry evaluator, mode/direction/node passage
+  normalization, typed local arrival places, frozen publication witnesses and
+  versioned compatibility. Remove the building-density admission veto; retain
+  its descriptive counts. The actual existing mountain association is 50 walking
+  miles, correcting the former 25-mile documentation; route buffers are unchanged.
+  Final proof/source focused checks pass 183 cases; source extraction checks pass
+  78 cases and the shared-context follow-up passes 32 (these suites overlap).
+- [x] Replace named-outline proximity with prepared entrance membership and
+  requested-profile ownership. Map and Full share one exact start selector;
+  unresolved drive filters retain context trails without selectable dots, stale
+  requests are rejected, saved request snapshots retain their profile, and
+  unsupported old unfinished jobs stop while saved geometry stays readable.
+- [x] Correct demonstrated preparation bottlenecks: cache SQL statements, root
+  arrival propagation, restrict transition queries, index parking assertions,
+  skip unused final refresh reachability, and avoid repeated normalization work
+  on untagged geometry nodes. Bounded entrance outputs remain identical across
+  performance comparisons; no completed regional speed improvement is claimed.
+- [x] Complete final integration verification and independent source evaluation.
+  Two consecutive `npm run verify` runs pass all 1,373 tests in 113 files,
+  lint, types, MapLibre asset checks and the application production build; two
+  browser runs pass all 11 cases each. The independent
+  [source evaluation](access-review/implementation-validation.md) passes 262
+  focused cases and records six pinned original-source diagnostic windows.
+  Those windows helped revise the policy and are not untouched holdouts; their
+  candidate counts cannot establish regional precision/recall.
+  A disposable current-policy fixture confirms map/Full agreement on two starts,
+  empty unresolved-filter markers with retained trails, completed saved results,
+  desktop zoom/pan anchoring, and usable internally scrolling mobile details.
+  Its hand-built loop and arbitrary basemap location test UI behavior, not actual
+  hike quality or surroundings. The QA server/tab and completed task worktrees
+  are removed; installed packs, saved work and other active worktrees remain intact.
+- [ ] Complete the real rebuilt-pack publication/acceptance check. The user
+  explicitly requested to run and monitor the final regional build; leave it to
+  them. Old packs require rebuilding for new start selection, while installed
+  data, saved routes and verified downloads/elevation/metric caches are preserved.
+- [ ] Establish regional accuracy on fresh independently labeled held-out areas
+  before claiming minimized false positives/negatives. Separate physical entry,
+  permission, arrival claims, membership, product exclusions and source gaps.
 
 ### Southern East Bay connected gated entrances — 2026-09-30
 
@@ -132,16 +166,16 @@ the evidence line.
   Stanford parking `way/97345506` contacts a track but no non-track hiking link;
   Vargas parking `way/416179301` has no shared road/trail contacts. Independent
   static review finds no extraction, membership or compaction defect.
-- [ ] Resolve the requested entrance-policy choice before changing admission.
-  The current same-node service-road gate rule deliberately rejects these
-  connected entrances. The broader [entry recommendation](access-point-review.md)
+- [x] Resolve the entrance-policy choice through the user's broader replacement
+  instruction. The baseline same-node service-road gate rule rejected these
+  connected entrances. The implemented [entry model](access-point-review.md)
   supersedes the earlier bounded gate-retention proposal: nominate the actual
   service/path frontier and keep an interior generic gate at its real crossing,
   unless it is independently asserted as a trip-start location. This changes
   start identity deliberately; do not transplant gate metadata. Do not describe
   these cases as absent hiking connections. Any
   refinement requires restrictive/interior/branch/distance regressions and the
-  existing density, mountain, access and route eligibility checks.
+  mountain, access and route eligibility checks; density is now descriptive.
 - [ ] Implement the chosen repair, run required integration checks, and provide
   the user retry instructions. The failed area has no completed region receipt;
   retain source/elevation/measurement caches and existing publications. No real

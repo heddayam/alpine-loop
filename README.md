@@ -110,11 +110,14 @@ The workflow is **choose named hiking areas → preview → build**. Run `./alpi
 for the configured names: eleven Washington regions following WTA's familiar
 regional organization and the four existing California areas. All areas use one
 pinned **GMBA Standard** mountain-range inventory.
-Starts require supported access, **fewer than 10 mapped buildings within 500 metres**,
-and a hiking connection to their selected mountain core within 25 miles. Unmarked
-mountain entrances and connected valley approaches remain eligible; ordinary roads
-cannot establish that connection. Washington's state scope and the previous four
-California territories limit entrance nomination. See the
+Starts require a connected mapped pedestrian entrance and a hiking connection
+to their selected mountain core within 50 walking miles. Building density is
+descriptive context rather than an exclusion. Unmarked mountain entrances and
+connected valley approaches remain eligible; ordinary roads cannot establish
+the mountain connection. The 50-mile association preserves the actual existing
+policy; earlier documentation incorrectly called it 25 miles. The independent
+25-mile geographic route buffer remains unchanged. Washington's state scope and
+the previous four California territories limit entrance nomination. See the
 [range definitions](data/coverage/regions/README.md) for provenance and limits.
 
 The displayed boundary is the mountain core plus small neighborhoods around actual
@@ -212,7 +215,8 @@ Each named region remains an independent graph; overlapping regions never get st
 together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
 Before publication, each reviewed approach must have a mapped starting point in
 the final graph within its declared registration neighborhood, or an actual mapped
-start explicitly excluded by the density/terrain rules and named in release limitations.
+start explicitly excluded by mountain association or a declared source limitation
+and named in release limitations.
 Missing topology still stops publication and names the approach to investigate; the
 previous release remains usable. Areas with no eligible starts stop before elevation.
 This check does not establish a complete approach/trail inventory
@@ -226,6 +230,8 @@ ALPINE_SOURCE_CACHE=/app/.cache/progressive-feasibility/shared-sources \
   ./alpine.sh build central-cascades --rebuild
 ```
 
+Entrance policy changes require rebuilding desired regions before their starts
+can be selected by the map or Full search. Existing saved routes remain readable.
 The launcher updates the data image; `--rebuild` reruns graph
 preparation while keeping verified source/context, DEM and measurement caches.
 The previous published area remains available until the rebuild succeeds. This
@@ -235,8 +241,10 @@ container. Downloads, source context, elevation and measurement caches remain
 in the existing host directories. Outside Compose, `ALPINE_BUILD_SCRATCH` can
 select temporary storage; its default is the build-cache root.
 
-This measures a warm preparation, so compare individual stages and cache-hit counts
-with the previous run rather than treating the total as a cold-build comparison.
+Changed source-normalization versions require a fresh normalization pass even
+when verified raw downloads, DEM and measurement caches are reused. Compare
+individual stages and cache-hit counts with the previous run rather than
+assuming the total represents fully warm preparation.
 
 Building another named region adds it; rebuilding the same ID replaces it. The first
 named publication retires anonymous bbox entries from the active catalog, retaining
