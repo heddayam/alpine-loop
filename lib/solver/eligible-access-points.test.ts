@@ -4,7 +4,6 @@ import {
   accessPointCanStartClosedRoute,
   accessPointMatchesResolvedFilter,
   listEligibleAccessPointCandidates,
-  PORTAL_NAMED_REGION_TOLERANCE_M,
   rankAccessPointCandidates,
 } from "./eligible-access-points";
 
@@ -64,7 +63,7 @@ describe("eligible access-point enumeration", () => {
     expect(rankAccessPointCandidates(smallerPublicGraph, largerUnknownGraph, true)).toBeGreaterThan(0);
   });
 
-  it("applies geometry, access policy, buildings, and stable ranking once", async () => {
+  it("applies geometry and requested access policy without a density veto", async () => {
     const points = [
       point("lower-rank"),
       point("higher-rank", { knownConnectivity: 5 }),
@@ -82,7 +81,7 @@ describe("eligible access-point enumeration", () => {
       includeUncertainAccess: false,
     });
     expect(result.all).toHaveLength(5);
-    expect(result.eligible.map(({ id }) => id)).toEqual(["higher-rank", "lower-rank"]);
+    expect(result.eligible.map(({ id }) => id)).toEqual(["higher-rank", "built-up", "lower-rank"]);
   });
 
   it("keeps starts whose closed-route reachability was never measured", () => {
@@ -97,7 +96,6 @@ describe("eligible access-point enumeration", () => {
       point("loops", { canReachCycle: true }),
       point("dead-end", { canReachCycle: false }),
       point("unmeasured", { canReachCycle: undefined }),
-      // Dropped for buildings, so it must not be counted as a no-cycle exclusion.
       point("built-up-dead-end", { nearbyBuildingCount: 500, canReachCycle: false }),
     ];
     const repository = {
@@ -110,39 +108,81 @@ describe("eligible access-point enumeration", () => {
       includeUncertainAccess: false,
     });
     expect(result.eligible.map(({ id }) => id).sort()).toEqual(["loops", "unmeasured"]);
-    expect(result.matchedFilters.map(({ id }) => id).sort()).toEqual(["dead-end", "loops", "unmeasured"]);
-    expect(result.noCycleExcluded).toBe(1);
+    expect(result.matchedFilters.map(({ id }) => id).sort()).toEqual(["built-up-dead-end", "dead-end", "loops", "unmeasured"]);
+    expect(result.noCycleExcluded).toBe(2);
   });
 
-  it("includes trail portals in the named-region approach band without relaxing drawn or drive-time geometry", () => {
-    const nearBoundaryPortal = point("portal", {
-      lon: 1 + 499 / 111_195,
-      trailComponentId: "trail:portal",
-      reachableTrailKm: 10,
-    });
+  it("uses actual named membership, including outside approaches and holes, while drawn/drive geometry stays exact", () => {
+    const member = point("portal", { lon: 3, regionIds: ["selected", "other"] });
     const namedFilter = {
       namedRegionPredicateIndex: 0,
+      namedRegionIds: ["selected"],
       predicates: [AREA],
       coverage: AREA,
     };
-    expect(PORTAL_NAMED_REGION_TOLERANCE_M).toBe(500);
-    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, namedFilter)).toBe(true);
-    expect(accessPointMatchesResolvedFilter(
-      { ...nearBoundaryPortal, lon: 1 + 501 / 111_195 },
-      namedFilter,
-    )).toBe(false);
-    expect(accessPointMatchesResolvedFilter(
-      { ...nearBoundaryPortal, trailComponentId: undefined },
-      namedFilter,
-    )).toBe(false);
-    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
-      ...namedFilter,
-      namedRegionPredicateIndex: undefined,
-    })).toBe(false);
-    expect(accessPointMatchesResolvedFilter(nearBoundaryPortal, {
+    expect(accessPointMatchesResolvedFilter(member, namedFilter)).toBe(true);
+    expect(accessPointMatchesResolvedFilter(point("wrong-circle", { regionIds: ["neighbor"] }), namedFilter)).toBe(false);
+    expect(accessPointMatchesResolvedFilter(point("unrecorded"), namedFilter)).toBe(false);
+    expect(accessPointMatchesResolvedFilter(member, { ...namedFilter, namedRegionIds: ["missing", "other"] })).toBe(true);
+    expect(accessPointMatchesResolvedFilter(member, { ...namedFilter, namedRegionIds: undefined })).toBe(false);
+    expect(accessPointMatchesResolvedFilter(member, {
       predicates: [AREA, AREA],
       namedRegionPredicateIndex: 1,
+      namedRegionIds: ["selected"],
       coverage: AREA,
     })).toBe(false);
+    const hole = { type: "Polygon" as const, coordinates: [AREA.coordinates[0], [[-0.1,-0.1],[0.1,-0.1],[0.1,0.1],[-0.1,0.1],[-0.1,-0.1]]] };
+    const holeMember = { ...member, lon: 0 };
+    expect(accessPointMatchesResolvedFilter(holeMember, { ...namedFilter, predicates: [hole] })).toBe(true);
+    expect(accessPointMatchesResolvedFilter(holeMember, { predicates: [hole], coverage: AREA })).toBe(false);
+    expect(accessPointMatchesResolvedFilter(holeMember, { ...namedFilter, predicates: [hole, hole], namedRegionPredicateIndex: 1 })).toBe(false);
+    expect(accessPointMatchesResolvedFilter({ ...holeMember, lon: 1 }, { predicates: [AREA], coverage: AREA })).toBe(true);
+  });
+
+  it("does not bound named membership by its display polygon and requests the selected profile", async () => {
+    const calls: Parameters<GraphRepository["getAccessPointCandidates"]>[0][]=[];
+    const coverage = { type: "Polygon" as const, coordinates: [[[-4,-4],[4,-4],[4,4],[-4,4],[-4,-4]]] };
+    const repository = { getAccessPointCandidates: async (query:typeof calls[number]) => {
+      calls.push(query); return [point("outside-member", { lon: 3, regionIds: ["selected"] }), point("inside-neighbor", { regionIds: ["neighbor"] })];
+    } } as GraphRepository;
+    const result = await listEligibleAccessPointCandidates({ repository, includeUncertainAccess: false,
+      accessFilter: { predicates: [AREA], namedRegionPredicateIndex: 0, namedRegionIds: ["selected"], coverage } });
+    expect(calls.map(call => [call.bbox, call.includeUncertainAccess])).toEqual([[[-4,-4,4,4], false]]);
+    expect(result.eligible.map(point => point.id)).toEqual(["outside-member"]);
+  });
+
+  it("uses null cycle hints from the requested profile without exact-distance pruning", async () => {
+    const candidates = [point("unknown-loop", { knownMinimumStemMeters: null, inclusiveMinimumStemMeters: 0, canReachCycle: true }),
+      point("long-stem", { knownMinimumStemMeters: 20_000, inclusiveMinimumStemMeters: 20_000, canReachCycle: true })];
+    const repository = { getAccessPointCandidates: async () => candidates } as unknown as GraphRepository;
+    const options = { repository, accessFilter: { predicates: [AREA], coverage: AREA } };
+    const known = await listEligibleAccessPointCandidates({ ...options, includeUncertainAccess: false });
+    expect(known.eligible.map(point => point.id)).toEqual(["long-stem"]);
+    expect(known.noCycleExcluded).toBe(1);
+    expect((await listEligibleAccessPointCandidates({ ...options, includeUncertainAccess: true })).eligible).toHaveLength(2);
+  });
+
+  it("clips only the fetch bounds to a viewport without changing named membership", async () => {
+    const calls: Parameters<GraphRepository["getAccessPointCandidates"]>[0][]=[];
+    const repository = { getAccessPointCandidates: async (query:typeof calls[number]) => {
+      calls.push(query); return [point("selected", { lon:0.5, regionIds:["selected"] })];
+    } } as GraphRepository;
+    const result = await listEligibleAccessPointCandidates({ repository,includeUncertainAccess:true,viewportBbox:[0,-0.5,2,0.5],
+      accessFilter:{predicates:[AREA,AREA],namedRegionPredicateIndex:1,namedRegionIds:["selected"],coverage:AREA} });
+    expect(calls[0].bbox).toEqual([0,-0.5,1,0.5]);
+    expect(result.eligible.map(point=>point.id)).toEqual(["selected"]);
+  });
+
+  it("uses an inclusive explicit-start fallback only for ineligible-start diagnostics", async () => {
+    const calls: Parameters<GraphRepository["getAccessPointCandidates"]>[0][]=[];
+    const repository = { getAccessPointCandidates: async (query:typeof calls[number]) => {
+      calls.push(query); return query.includeUncertainAccess ? [point("uncertain", { accessState: "unknown" })] : [];
+    } } as GraphRepository;
+    const result = await listEligibleAccessPointCandidates({ repository, accessFilter: { predicates: [AREA], coverage: AREA }, includeUncertainAccess: false, startAccessPointId: "uncertain" });
+    expect(calls.map(call => call.includeUncertainAccess)).toEqual([false, false, true]);
+    expect(result.all.map(point => point.id)).toEqual(["uncertain"]);
+    expect(result.matchedFilters).toEqual([]);
+    expect(result.eligible).toEqual([]);
+    expect(result.noCycleExcluded).toBe(0);
   });
 });

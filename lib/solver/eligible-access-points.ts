@@ -1,10 +1,9 @@
-import { accessPointIsWildEnough } from "@/lib/data/wilderness";
 import {
   accessPointIsEligible,
   areaBounds,
   coordinateIsInsideArea,
-  distanceMetersToArea,
   type AccessPointCandidate,
+  type BoundingBox,
   type GraphRepository,
 } from "@/lib/graph";
 import type { ResolvedAccessFilterContext } from "./types";
@@ -14,25 +13,15 @@ export type EligibleAccessPointQuery = {
   accessFilter: ResolvedAccessFilterContext;
   includeUncertainAccess: boolean;
   startAccessPointId?: string;
+  /** Rendering/fetch bound only; never changes membership or owner choice. */
+  viewportBbox?: BoundingBox;
   signal?: AbortSignal;
 };
 
 /**
- * Reviewed named regions represent destinations such as parks, preserves, and
- * wilderness areas. Their usable trailheads commonly sit just outside the
- * legal boundary, so named-region searches admit trail portals in a bounded
- * approach band. Drawn areas and drive-time contours remain exact.
- */
-export const PORTAL_NAMED_REGION_TOLERANCE_M = 500;
-
-/**
- * A start with no reachable cycle can never produce a closed route, so the
- * solver already discards it after loading its topology. Rejecting it here
- * keeps it off the map and out of preview counts as well.
- *
- * The measurement comes from the `inclusive` profile, which is the permissive
- * superset of `known`: a start that fails it fails under every access setting.
- * `null` means the pack predates closed-route topology and is kept.
+ * Repositories set this hint from the requested profile of the owning graph.
+ * A false hint safely excludes a start; a finite hint does not prove a route.
+ * Missing hints remain conservative for in-memory/legacy fixture repositories.
  */
 export function accessPointCanStartClosedRoute(
   candidate: Pick<AccessPointCandidate, "canReachCycle">,
@@ -41,16 +30,17 @@ export function accessPointCanStartClosedRoute(
 }
 
 export function accessPointMatchesResolvedFilter(
-  candidate: Pick<AccessPointCandidate, "lon" | "lat" | "trailComponentId">,
+  candidate: Pick<AccessPointCandidate, "lon" | "lat" | "regionIds">,
   accessFilter: ResolvedAccessFilterContext,
 ): boolean {
   const namedRegionPredicateIndex = accessFilter.namedRegionPredicateIndex ?? -1;
+  const namedRegionIds = accessFilter.namedRegionIds;
+  if ((namedRegionPredicateIndex >= 0 || (namedRegionIds?.length ?? 0) > 0)
+    && !candidate.regionIds?.some(id => namedRegionIds?.includes(id))) return false;
   return accessFilter.predicates.every((geometry, index) => {
-    const coordinate = [candidate.lon, candidate.lat] as const;
-    if (coordinateIsInsideArea(coordinate, geometry)) return true;
-    return candidate.trailComponentId !== undefined
-      && index === namedRegionPredicateIndex
-      && distanceMetersToArea(coordinate, geometry) <= PORTAL_NAMED_REGION_TOLERANCE_M;
+    // Named membership is authoritative; circles/core outlines are display data.
+    return index === namedRegionPredicateIndex
+      || coordinateIsInsideArea([candidate.lon, candidate.lat], geometry);
   });
 }
 
@@ -82,7 +72,7 @@ export async function listEligibleAccessPointCandidates(
   /** Passed every filter, including closed-route reachability. */
   eligible: AccessPointCandidate[];
   /**
-   * Passed the geometry, access, and remoteness filters but not yet the
+   * Passed the membership, geometry, and access filters but not yet the
    * closed-route filter. An explicitly chosen start is checked against this so
    * a no-cycle selection reports the honest reason instead of being blamed on
    * the access-point area settings.
@@ -93,30 +83,44 @@ export async function listEligibleAccessPointCandidates(
   const coverageBounds = areaBounds(query.accessFilter.coverage);
   const bbox = [...coverageBounds] as [number,number,number,number];
   query.accessFilter.predicates.forEach((geometry,index) => {
+    if (index === query.accessFilter.namedRegionPredicateIndex) return;
     const bounds=areaBounds(geometry);
-    const dy=index===query.accessFilter.namedRegionPredicateIndex ? PORTAL_NAMED_REGION_TOLERANCE_M/110_000 : 0;
-    const dx=dy/Math.max(0.00001,Math.cos(Math.min(90,Math.max(Math.abs(bounds[1]),Math.abs(bounds[3]))+dy)*Math.PI/180));
-    bbox[0]=Math.max(bbox[0],bounds[0]-dx);bbox[1]=Math.max(bbox[1],bounds[1]-dy);
-    bbox[2]=Math.min(bbox[2],bounds[2]+dx);bbox[3]=Math.min(bbox[3],bounds[3]+dy);
+    bbox[0]=Math.max(bbox[0],bounds[0]);bbox[1]=Math.max(bbox[1],bounds[1]);
+    bbox[2]=Math.min(bbox[2],bounds[2]);bbox[3]=Math.min(bbox[3],bounds[3]);
   });
+  if (query.viewportBbox) {
+    bbox[0]=Math.max(bbox[0],query.viewportBbox[0]);bbox[1]=Math.max(bbox[1],query.viewportBbox[1]);
+    bbox[2]=Math.min(bbox[2],query.viewportBbox[2]);bbox[3]=Math.min(bbox[3],query.viewportBbox[3]);
+  }
   const all = bbox[0]>bbox[2] || bbox[1]>bbox[3] ? [] : await query.repository.getAccessPointCandidates({
     bbox,
-    includeUncertainAccess: true,
+    includeUncertainAccess: query.includeUncertainAccess,
     signal: query.signal,
   });
+  let ineligibleExplicitStart: string | undefined;
   // Preserve the distinction between a missing selected start and one outside
   // the filter without loading every other start in the installed graph.
   if (query.startAccessPointId && !all.some(point=>point.id===query.startAccessPointId)) {
-    const selected = await query.repository.getAccessPointCandidates({bbox:coverageBounds,accessPointId:query.startAccessPointId,includeUncertainAccess:true,signal:query.signal});
+    const selected = await query.repository.getAccessPointCandidates({bbox:coverageBounds,accessPointId:query.startAccessPointId,includeUncertainAccess:query.includeUncertainAccess,signal:query.signal});
     const point=selected.find(point=>point.id===query.startAccessPointId);
     if(point)all.push(point);
+    else if (!query.includeUncertainAccess) {
+      // An inclusive fallback is diagnostic only: never let it replace the
+      // requested-profile owner or enter the eligible/matched sets.
+      const inclusive = await query.repository.getAccessPointCandidates({bbox:coverageBounds,accessPointId:query.startAccessPointId,includeUncertainAccess:true,signal:query.signal});
+      const fallback = inclusive.find(point=>point.id===query.startAccessPointId);
+      if (fallback) { all.push(fallback); ineligibleExplicitStart = fallback.id; }
+    }
   }
   const matchedFilters = all
     .filter((candidate) => accessPointMatchesResolvedFilter(candidate, query.accessFilter))
     .filter((candidate) => accessPointIsEligible(candidate, query.includeUncertainAccess))
-    .filter(accessPointIsWildEnough)
+    .filter((candidate) => candidate.id !== ineligibleExplicitStart)
     .sort((left, right) => rankAccessPointCandidates(left, right, query.includeUncertainAccess));
-  const eligible = matchedFilters.filter(accessPointCanStartClosedRoute);
+  const eligible = matchedFilters.filter(candidate => {
+    const minimumStem = query.includeUncertainAccess ? candidate.inclusiveMinimumStemMeters : candidate.knownMinimumStemMeters;
+    return minimumStem === undefined ? accessPointCanStartClosedRoute(candidate) : minimumStem !== null;
+  });
   // Reported rather than discarded: it is the only thing that explains an empty
   // result in a compact drawn area.
   return { all, eligible, matchedFilters, noCycleExcluded: matchedFilters.length - eligible.length };

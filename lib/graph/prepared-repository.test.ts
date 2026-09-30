@@ -3,13 +3,15 @@ import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
-import { PreparedGraphRepository } from "./prepared-repository";
+import { ACCESS_ENTRY_POLICY_VERSION } from "@/lib/contracts/access-policy";
+import { PreparedGraphRepository, type PreparedGraphDescriptor } from "./prepared-repository";
 import { SQLiteGraphRepository } from "./sqlite-repository";
 import { writeGraphFixture, promoteGraphFixture, GRAPH_FIXTURE_IDENTITY } from "./test-helpers";
 import { coordinateIsInsideArea, segmentIntersectsArea, type AreaGeometry } from "./geometry";
 import type { GraphEdge, GraphNode, InducedGraph, ReachableGraphQuery } from "./types";
 import { ReachableGraphClosedRouteSolver } from "../solver/reachable-graph-closed-route-solver";
 import * as records from "./sqlite-records";
+import { listEligibleAccessPointCandidates } from "../solver/eligible-access-points";
 
 const directories: string[] = [];
 const repositories: Array<PreparedGraphRepository | SQLiteGraphRepository> = [];
@@ -83,10 +85,10 @@ function fixture(mixedIds = false) {
     // Fresh subset exports retain global keys but assign unrelated local rowids.
     db.exec("UPDATE nodes SET rowid=rowid+1000000; UPDATE edges SET rowid=rowid+2000000");
     db.close();
-    return { path, geometry };
+    return { path, geometry, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION };
   });
-  const open = (selected = artifacts, coverage = full) => {
-    const repository = new PreparedGraphRepository({ releaseId: "release", installationId: GRAPH_FIXTURE_IDENTITY.id, artifacts: selected, coverage });
+  const open = (selected: PreparedGraphDescriptor["artifacts"] = artifacts, coverage = full) => {
+    const repository = new PreparedGraphRepository({ releaseId: "release", installationId: GRAPH_FIXTURE_IDENTITY.id, artifacts: selected.map(artifact => ({ ...artifact, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION })), coverage });
     repositories.push(repository);
     return repository;
   };
@@ -154,14 +156,14 @@ test("pins immutable network identity independently of an expanded release catal
   const { prepared, mono } = fixture();
   const repository = new PreparedGraphRepository({
     releaseId: "expanded-catalog", installationId: "installed-networks",
-    artifacts: [{ path: prepared, geometry: full, graphId: "release" }], coverage: full,
+    artifacts: [{ path: prepared, geometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, graphId: "release" }], coverage: full,
   });
   repositories.push(repository);
   const expected = await mono.getReachableGraph(query);
   expect(sortedEdges((await repository.getReachableGraph(query)).graph)).toEqual(sortedEdges(expected.graph));
   const wrong = new PreparedGraphRepository({
     releaseId: "expanded-catalog", installationId: "installed-networks",
-    artifacts: [{ path: prepared, geometry: full, graphId: "wrong-network-version" }], coverage: full,
+    artifacts: [{ path: prepared, geometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, graphId: "wrong-network-version" }], coverage: full,
   });
   repositories.push(wrong);
   await expect(wrong.getReachableGraph(query)).rejects.toThrow("identity mismatch");
@@ -439,11 +441,11 @@ test("different query boundaries keep their own snapshots across asynchronous tr
     return { ...template, id: `edge-${i}`, edgeKey: i + 1, physicalEdgeKey: i + 1,
       fromNodeId: node.id, toNodeId: to.id, coordinates: [[node.lon, node.lat], [to.lon, to.lat]], lengthMeters: 1 };
   });
-  writeGraphFixture(path, { nodes, edges, accessPoints: [] });
+  writeGraphFixture(path, { nodes, edges, accessPoints: [{ ...graph().accessPoints[0], nodeId: "n0" }] });
   promoteGraphFixture(path, "release");
   const open = () => {
     const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "interleaved", coverage: full,
-      artifacts: [{ path, geometry: full, startGeometry: full }] });
+      artifacts: [{ path, geometry: full, startGeometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION }] });
     repositories.push(repository);
     return repository;
   };
@@ -494,7 +496,7 @@ test("bounded adjacency pages continue past a full batch of ineligible edges", a
 });
 
 
-test("local area starts retain buffered loops but exclude buffer-only access points", async () => {
+test("authoritative local entrance rows retain buffered loops regardless of display start geometry", async () => {
   const { prepared } = fixture();
   const db = new DatabaseSync(prepared);
   const columns = db.prepare("PRAGMA table_info(access_points)").all().map(row => String(row.name));
@@ -502,11 +504,11 @@ test("local area starts retain buffered loops but exclude buffer-only access poi
   db.close();
   const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
   const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "local", coverage: full,
-    artifacts: [{ path: prepared, geometry: full, startGeometry: core }] });
+    artifacts: [{ path: prepared, geometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, startGeometry: core }] });
   repositories.push(repository);
   const candidates = await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
-  expect(candidates.map(point => point.id)).toEqual(["start"]);
-  expect((await repository.getReachableGraph({ ...query, startNodeId: "a", startCoordinates: [-0.001, -0.001] })).graph.edges).toEqual([]);
+  expect(candidates.map(point => point.id)).toEqual(["buffer-start", "start"]);
+  expect((await repository.getReachableGraph({ ...query, startNodeId: "a", startCoordinates: [-0.001, -0.001] })).graph.edges.length).toBeGreaterThan(0);
   const solver = new ReachableGraphClosedRouteSolver({ pack: { ...GRAPH_FIXTURE_IDENTITY, id: "local" } });
   const result = await solver.generate({ distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, limit: 1,
     closedRoute: { maximumRepeatedTrailPct: 100 } }, {
@@ -531,7 +533,7 @@ test("overlapping local graphs deterministically own starts without mixing topol
   secondDb.exec("UPDATE nodes SET elevation_m=200; UPDATE edges SET length_m=400; UPDATE access_points SET node_id='a',known_minimum_stem_m=500,inclusive_minimum_stem_m=500"); secondDb.close();
   const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
   const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "local", coverage: full,
-    artifacts: [{ path: second, geometry: full, startGeometry: full }, { path: prepared, geometry: full, startGeometry: core }] });
+    artifacts: [{ path: second, geometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, startGeometry: full }, { path: prepared, geometry: full, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, startGeometry: core }] });
   repositories.push(repository);
   expect((await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true }))[0].inclusiveMinimumStemMeters).toBe(0);
   const first = (await repository.getReachableGraph(query)).graph;
@@ -555,7 +557,7 @@ test("named region ownership survives artifact filename changes and catalog orde
   const core = rectangle(-0.0001, -0.0001, 0.0001, 0.0001);
   for (const ownerPath of [prepared, updated]) {
     for (const reverse of [false, true]) {
-      const artifacts = [{path:neighbor,regionId:"pasayten",geometry:full,startGeometry:core}, {path:ownerPath,regionId:"glacier-peak",geometry:full,startGeometry:core}];
+      const artifacts = [{path:neighbor,accessPolicyVersion:ACCESS_ENTRY_POLICY_VERSION,regionId:"pasayten",geometry:full,startGeometry:core}, {path:ownerPath,accessPolicyVersion:ACCESS_ENTRY_POLICY_VERSION,regionId:"glacier-peak",geometry:full,startGeometry:core}];
       const repository = new PreparedGraphRepository({releaseId:"release",installationId:"local",coverage:full,artifacts:reverse ? artifacts.reverse() : artifacts});
       repositories.push(repository);
       expect((await repository.getAccessPointCandidates({bbox:[-1,-1,1,1],includeUncertainAccess:true}))[0].inclusiveMinimumStemMeters).toBe(0);
@@ -565,3 +567,174 @@ test("named region ownership survives artifact filename changes and catalog orde
     }
   }
 });
+
+function openLocalArtifacts(artifacts: PreparedGraphDescriptor["artifacts"]): PreparedGraphRepository {
+  const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "local", coverage: full,
+    artifacts: artifacts.map(artifact => ({ ...artifact, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, startGeometry: full })) });
+  repositories.push(repository);
+  return repository;
+}
+
+test("an ordinary node in an earlier graph cannot shadow an admitted entrance", async () => {
+  const { directory, prepared } = fixture();
+  const admitted = join(directory, "admitted.sqlite");
+  copyFileSync(prepared, admitted);
+  const ordinary = new DatabaseSync(prepared);
+  ordinary.exec("DELETE FROM access_points"); ordinary.close();
+  const actual = new DatabaseSync(admitted);
+  actual.exec("UPDATE nodes SET elevation_m=200; UPDATE edges SET length_m=400"); actual.close();
+  for (const reverse of [false, true]) {
+    const artifacts = [{ path: prepared, regionId: "a-node-only", geometry: full }, { path: admitted, regionId: "b-admitted", geometry: full }];
+    const repository = openLocalArtifacts(reverse ? artifacts.reverse() : artifacts);
+    const points = await repository.getAccessPointCandidates({ bbox: [-1,-1,1,1], includeUncertainAccess: true });
+    expect(points).toHaveLength(1);
+    expect(points[0].regionIds).toEqual(["b-admitted"]);
+    const result = (await repository.getReachableGraph(query)).graph;
+    expect(result.nodes.get("s")?.elevationMeters).toBe(200);
+    expect(result.edges.every(edge => edge.lengthMeters === 400)).toBe(true);
+  }
+});
+
+test("inclusive-only A cannot shadow known B; membership is a union independent of the pinned profile owner", async () => {
+  const { directory, prepared } = fixture();
+  const known = join(directory, "known.sqlite");
+  copyFileSync(prepared, known);
+  const uncertain = new DatabaseSync(prepared);
+  uncertain.exec("UPDATE access_points SET access_state='unknown',known_minimum_stem_m=NULL,inclusive_minimum_stem_m=75"); uncertain.close();
+  const certain = new DatabaseSync(known);
+  certain.exec("UPDATE nodes SET elevation_m=200; UPDATE edges SET length_m=400"); certain.close();
+  const artifacts = [{ path: known, regionId: "b-known", geometry: full }, { path: prepared, regionId: "a-uncertain", geometry: full }];
+  for (const reverse of [false, true]) {
+    const repository = openLocalArtifacts(reverse ? [...artifacts].reverse() : artifacts);
+    const inclusive = await repository.getAccessPointCandidates({ bbox: [-1,-1,1,1], includeUncertainAccess: true });
+    expect(inclusive[0]).toMatchObject({ accessState: "unknown", inclusiveMinimumStemMeters: 75, knownMinimumStemMeters: null, regionIds: ["a-uncertain", "b-known"] });
+    const knownOnly = await repository.getAccessPointCandidates({ bbox: [-1,-1,1,1], includeUncertainAccess: false });
+    expect(knownOnly[0]).toMatchObject({ accessState: "public", inclusiveMinimumStemMeters: 0, knownMinimumStemMeters: 0, regionIds: ["a-uncertain", "b-known"] });
+    expect((await repository.getReachableGraph(query)).graph.nodes.get("s")?.elevationMeters).toBe(100);
+    expect((await repository.getReachableGraph({ ...query, includeUncertainAccess: false })).graph.nodes.get("s")?.elevationMeters).toBe(200);
+    const result = await listEligibleAccessPointCandidates({ repository, includeUncertainAccess: false,
+      accessFilter: { coverage: full, predicates: [rectangle(0.0015,0.0015,0.002,0.002)], namedRegionPredicateIndex: 0, namedRegionIds: ["a-uncertain"] } });
+    expect(result.eligible.map(point => point.id)).toEqual(["start"]);
+    expect(result.eligible[0].knownMinimumStemMeters).toBe(0);
+  }
+});
+
+test("owner ordering uses graph identity before filenames and cycle feasibility never substitutes a neighbor", async () => {
+  const { directory, prepared } = fixture();
+  const later = join(directory, "a-later.sqlite"), earlier = join(directory, "z-earlier.sqlite");
+  copyFileSync(prepared, later); copyFileSync(prepared, earlier);
+  const db = new DatabaseSync(earlier);
+  db.exec("UPDATE metadata SET value='a-graph' WHERE key='releaseId'; UPDATE access_points SET known_minimum_stem_m=NULL,inclusive_minimum_stem_m=NULL"); db.close();
+  const repository = openLocalArtifacts([{ path: later, regionId: "same", graphId: "release", geometry: full },
+    { path: earlier, regionId: "same", graphId: "a-graph", geometry: full }]);
+  const result = await listEligibleAccessPointCandidates({ repository, includeUncertainAccess: true,
+    accessFilter: { coverage: full, predicates: [], namedRegionIds: ["same"] } });
+  expect(result.matchedFilters).toHaveLength(1);
+  expect(result.matchedFilters[0].inclusiveMinimumStemMeters).toBeNull();
+  expect(result.eligible).toEqual([]);
+  expect(result.noCycleExcluded).toBe(1);
+});
+
+test("a public entrance with only an unknown loop is excluded only in the known profile", async () => {
+  const { prepared } = fixture();
+  const db = new DatabaseSync(prepared);
+  db.exec("UPDATE edges SET access_state='unknown' WHERE id IN ('a-b','b-a'); UPDATE access_points SET known_minimum_stem_m=NULL"); db.close();
+  const repository = openLocalArtifacts([{ path: prepared, regionId: "selected", geometry: full }]);
+  const options = { repository, accessFilter: { coverage: full, predicates: [], namedRegionIds: ["selected"] } };
+  const known = await listEligibleAccessPointCandidates({ ...options, includeUncertainAccess: false });
+  expect(known.matchedFilters[0]).toMatchObject({ accessState: "public", canReachCycle: false, knownMinimumStemMeters: null });
+  expect(known.eligible).toEqual([]);
+  expect(known.noCycleExcluded).toBe(1);
+  expect((await listEligibleAccessPointCandidates({ ...options, includeUncertainAccess: true })).eligible).toHaveLength(1);
+  expect((await repository.getReachableGraph({ ...query, includeUncertainAccess: false })).graph.edges.some(edge => edge.accessState === "unknown")).toBe(false);
+});
+
+test("new starts require matching declared and database policy while old trails remain readable", async () => {
+  const { prepared } = fixture();
+  const old = new PreparedGraphRepository({ releaseId: "release", installationId: "old", coverage: full,
+    artifacts: [{ path: prepared, geometry: full, startGeometry: full, regionId: "old" }] });
+  repositories.push(old);
+  expect(await old.getAccessPointCandidates({ bbox: [-1,-1,1,1], includeUncertainAccess: true })).toEqual([]);
+  const trails = [];
+  for await (const edge of old.iterateMapTrails({ bbox: [-1,-1,1,1], includeUncertainAccess: true })) trails.push(edge);
+  expect(trails).toHaveLength(6);
+  await old.close();
+  const db = new DatabaseSync(prepared);
+  db.exec("DELETE FROM metadata WHERE key='access_policy_version'"); db.close();
+  await expect(openLocalArtifacts([{ path: prepared, regionId: "new", geometry: full }]).getAccessPointCandidates({ bbox: [-1,-1,1,1], includeUncertainAccess: true })).rejects.toThrow("access policy identity mismatch");
+});
+
+test("distinct new graph identities without local descriptors fail closed while contextual trails remain readable", async () => {
+  const { directory, prepared } = fixture();
+  const different = join(directory,"different.sqlite"); copyFileSync(prepared,different);
+  const db = new DatabaseSync(different);
+  db.exec("UPDATE metadata SET value='different' WHERE key='releaseId'"); db.close();
+  const repository = new PreparedGraphRepository({ releaseId:"release",installationId:"distinct",coverage:full,
+    artifacts:[{path:prepared,geometry:full,graphId:"release",accessPolicyVersion:ACCESS_ENTRY_POLICY_VERSION},
+      {path:different,geometry:full,graphId:"different",accessPolicyVersion:ACCESS_ENTRY_POLICY_VERSION}] });
+  repositories.push(repository);
+  await expect(repository.getAccessPointCandidates({bbox:[-1,-1,1,1],includeUncertainAccess:true})).rejects.toThrow("distinct graph identities cannot be joined");
+  await expect(repository.getReachableGraph(query)).rejects.toThrow("distinct graph identities cannot be joined");
+  const trails=[];
+  for await(const edge of repository.iterateMapTrails({bbox:[-1,-1,1,1],includeUncertainAccess:true})) trails.push(edge);
+  expect(trails).toHaveLength(6);
+});
+
+test("many-start ownership uses bounded batches without deep node reads and reuses its small admission index", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "prepared-many-starts-")); directories.push(directory);
+  const path = join(directory, "many.sqlite"), count = 1_200;
+  const nodes = new Map<string,GraphNode>(Array.from({ length: count }, (_, i) => [`n${i}`, {
+    id: `n${i}`, lon: 0.001*Math.cos(i*2*Math.PI/count), lat: 0.001*Math.sin(i*2*Math.PI/count), elevationMeters: 100, flags: [],
+  }]));
+  const template = graph().edges[0], entry = graph().accessPoints[0];
+  const edges = [...nodes.values()].map((from, i):GraphEdge => {
+    const to = nodes.get(`n${(i+1)%count}`)!;
+    return { ...template, id: `edge-${i}`, edgeKey: i+1, physicalEdgeKey: i+1, fromNodeId: from.id, toNodeId: to.id,
+      coordinates: [[from.lon,from.lat],[to.lon,to.lat]], lengthMeters: 1 };
+  });
+  writeGraphFixture(path, { nodes, edges, accessPoints: [...nodes.values()].map(node => ({ ...entry, id: `start-${node.id}`, nodeId: node.id })) });
+  promoteGraphFixture(path,"release");
+  const artifacts = Array.from({ length: 4 }, (_, i) => {
+    const copy = join(directory,`area-${i}.sqlite`); copyFileSync(path,copy);
+    return { path:copy,regionId:`region-${i}`,geometry:full };
+  });
+  const repository = openLocalArtifacts([...artifacts].reverse());
+  const nativeCalls: string[] = [], originalPrepare = DatabaseSync.prototype.prepare;
+  let indexPayloadBytes = 0;
+  const prepare = vi.spyOn(DatabaseSync.prototype,"prepare").mockImplementation(function(this:DatabaseSync, sql:string) {
+    const statement = originalPrepare.call(this,sql), originalAll = statement.all;
+    statement.all = (...parameters:unknown[]) => {
+      nativeCalls.push(sql);
+      const rows = Reflect.apply(originalAll,statement,parameters) as ReturnType<typeof statement.all>;
+      if (sql.includes("SELECT a.id, a.node_id, a.access_state")) indexPayloadBytes += Buffer.byteLength(JSON.stringify(rows));
+      return rows;
+    };
+    return statement;
+  });
+  const parseNode = vi.spyOn(records,"parseNode");
+  try {
+    const query = { bbox: [-1,-1,1,1] as const, includeUncertainAccess: true };
+    const coldStarted = performance.now();
+    const first = await repository.getAccessPointCandidates(query);
+    const coldMs = performance.now()-coldStarted;
+    expect(first).toHaveLength(count);
+    expect(first.every(point => point.regionIds?.length === 4)).toBe(true);
+    expect(parseNode).not.toHaveBeenCalled();
+    const isIndex = (sql:string) => sql.includes("SELECT a.id, a.node_id, a.access_state");
+    const isCandidates = (sql:string) => sql.includes("candidate_lon");
+    expect(nativeCalls.filter(isIndex)).toHaveLength(20); // 4 regions × ceil(1200/256)
+    expect(nativeCalls.filter(isCandidates)).toHaveLength(5); // one pinned owner
+    nativeCalls.length = 0;
+    const warmStarted = performance.now();
+    const repeated = await repository.getAccessPointCandidates(query);
+    const warmMs = performance.now()-warmStarted;
+    expect(repeated).toEqual(first);
+    expect(nativeCalls.filter(isIndex)).toHaveLength(0);
+    expect(nativeCalls.filter(isCandidates)).toHaveLength(5);
+    const half = await repository.getAccessPointCandidates({ ...query, bbox: [0,-1,1,1] });
+    expect(half).toEqual(first.filter(point => point.lon >= 0));
+    expect(parseNode).not.toHaveBeenCalled();
+    expect(repository.connectionStats).toEqual({ open: 4, peak: 4, limit: 8 });
+    console.info(`many-start reader: ${count} starts, 4 overlapping regions, ${indexPayloadBytes} bytes of admission-row JSON, cold ${coldMs.toFixed(1)} ms, warm ${warmMs.toFixed(1)} ms; cold 20 index + 5 candidate batches, warm 0 index + 5 candidate batches, 0 deep node reads`);
+  } finally { parseNode.mockRestore(); prepare.mockRestore(); }
+},15_000);

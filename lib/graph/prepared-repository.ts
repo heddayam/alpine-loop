@@ -1,17 +1,25 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { ACCESS_ENTRY_POLICY_VERSION } from "@/lib/contracts/access-policy";
 import { areaBounds, coordinateIsInsideArea, coordinateIsInsideBbox, edgeIsInsideBbox, prepareAreaGeometry, type AreaGeometry, type BoundingBox } from "./geometry";
-import { accessPointIsEligible, edgeIsTraversable } from "./policy";
-import { assertNotAborted, DistanceQueue, parseAccessPoint, parseMinimumStem, parseNode, requiredNumber, type SqliteRow } from "./sqlite-records";
+import { accessPointIsEligible, accessStateIsAllowed, edgeIsTraversable } from "./policy";
+import { assertNotAborted, DistanceQueue, parseAccessPoint, parseAccessState, parseMinimumStem, parseNode, requiredNumber, requiredString, type SqliteRow } from "./sqlite-records";
 import { PreparedEdgeCache } from "./prepared-edge-cache";
 import type { AccessPointCandidate, AccessPointCandidateQuery, GraphEdge, GraphNode, GraphQuery, GraphRepository, InducedGraph, ReachableGraphQuery, ReachableGraphResult } from "./types";
 
 export type PreparedGraphDescriptor = {
   releaseId: string;
   installationId: string;
-  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string; regionId?: string; startGeometry?: AreaGeometry }[];
+  artifacts: readonly { path: string; geometry: AreaGeometry; graphId?: string; regionId?: string; startGeometry?: AreaGeometry; accessPolicyVersion?: string }[];
   coverage: AreaGeometry;
 };
 type Artifact = PreparedGraphDescriptor["artifacts"][number] & { bounds: BoundingBox };
+type EntranceOwnership = { known?: Artifact; inclusive?: Artifact; regionIds: string[] };
+type EntranceIndex = {
+  points: Map<string, EntranceOwnership>;
+  knownNodes: Map<string, Artifact>;
+  inclusiveNodes: Map<string, Artifact>;
+};
+const nodeLocationKey = (id: string, coordinate: readonly [number, number]) => JSON.stringify([id, ...coordinate]);
 const MAXIMUM_CONNECTIONS = 8;
 const BATCH_SIZE = 256;
 const MAXIMUM_STATEMENTS_PER_CONNECTION = 7;
@@ -71,6 +79,7 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly releaseId: string;
   readonly #artifacts: Artifact[];
   readonly #graphIds: Map<string, string>;
+  readonly #accessPolicies: Map<string, string | undefined>;
   readonly #coverage: AreaGeometry;
   readonly #localAreas: boolean;
   readonly #coverageJson: string;
@@ -80,6 +89,7 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
   readonly #entranceFamilies = new WeakMap<DatabaseSync, boolean>();
   readonly #pool = new Map<string, DatabaseSync>();
+  #entranceIndex?: Promise<EntranceIndex>;
   #closed = false;
   #peakConnections = 0;
 
@@ -92,12 +102,14 @@ export class PreparedGraphRepository implements GraphRepository {
     this.#coverage = structuredClone(descriptor.coverage);
     this.#coverageJson = JSON.stringify(this.#coverage);
     this.#preparedCoverage = preparedCoverage(this.#coverage);
-    // Stable semantic ownership for named builds; retain legacy file order for pinned data.
+    // Semantic graph identity precedes deployment filenames in owner ordering.
     this.#artifacts = descriptor.artifacts.map(artifact => ({
       ...structuredClone(artifact), bounds: areaBounds(artifact.geometry),
-    })).sort((a, b) => a.regionId && b.regionId ? compareIds(a.regionId, b.regionId) || a.path.localeCompare(b.path)
-      : a.regionId ? -1 : b.regionId ? 1 : a.path.localeCompare(b.path));
+    })).sort((a, b) => compareIds(a.regionId ?? "", b.regionId ?? "")
+      || compareIds(a.graphId ?? descriptor.releaseId, b.graphId ?? descriptor.releaseId)
+      || compareIds(a.path, b.path));
     this.#graphIds = new Map(this.#artifacts.map(artifact => [artifact.path, artifact.graphId ?? descriptor.releaseId]));
+    this.#accessPolicies = new Map(this.#artifacts.map(artifact => [artifact.path, artifact.accessPolicyVersion]));
   }
 
   get connectionStats(): { open: number; peak: number; limit: number } {
@@ -124,6 +136,8 @@ export class PreparedGraphRepository implements GraphRepository {
       const metadata = new Map(database.prepare("SELECT key, value FROM metadata").all().map(row => [row.key, row.value]));
       if (metadata.get("schemaVersion") !== "7") throw new Error("expected schema version 7");
       if (metadata.get("releaseId") !== this.#graphIds.get(path)) throw new Error("release identity mismatch");
+      if (this.#accessPolicies.get(path) === ACCESS_ENTRY_POLICY_VERSION
+        && metadata.get("access_policy_version") !== ACCESS_ENTRY_POLICY_VERSION) throw new Error("access policy identity mismatch");
       database.prepare("SELECT known_minimum_stem_m, inclusive_minimum_stem_m FROM access_points LIMIT 0");
       const hasEntranceFamilies = database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'access_entrance_families'").get() !== undefined;
       if (hasEntranceFamilies) database.prepare("SELECT profile, access_point_id, family_id, junction_node_id, approach_distance_m FROM access_entrance_families LIMIT 0");
@@ -160,16 +174,59 @@ export class PreparedGraphRepository implements GraphRepository {
       && coordinateIsInsideArea(coordinate, artifact.geometry));
   }
 
-  // Independent buffered graphs can have different local topology/hints. The
-  // same deterministic owner supplies both a candidate and its entire search.
-  #startArtifact(id: string, coordinate: readonly [number, number]): Artifact | undefined {
-    return this.#artifacts.find(artifact => artifact.startGeometry
-      && coordinateIsInsideArea(coordinate, artifact.startGeometry)
-      && this.#node(id, [artifact]) !== undefined);
+  /**
+   * Index only admission identity, profile and membership, never graph nodes,
+   * geometry, source references or hints. Batching once per repository avoids
+   * scanning every overlapping graph separately for every queried entrance.
+   * Ownership is independent of viewport, selected regions and route feasibility.
+   */
+  #getEntranceIndex(): Promise<EntranceIndex> {
+    if (this.#closed) throw new Error("Prepared graph repository is closed");
+    return this.#entranceIndex ??= this.#buildEntranceIndex();
+  }
+
+  async #buildEntranceIndex(): Promise<EntranceIndex> {
+    const index: EntranceIndex = { points: new Map(), knownNodes: new Map(), inclusiveNodes: new Map() };
+    const compatible = this.#artifacts.filter(artifact => artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION);
+    if (!this.#localAreas && new Set(compatible.map(artifact => this.#graphIds.get(artifact.path))).size > 1) {
+      throw new Error("Independent entrance graphs require local area descriptors; distinct graph identities cannot be joined");
+    }
+    for (const artifact of compatible) {
+      let after = "";
+      while (true) {
+        const rows = this.#statement(artifact.path, `SELECT a.id, a.node_id, a.access_state, n.lon, n.lat
+          FROM access_points a JOIN nodes n ON n.id = a.node_id
+          WHERE a.id > ? ORDER BY a.id LIMIT 256`).all(after) as SqliteRow[];
+        for (const row of rows) {
+          const id = requiredString(row, "id"), nodeId = requiredString(row, "node_id");
+          const accessState = parseAccessState(requiredString(row, "access_state"));
+          if (!accessStateIsAllowed(accessState, true)) continue;
+          const coordinate = [requiredNumber(row, "lon"), requiredNumber(row, "lat")] as const;
+          const ownership = index.points.get(id) ?? { regionIds: [] };
+          ownership.inclusive ??= artifact;
+          if (accessStateIsAllowed(accessState, false)) ownership.known ??= artifact;
+          if (artifact.regionId && !ownership.regionIds.includes(artifact.regionId)) ownership.regionIds.push(artifact.regionId);
+          index.points.set(id, ownership);
+          const key = nodeLocationKey(nodeId, coordinate);
+          if (!index.inclusiveNodes.has(key)) index.inclusiveNodes.set(key, artifact);
+          if (accessStateIsAllowed(accessState, false) && !index.knownNodes.has(key)) index.knownNodes.set(key, artifact);
+        }
+        if (rows.length < BATCH_SIZE) break;
+        after = String(rows.at(-1)!.id);
+        await new Promise<void>(resolve => setImmediate(resolve));
+      }
+    }
+    return index;
+  }
+
+  async #startArtifact(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean): Promise<Artifact | undefined> {
+    const index = await this.#getEntranceIndex();
+    return (includeUncertainAccess ? index.inclusiveNodes : index.knownNodes).get(nodeLocationKey(id, coordinate));
   }
 
   #hasInstalledDeparture(id: string, coordinate: readonly [number, number], includeUncertainAccess: boolean, signal?: AbortSignal, owner?: Artifact): boolean {
-    for (const artifact of owner ? [owner] : this.#at(coordinate)) {
+    const artifacts = owner ? this.#localAreas ? [owner] : this.#entryGraphAt(coordinate, owner) : this.#at(coordinate);
+    for (const artifact of artifacts) {
       const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ?").iterate(id);
       for (const row of rows) {
         assertNotAborted(signal);
@@ -180,11 +237,30 @@ export class PreparedGraphRepository implements GraphRepository {
     return false;
   }
 
+  // Immutable fragments of one graph can retain their old seam behavior. New
+  // entrances never borrow nodes, departures or edges from another graph/policy.
+  #entryGraphAt(coordinate: readonly [number, number], owner: Artifact): Artifact[] {
+    return this.#at(coordinate).filter(artifact => artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION
+      && this.#graphIds.get(artifact.path) === this.#graphIds.get(owner.path));
+  }
+
   async getAccessPointCandidates(query: AccessPointCandidateQuery): Promise<AccessPointCandidate[]> {
     assertNotAborted(query.signal);
+    const entranceIndex = await this.#getEntranceIndex();
+    assertNotAborted(query.signal);
     const points = new Map<string, AccessPointCandidate>();
+    const ownerArtifacts = new Set<Artifact>();
+    if (this.#localAreas) {
+      const ownerships = query.accessPointId === undefined ? entranceIndex.points.values()
+        : [entranceIndex.points.get(query.accessPointId)];
+      for (const ownership of ownerships) {
+        const owner = query.includeUncertainAccess ? ownership?.inclusive : ownership?.known;
+        if (owner) ownerArtifacts.add(owner);
+      }
+    }
     const [west, south, east, north] = query.bbox;
-    for (const artifact of this.#artifacts.filter(artifact => intersects(query.bbox, artifact.bounds))) {
+    for (const artifact of this.#artifacts.filter(artifact => artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION
+      && (!this.#localAreas || ownerArtifacts.has(artifact)) && intersects(query.bbox, artifact.bounds))) {
       let after = "";
       while (true) {
         assertNotAborted(query.signal);
@@ -206,9 +282,10 @@ export class PreparedGraphRepository implements GraphRepository {
           ORDER BY a.id LIMIT ?`).all(west, east, south, north, after,
             ...(query.accessPointId === undefined ? [] : [query.accessPointId]), BATCH_SIZE) as SqliteRow[];
         for (const row of rows) {
+          const ownership = entranceIndex.points.get(requiredString(row, "id"));
+          if (this.#localAreas && (query.includeUncertainAccess ? ownership?.inclusive : ownership?.known) !== artifact) continue;
           const point = parseAccessPoint(row);
           const lon = requiredNumber(row, "candidate_lon"), lat = requiredNumber(row, "candidate_lat");
-          if (this.#localAreas && (points.has(point.id) || this.#startArtifact(point.nodeId, [lon, lat]) !== artifact)) continue;
           const knownMinimumStemMeters = parseMinimumStem(row, "known_minimum_stem_m");
           const inclusiveMinimumStemMeters = parseMinimumStem(row, "inclusive_minimum_stem_m");
           if (knownMinimumStemMeters !== null && (inclusiveMinimumStemMeters === null || inclusiveMinimumStemMeters > knownMinimumStemMeters)) {
@@ -223,10 +300,10 @@ export class PreparedGraphRepository implements GraphRepository {
           // query instead of crossing the JS/SQLite boundary for every point.
           if (!(departure && edgeIsTraversable(departure, query.includeUncertainAccess)
             && this.#preparedCoverage.containsEdge(departure))
-            && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal, this.#localAreas ? artifact : undefined)) continue;
+            && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal, artifact)) continue;
           insertConsistent(points, point.id, {
-            ...point, lon, lat, knownMinimumStemMeters, inclusiveMinimumStemMeters,
-            canReachCycle: inclusiveMinimumStemMeters !== null,
+            ...point, lon, lat, regionIds: [...(ownership?.regionIds ?? [])], knownMinimumStemMeters, inclusiveMinimumStemMeters,
+            canReachCycle: (query.includeUncertainAccess ? inclusiveMinimumStemMeters : knownMinimumStemMeters) !== null,
             knownConnectivity: requiredNumber(row, "known_connectivity"),
             inclusiveConnectivity: requiredNumber(row, "inclusive_connectivity"),
             knownOutDegree: requiredNumber(row, "known_out_degree"),
@@ -315,8 +392,11 @@ export class PreparedGraphRepository implements GraphRepository {
   async getReachableGraph(query: ReachableGraphQuery): Promise<ReachableGraphResult> {
     assertNotAborted(query.signal);
     if (!query.startCoordinates) throw new Error("Prepared graph queries require startCoordinates");
-    const owner = this.#localAreas ? this.#startArtifact(query.startNodeId, query.startCoordinates) : undefined;
-    const artifactsAt = (coordinate: readonly [number, number]) => this.#localAreas ? (owner ? [owner] : []) : this.#at(coordinate);
+    const compatibleEntries = this.#artifacts.some(artifact => artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION);
+    const owner = this.#localAreas || compatibleEntries ? await this.#startArtifact(query.startNodeId, query.startCoordinates, query.includeUncertainAccess) : undefined;
+    assertNotAborted(query.signal);
+    const artifactsAt = (coordinate: readonly [number, number]) => this.#localAreas ? (owner ? [owner] : [])
+      : owner ? this.#entryGraphAt(coordinate, owner) : compatibleEntries ? [] : this.#at(coordinate);
     const start = this.#node(query.startNodeId, artifactsAt(query.startCoordinates));
     const nodes = new Map<string, GraphNode>(), edges = new Map<string, GraphEdge>();
     if (!start || !this.#preparedCoverage.containsPoint([start.lon, start.lat])) {
@@ -395,6 +475,7 @@ export class PreparedGraphRepository implements GraphRepository {
     this.#pool.clear();
     this.#edges.clear();
     this.#alternateCoverage = undefined;
+    this.#entranceIndex = undefined;
     this.#closed = true;
   }
 }
