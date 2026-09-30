@@ -187,7 +187,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
   await rankComponents(db,"known",checkpoint);
   if(!reuseInclusive)await rankComponents(db,"inclusive",checkpoint);
   const prepared=Boolean(one(db,"SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name='sparse_portal_candidates'"));
-  await proof.prepare("measured");
+  await proof.prepare("measured",!prepared);
   if(!prepared) await proof.discover(coverage);
   run(db,"DELETE FROM derived_portals WHERE coverage_hash=?",coverageHash);
   let count=0;

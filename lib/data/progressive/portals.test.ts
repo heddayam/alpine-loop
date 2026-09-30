@@ -9,10 +9,18 @@ import { prepareSparsePortalCandidates } from "./portals";
 
 // Reduced local representations from the pinned WA 260801 source: entrance IDs,
 // coordinates and tags are retained; long trails/roads omit intermediate nodes.
-const top = `n4270728646 x-121.0788053 y47.8780535
+const top = `n46912347 x-121.0497773 y47.8820002
+n46912346 x-121.0492106 y47.881689
+n46912311 x-121.049962 y47.8772929
+n3761092411 x-121.0708682 y47.8854196
+n4270728646 x-121.0788053 y47.8780535
 n3761092325 Thighway=turning_circle x-121.0770096 y47.8812989
 n3761092329 Thighway=trailhead,name=Top%20%Lake%20%Trailhead x-121.0771895 y47.881442
 n3761092328 x-121.1532731 y47.8800167
+w427905142 Thighway=unclassified,name=Labyrinth%20%Mountain%20%Road Nn46912347,n46912346
+w428034416 Thighway=track,surface=gravel Nn46912346,n46912311
+w5846768 Thighway=track,surface=gravel Nn46912311,n3761092411
+w372544732 Thighway=track,surface=gravel Nn3761092411,n4270728646
 w428036699 Thighway=track,ref=FR%20%6701-520,surface=gravel Nn4270728646,n3761092325
 w1356527414 Thighway=path,foot=designated,name=Top%20%Lake%20%Trail Nn3761092325,n3761092329,n3761092328`;
 const heather = `n47010713 x-121.0331753 y47.8759179
@@ -96,7 +104,8 @@ w10 Thighway=residential Nn1,n2,n3,n4,n5,n6`;
 });
 
 function detachTrack(topology: NormalizedTopology) {
-  const way = topology.ways.find(way => way.flags.includes("osm-highway:track"))!;
+  const place=topology.nodes.find(node=>node.flags.includes("arrival-place:turning-circle"));
+  const way = topology.ways.find(way=>way.flags.includes("osm-highway:track") && (!place || way.nodeIds.includes(place.id)))!;
   const old = topology.nodes.find(node => node.id === way.nodeIds.at(-1))!;
   const node = { ...old, id: "unrelated", externalId: "node/unrelated", lon: old.lon + 0.00001 };
   topology.nodes.push(node);
@@ -108,7 +117,8 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
   const derive=(opl:string,adjust?:(topology:NormalizedTopology)=>void,omitPhysicalId?:string)=>deriveAtStage(opl,adjust,omitPhysicalId,early);
   it("keeps the mapped Top Lake trailhead 20.8m along its path from the track junction", async () => {
     const { points, topology, originalEdges, edges } = await derive(top);
-    expect(points).toHaveLength(2);
+    expect(points).toHaveLength(3);
+    expect(points[2]).toMatchObject({nodeId:"osm-node-46912346",accessState:"unknown",entryWitness:{kind:"interface",rootNodeId:"osm-node-46912346"}});
     expect(points[0]).toMatchObject({nodeId:"osm-node-3761092325",entryWitness:{kind:"interface",known:true}});
     expect(points[1]).toMatchObject({ nodeId: "osm-node-3761092329", name: "Top Lake Trailhead", accessState: "public", confidence: "high", portalRoadClass: "service-road" });
     expect(topology.ways.find(way => way.id === "osm-way-428036699")?.edgeClass).toBe("trail");
@@ -121,7 +131,7 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
       const junction = topology.nodes.find(node => node.id === "osm-node-3761092325")!;
       Object.assign(evidence, { nodeIds: [junction.id], externalId: junction.externalId, coordinates: [[junction.lon, junction.lat]] });
     });
-    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325"]);
+    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325","osm-node-46912346"]);
   });
 
   it("uses the hiking vertex of Heather Lake parking, without creating a connector across the lot", async () => {
@@ -154,21 +164,31 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
   it.each(["track", "path", "evidence"] as const)("does not add a mapped trailhead through restricted %s", async kind => {
     const { points } = await derive(top, topology => {
       if (kind === "evidence") topology.portalEvidence![0]!.accessState = "private";
-      else topology.ways.find(way => way.flags.includes(`osm-highway:${kind}`))!.accessState = "prohibited";
+      else {
+        const place=topology.nodes.find(node=>node.flags.includes("arrival-place:turning-circle"));
+        const way=topology.ways.find(way=>way.flags.includes(`osm-highway:${kind}`) && (kind!=="track" || !place || way.nodeIds.includes(place.id)))!;
+        way.accessState="prohibited";
+        if(kind==="track"){way.flags=way.flags.filter(flag=>!flag.startsWith("motor-"));way.flags.push("motor-access:prohibited");}
+      }
     });
-    expect(points.map(point=>point.nodeId)).toEqual(kind==="evidence"?["osm-node-3761092325"]:[]);
+    expect(points.map(point=>point.nodeId)).toEqual(kind==="evidence"?["osm-node-3761092325","osm-node-46912346"]:["osm-node-46912346"]);
   });
 
   it.each(["track", "path", "evidence"] as const)("does not add a parking start through restricted %s", async kind => {
     const { points } = await derive(heather, topology => {
       if (kind === "evidence") topology.portalEvidence![0]!.accessState = "private";
-      else topology.ways.find(way => way.flags.includes(`osm-highway:${kind}`))!.accessState = "prohibited";
+      else {
+        const place=topology.nodes.find(node=>node.flags.includes("arrival-place:turning-circle"));
+        const way=topology.ways.find(way=>way.flags.includes(`osm-highway:${kind}`) && (kind!=="track" || !place || way.nodeIds.includes(place.id)))!;
+        way.accessState="prohibited";
+        if(kind==="track"){way.flags=way.flags.filter(flag=>!flag.startsWith("motor-"));way.flags.push("motor-access:prohibited");}
+      }
     });
     expect(points).toEqual([]);
   });
 
   it.each([top, heather])("requires a source connection, not a nearby unrelated track", async opl => {
-    expect((await derive(opl, detachTrack)).points).toEqual([]);
+    expect((await derive(opl, detachTrack)).points.map(point=>point.nodeId)).toEqual(opl===top?["osm-node-46912346"]:[]);
   });
 
   it("does not snap track-side parking to an unrelated nearby hiking path", async () => {
@@ -193,7 +213,7 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
       way.nodeIds[0] = middle.id;
       way.coordinates[0] = [middle.lon, middle.lat];
     });
-    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329"]);
+    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329","osm-node-46912346"]);
   });
 
   it("finds the connected approach through a branch regardless of way grouping or discovery order", async () => {
@@ -213,15 +233,28 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
         topology.ways.push({ ...way, id: `osm-way-${id}`, externalId: `way/${id}`, nodeIds: nodes.map(node => node.id), coordinates: nodes.map(node => [node.lon, node.lat]) });
       }
     });
-    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329"]);
+    expect(points.map(point => point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329","osm-node-46912346"]);
+  });
+
+  it("preserves proof identity when an intermediate physical approach track is split",async()=>{
+    const baseline=(await derive(top)).points;
+    const {points}=await derive(top,topology=>{
+      const way=topology.ways.find(way=>way.id==="osm-way-372544732")!;
+      const middle={...topology.nodes[0]!,id:"spine-split",externalId:"node/spine-split",lon:-121.075,lat:47.882};
+      topology.nodes.push(middle);
+      topology.ways.push({...way,id:"osm-way-spine-split",externalId:"way/spine-split",nodeIds:[middle.id,way.nodeIds[1]!],coordinates:[[middle.lon,middle.lat],way.coordinates[1]!]});
+      way.nodeIds[1]=middle.id;way.coordinates[1]=[middle.lon,middle.lat];
+    });
+    const identity=(values:NormalizedAccessPoint[])=>values.map(point=>({nodeId:point.nodeId,name:point.name,access:point.accessState,witness:point.entryWitness,sourceRefs:point.sourceRefs}));
+    expect(identity(points)).toEqual(identity(baseline));
   });
 
   it("retains an unmarked track/path interface", async () => {
-    expect((await derive(top, topology => { topology.portalEvidence = []; })).points.map(point=>point.nodeId)).toEqual(["osm-node-3761092325"]);
+    expect((await derive(top, topology => { topology.portalEvidence = []; })).points.map(point=>point.nodeId)).toEqual(["osm-node-3761092325","osm-node-46912346"]);
   });
 
   it("does not traverse a pruned segment to find a track approach", async () => {
-    expect((await derive(top, undefined, "osm-way-1356527414:0")).points).toEqual([]);
+    expect((await derive(top, undefined, "osm-way-1356527414:0")).points.map(point=>point.nodeId)).toEqual(["osm-node-46912346"]);
   });
 
   it("keeps a connected mapped approach without a distance exception", async () => {
@@ -232,7 +265,7 @@ describe.each([false,true])("explicit hiking starts reached by walking tracks (b
       way.nodeIds.splice(1, 0, node.id);
       way.coordinates.splice(1, 0, [node.lon, node.lat]);
     });
-    expect(points.map(point=>point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329"]);
+    expect(points.map(point=>point.nodeId)).toEqual(["osm-node-3761092325","osm-node-3761092329","osm-node-46912346"]);
   });
 });
 
@@ -242,7 +275,8 @@ n3 x-121.999 y48.001
 n4 x-122.001 y48
 w1 Thighway=path Nn1,n2,n3,n1
 w2 Thighway=residential Nn4,n1`;
-const service=direct.replace("n1 x", "n1 Thighway=trailhead x").replace("highway=residential","highway=service");
+const rootService=(opl:string)=>`${opl}\nn5 x-122.002 y48\nw5 Thighway=residential Nn5,n4`;
+const service=rootService(direct.replace("n1 x", "n1 Thighway=trailhead x").replace("highway=residential","highway=service"));
 const parking=`n1 x-122 y48
 n2 x-121.999 y48
 n3 x-121.999 y48.001
@@ -281,12 +315,12 @@ n13 Tbarrier=gate,name=Unrelated%20%gate x-122.00004 y48`;
   });
 
   it("admits the service/path interface without promoting an interior sign or detached gate",async()=>{
-    const opl=direct.replace("highway=residential","highway=service").replace("n2 x","n2 Ttourism=information,name=Trail%20%sign x");
+    const opl=rootService(direct.replace("highway=residential","highway=service").replace("n2 x","n2 Ttourism=information,name=Trail%20%sign x"));
     expect((await derive(`${opl}\nn10 Tbarrier=gate x-122.00001 y48`)).points).toMatchObject([{nodeId:"osm-node-1",name:"Trailhead",confidence:"low"}]);
   });
 
   it("treats same-node signs as metadata at an independently proved interface",async()=>{
-    const opl=direct.replace("highway=residential","highway=service");
+    const opl=rootService(direct.replace("highway=residential","highway=service"));
     expect((await derive(opl.replace("n1 x","n1 Ttourism=information,name=Sign x"))).points).toMatchObject([{nodeId:"osm-node-1",name:"Sign"}]);
     expect((await derive(opl.replace("n1 x","n1 Tbarrier=gate,name=Mapped%20%entrance x"))).points).toMatchObject([
       {nodeId:"osm-node-1",name:"Mapped entrance",confidence:"medium",portalRoadClass:"service-road"},
@@ -332,19 +366,137 @@ describe.each([false,true])("connected entry proof (before elevation=%s)",early=
     expect((await derive(opl,topology=>topology.nodes.find(node=>node.id==="osm-node-1")!.flags.push("foot-access:private"))).points).toEqual([]);
   });
 
-  it("uses an affirmative motor arrival only without walking the prohibited arrival road",async()=>{
+  it("keeps unused ordinary-road mode facts separate from the actual foot departure",async()=>{
     const opl=direct.replace("highway=path","highway=path,foot=yes");
-    const restrict=(topology:NormalizedTopology)=>{topology.ways.find(way=>way.edgeClass==="street")!.accessState="prohibited";};
+    const restrict=(topology:NormalizedTopology)=>{const road=topology.ways.find(way=>way.edgeClass==="street")!;road.accessState="prohibited";road.flags=road.flags.filter(flag=>!flag.startsWith("motor-access:"));road.flags.push("motor-access:private");};
     expect((await derive(opl,restrict)).points).toEqual([]);
     expect((await derive(opl,topology=>{
       restrict(topology);const road=topology.ways.find(way=>way.edgeClass==="street")!;road.flags=road.flags.filter(flag=>!flag.startsWith("motor-access:"));road.flags.push("motor-access:public");
     })).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{known:true}}]);
+    expect((await derive(opl,topology=>{restrict(topology);const road=topology.ways.find(way=>way.edgeClass==="street")!;road.flags=road.flags.filter(flag=>!flag.startsWith("motor-access:"));road.flags.push("motor-access:unknown");})).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{known:true}}]);
   });
 
   it("interprets raw foot=no motorcar=yes as unused local arrival context",async()=>{
-    const opl=direct.replace("highway=path","highway=path,foot=yes").replace("highway=residential","highway=service,foot=no,motorcar=yes");
+    const opl=rootService(direct.replace("highway=path","highway=path,foot=yes").replace("highway=residential","highway=service,foot=no,motorcar=yes"));
     const {points}=await derive(opl);
     expect(points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{known:true}}]);
+  });
+
+  it.each(["service","track"])("does not selfroot an isolated %s/path junction or its trip-start tag",async highway=>{
+    const opl=direct.replace("highway=residential",`highway=${highway},foot=yes`);
+    expect((await derive(opl)).points).toEqual([]);
+    expect((await derive(opl.replace("n1 x","n1 Thighway=trailhead x"))).points).toEqual([]);
+  });
+
+  it.each(["service","track"])("proves a rooted %s approach while respecting motor restrictions",async highway=>{
+    const base=rootService(direct.replace("highway=residential",`highway=${highway},foot=yes${highway==="track"?",motorcar=yes":""}`).replace("highway=path","highway=path,foot=yes"));
+    const roots=(await derive(base)).points.map(point=>point.nodeId);
+    expect(roots).toEqual(highway==="track"?["osm-node-1","osm-node-4"]:["osm-node-1"]);
+    for(const motor of ["no","private"]) {
+      const {points}=await derive(base.replace(`highway=${highway},foot=yes${highway==="track"?",motorcar=yes":""} Nn4`,`highway=${highway},foot=yes,motor_vehicle=${motor} Nn4`));
+      // The true mode change is at the street contact; its foot departure remains public.
+      expect(points).toMatchObject([{nodeId:"osm-node-4",accessState:"public",entryWitness:{known:true,departurePhysicalId:"osm-way-2:0"}}]);
+      expect(points).toHaveLength(1);
+    }
+  });
+
+  it.each(["service","track"])("does not use prohibited walking on a motor-public %s arrival spine",async highway=>{
+    const base=rootService(direct.replace("highway=residential",`highway=${highway},foot=no,motorcar=yes`).replace("highway=path","highway=path,foot=yes"));
+    expect((await derive(base)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{known:true}}]);
+    expect((await derive(base.replace("motorcar=yes","motorcar=no"))).points).toEqual([]);
+  });
+
+  it.each(["motorway","motorway_link","trunk","trunk_link"])("does not grant generic arrival authority to a shared %s node",async highway=>{
+    const base=direct.replace("highway=residential",`highway=${highway},foot=yes`).replace("highway=path","highway=path,foot=yes");
+    expect((await derive(base)).points).toEqual([]);
+  });
+
+  it.each(["motorway,foot=no,motorcar=yes","trunk,foot=no"])("uses a validated parking place at a %s contact without granting generic root authority",async highway=>{
+    const base=parking.replace("highway=residential",`highway=${highway}`).replace("highway=path","highway=path,foot=yes");
+    expect((await derive(base)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",parkingEvidence:"portal-evidence:way/3",entryWitness:{kind:"parking",rootNodeId:"osm-node-4"}}]);
+    expect((await derive(base,topology=>{topology.portalEvidence=[];})).points).toEqual([]);
+  });
+
+  it.each(["service","track"])("uses a typed parking %s contact without walking its foot-forbidden approach",async highway=>{
+    const base=parking.replace("highway=residential",`highway=${highway},foot=no`).replace("highway=path","highway=path,foot=yes");
+    expect((await derive(base)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",parkingEvidence:"portal-evidence:way/3",entryWitness:{kind:"parking",rootNodeId:"osm-node-4",known:true}}]);
+    expect((await derive(base.replace(`highway=${highway},foot=no`,`highway=${highway},foot=no,motorcar=no`))).points).toEqual([]);
+  });
+
+  it.each(["primary","residential"])("retains local public walking arrival on a motor-private %s",async highway=>{
+    const base=direct.replace("highway=residential",`highway=${highway},foot=yes,motorcar=private`).replace("highway=path","highway=path,foot=yes");
+    expect((await derive(base)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public"}]);
+  });
+
+  it("stops physical arrival propagation at an actual motor gate without erasing its foot departure",async()=>{
+    const base=rootService(direct.replace("highway=residential","highway=track,foot=yes,motorcar=yes").replace("highway=path","highway=track,foot=yes,motorcar=yes").replace("n1 x","n1 Tbarrier=gate,foot=yes,motorcar=no x"));
+    const opl=`${base}\nn6 x-121.998 y48\nw6 Thighway=path,foot=yes Nn2,n6`;
+    expect((await derive(opl)).points.map(point=>point.nodeId)).toEqual(["osm-node-1","osm-node-4"]);
+    expect((await derive(opl.replace("foot=yes,motorcar=no x","foot=no,motorcar=no x"))).points.map(point=>point.nodeId)).toEqual([]);
+  });
+
+  it("does not turn a vehicle one-way track or its track branch into interior foot entrances",async()=>{
+    const opl=`n0 x-122.001 y48
+n1 x-122 y48
+n2 x-121.999 y48
+n3 x-121.998 y48
+n4 x-121.997 y48
+n5 x-121.996 y48
+n6 x-121.998 y48.001
+n7 x-121.995 y48
+w1 Thighway=residential Nn0,n1
+w2 Thighway=track,foot=yes,motorcar=yes,oneway=yes Nn1,n2,n3,n4,n5
+w3 Thighway=track,foot=yes Nn3,n6
+w4 Thighway=path,foot=yes Nn5,n7`;
+    expect((await derive(opl)).points.map(point=>point.nodeId)).toEqual(["osm-node-1","osm-node-5"]);
+    expect((await derive(opl.replace("motorcar=yes,oneway=yes","motorcar=no"))).points.map(point=>point.nodeId)).toEqual(["osm-node-1"]);
+  });
+
+  it("keeps motor direction separate after source foot-way reversal",async()=>{
+    const base=rootService(direct.replace("highway=residential","highway=track,foot=yes,motorcar=yes,oneway=yes,oneway:foot=-1").replace("highway=path","highway=path,foot=yes"));
+    expect((await derive(base)).points.map(point=>point.nodeId)).toEqual(["osm-node-1"]);
+    // The street is now attached to the prohibited motor direction. Public walking
+    // can start there, but cannot establish an interior arrival context upstream.
+    const reversed=base.replace("Nn4,n1","Nn1,n4").replace("oneway:foot=-1","oneway:foot=no");
+    expect((await derive(reversed)).points.map(point=>point.nodeId)).toEqual(["osm-node-4"]);
+  });
+
+  it("retains unknown-motor tracks as hiking approach without promoting an unmarked interior path contact",async()=>{
+    const base=rootService(direct.replace("highway=residential","highway=track,foot=yes").replace("highway=path","highway=path,foot=yes"));
+    expect((await derive(base)).points.map(point=>point.nodeId)).toEqual(["osm-node-4"]);
+    expect((await derive(base.replace("n1 x","n1 Thighway=trailhead x"))).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public"},{nodeId:"osm-node-4",accessState:"public"}]);
+    expect((await derive(base.replace("highway=track,foot=yes","highway=track").replace("n1 x","n1 Thighway=trailhead x"))).points).toMatchObject([{nodeId:"osm-node-1",accessState:"unknown"},{nodeId:"osm-node-4",accessState:"unknown"}]);
+  });
+
+  it("roots a typed turnaround only on its actual physical approach contact",async()=>{
+    const base=direct.replace("highway=residential","highway=track").replace("highway=path","highway=path,foot=yes").replace("n1 x","n1 Thighway=turning_circle x");
+    expect((await derive(base)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{kind:"interface",rootNodeId:"osm-node-1",known:true}}]);
+    expect((await derive(base.replace("highway=turning_circle","highway=turning_circle,foot=no"))).points).toEqual([]);
+    expect((await derive(base.replace("highway=track","highway=path,foot=yes,motor_vehicle=yes"))).points).toEqual([]);
+    expect((await derive(base.replace("highway=track","highway=service,foot=private,motor_vehicle=no"))).points).toEqual([]);
+    expect((await derive(base.replace("Nn4,n1","Nn4,n5")+"\nn5 x-122.00001 y48")).points).toEqual([]);
+  });
+
+  it("does not propagate arrival through a hiking link before a track/path interior junction",async()=>{
+    const opl=`n1 x-122 y48
+n2 x-121.999 y48
+n3 x-121.998 y48
+n4 x-122.001 y48
+n5 x-122.002 y48
+w1 Thighway=path,foot=yes Nn4,n1
+w2 Thighway=track,foot=yes Nn1,n2
+w3 Thighway=path,foot=yes Nn2,n3
+w4 Thighway=residential Nn5,n4`;
+    expect((await derive(opl)).points.map(point=>point.nodeId)).toEqual(["osm-node-4"]);
+    expect((await derive(opl.replace("n2 x","n2 Thighway=trailhead x"))).points.map(point=>point.nodeId)).toEqual(["osm-node-2","osm-node-4"]);
+  });
+
+  it("uses a parking assertion as its own root and preserves downstream explicit foot uncertainty",async()=>{
+    const base=direct.replace("highway=residential","highway=service,foot=yes,motorcar=yes").replace("highway=path","highway=path,foot=yes");
+    const opl=`${base}\nn5 x-122.0011 y48\nw5 Tamenity=parking Nn4,n5,n4`;
+    expect((await derive(opl)).points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{rootNodeId:"osm-node-4",known:true}}]);
+    const unknown=await derive(opl,topology=>{topology.portalEvidence!.find(item=>item.kind==="parking")!.flags=["foot-access:unknown"];});
+    expect(unknown.points).toMatchObject([{nodeId:"osm-node-1",accessState:"unknown",entryWitness:{rootNodeId:"osm-node-4",known:false}}]);
   });
 
   it("preserves asymmetric foot permissions without granting the restricted direction",async()=>{
@@ -372,11 +524,11 @@ describe.each([false,true])("connected entry proof (before elevation=%s)",early=
   });
 
   it("uses a supported motor restriction frontier while keeping generic track gates as crossings",async()=>{
-    const track=direct.replace("highway=path","highway=track,foot=yes").replace("highway=residential","highway=track,foot=yes");
+    const track=rootService(direct.replace("highway=path","highway=track,foot=yes,motorcar=yes").replace("highway=residential","highway=track,foot=yes,motorcar=yes"));
     const generic=track.replace("n1 x","n1 Tbarrier=gate,foot=yes x");
-    expect((await derive(generic)).points).toEqual([]);
+    expect((await derive(generic)).points.map(point=>point.nodeId)).toEqual(["osm-node-4"]);
     const {points}=await derive(generic.replace("barrier=gate,foot=yes","barrier=gate,foot=yes,motorcar=no"));
-    expect(points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{kind:"interface",known:true}}]);
+    expect(points).toMatchObject([{nodeId:"osm-node-1",accessState:"public",entryWitness:{kind:"interface",known:true}},{nodeId:"osm-node-4",accessState:"public"}]);
   });
 
   it("retains physical road roles when foot permission makes them routable",async()=>{
@@ -404,7 +556,7 @@ describe.each([false,true])("connected entry proof (before elevation=%s)",early=
       const path=topology.ways.find(way=>way.flags.includes("osm-highway:path"))!;
       path.bidirectional=false;path.nodeIds.reverse();path.coordinates.reverse();
     });
-    expect(points).toEqual([]);
+    expect(points.map(point=>point.nodeId)).toEqual(["osm-node-46912346"]);
   });
 
   it("keeps admission invariant under renaming, order and irrelevant off-network evidence",async()=>{
@@ -432,8 +584,8 @@ describe("sparse starts before elevation",()=>{
     } finally {store.close();}
   });
 
-  it("skips inland reach without a trip-start assertion and all reach during frozen final refresh",async()=>{
-    const {store,measure}=staged(parking);
+  it.each([parking,heather])("skips inland reach without a trip-start assertion and all reach during frozen final refresh",async opl=>{
+    const {store,measure}=staged(opl);
     try {
       let sawDiscovery=false,sawInland=false;
       await prepareSparsePortalCandidates(store,coverage,async()=>{
@@ -445,7 +597,9 @@ describe("sparse starts before elevation",()=>{
       measure();
       let sawRefresh=false,sawReach=false;
       await store.derivePortals(coverage,async()=>{
-        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_links_from'").get())sawRefresh=true;
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_links_from'").get()){
+          sawRefresh=true;expect(store.database.prepare("SELECT count(*) AS n FROM entry_spines").get()!.n).toBe(0);
+        }
         if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name IN ('entry_approach','entry_reach')").get())sawReach=true;
       });
       expect(sawRefresh).toBe(true);expect(sawReach).toBe(false);
@@ -525,7 +679,7 @@ describe("sparse starts before elevation",()=>{
   it.each([direct,service,parking,top,heather])("preserves the full final portal identity and ranking for every admission path",async opl=>{
     const early=await deriveAtStage(opl,undefined,undefined,true);
     const legacy=await deriveAtStage(opl);
-    expect(early.points).toHaveLength(opl===top?2:1);
+    expect(early.points).toHaveLength(opl===top?3:1);
     expect(early.points).toEqual(legacy.points);
   });
 
@@ -601,7 +755,19 @@ describe("sparse starts before elevation",()=>{
     });
     try {
       store.database.exec("UPDATE eligible_segments SET length_m=1");
-      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:2,eligibleAccessPoints:2});
+      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:3,eligibleAccessPoints:3});
+    } finally {store.close();}
+  });
+
+  it("does not replace a frozen parking assertion with a road root at the same location",async()=>{
+    const {store,measure}=staged(parking);
+    try {
+      await prepareSparsePortalCandidates(store,coverage);
+      const proof=JSON.parse(String(store.database.prepare("SELECT witness FROM sparse_portal_candidates").get()!.witness));
+      expect(proof).toMatchObject({rootNodeId:"osm-node-4",rootAssertion:"osm-evidence-parking-way-3"});
+      store.database.exec("DELETE FROM evidence WHERE kind='parking'");
+      measure();await store.derivePortals(coverage);
+      expect(store.database.prepare("SELECT count(*) AS n FROM derived_portals").get()!.n).toBe(0);
     } finally {store.close();}
   });
 
