@@ -1,5 +1,6 @@
 import type { RouteSearchRequest } from "./types";
 import { CLOSE_MATCH_DISTANCE_MULTIPLIER } from "@/lib/contracts/routes";
+import { decomposeCycleBlocks } from "./cycle-blocks";
 import { routeElevationMetrics } from "./route-elevation";
 import { rankRouteMetrics } from "./route-quality";
 import type { GradeExperienceMetrics } from "@/lib/contracts";
@@ -141,11 +142,15 @@ function buildGraph(
 /** Reverse Dijkstra gives an admissible distance bound for every return,
  * including a retraced stem. Unlike hop-count blocking, this remains valid
  * for unequal trail lengths and every path-local forbidden-node set. */
-function minimumReturnDistances(graph: InternalGraph, stop: () => boolean, expand: () => void): Float64Array {
+function minimumReturnDistances(graph: InternalGraph, stop: () => boolean, expand: () => void, residual?: {
+  seeds: Array<[number, number]>;
+  target: number;
+  maximumDistance: number;
+  allows: (edge: number) => boolean;
+}): Float64Array {
   const best = new Float64Array(graph.nodeIds.length).fill(Infinity);
   if (graph.start < 0) return best;
-  best[graph.start] = 0;
-  const heap: Array<{ node: number; distance: number }> = [{ node: graph.start, distance: 0 }];
+  const heap: Array<{ node: number; distance: number }> = [];
   const push = (item: typeof heap[number]): void => {
     let index = heap.length;
     heap.push(item);
@@ -157,6 +162,9 @@ function minimumReturnDistances(graph: InternalGraph, stop: () => boolean, expan
     }
     heap[index] = item;
   };
+  for (const [node, distance] of residual?.seeds ?? [[graph.start, 0]]) {
+    if (distance < best[node]!) { best[node] = distance; push({ node, distance }); }
+  }
   while (heap.length > 0 && !stop()) {
     const current = heap[0]!;
     const last = heap.pop()!;
@@ -173,10 +181,12 @@ function minimumReturnDistances(graph: InternalGraph, stop: () => boolean, expan
     }
     if (current.distance !== best[current.node]) continue;
     expand();
+    if (current.node === residual?.target) break;
     for (const edge of graph.incoming[current.node]!) {
+      if (residual && !residual.allows(edge)) continue;
       const next = graph.from[edge]!;
       const distance = current.distance + graph.length[edge]!;
-      if (distance < best[next]!) {
+      if (distance < best[next]! && distance <= (residual?.maximumDistance ?? Infinity)) {
         best[next] = distance;
         push({ node: next, distance });
       }
@@ -305,63 +315,123 @@ export function searchSimpleRoutes(
     if (!previous || compareCandidate(candidate, previous) < 0) archive.set(loopKey, candidate);
   };
 
-  // A simple path from the start contains every possible stem + unfinished
-  // cycle. Closing to an ancestor supplies exactly one cycle. The prefix is
-  // returned along the same physical trails, only when every reverse exists.
-  // No cycle composition, arbitrary closed walks, or repair pass is needed.
+  // Exact matches have priority. Both passes use this one traversal; the
+  // fallback relaxes numerical ranges only, never topology or legal access.
+  // Reserve a small bounded part of unsuccessful searches for a close match.
   if (graph.start >= 0 && !outOfTime()) {
+    const { edgeBlock, blocks } = decomposeCycleBlocks({ ...graph, nodeCount: graph.nodeIds.length }, options.signal);
     const returnDistances = minimumReturnDistances(graph, exhausted, () => { expandedStates += 1; });
-    const path: number[] = [];
-    const usedPhysical = new Set<string>();
-    const positions = new Map<number, number>([[graph.start, 0]]);
-    const distances = [0];
-    const reverses: number[] = [];
-    const irreversiblePrefixCounts = [0];
-    const frameFor = (node: number) => ({ node, next: 0, edges: [...graph.outgoing[node]!].sort((a, b) =>
-      Number(positions.has(graph.to[b]!)) - Number(positions.has(graph.to[a]!))
-      || graph.length[a]! + returnDistances[graph.to[a]!]! - graph.length[b]! - returnDistances[graph.to[b]!]!
-      || a - b) });
-    const frames = [frameFor(graph.start)];
-    // Permit nearby over-distance matches, but never explore unbounded paths
-    // merely because the exact target cannot be met.
-    const explorationDistance = maxMeters * CLOSE_MATCH_DISTANCE_MULTIPLIER;
-    while (frames.length > 0 && !exhausted()) {
-      const frame = frames.at(-1)!;
-      const outgoing = frame.edges;
-      if (frame.next === outgoing.length) {
-        frames.pop();
-        if (path.length > 0) {
-          positions.delete(frame.node);
-          usedPhysical.delete(graph.physical[path.pop()!]!);
-          distances.pop();
-          reverses.pop();
-          irreversiblePrefixCounts.pop();
+    const maximumGain = request.elevationGainFeet ? request.elevationGainFeet.max * 0.3048 : Infinity;
+    const minimumGain = request.elevationGainFeet ? request.elevationGainFeet.min * 0.3048 : 0;
+    const minimumDistance = request.distanceMiles.min * METERS_PER_MILE;
+    const maximumElevation = request.maximumElevationFeet ? request.maximumElevationFeet.max * 0.3048 : Infinity;
+    const maximumStem = request.closedRoute.maximumSharedStemMiles === undefined ? Infinity
+      : request.closedRoute.maximumSharedStemMiles * METERS_PER_MILE;
+    const maximumRepeat = request.closedRoute.maximumRepeatedTrailPct / 100;
+    const enumerate = (exactOnly: boolean): void => {
+      const path: number[] = [];
+      const usedPhysical = new Set<string>();
+      const positions = new Map<number, number>([[graph.start, 0]]);
+      const distances = [0], gains = [0], elevations = [-Infinity];
+      const reverses: number[] = [];
+      const reverseDistances = [0], reverseGains = [0];
+      const frameFor = (node: number) => ({ node, next: 0, edges: [...graph.outgoing[node]!].sort((a, b) =>
+        Number(positions.has(graph.to[b]!)) - Number(positions.has(graph.to[a]!))
+        || graph.length[a]! + returnDistances[graph.to[a]!]! - graph.length[b]! - returnDistances[graph.to[b]!]!
+        || a - b) });
+      const frames = [frameFor(graph.start)];
+      const explorationDistance = maxMeters * (exactOnly ? 1 : CLOSE_MATCH_DISTANCE_MULTIPLIER);
+      while (frames.length > 0 && !exhausted()) {
+        if (exactOnly && validCandidateCount === 0
+          && (expandedStates >= options.budget.maximumExpandedStates * 0.9 || now() - startedAt >= options.budget.deadlineMs * 0.9)) {
+          truncationReasons.add("exact-search-limit");
+          break;
         }
-        continue;
+        const frame = frames.at(-1)!;
+        if (frame.next === frame.edges.length) {
+          frames.pop();
+          if (path.length > 0) {
+            positions.delete(frame.node);
+            usedPhysical.delete(graph.physical[path.pop()!]!);
+            distances.pop(); gains.pop(); elevations.pop(); reverses.pop(); reverseDistances.pop(); reverseGains.pop();
+          }
+          continue;
+        }
+        const edge = frame.edges[frame.next++]!;
+        expandedStates += 1;
+        const key = graph.physical[edge]!;
+        if (usedPhysical.has(key)) continue;
+        const next = graph.to[edge]!;
+        const distance = distances.at(-1)! + graph.length[edge]!;
+        const gain = gains.at(-1)! + graph.gain[edge]!;
+        const elevation = Math.max(elevations.at(-1)!, graph.maximumElevation[edge]!);
+        if (exactOnly && (gain > maximumGain || elevation > maximumElevation)) continue;
+        const attachment = positions.get(next);
+        if (attachment !== undefined) {
+          const backDistance = reverseDistances[attachment]!;
+          if (!Number.isFinite(backDistance)) continue;
+          const totalDistance = distance + backDistance;
+          if (totalDistance > explorationDistance) continue;
+          const totalGain = gain + reverseGains[attachment]!;
+          const stemDistance = distances[attachment]!;
+          // These are necessary exact-match conditions. Minimum ranges are
+          // tested only on a completed route, never used to discard a prefix.
+          if (exactOnly && (totalDistance < minimumDistance || totalGain < minimumGain || totalGain > maximumGain
+            || stemDistance > maximumStem || backDistance > totalDistance * maximumRepeat + 1e-9)) continue;
+          offer([...path, edge, ...reverses.slice(0, attachment).reverse()], attachment, stemDistance);
+          continue;
+        }
+        if (!Number.isFinite(returnDistances[next]) || distance + returnDistances[next]! > explorationDistance) continue;
+        const reverse = graph.reverse.get(`${key}:${next}:${frame.node}`) ?? -1;
+        const backDistance = reverseDistances.at(-1)! + (reverse < 0 ? Infinity : graph.length[reverse]!);
+        const backGain = reverseGains.at(-1)! + (reverse < 0 ? Infinity : graph.gain[reverse]!);
+        // A simple cycle cannot cross blocks. After leaving one block, the
+        // entire earlier prefix must be the reversible stem of any later loop.
+        // Keep every alternative path within a block, including longer stems.
+        const enteringBlock = path.length > 0 && edgeBlock[path.at(-1)!] !== edgeBlock[edge];
+        if (enteringBlock && (!Number.isFinite(reverseDistances.at(-1)!) || (exactOnly
+          && (distances.at(-1)! > maximumStem || reverseDistances.at(-1)! > maxMeters * maximumRepeat
+            || gains.at(-1)! + reverseGains.at(-1)! > maximumGain)))) continue;
+        // Bridges can only be part of a stem; their reverse is mandatory.
+        if (!blocks[edgeBlock[edge]!]!.cyclic && (!Number.isFinite(backDistance) || (exactOnly
+          && (distance > maximumStem || backDistance > maxMeters * maximumRepeat || gain + backGain > maximumGain)))) continue;
+        path.push(edge);
+        usedPhysical.add(key);
+        positions.set(next, path.length);
+        distances.push(distance); gains.push(gain); elevations.push(elevation);
+        reverses.push(reverse); reverseDistances.push(backDistance); reverseGains.push(backGain);
+        // Once this prefix cannot be a stem, every completion must close to
+        // an existing eligible ancestor. Recompute a weighted return bound in
+        // this exact residual graph; never cache path-relative blocking state.
+        // Ancestors are terminal targets, seeded with their actual stem return
+        // cost. Used physical trails and all other prefix nodes are forbidden.
+        // This also covers lollipops, unlike banning the whole prefix and
+        // insisting on a new path directly to the start.
+        const canExtendStem = Number.isFinite(backDistance) && distance <= maximumStem
+          && backDistance <= maxMeters * maximumRepeat && gain + backGain <= maximumGain;
+        if (exactOnly && !canExtendStem) {
+          const seeds: Array<[number, number]> = [];
+          for (const [node, index] of positions) {
+            if (node !== next && Number.isFinite(reverseDistances[index]) && distances[index]! <= maximumStem
+              && reverseDistances[index]! <= maxMeters * maximumRepeat
+              && gains[index]! + reverseGains[index]! <= maximumGain) seeds.push([node, reverseDistances[index]!]);
+          }
+          const residual = minimumReturnDistances(graph, exhausted, () => { expandedStates += 1; }, {
+            seeds, target: next, maximumDistance: maxMeters - distance,
+            allows: edge => !usedPhysical.has(graph.physical[edge]!)
+              && (!positions.has(graph.from[edge]!) || graph.from[edge] === next),
+          });
+          if (distance + residual[next]! > maxMeters) {
+            positions.delete(next); usedPhysical.delete(key); path.pop();
+            distances.pop(); gains.pop(); elevations.pop(); reverses.pop(); reverseDistances.pop(); reverseGains.pop();
+            continue;
+          }
+        }
+        frames.push(frameFor(next));
       }
-      const edge = outgoing[frame.next++]!;
-      expandedStates += 1;
-      const key = graph.physical[edge]!;
-      if (usedPhysical.has(key)) continue;
-      const next = graph.to[edge]!;
-      const distance = distances.at(-1)! + graph.length[edge]!;
-      const attachment = positions.get(next);
-      if (attachment !== undefined) {
-        if (irreversiblePrefixCounts[attachment] !== 0) continue;
-        const stemDistance = distances[attachment]!;
-        offer([...path, edge, ...reverses.slice(0, attachment).reverse()], attachment, stemDistance);
-        continue;
-      }
-      if (!Number.isFinite(returnDistances[next]) || distance + returnDistances[next]! > explorationDistance) continue;
-      path.push(edge);
-      usedPhysical.add(key);
-      positions.set(next, path.length);
-      distances.push(distance);
-      const reverse = graph.reverse.get(`${key}:${next}:${frame.node}`) ?? -1;
-      reverses.push(reverse);
-      irreversiblePrefixCounts.push(irreversiblePrefixCounts.at(-1)! + Number(reverse < 0));
-      frames.push(frameFor(next));
-    }
+    };
+    enumerate(true);
+    if (validCandidateCount === 0 && !exhausted()) enumerate(false);
   }
 
   const select = (pool: readonly Candidate[], limit: number): Candidate[] => {
