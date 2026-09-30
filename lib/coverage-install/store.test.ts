@@ -22,7 +22,7 @@ it("waits for another connection before initializing the journal mode", async ()
   `], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let errors = "";
-  child.stderr.on("data", data => { errors += String(data); });
+  child.stderr!.on("data", data => { errors += String(data); });
   child.once("message", () => { timer = setTimeout(release, 100); });
   try {
     const code = await new Promise<number | null>((complete, reject) => {
