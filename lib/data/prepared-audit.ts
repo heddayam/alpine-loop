@@ -31,6 +31,29 @@ export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRele
     if((JSON.parse(String(access.source_refs)) as string[]).some(id=>!sources.has(id))) throw new Error(`Unknown access source: ${access.id}`);
     if([access.known,access.inclusive].some(value=>value!==null&&(!finite(value)||Number(value)<0)) || (access.known!==null&&(access.inclusive===null||Number(access.inclusive)>Number(access.known)))) throw new Error(`Invalid compact feasibility hints: ${access.id}`);
   }
+  // This extension is optional so previously installed schema-7 packs remain
+  // readable. Audit values and joins explicitly even if a malformed producer
+  // omitted the writer's CHECK and foreign-key constraints.
+  if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='access_entrance_families'").get()) {
+    let family:string|undefined,profile:string|undefined,junction:string|undefined,state:string|undefined,members=0;
+    const checkGroup=()=>{if(family!==undefined&&members<2)throw new Error(`Invalid entrance family cardinality: ${family}`);};
+    for(const member of db.prepare(`SELECT f.*,a.id AS access_exists,a.access_state,n.id AS junction_exists
+      FROM access_entrance_families f LEFT JOIN access_points a ON a.id=f.access_point_id
+      LEFT JOIN nodes n ON n.id=f.junction_node_id ORDER BY f.profile,f.family_id,f.access_point_id`).iterate()) {
+      if(++work%1000===0) await checkpoint();
+      if(!['known','inclusive'].includes(String(member.profile)) || !/^entrance-family:[0-9a-f]{64}$/.test(String(member.family_id)) ||
+        !member.access_exists || !member.junction_exists || !finite(member.approach_distance_m) || Number(member.approach_distance_m)<0 || Number(member.approach_distance_m)>250 ||
+        (member.access_state!=='public'&&(member.profile!=='inclusive'||member.access_state!=='unknown'))) throw new Error(`Invalid entrance family member: ${member.access_point_id}`);
+      if(family!==member.family_id||profile!==member.profile) {
+        checkGroup();family=String(member.family_id);profile=String(member.profile);junction=String(member.junction_node_id);state=String(member.access_state);members=0;
+      }
+      if(junction!==member.junction_node_id||state!==member.access_state) throw new Error(`Inconsistent entrance family: ${family}`);
+      members++;
+    }
+    checkGroup();
+    if(db.prepare(`SELECT profile,access_point_id FROM access_entrance_families
+      GROUP BY profile,access_point_id HAVING count(*)<>1 LIMIT 1`).get()) throw new Error("Repeated entrance family membership");
+  }
   let prior:{key:number;from:string;to:string;length:number;gain:number;loss:number}|undefined;
   for(const edge of db.prepare(`SELECT e.*,s.min_lon AS spatial_w,s.max_lon AS spatial_e,s.min_lat AS spatial_s,s.max_lat AS spatial_n,a.lon AS a_lon,a.lat AS a_lat,a.elevation_m AS a_elevation,b.lon AS b_lon,b.lat AS b_lat,b.elevation_m AS b_elevation,p.geometry_hash,p.from_node_key,p.to_node_key,a.node_key AS a_key,b.node_key AS b_key
     FROM edges e LEFT JOIN edge_spatial s ON s.row_id=e.edge_key LEFT JOIN nodes a ON a.id=e.from_node LEFT JOIN nodes b ON b.id=e.to_node LEFT JOIN physical_edges p ON p.physical_edge_key=e.physical_edge_key ORDER BY e.physical_edge_key,e.edge_key`).iterate()) {

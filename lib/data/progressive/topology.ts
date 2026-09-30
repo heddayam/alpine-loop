@@ -1,4 +1,5 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { writeEntranceFamilies } from "./entrance-families";
 
 type Row = Record<string, string | number | null>;
 // Fixed SQL only; each invocation owns its cache. Iterators remain uncached.
@@ -167,7 +168,15 @@ export async function writeProgressiveTopology(db: DatabaseSync, checkpoint: () 
   } catch (error) {
     if (db.isTransaction) db.exec("ROLLBACK");
     throw error;
-  } finally { statementCaches.delete(db); }
+  } finally {
+    // Cancellation may leave committed scratch batches; same-connection retry
+    // must not inherit tables or prepared statements from an interrupted pass.
+    db.exec(`DROP TABLE IF EXISTS temp.entrance_arms; DROP TABLE IF EXISTS temp.entrance_degrees; DROP TABLE IF EXISTS temp.entrance_links;
+      DROP TABLE IF EXISTS temp.queue; DROP TABLE IF EXISTS temp.todo; DROP TABLE IF EXISTS temp.dfs;
+      DROP TABLE IF EXISTS temp.seeds; DROP TABLE IF EXISTS temp.bridges;
+      DROP TABLE IF EXISTS temp.work_physical; DROP TABLE IF EXISTS temp.work_edges; DROP TABLE IF EXISTS temp.work_nodes;`);
+    statementCaches.delete(db);
+  }
 }
 
 async function deriveTopology(db: DatabaseSync, checkpoint: () => Promise<void>): Promise<void> {
@@ -187,6 +196,7 @@ async function deriveTopology(db: DatabaseSync, checkpoint: () => Promise<void>)
     db.exec("CREATE INDEX work_nodes_scc ON work_nodes(scc,k);");
     db.exec(`DELETE FROM work_physical WHERE (SELECT scc FROM work_nodes WHERE k=from_key)<>(SELECT scc FROM work_nodes WHERE k=to_key);`);
     await seedCycles(db,checkpoint);
+    await writeEntranceFamilies(db,profile,checkpoint);
     await distances(db,checkpoint);
       for(const access of rows(db, "SELECT a.id,w.dist FROM access_points a JOIN nodes n ON n.id=a.node_id JOIN work_nodes w ON w.k=n.node_key ORDER BY a.id")) {
         if(++work%1000===0) await checkpoint();
