@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import { filteredSourceLines } from "./source-filter";
 import { buildingCentroidOf, parseBuildingCentroids } from "@/lib/data/osm/buildings";
 import { parseOplTags } from "@/lib/data/osm/opl";
-import { classifyOsmWay, osmAccessState, osmFootDirection, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
+import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmFootDirection, osmNodeFlags, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
 import type { NormalizedNode, NormalizedWay, NormalizedPortalEvidence } from "@/lib/data/types";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
@@ -30,10 +30,11 @@ const componentBounds = (area: AreaGeometry, context: number) => JSON.stringify(
 function intersectsEnvelopes(row: Row, envelopes: readonly Envelope[]): boolean {
   return envelopes.some(([east,west,north,south])=>row.minx<=east&&row.maxx>=west&&row.miny<=north&&row.maxy>=south);
 }
-function walkingEntry(row: Row, tags: Record<string,string>, refs: string[], coordinates: [number,number][], sourceId: string): WalkingEntry {
+function walkingEntry(row: Row, tags: Record<string,string>, refs: string[], coordinates: [number,number][], sourceId: string,
+  nodeFlags: ReadonlyMap<string, string[]>): WalkingEntry {
   const direction=osmFootDirection(tags);
   if(direction==="reverse") {refs=[...refs].reverse();coordinates=[...coordinates].reverse();}
-  const nodes=refs.map((id,index)=>({id:`osm-node-${id}`,externalId:`node/${id}`,lon:coordinates[index]![0],lat:coordinates[index]![1],elevationM:null,flags:[],sourceRefs:[sourceId]}));
+  const nodes=refs.map((id,index)=>({id:`osm-node-${id}`,externalId:`node/${id}`,lon:coordinates[index]![0],lat:coordinates[index]![1],elevationM:null,flags:nodeFlags.get(id)??[],sourceRefs:[sourceId]}));
   return {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map(node=>node.id),coordinates,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.kind as NormalizedWay["edgeClass"],sourceRefs:[sourceId],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
 }
 function* portalEvidence(externalId: string, tags: Record<string,string>, nodeIds: string[], coordinates: [number,number][], sourceId: string): Generator<NormalizedPortalEvidence> {
@@ -45,7 +46,7 @@ function nodeBuilding(row: Node, tags: Record<string,string>): readonly [number,
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v8";
+export const NORMALIZATION_VERSION = "source-normalization-v9";
 const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
 export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
   `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;
@@ -82,6 +83,7 @@ function outerRings(parts: string[][]): string[][] {
 export class CoverageSourceStore {
   readonly db: DatabaseSync;
   private spatialReady = false;
+  private nodeFlagQuery?: ReturnType<DatabaseSync["prepare"]>;
   constructor(readonly path: string, readonly source: SourceSnapshot, readonly geometry: AreaGeometry) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16384; PRAGMA temp_store=FILE;
@@ -181,7 +183,7 @@ export class CoverageSourceStore {
           if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
           putNode.run(id, lon, lat);
           const tags = parseOplTags(field("T"));
-          if (isBuilding(tags) || osmPortalEvidenceKinds(tags).length) putContextNode.run(id, lon, lat, field("T"));
+          if (isBuilding(tags) || osmPortalEvidenceKinds(tags).length || hasOsmNodeContext(tags)) putContextNode.run(id, lon, lat, field("T"));
         } else if (type === "w") {
           const tags = parseOplTags(field("T"));
           const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
@@ -259,6 +261,13 @@ export class CoverageSourceStore {
         ${table==="nodes"?"AND candidate.tags!=''":""}) ORDER BY p.id`).iterate(componentBounds(area,0.01)) as Iterable<Node>;
   }
 
+  /** One bounded identity join per complete way, not one query per source node. */
+  private nodeFlags(refs: readonly string[]): Map<string, string[]> {
+    this.nodeFlagQuery ??= this.db.prepare("SELECT id,tags FROM nodes WHERE id IN (SELECT value FROM json_each(?))");
+    const rows = this.nodeFlagQuery.all(JSON.stringify(refs)) as { id: string; tags: string }[];
+    return new Map(rows.map(({ id, tags }) => [id, osmNodeFlags(parseOplTags(tags))]));
+  }
+
   /** Read the regional import context once, retaining independent walking/context envelopes. */
   *context(area: AreaGeometry, walkingArea: AreaGeometry = area): Generator<CoverageContextEntry> {
     for(const row of this.nearbyPoints("nodes",area)) {
@@ -278,7 +287,7 @@ export class CoverageSourceStore {
       if(!walking&&!building&&!evidence) continue;
       const coordinates=JSON.parse(row.coordinates) as [number,number][];
       const refs=walking||evidence ? JSON.parse(row.refs) as string[] : [];
-      if(walking) yield {kind:"way",...walkingEntry(row,tags,refs,coordinates,this.source.id)};
+      if(walking) yield {kind:"way",...walkingEntry(row,tags,refs,coordinates,this.source.id,this.nodeFlags(refs))};
       if(building) {
         const centroid=buildingCentroidOf({type:"LineString",coordinates});
         if(centroid) yield {kind:"building",centroid};
@@ -291,7 +300,8 @@ export class CoverageSourceStore {
   *ways(area: AreaGeometry, contextDegrees=0.01): Generator<WalkingEntry> {
     for(const row of this.nearbyWays(area,contextDegrees)) {
       if(["building","evidence"].includes(row.kind)) continue;
-      yield walkingEntry(row,JSON.parse(row.tags),JSON.parse(row.refs),JSON.parse(row.coordinates),this.source.id);
+      const refs=JSON.parse(row.refs) as string[];
+      yield walkingEntry(row,JSON.parse(row.tags),refs,JSON.parse(row.coordinates),this.source.id,this.nodeFlags(refs));
     }
   }
   *evidence(area: AreaGeometry): Generator<NormalizedPortalEvidence> {

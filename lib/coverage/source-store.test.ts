@@ -6,6 +6,8 @@ import { CoverageSourceStore, sourceStoreFileName, type CoverageContextEntry } f
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
+import { normalizeOsmOpl } from "@/lib/data/osm/opl";
+import { compiledEdgesForSegment } from "@/lib/data/compiled-edges";
 
 vi.mock("./source-filter", () => ({ filteredSourceLines: () => { throw new Error("Unexpected source read"); } }));
 const source: SourceSnapshot = { id: "fixture", authority: "fixture", dataset: "fixture", version: "1", retrievedAt: "2026-09-24", url: "https://example.invalid/fixture", license: "fixture", contentHash: `sha256:${"1".repeat(64)}`, localPath: "/offline-fixture.osm.pbf" };
@@ -57,7 +59,37 @@ describe("compact coverage source", () => {
     ]) });
     const ways = [...store.ways(area)].map(({way})=>way);
     expect(ways[0]).toMatchObject({ nodeIds: ["osm-node-2","osm-node-1"], bidirectional:false, accessState:"public" });
-    expect(ways.map(way=>way.edgeClass)).toEqual(["trail","trail","trail"]);
+    expect(ways.map(way=>way.edgeClass)).toEqual(["trail","trail","street"]);
+  });
+
+  it("retains attached passage tags outside the point envelope with one bounded identity join per way", async () => {
+    const fixture = [
+      "n1 T x0 y0", "n2 Tbarrier=bollard,foot=no,motorcar=yes x5 y0",
+      "n3 Tinformation=board,access=private x0.001 y0", "n4 Tbarrier=gate x0.002 y0",
+      "w10 Thighway=track,foot=yes,motorcar=private,oneway=yes Nn1,n2,n3,n4",
+      "w11 Thighway=service,foot=yes,oneway=yes Nn1,n3",
+      "w12 Thighway=pedestrian,area=yes Nn1,n3,n4,n1",
+    ];
+    const store = make();
+    await store.import(async () => {}, { lines: lines(fixture) });
+    const reference = normalizeOsmOpl(fixture.join("\n"), source.id);
+    const local = rectangle([-.001, -.001, .003, .001]);
+    const queries = vi.spyOn(store.db, "prepare");
+    const entries = [...store.context(local)].filter(entry => entry.kind === "way");
+    expect(queries.mock.calls.filter(([sql]) => sql.startsWith("SELECT id,tags FROM nodes"))).toHaveLength(1);
+    queries.mockRestore();
+    expect(entries.map(entry => entry.way)).toEqual(reference.ways);
+    const way = entries[0]!;
+    expect(way.nodes).toEqual(way.way.nodeIds.map(id => reference.nodes.find(node => node.id === id)));
+    expect(way.nodes[1]!.flags).toEqual(expect.arrayContaining(["barrier:bollard", "foot-access:prohibited"]));
+    expect(way.nodes[2]!.flags).not.toContain("foot-access:private");
+    expect(way.nodes[3]!.flags).toEqual(["barrier:gate"]);
+    expect(entries[2]!.way).toMatchObject({ edgeClass: "sidewalk", flags: expect.arrayContaining(["osm-highway:pedestrian", "area:yes"]) });
+    const compiled = compiledEdgesForSegment(way.way, 0, way.way.coordinates!.slice(0, 2), {
+      lengthM: 100, gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, elevationProfile: null,
+    }, { nodeFlags: way.nodes.slice(0, 2).map(node => node.flags) });
+    expect(compiled.map(edge => edge.accessState)).toEqual(["prohibited", "prohibited"]);
+    expect([...store.ways(local)]).toEqual(entries.map(({ way, nodes }) => ({ way, nodes })));
   });
 
   it.each(["stream", "integrity"])("rebuilds an interrupted %s phase without trusting partial data", async (phase) => {

@@ -7,7 +7,11 @@ import { rectangle, unionCoverage } from "./geometry";
 const CONTEXT_FILTERS = [
   "w/highway", "w/footway", "nw/amenity=parking", "nw/highway=trailhead",
   "nw/information=trailhead,guidepost,board,map", "nw/tourism=information",
-  "nw/barrier=gate", "nwr/building",
+  "nw/barrier=gate", "n/barrier", "n/foot", "n/access", "n/foot:forward", "n/foot:backward", "n/oneway:foot",
+  "n/motorcar", "n/motor_vehicle", "n/vehicle", "n/access:conditional", "n/foot:conditional",
+  "n/foot:forward:conditional", "n/foot:backward:conditional",
+  "n/motorcar:conditional", "n/motor_vehicle:conditional", "n/vehicle:conditional", "n/oneway:foot:conditional",
+  "nwr/building",
 ];
 
 /** One owned child, including cancellation during native scans and early iterator return. */

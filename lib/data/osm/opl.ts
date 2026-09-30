@@ -5,6 +5,8 @@ import {
   classifyOsmWay,
   osmAccessState,
   osmFootDirection,
+  osmNodeFlags,
+  hasOsmNodeContext,
   osmPortalEvidenceKinds,
   osmWayFlags,
 } from "./normalize";
@@ -70,7 +72,7 @@ function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], s
       lon: input.lon,
       lat: input.lat,
       elevationM: null,
-      flags: [],
+      flags: osmNodeFlags(input.tags),
       sourceRefs: [sourceId],
     };
     retainedNodes.set(id, normalized);
@@ -105,6 +107,7 @@ function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], s
 
   const portalEvidence: NormalizedPortalEvidence[] = [];
   for (const node of nodes.values()) {
+    if (hasOsmNodeContext(node.tags)) retainNode(node.id);
     const kinds = osmPortalEvidenceKinds(node.tags);
     if (kinds.length === 0) continue;
     const normalizedNode = retainNode(node.id);

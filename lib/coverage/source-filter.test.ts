@@ -106,6 +106,20 @@ describe.skipIf(spawnSync("osmium", ["--version"]).status !== 0)("native source 
     expect(await readdir(staging)).toEqual([]);
   });
 
+  it("retains standalone barriers and access facts as well as attached passage tags", async () => {
+    const directory = await root(), source = path.join(directory, "passages.osm.opl"), staging = path.join(directory, "staging");
+    await writeFile(source, [
+      "n1 Tbarrier=bollard,foot=no x0.001 y0.001", "n2 Taccess=private x0.002 y0.002",
+      "n3 Tmotorcar=no x0.003 y0.003", "n4 Tfoot:conditional=no%20%@%20%(winter) x0.004 y0.004",
+      "n5 Tbarrier=stile,foot=yes x0.004 y0.004", "n6 T x0.1 y0.1",
+      "w1 Thighway=path,foot=yes Nn5,n6",
+    ].join("\n"));
+    const output = await collect(filteredSourceLines(source, staging, rectangle([0, 0, .005, .005]), async () => {}));
+    expect(ids(output)).toEqual(["n1", "n2", "n3", "n4", "n5", "n6", "w1"]);
+    expect(output.find(line => line.startsWith("n5 "))).toContain("barrier=stile,foot=yes");
+    expect(await readdir(staging)).toEqual([]);
+  });
+
   it("fails closed and removes staging when a selected way references a missing source node", async () => {
     const directory = await root(), source = path.join(directory, "missing-node.osm.opl"), staging = path.join(directory, "staging");
     await writeFile(source, "n1 T x0.001 y0.001\nw1 Thighway=path Nn1,n2\n");
@@ -140,6 +154,22 @@ async function finishChild(child: ReturnType<typeof pendingChild>, code = 0) {
 }
 const stages = ["extract", "cat", "getparents", "getparents", "tags-filter", "cat", "getid", "merge"].map((command, index) => ({ command, index }));
 describe("filter process lifetime", () => {
+  it("selects every barrier and node permission family before reference completion", async () => {
+    const directory = await root();
+    const children = stages.slice(0, 5).map(() => pendingChild());
+    const result = collect(filteredSourceLines(fixture, directory, rectangle([0, 0, .005, .005]), async () => {}));
+    const rejected = expect(result).rejects.toThrow("osmium tags-filter failed");
+    for (const child of children.slice(0, 4)) await finishChild(child);
+    await vi.waitFor(() => expect(children[4]!.listenerCount("close")).toBe(1));
+    const args = vi.mocked(spawn).mock.calls.at(-1)![1] as string[];
+    expect(args).toEqual(expect.arrayContaining([
+      "n/barrier", "n/foot", "n/access", "n/motorcar", "n/motor_vehicle", "n/vehicle",
+      "n/foot:forward", "n/foot:backward", "n/foot:conditional", "n/access:conditional",
+      "n/motorcar:conditional", "n/motor_vehicle:conditional", "n/vehicle:conditional",
+    ]));
+    await finishChild(children[4]!, 1);
+    await rejected;
+  });
   it("pads an L-shaped addition without filling the old core's bounding rectangle",async()=>{
     const directory=await root(),child=pendingChild();
     const result=collect(filteredSourceLines(fixture,directory,unionCoverage([

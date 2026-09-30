@@ -2,7 +2,7 @@ import type { AccessState } from "@/lib/graph/types";
 import type { EdgeClass, NormalizedPortalEvidence } from "../types";
 
 const TRAIL_HIGHWAYS = new Set(["path", "bridleway", "steps"]);
-const LEGACY_WALKING_CONNECTORS = new Set(["service", "unclassified", "residential", "living_street"]);
+const WALKING_ROADS = new Set(["service", "unclassified", "residential", "living_street"]);
 const STREET_HIGHWAYS = new Set([
   "motorway", "motorway_link",
   "trunk", "trunk_link",
@@ -12,44 +12,31 @@ const STREET_HIGHWAYS = new Set([
   "unclassified", "residential", "living_street", "road",
 ]);
 const SIDEWALK_SUBTAGS = new Set(["sidewalk", "crossing", "traffic_island", "access_aisle", "link"]);
-const AFFIRMATIVE_MOTOR_ACCESS = new Set([
-  "yes", "designated", "permissive", "public", "destination", "customers", "agricultural", "forestry",
-]);
-const TRAIL_SURFACES = new Set([
-  "dirt", "earth", "fine_gravel", "grass", "ground", "mud", "pebblestone", "rock", "sand", "unpaved", "wood",
-]);
+const PUBLIC_ACCESS = new Set(["yes", "designated", "permissive", "public"]);
+const PURPOSE_ACCESS = new Set(["customers", "destination", "delivery", "agricultural", "forestry"]);
 const INFORMATION_VALUES = new Set(["guidepost", "board", "map"]);
+const ACCESS_ORDER: readonly AccessState[] = ["public", "unknown", "private", "prohibited", "closed"];
 
 function hasTrailContext(values: Record<string, string>): boolean {
   return values.footway === "trail"
     || values.trail_visibility !== undefined
     || values.sac_scale !== undefined
-    || values.informal === "yes"
-    || TRAIL_SURFACES.has(values.surface ?? "")
-    || /(?:^|\s)(trail|path)(?:\s|$)/i.test(values.name ?? "");
+    || values.informal === "yes";
 }
 
-function hasAffirmativeMotorVehicleEvidence(values: Record<string, string>): boolean {
-  const motorAccess = values.motor_vehicle ?? values.vehicle ?? values.access;
-  return AFFIRMATIVE_MOTOR_ACCESS.has(motorAccess ?? "");
-}
-
-function wasWalkingConnector(values: Record<string, string>): boolean {
-  return LEGACY_WALKING_CONNECTORS.has(values.highway ?? "") && (
-    ["yes", "designated", "permissive", "public"].includes(values.foot ?? "")
-    || /(?:^|\s)(trail|path|walk)(?:\s|$)/i.test(values.name ?? "")
-  );
+function isWalkingRoad(values: Record<string, string>): boolean {
+  return WALKING_ROADS.has(values.highway ?? "") && PUBLIC_ACCESS.has(values.foot ?? "");
 }
 
 /** Classify OSM ways once at the adapter boundary; null means no graph context is retained. */
 export function classifyOsmWay(values: Record<string, string>): EdgeClass | null {
   const highway = values.highway ?? "";
   if (SIDEWALK_SUBTAGS.has(values.footway ?? "")) return "sidewalk";
-  if (wasWalkingConnector(values)) return "trail";
+  if (values.area === "yes" && (TRAIL_HIGHWAYS.has(highway) || highway === "footway" || highway === "pedestrian")) return "sidewalk";
+  // Routing can retain an explicitly walkable road without changing its source role.
+  if (isWalkingRoad(values)) return "trail";
   if (TRAIL_HIGHWAYS.has(highway)) return "trail";
-  if (highway === "track") {
-    return hasAffirmativeMotorVehicleEvidence(values) && values.foot === "no" ? "service-road" : "trail";
-  }
+  if (highway === "track") return "trail";
   if (highway === "footway" || highway === "pedestrian") return "trail";
   if (highway === "service") return "service-road";
   if (STREET_HIGHWAYS.has(highway)) return "street";
@@ -65,20 +52,97 @@ export function osmPortalEvidenceKinds(values: Record<string, string>): Normaliz
   return kinds;
 }
 
-export function osmAccessState(values: Record<string, string>): AccessState {
-  const access = values.foot ?? values.access;
+function accessState(access: string | undefined, conditional: string | undefined): AccessState {
+  if (access === "closed") return "closed";
   if (["no", "agricultural", "forestry"].includes(access ?? "")) return "prohibited";
-  if (["private", "customers", "destination"].includes(access ?? "")) return "private";
-  if (["yes", "designated", "permissive", "public"].includes(access ?? "")) return "public";
-  return "unknown";
+  if (access === "private" || PURPOSE_ACCESS.has(access ?? "")) return "private";
+  // A conditional rule is retained verbatim; it cannot certify public passage.
+  return PUBLIC_ACCESS.has(access ?? "") && !conditional ? "public" : "unknown";
+}
+
+function footDirections(values: Record<string, string>): { forward: boolean; backward: boolean } {
+  // Ordinary road and track oneway describes vehicles. Only pedestrian ways
+  // inherit the generic tag when no foot-specific direction has been supplied.
+  const pedestrian = TRAIL_HIGHWAYS.has(values.highway ?? "")
+    || values.highway === "footway" || values.highway === "pedestrian";
+  const oneway = values["oneway:foot"] ?? (pedestrian ? values.oneway : undefined);
+  let forward = oneway !== "-1";
+  let backward = oneway !== "yes" && oneway !== "1";
+  if (values["foot:forward"] === "no") forward = false;
+  if (values["foot:backward"] === "no") backward = false;
+  return { forward, backward };
+}
+
+function footState(values: Record<string, string>, direction?: "forward" | "backward"): AccessState {
+  const directional = direction ? `foot:${direction}` : undefined;
+  return accessState((directional ? values[directional] : undefined) ?? values.foot ?? values.access,
+    (directional ? values[`${directional}:conditional`] : undefined)
+      ?? values["foot:conditional"] ?? values["oneway:foot:conditional"]
+      ?? (values.foot === undefined && (!directional || values[directional] === undefined) ? values["access:conditional"] : undefined));
+}
+
+function directionalStates(values: Record<string, string>): readonly [AccessState, AccessState] {
+  const allowed = footDirections(values);
+  return [allowed.forward ? footState(values, "forward") : "prohibited",
+    allowed.backward ? footState(values, "backward") : "prohibited"];
+}
+
+export function osmAccessState(values: Record<string, string>): AccessState {
+  // The common field expresses the best available movement. Oriented flags
+  // below retain stricter directions so neither compiler nor proof invents one.
+  const states = directionalStates(values);
+  return ACCESS_ORDER[Math.min(...states.map(state => ACCESS_ORDER.indexOf(state)))]!;
+}
+
+export function osmMotorAccessState(values: Record<string, string>): AccessState {
+  const keys = ["motorcar", "motor_vehicle", "vehicle", "access"];
+  const index = keys.findIndex((key) => values[key] !== undefined);
+  const key = keys[index];
+  const conditional = keys.slice(0, index < 0 ? keys.length : index + 1)
+    .map((key) => `${key}:conditional`).find((key) => values[key] !== undefined);
+  return accessState(key ? values[key] : undefined, conditional ? values[conditional] : undefined);
 }
 
 export function osmFootDirection(values: Record<string, string>): "forward" | "reverse" | "both" {
-  const footOneway = values["oneway:foot"] ?? values.oneway;
-  if (footOneway === "-1") return "reverse";
-  if (footOneway === "yes" || footOneway === "1" || values["foot:backward"] === "no") return "forward";
-  if (values["foot:forward"] === "no" && values["foot:backward"] !== "no") return "reverse";
-  return "both";
+  const { forward, backward } = footDirections(values);
+  if (forward && backward) return "both";
+  return backward ? "reverse" : "forward";
+}
+
+function permissionFlags(values: Record<string, string>, includeUnknownMotor = true): string[] {
+  const motorFact = ["access", "motorcar", "motor_vehicle", "vehicle", "access:conditional", "motorcar:conditional", "motor_vehicle:conditional", "vehicle:conditional"]
+    .some((key) => values[key] !== undefined);
+  const flags = includeUnknownMotor || motorFact ? [`motor-access:${osmMotorAccessState(values)}`] : [];
+  for (const key of ["access", "foot", "motorcar", "motor_vehicle", "vehicle", "foot:forward", "foot:backward", "oneway", "oneway:foot"])
+    if (values[key] !== undefined) flags.push(`osm-${key}:${values[key]}`);
+  for (const key of ["access:conditional", "foot:conditional", "foot:forward:conditional", "foot:backward:conditional", "motorcar:conditional", "motor_vehicle:conditional", "vehicle:conditional", "oneway:foot:conditional"])
+    if (values[key] !== undefined) flags.push(`osm-${key}:${values[key]}`);
+  return flags;
+}
+
+/** Object access (a private information board or parking POI) is not a crossing rule. */
+export function osmNodeFlags(values: Record<string, string>): string[] {
+  const barrier = values.barrier && values.barrier !== "no";
+  const trailhead = values.highway === "trailhead" || values.information === "trailhead";
+  const object = INFORMATION_VALUES.has(values.information ?? "") || values.tourism === "information"
+    || values.amenity === "parking" || Boolean(values.building && values.building !== "no");
+  const footRule = ["foot", "access", "foot:conditional", "access:conditional", "foot:forward", "foot:backward", "foot:forward:conditional", "foot:backward:conditional", "oneway:foot:conditional"]
+    .some((key) => values[key] !== undefined);
+  // Node directional tags have no incident-way orientation. Retain a known
+  // restriction at the crossing rather than guessing which turns it controls.
+  const nodeAccess = ACCESS_ORDER[Math.max(...[footState(values), footState(values, "forward"), footState(values, "backward")]
+    .map(state => ACCESS_ORDER.indexOf(state)))]!;
+  return [
+    ...(barrier ? [`barrier:${values.barrier}`] : []),
+    ...(footRule && (barrier || trailhead || !object) ? [`foot-access:${nodeAccess}`] : []),
+    ...permissionFlags(values, false),
+  ];
+}
+
+export function hasOsmNodeContext(values: Record<string, string>): boolean {
+  return values.barrier !== undefined || Object.keys(values).some((key) =>
+    ["access", "foot", "motorcar", "motor_vehicle", "vehicle", "foot:forward", "foot:backward", "oneway:foot"].includes(key)
+    || key.endsWith(":conditional"));
 }
 
 export function osmWayFlags(
@@ -86,12 +150,20 @@ export function osmWayFlags(
   featureId: string,
   direction: ReturnType<typeof osmFootDirection>,
 ): string[] {
+  const footStates = directionalStates(values);
+  const oriented = direction === "reverse" ? [...footStates].reverse() : footStates;
+  const hasDirectionalAccess = ["foot:forward", "foot:backward", "foot:forward:conditional", "foot:backward:conditional"]
+    .some(key => values[key] !== undefined);
   return [
     `osm-feature:${featureId}`,
     `osm-highway:${values.highway}`,
+    ...permissionFlags(values),
+    ...(hasDirectionalAccess ? [`foot-forward-access:${oriented[0]}`, `foot-backward-access:${oriented[1]}`] : []),
+    ...(values.area ? [`area:${values.area}`] : []),
     ...((values.highway === "footway" || values.highway === "pedestrian")
       && !SIDEWALK_SUBTAGS.has(values.footway ?? "") && !hasTrailContext(values) ? ["possible-walking-link"] : []),
     ...(direction === "both" ? [] : [direction === "reverse" ? "oneway-reversed" : "oneway"]),
+    ...(!footDirections(values).forward && !footDirections(values).backward ? ["foot-direction:none"] : []),
     ...(values.surface ? [`surface:${values.surface}`] : []),
     ...(values.smoothness ? [`smoothness:${values.smoothness}`] : []),
     ...(values.trail_visibility ? [`trail-visibility:${values.trail_visibility}`] : []),

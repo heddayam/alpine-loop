@@ -53,6 +53,7 @@ describe("OSM OPL normalization", () => {
     expect(topology.ways[0].flags).toEqual([
       "osm-feature:way/9",
       "osm-highway:path",
+      "motor-access:unknown",
       "surface:rock",
       "smoothness:bad",
       "trail-visibility:intermediate",
@@ -61,6 +62,27 @@ describe("OSM OPL normalization", () => {
       "disused:yes",
       "abandoned:yes",
     ]);
+  });
+
+  it("retains non-gate passages on actual source nodes and keeps information object access separate", () => {
+    const topology = normalizeOsmOpl([
+      "n1 Tbarrier=bollard,foot=yes,motor_vehicle=no x0 y0",
+      "n2 Tfoot=no x0.001 y0",
+      "n3 Tinformation=board,access=private x0.002 y0",
+      "n4 Tbarrier=stile,foot=private x0.003 y0",
+      "n5 Tbarrier=gate x0.004 y0",
+      "n6 Tfoot=private x0.1 y0",
+      "w1 Thighway=track,foot=yes,motorcar=private,oneway=yes Nn1,n2,n3,n4,n5",
+    ].join("\n"), "fixture");
+    const node = (id: string) => topology.nodes.find(value => value.externalId === `node/${id}`)!;
+    expect(node("1").flags).toEqual(expect.arrayContaining(["barrier:bollard", "foot-access:public", "motor-access:prohibited"]));
+    expect(node("2").flags).toContain("foot-access:prohibited");
+    expect(node("3").flags).not.toContain("foot-access:private");
+    expect(node("4").flags).toEqual(expect.arrayContaining(["barrier:stile", "foot-access:private"]));
+    expect(node("5").flags).toEqual(["barrier:gate"]);
+    expect(node("6").flags).toContain("foot-access:private");
+    expect(topology.ways[0]).toMatchObject({ edgeClass: "trail", accessState: "public", bidirectional: true });
+    expect(topology.portalEvidence?.map(evidence => evidence.externalId)).toEqual(["node/3", "node/5"]);
   });
 
   it("decodes delimited Unicode OPL escapes", () => {
@@ -132,7 +154,7 @@ describe("OSM OPL normalization", () => {
     ].join("\n"), "osm-fixture");
 
     expect(topology.ways.map(({ edgeClass }) => edgeClass)).toEqual([
-      "trail", "trail", "service-road", "street",
+      "trail", "trail", "trail", "street",
     ]);
   });
 
