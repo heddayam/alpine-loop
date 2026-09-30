@@ -474,7 +474,8 @@ describe("ResultsPanel", () => {
     const view = render(<ResultsPanel {...props} />);
     expect(screen.getByText("Full search improving results.")).toBeVisible();
     expect(screen.getByText("1 of 1 trailheads attempted.")).toBeVisible();
-    expect(screen.getByText("Trailhead searches: 0 fully explored · 1 unfinished · 0 at search limits.")).toBeVisible();
+    expect(screen.getByText("Trailhead searches: 0 exact searches complete · 1 unfinished · 0 at search limits.")).toBeVisible();
+    expect(screen.getByText("Close matches come from a limited search and are not exhaustive.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
     expect(onStop).toHaveBeenCalledOnce();
     view.rerender(<ResultsPanel {...props} selectedRouteId="exact-loop" detail stopAction={{ onStop, pending: true }} />);
@@ -499,7 +500,21 @@ describe("ResultsPanel", () => {
     view.rerender(<ResultsPanel {...props} />);
     expect(screen.getByText("Full search completed.")).toBeVisible();
     expect(screen.getByText("1 of 1 trailheads attempted.")).toBeVisible();
-    expect(screen.queryByText(/fully explored|unfinished|at search limits/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/exact search(?:es)? complete|unfinished|at search limits/i)).not.toBeInTheDocument();
+  });
+
+  it("scopes completion to exact search and discloses bounded close exploration even without saved close routes", () => {
+    const saved = results({ nearMisses: [] });
+    const props = { status: "done" as const, results: saved, onHoverRoute: vi.fn(), onSelectRoute: vi.fn() };
+    const view = render(<ResultsPanel {...props} currentJob={{ ...saved.job, progress: { ...saved.job.progress,
+      searchPass: 2, exhaustedAccessPointCount: 1, unfinishedAccessPointCount: 0, limitedAccessPointCount: 0,
+    } }} />);
+    expect(screen.getByText("Exact search complete for every eligible trailhead.")).toBeVisible();
+    expect(screen.getByText("Close matches come from a limited search and are not exhaustive.")).toBeVisible();
+    expect(screen.queryByText(/fully explored/)).not.toBeInTheDocument();
+    view.rerender(<ResultsPanel {...props} />);
+    expect(screen.getByText("1 of 1 trailheads attempted.")).toBeVisible();
+    expect(screen.queryByText(/exact search complete|not exhaustive/i)).not.toBeInTheDocument();
   });
 
   it("keeps the previous page visible on a paging error and advances only when available", async () => {

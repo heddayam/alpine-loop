@@ -138,11 +138,11 @@ describe("JobsModal", () => {
     } }]} />);
     expect(screen.getByText("Improving results — pass 2.")).toBeVisible();
     expect(screen.getByRole("progressbar", { name: "Improving results" })).not.toHaveAttribute("value");
-    expect(screen.getByText("Trailhead searches: 5 fully explored · 3 unfinished · 2 at search limits.")).toBeVisible();
+    expect(screen.getByText("Trailhead searches: 5 exact searches complete · 3 unfinished · 2 at search limits.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Stop Santa Cruz Mountains search" })).toBeEnabled();
   });
 
-  it("distinguishes terminal limits from fully explored and legacy attempted searches", () => {
+  it("distinguishes terminal limits from exact completion and legacy attempted searches", () => {
     const completed: RouteJob = { ...job, status: "completed", partial: true, progress: { ...job.progress,
       processedAccessPointCount: 10, searchPass: 3, exhaustedAccessPointCount: 8,
       unfinishedAccessPointCount: 0, limitedAccessPointCount: 2,
@@ -155,10 +155,10 @@ describe("JobsModal", () => {
     view.rerender(<JobsModal {...baseProps} jobs={[{ ...completed, partial: false, progress: {
       ...completed.progress, exhaustedAccessPointCount: 10, limitedAccessPointCount: 0,
     } }]} />);
-    expect(screen.getByText("Search space fully explored for every eligible trailhead.")).toBeVisible();
+    expect(screen.getByText("Exact search complete for every eligible trailhead.")).toBeVisible();
     view.rerender(<JobsModal {...baseProps} jobs={[{ ...job, status: "completed", progress: { ...job.progress, processedAccessPointCount: 10 } }]} />);
     expect(screen.getByText("All eligible trailheads were attempted.")).toBeVisible();
-    expect(screen.queryByText(/fully explored/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/exact search(?:es)? complete/i)).not.toBeInTheDocument();
   });
 
   it("retains saved data during a refresh error and offers retry", async () => {

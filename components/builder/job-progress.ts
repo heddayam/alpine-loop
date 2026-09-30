@@ -27,7 +27,7 @@ export function jobStage(job: RouteJobV2) {
     case "completed": return (limited ?? 0) > 0 || (unfinished ?? 0) > 0
       ? "Search finished with unexplored possibilities. More suitable routes may exist."
       : exhausted === eligible && unfinished === 0 && limited === 0
-        ? "Search space fully explored for every eligible trailhead."
+        ? "Exact search complete for every eligible trailhead."
         : processed >= eligible ? "All eligible trailheads were attempted." : `${processed} of ${eligible} trailheads attempted.`;
     case "cancelled": return eligible ? `Stopped after ${processed} of ${eligible} trailheads were attempted.` : "Search stopped before trailhead processing began.";
     case "failed": return "Stopped with an error.";
@@ -39,7 +39,7 @@ export function jobStage(job: RouteJobV2) {
 export function explorationSummary(job: RouteJobV2) {
   const { exhaustedAccessPointCount, unfinishedAccessPointCount, limitedAccessPointCount } = job.progress;
   const counts = [
-    exhaustedAccessPointCount === undefined ? null : `${exhaustedAccessPointCount} fully explored`,
+    exhaustedAccessPointCount === undefined ? null : `${exhaustedAccessPointCount} exact search${exhaustedAccessPointCount === 1 ? "" : "es"} complete`,
     unfinishedAccessPointCount === undefined ? null : `${unfinishedAccessPointCount} unfinished`,
     limitedAccessPointCount === undefined ? null : `${limitedAccessPointCount} at search limits`,
   ].filter(Boolean);

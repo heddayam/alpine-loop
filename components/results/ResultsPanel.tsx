@@ -562,6 +562,8 @@ export function ResultsPanel({
       {isImprovingResults(job) ? <span> {jobStage(job)}</span> : null}
       {exploration ? <span> {exploration}</span> : null}
       {job.status === "completed" && exploration ? <span> {jobStage(job)}</span> : null}
+      {results.nearMisses.length > 0 || (job.status === "completed" && job.progress.exhaustedAccessPointCount !== undefined)
+        ? <span> Close matches come from a limited search and are not exhaustive.</span> : null}
       {active ? <span>{status === "error"
         ? " Live updates paused. Reopen this job from Jobs to retry."
         : detail ? " Search continues while you read. Return to results to see new routes."
