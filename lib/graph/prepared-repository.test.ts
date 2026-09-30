@@ -9,6 +9,7 @@ import { writeGraphFixture, promoteGraphFixture, GRAPH_FIXTURE_IDENTITY } from "
 import { coordinateIsInsideArea, segmentIntersectsArea, type AreaGeometry } from "./geometry";
 import type { GraphEdge, GraphNode, InducedGraph, ReachableGraphQuery } from "./types";
 import { ReachableGraphClosedRouteSolver } from "../solver/reachable-graph-closed-route-solver";
+import * as records from "./sqlite-records";
 
 const directories: string[] = [];
 const repositories: Array<PreparedGraphRepository | SQLiteGraphRepository> = [];
@@ -338,6 +339,126 @@ test("retains exact query coverage when it differs from installation coverage", 
   expect(unrestricted.graph.edges.length).toBeGreaterThan(0);
   expect(narrow.graph.edges).toEqual([]);
   expect(await repository.getReachableGraph(query)).toEqual(unrestricted);
+});
+
+test("warm reads reuse decoding without reusing access, distance, or edge-budget decisions", async () => {
+  const { prepared, open } = fixture();
+  const database = new DatabaseSync(prepared);
+  database.exec("UPDATE edges SET access_state='unknown' WHERE id IN ('s-e','e-s')");
+  database.close();
+  const artifact = [{ path: prepared, geometry: full }];
+  const repository = open(artifact);
+  const parse = vi.spyOn(records, "parseEdge");
+  try {
+    const inclusive = await repository.getReachableGraph(query);
+    const initial = parse.mock.calls.length;
+    expect(initial).toBe(12);
+    expect(await repository.getReachableGraph(query)).toEqual(inclusive);
+    expect(parse.mock.calls).toHaveLength(initial);
+    parse.mockClear();
+    for (const options of [{ includeUncertainAccess: false }, { maximumDistanceMeters: 200 }, { maximumDirectedEdges: 2 }]) {
+      const changed = { ...query, ...options };
+      const warm = await repository.getReachableGraph(changed);
+      expect(parse.mock.calls).toHaveLength(0);
+      expect(warm).toEqual(await open(artifact).getReachableGraph(changed));
+      parse.mockClear();
+      // Every subsequent warm call must decode no rows, regardless of filters.
+      expect(await repository.getReachableGraph(changed)).toEqual(warm);
+      expect(parse.mock.calls).toHaveLength(0);
+    }
+  } finally { parse.mockRestore(); }
+});
+
+test("returned graph and map geometry, profiles, and metadata cannot poison cached edges", async () => {
+  const { prepared, open } = fixture();
+  const database = new DatabaseSync(prepared);
+  database.exec("UPDATE edges SET elevation_profile='[[0,100],[200,100]]'");
+  database.close();
+  const repository = open([{ path: prepared, geometry: full }]);
+  const first = await repository.getReachableGraph(query);
+  const expected = structuredClone(first);
+  const edge = first.graph.edges[0];
+  edge.id = "modified";
+  edge.coordinates[0] = [100, 100];
+  edge.elevationProfile![0].elevationMeters = 999;
+  edge.sourceIds.push("modified");
+  edge.flags.push("modified");
+  first.graph.nodes.get("s")!.lon = 100;
+  expect(await repository.getReachableGraph(query)).toEqual(expected);
+  const map = repository.iterateMapTrails({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
+  const displayed = (await map.next()).value!;
+  displayed.coordinates[0] = [100, 100];
+  displayed.elevationProfile![0].elevationMeters = 999;
+  await map.return(undefined);
+  expect(await repository.getReachableGraph(query)).toEqual(expected);
+});
+
+test("cached positive and negative containment remain specific to exact query geometry", async () => {
+  const { prepared, open } = fixture();
+  const repository = open([{ path: prepared, geometry: full }]);
+  const hole: AreaGeometry = { type: "Polygon", coordinates: [
+    full.type === "Polygon" ? full.coordinates[0] : [],
+    [[-0.0002, -0.0012], [0.0002, -0.0012], [0.0002, -0.0008], [-0.0002, -0.0008], [-0.0002, -0.0012]],
+  ] };
+  const baseline = await repository.getReachableGraph(query);
+  const cut = { ...query, coverage: hole };
+  const expected = await open([{ path: prepared, geometry: full }]).getReachableGraph(cut);
+  expect(expected.graph.edges.some(edge => edge.id === "a-b" || edge.id === "b-a")).toBe(false);
+  expect(await repository.getReachableGraph(cut)).toEqual(expected);
+  expect(await repository.getReachableGraph(cut)).toEqual(expected);
+  expect(await repository.getReachableGraph(query)).toEqual(baseline);
+  const [narrow, complete, repeated] = await Promise.all([
+    repository.getReachableGraph({ ...query, coverage: rectangle(-0.0001, -0.0001, 0.0001, 0.0001) }),
+    repository.getReachableGraph(query), repository.getReachableGraph(cut),
+  ]);
+  expect(narrow.graph.edges).toEqual([]);
+  expect(complete).toEqual(baseline);
+  expect(repeated).toEqual(expected);
+});
+
+test("closing a repository also prevents a paused map iterator from repopulating its cache", async () => {
+  const { open } = fixture();
+  const repository = open();
+  const map = repository.iterateMapTrails({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
+  expect((await map.next()).done).toBe(false);
+  await repository.close();
+  await expect(map.next()).rejects.toThrow("closed");
+});
+
+test("different query boundaries keep their own snapshots across asynchronous traversal yields", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "prepared-interleaved-reader-"));
+  directories.push(directory);
+  const path = join(directory, "graph.sqlite");
+  const nodes = new Map<string, GraphNode>(Array.from({ length: 256 }, (_, i) => [`n${i}`, {
+    id: `n${i}`, lon: 0.001 * Math.cos(i * Math.PI / 128), lat: 0.001 * Math.sin(i * Math.PI / 128),
+    elevationMeters: 100, flags: [],
+  }]));
+  const template = graph().edges[0];
+  const edges = [...nodes.values()].map((node, i): GraphEdge => {
+    const to = nodes.get(`n${(i + 1) % nodes.size}`)!;
+    return { ...template, id: `edge-${i}`, edgeKey: i + 1, physicalEdgeKey: i + 1,
+      fromNodeId: node.id, toNodeId: to.id, coordinates: [[node.lon, node.lat], [to.lon, to.lat]], lengthMeters: 1 };
+  });
+  writeGraphFixture(path, { nodes, edges, accessPoints: [] });
+  promoteGraphFixture(path, "release");
+  const open = () => {
+    const repository = new PreparedGraphRepository({ releaseId: "release", installationId: "interleaved", coverage: full,
+      artifacts: [{ path, geometry: full, startGeometry: full }] });
+    repositories.push(repository);
+    return repository;
+  };
+  const clipped = (south: number): AreaGeometry => ({ type: "Polygon", coordinates: [
+    full.type === "Polygon" ? full.coordinates[0] : [],
+    [[-0.0001, south], [0.0001, south], [0.0001, south + 0.0004], [-0.0001, south + 0.0004], [-0.0001, south]],
+  ] });
+  const queries = [clipped(-0.0012), clipped(0.0008), rectangle(-0.002, -0.002, 0.002, 0.0015)]
+    .map(coverage => ({ ...query, coverage, startNodeId: "n0", startCoordinates: [0.001, 0] as const, maximumDirectedEdges: 1_000 }));
+  const expected = [];
+  for (const request of queries) expected.push(await open().getReachableGraph(request));
+  expect(expected[0].graph.nodes.size).toBeGreaterThan(128);
+  const repository = open();
+  expect(await Promise.all(queries.map(request => repository.getReachableGraph(request)))).toEqual(expected);
+  expect(await Promise.all([...queries].reverse().map(request => repository.getReachableGraph(request)))).toEqual([...expected].reverse());
 });
 
 

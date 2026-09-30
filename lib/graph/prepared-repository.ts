@@ -1,7 +1,8 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { areaBounds, coordinateIsInsideArea, coordinateIsInsideBbox, edgeIsInsideBbox, lineIsInsideArea, type AreaGeometry, type BoundingBox } from "./geometry";
+import { areaBounds, coordinateIsInsideArea, coordinateIsInsideBbox, edgeIsInsideBbox, prepareAreaGeometry, type AreaGeometry, type BoundingBox } from "./geometry";
 import { accessPointIsEligible, edgeIsTraversable } from "./policy";
-import { assertNotAborted, DistanceQueue, parseAccessPoint, parseEdge, parseMinimumStem, parseNode, requiredNumber, type SqliteRow } from "./sqlite-records";
+import { assertNotAborted, DistanceQueue, parseAccessPoint, parseMinimumStem, parseNode, requiredNumber, type SqliteRow } from "./sqlite-records";
+import { PreparedEdgeCache } from "./prepared-edge-cache";
 import type { AccessPointCandidate, AccessPointCandidateQuery, GraphEdge, GraphNode, GraphQuery, GraphRepository, InducedGraph, ReachableGraphQuery, ReachableGraphResult } from "./types";
 
 export type PreparedGraphDescriptor = {
@@ -27,10 +28,37 @@ function intersects(a: BoundingBox, b: BoundingBox): boolean {
 
 function insertConsistent<T>(values: Map<string, T>, id: string, value: T): void {
   const previous = values.get(id);
-  if (previous !== undefined && JSON.stringify(previous) !== JSON.stringify(value)) {
+  if (previous !== undefined && previous !== value && JSON.stringify(previous) !== JSON.stringify(value)) {
     throw new Error(`Graph database corruption: conflicting release record ${id}`);
   }
   values.set(id, value);
+}
+
+function preparedCoverage(geometry: AreaGeometry) {
+  const prepared = prepareAreaGeometry(geometry);
+  const edges = new WeakMap<GraphEdge, boolean>();
+  return {
+    containsPoint: prepared.containsPoint,
+    containsEdge(edge: GraphEdge): boolean {
+      const cached = edges.get(edge);
+      if (cached !== undefined) return cached;
+      const coordinates = edge.coordinates;
+      let inside = coordinates.length >= 2;
+      for (let index = 1; inside && index < coordinates.length; index++) {
+        inside = prepared.containsSegment(coordinates[index - 1], coordinates[index]);
+      }
+      edges.set(edge, inside);
+      return inside;
+    },
+  };
+}
+
+// GraphEdge is a mutable public contract. Neither a prior graph result nor a
+// map consumer may change a cached row or its exact containment result.
+function copyEdge(edge: GraphEdge): GraphEdge {
+  return { ...edge, coordinates: edge.coordinates.map(([lon, lat]) => [lon, lat] as const),
+    ...(edge.elevationProfile ? { elevationProfile: edge.elevationProfile.map(sample => ({ ...sample })) } : {}),
+    sourceIds: [...edge.sourceIds], flags: [...edge.flags] };
 }
 
 /**
@@ -46,6 +74,9 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly #coverage: AreaGeometry;
   readonly #localAreas: boolean;
   readonly #coverageJson: string;
+  readonly #preparedCoverage: ReturnType<typeof preparedCoverage>;
+  readonly #edges = new PreparedEdgeCache();
+  #alternateCoverage?: { json: string; prepared: ReturnType<typeof preparedCoverage> };
   readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
   readonly #entranceFamilies = new WeakMap<DatabaseSync, boolean>();
   readonly #pool = new Map<string, DatabaseSync>();
@@ -60,6 +91,7 @@ export class PreparedGraphRepository implements GraphRepository {
     if (this.#localAreas && descriptor.artifacts.some(artifact => !artifact.startGeometry)) throw new Error("Local area graphs require start geometry on every artifact");
     this.#coverage = structuredClone(descriptor.coverage);
     this.#coverageJson = JSON.stringify(this.#coverage);
+    this.#preparedCoverage = preparedCoverage(this.#coverage);
     // Stable semantic ownership for named builds; retain legacy file order for pinned data.
     this.#artifacts = descriptor.artifacts.map(artifact => ({
       ...structuredClone(artifact), bounds: areaBounds(artifact.geometry),
@@ -83,6 +115,7 @@ export class PreparedGraphRepository implements GraphRepository {
     if (this.#pool.size === MAXIMUM_CONNECTIONS) {
       const [oldest, database] = this.#pool.entries().next().value!;
       this.#statements.delete(database);
+      this.#edges.forget(oldest);
       database.close();
       this.#pool.delete(oldest);
     }
@@ -117,6 +150,11 @@ export class PreparedGraphRepository implements GraphRepository {
     return statement;
   }
 
+  #edge(path: string, row: SqliteRow): GraphEdge {
+    if (this.#closed) throw new Error("Prepared graph repository is closed");
+    return this.#edges.read(path, row);
+  }
+
   #at(coordinate: readonly [number, number]): Artifact[] {
     return this.#artifacts.filter(artifact => coordinateIsInsideBbox(coordinate, artifact.bounds)
       && coordinateIsInsideArea(coordinate, artifact.geometry));
@@ -135,8 +173,8 @@ export class PreparedGraphRepository implements GraphRepository {
       const rows = this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ?").iterate(id);
       for (const row of rows) {
         assertNotAborted(signal);
-        const edge = parseEdge(row);
-        if (edgeIsTraversable(edge, includeUncertainAccess) && lineIsInsideArea(edge.coordinates, this.#coverage)) return true;
+        const edge = this.#edge(artifact.path, row);
+        if (edgeIsTraversable(edge, includeUncertainAccess) && this.#preparedCoverage.containsEdge(edge)) return true;
       }
     }
     return false;
@@ -177,14 +215,14 @@ export class PreparedGraphRepository implements GraphRepository {
             throw new Error("Graph database corruption: inconsistent profile hints");
           }
           if (!coordinateIsInsideBbox([lon, lat], query.bbox)
-            || !coordinateIsInsideArea([lon, lat], this.#coverage)
+            || !this.#preparedCoverage.containsPoint([lon, lat])
             || !accessPointIsEligible(point, query.includeUncertainAccess)) continue;
           const departure = row.departure_id === null ? undefined
-            : parseEdge(Object.fromEntries(EDGE_COLUMNS.map(column => [column, row[`departure_${column}`]!])));
+            : this.#edge(artifact.path, Object.fromEntries(EDGE_COLUMNS.map(column => [column, row[`departure_${column}`]!])));
           // Usually the first departure is installed. Read it in the candidate
           // query instead of crossing the JS/SQLite boundary for every point.
           if (!(departure && edgeIsTraversable(departure, query.includeUncertainAccess)
-            && lineIsInsideArea(departure.coordinates, this.#coverage))
+            && this.#preparedCoverage.containsEdge(departure))
             && !this.#hasInstalledDeparture(point.nodeId, [lon, lat], query.includeUncertainAccess, query.signal, this.#localAreas ? artifact : undefined)) continue;
           insertConsistent(points, point.id, {
             ...point, lon, lat, knownMinimumStemMeters, inclusiveMinimumStemMeters,
@@ -224,11 +262,12 @@ export class PreparedGraphRepository implements GraphRepository {
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
           AND e.id > ? ORDER BY e.id LIMIT ?`).all(west, east, south, north, after, BATCH_SIZE) as SqliteRow[];
         for (const row of rows) {
-          const edge = parseEdge(row);
+          assertNotAborted(query.signal);
+          const edge = this.#edge(artifact.path, row);
           if (seen.has(edge.id) || !edgeIsTraversable(edge, query.includeUncertainAccess)
-            || !edgeIsInsideBbox(edge, query.bbox) || !lineIsInsideArea(edge.coordinates, this.#coverage)) continue;
+            || !edgeIsInsideBbox(edge, query.bbox) || !this.#preparedCoverage.containsEdge(edge)) continue;
           seen.add(edge.id);
-          yield edge;
+          yield copyEdge(edge);
         }
         if (rows.length < BATCH_SIZE) break;
         after = String(rows.at(-1)!.id);
@@ -280,13 +319,23 @@ export class PreparedGraphRepository implements GraphRepository {
     const artifactsAt = (coordinate: readonly [number, number]) => this.#localAreas ? (owner ? [owner] : []) : this.#at(coordinate);
     const start = this.#node(query.startNodeId, artifactsAt(query.startCoordinates));
     const nodes = new Map<string, GraphNode>(), edges = new Map<string, GraphEdge>();
-    if (!start || !coordinateIsInsideArea([start.lon, start.lat], this.#coverage)) {
+    if (!start || !this.#preparedCoverage.containsPoint([start.lon, start.lat])) {
       return { graph: { nodes, edges: [], accessPoints: [] }, truncated: false };
     }
     nodes.set(start.id, start);
     const pending = new DistanceQueue(), distances = new Map([[start.id, 0]]);
     pending.push({ nodeId: start.id, distance: 0 });
-    const sameCoverage = JSON.stringify(query.coverage) === this.#coverageJson;
+    const coverageJson = JSON.stringify(query.coverage);
+    let queryCoverage: ReturnType<typeof preparedCoverage> | undefined;
+    if (coverageJson !== this.#coverageJson) {
+      // Only one alternate query geometry is retained. Each in-flight query
+      // holds its own snapshot, so interleaved queries cannot share decisions
+      // made against a different boundary.
+      if (this.#alternateCoverage?.json !== coverageJson) {
+        this.#alternateCoverage = { json: coverageJson, prepared: preparedCoverage(query.coverage) };
+      }
+      queryCoverage = this.#alternateCoverage.prepared;
+    }
     let visited = 0, truncated = false;
     search: while (pending.size) {
       if (++visited % 128 === 0) await new Promise<void>(resolve => setImmediate(resolve));
@@ -305,11 +354,11 @@ export class PreparedGraphRepository implements GraphRepository {
             : this.#statement(artifact.path, "SELECT * FROM edges WHERE from_node = ? AND id > ? ORDER BY id LIMIT 256").all(node.id, after) as SqliteRow[];
           for (const row of rows) {
             assertNotAborted(query.signal);
-            const edge = parseEdge(row);
+            const edge = this.#edge(artifact.path, row);
             if (!edgeIsTraversable(edge, query.includeUncertainAccess)
               || current.distance + edge.lengthMeters > query.maximumDistanceMeters
-              || !lineIsInsideArea(edge.coordinates, this.#coverage)
-              || (!sameCoverage && !lineIsInsideArea(edge.coordinates, query.coverage))) continue;
+              || !this.#preparedCoverage.containsEdge(edge)
+              || (queryCoverage && !queryCoverage.containsEdge(edge))) continue;
             insertConsistent(adjacency, edge.id, edge);
             if (++eligibleInArtifact > query.maximumDirectedEdges) break batches;
           }
@@ -338,12 +387,14 @@ export class PreparedGraphRepository implements GraphRepository {
         }
       }
     }
-    return { graph: { nodes, edges: [...edges.values()], accessPoints: [] }, truncated };
+    return { graph: { nodes, edges: [...edges.values()].map(copyEdge), accessPoints: [] }, truncated };
   }
 
   async close(): Promise<void> {
     for (const database of this.#pool.values()) { this.#statements.delete(database); database.close(); }
     this.#pool.clear();
+    this.#edges.clear();
+    this.#alternateCoverage = undefined;
     this.#closed = true;
   }
 }
