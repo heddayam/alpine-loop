@@ -27,6 +27,7 @@ type RawWay = { id: string; tags: Record<string, string>; nodeIds: string[] };
 type AuditPoint = NormalizedAccessPoint & { lon: number; lat: number };
 const ownRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEGACY_BUILDING_RADIUS_M = 500;
+const HISTORICAL_BUILDING_SOURCE_COMMIT = "204f8fb";
 const legacyDensityAllows = (point: { nearbyBuildingCount: number }) => point.nearbyBuildingCount < 10;
 const usable = (access: string) => access === "public" || access === "unknown";
 const argument = (name: string, fallback = "") => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
@@ -70,6 +71,25 @@ async function legacyDetector(commit: string, output: string) {
   });
   const path = join(output, "legacy-detector.ts"); await writeFile(path, translated);
   return await import(pathToFileURL(path).href) as { deriveProgressivePortals: (store: ProgressiveGraphStore, coverage: ReturnType<typeof rectangle>) => Promise<number> };
+}
+
+/** Density is a historical research control, never current preparation.
+ * Pin its old parser so centroid/relation semantics remain reproducible.
+ */
+export async function historicalBuildingSource(output:string) {
+  const original="lib/coverage/source-store.ts";
+  const source=execFileSync("git",["show",`${HISTORICAL_BUILDING_SOURCE_COMMIT}:${original}`],{cwd:ownRoot,encoding:"utf8"});
+  const translated=source.replace(/from "([^"]+)"/g,(match,spec:string)=>{
+    if(spec.startsWith("node:"))return match;
+    const location=spec.startsWith("@/")?resolve(ownRoot,spec.slice(2)):resolve(ownRoot,dirname(original),spec);
+    return `from "${pathToFileURL(existsSync(`${location}.ts`)?`${location}.ts`:join(location,"index.ts")).href}"`;
+  });
+  const file=join(output,"historical-building-source.ts");await writeFile(file,translated);
+  return (await import(pathToFileURL(file).href)).CoverageSourceStore as new(path:string,source:SourceSnapshot,geometry:ReturnType<typeof rectangle>)=>{
+    import(checkpoint:()=>Promise<void>,options:{lines:AsyncIterable<string>}):Promise<void>;
+    buildings(geometry:ReturnType<typeof rectangle>):Iterable<readonly[number,number]>;
+    close():void;
+  };
 }
 
 function sourceIndex(ways: readonly RawWay[]) {
@@ -131,7 +151,7 @@ export function cycleComponents(edges: readonly CompiledEdge[], profile: "known"
   return result;
 }
 
-async function auditWindow(window: Window, pbf: string, contentHash: `sha256:${string}`, output: string, legacy: Awaited<ReturnType<typeof legacyDetector>>) {
+async function auditWindow(window: Window, pbf: string, contentHash: `sha256:${string}`, output: string, legacy: Awaited<ReturnType<typeof legacyDetector>>, BuildingSource:Awaited<ReturnType<typeof historicalBuildingSource>>) {
   const directory = join(output, window.id); await mkdir(directory, { recursive: true });
   const padded = window.contextBbox ?? [window.bbox[0] - .008, window.bbox[1] - .008, window.bbox[2] + .008, window.bbox[3] + .008] as const;
   const extractionIdentity = hash([contentHash, padded, "complete_ways"]), receipt = join(directory, "extract-identity.txt");
@@ -142,13 +162,20 @@ async function auditWindow(window: Window, pbf: string, contentHash: `sha256:${s
   const source: SourceSnapshot = { id: window.source, authority: "OSM/Geofabrik", dataset: "pinned OSM", version: contentHash, retrievedAt: "pinned receipt", url: "offline cached source", license: "ODbL", contentHash, localPath: pbf };
   const rawWays: RawWay[] = [], rawNodes = new Map<string, Record<string, string>>(); let rawNodeCount = 0;
   for await (const line of lines(opl)) { const fields = line.split(" "), tags = parseOplTags(fields.find(value => value.startsWith("T"))?.slice(1)); if (line[0] === "n") { rawNodeCount++; if (Object.keys(tags).length) rawNodes.set(fields[0]!.slice(1), tags); } else if (line[0] === "w") rawWays.push({ id: fields[0]!, tags, nodeIds: fields.find(value => value.startsWith("N"))?.slice(1).split(",").map(value => value.slice(1)) ?? [] }); }
-  const rawPath = join(directory, "raw.sqlite"), stagePath = join(directory, "audit.sqlite");
-  for (const path of [rawPath, stagePath]) for (const suffix of ["", "-wal", "-shm"]) await rm(path + suffix, { force: true });
+  const rawPath = join(directory, "raw.sqlite"), stagePath = join(directory, "audit.sqlite"),buildingPath=join(directory,"historical-buildings.sqlite");
+  for (const path of [rawPath, stagePath,buildingPath]) for (const suffix of ["", "-wal", "-shm"]) await rm(path + suffix, { force: true });
   const raw = new CoverageSourceStore(rawPath, source, rectangle(padded)), stage = new ProgressiveGraphStore({ stagingPath: stagePath, buildIdentity: extractionIdentity });
-  const started = performance.now(), nodeMap = new Map<string, NormalizedNode>(), ways: NormalizedWay[] = [], buildings: Array<readonly [number, number]> = [], edges: CompiledEdge[] = [];
+  const historical=new BuildingSource(buildingPath,source,rectangle(padded));
+  const started = performance.now(), nodeMap = new Map<string, NormalizedNode>(), ways: NormalizedWay[] = [], edges: CompiledEdge[] = [];
   try {
     await raw.import(async () => {}, { lines: lines(opl) });
-    stage.transaction(() => { for (const item of raw.context(rectangle(padded))) { if (item.kind === "building") { buildings.push(item.centroid); stage.putBuilding(item.centroid); } else if (item.kind === "evidence") stage.putPortalEvidence(item.evidence); else { ways.push(item.way); stage.putWay(item.way); for (const node of item.nodes) { nodeMap.set(node.id, node); stage.putNode(node); } } } });
+    stage.transaction(() => { for (const item of raw.context(rectangle(padded))) { if (item.kind === "evidence") stage.putPortalEvidence(item.evidence); else { ways.push(item.way); stage.putWay(item.way); for (const node of item.nodes) { nodeMap.set(node.id, node); stage.putNode(node); } } } });
+    await historical.import(async()=>{},{lines:lines(opl)});
+    const buildings=[...historical.buildings(rectangle(padded))];
+    // Only the pinned historical detector reads these research scratch tables.
+    stage.database.exec("CREATE TABLE buildings(id INTEGER PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,UNIQUE(lon,lat)); CREATE VIRTUAL TABLE building_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat)");
+    const put=stage.database.prepare("INSERT OR IGNORE INTO buildings(lon,lat) VALUES (?,?)"),spatial=stage.database.prepare("INSERT OR IGNORE INTO building_spatial SELECT id,lon,lon,lat,lat FROM buildings");
+    stage.transaction(()=>{for(const centroid of buildings)put.run(...centroid);spatial.run();});
     const context = prepareAreaGeometry(rectangle(padded));
     stage.transaction(() => { for (const way of ways) if (way.edgeClass === "trail") for (let index = 0; index < way.nodeIds.length - 1; index++) { const a = way.coordinates[index]!, b = way.coordinates[index + 1]!; if (!context.containsSegment(a, b)) continue; const segment = compiledEdgesForSegment(way, index, [a, b], { lengthM: distanceMeters(a, b), gainM: null, lossM: null, maxElevationM: null, maxSustainedGradePct: null, elevationProfile: null }, { nodeFlags: [nodeMap.get(way.nodeIds[index]!)!.flags, nodeMap.get(way.nodeIds[index + 1]!)!.flags] }); edges.push(...segment); for (const edge of segment) stage.putEdge(edge); } });
     await selectProgressiveEdges(stage, rectangle(padded));
@@ -185,22 +212,22 @@ async function auditWindow(window: Window, pbf: string, contentHash: `sha256:${s
       limitations: ["No independent complete entrance labels: precision/recall unassessable", "Same corrected normalization/movement geometry for both detectors", "No mountain-association, DEM, route suitability, or full-region denominator", "Undirected cycle potential is not a directed or criteria-valid route", "Complete source-way references do not certify complete arrival/parking mapping"] };
     await writeFile(join(directory, "report.json"), JSON.stringify(report, null, 2));
     return { id: window.id, context: window.context, sourceHash: contentHash, rawNodeCount, retainedWayCount: ways.length, directedSegments: edges.length, baseline: report.baseline, proposed: report.proposed, changes: { newOnly: changes.filter(item => item.status === "new-only").length, oldOnly: changes.filter(item => item.status === "old-only").length, both: changes.filter(item => item.status === "both").length }, assertions: assertions.length, areaRoutes, timings: report.timings, processPeakRssBytes: report.processPeakRssBytes };
-  } finally { raw.close(); stage.close(); }
+  } finally { historical.close(); raw.close(); stage.close(); }
 }
 
 async function main() {
   const output = resolve(argument("output", ".cache/access-entry-audit")); if (!output.includes(`${join(ownRoot, ".cache")}/`) && !output.startsWith("/private/tmp/")) throw new Error("Use an ignored .cache directory or a temporary directory for audit output");
   await mkdir(output, { recursive: true });
   const windows = JSON.parse(await readFile(resolve(argument("windows", "data/fixtures/access-review/study-windows.json")), "utf8")) as Window[];
-  const legacyCommit = argument("legacy-commit", "7894ea3"), legacy = await legacyDetector(legacyCommit, output), fingerprints = new Map<string, `sha256:${string}`>();
+  const legacyCommit = argument("legacy-commit", "7894ea3"), legacy = await legacyDetector(legacyCommit, output), BuildingSource=await historicalBuildingSource(output), fingerprints = new Map<string, `sha256:${string}`>();
   const reports = [];
   for (const window of windows) {
     const pbf = resolve(argument(window.source)); if (!argument(window.source)) throw new Error(`Provide --${window.source}=<cached pinned PBF>`);
     let digest = fingerprints.get(pbf); if (!digest) { digest = await fileHash(pbf); fingerprints.set(pbf, digest); }
     console.error(`Auditing ${window.id}: ${window.context}`);
-    const report = await auditWindow(window, pbf, digest, output, legacy); reports.push(report); console.error(JSON.stringify(report));
+    const report = await auditWindow(window, pbf, digest, output, legacy,BuildingSource); reports.push(report); console.error(JSON.stringify(report));
   }
-  const summary = { commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: ownRoot, encoding: "utf8" }).trim(), legacyCommit, proofSourceHash: await fileHash(join(ownRoot, "lib/data/progressive/entry-proof.ts")), observedAt: new Date().toISOString(), normalizationVersion: NORMALIZATION_VERSION, standaloneAdapterVersion: OSM_TOPOLOGY_ADAPTER_VERSION, windows: reports };
+  const summary = { commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: ownRoot, encoding: "utf8" }).trim(), legacyCommit, historicalBuildingSourceCommit:HISTORICAL_BUILDING_SOURCE_COMMIT, proofSourceHash: await fileHash(join(ownRoot, "lib/data/progressive/entry-proof.ts")), observedAt: new Date().toISOString(), normalizationVersion: NORMALIZATION_VERSION, standaloneAdapterVersion: OSM_TOPOLOGY_ADAPTER_VERSION, windows: reports };
   await writeFile(join(output, "summary.json"), JSON.stringify(summary, null, 2)); console.log(JSON.stringify(summary, null, 2));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

@@ -2,7 +2,7 @@ import { distanceMeters } from "./metrics";
 import type { BuildingCentroid } from "./osm/buildings";
 import type { Coordinate, NormalizedAccessPoint, NormalizedNode } from "./types";
 
-/** Descriptive source context retained in packs; building density does not admit or reject an entrance. */
+/** Historical fixture/research comparison only; production does not collect building context. */
 export const BUILDING_RADIUS_M = 500;
 
 function cellKey(lon: number, lat: number, cellDegrees: number): string {

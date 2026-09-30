@@ -5,12 +5,8 @@ import { runCommand } from "./command";
 import type { OsmRegionOptions, PreparedOsmRegion } from "./pipeline";
 
 /**
- * Building centroids, used to tell a trailhead apart from a street corner.
- *
- * Buildings are the most direct evidence that people live somewhere, and they
- * come out of the OSM extract we already download. The immediate surroundings
- * are what "is this in a neighbourhood" asks about, so this is deliberately a
- * local measurement rather than a wide-area one.
+ * Historical building-centroid fixtures and research comparisons.
+ * The active regional builder neither collects buildings nor uses density.
  *
  * Only centroids are kept. Footprint geometry would be far larger and nothing
  * downstream needs the shape.

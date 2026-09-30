@@ -42,7 +42,8 @@ export function createPreparedSchema(database:DatabaseSync):void {
         inclusive_connectivity INTEGER NOT NULL CHECK(inclusive_connectivity >= 0),
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
         inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
-        nearby_building_count INTEGER NOT NULL CHECK(nearby_building_count >= 0)
+        -- Historical field: new production packs do not collect building counts.
+        nearby_building_count INTEGER CHECK(nearby_building_count IS NULL OR nearby_building_count >= 0)
         ,
         reachable_trail_km REAL NOT NULL CHECK(reachable_trail_km >= 0),
         trail_component_id TEXT NOT NULL,

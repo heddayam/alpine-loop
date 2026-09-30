@@ -193,7 +193,7 @@ describe("progressive schema-6 publisher",()=>{
     } finally {rmSync(directory,{recursive:true,force:true});}
   });
 
-  it("derives a globally clustered road-contact portal with building evidence",async()=>{
+  it("publishes a road-contact portal without collecting building metadata",async()=>{
     const directory=mkdtempSync(path.join(tmpdir(),"progressive-portals-"));
     try {
       const {nodes,edges}=fixture();
@@ -203,7 +203,6 @@ describe("progressive schema-6 publisher",()=>{
       store.putNode({id:"road",externalId:"road",lon:0,lat:-0.001,elevationM:null,flags:[],sourceRefs:["fixture"]});
       for(const edge of edges)store.putEdge(edge);
       store.putWay({id:"street",externalId:"way/street",nodeIds:["road","a"],coordinates:[[0,-0.001],[0,0]],name:"Access Road",accessState:"public",bidirectional:true,edgeClass:"street",sourceRefs:["fixture"],flags:[]});
-      store.putBuilding([0.0001,0]);
       const version=manifest("portal-v1",0.002);
       expect(await store.derivePortals(version.coverage.boundary)).toBe(1);
       const result=await publishProgressiveGraph(store,{outputRoot:path.join(directory,"packs"),manifest:version,
@@ -211,8 +210,8 @@ describe("progressive schema-6 publisher",()=>{
         searchRegions:[{namedAreaId:"pack:progressive-fixture",displayOrder:0}]});
       const db=new DatabaseSync(result.databasePath,{readOnly:true});
       try {
-        const point=db.prepare("SELECT id,nearby_building_count,portal_road_class,known_connectivity FROM access_points").get() as {id:string;nearby_building_count:number;portal_road_class:string;known_connectivity:number};
-        expect(point).toMatchObject({id:"portal:a",nearby_building_count:1,portal_road_class:"street",known_connectivity:3});
+        const point=db.prepare("SELECT id,nearby_building_count,portal_road_class,known_connectivity FROM access_points").get() as {id:string;nearby_building_count:null;portal_road_class:string;known_connectivity:number};
+        expect(point).toMatchObject({id:"portal:a",nearby_building_count:null,portal_road_class:"street",known_connectivity:3});
         expect(db.prepare("SELECT alias FROM named_area_aliases WHERE alias='Accessible pack'").get()).toMatchObject({alias:"Accessible pack"});
       } finally {db.close();store.close();}
     } finally {rmSync(directory,{recursive:true,force:true});}

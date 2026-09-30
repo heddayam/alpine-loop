@@ -60,7 +60,7 @@ export function createPackSchema(database: DatabaseSync): void {
         inclusive_connectivity INTEGER NOT NULL CHECK(inclusive_connectivity >= 0),
         known_out_degree INTEGER NOT NULL CHECK(known_out_degree >= 0),
         inclusive_out_degree INTEGER NOT NULL CHECK(inclusive_out_degree >= 0),
-        nearby_building_count INTEGER NOT NULL CHECK(nearby_building_count >= 0)
+        nearby_building_count INTEGER CHECK(nearby_building_count IS NULL OR nearby_building_count >= 0)
         ,
         reachable_trail_km REAL NOT NULL CHECK(reachable_trail_km >= 0),
         trail_component_id TEXT NOT NULL,
@@ -266,16 +266,12 @@ export function writePackDatabase(path: string, contents: DatabaseContents): voi
           throw new Error(`Access point ${point.id} is missing schema 6 ranking fields`);
         }
         const ranking = rankingValues.map((value) => value!);
-        // Not optional: a missing count would make an urban start look wild.
-        if (typeof point.nearbyBuildingCount !== "number") {
-          throw new Error(`Access point ${point.id} is missing its nearby building count`);
-        }
         if (typeof point.reachableTrailKm !== "number" || !point.trailComponentId || !point.portalRoadClass) {
           throw new Error(`Access point ${point.id} is missing schema 6 portal fields`);
         }
         insertAccess.run(
           point.id, point.nodeId, point.name, point.kind, point.accessState,
-          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, point.nearbyBuildingCount,
+          point.confidence, point.parkingEvidence, JSON.stringify(point.sourceRefs), ...ranking, point.nearbyBuildingCount ?? null,
           point.reachableTrailKm, point.trailComponentId, point.portalRoadClass, point.parkingDistanceM ?? null,
         );
       }

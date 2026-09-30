@@ -71,7 +71,7 @@ export type NormalizedAccessPoint = {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
-  /** OSM buildings within BUILDING_RADIUS_M of the snapped node. */
+  /** Historical metadata from older fixtures/packs; production no longer collects it. */
   nearbyBuildingCount?: number;
 };
 

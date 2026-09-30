@@ -134,7 +134,7 @@ export function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     confidence: confidence as GraphAccessPoint["confidence"],
     parkingEvidence: typeof row.parking_evidence === "string" ? row.parking_evidence : null,
     sourceIds: jsonArray<string>(row.source_refs, "access point source_refs"),
-    nearbyBuildingCount: requiredNumber(row, "nearby_building_count"),
+    ...(row.nearby_building_count === null ? {} : { nearbyBuildingCount: requiredNumber(row, "nearby_building_count") }),
     reachableTrailKm: requiredNumber(row, "reachable_trail_km"),
     trailComponentId: requiredString(row, "trail_component_id"),
     portalRoadClass: parsePortalRoadClass(row.portal_road_class),

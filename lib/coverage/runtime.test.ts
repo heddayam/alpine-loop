@@ -136,14 +136,17 @@ it("retains dense connected entrances and measures their hiking network",async()
   expect(measured.length).toBeGreaterThan(0);
   expect(measured.some(([lon])=>lon> -121.2)).toBe(true);
   const [piece]=await pieces();
-  expect(piece!.access.some(point=>Number(point.nearby_building_count)===10)).toBe(true);
+  expect(piece!.access.length).toBeGreaterThan(0);
+  expect(piece!.access.every(point=>point.nearby_building_count===null)).toBe(true);
   expect((await release()).limitations.some(message=>message.includes("buildings-within"))).toBe(false);
   await expectNoScratch();
 });
 it("retains a start with nine nearby buildings",async()=>{
   fixtureLines.push(...buildingsAt(-121.26,47.51,9));
   await build();
-  expect((await pieces())[0]!.access.some(point=>point.nearby_building_count===9)).toBe(true);
+  const access=(await pieces())[0]!.access;
+  expect(access.length).toBeGreaterThan(0);
+  expect(access.every(point=>point.nearby_building_count===null)).toBe(true);
 });
 it("filters lowland starts before elevation while preserving an unmarked valley approach and reporting reviewed exclusions",async()=>{
   // The first loop's entrance is outside terrain, connected to its mountain end.
@@ -614,10 +617,11 @@ it.each([
   await expect(build(secondArea,context(),input)).rejects.toThrow("Conflicting source metadata");
   expect(await release()).toEqual(before);
 });
-it("retains unsupported building disclosures when reusing an area",async()=>{
+it("ignores unrelated building relations and reuses the completed area",async()=>{
   fixtureLines.push("r30 Ttype=multipolygon,building=yes Mw999@outer");
   await build();const before=await release();
-  expect(before.limitations.some(message=>message.includes("1 unsupported building relations"))).toBe(true);
+  expect(before.limitations.some(message=>message.includes("building"))).toBe(false);
+  expect((await pieces())[0]!.access.length).toBeGreaterThan(0);
   await build();expect((await release()).limitations).toEqual(before.limitations);
 });
 it("rejects a mismatched source digest before local extraction",async()=>{

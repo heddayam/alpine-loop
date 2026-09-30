@@ -9,6 +9,7 @@ import type { DataRelease } from "@/lib/contracts/releases";
 import { ACCESS_ENTRY_POLICY_VERSION } from "@/lib/contracts/access-policy";
 import { rectangle } from "@/lib/coverage/geometry";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
+import { PreparedGraphRepository } from "@/lib/graph/prepared-repository";
 import { createPreparedSchema } from "./sqlite-writer";
 import { exportPreparedRelease, inspectPreparedRelease, preparedReleaseId, publishPreparedCatalog, type PreparedReleaseOptions } from "./prepared-release";
 
@@ -55,6 +56,20 @@ it("publishes the entrance policy with its frozen source proof and checks it on 
   await publishPreparedCatalog(release,root);
   const altered={...release,artifacts:release.artifacts.map(artifact=>({...artifact,accessPolicyVersion:"earlier-policy"}))};
   await expect(publishPreparedCatalog(altered,root)).rejects.toThrow("entrance policy differs");
+});
+it.each([null,123])("exports and reads entrances with historical building metadata %s",async count=>{
+  const options=entryFixture(),db=new DatabaseSync(options.databasePath);
+  try {db.prepare("UPDATE access_points SET nearby_building_count=?").run(count);} finally {db.close();}
+  const release=await exportPreparedRelease(options);
+  const repository=new PreparedGraphRepository({releaseId:release.id,installationId:"building-metadata-fixture",coverage:options.geometry,
+    artifacts:[{path:options.databasePath,geometry:options.geometry,graphId:release.id,accessPolicyVersion:ACCESS_ENTRY_POLICY_VERSION}]});
+  try {
+    const points=await repository.getAccessPointCandidates({bbox:[-2,-2,2,2],includeUncertainAccess:false});
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({nodeId:"a-start",accessState:"public"});
+    if(count===null) expect(points[0]).not.toHaveProperty("nearbyBuildingCount");
+    else expect(points[0]!.nearbyBuildingCount).toBe(count);
+  } finally {await repository.close();}
 });
 it.each(["missing witness","unknown witness","duplicate node","bypassed passage"])("rejects %s in a new-policy prepared graph",async defect=>{
   const options=entryFixture(),db=new DatabaseSync(options.databasePath);

@@ -5,7 +5,6 @@ import { canonicalTopologyJson } from "@/lib/graph/topology-hash";
 import { deriveProgressivePortals } from "./portals";
 import type { AreaGeometry } from "../area-geometry";
 import type { SourceSnapshot } from "../adapters";
-import type { BuildingCentroid } from "../osm/buildings";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence, NormalizedWay } from "../types";
 
 export type ProgressiveGraphStoreOptions = { stagingPath: string; buildIdentity: string; deferLookupIndexes?: boolean };
@@ -54,8 +53,6 @@ export class ProgressiveGraphStore {
       CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,external_id TEXT NOT NULL,edge_class TEXT NOT NULL,access_state TEXT NOT NULL,bidirectional INTEGER NOT NULL,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS way_nodes(way_id TEXT NOT NULL,node_id TEXT NOT NULL,ordinal INTEGER NOT NULL,PRIMARY KEY(way_id,ordinal)) STRICT;
       CREATE TABLE IF NOT EXISTS evidence(id TEXT PRIMARY KEY,kind TEXT NOT NULL,record TEXT NOT NULL) STRICT;
-      CREATE TABLE IF NOT EXISTS buildings(id INTEGER PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,UNIQUE(lon,lat)) STRICT;
-      CREATE VIRTUAL TABLE IF NOT EXISTS building_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat);
       CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS edges(id TEXT PRIMARY KEY,stable_physical_id TEXT NOT NULL,from_node TEXT NOT NULL,to_node TEXT NOT NULL,access_state TEXT NOT NULL,edge_class TEXT NOT NULL,record TEXT NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS access_points(id TEXT PRIMARY KEY,node_id TEXT NOT NULL,record TEXT NOT NULL) STRICT;
@@ -141,13 +138,6 @@ export class ProgressiveGraphStore {
   }
   putPortalEvidence(item: NormalizedPortalEvidence): void {
     this.put("evidence", item.id, ["kind"], [item.kind], canonicalRecord(item));
-  }
-  putBuilding([lon,lat]: BuildingCentroid): void {
-    this.assertOpen();
-    const inserted = this.statement("INSERT OR IGNORE INTO buildings(lon,lat) VALUES (?,?)").run(lon,lat);
-    const row = inserted.changes ? {id:Number(inserted.lastInsertRowid)} : this.statement(`SELECT b.id FROM buildings b
-      LEFT JOIN building_spatial s ON s.id=b.id WHERE b.lon=? AND b.lat=? AND s.id IS NULL`).get(lon,lat) as {id:number}|undefined;
-    if (row) this.statement("INSERT OR IGNORE INTO building_spatial VALUES (?,?,?,?,?)").run(row.id,lon,lon,lat,lat);
   }
   putSource(source: SourceSnapshot): void {
     const durable = { ...source };

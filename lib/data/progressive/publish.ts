@@ -130,10 +130,10 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       const point=JSON.parse(row.record) as NormalizedAccessPoint;
       if (!(usedNode.get(point.nodeId))) continue;
       assertRefs(point.sourceRefs,point.id);
-      const fields=[point.knownConnectivity,point.inclusiveConnectivity,point.knownOutDegree,point.inclusiveOutDegree,point.nearbyBuildingCount,point.reachableTrailKm,point.trailComponentId,point.portalRoadClass];
+      const fields=[point.knownConnectivity,point.inclusiveConnectivity,point.knownOutDegree,point.inclusiveOutDegree,point.reachableTrailKm,point.trailComponentId,point.portalRoadClass];
       if (fields.some((value)=>value===undefined||value===null)) throw new Error(`Access point ${point.id} is missing ranking or portal fields`);
       insertAccess.run(point.id,point.nodeId,point.name,point.kind,point.accessState,point.confidence,point.parkingEvidence,JSON.stringify(point.sourceRefs),
-        point.knownConnectivity!,point.inclusiveConnectivity!,point.knownOutDegree!,point.inclusiveOutDegree!,point.nearbyBuildingCount!,point.reachableTrailKm!,point.trailComponentId!,point.portalRoadClass!,point.parkingDistanceM??null);
+        point.knownConnectivity!,point.inclusiveConnectivity!,point.knownOutDegree!,point.inclusiveOutDegree!,point.nearbyBuildingCount??null,point.reachableTrailKm!,point.trailComponentId!,point.portalRoadClass!,point.parkingDistanceM??null);
       if (point.entryWitness) insertWitness.run(point.id,JSON.stringify(point.entryWitness));
       accessCount++;
     }

@@ -42,8 +42,8 @@ export type GraphAccessPoint = {
   confidence: "high" | "medium" | "low";
   parkingEvidence: string | null;
   sourceIds: string[];
-  /** OSM buildings within BUILDING_RADIUS_M of the snapped node. */
-  nearbyBuildingCount: number;
+  /** Historical metadata from older packs; new production packs omit it. */
+  nearbyBuildingCount?: number;
   reachableTrailKm?: number;
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;

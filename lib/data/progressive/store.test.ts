@@ -50,7 +50,6 @@ it("reuses fixed import statements across new identities and overlapping replays
     store.setNodeElevation(id, 120);
     store.putWay({ id, externalId: `way/${id}`, nodeIds: [id], coordinates: [[index, 2]], name: null, accessState: "public", bidirectional: true, flags: [], sourceRefs: [source] });
     store.putPortalEvidence({ id, externalId: `node/${id}`, kind: "parking", name: null, nodeIds: [id], coordinates: [], accessState: "public", sourceRefs: [source] });
-    store.putBuilding([index, 2]);
   };
   try {
     put(0, "west");
@@ -128,13 +127,12 @@ it("rolls back imports and reuses statements without retaining rolled-back recor
     store.putNode({ ...node, id: "b", externalId: "node/b", lon: 2 });
     store.putWay({ id: "trail", externalId: "way/trail", nodeIds: ["a", "b"], coordinates: [[1, 2], [2, 2]], name: null, accessState: "public", bidirectional: true, flags: [], sourceRefs: ["west"] });
     store.putPortalEvidence({ id: "parking", externalId: "node/a", kind: "parking", name: null, nodeIds: ["a"], coordinates: [], accessState: "public", sourceRefs: ["west"] });
-    store.putBuilding([1, 2]);
   };
   try {
     store.putNode(node);
     expect(() => store.transaction(() => { put(); throw new Error("interrupted"); })).toThrow("interrupted");
     expect([...store.iterateNodes()]).toEqual([node]);
-    const counts = { ways: 0, way_nodes: 0, evidence: 0, buildings: 0, building_spatial: 0 };
+    const counts = { ways: 0, way_nodes: 0, evidence: 0 };
     for (const [table, count] of Object.entries(counts)) {
       expect(store.database.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(count);
     }
@@ -142,7 +140,7 @@ it("rolls back imports and reuses statements without retaining rolled-back recor
     store.transaction(put);
     expect([...store.iterateNodes()][0]).toEqual({ ...node, elevationM: 120, sourceRefs: ["east", "west"] });
     expect([...store.iterateNodes()]).toHaveLength(2);
-    for (const table of ["ways", "evidence", "buildings", "building_spatial"]) {
+    for (const table of ["ways", "evidence"]) {
       expect(store.database.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(1);
     }
     expect(store.database.prepare("SELECT count(*) AS n FROM way_nodes").get()!.n).toBe(2);
@@ -161,21 +159,18 @@ it("repairs incomplete derived rows after reopening and resolves evidence when n
   try {
     store.putNode(node);
     store.putWay(way);
-    store.putBuilding([1, 2]);
     store.putPortalEvidence(evidence);
     store.putNode({ ...node, id: "road", externalId: "node/road", lon: 2, lat: 1 });
     store.putWay({ ...way, id: "road", externalId: "way/road", nodeIds: ["road","b"], coordinates: [[2,1],[2,2]], edgeClass: "street" });
     store.putEdge({ id: "edge", stablePhysicalId: "trail:0", fromNode: "a", toNode: "b", geometry: way.coordinates,
       lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 0, maxSustainedGradePct: 0, accessState: "public", edgeClass: "trail", flags: [], sourceRefs: ["west"] });
     expect(await store.derivePortals(coverage)).toBe(0);
-    store.database.exec("DELETE FROM way_nodes WHERE way_id='trail' AND ordinal=1; DELETE FROM building_spatial");
+    store.database.exec("DELETE FROM way_nodes WHERE way_id='trail' AND ordinal=1");
     store.close();
     store = openProgressiveGraphStore(options);
     store.putNode(node);
     store.putWay(way);
-    store.putBuilding([1, 2]);
     expect(store.database.prepare("SELECT node_id,ordinal FROM way_nodes WHERE way_id='trail' ORDER BY ordinal").all()).toEqual([{ node_id: "a", ordinal: 0 }, { node_id: "b", ordinal: 1 }]);
-    expect(store.database.prepare("SELECT count(*) AS n FROM building_spatial").get()!.n).toBe(1);
     store.putNode({ ...node, id: "b", externalId: "node/b", lon: 2 });
     store.putEdge({ id: "reverse-edge", stablePhysicalId: "trail:0", fromNode: "b", toNode: "a", geometry: [...way.coordinates].reverse(),
       lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 0, maxSustainedGradePct: 0, accessState: "public", edgeClass: "trail", flags: [], sourceRefs: ["west"] });

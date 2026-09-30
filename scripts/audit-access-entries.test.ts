@@ -1,6 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cycleComponents, profileCounts } from "./audit-access-entries";
+import { cycleComponents, historicalBuildingSource, profileCounts } from "./audit-access-entries";
 import { compiledEdgesForSegment } from "../lib/data/compiled-edges";
 import { distanceMeters } from "../lib/data/metrics";
 import { normalizeOsmOpl } from "../lib/data/osm/opl";
@@ -56,6 +58,19 @@ async function originalCandidates(fixture: string, stage: "sparse" | "measured")
 }
 
 describe("offline access-entry audit", () => {
+  it("keeps the pinned historical building control outside current source preparation",async()=>{
+    const directory=await mkdtemp(join(tmpdir(),"historical-building-control-"));
+    try {
+      const BuildingSource=await historicalBuildingSource(directory);
+      const geometry=rectangle([-1,-1,2,2]);
+      const source={id:"research",authority:"fixture",dataset:"fixture",version:"1",retrievedAt:"2026-09-30",url:"https://example.invalid/fixture",license:"fixture",contentHash:`sha256:${"0".repeat(64)}` as const,localPath:"offline"};
+      const store=new BuildingSource(":memory:",source,geometry);
+      try {
+        await store.import(async()=>{},{lines:(async function*(){yield* ["n1 Tbuilding=yes x0 y0","n2 T x1 y0","n3 T x1 y1","n4 T x0 y1","w10 Tbuilding=yes Nn1,n2,n3,n4,n1"];})()});
+        expect([...store.buildings(geometry)]).toEqual([[0,0],[.4,.4]]);
+      } finally {store.close();}
+    } finally {await rm(directory,{recursive:true,force:true});}
+  });
   it("separates detector permission changes from the building-density veto", () => {
     expect(profileCounts([point("known", "public", 9), point("dense", "public", 10),
       point("unknown", "unknown", 0), point("private", "private", 0)])).toEqual({

@@ -146,25 +146,14 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         let pending: Array<() => void> = [], work = 0;
         const flush = () => { if (pending.length) store.transaction(() => { for (const write of pending) write(); }); pending = []; };
         const enqueue = (write: () => void) => { pending.push(write); if (pending.length < 1000) return false; flush(); return true; };
-        store.database.exec(`CREATE TEMP TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,approach_link INTEGER NOT NULL,core_hiking INTEGER NOT NULL) STRICT;
-          CREATE TEMP TABLE unsupported_buildings(id TEXT PRIMARY KEY) STRICT`);
-        const unsupported=store.database.prepare("INSERT OR IGNORE INTO unsupported_buildings VALUES (?)");
+        store.database.exec(`CREATE TEMP TABLE eligible_segments(id TEXT PRIMARY KEY,from_node TEXT NOT NULL,to_node TEXT NOT NULL,length_m REAL NOT NULL,approach_link INTEGER NOT NULL,core_hiking INTEGER NOT NULL) STRICT`);
         const eligible = store.database.prepare("INSERT OR IGNORE INTO eligible_segments VALUES (?,?,?,?,?,?)");
         const loadContext = async (readGeometry: AreaGeometry, selected: typeof raws) => {
           const boundary = prepareAreaGeometry(area.geometry);
           for (const raw of selected) {
-            for(const row of raw.db.prepare("SELECT id FROM inventory WHERE disposition='unsupported'").iterate()) {
-              if(++work%1000===0) await check();
-              unsupported.run(row.id);
-            }
             const sourceCoverage = intersectCoverage(readGeometry, recipe.sources.find(source => source.config.id === raw.source.id)!.geometry);
             if (!sourceCoverage) continue;
             for (const entry of raw.context(readGeometry,sourceCoverage)) {
-              if (entry.kind === "building") {
-                if (enqueue(() => store.putBuilding(entry.centroid))) await check();
-                memberSources.add(raw.source.id);
-                continue;
-              }
               if (entry.kind === "evidence") {
                 if (enqueue(() => store.putPortalEvidence(entry.evidence))) await check();
                 entry.evidence.sourceRefs.forEach(id => memberSources.add(id)); memberSources.add(raw.source.id);
@@ -252,10 +241,8 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         for (const source of region.sources ?? []) if (!sources.some(prior => prior.id === source.id)) sources.push(source);
         sources.sort((a,b)=>a.id.localeCompare(b.id));
         for (const source of sources) store.putSource({...source,contentHash:source.contentHash as `sha256:${string}`,localPath:""});
-        const unsupportedBuildings=Number(store.database.prepare("SELECT count(*) AS n FROM unsupported_buildings").get()!.n);
         const limitations = [...recipe.limitations,...(elevation.limitations??[]),
-          ...(unsupportedBuildings ? [`The local context contains ${unsupportedBuildings} unsupported building relations. Descriptive building counts may be incomplete; individual reasons are recorded in its context inventory.`] : []),
-          "Access and building context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.",
+          "Access context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.",
           "Starts must connect through hiking links within 25 walking miles to a mapped hiking trail touching this area's GMBA Standard mountain core. Ordinary roads do not establish mountain approaches. Unknown access is included; low foothills and disconnected source trails can be excluded. This qualifies starts, not every generated route's terrain.",
           "Regional graphs preserve supported routes within the configured distance budget; missing source trails may still exist."];
         const options = {databasePath,outputRoot,geometry:area.geometry,sources,regions:[searchRegion(sources)],
