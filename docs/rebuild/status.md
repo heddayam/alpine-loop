@@ -18,8 +18,10 @@ the evidence line.
 - [x] Record the [coherent replacement recommendation](access-point-review.md):
   one mode-aware source topology and connected-entry proof, explicit prepared
   region membership, and one profile-aware start selector for map and search.
-  The proposed removal of the building-count veto is an explicit product
-  revision; existing application policy remains unchanged. The review includes
+  The initial proposed removal of the building-count veto was reconsidered:
+  retain density and the existing 25-mile association in the first replacement;
+  evaluate any later scope change separately. Existing application policy remains
+  unchanged. The review includes
   cross-region precision/recall labels, holdouts, source-gap accounting,
   compatibility and implementation acceptance requirements.
 - [x] Verify baseline evidence with offline committed fixtures: topology audit
@@ -28,6 +30,25 @@ the evidence line.
   process-identity sandbox retry. Documentation/link checks pass. This is a
   documentation-only review; no regional processing, publication, installation
   or measured accuracy comparison was performed.
+- [x] Challenge the proposal before implementation and incorporate concrete
+  corrections. [Entry preflight](access-review/entry-preflight.md) preserves
+  pedestrian eligibility independently of car certainty, validates asserted
+  trailhead approaches, distinguishes gate/frontier identity and parking-place
+  assertions, and requires end-to-end passage enforcement.
+  [Selection preflight](access-review/selection-preflight.md) reuses existing
+  per-artifact entrance rows, limits owners to requested-profile admitted
+  records, distinguishes count/map mismatches from existing solver safety, and
+  clarifies close-match bounds and job migration.
+  [Validation preflight](access-review/validation-preflight.md) isolates product
+  policy, defines independent movement/place identity and error attribution.
+  Baseline tests pass 101/101 entry/source/compaction cases and 63/63
+  selection/reader/solver/job cases; suites overlap prior review evidence.
+  Direct offline probes reproduce generic road oneway affecting walking and
+  both forbidden foot directions yielding a forward direction. The updated
+  recommendation uses two behavior waves without another catalog, car-routing
+  stack, relation engine or permanent legacy selector. Documentation/link checks
+  pass; completed review worktrees/branches are removed. No app or data changes
+  are part of this preflight, and no regional accuracy improvement is claimed.
 - [ ] Implement and independently evaluate the replacement before adopting it.
   Existing entrance-policy/repair gates below remain pending. Synthetic fixture
   success and nearby reviewed anchors do not establish regional precision or
@@ -53,9 +74,12 @@ the evidence line.
   static review finds no extraction, membership or compaction defect.
 - [ ] Resolve the requested entrance-policy choice before changing admission.
   The current same-node service-road gate rule deliberately rejects these
-  connected entrances. Recommend a bounded mapped approach that retains the
-  actual gate as the start, without connectors, evidence relocation or access
-  overrides. Do not describe these cases as absent hiking connections. Any
+  connected entrances. The broader [entry recommendation](access-point-review.md)
+  supersedes the earlier bounded gate-retention proposal: nominate the actual
+  service/path frontier and keep an interior generic gate at its real crossing,
+  unless it is independently asserted as a trip-start location. This changes
+  start identity deliberately; do not transplant gate metadata. Do not describe
+  these cases as absent hiking connections. Any
   refinement requires restrictive/interior/branch/distance regressions and the
   existing density, mountain, access and route eligibility checks.
 - [ ] Implement the chosen repair, run required integration checks, and provide

@@ -1,6 +1,9 @@
 # Access points: one entry model for the whole application
 
-Review and recommendation, 2026-09-30. Baseline: `9fff8d7`.
+Review and recommendation, 2026-09-30. Initial audit baseline: `9fff8d7`;
+preimplementation challenge baseline: `8185478`. The decisions below incorporate
+the second review; its reports challenge the earlier draft rather than supersede
+these decisions.
 This covers extraction, preparation, publication, installation, map presentation,
 geographic filtering, Full enumeration, and route feasibility across all regions.
 It recommends a replacement design; it does not change application behavior or
@@ -25,24 +28,34 @@ Those questions can use one prepared record and one selector. They should not
 collapse into a confidence score or a single public/unknown/private value whose
 meaning changes between preparation, map, and search.
 
-The recommended product change is to remove the building-count veto from access
-validity. Keep mountains as destination geography and connected regional
-membership. Retain buildings as descriptive surroundings if useful. A genuine
-mountain entrance beside a village or visitor facility should survive; a retail
-parking lot with no hiking entry should fail through topology. This deliberately
-revises the current wilderness-start requirement, rather than quietly changing
-its numeric cutoff. It remains a proposal until implemented and evaluated.
-This also admits dense, mountain-associated starts whose generated loops head
-away from the core. Those are acceptable under this recommendation: a mountain
-association selects a destination's starts, while users' actual route constraints
-decide route suitability. Do not compensate by clipping routes to mountain
-polygons or silently adding a must-visit-core constraint.
+Keep the accepted **fewer than ten buildings within 500 m** and **25-mile mountain
+association** policies in the first replacement. They decide which physically
+valid entrances this product offers. Removing density is a separate possible
+product revision, not a detector fix or a recall improvement under today's
+definition. A mountain association still selects starts without requiring every
+route to visit the core. Do not clip routes or add that constraint silently.
+
+The concrete simplification is smaller than the first draft suggested: regional
+artifacts already contain frozen `access_points` rows. Use those rows plus their
+`regionId` as the saved region entrance list. Do not create another global catalog.
+Replace repeated geometric inference with that authority, and replace nomination
+exceptions with one connected-entry calculation over the source topology.
+
+The second review found actual design mistakes worth correcting: motor certainty
+must not control the hiking-access toggle; a trailhead tag cannot bypass a missing
+or forbidden approach; parking-place evidence is not a routed interior connector;
+and a gate's location need not be an entrance's location. Implementation can
+proceed from these clarified rules and concrete fixtures. Independent regional
+labels are needed to claim improved accuracy, not to begin semantic implementation.
 
 ## What the application currently does
 
 The detailed independent reviews are [topology and permission](access-review/topology-audit.md),
 [geography and map](access-review/geography-audit.md), and
 [source semantics and evaluation](access-review/source-audit.md).
+The second-review challenges are [entry semantics](access-review/entry-preflight.md),
+[selection and ownership](access-review/selection-preflight.md), and
+[validation](access-review/validation-preflight.md).
 
 | Stage | Current decision | Main weakness |
 | --- | --- | --- |
@@ -50,12 +63,12 @@ The detailed independent reviews are [topology and permission](access-review/top
 | Normalization | Exclusive trail/street/service/sidewalk class; one pedestrian access state | A foot-allowed road can lose its road identity; vehicle permissions and node crossing restrictions are not represented independently. |
 | Nomination | Street contact; evidence at service contact; trailhead within 250 m of track; one parking contact | Different source mapping forms receive different admission rules despite equivalent entry topology. |
 | Candidate permission | Worst access state of every incident trail way | A private branch can veto a public departure, while a foot-private gate can be ignored. |
-| Product relevance | Fewer than ten mapped buildings within 500 m; hiking connection within 25 miles to a GMBA core | Surroundings and destination suitability are treated as entrance validity; source omissions and thresholds lose legitimate entrances. |
-| Preparation/publication | Freeze starts, add outside-start neighborhoods and support, prune, measure, compact | Freezing is sound; encoding membership mainly through polygons makes later inference ambiguous. |
+| Product relevance | Fewer than ten mapped buildings within 500 m; hiking connection within 25 miles to a GMBA core | These are intentional scope exclusions; keep them distinct from detection errors and mapping gaps. |
+| Preparation/publication | Freeze starts, add outside-start neighborhoods and support, prune, measure, compact | Frozen entrance rows already exist; runtime membership inferred from polygons can disagree with those rows. |
 | Installed overlap | Stable owner selected by geometry plus graph-node existence | Node existence does not prove that owner admitted the entrance. |
 | Named filtering | Expanded start polygon plus another 500 m runtime tolerance | Nearby starts from another installed region can satisfy the selected region without membership. |
 | Map | Viewport starts, building check, inclusive cycle check, client unknown toggle | Active drawn/named/driving predicates are not applied to generic dots. |
-| Full/jobs | Installed departure, area/access/building checks and inclusive cycle hint; pinned job enumeration | Search and map mean different things by eligible; the inclusive hint can retain starts with no known-only cycle. |
+| Full/jobs | Installed departure, area/access/building checks and inclusive cycle hint; pinned job enumeration | Counts/map can retain starts with no known-only cycle. Solver execution already uses requested-profile hints and traversal; this is not evidence of an unknown-route permission leak. |
 
 These are code-supported mechanisms, not measured frequencies. Some intentional
 exclusions are product choices, some are implementation defects, and some are
@@ -78,49 +91,63 @@ heuristics inside the word hiking:
 | Service/access road or parking aisle | Approach link when connected to an arrival root/place; class alone is not an arrival root. |
 | Explicit sidewalk/crossing/access link | Pedestrian approach context, never a hiking seed or generated hike by itself. |
 | Path, bridleway, steps, track, non-sidewalk footway/pedestrian way | Hiking/walking role, subject to passage rules; ambiguous walking links still cannot seed mountain association. |
-| Track with supported motor passage | Both hiking and motor approach roles. Public/unknown permissions and their evidence remain distinct. |
-| Other way with explicit hiking-use source evidence | Its hiking role needs semantic evidence such as supported hiking-route membership, not its name or foot permission alone. |
-| Connected explicit trailhead | A source assertion of a trip-start place, subject to usable departure and passage validation. |
-| Parking polygon, sign, or interior gate | Observation/place extent or crossing rule; it supplies no imaginary interior path and is not an automatic trip-start root. |
+| Track | Physical hiking/land-access roles remain separate from permission. Connected mapped track approaches may establish pedestrian entry; motor uncertainty alone cannot remove that role. A track-track junction is not automatically another start. |
+| Road with supported walking use | Preserve currently supported walking geometry separately from source road function. Hiking-route relation support is optional future adapter work, not a prerequisite or name-based promotion. |
+| Connected explicit trailhead | An assertion of a trip-start location requiring an actual connected, usable mapped approach and departure; the tag cannot grant permission or invent its approach. |
+| Parking area | A local place assertion at its actual hiking contact, supported by its mapped arrival contact and foot passage. It supplies no routed interior edge or legal parking guarantee. |
+| Sign or interior gate | Observation or crossing rule; it is not an automatic trip-start root. |
 
 Represent pedestrian areas as areas/observations until supported walking
 connections exist. Never compile their perimeter into a hiking cycle merely
-because the source is a closed highway way. Preserve supported place/route
-relations at normalization when they carry these roles; malformed or unsupported
-geometry remains a disclosed source limitation.
+because the source is a closed highway way. Unsupported relations remain a
+disclosed representation limitation; do not bundle a new relation engine into
+this change. A source role table must preserve supported road-walking geometry
+while correcting road identity and mountain seeding.
 
 The finite witness rule is:
 
-1. Begin at a mapped ordinary arrival-road contact or an explicit connected
-   trip-start/arrival place. This establishes a local source assertion, not
-   global vehicle connectivity. Never begin at an artificial extraction cut.
+1. Begin at a mapped ordinary arrival-road contact or a validated arrival place.
+   This establishes a local source assumption, not global vehicle connectivity.
+   Never begin at an artificial extraction cut. An explicit trailhead farther
+   along a path remains a candidate location requiring approach validation,
+   rather than serving as its own proof of arrival.
 2. Reach the proposed entry through actual approach-role links under the
    witness's ingress mode, observing direction and node restrictions. Walking
    through hiking-only links cannot spread arrival status into the interior.
-   Mixed-use tracks remain traversable in their motor-approach role, so an
-   unmarked path farther along a genuinely accessible forest road can qualify.
+   Tracks retain physical land-access roles even when car permission is unknown
+   or private; prove the used foot movement rather than infer car reachability.
+   A usable track approach can establish an unmarked path exit. Source function,
+   not the presence of `motor_vehicle=yes`, defines that physical role.
+   An explicitly asserted trailhead may validate its actual walking connection
+   from that frontier along hiking links; this validates the asserted location
+   without nominating every other visited hiking node.
 3. Emit only a source trip-start assertion, an approach-to-hiking role change,
-   or a supported motor-to-foot transition. Merely visiting a node or a junction
-   of two continuing mixed-use tracks emits nothing. A mode transition needs
+   or an explicitly supported passage/mode frontier. Merely visiting a node or
+   a junction of two continuing mixed-use tracks emits nothing. A transition needs
    an arrival-side witness and an actual restriction/role difference, not just
    a generic gate symbol.
 4. Require at least one allowed/explicitly unknown hiking departure, including
-   the real node crossing and its first segment. Keep ingress mode and every
-   unresolved passage fact with the decision. A motor-permitted, foot-forbidden
-   access road can support car arrival followed by a permitted foot departure;
-   its foot prohibition does not erase its motor role.
+   the real node crossing and its first segment. Keep the used movement and
+   every unresolved passage fact with the decision. At an arrival-road contact,
+   do not require walking along an unused road edge merely to enter a public
+   trail. A longer car-only ingress is a separate arrival claim; the pedestrian
+   evaluator must not pretend it has proved walking on a foot-forbidden road.
 
-Known/inclusive eligibility evaluates passage on the entire chosen witness,
-not just its departure edge. An unrelated uncertain parking facility or unused
-vehicle approach does not make an otherwise known pedestrian witness uncertain.
-Keep arrival uncertainty separate from the hiking route's passage uncertainty.
+Known/inclusive eligibility evaluates **foot passage actually used** by the
+chosen entry witness, including its approach where that approach is walked,
+crossing and departure. A used unknown foot passage needs inclusive access; an
+unused private spur does not veto a public witness. Car uncertainty/private car
+access cannot independently veto a proven pedestrian entrance. Neither an unused
+vehicle approach nor parking uncertainty makes a known-foot witness unknown.
+Keep unsupported car-only arrival claims separate rather than silently broadening
+the hiking toggle. No new car-routing service is part of this replacement.
 
 This is one graph reachability/transition calculation per profile, not a walk
 from every evidence point with separate gate/trailhead/parking radii. The ordinary
 road root is a stated local-access assumption; isolated or stale roads remain
-source errors to score, not proof of globally verified arrival. A disputed
-motor capability remains disputed instead of promoting an internal track to
-verified arrival. Explicit source assertions also need independent review.
+cases to review, not proof of globally verified arrival. An accurately mapped
+isolated road can expose a model assumption error; do not automatically blame
+the source. Explicit source assertions also need independent review.
 
 The compiler evaluates a usable **ingress/departure pair** or a mapped approach
 path at a real source node. Restrictions apply to the movements used by that
@@ -138,17 +165,23 @@ all through the same connected-entry proof:
   pedestrian-entry proof as a street approach; it does not need a same-node sign.
 - A road/road intersection is not a hiking entry merely because walking is
   permitted on both roads. Hiking function and passage capability are separate.
-- A gate is a passage point. It becomes a start when it actually defines the
-  entry/arrival transition, such as a motor barrier on a walkable track. An
-  interior gate or sign does not create another entrance by itself.
+- A gate is a passage point. It becomes a start when it actually defines a
+  supported entry frontier or carries a validated trip-start assertion. An
+  interior gate or sign does not create another entrance by itself. For the
+  reviewed Stanford/Vargas mapping, a generic gate down an already hiking-only
+  path remains a crossing rule; the service/path frontier is the unmarked start.
+  This revises the earlier gate-retention repair recommendation deliberately.
+  Do not transfer the gate's name or permission to the junction.
 - An unmarked road-to-trail transition remains a valid candidate. A separately
   mapped trailhead can remain the actual start when its approach is connected
   and source-supported. Keep its approach and coordinates; do not transplant
   its name or permission onto a nearby junction.
-- Retain every independently usable parking exit. Require actual mapped access
-  links, shared contacts or mapped pedestrian paths; a polygon's boundary is not
-  a hiking loop and its two contacts do not justify an invented walking connector
-  across it.
+- Retain every independently usable parking exit at an actual hiking contact of
+  the validated place. A parking area with separate mapped arrival and hiking
+  contacts can assert that local trip-start place without a drawn interior line
+  (the Heather-style mapping). Apply its foot restrictions and record the place
+  assumption. Its boundary is not a hiking loop; the assertion adds no walking
+  connector between contacts and cannot be used by the route solver as one.
 - Trace actual topology across source-way splits. Do not use nearest-neighbor
   snapping, entrance clustering, per-evidence distance exceptions, or a road
   name regular expression to establish an entry.
@@ -173,17 +206,28 @@ disableable. Missing geometry is a source gap, not access-unknown: there is no
 permission setting that can supply a nonexistent connector. Preserve unsupported
 conditional restrictions as unresolved conditions; a known restriction must not
 disappear into generic unknown. Do not claim date-specific permission without
-evaluating its condition. Interpret pedestrian direction according to the source
-class and explicit foot tags; ordinary vehicle oneway must not restrict walking.
+evaluating its condition. Keep purpose-limited permission distinct from absent
+tags; unknown access does not override an established restriction. Interpret
+pedestrian direction according to source class and explicit foot tags; ordinary
+vehicle oneway must not restrict walking, and prohibiting both foot directions
+must produce no foot movement.
+
+Declare the finite source context in which the proof was established. Complete
+hiking-route support is not complete arrival context. Retain the witnessed
+approach before pruning. A root missing beyond an extraction boundary is a context
+limitation, not proof of no physical entrance. Support expansion never discovers
+new starts implicitly; changed nomination context requires explicit re-preparation.
 
 ## Region membership and boundaries
 
-Keep the GMBA cores as named destination geography. Build **explicit entrance
-membership** from the frozen, connected starts admitted to each region. The
-current bounded hiking connection can remain the regional association rule;
-its 25-mile value is a named product policy and must be independent of the
-route-support budget. It is not a statement that an entrance outside the bound
-is physically invalid or that every resulting route enters the core.
+Keep the GMBA cores as named destination geography. Use each region artifact's
+frozen entrance records as **explicit membership**, rather than adding a second
+catalog. Keep the current inclusive, undirected hiking/possible-link association:
+at most 25 miles to an unambiguous hiking link touching the core, measured with
+the current endpoint seeding. Ordinary roads cannot establish it. This is static
+destination association, not proof of a known-only directed journey to the core.
+Decouple the 25-mile policy constant from the route-support budget without
+changing its value or pretending it measures the exact core intersection.
 
 Named selection is membership in the prepared entrance set, including actual
 approaches outside the core. Drawn selection is exact entrance-coordinate
@@ -199,12 +243,16 @@ markers. Neither a park border nor a hiking line crossing a download boundary
 creates an entrance. Broadening a region cannot repair missing source topology.
 
 Choose an overlapping graph owner only among artifacts that actually admitted
-the entrance under the installation's policy. Order those candidates by stable
-region ID and graph identity, then pin the owner before checking route feasibility.
+the entrance under the installation's policy **in the requested foot-witness
+profile**. An inclusive-only record in A cannot suppress a known record in B.
+Order those candidates by stable region ID and graph identity, then pin the owner
+before checking cycle/route feasibility.
 Selected region IDs filter membership but do not reorder owners. Never choose an
 owner according to whether a solver happens to find a route. Apply regional
 membership independently of owner choice. Retain deterministic one-graph ownership for the whole solve;
 never join overlapping graphs or combine their topology hints to invent a route.
+Equivalent source/policy inputs need a support audit; a deterministic owner does
+not promise the best route available in the union of differing graph supports.
 
 ## Preparation, runtime, and map share one meaning
 
@@ -241,17 +289,21 @@ known/inclusive topology hints, map edge exposure, and final solver validation.
 Admission-only enforcement would still allow a route through a restrictive
 interior gate. Preserve crossing nodes or an equivalent exact movement encoding;
 do not turn one blocked branch movement into a blanket veto on its junction.
+A barrier mapped ambiguously on a multiway junction cannot be assigned a favored
+unrestricted crossing through geometric guesswork. Starting at a barrier cannot
+bypass its restriction.
 
-Migration rule: new searches under the new selector require every contributing
-artifact to declare the compatible entrance/membership policy. Do not combine
-old geometric membership and new explicit membership in one new job. Areas
-needing rebuild are explicitly unavailable for those searches until rebuilt;
-existing artifacts and saved geometry are retained. Existing jobs keep their
-pinned selector version and owner mapping, and resume with their original
-semantics while the corresponding implementation and data remain supported.
-Preserve partial/saved results if resumption is unavailable; never re-enumerate
-them under the new policy. Legacy compatibility is a bounded migration concern,
-not an alternative admission system for new data.
+Migration rule: ship one new selection policy. Every contributing artifact must
+declare compatibility; an unrelated old installed region must not disable a
+compatible selected region. Do not mix old geometric admission with record-based
+membership in one new job. Incompatible eligible markers and new searches are
+unavailable until those areas are rebuilt; preserve their data and saved results.
+New jobs pin policy, installation and owner meaning. Existing jobs do not currently
+pin enough to guarantee exact resumption after changing this algorithm. Stop
+unsupported unfinished jobs with a clear reason and preserve partial results,
+rather than retaining a permanent second selector or re-enumerating silently.
+Already recorded geometry/results stay readable. This migration needs a test;
+it is not an existing guarantee.
 
 Use one selector for eligible map highlighting, counts, Full enumeration, and
 explicit-start validation. The viewport only limits rendering/data fetching;
@@ -259,12 +311,15 @@ panning cannot change the eligible set. Contextual entrances outside the active
 filter may be shown with different styling and clear meaning. While driving
 geometry is unresolved or failed, do not display a broadened eligible set.
 
-Cycle feasibility uses the requested known/inclusive profile. A public entrance
-whose only loop crosses unknown links is not a known-only viable start. Keep
+Cycle feasibility uses the owning graph's requested known/inclusive profile.
+A public entrance whose only loop crosses unknown links is not a known-only viable start. Keep
 legacy missing hints conservative. A feasibility hint is a safe exclusion bound,
 not proof of a simple loop/lollipop satisfying requested distance, elevation,
 grade, direction and repetition; the solver owns that proof. No-route outcomes
 and computation limits remain visible. Return exact and close matches separately.
+Keep only proved safe exclusions in this selector. In particular, an exact-route
+distance bound must not discard a start that can produce a longer labeled close
+match; cover that case before moving solver feasibility checks into selection.
 
 Show destination/core geography, the active start filter, actual entrance markers,
 and downloaded routing support with distinct labels. Start coverage and the
@@ -295,14 +350,14 @@ concentrate in one module used by all callers.
 | A learned validity score | Adds labels, tuning and regional drift; a score cannot create missing topology or resolve known restrictions. |
 | A pure car-network frontier | Useful for verified motor arrivals, but loses mixed-use track starts and walk-in entrances unless place and movement semantics are retained; local clips cannot establish global car reachability. |
 
-No optimality or accuracy theorem is claimed. This is the smallest coherent
-design supported by the identified failure mechanisms; its error tradeoffs need
-independent comparative measurement.
+No optimality or accuracy theorem is claimed. The design removes repeated
+inference and evidence-specific admission paths; whether its source assumptions
+improve regional accuracy needs independent comparative measurement.
 
 ## Acceptance across regions
 
-First label complete small study windows independently of generated candidates
-in both Washington and California. Record physical entry, foot permission,
+For the accuracy comparison, label complete small study windows independently
+of generated candidates in both Washington and California. Record physical entry, foot permission,
 arrival/parking facts, and regional relevance separately, with exact movement,
 evidence date and unresolved facts. Include every emitted candidate and all
 independently identified entrances in each window, so recall has a denominator.
@@ -320,14 +375,18 @@ unknown-only cycles, and saved-job restoration after policy/data changes.
 Run baseline and proposal on identical pinned inputs. Report physical-entry
 precision/recall, restricted inclusions, membership errors, arrival-claim errors,
 product exclusions, duplicate outputs, unresolved truth, and source gaps
-separately, for both access profiles and each region. Use one-to-one entrance
-matching; proximity to a famous point is not identity. Do not optimize total
+separately, for both access profiles and each region. Define real entry movements,
+trip-start places and permitted location aliases before one-to-one matching.
+Distinct usable node starts along one approach are not automatically invalid
+duplicates; report redundant representations separately. Proximity to a famous
+point is not identity. Do not optimize total
 start count or a pooled score that hides a region's regression.
 
 Require fewer resolved false positives and false negatives across holdouts, or
 an explicitly documented tradeoff. Semantic metamorphic tests must also show
 that splitting a source way, renaming a road, changing evidence placement while
-preserving its actual approach, expanding support, or panning the map does not
+preserving its actual approach, expanding routing support with identical entry
+context, or panning the map does not
 arbitrarily change entry validity/membership. Adding an equivalent overlapping
 artifact must not suppress a real entrance merely because it contains its node.
 New installations can legitimately change owner/route feasibility when support,
@@ -335,11 +394,27 @@ source or policy changes; existing jobs retain their pinned installation/owner.
 Moving a gate or changing its access genuinely can change the movement and must
 not be asserted invariant. Keep automated inputs committed and network-free.
 
-Implementation should replace nomination/permission first behind an integrator-owned
-compatibility seam, then explicit membership/ownership and the shared selector,
-then map presentation. Every wave deletes superseded rules. Run the runbook's
-full verification before implementation acceptance and audit rebuilt real data
-when the prepared contract changes. No regional build is started by this review.
+Implementation has two focused behavior waves:
+
+1. Implement the source-role/foot-entry evaluator in the real compiler, with
+   committed raw-source fixtures exercising its public seam. Replace nomination
+   and passage semantics together, carrying barriers and directions through
+   publication, compaction, hints and final routes. Preserve relevance policy.
+   This is one production implementation, not a parallel reference engine or
+   an old-rule fallback. Explain changed fixture expectations explicitly.
+2. Consume the existing regional entrance rows for membership and profile-aware
+   deterministic ownership. Use one selector for map/counts/Full/explicit starts;
+   migrate jobs/artifact compatibility and remove proximity admission. Keep
+   route support separate from start filtering and preserve saved results.
+
+Each wave deletes its superseded rules and runs the runbook's full verification.
+Audit rebuilt real data when the prepared contract changes. Evaluate accuracy
+against independently labeled windows/holdouts before calling the replacement
+more accurate; synthetic cases establish semantics rather than regional recall.
+Stop promotion for newly admitted known-forbidden passage, an invented connector,
+or an unexplained loss of a resolved in-policy entrance. Do not add another data
+source or subsystem merely to hide such a failure. No regional build is started
+by this review.
 
 Review evidence: the independent audits reran current offline suites totaling
 79 topology/normalization/filter cases and 62 geography/reader/search cases
@@ -347,6 +422,11 @@ Review evidence: the independent audits reran current offline suites totaling
 baseline behavior, not improved accuracy. The source review verified primary
 documentation and maintained implementations. Documentation diff/link checks
 complete this review; a labeled cross-region comparison remains future work.
+The second review reran 101/101 entry/source/compaction baseline cases and 63/63
+selection/reader/solver/job cases (with overlapping coverage between reviews),
+and reproduced two direction interpretation defects with direct offline probes.
+These do not implement or test the proposed replacement. The review changes
+documentation only and does not alter source/metric caches, packs or installations.
 
 ## Primary sources and assumptions
 
