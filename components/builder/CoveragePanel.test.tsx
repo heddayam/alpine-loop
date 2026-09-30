@@ -309,3 +309,38 @@ it("selects searchable named regions and reflects map selection without showing 
   fireEvent.change(screen.getByRole("searchbox", {name:"Find a region"}), {target:{value:"missing"}});
   expect(screen.getByText("No matching regions.")).toBeVisible();
 });
+
+it("discloses complete unavailable-start reasons independently of region selection", async () => {
+  const next = namedCatalog();
+  const reasons = [
+    "Carbon River entrance is unavailable as a route start in this data version: its mapped approach does not reach the mountain trail network within 25 miles.",
+    "Sunrise entrance is unavailable as a route start in this data version: the reviewed starting location has no mapped hiking connection.",
+  ];
+  const technical = "Local topology uses buffered, node-based source extracts.";
+  next.release.limitations = [...reasons, technical, "US-only coverage; the international border is a hard limit."];
+  vi.stubGlobal("fetch", vi.fn(async () => response(next)));
+  const view = render(<CoveragePanel {...props} selected={[]} onSelectionChange={vi.fn()} />);
+  const summary = await screen.findByText("Unavailable starting locations");
+  const disclosure = screen.getByRole("group", { name: "Unavailable starting locations" });
+  expect(disclosure).not.toHaveAttribute("open");
+  for (const reason of reasons) expect(screen.getByText(reason)).not.toBeVisible();
+  expect(screen.queryByText(technical)).not.toBeInTheDocument();
+  expect(screen.queryByText("US trails only. Routes stop at the international border.")).not.toBeInTheDocument();
+  fireEvent.click(summary);
+  expect(disclosure).toHaveAttribute("open");
+  for (const reason of reasons) expect(screen.getByText(reason)).toBeVisible();
+  expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  view.rerender(<CoveragePanel {...props} selected={["next"]} onSelectionChange={vi.fn()} />);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Find a region" }), { target: { value: "Henry" } });
+  for (const reason of reasons) expect(screen.getByText(reason)).toBeVisible();
+  expect(screen.getByText("US trails only. Routes stop at the international border.")).toBeVisible();
+  expect(screen.queryByText(technical)).not.toBeInTheDocument();
+});
+
+it.each([{ limitations: [] }, { limitations: ["Source data can omit trails.", "US-only coverage; the international border is a hard limit."] }])("omits unavailable-start details when the release has no such notes: %j", async ({ limitations }) => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...catalog, release: { ...catalog.release!, limitations } })));
+  render(<CoveragePanel {...props} />);
+  await screen.findByText("1 available");
+  expect(screen.queryByText("Unavailable starting locations")).not.toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Unavailable starting locations" })).not.toBeInTheDocument();
+});

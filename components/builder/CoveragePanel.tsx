@@ -32,6 +32,7 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
     previous.current = next;
   }, [catalog, onChanged]);
   const sections = release?.sections ?? [];
+  const unavailableStarts = [...new Set(release?.limitations.filter(value => value.includes("is unavailable as a route start in this data version:")) ?? [])];
   const unit = release?.partitioning === "local-areas" ? "area" : release?.partitioning === "connected-networks" ? "network" : "section";
   const namedList = Boolean(onSelectionChange || sections.some(section => section.name));
   const regionName = (section: typeof sections[number]) => section.name ?? `Area ${sections.indexOf(section) + 1}`;
@@ -91,6 +92,10 @@ export function CoveragePanel({ open, selected, onSelectionChange, onChanged, on
             </label>)}</div>
             {!visibleSections.length ? <span>No matching regions.</span> : null}
           </section> : null}
+          {unavailableStarts.length ? <details className="coverage-selection" aria-labelledby="coverage-unavailable-starts-title">
+            <summary id="coverage-unavailable-starts-title">Unavailable starting locations</summary>
+            <ul>{unavailableStarts.map(reason => <li key={reason}>{reason}</li>)}</ul>
+          </details> : null}
           {!selectedIds.size && !namedList ? <span className="coverage-selection">Select {unit === "area" ? "an" : "a"} {unit} on the map.</span> : null}
           {selectedIds.size || updating ? <div className="coverage-selection" role="status">{selectedIds.size ? `${selectedIds.size} ${unit}${selectedIds.size === 1 ? "" : "s"} selected` : "Update downloaded trails"} · {hasChanges ? <>up to {bytes(downloadBytes)} download · {bytes(activeBytes)} active trail data after download</> : <>{bytes(activeBytes)} selected trail data</>}</div> : null}
           {adding && updating ? <span className="coverage-selection">Includes updates to {updateIds.size} downloaded {unit}{updateIds.size === 1 ? "" : "s"}.</span> : null}
