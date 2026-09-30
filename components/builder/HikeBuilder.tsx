@@ -195,7 +195,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
         if (!stopped && !controller.signal.aborted && operation.current === controller) {
           setWorkspace(current => current.status === "done" && current.results.job.id === liveJobId
             ? { status: "error", previous: current.results, jobId: liveJobId,
-              message: error instanceof Error ? error.message : "Live results could not be refreshed. Reopen the job to retry." } : current);
+              message: error instanceof Error ? error.message : "Live results could not be refreshed." } : current);
         }
       } finally {
         if (operation.current === controller) operation.current = null;
@@ -472,7 +472,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan" || coverageOpen}>
-          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults ? { hasNext: !ACTIVE_JOB_STATUSES.has(routeResults.job.status) && Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults && !ACTIVE_JOB_STATUSES.has(routeResults.job.status) ? { hasNext: Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
         </div>
         </section>
 

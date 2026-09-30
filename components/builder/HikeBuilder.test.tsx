@@ -393,6 +393,168 @@ describe("geographic workspace", () => {
 
 });
 
+describe("live saved results", () => {
+  function page(status: RouteJobV2["status"], results = savedPage.results) {
+    return { ...savedPage, nextCursor: "next", results, job: { ...job, status,
+      partial: status !== "completed", progress: { ...job.progress,
+        processedAccessPointCount: status === "completed" ? 2 : results.length ? 1 : 0,
+        exactRouteCount: results.filter(result => result.matchType === "exact").length,
+        nearMissRouteCount: results.filter(result => result.matchType === "near-miss").length,
+      } } };
+  }
+  async function advance(milliseconds: number) {
+    await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds); });
+  }
+  async function mount() {
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await act(async () => {});
+  }
+  function useClock() { vi.useFakeTimers(); vi.restoreAllMocks(); }
+
+  it("refreshes an empty queued search through close and exact matches, then enables terminal paging", async () => {
+    useClock();
+    const closeRoute = { ...generatedRoute, id: "close-route", violations: [
+      { constraint: "distance", value: 0.5, min: 1, max: 4, delta: 0.5, normalizedDelta: 0.125 },
+    ] };
+    const snapshots = [page("queued", []), page("running", [{ matchType: "near-miss", accessPointId: "trailhead-a", route: closeRoute }]), page("running"), page("completed")];
+    const reads: string[] = [];
+    mockBaseFetch(url => {
+      if (!url.includes("/results?")) return;
+      reads.push(url);
+      return json(url.includes("cursor=") ? page("completed", [{ ...savedPage.results[0]!, route: { ...generatedRoute, id: "second-page" } }]) : snapshots.shift());
+    });
+    await mount();
+    expect(screen.getByText("Full search queued.")).toBeVisible();
+    expect(screen.getByText("No routes saved yet.")).toBeVisible();
+    expect(screen.queryByText("No routes found.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Batch result pages" })).not.toBeInTheDocument();
+    await advance(2_000);
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("close-route");
+    expect(screen.getByRole("heading", { name: "Close matches" })).toBeVisible();
+    expect(screen.getByText("1 of 2 trailheads attempted.")).toBeVisible();
+    await advance(2_000);
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.getByLabelText("Map routes")).not.toHaveTextContent("close-route");
+    expect(screen.queryByRole("heading", { name: "Close matches" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Batch result pages" })).not.toBeInTheDocument();
+    await advance(2_000);
+    expect(screen.getByText("Full search completed.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Next 50 routes" })).toBeEnabled();
+    await advance(8_000);
+    expect(reads).toHaveLength(4);
+    expect(reads.every(url => !url.includes("cursor="))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Next 50 routes" }));
+    await act(async () => {});
+    expect(reads.at(-1)).toContain("cursor=next");
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("second-page");
+  });
+
+  it("serializes slow first-page refreshes and waits two seconds after each response", async () => {
+    useClock();
+    const pending = deferred<Response>();
+    let reads = 0;
+    mockBaseFetch(url => url.includes("/results?") ? ++reads === 2 ? pending.promise : json(page(reads < 3 ? "running" : "completed")) : undefined);
+    await mount();
+    await advance(2_000);
+    expect(reads).toBe(2);
+    await advance(20_000);
+    expect(reads).toBe(2);
+    await act(async () => pending.resolve(json(page("running"))));
+    await advance(1_999);
+    expect(reads).toBe(2);
+    await advance(1);
+    expect(reads).toBe(3);
+    expect(screen.getByText("Full search completed.")).toBeVisible();
+  });
+
+  it("freezes a route being read and resumes first-page updates after returning to results", async () => {
+    useClock();
+    const pending = deferred<Response>();
+    const replacement = page("completed", [{ ...savedPage.results[0]!, route: { ...generatedRoute, id: "replacement-route" } }]);
+    let reads = 0;
+    let refreshSignal: AbortSignal | undefined;
+    mockBaseFetch((url, init) => {
+      if (!url.includes("/results?")) return;
+      if (++reads === 2) { refreshSignal = init?.signal as AbortSignal; return pending.promise; }
+      return json(reads === 1 ? page("running") : replacement);
+    });
+    await mount();
+    await advance(2_000);
+    fireEvent.click(screen.getByRole("button", { name: "Open map route exact-route" }));
+    expect(refreshSignal?.aborted).toBe(true);
+    expect(screen.getByRole("complementary", { name: "Route details" })).toBeVisible();
+    await advance(10_000);
+    expect(reads).toBe(2);
+    await act(async () => pending.resolve(json(replacement)));
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.getByRole("complementary", { name: "Route details" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Back to results/ }));
+    await advance(2_000);
+    expect(reads).toBe(3);
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("replacement-route");
+    expect(screen.getByText("Full search completed.")).toBeVisible();
+  });
+
+  it.each(["clear", "edit", "other-job"] as const)("ignores a late refresh after %s changes the active view", async action => {
+    useClock();
+    const pending = deferred<Response>();
+    const other = { ...job, id: "3d594650-3436-4f8b-a0e8-38d13fc148cb", area: { ...savedArea, label: "Other area" } };
+    let reads = 0;
+    let refreshSignal: AbortSignal | undefined;
+    mockBaseFetch((url, init) => {
+      if (url === "/api/route-jobs") return json({ version: 2, jobs: [page("running").job, other] });
+      if (url.includes(other.id)) return json({ ...savedPage, job: other, results: [{ ...savedPage.results[0]!, route: { ...generatedRoute, id: "other-route" } }] });
+      if (!url.includes("/results?")) return;
+      if (++reads === 2) { refreshSignal = init?.signal as AbortSignal; return pending.promise; }
+      return json(page("running"));
+    });
+    await mount();
+    await advance(2_000);
+    if (action === "clear") fireEvent.click(screen.getByRole("button", { name: "Clear results" }));
+    if (action === "edit") {
+      fireEvent.click(screen.getByRole("button", { name: "Plan" }));
+      fireEvent.change(screen.getByLabelText("Distance minimum"), { target: { value: "2" } });
+    }
+    if (action === "other-job") {
+      fireEvent.click(screen.getByRole("button", { name: /Jobs \(/ }));
+      await act(async () => {});
+      fireEvent.click(screen.getByRole("button", { name: "View results for Other area" }));
+      await act(async () => {});
+    }
+    expect(refreshSignal?.aborted).toBe(true);
+    await act(async () => pending.resolve(json(page("completed", [{ ...savedPage.results[0]!, route: { ...generatedRoute, id: "stale-route" } }]))));
+    expect(screen.getByLabelText("Map routes")).not.toHaveTextContent("stale-route");
+    if (action === "clear") expect(screen.getByLabelText("Map routes")).toBeEmptyDOMElement();
+    if (action === "edit") expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    if (action === "other-job") expect(screen.getByLabelText("Map routes")).toHaveTextContent("other-route");
+  });
+
+  it("retains results when live refresh fails, stops polling, and recovers when the job is reopened", async () => {
+    useClock();
+    let reads = 0;
+    mockBaseFetch(url => {
+      if (url === "/api/route-jobs") return json({ version: 2, jobs: [page("running").job] });
+      if (!url.includes("/results?")) return;
+      return ++reads === 2 ? json({ error: { message: "The saved results are temporarily unavailable." } }, 503) : json(page(reads === 1 ? "running" : "completed"));
+    });
+    await mount();
+    await advance(2_000);
+    expect(screen.getByRole("alert")).toHaveTextContent("The saved results are temporarily unavailable.");
+    expect(screen.getByText("Live updates paused. Reopen this job from Jobs to retry.")).toBeVisible();
+    expect(screen.queryByText(/Results update as trailheads finish/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    await advance(8_000);
+    expect(reads).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: /Jobs \(/ }));
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "View results for Saved area" }));
+    await act(async () => {});
+    expect(reads).toBe(3);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Full search completed.")).toBeVisible();
+  });
+});
+
 
 it("serializes slow job refreshes and continues polling until a deletion disappears", async () => {
   vi.useFakeTimers();

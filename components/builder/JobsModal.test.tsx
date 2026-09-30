@@ -148,4 +148,20 @@ describe("JobsModal", () => {
     view.rerender(<JobsModal {...baseProps} jobs={[completed]} openingJobId={job.id} />);
     expect(screen.getByRole("button", { name: /View results for/ })).toHaveTextContent("Opening…");
   });
+
+  it.each(["queued", "resolving-drive-time", "running", "failed"] as const)("allows viewing %s jobs before they have saved routes", status => {
+    const onOpenResults = vi.fn();
+    render(<JobsModal {...baseProps} onOpenResults={onOpenResults} jobs={[{ ...job, status,
+      progress: { ...job.progress, exactRouteCount: 0, nearMissRouteCount: 0 },
+    }]} />);
+    const open = screen.getByRole("button", { name: "View results for Santa Cruz Mountains" });
+    expect(open).toBeEnabled();
+    fireEvent.click(open);
+    expect(onOpenResults).toHaveBeenCalledWith(job.id);
+  });
+
+  it("does not offer results while a job is being deleted", () => {
+    render(<JobsModal {...baseProps} jobs={[{ ...job, status: "deleting" }]} />);
+    expect(screen.queryByRole("button", { name: /View results for/ })).not.toBeInTheDocument();
+  });
 });
