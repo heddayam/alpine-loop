@@ -23,8 +23,9 @@ do not resume their gates or carry their architecture into the replacement.
 - Longer searches are acceptable. Prioritize thorough exploration, useful route
   choices, clear progress and responsive cancellation over sub-10-second results.
   Do not add machinery or truncate work solely to satisfy earlier speed targets.
-- Local launch acquires usable prepared data automatically. Hosted use starts
-  from a URL. Users never prepare OSM/elevation data or configure catalogs.
+- Local launch acquires usable prepared data automatically. Users never prepare
+  OSM/elevation data or configure catalogs. Hosted delivery is deferred by the
+  user; keep a straightforward future hosting path without building it now.
 
 ## Execution
 
@@ -40,6 +41,8 @@ do not resume their gates or carry their architecture into the replacement.
 - Keep tests focused on independent route correctness and real whole-app flows.
   Automated tests are offline and use committed fixtures; real-data performance
   measurements are separate. No test-count target or repeated full-suite ritual.
+- Prioritize robust code and engineering over patchwork tests. Add a test only
+  when it independently protects a meaningful correctness or failure boundary.
 - Keep generated datasets, downloads, caches, databases, and secrets out of Git.
   Never open a live container's WAL database through the host filesystem.
 - No stack receives protected status. Add a dependency or subsystem only when
