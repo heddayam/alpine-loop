@@ -7,6 +7,7 @@ import type {
 } from "@/lib/contracts";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
+import { ACTIVE_JOB_STATUSES } from "../builder/useJobs";
 import { routeStart } from "./route-start";
 import { entranceRouteGroups, type EntranceRouteGroup } from "./entrance-groups";
 import { routeGpx, routeGpxFilename } from "@/lib/export/route-gpx";
@@ -582,7 +583,7 @@ export function ResultsPanel({
       <div className="results-state" role="status">
         <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
         <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
-        {job.partial ? <span> Partial results retained.</span> : null}
+        {ACTIVE_JOB_STATUSES.has(job.status) ? <span> Results update as trailheads finish. Paging is available when the search stops.</span> : job.partial ? <span> Partial results retained.</span> : null}
         {job.stale ? <span> Generated with older map data.</span> : null}
         {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
         {job.error ? <span> {job.error}</span> : null}
@@ -592,8 +593,8 @@ export function ResultsPanel({
 
       {total === 0 ? (
         <div className="no-results" role="status">
-          <strong>{startKey ? "No routes at this trailhead on this page." : "No routes found."}</strong>
-          <span>Widen the distance range, choose a broader area, or include uncertain access in Settings.</span>
+          <strong>{startKey ? "No routes at this trailhead on this page." : ACTIVE_JOB_STATUSES.has(job.status) ? "No routes saved yet." : "No routes found."}</strong>
+          <span>{ACTIVE_JOB_STATUSES.has(job.status) ? "The search is still running; suitable routes will appear here as they are saved." : "Widen the distance range, choose a broader area, or include uncertain access in Settings."}</span>
         </div>
       ) : (
         <div className="route-lists" onKeyDown={handleKeyboardNavigation} aria-label="Generated routes">

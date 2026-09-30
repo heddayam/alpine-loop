@@ -97,7 +97,7 @@ export function JobsModal({
             const pending = storedPending === "cancelling" && !ACTIVE_STATUSES.has(job.status)
               ? undefined
               : storedPending;
-            const canOpen = job.status === "completed" || (job.status === "cancelled" && (progress.exactRouteCount + progress.nearMissRouteCount) > 0);
+            const canOpen = job.status !== "deleting";
             const canCancel = ACTIVE_STATUSES.has(job.status) && pending !== "cancelling";
             const determinate = progress.eligibleAccessPointCount > 0 || ["completed", "cancelled", "failed"].includes(job.status);
             const percent = progress.eligibleAccessPointCount > 0 ? Math.min(100, Math.round(progress.processedAccessPointCount / progress.eligibleAccessPointCount * 100)) : job.status === "completed" ? 100 : 0;

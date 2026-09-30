@@ -52,6 +52,14 @@ async function requestJson(url: string, init?: RequestInit) {
   return payload;
 }
 
+async function readJobPage(id: string, signal: AbortSignal, cursor?: string): Promise<RouteResults> {
+  const query = new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) });
+  const page = routeJobResultsPageV2Schema.parse(await requestJson(`/api/route-jobs/${encodeURIComponent(id)}/results?${query}`, { signal, cache: "no-store" }));
+  return { job: page.job, nextCursor: page.nextCursor,
+    exact: page.results.filter((result) => result.matchType === "exact").map(({ route }) => route),
+    nearMisses: page.results.filter((result) => result.matchType === "near-miss").map(({ route }) => route) };
+}
+
 export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const router = useRouter();
   const [catalog, setCatalog] = useState<SearchCatalog>();
@@ -164,13 +172,39 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
       if (!controller.signal.aborted && operation.current === controller) setWorkspace({ status: "error", jobId, previous, message: error instanceof Error ? error.message : "Search results could not be loaded." });
     } finally { if (operation.current === controller) operation.current = null; }
   }, [router]);
-  const loadJob = useCallback((id: string, cursor?: string, previous?: RouteResults) => runView(async (signal) => {
-    const query = new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) });
-    const page = routeJobResultsPageV2Schema.parse(await requestJson(`/api/route-jobs/${encodeURIComponent(id)}/results?${query}`, { signal, cache: "no-store" }));
-    return { job: page.job, nextCursor: page.nextCursor,
-      exact: page.results.filter((result) => result.matchType === "exact").map(({ route }) => route),
-      nearMisses: page.results.filter((result) => result.matchType === "near-miss").map(({ route }) => route) };
-  }, id, previous), [runView]);
+  const loadJob = useCallback((id: string, cursor?: string, previous?: RouteResults) =>
+    runView(signal => readJobPage(id, signal, cursor), id, previous), [runView]);
+  const liveJobId = workspace.status === "done" && ACTIVE_JOB_STATUSES.has(workspace.results.job.status)
+    ? workspace.results.job.id : undefined;
+  // Active results are first-page snapshots: newly discovered exact routes can
+  // sort ahead of close matches. Freeze the collection while reading a route.
+  useEffect(() => {
+    if (!liveJobId || panel === "route") return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let controller: AbortController | undefined;
+    const refresh = async () => {
+      controller = new AbortController();
+      operation.current = controller;
+      try {
+        const results = await readJobPage(liveJobId, controller.signal);
+        if (stopped || controller.signal.aborted || operation.current !== controller) return;
+        setWorkspace(current => current.status === "done" && current.results.job.id === liveJobId
+          ? { status: "done", results } : current);
+      } catch (error) {
+        if (!stopped && !controller.signal.aborted && operation.current === controller) {
+          setWorkspace(current => current.status === "done" && current.results.job.id === liveJobId
+            ? { status: "error", previous: current.results, jobId: liveJobId,
+              message: error instanceof Error ? error.message : "Live results could not be refreshed. Reopen the job to retry." } : current);
+        }
+      } finally {
+        if (operation.current === controller) operation.current = null;
+        if (!stopped) timer = setTimeout(() => void refresh(), 2_000);
+      }
+    };
+    timer = setTimeout(() => void refresh(), 2_000);
+    return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
+  }, [liveJobId, panel]);
   useEffect(() => {
     if (!restoreJobId) return;
     void loadJob(restoreJobId);
@@ -438,7 +472,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan" || coverageOpen}>
-          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults ? { hasNext: Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults ? { hasNext: !ACTIVE_JOB_STATUSES.has(routeResults.job.status) && Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
         </div>
         </section>
 
