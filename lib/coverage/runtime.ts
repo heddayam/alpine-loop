@@ -9,6 +9,7 @@ import { exportPreparedRelease, preparedReleaseId, publishPreparedCatalog } from
 import { compactPreparedGraph } from "@/lib/data/compact-prepared-graph";
 import { rebuildPreparedSpatialIndexes } from "@/lib/data/prepared-spatial-index";
 import { writeProgressiveTopology } from "@/lib/data/progressive/topology";
+import { ENTRANCE_FAMILY_ALGORITHM_VERSION } from "@/lib/data/progressive/entrance-families";
 import { openProgressiveGraphStore } from "@/lib/data/progressive/store";
 import { prepareSparsePortalCandidates } from "@/lib/data/progressive/portals";
 import { BUILDING_RADIUS_M, MAXIMUM_NEARBY_BUILDINGS } from "@/lib/data/wilderness";
@@ -37,7 +38,7 @@ import type { NormalizedWay } from "@/lib/data/types";
 import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometry";
 import type { CoverageRegion, CoverageRunnerContext, CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
-const BUILD_VERSION = `named-mountain-regions-v3:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}`;
+const BUILD_VERSION = `named-mountain-regions-v3:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}:${ENTRANCE_FAMILY_ALGORITHM_VERSION}`;
 const HIKING_HIGHWAYS=new Set(["path","track","bridleway","steps","footway","pedestrian"].map(kind=>`osm-highway:${kind}`));
 type ReferenceAudit = Awaited<ReturnType<typeof auditOfficialTrailReferences>>;
 type Receipt = { release: DataRelease; approaches: [number,number][]; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"] };

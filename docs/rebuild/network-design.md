@@ -59,6 +59,41 @@ test, disconnected trail snap or borrowing names/confidence from arbitrary signs
 within 250 m. Unmarked street-to-trail entrances remain candidates. A marked hiking
 approach may connect along at most 250 m of actual hiking paths to a track entrance.
 
+After corridor compaction, the existing known/inclusive topology passes identify
+conservative entrance families. Each entrance must be a physical leaf with a
+nonbranching, bidirectionally walkable approach of at most 250 m to the same
+junction. Every approach link must be a bridge, and the grouped arms must leave
+exactly one onward physical link at that junction. Members share access state
+and lie within 100 m of an actual deterministic representative; partial spatial
+subsets and chains cannot create a family. Cycles, parallel trails, one-way links,
+additional exits and ambiguous topology remain distinct.
+
+[Bridge analysis](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.bridges.bridges.html)
+proves that these leaf arms contain no physical cycle. The single remaining
+connection means every accepted loop is downstream of their shared junction.
+This is a sufficient condition under the simple-loop/lollipop model, not a claim
+that every nearby entrance can be grouped. Incidence checks include the full
+profile graph, even links excluded by SCC preprocessing, so one-way exits cannot
+disappear from the proof. Reuse the bridge pass and its disk-backed scratch data;
+no additional global DFS, source download or elevation sampling is required.
+
+Families annotate starts without deleting them. Every original entrance retains
+its coordinates, approach geometry, metrics, access evidence, route buffer,
+geographic filtering and independent search. Optional schema-7
+`access_entrance_families` records carry the profile, family, shared junction and
+approach distance. Older artifacts and saved routes remain readable. Compiler
+identity includes the family policy, so applying it requires rebuilding and
+installing the desired areas.
+
+Newly generated routes carry the exact identity of their single physical cycle,
+excluding the retraced stem and traversal direction. Result rows on the loaded
+page group only when both the entrance family and physical cycle match, with
+original starting-point variants available to expand. Exact and close matches
+remain separate, every route retains its own metrics and geometry, and result
+counts and pagination still count the original routes. Map families anchor at a
+real member entrance, while viewport and unknown-access filtering retain their
+original entrance semantics.
+
 Public/unknown candidates with 0–9 buildings within 500 metres qualify through
 an undirected hiking path to a mapped hiking link touching this area's selected
 Standard core within 25 miles. Paths, walking-eligible tracks, bridleways, steps,

@@ -150,6 +150,19 @@ describe("geographic search with prepared installation storage and compute", () 
     expect(overview.trailNetwork.features).toEqual([]);
   });
 
+  it("keeps every map entrance and exposes separately namespaced access-profile families",async()=>{
+    const original=PreparedGraphRepository.prototype.getAccessPointCandidates;
+    const candidates=vi.spyOn(PreparedGraphRepository.prototype,"getAccessPointCandidates").mockImplementation(async function(this:PreparedGraphRepository,...args){
+      return (await original.apply(this,args)).map(point=>({...point,knownEntranceFamilyId:"known-family",inclusiveEntranceFamilyId:"inclusive-family"}));
+    });
+    try {
+      const map=await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}&trails=0`));
+      expect(map.accessPoints.length).toBeGreaterThan(0);
+      expect(new Set(map.accessPoints.map(point=>point.id)).size).toBe(map.accessPoints.length);
+      expect(map.accessPoints.every(point=>point.knownEntranceFamilyId==="fixture-installation::known-family"&&point.inclusiveEntranceFamilyId==="fixture-installation::inclusive-family")).toBe(true);
+    } finally {candidates.mockRestore();}
+  });
+
   it("keeps local region IDs stable and excludes uninstalled overlapping neighbors", async () => {
     const oldRelease = JSON.parse(await readFile(join(root, "releases", "fixture-release.json"), "utf8"));
     const oldInstallation = JSON.parse(await readFile(join(root, "installations", "fixture-installation.json"), "utf8"));

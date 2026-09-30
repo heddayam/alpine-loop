@@ -72,6 +72,7 @@ async function pieces() {
       access:db.prepare("SELECT * FROM access_points ORDER BY id").all(),
       metadata:db.prepare("SELECT * FROM metadata ORDER BY key").all(),
       sources:db.prepare("SELECT * FROM sources ORDER BY id").all(),
+      entranceFamilies:db.prepare("SELECT * FROM access_entrance_families ORDER BY profile,access_point_id").all(),
     });expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(db.prepare("PRAGMA freelist_count").get()!.freelist_count).toBe(0); }
     finally {db.close();}
@@ -95,6 +96,34 @@ it("prepares distance-relevant trails and advertises the named start footprint",
   expect(piece!.edges.some(edge=>String(edge.id).startsWith("osm-way-202:"))).toBe(false);
   expect(piece!.access.length).toBeGreaterThan(0);
   expect(filteredSourceLines).toHaveBeenCalledOnce();
+  await expectNoScratch();
+});
+it("publishes short alternate entrance families while retaining every original start and approach",async()=>{
+  fixtureLines=fixtureLines.map(line=>line.startsWith("w101 ")?line.replace("Nn1,n2,n3,n1","Nn8,n2,n3,n8"):line);
+  fixtureLines.splice(fixtureLines.findIndex(line=>line.startsWith("w")),0,
+    "n6 Thighway=trailhead,name=Alternate%20%entrance x-121.2598 y47.5102",
+    "n7 T x-121.2605 y47.5105","n8 T x-121.263 y47.515");
+  fixtureLines.push(
+    "w103 Thighway=residential,access=yes Nn4,n6",
+    "w104 Thighway=path,foot=yes Nn1,n7,n8","w105 Thighway=path,foot=yes Nn6,n7");
+  await build();
+  const before=await release(),[piece]=await pieces();
+  expect(piece!.access.map(point=>point.node_id)).toEqual(["osm-node-1","osm-node-6"]);
+  expect(piece!.entranceFamilies).toHaveLength(4);
+  for(const profile of ["known","inclusive"]) {
+    const members=piece!.entranceFamilies.filter(member=>member.profile===profile);
+    expect(new Set(members.map(member=>member.family_id)).size).toBe(1);
+    expect(members.every(member=>member.junction_node_id==="osm-node-7")).toBe(true);
+    expect(members.map(member=>member.access_point_id)).toEqual(piece!.access.map(point=>point.id));
+    expect(members.every(member=>Number(member.approach_distance_m)>0&&Number(member.approach_distance_m)<250)).toBe(true);
+  }
+  expect(piece!.nodes.find(node=>node.id==="osm-node-1")).toMatchObject({lon:-121.26,lat:47.51});
+  expect(piece!.nodes.find(node=>node.id==="osm-node-6")).toMatchObject({lon:-121.2598,lat:47.5102});
+  expect(piece!.edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.2605&&point[1]===47.5105)).toBe(true);
+  vi.mocked(filteredSourceLines).mockClear();
+  await build();
+  expect(await release()).toEqual(before);
+  expect(filteredSourceLines).not.toHaveBeenCalled();
   await expectNoScratch();
 });
 const buildingsAt=(lon:number,lat:number,count:number)=>Array.from({length:count},(_,i)=>`n${9000+i} Tbuilding=yes x${lon+i*.00001} y${lat}`);

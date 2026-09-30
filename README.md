@@ -183,6 +183,10 @@ candidates, filters them by mountain-trail connectivity, then prunes trails that
 cannot participate within their distance budget
 **before elevation work**. It requests only DEM tiles owning retained samples. It reuses segment metrics across overlapping
 builds, then stores compact corridors with their full geometry and elevation profiles.
+The existing topology pass also identifies short alternate entrances that meet
+one onward trail without forming a cycle. It preserves every start and approach;
+results group matching physical loops with expandable entrance variants. Rebuild
+and install desired areas to add this metadata to older packs.
 Each named region remains an independent graph; overlapping regions never get stitched
 together. Pinned region inputs live in `data/coverage/regions/catalog.json`.
 Before publication, each reviewed approach must have a mapped starting point in

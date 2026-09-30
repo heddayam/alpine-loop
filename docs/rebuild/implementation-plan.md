@@ -41,6 +41,10 @@ broaden the area.
 - Full search attempts every eligible trailhead and retains up to ten exact
   routes per start, or one close match if no exact route was found there.
   One request creates one saved job regardless of internal data partitions.
+- Prepared entrance families annotate short alternate approaches to one onward
+  trail without removing any start. Results group identical physical loops from
+  these entrances and retain expandable starting-point variants with their own
+  geometry and constraint matches.
 - Exact and clearly labeled close matches remain separate. A completed Full
   search means every eligible start was attempted, not that every possible
   closed walk was enumerated. Computation limits remain visible.

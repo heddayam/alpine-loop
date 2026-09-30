@@ -86,7 +86,10 @@ own road/track and hiking contacts. No radius clustering, nearby-road guess or
 disconnected parking-to-trail snap remains. Unmarked street-to-trail entrances
 are included. Rank surviving starts by their prepared trail network, then
 discard every context-only road, sidewalk, and evidence row before publishing.
-The runtime graph remains trail-only.
+The runtime graph remains trail-only. Build-time [entrance families](network-design.md)
+annotate short, cycle-free alternatives with one shared onward trail. Their
+original starts, observations and approach geometry remain intact; proximity
+alone never merges entrances or grants access.
 
 OSM access tags remain the baseline. Preserve `public` and `unknown` separately
 for provenance, ranking, and review; both are traversable by default, while

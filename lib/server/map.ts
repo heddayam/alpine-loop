@@ -12,6 +12,8 @@ type MapPoint = {
   id: string; name: string; lon: number; lat: number; kind: string;
   accessState: AccessState;
   confidence: "high" | "medium" | "low";
+  knownEntranceFamilyId?: string;
+  inclusiveEntranceFamilyId?: string;
 };
 
 export async function mapData(request: Request) {
@@ -32,6 +34,8 @@ export async function mapData(request: Request) {
         accessPoints.push(...points.filter(accessPointCanStartClosedRoute).filter(accessPointIsWildEnough).map((point) => ({
           id: namespacedId(installation.id, point.id), name: point.name, lon: point.lon, lat: point.lat,
           kind: point.kind, accessState: point.accessState, confidence: point.confidence,
+          ...(point.knownEntranceFamilyId ? { knownEntranceFamilyId: namespacedId(installation.id, point.knownEntranceFamilyId) } : {}),
+          ...(point.inclusiveEntranceFamilyId ? { inclusiveEntranceFamilyId: namespacedId(installation.id, point.inclusiveEntranceFamilyId) } : {}),
         })));
         if (params.get("trails") !== "0") {
           for await (const edge of repository.iterateMapTrails({ bbox: bbox.data, includeUncertainAccess: true, signal: request.signal })) {
