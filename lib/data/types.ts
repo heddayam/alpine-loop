@@ -1,5 +1,6 @@
 import type { AccessState } from "@/lib/graph/types";
 import type { NamedArea, TopologyProfile } from "@/lib/contracts";
+import type { EntryWitness } from "@/lib/contracts/access-policy";
 
 export type Coordinate = readonly [lon: number, lat: number];
 
@@ -58,6 +59,8 @@ export type NormalizedAccessPoint = {
   confidence: "high" | "medium" | "low";
   parkingEvidence: string | null;
   sourceRefs: string[];
+  /** The actual source movement used to admit this entrance, before support expansion. */
+  entryWitness?: EntryWitness;
   knownConnectivity?: number;
   inclusiveConnectivity?: number;
   knownOutDegree?: number;

@@ -5,6 +5,8 @@ import type { SearchCompletion } from "./budget";
 export type ResolvedAccessFilterContext = {
   predicates: readonly AreaGeometry[];
   namedRegionPredicateIndex?: number;
+  /** Replaces the named polygon predicate with actual installed entrance membership. */
+  namedRegionIds?: readonly string[];
   coverage: AreaGeometry;
 };
 

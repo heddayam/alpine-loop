@@ -15,6 +15,8 @@ export type GraphQuery = {
 };
 
 export type AccessPointCandidate = GraphAccessPoint & {
+  /** Membership comes from regional entrance rows, independently of the owning graph. */
+  regionIds?: readonly string[];
   lon: number;
   lat: number;
   knownConnectivity: number;
@@ -25,7 +27,7 @@ export type AccessPointCandidate = GraphAccessPoint & {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
-  /** Whether the inclusive topology profile can reach a physical cycle. */
+  /** Whether the requested topology profile can reach a physical cycle. */
   canReachCycle?: boolean;
   knownMinimumStemMeters?: number | null;
   inclusiveMinimumStemMeters?: number | null;
