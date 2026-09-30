@@ -24,14 +24,36 @@ the evidence line.
 - [x] Refill workers on completion with ordered durable checkpoints and expose
   saved results while running. Refresh the active overview, freeze route details,
   and reject late results after context changes.
-- [ ] Finish and verify automatic improvement after every eligible start gets
+- [x] Finish and verify automatic improvement after every eligible start gets
   its initial attempt. The user explicitly selected continued improvement with
   Stop retaining results. Separate increasing work allowances from fixed graph
   and candidate-memory caps; persist typed completion and attempts, preserve
   better incumbent results, and expose unfinished/limited exploration honestly.
-- [ ] Pass the full verification and browser suites twice, verify live desktop
+  The focused solver/oracle suite passes 120 tests, backend lifecycle/worker
+  checks pass 72, and UI checks pass 77. Two offline Chromium runs each pass all
+  11 flows, including incremental publication and Stop from frozen route details.
+  Live in-app checks pass on a separate committed-fixture installation for desktop
+  zoom/pan anchoring and mobile internal scrolling/details.
+- [x] Separate completed exact exploration from bounded close-match fallback.
+  The user's Santa Cruz tail exposed close-only retries after exact exhaustion;
+  the user chose to keep a useful close match and finish those starts. Independent
+  fixtures fail before the correction and pass afterward; 16 focused engine,
+  oracle, and prepared-reader checks pass. Three affected real starts now finish
+  in 203,583–545,565 states instead of 204,800,000 each, retaining close matches.
+  All 36 exact-route samples in the sealed regional comparison are unchanged.
+  See the [tail diagnosis](route-search-optimization.md#close-match-continuation-correction).
+- [x] Pass the full verification and browser suites twice, verify live desktop
   and mobile behavior, and clean up task worktrees/branches. No regional schema
-  or published pack changes are included.
+  or published pack changes are included in the search work. Two complete
+  `npm run verify` runs pass: 110 files, 1,221 tests passed and one skipped, lint,
+  types, and production builds. Two `npm run test:browser` runs each pass 11
+  flows. These ran on the isolated search snapshot `b252440`, excluding concurrent
+  entrance-policy work in the shared checkout. A native-worker fixture exceeded
+  the former 15-second test timeout once; its focused rerun passes and the test
+  scheduling allowance is now 30 seconds. Algorithm timing remains separately
+  measured. Live desktop/mobile checks use disposable saved-job fixtures and
+  confirm exact-completion wording, bounded-close disclosure, map anchoring,
+  and usable route details. The user's stopped job retains 107 exact matches.
 
 ### Whole-application access-point review — 2026-09-30
 

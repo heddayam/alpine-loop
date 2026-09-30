@@ -217,3 +217,13 @@ starts at 50,000 states / 1.5 seconds and doubles unfinished starts' allowances
 after each committed pass. Replay overhead and total Full-search latency are
 not represented by the 805 ms figure. The earlier 21 → 22 loop result at
 50,000 states illustrates why the initial pass alone must not be called complete.
+
+After separating bounded close fallback from exact continuation, the isolated
+search snapshot `459dc17` was checked on the same sealed sample for three
+repetitions at 500,000 states with its solver clock disabled. It still retains
+32 distinct exact physical loops (19 Santa Cruz, 13 Snoqualmie), and every
+retained exact route object matches the final per-attempt check above. This is
+a coverage regression check, not a new timing comparison. The report is
+`/private/tmp/alpine-close-regional-coverage.json`. The separate
+[live-tail diagnosis](route-search-optimization.md#close-match-continuation-correction)
+uses the user's longer, gain-constrained Santa Cruz request.

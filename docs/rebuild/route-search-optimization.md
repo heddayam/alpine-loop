@@ -29,8 +29,8 @@ One path traversal searches exact numerical matches first and uses the same
 implementation for a close-match fallback. Exact prefixes can be pruned by
 nonnegative upper distance/gain/elevation bounds; lower distance/gain limits are
 checked only on completed routes. A small unsuccessful-search reserve allows
-the fallback. This reserve is temporary per-attempt policy, not the intended
-whole-job stopping rule.
+the fallback. The fallback has its own fixed work allowance and does not control
+whether exact-match exploration is complete.
 
 Physical biconnected decomposition is iterative and handles self-loops, parallel
 trails and reverse records. A simple cycle belongs to one block. Thus a prefix
@@ -84,7 +84,7 @@ evidence, not universal regional completeness or an optimal running-time claim.
 ## Continuing Full searches
 
 The first pass gives each eligible start 50,000 expanded states and 1.5 seconds.
-Only starts stopped by a work or time allowance qualify for another attempt.
+Only starts whose exact search stopped by a work or time allowance qualify for another attempt.
 After the entire pass has durably committed, their allowances double. An attempt
 replays deterministic search with a larger allowance; no DFS cursor is serialized.
 This keeps recovery small and makes the replay cost explicit. Doubling bounds
@@ -102,8 +102,8 @@ work diagnostic, not a coverage limit, and no ever-growing identity set is kept.
 Explicit safe-integer and timer ceilings prevent numerical overflow or an
 identical retry after budget saturation.
 
-Each outcome is typed: exhausted within the configured search space, retryable,
-or limited. A start attempted once stays counted as attempted during refinement.
+Each outcome is typed: exact exploration exhausted within the configured search
+space, retryable, or limited. A start attempted once stays counted as attempted during refinement.
 Progress separately reports exhausted, unfinished, and limited starts. A job can
 finish with partial exploration because of a fixed limit. Historical jobs remain
 historical; missing old completion metadata never causes automatic retries.
@@ -125,7 +125,46 @@ An independent decimal-length counterexample guards the case where contracted
 addition puts a valid route a fraction above its maximum distance.
 
 The ten-route retention and overlap policy still apply. Exhausting an eligible
-start's configured search does not claim all regional hikes are known: source
+start's configured exact search does not claim all regional hikes are known: source
 coverage, admission, installed graph boundaries, and retention remain relevant.
 See the [regional benchmark](route-search-benchmark.md) for pinned-input discovery,
 quality, timing, and memory measurements, including observed regressions.
+
+## Close-match continuation correction
+
+The user's Santa Cruz search exposed a phase-accounting defect: an exhausted
+exact search could remain retryable solely because the relaxed close search hit
+its work allowance. On pass 13, three starts each examined 204,800,000 states in
+116–132 seconds and retained zero exact routes. Their diagnostics had no exact
+phase limit and no authoritative rejections. The running Docker solver's source
+hash matched the inspected implementation. All eight then-unfinished starts had
+zero retained exact routes, although some still had genuine exact exploration
+remaining. These are observations of one live job, not a regional benchmark.
+
+An independent 6-by-6 fixture makes every directed edge's gain exceed the total
+requested gain cap, proving that no exact route is possible. The former solver
+nevertheless consumed each increasing allowance finding close alternatives and
+classified the start as retryable. The user explicitly chose to keep a useful
+close match and finish once exact exploration is exhausted.
+
+Exact truncation and close-match truncation are now recorded separately. The
+close fallback receives at most 50,000 additional states and 1.5 seconds,
+constrained by the remaining attempt allowance and existing memory caps. Its
+limits cannot cause another exact-search attempt; genuine exact limits still do.
+The same separation applies to a deadline reached only during close validation.
+Progress says "exact search complete" and discloses bounded close exploration.
+The best already-saved close match is preserved by normal incumbent retention.
+This does not eliminate combinatorial exact-search tails or implement resumable
+DFS; those remaining cases can still take substantial time.
+
+A read-only probe of sealed Santa Cruz artifact
+`880dab3b314d1be687684a5e2111b5cca9ad26a9802038efb8ed9c36e212e655`
+used the live criteria (7–9 miles, 2,000–2,600 feet gain, 10% repeated trail,
+3-mile maximum shared approach) and pass-13 allowance. Starts `300752719`,
+`331113416`, and `65389932` now exhaust exact exploration in 221,218, 203,583,
+and 545,565 total states, respectively, retaining useful close routes. The same
+three live attempts had each consumed 204,800,000 states. The probe's elapsed
+times were 170, 113, and 207 ms; those host timings are not a controlled speedup
+comparison against the concurrent Docker job. The installed files and live
+search were not modified. The private report is
+`/private/tmp/alpine-tail-probe-result.json`.

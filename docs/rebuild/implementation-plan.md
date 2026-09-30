@@ -50,8 +50,11 @@ broaden the area.
   geometry and constraint matches.
 - Exact and clearly labeled close matches remain separate. Full search gives
   every eligible start an initial attempt, then automatically improves unfinished
-  searches with increasing work allowances. Stop keeps saved results. Attempted
-  starts and exhausted exploration are separate progress measures; fixed memory
+  exact searches with increasing work allowances. Once exact exploration is
+  exhausted, retain a useful close match from bounded fallback exploration and
+  finish that start; close-only limits do not trigger deeper attempts.
+  Stop keeps saved results. Attempted starts and completed exact exploration
+  are separate progress measures; fixed memory
   limits remain visible. Completion does not claim every regional hike is known.
   See [route-search policy](route-search-optimization.md).
 
