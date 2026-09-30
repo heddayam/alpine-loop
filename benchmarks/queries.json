@@ -1,0 +1,704 @@
+{
+  "version": 1,
+  "frozenDate": "2026-09-30",
+  "freezeRevision": "9c5faab",
+  "purpose": "Inputs fixed before replacement-engine optimization. Expectations may gain independently checked witnesses without changing queries.",
+  "queries": [
+    {
+      "id": "north-bend-short",
+      "name": "North Bend: short low-gain loops",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          4828.032,
+          9656.064
+        ],
+        "gain": [
+          0.0,
+          457.20000000000005
+        ],
+        "repetition": 0.15,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 50,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "north-bend-pure",
+      "name": "North Bend: pure loops",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          8046.72,
+          16093.44
+        ],
+        "gain": [
+          152.4,
+          1066.8
+        ],
+        "repetition": 0,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 50,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "north-bend-known",
+      "name": "North Bend: known access only",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          6437.376,
+          16093.44
+        ],
+        "gain": [
+          0.0,
+          1066.8
+        ],
+        "repetition": 0.3,
+        "includeUnknown": false
+      },
+      "eligibleStartsAtFreeze": 14,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "middle-fork-day",
+      "name": "Middle Fork: full day",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.62,
+          47.5,
+          -121.43,
+          47.61
+        ],
+        "distance": [
+          12874.752,
+          24140.16
+        ],
+        "gain": [
+          304.8,
+          1524.0
+        ],
+        "repetition": 0.35,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 38,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "middle-fork-flat",
+      "name": "Middle Fork: restrained gain",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.62,
+          47.5,
+          -121.43,
+          47.61
+        ],
+        "distance": [
+          4828.032,
+          11265.408
+        ],
+        "gain": [
+          0.0,
+          152.4
+        ],
+        "repetition": 0.25,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 38,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "pass-lakes",
+      "name": "Snoqualmie Pass: lake-country circuit",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          9656.064,
+          22530.816
+        ],
+        "gain": [
+          457.20000000000005,
+          1524.0
+        ],
+        "repetition": 0.4,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 97,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "pass-long",
+      "name": "Snoqualmie Pass: 45\u201365 mile backpack",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          72420.48,
+          104607.36
+        ],
+        "gain": [
+          1524.0,
+          5486.400000000001
+        ],
+        "repetition": 0.4,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 97,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "pass-demanding",
+      "name": "Snoqualmie Pass: restrictive short/high-gain request",
+      "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+      "regionId": "snoqualmie-region",
+      "query": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          1609.344,
+          3218.688
+        ],
+        "gain": [
+          2438.4,
+          2743.2000000000003
+        ],
+        "repetition": 0.05,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 97,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "stevens-short",
+      "name": "Stevens Pass: short alpine outing",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          4828.032,
+          11265.408
+        ],
+        "gain": [
+          152.4,
+          762.0
+        ],
+        "repetition": 0.25,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 30,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "stevens-day",
+      "name": "Stevens Pass: alpine day loop",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          12874.752,
+          25749.504
+        ],
+        "gain": [
+          609.6,
+          1828.8000000000002
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 30,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "stevens-pure",
+      "name": "Stevens Pass: no repeated trail",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          9656.064,
+          24140.16
+        ],
+        "gain": [
+          304.8,
+          1524.0
+        ],
+        "repetition": 0,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 30,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "stevens-known",
+      "name": "Stevens Pass: known access only",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          6437.376,
+          19312.128
+        ],
+        "gain": [
+          0.0,
+          1371.6000000000001
+        ],
+        "repetition": 0.4,
+        "includeUnknown": false
+      },
+      "eligibleStartsAtFreeze": 10,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "wenatchee-easy",
+      "name": "Lake Wenatchee: easy circuit",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -120.94,
+          47.75,
+          -120.7,
+          47.91
+        ],
+        "distance": [
+          3218.688,
+          8046.72
+        ],
+        "gain": [
+          0.0,
+          243.84
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 83,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "wenatchee-day",
+      "name": "Lake Wenatchee: forest day hike",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -120.94,
+          47.75,
+          -120.7,
+          47.91
+        ],
+        "distance": [
+          9656.064,
+          19312.128
+        ],
+        "gain": [
+          304.8,
+          1219.2
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 83,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "stevens-long",
+      "name": "Stevens Pass: 50\u201375 mile backpack",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          80467.2,
+          120700.8
+        ],
+        "gain": [
+          2133.6,
+          6705.6
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 30,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "wenatchee-demanding",
+      "name": "Lake Wenatchee: restrictive short/high-gain request",
+      "datasetId": "pilot-central-cascades-c478e58db3ba",
+      "regionId": "central-cascades",
+      "query": {
+        "area": [
+          -120.94,
+          47.75,
+          -120.7,
+          47.91
+        ],
+        "distance": [
+          1609.344,
+          3218.688
+        ],
+        "gain": [
+          2438.4,
+          2743.2000000000003
+        ],
+        "repetition": 0,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 83,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "paradise-short",
+      "name": "Paradise: short scenic circuit",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          3218.688,
+          8046.72
+        ],
+        "gain": [
+          0.0,
+          548.64
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 52,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "paradise-day",
+      "name": "Paradise: longer day loop",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          9656.064,
+          19312.128
+        ],
+        "gain": [
+          457.20000000000005,
+          1371.6000000000001
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 52,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "paradise-known",
+      "name": "Paradise: known access only",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          4828.032,
+          12874.752
+        ],
+        "gain": [
+          0.0,
+          1066.8
+        ],
+        "repetition": 0.25,
+        "includeUnknown": false
+      },
+      "eligibleStartsAtFreeze": 20,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "sunrise-pure",
+      "name": "Sunrise: no repeated trail",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          6437.376,
+          16093.44
+        ],
+        "gain": [
+          304.8,
+          1219.2
+        ],
+        "repetition": 0,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 18,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "sunrise-day",
+      "name": "Sunrise: full day lollipop or loop",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          12874.752,
+          25749.504
+        ],
+        "gain": [
+          609.6,
+          1676.4
+        ],
+        "repetition": 0.35,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 18,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "carbon-easy",
+      "name": "Carbon River: easy forest circuit",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -122.04,
+          46.96,
+          -121.88,
+          47.04
+        ],
+        "distance": [
+          3218.688,
+          9656.064
+        ],
+        "gain": [
+          0.0,
+          365.76
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 12,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "sunrise-long",
+      "name": "Sunrise: 55\u201385 mile backpack",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          88513.92,
+          136794.24
+        ],
+        "gain": [
+          2438.4,
+          7620.0
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 18,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    },
+    {
+      "id": "paradise-demanding",
+      "name": "Paradise: restrictive short/high-gain request",
+      "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+      "regionId": "mount-rainier-area",
+      "query": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          1609.344,
+          3218.688
+        ],
+        "gain": [
+          2438.4,
+          2743.2000000000003
+        ],
+        "repetition": 0.05,
+        "includeUnknown": true
+      },
+      "eligibleStartsAtFreeze": 52,
+      "expected": {
+        "existence": "unknown",
+        "reason": "No solver output is used as an oracle. Restrictive requests are not assumed empty."
+      }
+    }
+  ]
+}
