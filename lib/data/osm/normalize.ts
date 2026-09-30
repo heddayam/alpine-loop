@@ -16,6 +16,13 @@ const PUBLIC_ACCESS = new Set(["yes", "designated", "permissive", "public"]);
 const PURPOSE_ACCESS = new Set(["customers", "destination", "delivery", "agricultural", "forestry"]);
 const INFORMATION_VALUES = new Set(["guidepost", "board", "map"]);
 const ACCESS_ORDER: readonly AccessState[] = ["public", "unknown", "private", "prohibited", "closed"];
+const MOTOR_MODES = ["motorcar", "motor_vehicle", "vehicle", "access"] as const;
+const PERMISSION_KEYS = ["foot", ...MOTOR_MODES];
+export const OSM_PERMISSION_CONTEXT_KEYS = [
+  ...PERMISSION_KEYS.flatMap(mode => [mode, `${mode}:conditional`, ...["forward", "backward"].flatMap(direction =>
+    [`${mode}:${direction}`, `${mode}:${direction}:conditional`])]),
+  ...["oneway", "oneway:foot", "oneway:motorcar", "oneway:motor_vehicle", "oneway:vehicle"].flatMap(key => [key, `${key}:conditional`]),
+];
 
 function hasTrailContext(values: Record<string, string>): boolean {
   return values.footway === "trail"
@@ -76,11 +83,12 @@ function footDirections(values: Record<string, string>): { forward: boolean; bac
 }
 
 function footState(values: Record<string, string>, direction?: "forward" | "backward"): AccessState {
-  const directional = direction ? `foot:${direction}` : undefined;
-  return accessState((directional ? values[directional] : undefined) ?? values.foot ?? values.access,
-    (directional ? values[`${directional}:conditional`] : undefined)
-      ?? values["foot:conditional"] ?? values["oneway:foot:conditional"]
-      ?? (values.foot === undefined && (!directional || values[directional] === undefined) ? values["access:conditional"] : undefined));
+  const keys = ["foot", "access"].flatMap(mode => direction ? [`${mode}:${direction}`, mode] : [mode]);
+  const index = keys.findIndex(key => values[key] !== undefined);
+  const conditional = keys.slice(0, index < 0 ? keys.length : index + 1)
+    .map(key => `${key}:conditional`).find(key => values[key] !== undefined);
+  return accessState(index < 0 ? undefined : values[keys[index]!],
+    conditional ? values[conditional] : values["oneway:foot:conditional"]);
 }
 
 function directionalStates(values: Record<string, string>): readonly [AccessState, AccessState] {
@@ -97,12 +105,31 @@ export function osmAccessState(values: Record<string, string>): AccessState {
 }
 
 export function osmMotorAccessState(values: Record<string, string>): AccessState {
-  const keys = ["motorcar", "motor_vehicle", "vehicle", "access"];
+  const keys = MOTOR_MODES;
   const index = keys.findIndex((key) => values[key] !== undefined);
   const key = keys[index];
   const conditional = keys.slice(0, index < 0 ? keys.length : index + 1)
     .map((key) => `${key}:conditional`).find((key) => values[key] !== undefined);
   return accessState(key ? values[key] : undefined, conditional ? values[conditional] : undefined);
+}
+
+/** Source direction and mode specificity are resolved before node-order normalization. */
+function motorDirectionState(values: Record<string, string>, direction: "forward" | "backward", includeOneway = true): AccessState {
+  const keys = MOTOR_MODES.flatMap(mode => [`${mode}:${direction}`, mode]);
+  const baseIndex = keys.findIndex(key => values[key] !== undefined);
+  const conditionalKey = keys.slice(0, baseIndex < 0 ? keys.length : baseIndex + 1)
+    .map(key => `${key}:conditional`).find(key => values[key] !== undefined);
+  let state = accessState(baseIndex < 0 ? undefined : values[keys[baseIndex]!], conditionalKey ? values[conditionalKey] : undefined);
+  if (!includeOneway) return state;
+  const onewayKeys = ["oneway:motorcar", "oneway:motor_vehicle", "oneway:vehicle", "oneway"];
+  const onewayIndex = onewayKeys.findIndex(key => values[key] !== undefined);
+  const oneway = onewayIndex < 0 ? undefined : values[onewayKeys[onewayIndex]!];
+  if ((direction === "forward" && oneway === "-1") || (direction === "backward" && ["yes", "1"].includes(oneway ?? "")))
+    return ACCESS_ORDER[Math.max(ACCESS_ORDER.indexOf(state), ACCESS_ORDER.indexOf("prohibited"))]!;
+  const conditional = onewayKeys.slice(0, onewayIndex < 0 ? onewayKeys.length : onewayIndex + 1)
+    .some(key => values[`${key}:conditional`] !== undefined);
+  if (state === "public" && (conditional || ["reversible", "alternating"].includes(oneway ?? ""))) state = "unknown";
+  return state;
 }
 
 export function osmFootDirection(values: Record<string, string>): "forward" | "reverse" | "both" {
@@ -112,12 +139,10 @@ export function osmFootDirection(values: Record<string, string>): "forward" | "r
 }
 
 function permissionFlags(values: Record<string, string>, includeUnknownMotor = true): string[] {
-  const motorFact = ["access", "motorcar", "motor_vehicle", "vehicle", "access:conditional", "motorcar:conditional", "motor_vehicle:conditional", "vehicle:conditional"]
+  const motorFact = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key !== "foot" && !key.startsWith("foot:") && !key.startsWith("oneway"))
     .some((key) => values[key] !== undefined);
   const flags = includeUnknownMotor || motorFact ? [`motor-access:${osmMotorAccessState(values)}`] : [];
-  for (const key of ["access", "foot", "motorcar", "motor_vehicle", "vehicle", "foot:forward", "foot:backward", "oneway", "oneway:foot"])
-    if (values[key] !== undefined) flags.push(`osm-${key}:${values[key]}`);
-  for (const key of ["access:conditional", "foot:conditional", "foot:forward:conditional", "foot:backward:conditional", "motorcar:conditional", "motor_vehicle:conditional", "vehicle:conditional", "oneway:foot:conditional"])
+  for (const key of OSM_PERMISSION_CONTEXT_KEYS)
     if (values[key] !== undefined) flags.push(`osm-${key}:${values[key]}`);
   return flags;
 }
@@ -128,28 +153,33 @@ export function osmNodeFlags(values: Record<string, string>): string[] {
   const trailhead = values.highway === "trailhead" || values.information === "trailhead";
   const object = INFORMATION_VALUES.has(values.information ?? "") || values.tourism === "information"
     || values.amenity === "parking" || Boolean(values.building && values.building !== "no");
-  const footRule = ["foot", "access", "foot:conditional", "access:conditional", "foot:forward", "foot:backward", "foot:forward:conditional", "foot:backward:conditional", "oneway:foot:conditional"]
+  const footRule = OSM_PERMISSION_CONTEXT_KEYS.filter(key => key === "access" || key.startsWith("access:") || key === "foot" || key.startsWith("foot:") || key === "oneway:foot:conditional")
     .some((key) => values[key] !== undefined);
   // Node directional tags have no incident-way orientation. Retain a known
   // restriction at the crossing rather than guessing which turns it controls.
   const nodeAccess = ACCESS_ORDER[Math.max(...[footState(values), footState(values, "forward"), footState(values, "backward")]
     .map(state => ACCESS_ORDER.indexOf(state)))]!;
+  const nodeMotor = ACCESS_ORDER[Math.max(...[osmMotorAccessState(values), motorDirectionState(values, "forward", false), motorDirectionState(values, "backward", false)]
+    .map(state => ACCESS_ORDER.indexOf(state)))]!;
+  const permissions = permissionFlags(values, false);
+  const motorRule = permissions.some(flag => flag.startsWith("motor-access:"));
   return [
     ...(barrier ? [`barrier:${values.barrier}`] : []),
     ...(footRule && (barrier || trailhead || !object) ? [`foot-access:${nodeAccess}`] : []),
-    ...permissionFlags(values, false),
+    ...permissions.filter(flag => !flag.startsWith("motor-access:")),
+    ...(motorRule && (barrier || trailhead || !object) ? [`motor-access:${nodeMotor}`] : []),
   ];
 }
 
 export function hasOsmNodeContext(values: Record<string, string>): boolean {
   return values.barrier !== undefined || Object.keys(values).some((key) =>
-    ["access", "foot", "motorcar", "motor_vehicle", "vehicle", "foot:forward", "foot:backward", "oneway:foot"].includes(key)
+    OSM_PERMISSION_CONTEXT_KEYS.includes(key)
     || key.endsWith(":conditional"));
 }
 
 /** A place assertion's own foot rule is separate from car/parking certainty. */
 export function osmEvidenceFlags(values: Record<string,string>): string[] {
-  const declared=Object.keys(values).some(key=>key==="access"||key==="foot"||key.startsWith("foot:")||key==="access:conditional");
+  const declared=Object.keys(values).some(key=>key==="access"||key.startsWith("access:")||key==="foot"||key.startsWith("foot:"));
   const state=ACCESS_ORDER[Math.max(...[footState(values),footState(values,"forward"),footState(values,"backward")]
     .map(value=>ACCESS_ORDER.indexOf(value)))]!;
   return [...(declared?[`foot-access:${state}`]:[]),...permissionFlags(values,false)];
@@ -162,12 +192,16 @@ export function osmWayFlags(
 ): string[] {
   const footStates = directionalStates(values);
   const oriented = direction === "reverse" ? [...footStates].reverse() : footStates;
-  const hasDirectionalAccess = ["foot:forward", "foot:backward", "foot:forward:conditional", "foot:backward:conditional"]
+  const motorStates = [motorDirectionState(values, "forward"), motorDirectionState(values, "backward")];
+  if (direction === "reverse") motorStates.reverse();
+  const hasDirectionalMotor = motorStates.some(state => state !== osmMotorAccessState(values));
+  const hasDirectionalAccess = ["foot", "access"].flatMap(mode => ["forward", "backward"].flatMap(direction => [`${mode}:${direction}`, `${mode}:${direction}:conditional`]))
     .some(key => values[key] !== undefined);
   return [
     `osm-feature:${featureId}`,
     `osm-highway:${values.highway}`,
     ...permissionFlags(values),
+    ...(hasDirectionalMotor ? [`motor-forward-access:${motorStates[0]}`, `motor-backward-access:${motorStates[1]}`] : []),
     ...(hasDirectionalAccess ? [`foot-forward-access:${oriented[0]}`, `foot-backward-access:${oriented[1]}`] : []),
     ...(values.area ? [`area:${values.area}`] : []),
     ...((values.highway === "footway" || values.highway === "pedestrian")

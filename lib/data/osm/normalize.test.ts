@@ -102,7 +102,36 @@ describe("OSM tag classification", () => {
     expect(osmNodeFlags({ barrier: "gate", access: "private", foot: "yes" })).toContain("foot-access:public");
     for (const object of [{ information: "board" }, { tourism: "information" }, { amenity: "parking" }] as Record<string,string>[]) {
       expect(osmNodeFlags({ ...object, access: "private" })).not.toContain("foot-access:private");
+      expect(osmNodeFlags({ ...object, motorcar: "private" })).not.toContain("motor-access:private");
       expect(osmNodeFlags({ ...object, access: "private", barrier: "gate" })).toContain("foot-access:private");
     }
+    expect(osmNodeFlags({barrier:"gate",motorcar:"yes","motorcar:backward":"no"})).toContain("motor-access:prohibited");
+  });
+
+  it("preserves oriented motor facts without changing pedestrian movement", () => {
+    const source = { highway: "track", foot: "yes", motorcar: "yes", "motorcar:forward": "no", "oneway:motorcar": "no", oneway: "yes" };
+    expect(osmWayFlags(source, "way/1", "both")).toEqual(expect.arrayContaining([
+      "motor-forward-access:prohibited", "motor-backward-access:public", "osm-motorcar:forward:no",
+    ]));
+    expect(osmWayFlags(source, "way/1", "reverse")).toEqual(expect.arrayContaining([
+      "motor-forward-access:public", "motor-backward-access:prohibited",
+    ]));
+    expect(osmAccessState(source)).toBe("public");
+    expect(osmFootDirection(source)).toBe("both");
+    expect(osmWayFlags({ highway: "service", motorcar: "yes", oneway: "-1" }, "way/2", "both"))
+      .toEqual(expect.arrayContaining(["motor-forward-access:prohibited", "motor-backward-access:public"]));
+    expect(osmWayFlags({ highway: "track", motorcar: "yes", "motorcar:backward:conditional": "no @ (snow)" }, "way/3", "both"))
+      .toEqual(expect.arrayContaining(["motor-forward-access:public", "motor-backward-access:unknown"]));
+    expect(osmWayFlags({ motorcar: "yes", "vehicle:forward": "no", "oneway:conditional": "yes @ (snow)" }, "way/4", "both"))
+      .toEqual(expect.arrayContaining(["motor-forward-access:unknown", "motor-backward-access:unknown"]));
+  });
+
+  it("resolves mode and directional foot restrictions before broader conditions", () => {
+    const values = { highway: "track", foot: "yes", "access:forward": "no", "foot:forward": "yes", "foot:conditional": "no @ (winter)" };
+    expect(osmWayFlags(values, "way/1", "both")).toEqual(expect.arrayContaining([
+      "foot-forward-access:public", "foot-backward-access:unknown",
+    ]));
+    expect(osmWayFlags({ highway: "track", access: "yes", "access:forward": "no" }, "way/2", "both"))
+      .toEqual(expect.arrayContaining(["foot-forward-access:prohibited", "foot-backward-access:public"]));
   });
 });
