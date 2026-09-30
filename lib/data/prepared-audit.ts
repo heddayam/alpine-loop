@@ -1,8 +1,19 @@
 import { DatabaseSync } from "node:sqlite";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import { lineIsInsideArea } from "@/lib/graph/geometry";
+import { packSourceSchema } from "@/lib/contracts/manifest";
 import type { DataRelease } from "@/lib/contracts/releases";
 import type { Coordinate } from "./types";
+import { sameSourceContent } from "./source-metadata";
+
+/** Adapt stored provenance without coercing malformed database values. */
+export function readPreparedSources(db:DatabaseSync):DataRelease["sources"] {
+  return db.prepare("SELECT * FROM sources ORDER BY id").all().map(row=>{
+    const source=packSourceSchema.safeParse({id:row.id,authority:row.authority,dataset:row.dataset,version:row.version,retrievedAt:row.retrieved_at,url:row.url,license:row.license,contentHash:row.content_hash});
+    if(!source.success) throw new Error(`Complete graph source differs: ${row.id}`);
+    return source.data;
+  });
+}
 
 /** A single disk-backed scan verifies complete graph consistency before any release is visible. */
 export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRelease,"id"|"geometry"|"sources">, checkpoint:()=>Promise<void>, allowSourceSubset=false) {
@@ -10,11 +21,11 @@ export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRele
   if(db.prepare("SELECT value FROM metadata WHERE key='releaseId'").get()?.value!==expected.id) throw new Error("Complete graph release identity differs from export inputs");
   if(db.prepare("PRAGMA integrity_check").get()?.integrity_check!=="ok" || db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Complete graph failed SQLite integrity audit");
   const sources=new Set(expected.sources.map(source=>source.id));
-  const stored=db.prepare("SELECT * FROM sources ORDER BY id").all();
+  const stored=readPreparedSources(db);
   if(!stored.length || (!allowSourceSubset && stored.length!==sources.size) || stored.some(row=>!sources.has(String(row.id)))) throw new Error("Complete graph source inventory differs");
   for(const source of expected.sources.filter(source=>!allowSourceSubset||stored.some(row=>row.id===source.id))) {
     const row=stored.find(row=>row.id===source.id);
-    if(!row || row.authority!==source.authority || row.dataset!==source.dataset || row.version!==source.version || row.retrieved_at!==source.retrievedAt || row.url!==source.url || row.license!==source.license || row.content_hash!==source.contentHash) throw new Error(`Complete graph source differs: ${source.id}`);
+    if(!row || !sameSourceContent(row,source) || (!allowSourceSubset&&row.retrievedAt!==source.retrievedAt)) throw new Error(`Complete graph source differs: ${source.id}`);
   }
   sources.clear();
   for(const row of stored) sources.add(String(row.id));

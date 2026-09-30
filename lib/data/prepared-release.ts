@@ -12,8 +12,9 @@ import { dataReleaseSchema, type DataRelease } from "@/lib/contracts/releases";
 import { packSourceSchema } from "@/lib/contracts/manifest";
 import type { AreaGeometry } from "./area-geometry";
 import { contentId } from "@/lib/coverage/geometry";
-import { auditPreparedGraph } from "./prepared-audit";
+import { auditPreparedGraph, readPreparedSources } from "./prepared-audit";
 import { writeJsonAtomically } from "./source-cache";
+import { sameSourceContent } from "./source-metadata";
 
 export type PreparedReleaseOptions = Pick<DataRelease,"geometry"|"sources"|"regions"|"builtAt"|"compilerVersion"|"metricAlgorithmVersion"> & {
   databasePath: string; outputRoot: string; limitations?: string[]; checkpoint?: () => Promise<void>;
@@ -109,7 +110,7 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
       const compressedHash=await fileHash(compressed,checkpoint);
       if(reuseAudits && release.partitioning==="local-areas") {
         const receipt=await readFile(receiptPath(outputRoot,artifact.id),"utf8").then(raw=>receiptSchema.parse(JSON.parse(raw))).catch(()=>null);
-        if(receipt && receipt.key===auditKey(artifact) && receipt.compressedHash===compressedHash && receipt.summary.id===artifact.id && receipt.sources.every(source=>release.sources.some(candidate=>candidate.id===source.id&&contentId(candidate)===contentId(source)))) {
+        if(receipt && receipt.key===auditKey(artifact) && receipt.compressedHash===compressedHash && receipt.summary.id===artifact.id && receipt.sources.every(source=>release.sources.some(candidate=>sameSourceContent(candidate,source)))) {
           artifacts.push(receipt.summary);continue;
         }
       }
@@ -145,8 +146,7 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
         const summary=graphSummary(db,artifact.id);
         artifacts.push(summary);
         if(release.partitioning==="local-areas") {
-          const ids=new Set(db.prepare("SELECT id FROM sources").all().map(row=>String(row.id)));
-          await writeAuditReceipt(outputRoot,artifact,compressedHash,release.sources.filter(source=>ids.has(source.id)),summary);
+          await writeAuditReceipt(outputRoot,artifact,compressedHash,readPreparedSources(db),summary);
         }
       } finally {db.close();await rm(file);}
     }
