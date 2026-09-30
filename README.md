@@ -14,10 +14,10 @@ npm run build
 npm start
 ```
 
-The first slice reads the ignored `.local-data/rewrite/pilot` dataset. Open
+The first slice reads the ignored `.local-data/rewrite/fresh-north-bend` dataset. Open
 http://127.0.0.1:3000; set `PORT=3011` if another app uses that port. This development
-slice requires the already-prepared pilot files. Automatic first-run data acquisition
-and hosted delivery are still required before release.
+slice currently requires the prepared files on this machine. Automatic first-run
+data acquisition remains unfinished. Hosting is deferred at the user's request.
 
 The working flow is map area → distance/gain/repetition → progressive exact routes
 → route inspection → GPX. Reopening the browser restores the latest search while
@@ -32,8 +32,9 @@ results never changes the submitted query.
 
 - A small Node server keeps search alive after the page closes. Browser-only work
   cannot satisfy that lifetime. A worker keeps route computation off the HTTP thread.
-- Immutable graph and drawing files replace traversal through SQL. The pilot is
-  small enough to load directly; this does not establish the right statewide format.
+- The fresh North Bend graph and drawings total about 2 MB compressed. Loading
+  these immutable files directly needs no query engine, database server or
+  migrations. This is a choice for the measured slice, not a statewide format.
 - Current searches stay in memory. No job database, migrations or restart recovery
   are needed for the confirmed experience.
 - Vite builds a static React interface. There is no server-rendered page requirement
@@ -43,29 +44,40 @@ results never changes the submitted query.
   build it reduced main JavaScript from 306 kB gzip with MapLibre to 109 kB and
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
-The runtime currently allows two simultaneous searches and retains four recent
-searches. A search continues until exploration finishes or the user stops it;
-there is no application time or expansion cutoff. Similar routes at a start are
-grouped by shared trail distance; up to
-10 choices per start and 300 overall are shown. Display limits do not stop search.
-Published choices stay stable while someone inspects or exports them. These
-prototype choices require further evaluation, especially for very large areas.
+The server keeps one current search. A search continues until exploration
+finishes or the user stops it; there is no application time or expansion cutoff.
+Up to ten distinct choices per start are kept, with no global results cap.
+Similar variations are omitted. Results are paged and drawings load when needed;
+published choices stay stable while someone inspects or exports them.
+The solver shares its graph indexes and retains each start's current path.
+Per-start graph-sized distance tables were deleted after the broader data
+experiment exposed an 11.56 GiB startup allocation. Slower exhaustive traversal
+is acceptable; the remaining memory use still needs measurement on every
+acceptance case.
 Longer searches are acceptable; timing benchmarks are descriptive, not a reason
 to truncate exploration or add complexity. The interface currently targets desktop.
 
 ## Evidence and remaining work
 
-`benchmarks/` freezes 24 requests across three Washington areas and checks independent
-source witnesses. The pilot retains historical source omissions, documented in the
-app. It is not complete Washington coverage. A fresh data pipeline, a diverse results
-shortlist, complete long-hike validation, automatic setup, full-app resource
-measurements and hosted delivery remain unfinished.
+The immediate delivery target is one complete North Bend experience. The
+[fresh compiler](tools/prepare/README.md) reads pinned OSM and elevation sources
+without mountain qualification, a mileage-derived buffer or a runtime database.
+It records finite coverage and unresolved access explicitly. An independent
+review of actual entrances is still finding source-interpretation issues; the
+small slice must pass before coverage expands.
+
+`benchmarks/` freezes 24 requests across three Washington areas and checks
+independent source witnesses. Existing results use the inherited pilot, with
+its historical omissions. Fresh-source witness recovery, complete long-hike
+validation, automatic setup and full-app resource measurements remain unfinished.
 
 The recorded engine observation recovered specific independent witnesses in
 10 of 14 proven requests. The other four were still searching and had found other
 exact routes. Seventeen of 24 requests finished within the observation window;
 seven remained unfinished. These are descriptive measurements on the pilot,
-not coverage or speed guarantees. See `benchmarks/README.md` for reproduction.
+not coverage or speed guarantees. They also predate removal of the per-start
+distance optimization, so are not current-engine timings.
+See `benchmarks/README.md` for reproduction.
 
 ```sh
 npm run verify

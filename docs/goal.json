@@ -17,5 +17,5 @@
     "engineering": "Challenge raw sources, processing and storage from first principles. Prioritize robust code over patchwork tests; use targeted independent checks with restraint.",
     "deferred": ["Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."]
   },
-  "state": "First real-data slice and desktop flow are implemented and checked in the browser. Twenty-four frozen engine measurements are recorded; unfinished searches remain explicitly unfinished. Fresh source coverage, shortlist quality, complete witness recovery, automatic setup and full-app resource measurements remain in progress. Hosting is deferred."
+  "state": "Prove a complete small North Bend slice before expanding coverage or optimizing. Fresh OSM/DEM preparation and the desktop flow are implemented; independent source-access review is finding and correcting real defects. Paging, reconnect and GPX have been checked in the browser. Historical 24-query measurements predate the current engine and fresh sources. Independent fresh-source witness recovery, automatic setup, long-hike validation and full-app resource measurements remain in progress. Hosting is deferred."
 }
