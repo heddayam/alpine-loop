@@ -13,6 +13,8 @@ const FOOT = 0.3048;
 const CURRENT_SEARCH = "alpine-loop.current-search";
 const miles = (meters: number) => (meters / MILE).toFixed(1);
 const feet = (meters: number) => Math.round(meters / FOOT).toLocaleString();
+const routeName = (route: HikeRoute) =>
+  route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
 const remember = (id: string | null) => {
   try {
     if (id) localStorage.setItem(CURRENT_SEARCH, id);
@@ -126,8 +128,9 @@ function RouteDetails({
         ← All routes
       </button>
       <h2 id="route-detail-heading" tabIndex={-1}>
-        {route.startName || "Unnamed starting point"}
+        {routeName(route)}
       </h2>
+      <p className="quiet">From {route.startName || "an unnamed starting point"}</p>
       <p className="route-kind">
         {route.kind === "lollipop"
           ? "Lollipop · an out-and-back approach to a loop"
@@ -208,7 +211,9 @@ export function App() {
   const [includeUnknown, setIncludeUnknown] = useState(true);
   const [search, setSearch] = useState<SearchSnapshot>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const operation = useRef<AbortController | null>(null);
@@ -239,7 +244,10 @@ export function App() {
             })
             .catch((failure) => {
               if (!controller.signal.aborted) {
-                if (failure.status === 404) remember(null);
+                // Do not let a transient failure replace a still-running search
+                // whose identifier is our only way to reconnect or stop it.
+                if (failure.status !== 404) throw failure;
+                remember(null);
                 setError(failure.message);
               }
             });
@@ -266,17 +274,19 @@ export function App() {
         );
         if (!controller.signal.aborted) {
           setSearch(snapshot);
-          setError("");
+          setConnectionError("");
         }
         if (snapshot.status !== "running") return;
       } catch (failure) {
         if (controller.signal.aborted) return;
-        setError(
+        setConnectionError(
           failure instanceof Error
             ? failure.message
             : "Connection lost. Reconnecting…",
         );
         if ((failure as { status?: number }).status === 404) {
+          setError((failure as Error).message);
+          setConnectionError("");
           setSearch(undefined);
           setSelectedId(null);
           setEditing(true);
@@ -344,6 +354,7 @@ export function App() {
       if (!controller.signal.aborted) {
         setSearch(snapshot);
         setEditing(false);
+        setConnectionError("");
         remember(snapshot.id);
       }
     } catch (failure) {
@@ -371,6 +382,7 @@ export function App() {
       if (!controller.signal.aborted) {
         setSearch(snapshot);
         setError("");
+        setConnectionError("");
       }
     } catch (failure) {
       if (!controller.signal.aborted)
@@ -450,10 +462,10 @@ export function App() {
         ) : (
           <>
             <div className="sidebar-content">
-              {error && (
+              {(error || connectionError) && (
                 <div className="error-banner" role="alert">
-                  <p>{error}</p>
-                  {running && (
+                  <p>{error || connectionError}</p>
+                  {connectionError && !error && running && (
                     <button
                       type="button"
                       onClick={() => setRetry((value) => value + 1)}
@@ -476,6 +488,7 @@ export function App() {
                         type="button"
                         onClick={() => {
                           restoreDraft();
+                          setError("");
                           setEditing(false);
                         }}
                       >
@@ -608,7 +621,7 @@ export function App() {
                       <p className="access-summary">
                         {search.query.includeUnknown
                           ? "Uncertain access included"
-                          : "Confirmed access only"}
+                          : "Mapped public access only"}
                       </p>
                     </section>
                     <section
@@ -670,11 +683,14 @@ export function App() {
                                 className="route-card"
                                 type="button"
                                 onClick={() => pickRoute(route.id)}
+                                onPointerEnter={() => setHoveredId(route.id)}
+                                onPointerLeave={() => setHoveredId(null)}
+                                onFocus={() => setHoveredId(route.id)}
+                                onBlur={() => setHoveredId(null)}
                               >
                                 <span className="route-card-top">
                                   <span className="route-name">
-                                    {route.startName ||
-                                      "Unnamed starting point"}
+                                    {routeName(route)}
                                   </span>
                                 </span>
                                 <span className="route-metrics">
@@ -749,7 +765,7 @@ export function App() {
           editing={editing}
           drawn={areaMode === "drawn"}
           routes={editing ? [] : currentRoutes}
-          selectedId={selectedId}
+          selectedId={selectedId ?? hoveredId}
           camera={camera}
           onArea={(bounds) => {
             setArea(bounds);

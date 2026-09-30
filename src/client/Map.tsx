@@ -112,8 +112,7 @@ export function HikeMap({
       if (
         callbacks.current.editing &&
         !callbacks.current.drawn &&
-        !programmatic.current &&
-        !drawingRef.current
+        !programmatic.current
       )
         callbacks.current.onViewport(visibleBounds(map));
     });
