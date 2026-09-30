@@ -1,0 +1,1773 @@
+[
+  {
+    "id": "north-bend-short",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 18.742707999999993,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": 110.51324999999999,
+    "outputs": 126,
+    "elapsedMs": 10000.620584,
+    "cpuMs": 739.017,
+    "peakProcessRssMiB": 127.90625,
+    "progressEvents": 8214,
+    "cancelLatencyMs": 0.375584000001254,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 2079193,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 157913
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 375257
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 591833
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 804825
+      },
+      {
+        "elapsedMs": 4999,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1020633
+      },
+      {
+        "elapsedMs": 5999,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1235417
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1451481
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1665241
+      },
+      {
+        "elapsedMs": 9000,
+        "outputs": 126,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1873881
+      }
+    ]
+  },
+  {
+    "id": "north-bend-pure",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 16.847875000000002,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 10001.138875,
+    "cpuMs": 739.235,
+    "peakProcessRssMiB": 121.53125,
+    "progressEvents": 8254,
+    "cancelLatencyMs": 0.6654170000001614,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 2089806,
+        "elapsedMs": 10001
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 187726
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 399950
+      },
+      {
+        "elapsedMs": 3001,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 611406
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 821326
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1032014
+      },
+      {
+        "elapsedMs": 6001,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1238094
+      },
+      {
+        "elapsedMs": 7001,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1449038
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1658702
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 0,
+        "totalStarts": 50,
+        "attemptedStarts": 50,
+        "completedStarts": 49,
+        "expansions": 1874766
+      }
+    ]
+  },
+  {
+    "id": "north-bend-known",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 21.871042000000003,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": 51.557084,
+    "outputs": 612,
+    "elapsedMs": 541.184125,
+    "cpuMs": 94.597,
+    "peakProcessRssMiB": 126.828125,
+    "progressEvents": 430,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 14,
+        "attemptedStarts": 14,
+        "completedStarts": 14,
+        "expansions": 103872,
+        "elapsedMs": 541
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "middle-fork-day",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 16.863416,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": 92.30804199999999,
+    "outputs": 4,
+    "elapsedMs": 10000.654667,
+    "cpuMs": 848.206,
+    "peakProcessRssMiB": 132.953125,
+    "progressEvents": 8185,
+    "cancelLatencyMs": 0.3950830000012502,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 2079055,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 190799
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 405327
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 611663
+      },
+      {
+        "elapsedMs": 4001,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 811855
+      },
+      {
+        "elapsedMs": 5001,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 1020751
+      },
+      {
+        "elapsedMs": 6001,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 1232719
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 1444943
+      },
+      {
+        "elapsedMs": 8001,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 1656911
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 4,
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 34,
+        "expansions": 1868111
+      }
+    ]
+  },
+  {
+    "id": "middle-fork-flat",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 16.830375000000004,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 111.89945800000001,
+    "cpuMs": 48.556,
+    "peakProcessRssMiB": 126.78125,
+    "progressEvents": 77,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 38,
+        "attemptedStarts": 38,
+        "completedStarts": 38,
+        "expansions": 1322,
+        "elapsedMs": 112
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "pass-lakes",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 17.119333999999995,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": 130.230417,
+    "outputs": 4801,
+    "elapsedMs": 10001.803457999998,
+    "cpuMs": 1244.689,
+    "peakProcessRssMiB": 144.640625,
+    "progressEvents": 7776,
+    "cancelLatencyMs": 1.733290999998644,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 1950167,
+        "elapsedMs": 10001
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1001,
+        "outputs": 223,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 67,
+        "expansions": 124356
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 997,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 71,
+        "expansions": 331873
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 1341,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 533463
+      },
+      {
+        "elapsedMs": 3999,
+        "outputs": 1884,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 732887
+      },
+      {
+        "elapsedMs": 5001,
+        "outputs": 2314,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 926423
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 2947,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 1121495
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 3498,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 1331671
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 3902,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 1541591
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 4334,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 75,
+        "expansions": 1746135
+      }
+    ]
+  },
+  {
+    "id": "pass-long",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 17.632499999999993,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": 1219.931584,
+    "outputs": 1406,
+    "elapsedMs": 10001.204584000001,
+    "cpuMs": 1419.276,
+    "peakProcessRssMiB": 134.546875,
+    "progressEvents": 7426,
+    "cancelLatencyMs": 0.7361670000009326,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 1862100,
+        "elapsedMs": 10001
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1001,
+        "outputs": 0,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 63,
+        "expansions": 157814
+      },
+      {
+        "elapsedMs": 2001,
+        "outputs": 215,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 347348
+      },
+      {
+        "elapsedMs": 3001,
+        "outputs": 316,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 538324
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 488,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 731860
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 620,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 905428
+      },
+      {
+        "elapsedMs": 6001,
+        "outputs": 981,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 1101780
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 1116,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 1296084
+      },
+      {
+        "elapsedMs": 8001,
+        "outputs": 1194,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 1476820
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 1316,
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 65,
+        "expansions": 1660116
+      }
+    ]
+  },
+  {
+    "id": "pass-demanding",
+    "datasetId": "pilot-snoqualmie-region-8aac36e91e5b",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "26508e4fac2fac31a45e5c5196445c3760b480db5b41d68eaa40d242db10f817",
+    "node": "v24.11.0",
+    "nodeCount": 11181,
+    "directedEdges": 24290,
+    "graphStarts": 1227,
+    "loadMs": 17.662667,
+    "compressedBytes": 716363,
+    "graphBytes": 3455029,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 709.537208,
+    "cpuMs": 122.547,
+    "peakProcessRssMiB": 126.53125,
+    "progressEvents": 561,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 97,
+        "attemptedStarts": 97,
+        "completedStarts": 97,
+        "expansions": 99259,
+        "elapsedMs": 709
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "stevens-short",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 21.255333000000007,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 151.14299999999997,
+    "cpuMs": 64.377,
+    "peakProcessRssMiB": 126.296875,
+    "progressEvents": 106,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 30,
+        "expansions": 13348,
+        "elapsedMs": 150
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "stevens-day",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 24.078333,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": 72.86466600000001,
+    "outputs": 26,
+    "elapsedMs": 248.304958,
+    "cpuMs": 81.25,
+    "peakProcessRssMiB": 125.90625,
+    "progressEvents": 177,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 30,
+        "expansions": 31491,
+        "elapsedMs": 248
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "stevens-pure",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 46.38429099999999,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 222.147292,
+    "cpuMs": 80.975,
+    "peakProcessRssMiB": 126.5,
+    "progressEvents": 156,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 30,
+        "expansions": 26251,
+        "elapsedMs": 222
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "stevens-known",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 21.03162499999999,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": 39.466459000000015,
+    "outputs": 10,
+    "elapsedMs": 49.234834000000006,
+    "cpuMs": 52.562,
+    "peakProcessRssMiB": 123.515625,
+    "progressEvents": 22,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 10,
+        "attemptedStarts": 10,
+        "completedStarts": 10,
+        "expansions": 999,
+        "elapsedMs": 48
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "wenatchee-easy",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 23.658292000000003,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": 1168.228458,
+    "outputs": 16,
+    "elapsedMs": 2988.616833,
+    "cpuMs": 369.266,
+    "peakProcessRssMiB": 130.171875,
+    "progressEvents": 2353,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 83,
+        "expansions": 562818,
+        "elapsedMs": 2989
+      }
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1002,
+        "outputs": 0,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 66,
+        "expansions": 157546
+      },
+      {
+        "elapsedMs": 2001,
+        "outputs": 4,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 78,
+        "expansions": 354108
+      }
+    ]
+  },
+  {
+    "id": "wenatchee-day",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 19.055834000000004,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": 195.850792,
+    "outputs": 905,
+    "elapsedMs": 10000.240792,
+    "cpuMs": 983.312,
+    "peakProcessRssMiB": 126.578125,
+    "progressEvents": 7877,
+    "cancelLatencyMs": 0.4210830000010901,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 1977907,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1001,
+        "outputs": 20,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 66,
+        "expansions": 162258
+      },
+      {
+        "elapsedMs": 2001,
+        "outputs": 41,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 78,
+        "expansions": 363940
+      },
+      {
+        "elapsedMs": 3001,
+        "outputs": 122,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 566579
+      },
+      {
+        "elapsedMs": 4001,
+        "outputs": 231,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 768051
+      },
+      {
+        "elapsedMs": 5006,
+        "outputs": 332,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 961587
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 446,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 1162803
+      },
+      {
+        "elapsedMs": 7001,
+        "outputs": 559,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 1378355
+      },
+      {
+        "elapsedMs": 8001,
+        "outputs": 730,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 1578547
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 821,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 81,
+        "expansions": 1783603
+      }
+    ]
+  },
+  {
+    "id": "stevens-long",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 18.50470899999999,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": 76.32266700000001,
+    "outputs": 38,
+    "elapsedMs": 10001.66375,
+    "cpuMs": 1222.395,
+    "peakProcessRssMiB": 133.546875,
+    "progressEvents": 7793,
+    "cancelLatencyMs": 1.1950829999987036,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 1982856,
+        "elapsedMs": 10001
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 32,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 190344
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 32,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 385160
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 32,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 576136
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 32,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 770696
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 32,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 973960
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 34,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 1182344
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 36,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 1383816
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 36,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 1583240
+      },
+      {
+        "elapsedMs": 9000,
+        "outputs": 36,
+        "totalStarts": 30,
+        "attemptedStarts": 30,
+        "completedStarts": 22,
+        "expansions": 1781640
+      }
+    ]
+  },
+  {
+    "id": "wenatchee-demanding",
+    "datasetId": "pilot-central-cascades-c478e58db3ba",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "88a558993c5deba923d1ff27eca4060214b258a72044563ff526b0c12b00cbe4",
+    "node": "v24.11.0",
+    "nodeCount": 11897,
+    "directedEdges": 25120,
+    "graphStarts": 1703,
+    "loadMs": 20.955624999999998,
+    "compressedBytes": 747643,
+    "graphBytes": 3623035,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 1317.317333,
+    "cpuMs": 224.26,
+    "peakProcessRssMiB": 128.375,
+    "progressEvents": 1044,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 83,
+        "expansions": 227991,
+        "elapsedMs": 1316
+      }
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 0,
+        "totalStarts": 83,
+        "attemptedStarts": 83,
+        "completedStarts": 70,
+        "expansions": 164216
+      }
+    ]
+  },
+  {
+    "id": "paradise-short",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 17.466583,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": 81.58633400000001,
+    "outputs": 11858,
+    "elapsedMs": 10000.629459,
+    "cpuMs": 953.218,
+    "peakProcessRssMiB": 132.015625,
+    "progressEvents": 7963,
+    "cancelLatencyMs": 0.4688750000004802,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 36,
+        "expansions": 2018488,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 690,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 26,
+        "expansions": 180719
+      },
+      {
+        "elapsedMs": 2001,
+        "outputs": 1672,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 26,
+        "expansions": 391407
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 3005,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 27,
+        "expansions": 603229
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 4020,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 29,
+        "expansions": 803611
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 4747,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 29,
+        "expansions": 1012763
+      },
+      {
+        "elapsedMs": 6001,
+        "outputs": 5792,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 30,
+        "expansions": 1212033
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 7014,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 31,
+        "expansions": 1423050
+      },
+      {
+        "elapsedMs": 8001,
+        "outputs": 8294,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 36,
+        "expansions": 1612472
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 9951,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 36,
+        "expansions": 1807800
+      }
+    ]
+  },
+  {
+    "id": "paradise-day",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 16.197041,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": 86.54899999999999,
+    "outputs": 15344,
+    "elapsedMs": 9999.84,
+    "cpuMs": 1227.361,
+    "peakProcessRssMiB": 132.578125,
+    "progressEvents": 7749,
+    "cancelLatencyMs": 0.48708299999998417,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 1966101,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 1948,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 16,
+        "expansions": 178420
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 3223,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 16,
+        "expansions": 382452
+      },
+      {
+        "elapsedMs": 3001,
+        "outputs": 4415,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 583701
+      },
+      {
+        "elapsedMs": 4001,
+        "outputs": 5774,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 789013
+      },
+      {
+        "elapsedMs": 5001,
+        "outputs": 7274,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 988181
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 8930,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 1184789
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 10229,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 1382933
+      },
+      {
+        "elapsedMs": 8001,
+        "outputs": 12241,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 1584917
+      },
+      {
+        "elapsedMs": 9000,
+        "outputs": 13887,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 17,
+        "expansions": 1775125
+      }
+    ]
+  },
+  {
+    "id": "paradise-known",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 16.514332999999993,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": 42.47316599999999,
+    "outputs": 390,
+    "elapsedMs": 284.687833,
+    "cpuMs": 65.941,
+    "peakProcessRssMiB": 125.078125,
+    "progressEvents": 230,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 20,
+        "attemptedStarts": 20,
+        "completedStarts": 20,
+        "expansions": 50242,
+        "elapsedMs": 284
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "sunrise-pure",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 16.065791000000004,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 10000.789458,
+    "cpuMs": 1091.192,
+    "peakProcessRssMiB": 133.046875,
+    "progressEvents": 7580,
+    "cancelLatencyMs": 0.8655830000006972,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1934495,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 183711
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 340895
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 551327
+      },
+      {
+        "elapsedMs": 4001,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 751263
+      },
+      {
+        "elapsedMs": 5001,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 955039
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1155487
+      },
+      {
+        "elapsedMs": 7001,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1353375
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1552543
+      },
+      {
+        "elapsedMs": 9000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1738399
+      }
+    ]
+  },
+  {
+    "id": "sunrise-day",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 15.555499999999995,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": 1114.006792,
+    "outputs": 132,
+    "elapsedMs": 10000.105084,
+    "cpuMs": 1231.262,
+    "peakProcessRssMiB": 133.03125,
+    "progressEvents": 7847,
+    "cancelLatencyMs": 0.36708400000134134,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 2002978,
+        "elapsedMs": 10000
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1001,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 196898
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 14,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 398114
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 30,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 612642
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 45,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 816418
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 60,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1015074
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 74,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1210914
+      },
+      {
+        "elapsedMs": 7001,
+        "outputs": 88,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1404706
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 104,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1606178
+      },
+      {
+        "elapsedMs": 9001,
+        "outputs": 118,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 7,
+        "expansions": 1805346
+      }
+    ]
+  },
+  {
+    "id": "carbon-easy",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 15.669541999999993,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 46.163916,
+    "cpuMs": 50.382,
+    "peakProcessRssMiB": 127.5,
+    "progressEvents": 25,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 12,
+        "attemptedStarts": 12,
+        "completedStarts": 12,
+        "expansions": 292,
+        "elapsedMs": 45
+      }
+    },
+    "milestones": []
+  },
+  {
+    "id": "sunrise-long",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 15.456999999999994,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 10001.412291999999,
+    "cpuMs": 1587.738,
+    "peakProcessRssMiB": 135.6875,
+    "progressEvents": 7341,
+    "cancelLatencyMs": 1.4508749999986321,
+    "terminal": {
+      "type": "done",
+      "status": "stopped",
+      "progress": {
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 1873867,
+        "elapsedMs": 10001
+      },
+      "reason": "Search stopped"
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 188107
+      },
+      {
+        "elapsedMs": 2000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 384715
+      },
+      {
+        "elapsedMs": 3000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 571595
+      },
+      {
+        "elapsedMs": 4000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 755915
+      },
+      {
+        "elapsedMs": 5000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 955083
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 1144523
+      },
+      {
+        "elapsedMs": 7000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 1335499
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 1519307
+      },
+      {
+        "elapsedMs": 8994,
+        "outputs": 0,
+        "totalStarts": 18,
+        "attemptedStarts": 18,
+        "completedStarts": 3,
+        "expansions": 1697483
+      }
+    ]
+  },
+  {
+    "id": "paradise-demanding",
+    "datasetId": "pilot-mount-rainier-area-6f7616ff3142",
+    "engineSha256": "3a9ebacf445e2dd66e51708ff5140204b72b9ad072d6e23171076ddb9e5b53da",
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "graphSha256": "18a11f655c1e517889cf95c353e053966f769abcb09e6d93d3daceeacf308c36",
+    "node": "v24.11.0",
+    "nodeCount": 10918,
+    "directedEdges": 21246,
+    "graphStarts": 2009,
+    "loadMs": 20.705624999999998,
+    "compressedBytes": 655556,
+    "graphBytes": 3156967,
+    "firstExactMs": null,
+    "outputs": 0,
+    "elapsedMs": 8510.657041999999,
+    "cpuMs": 807.624,
+    "peakProcessRssMiB": 131.953125,
+    "progressEvents": 6830,
+    "cancelLatencyMs": null,
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 52,
+        "expansions": 1724799,
+        "elapsedMs": 8510
+      }
+    },
+    "milestones": [
+      {
+        "elapsedMs": 1000,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 36,
+        "expansions": 184851
+      },
+      {
+        "elapsedMs": 2001,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 38,
+        "expansions": 389637
+      },
+      {
+        "elapsedMs": 3001,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 38,
+        "expansions": 597765
+      },
+      {
+        "elapsedMs": 4001,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 38,
+        "expansions": 796933
+      },
+      {
+        "elapsedMs": 5001,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 38,
+        "expansions": 988677
+      },
+      {
+        "elapsedMs": 6000,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 41,
+        "expansions": 1198838
+      },
+      {
+        "elapsedMs": 7001,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 44,
+        "expansions": 1409329
+      },
+      {
+        "elapsedMs": 8000,
+        "outputs": 0,
+        "totalStarts": 52,
+        "attemptedStarts": 52,
+        "completedStarts": 50,
+        "expansions": 1619049
+      }
+    ]
+  }
+]
