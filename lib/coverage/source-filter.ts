@@ -3,12 +3,13 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { rectangle, unionCoverage } from "./geometry";
-import { OSM_PERMISSION_CONTEXT_KEYS } from "@/lib/data/osm/normalize";
+import { OSM_ARRIVAL_NODE_HIGHWAYS, OSM_PERMISSION_CONTEXT_KEYS } from "@/lib/data/osm/normalize";
 
 const CONTEXT_FILTERS = [
   "w/highway", "w/footway", "nw/amenity=parking", "nw/highway=trailhead",
   "nw/information=trailhead,guidepost,board,map", "nw/tourism=information",
   "nw/barrier=gate", "n/barrier", ...OSM_PERMISSION_CONTEXT_KEYS.map(key => `n/${key}`),
+  ...OSM_ARRIVAL_NODE_HIGHWAYS.map(highway => `n/highway=${highway}`),
   "nwr/building",
 ];
 

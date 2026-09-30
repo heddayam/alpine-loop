@@ -9,7 +9,7 @@ import { withAtomicDirectory } from "../source-cache";
 import type { NormalizedTopology } from "../types";
 import { requireCommand, runCommand, type CommandRunner } from "./command";
 import { readAndNormalizeOsmOpl } from "./opl";
-import { OSM_PERMISSION_CONTEXT_KEYS } from "./normalize";
+import { OSM_ARRIVAL_NODE_HIGHWAYS, OSM_PERMISSION_CONTEXT_KEYS } from "./normalize";
 
 const boundarySchema = z.object({
   type: z.literal("Feature"),
@@ -26,7 +26,7 @@ export type OsmPipelineOptions = {
 export type PreparedOsmRegion = { regionPath: string; identity: string };
 export type OsmRegionOptions = Pick<OsmPipelineOptions, "preparationRoot" | "runner">;
 
-export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-directed-foot-passage-v12";
+export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-directed-foot-passage-v13";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
@@ -85,6 +85,7 @@ export async function prepareOsmTopology(
       "tags-filter", extracted, HIGHWAY_FILTER,
       "nw/highway=trailhead", "nw/amenity=parking", "nw/information=trailhead,guidepost,board,map",
       "nw/tourism=information", "n/barrier", ...OSM_PERMISSION_CONTEXT_KEYS.map(key => `n/${key}`),
+      ...OSM_ARRIVAL_NODE_HIGHWAYS.map(highway => `n/highway=${highway}`),
       "r/route=hiking,foot", "--overwrite", "--output", filtered,
     ]);
     await nonempty(filtered, "OSM hiking filter");

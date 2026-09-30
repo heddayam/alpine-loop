@@ -18,6 +18,7 @@ const INFORMATION_VALUES = new Set(["guidepost", "board", "map"]);
 const ACCESS_ORDER: readonly AccessState[] = ["public", "unknown", "private", "prohibited", "closed"];
 const MOTOR_MODES = ["motorcar", "motor_vehicle", "vehicle", "access"] as const;
 const PERMISSION_KEYS = ["foot", ...MOTOR_MODES];
+export const OSM_ARRIVAL_NODE_HIGHWAYS = ["turning_circle"] as const;
 export const OSM_PERMISSION_CONTEXT_KEYS = [
   ...PERMISSION_KEYS.flatMap(mode => [mode, `${mode}:conditional`, ...["forward", "backward"].flatMap(direction =>
     [`${mode}:${direction}`, `${mode}:${direction}:conditional`])]),
@@ -169,6 +170,7 @@ export function osmNodeFlags(values: Record<string, string>): string[] {
   const permissions = permissionFlags(values, false);
   const motorRule = permissions.some(flag => flag.startsWith("motor-access:"));
   return [
+    ...(values.highway === "turning_circle" ? ["arrival-place:turning-circle"] : []),
     ...(barrier ? [`barrier:${values.barrier}`] : []),
     ...(footRule && (barrier || trailhead || !object) ? [`foot-access:${nodeAccess}`] : []),
     ...permissions.filter(flag => !flag.startsWith("motor-access:")),
@@ -177,7 +179,7 @@ export function osmNodeFlags(values: Record<string, string>): string[] {
 }
 
 export function hasOsmNodeContext(values: Record<string, string>): boolean {
-  return values.barrier !== undefined || Object.keys(values).some((key) =>
+  return OSM_ARRIVAL_NODE_HIGHWAYS.some(highway => values.highway === highway) || values.barrier !== undefined || Object.keys(values).some((key) =>
     OSM_PERMISSION_CONTEXT_KEYS.includes(key)
     || key.endsWith(":conditional"));
 }

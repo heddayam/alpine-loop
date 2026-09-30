@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classifyOsmWay, osmAccessState, osmEvidenceFlags, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
+import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmEvidenceFlags, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
 
 describe("OSM tag classification", () => {
+  it("retains a typed vehicle turnaround without inventing foot or parking permission", () => {
+    expect(hasOsmNodeContext({highway:"turning_circle"})).toBe(true);
+    expect(osmNodeFlags({highway:"turning_circle"})).toEqual(["arrival-place:turning-circle"]);
+    expect(osmNodeFlags({highway:"turning_circle",foot:"no"})).toContain("foot-access:prohibited");
+  });
   it("keeps track and walkable-road areas as places rather than perimeter routes",()=>{
     expect(classifyOsmWay({highway:"track",area:"yes",foot:"yes"})).toBe("sidewalk");
     expect(classifyOsmWay({highway:"service",area:"yes",foot:"yes"})).toBe("sidewalk");
