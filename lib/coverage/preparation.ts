@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { readCuratedAccessFile } from "@/lib/data/curated-access";
-import { readPinnedOsmSnapshot, refreshPinnedOsmSnapshot } from "@/lib/data/osm/source";
+import { OsmCacheVersionMismatchError, readPinnedOsmSnapshot, refreshPinnedOsmSnapshot } from "@/lib/data/osm/source";
 import { intersectCoverage } from "./geometry";
 import type { SourceRecipe } from "./recipe";
 import { CoverageSourceStore, sourceStoreFileName } from "./source-store";
@@ -59,7 +59,9 @@ export async function preparationInputs(recipe: SourceRecipe, session: Session, 
     await session.check();
     await session.report(`Verifying ${source.config.dataset}`);
     const snapshot = await readPinnedOsmSnapshot(session.cacheRoot, source.config).catch(async (error: unknown) => {
-      if (recipe.offline || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const recoverable = error instanceof OsmCacheVersionMismatchError || (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
+      if (recipe.offline || !recoverable) throw error;
+      await session.report(`Acquiring ${source.config.dataset}`);
       return (await refreshPinnedOsmSnapshot(session.cacheRoot, source.config)).snapshot;
     });
     if (snapshot.contentHash !== source.sha256) throw new Error(`Pinned source hash differs for ${source.config.id}`);
