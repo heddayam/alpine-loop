@@ -41,8 +41,9 @@ import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometr
 import { unavailableReviewedStartSchema, type CoverageRegion, type CoverageRunnerContext, type CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
 const BUILD_VERSION = `named-mountain-regions-v4:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}:${ENTRANCE_FAMILY_ALGORITHM_VERSION}:${PORTAL_ADMISSION_ALGORITHM_VERSION}`;
-// Preserve the previous inclusive association reach, independently of the
-// route envelope. This identifies destinations; routes need not visit the core.
+// The shared distance helper halves this return-distance budget: preserve the
+// existing 25-mile one-way inclusive association, independently of the route
+// envelope. This identifies destinations; routes need not visit the core.
 const MOUNTAIN_ASSOCIATION_METERS = 50 * 1609.344;
 const HIKING_HIGHWAYS=new Set(["path","track","bridleway","steps","footway","pedestrian"].map(kind=>`osm-highway:${kind}`));
 type ReferenceAudit = Awaited<ReturnType<typeof auditOfficialTrailReferences>>;
@@ -255,7 +256,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         const limitations = [...recipe.limitations,...(elevation.limitations??[]),
           ...(unsupportedBuildings ? [`The local context contains ${unsupportedBuildings} unsupported building relations. Descriptive building counts may be incomplete; individual reasons are recorded in its context inventory.`] : []),
           "Access and building context uses buffered, node-based source extracts; features without a node inside that buffer can be absent.",
-          "Starts must connect through hiking links within 50 walking miles to a mapped hiking trail touching this area's GMBA Standard mountain core. Ordinary roads do not establish mountain approaches. Unknown access is included; low foothills and disconnected source trails can be excluded. This qualifies starts, not every generated route's terrain.",
+          "Starts must connect through hiking links within 25 walking miles to a mapped hiking trail touching this area's GMBA Standard mountain core. Ordinary roads do not establish mountain approaches. Unknown access is included; low foothills and disconnected source trails can be excluded. This qualifies starts, not every generated route's terrain.",
           "Regional graphs preserve supported routes within the configured distance budget; missing source trails may still exist."];
         const options = {databasePath,outputRoot,geometry:area.geometry,sources,regions:[searchRegion(sources)],
           builtAt:sources.map(source => source.retrievedAt).sort().at(-1)!,compilerVersion:BUILD_VERSION,metricAlgorithmVersion:METRIC_VERSION,

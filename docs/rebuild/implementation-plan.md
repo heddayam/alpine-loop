@@ -27,10 +27,10 @@ these product limits never clip routes. Broad outlines, EPA residual allocation
 and the separate terrain mask are removed.
 
 A start needs a connected source-supported pedestrian entrance and a hiking
-connection to its selected core within 50 walking miles. Building counts describe
-the surroundings and never veto an entrance. The 50-mile association is the
-existing inclusive graph-distance policy, previously documented incorrectly as
-25 miles; the separate 25-mile geographic route buffer remains unchanged.
+connection to its selected core within 25 walking miles. Building counts describe
+the surroundings and never veto an entrance. The shared distance helper halves
+its 50-mile return-distance budget to the existing 25-mile one-way association
+limit; the separate 25-mile geographic route buffer remains unchanged.
 Ordinary roads and validated parking/vehicle-turnaround places establish local
 arrival context. Connected service approaches and affirmative-motor track
 approaches lead to hiking departures or mapped mode frontiers. Unknown/private

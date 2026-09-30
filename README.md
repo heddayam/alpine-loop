@@ -111,12 +111,12 @@ for the configured names: eleven Washington regions following WTA's familiar
 regional organization and the four existing California areas. All areas use one
 pinned **GMBA Standard** mountain-range inventory.
 Starts require a connected mapped pedestrian entrance and a hiking connection
-to their selected mountain core within 50 walking miles. Building density is
+to their selected mountain core within 25 walking miles. Building density is
 descriptive context rather than an exclusion. Unmarked mountain entrances and
 connected valley approaches remain eligible; ordinary roads cannot establish
-the mountain connection. The 50-mile association preserves the actual existing
-policy; earlier documentation incorrectly called it 25 miles. The independent
-25-mile geographic route buffer remains unchanged. Washington's state scope and
+the mountain connection. The shared distance helper receives a 50-mile
+return-distance budget and applies a 25-mile one-way association limit. The
+independent 25-mile geographic route buffer remains unchanged. Washington's state scope and
 the previous four California territories limit entrance nomination. See the
 [range definitions](data/coverage/regions/README.md) for provenance and limits.
 

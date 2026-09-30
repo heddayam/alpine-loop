@@ -122,8 +122,10 @@ the evidence line.
 - [x] Implement one connected-entry evaluator, mode/direction/node passage
   normalization, typed local arrival places, frozen publication witnesses and
   versioned compatibility. Remove the building-density admission veto; retain
-  its descriptive counts. The actual existing mountain association is 50 walking
-  miles, correcting the former 25-mile documentation; route buffers are unchanged.
+  its descriptive counts. The actual existing mountain association is 25 walking
+  miles: the shared helper halves its 50-mile return-distance input. The initial
+  review's 50-mile wording was an interpretation error; behavior and route buffers
+  are unchanged.
   Final proof/source focused checks pass 183 cases; source extraction checks pass
   78 cases and the shared-context follow-up passes 32 (these suites overlap).
 - [x] Replace named-outline proximity with prepared entrance membership and

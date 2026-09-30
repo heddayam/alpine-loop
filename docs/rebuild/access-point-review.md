@@ -51,8 +51,9 @@ and path-only Alum Rock circles challenge the same rule. This is a source-functi
 product assumption, not certified global vehicle reachability.
 
 Building density no longer vetoes entrance admission. The actual existing
-mountain association is **50 walking miles**, previously documented incorrectly
-as 25; the independent 25-mile geographic route buffer is unchanged. Association
+mountain association is **25 walking miles**. The shared helper halves its
+50-mile return-distance input; the earlier review mistook that input for the
+one-way limit. The independent 25-mile geographic route buffer is unchanged. Association
 does not prove a known-only journey to a core or an appealing hike.
 
 The map and Full now use the same request selector, actual regional membership
@@ -109,7 +110,7 @@ Test its effect on representative entrances, generated routes and Full-search
 cost, rather than retain it merely because it exists or delete it merely because
 fewer rules sound better.
 
-Hold historical density and the actual **50-mile mountain association** constant when comparing
+Hold historical density and the actual **25-mile mountain association** constant when comparing
 old/new detector accuracy, then separately compare product fit with density
 removed. That experimental control does not make retention the desired end-state.
 Topology plus mountain association does not prove an appealing hike; inspect dense
@@ -146,7 +147,7 @@ The historical second-review challenges are [entry semantics](access-review/entr
 | Normalization | Exclusive trail/street/service/sidewalk class; one pedestrian access state | A foot-allowed road can lose its road identity; vehicle permissions and node crossing restrictions are not represented independently. |
 | Nomination | Street contact; evidence at service contact; trailhead within 250 m of track; one parking contact | Different source mapping forms receive different admission rules despite equivalent entry topology. |
 | Candidate permission | Worst access state of every incident trail way | A private branch can veto a public departure, while a foot-private gate can be ignored. |
-| Product relevance | Fewer than ten mapped buildings within 500 m; actual hiking connection within 50 miles to a GMBA core | These were scope exclusions; old documentation incorrectly called the latter 25 miles. |
+| Product relevance | Fewer than ten mapped buildings within 500 m; actual hiking connection within 25 miles to a GMBA core | These were scope exclusions; the shared helper halves its 50-mile return-distance input. |
 | Preparation/publication | Freeze starts, add outside-start neighborhoods and support, prune, measure, compact | Frozen entrance rows already exist; runtime membership inferred from polygons can disagree with those rows. |
 | Installed overlap | Stable owner selected by geometry plus graph-node existence | Node existence does not prove that owner admitted the entrance. |
 | Named filtering | Expanded start polygon plus another 500 m runtime tolerance | Nearby starts from another installed region can satisfy the selected region without membership. |
@@ -306,11 +307,11 @@ new starts implicitly; changed nomination context requires explicit re-preparati
 Keep the GMBA cores as named destination geography. Use each region artifact's
 frozen entrance records as **explicit membership**, rather than adding a second
 catalog. Keep the current inclusive, undirected hiking/possible-link association:
-at most 50 walking miles to an unambiguous hiking link touching the core, measured with
+at most 25 walking miles to an unambiguous hiking link touching the core, measured with
 the current endpoint seeding. Ordinary roads cannot establish it. This is static
 destination association, not proof of a known-only directed journey to the core.
-Decouple the actual 50-mile policy constant from the route-support budget without
-changing its value or pretending it measures the exact core intersection.
+Keep the effective 25-mile association limit independent of the route-support
+budget without changing its value or pretending it measures the exact core intersection.
 
 Named selection is membership in the prepared entrance set, including actual
 approaches outside the core. Drawn selection is exact entrance-coordinate
