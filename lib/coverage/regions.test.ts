@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { beforeAll, expect, it, vi } from "vitest";
+import regroupingBaseline from "@/data/fixtures/coverage/wta-regrouping-baseline.json";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import { coordinateIsInsideArea } from "@/lib/graph/geometry";
 import { listCoverageRegions, readCoverageRegion } from "./regions";
@@ -12,8 +14,17 @@ vi.mock("node:fs/promises", async original => {
   return {...actual,readFile:vi.fn(actual.readFile)};
 });
 type Region=Awaited<ReturnType<typeof readCoverageRegion>>;
-type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];startLimitPath?:string;approaches:NonNullable<Region["reviewedApproaches"]>}>};
+type Approach={id:string;name:string;coordinates:[number,number];radiusMeters?:number;basis:string;url:string|null};
+type Catalog={schemaVersion:number;startLimitPath:string;regions:Array<{id:string;rangeIds:string[];recipePath:string;startLimitPath?:string;approachRadiusMeters:number;approaches:Approach[]}>};
 type Ranges={properties:{source:{id:string};archiveSha256:string;derivation:{missingBroadLeafIds:string[]}};features:Array<{properties:{id:string;name:string;ancestry:string[]};geometry:AreaGeometry}>};
+const washingtonIds=[
+  "central-cascades","central-washington","eastern-washington","issaquah-alps","mount-rainier-area",
+  "north-cascades","olympic-peninsula","puget-sound-and-islands","snoqualmie-region","south-cascades","southwest-washington",
+];
+const californiaIds=regroupingBaseline.california.map(region=>region.id);
+const catalogDirectory=path.resolve("data/coverage/regions");
+const fileHash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
+const washingtonEntries=()=>catalog.regions.filter(region=>!californiaIds.includes(region.id));
 let catalog:Catalog,ranges:Ranges,regions:Map<string,Region>;
 beforeAll(async()=>{
   catalog=JSON.parse(await readFile(path.resolve("data/coverage/regions/catalog.json"),"utf8"));
@@ -39,29 +50,65 @@ it("pins named Standard leaves, ancestry and portable source attribution",()=>{
   }
 });
 
+it("conserves every selected Washington mountain and reviewed approach through regrouping",async()=>{
+  const washington=washingtonEntries();
+  expect(washington.map(region=>region.id).sort()).toEqual([...washingtonIds].sort());
+  // Equal sorted multisets catch both omitted leaves and duplicate ownership.
+  // The baseline comes from the previous catalog, independently of this mapping.
+  const selected=washington.flatMap(region=>region.rangeIds).sort();
+  expect(selected).toHaveLength(123);
+  expect(selected).toEqual(regroupingBaseline.washingtonRangeIds);
+  expect(new Set(selected).size).toBe(selected.length);
+  const approaches=washington.flatMap(region=>region.approaches.map(point=>({
+    id:point.id,sha256:contentId(point),radiusMeters:point.radiusMeters??region.approachRadiusMeters,
+  }))).sort((a,b)=>a.id.localeCompare(b.id));
+  expect(approaches).toHaveLength(64);
+  expect(approaches).toEqual(regroupingBaseline.washingtonReviewedApproaches);
+  expect(new Set(approaches.map(point=>point.id)).size).toBe(approaches.length);
+  expect(fileHash(await readFile(path.resolve("data/coverage/mountain-ranges.geojson"))))
+    .toBe(regroupingBaseline.mountainRangeFileSha256);
+  expect(catalog.startLimitPath).toBe(regroupingBaseline.washingtonStartLimit.path);
+  expect(fileHash(await readFile(path.resolve(catalogDirectory,catalog.startLimitPath))))
+    .toBe(regroupingBaseline.washingtonStartLimit.sha256);
+  for(const entry of washington) {
+    expect(entry.startLimitPath,entry.id).toBeUndefined();
+    expect(entry.recipePath,entry.id).toBe(regroupingBaseline.washingtonRecipe.path);
+    expect(regions.get(entry.id)!.replaces,`${entry.id}: regrouping must not promise historical route retention`).toBeUndefined();
+  }
+  expect(fileHash(await readFile(path.resolve(catalogDirectory,regroupingBaseline.washingtonRecipe.path))))
+    .toBe(regroupingBaseline.washingtonRecipe.sha256);
+});
+
+it("preserves exact California catalog entries, nomination caps and source recipes",async()=>{
+  for(const baseline of regroupingBaseline.california) {
+    const entry=catalog.regions.find(region=>region.id===baseline.id)!;
+    expect(contentId(entry),baseline.id).toBe(baseline.catalogSha256);
+    expect(fileHash(await readFile(path.resolve(catalogDirectory,entry.startLimitPath!))),baseline.id)
+      .toBe(baseline.startLimitFileSha256);
+    expect(fileHash(await readFile(path.resolve(catalogDirectory,entry.recipePath))),baseline.id)
+      .toBe(baseline.recipeFileSha256);
+  }
+});
+
 it("reuses a full named leaf for a different territory without changing the source dataset",async()=>{
   const oregon:[number,number]=[-118.30649444676988,45.61998033];
   const blue=ranges.features.find(feature=>feature.properties.id==="16211")!;
   expect(coordinateIsInsideArea(oregon,blue.geometry)).toBe(true);
-  expect(coordinateIsInsideArea(oregon,regions.get("blue-mountains")!.geometry)).toBe(false);
+  expect(coordinateIsInsideArea(oregon,regions.get("eastern-washington")!.geometry)).toBe(false);
   const cap={type:"Feature",geometry:rectangle([-118.4,45.5,-118.2,45.7])};
   const changed=structuredClone(catalog);
-  changed.regions.push({...changed.regions.find(region=>region.id==="blue-mountains")!,
-    id:"oregon-blue-mountains",startLimitPath:"oregon-product-cap.geojson",approaches:[]});
+  changed.regions.push({...changed.regions.find(region=>region.id==="eastern-washington")!,
+    id:"oregon-blue-mountains",rangeIds:["16211"],startLimitPath:"oregon-product-cap.geojson",approaches:[]});
   vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed))
     .mockResolvedValueOnce(JSON.stringify(ranges)).mockResolvedValueOnce(JSON.stringify(cap));
   const added=await readCoverageRegion("oregon-blue-mountains");
   expect(coordinateIsInsideArea(oregon,added.geometry)).toBe(true);
   expect(subtractCoverage(added.geometry,cap.geometry)).toBeNull();
-  expect(added.sources![0]).toEqual(regions.get("blue-mountains")!.sources![0]);
+  expect(added.sources![0]).toEqual(regions.get("eastern-washington")!.sources![0]);
 });
 
-it("plans all sixteen cores offline with supported route buffers and explicit provenance",async()=>{
-  expect((await listCoverageRegions()).map(entry=>entry.id).sort()).toEqual([
-    "central-cascades","henry-coe","monterey-carmel","north-cascades","olympic-peninsula",
-    "rainier-goat-rocks","santa-cruz-mountains","southern-east-bay","southwest-cascades",
-    "blue-mountains","columbia-basin","north-puget","northeast-washington","south-puget","spokane-palouse","willapa-hills",
-  ].sort());
+it("plans all fifteen cores offline with supported route buffers and explicit provenance",async()=>{
+  expect((await listCoverageRegions()).map(entry=>entry.id).sort()).toEqual([...washingtonIds,...californiaIds].sort());
   for(const [id,region] of regions) {
     const plan=planCoverageRegion(region);
     expect(subtractCoverage(plan.geometry,unionCoverage(region.recipe.sources.map(source=>source.geometry))),id).toBeNull();
@@ -71,43 +118,53 @@ it("plans all sixteen cores offline with supported route buffers and explicit pr
   }
 },15000);
 
-it("keeps representative mountain starts while excluding lowland cities from Central",()=>{
+it.each([
+  {name:"Lost Creek / Mountain Loop",point:[-121.3366962,48.0937555],owner:"north-cascades"},
+  {name:"Heather Lake / Stevens Pass",point:[-121.0756526,47.8662242],owner:"central-cascades"},
+  {name:"Stuart Lake / Leavenworth",point:[-120.8207727,47.5277884],owner:"central-cascades"},
+  {name:"Snoqualmie Alpine Lakes",point:[-121.4235243,47.4455622],owner:"snoqualmie-region"},
+  {name:"West Fork Teanaway",point:[-120.960625,47.2982778],owner:"snoqualmie-region"},
+  {name:"Tiger Mountain",point:[-121.972,47.488],owner:"issaquah-alps"},
+  {name:"Manastash Ridge",point:[-120.771,46.993],owner:"central-washington"},
+  {name:"Longmire / Paradise",point:[-121.81253,46.7501122],owner:"mount-rainier-area"},
+  {name:"Goat Rocks Snowgrass",point:[-121.518893,46.4639429],owner:"south-cascades"},
+  {name:"Ape Canyon / St. Helens",point:[-122.092329,46.165278],owner:"south-cascades"},
+])("assigns $name to its hiking district without losing or duplicating the core",({point,owner})=>{
+  expect(washingtonIds.filter(id=>coordinateIsInsideArea(point as [number,number],regions.get(id)!.geometry))).toEqual([owner]);
+});
+
+it("excludes lowland cities from the Cascades mountain cores",()=>{
   const central=regions.get("central-cascades")!;
-  for(const point of [[-121.3366962,48.0937555],[-121.0756526,47.8662242],[-120.8207727,47.5277884]] as [number,number][])
-    expect(coordinateIsInsideArea(point,central.geometry),String(point)).toBe(true); // Lost Creek, Heather, Stuart Lake
   for(const point of [[-122.1252,48.1987],[-122.334,48.4212],[-122.33,47.61]] as [number,number][])
     expect(coordinateIsInsideArea(point,central.geometry),String(point)).toBe(false); // Arlington, Mount Vernon, Seattle
-  expect(central.replaces).toBeUndefined();
-  expect(central.aliases).toEqual(expect.arrayContaining(["Glacier Peak","Glacier Peak Wilderness","Henry M. Jackson Wilderness"]));
 });
 
 it("retains reviewed approaches as audit anchors without adding their neighborhoods to the core",async()=>{
-  const central=regions.get("central-cascades")!;
-  expect(central.reviewedApproaches).toHaveLength(28);
-  expect(central.reviewedApproaches!.find(point=>point.id==="6304.005511")?.radiusMeters).toBe(600);
-  expect(central.reviewedApproaches!.filter(point=>point.id==="5278010416")).toHaveLength(1);
-  expect(central.reviewedApproaches!.some(point=>point.id==="6300.005511")).toBe(false);
+  const approaches=washingtonIds.flatMap(id=>regions.get(id)!.reviewedApproaches!);
+  expect(approaches.find(point=>point.id==="6304.005511")?.radiusMeters).toBe(600);
+  expect(approaches.filter(point=>point.id==="5278010416")).toHaveLength(1);
+  expect(approaches.some(point=>point.id==="6300.005511")).toBe(false);
   const baseline=JSON.parse(await readFile(path.resolve("data/fixtures/coverage/central-cascades-baseline.json"),"utf8"));
   for(const previous of baseline.regions) for(const expected of previous.approaches)
-    expect(central.reviewedApproaches).toContainEqual({id:expected.id,name:expected.name,coordinates:expected.coordinates,radiusMeters:expected.radiusMeters});
+    expect(approaches).toContainEqual({id:expected.id,name:expected.name,coordinates:expected.coordinates,radiusMeters:expected.radiusMeters});
   const olympic=regions.get("olympic-peninsula")!,ozette:[number,number]=[-124.66889,48.15519];
   expect(coordinateIsInsideArea(ozette,olympic.geometry)).toBe(false);
   expect(coordinateIsInsideArea(ozette,olympic.startLimitGeometry!)).toBe(true);
   const changed=structuredClone(catalog);
-  changed.regions.find(region=>region.id==="central-cascades")!.approaches=[];
+  changed.regions.find(region=>region.id==="olympic-peninsula")!.approaches=[];
   vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(changed));
-  const withoutAnchors=await readCoverageRegion("central-cascades");
-  expect(withoutAnchors.geometry).toEqual(central.geometry);
-  expect(withoutAnchors.startLimitGeometry!).toEqual(central.startLimitGeometry!);
-  expect(withoutAnchors.sources![2]!.contentHash).not.toBe(central.sources![2]!.contentHash);
+  const withoutAnchors=await readCoverageRegion("olympic-peninsula");
+  expect(withoutAnchors.geometry).toEqual(olympic.geometry);
+  expect(withoutAnchors.startLimitGeometry!).toEqual(olympic.startLimitGeometry!);
+  expect(withoutAnchors.sources![2]!.contentHash).not.toBe(olympic.sources![2]!.contentHash);
 });
 
 it("limits Washington starts to Washington while route support can extend into Oregon",()=>{
-  const southwest=regions.get("southwest-cascades")!,oregon:[number,number]=[-122,45.5];
+  const southwest=regions.get("southwest-washington")!,oregon:[number,number]=[-122,45.5];
   expect(coordinateIsInsideArea(oregon,southwest.geometry)).toBe(false);
   expect(coordinateIsInsideArea(oregon,southwest.startLimitGeometry!)).toBe(false);
   expect(coordinateIsInsideArea(oregon,planCoverageRegion(southwest).geometry)).toBe(true);
-  expect(coordinateIsInsideArea([-116.7,47.7],regions.get("northeast-washington")!.startLimitGeometry!)).toBe(false); // Idaho
+  expect(coordinateIsInsideArea([-116.7,47.7],regions.get("eastern-washington")!.startLimitGeometry!)).toBe(false); // Idaho
   const north=planCoverageRegion(regions.get("north-cascades")!);
   expect(coordinateIsInsideArea([-121.4077738,48.9998624],north.geometry)).toBe(true); // US Chilliwack routing support
   expect(coordinateIsInsideArea([-121.7736891,48.99766],north.geometry)).toBe(false); // Canada

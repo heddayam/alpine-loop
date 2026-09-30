@@ -1,0 +1,486 @@
+{
+  "schemaVersion": 1,
+  "capturedFrom": "GMBA Standard catalog before WTA-style regrouping at 2026-09-29; immutable conservation evidence, not a production region registry.",
+  "mountainRangeFileSha256": "ede170c4e2a6626e6db4ee324bdd753788d91c72c31dd0423adbd4a83c1aeb4a",
+  "washingtonStartLimit": {
+    "path": "../../fixtures/coverage/washington-start-coverage.geojson",
+    "sha256": "6f5274416c8dcf9bf05d2daff212a7344cdd4a73ffb461fec16d6a00084e4f3d"
+  },
+  "washingtonRecipe": {
+    "path": "../recipes/washington.json",
+    "sha256": "dffdee377e2571e1923a7929cc7db1d0c45858199de0e26bdf2d059947de44c3"
+  },
+  "washingtonRangeIds": [
+    "16160",
+    "16161",
+    "16163",
+    "16166",
+    "16167",
+    "16198",
+    "16206",
+    "16207",
+    "16208",
+    "16209",
+    "16211",
+    "16217",
+    "16218",
+    "16219",
+    "16220",
+    "16222",
+    "16223",
+    "16225",
+    "16226",
+    "16227",
+    "16228",
+    "16229",
+    "16230",
+    "16243",
+    "16936",
+    "16937",
+    "16938",
+    "16939",
+    "16940",
+    "16941",
+    "16942",
+    "16944",
+    "16945",
+    "16947",
+    "16948",
+    "16956",
+    "16957",
+    "16958",
+    "16959",
+    "16960",
+    "16961",
+    "16962",
+    "16967",
+    "16969",
+    "16970",
+    "16971",
+    "16972",
+    "16973",
+    "16975",
+    "16976",
+    "16977",
+    "16978",
+    "16979",
+    "16980",
+    "16981",
+    "16982",
+    "16984",
+    "16985",
+    "16986",
+    "16987",
+    "16989",
+    "16990",
+    "16991",
+    "16993",
+    "16994",
+    "16995",
+    "16997",
+    "16999",
+    "17001",
+    "17012",
+    "17013",
+    "17014",
+    "17015",
+    "17016",
+    "17017",
+    "17018",
+    "17019",
+    "17020",
+    "17021",
+    "17023",
+    "17024",
+    "17025",
+    "17026",
+    "17027",
+    "17028",
+    "17029",
+    "17030",
+    "17032",
+    "17033",
+    "17035",
+    "17036",
+    "17037",
+    "17038",
+    "17040",
+    "17041",
+    "17042",
+    "17043",
+    "17044",
+    "17155",
+    "17178",
+    "17179",
+    "17180",
+    "17181",
+    "17182",
+    "17183",
+    "17185",
+    "17186",
+    "17187",
+    "17188",
+    "17189",
+    "17190",
+    "17192",
+    "17193",
+    "17194",
+    "17195",
+    "17196",
+    "17197",
+    "17199",
+    "17200",
+    "17203",
+    "17204",
+    "17206",
+    "19110"
+  ],
+  "washingtonReviewedApproaches": [
+    {
+      "id": "11194010357",
+      "sha256": "0c9191136aae63e049037a263fc7bcf542fd55eff2fedba6cffa04abb3fbf06c",
+      "radiusMeters": 500
+    },
+    {
+      "id": "11198010357",
+      "sha256": "61cf1fb43ad99f791997521401a1b90f96b690e84fcc3278d85fe872158a92af",
+      "radiusMeters": 500
+    },
+    {
+      "id": "11201010357",
+      "sha256": "51c2f48b010effc87e4e8ed5d9fbdb6161e87acd0ad58b5f6c0e56455e24fe8b",
+      "radiusMeters": 500
+    },
+    {
+      "id": "11303010357",
+      "sha256": "34979d5d8f86321f89c3231839b2c6c665937e8c13eb303a533fb9dd68f10bff",
+      "radiusMeters": 500
+    },
+    {
+      "id": "11308010357",
+      "sha256": "373d3b72d24a6aa36323bd7a5c94c360531393f33fa1665205339b3ba13aead1",
+      "radiusMeters": 500
+    },
+    {
+      "id": "48232",
+      "sha256": "a8ae59dc647238c4260213281bdf716c7f0e90e53a0fde88831c597bd8bab2b5",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5112010416",
+      "sha256": "39b6eba45a8e0ad71fb1dde0c1ccb2df4ff5ddb06d269dc77fd9f8b0d3153e33",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5278010416",
+      "sha256": "8afa9b8178b2261efadd58afedc9f3bd8c659fd11b09f8f6a9473251268afa2f",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5339010357",
+      "sha256": "2319dbddc549c4c896fb41b5b63755e9929b8404691839607577946775efded3",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5346010357",
+      "sha256": "0079620d9d476cee99db78329e4487dfa060036d67687b47a242c77a668f48d1",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5357010357",
+      "sha256": "a06479fd71caa181eb4af4a4a025bcd7f96a958123186ddfb94e448c9b6cfdcd",
+      "radiusMeters": 500
+    },
+    {
+      "id": "5420.004841",
+      "sha256": "4fb89dd138e4a395eb1f639cb4577225cbb0eafc45ac384551acfba44eec451d",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6278.005511",
+      "sha256": "0e033319b29a42506e9c96f938773951dd1dab6fb0f321cbb982b3468b0283e1",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6279.005511",
+      "sha256": "ec9bd35858891d1ada1e233b5af297511fb75cb1a3f1a5895274b482f6185839",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6301.005511",
+      "sha256": "4a367077f03a861a0ae12c311c93e41888354f3837d4518956a65c38a86fe304",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6303.005511",
+      "sha256": "66c334a93f7c764c2a5d4768852e1455a05c584d30f2837da3468121592bbbe8",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6304.005511",
+      "sha256": "51b4025f97d6826d6633dab6a674cdbcf7b32fc07ef6b0545ddc5486f2b5f043",
+      "radiusMeters": 600
+    },
+    {
+      "id": "6305.005511",
+      "sha256": "c81149025a165965e1866259d6ea7c9006d4a4e131c173ea46d69b2256c6e6c9",
+      "radiusMeters": 500
+    },
+    {
+      "id": "6307.005511",
+      "sha256": "5379706836af056ac7ef3dd771f2aae360aa44c9d21a6e3a60582624cb78b916",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-adams-north-killen",
+      "sha256": "5ac7d6facb67f4f6f23de85c452c83821f449975dabfc5364c493173f1e12936",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-adams-south-stagman",
+      "sha256": "2b039565dea1d6ae0f9548961fa1c9efe00ae3fdca17b785ca0bc2447d224954",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-ape-canyon-loowit",
+      "sha256": "845211a9a4583f5085cce26e9e39a23d0fa474dec5c78ad2051a0605e397a141",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-baker-lake",
+      "sha256": "4154b4c827629b83161cfff9f897976453c11fa3f4b89f61a60a9e480a214cd5",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-buckhorn-mount-townsend",
+      "sha256": "ba9b439587ba3577753090579eced63a8879f4633cce88557c4d50b676550464",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-chinook-naches",
+      "sha256": "64ff3e1ed39addc88e0bf62f985d83708b4fa6bbb673454ce1fa0f5c81c4a8de",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-chiwawa-spider-meadow",
+      "sha256": "5b778e117b02753b72eb027c5c7cf4f91e5bff9bac505f4479fc93821582ebc9",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-cle-elum-pete-lake",
+      "sha256": "eee34cbe07d88545400a3669d98b4746f6c9f90a3a908806a84a6cf8956999aa",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-diablo-ross-lake",
+      "sha256": "61e43020c3420875b1921dda4f2811284ced37d754b4493cb41281523aabd734",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-east-glacier-peak-white-river",
+      "sha256": "a14df5c985d4fbf959e00af07d67d5037398e29ea8f4b06e1447ddadb9549c7e",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-elwha-olympic-hot-springs-road",
+      "sha256": "87d08d837019151b17b71ad42d8eaa41d883c28bf19c7b35d90f1e78672434b6",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-goat-rocks-snowgrass",
+      "sha256": "fa76a0537103d0342d70eede8b2dc8d49e3968c050b7a50511f6d7c01b8eb6aa",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-goat-rocks-walupt",
+      "sha256": "f7c31bf884eaf508f4131fa8e61da3187ff91de87508a929be9c9ec4d118768c",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-greenwater-norse-peak",
+      "sha256": "f1bd69220b0ef7bb5ac222e4035b5548543484c1e4785323ca6216816e48a7e2",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-hannegan-artist-point",
+      "sha256": "8634cf02ccd370a6b17aa4b8558795cbcd5973d10d810a34330b2a76208f3a09",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-hoh-rainforest",
+      "sha256": "159b468fc0a66cc6ca96362d0afcd409d03d14190a660bf825d27dd36e001e47",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-hurricane-ridge",
+      "sha256": "de72777847bc729103bb6d3580f643001c1e157d6d97de64ccd1087acde1d93f",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-icicle-enchantments",
+      "sha256": "d31e2c92c703cd39f55aabbf0e62d343861cad3c446f5068b5ccb711b9dda285",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-indian-heaven-lemei",
+      "sha256": "a16a94ce19deaac5673de344fb4dcac7fb789bbf69d0fc4ecae27f911d64598c",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-june-lake-loowit",
+      "sha256": "5ced529025b656b7b9f9bd70c96f65018ac1d35d2f41c6da459e1fec50a8342d",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-longmire-paradise",
+      "sha256": "b392bb602fc1e691713f990f53b7fc7bb67de802e997a29418102849b12f8166",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-methow-twisp",
+      "sha256": "31f65344361680c80b29e6bc9adbd3c5d25ba1dfd47fb90a30dce69cc8098f54",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-mount-margaret-boundary",
+      "sha256": "7ed6b69844d214a0b58faf3e8f1bd13e5444d0dc32e52164b7107358d31a732b",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-mowich-carbon",
+      "sha256": "aaff8e6b27cc1fa78ae00fb7bf62fcc26eb6263c11da7670bdb874041a0826f5",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-ohanapecosh",
+      "sha256": "93e369657742ff0b76dffc428afe1ebed4b3e43e95b38c77b0da16b7a0d032d1",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-ozette-triangle",
+      "sha256": "db5af077284a4c64c50404b09bc5af55b24fa84c0f23e414c8f6fccb833b6d42",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-pasayten-east",
+      "sha256": "7747cb3ac35968f63b33c4ec7938f6ee194981c54445665ea8d2859c619a9fcf",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-pasayten-west",
+      "sha256": "a34af9bef179eb4ba64525bd366c899b059e544935167178e3c1041c452ef08b",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-quinault-kestner-homestead",
+      "sha256": "484425f90545009575bae5ca113876cd8ddb457e06a54183ff821425b17146a0",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-quinault-rainforest",
+      "sha256": "0e72a252e7b4503a38a048ee9dab786f7ed9aaaa68bad3bc69b1a16afcd0ef30",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-rainy-maple-pass",
+      "sha256": "a63c7c51952c2ff6f9190a1c71ccfae007979330b076e568e311dcb44a6664e2",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-silver-star-tarbell",
+      "sha256": "cc16862532a0a7d88001ef85a134b3bc7186b084d9a628813fff76817bf53739",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-snoqualmie-alpine-lakes",
+      "sha256": "b65706924a265d183a56053c272b59630766abd19a9c76cca6e8df947dbb308b",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-sol-duc-lovers-lane",
+      "sha256": "b17157f4fd6cc59021a5e0cbf7540251d14788fa5455b78290bb2b6cacad8d2c",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-staircase-rapids",
+      "sha256": "8c5e3f5126c93a7d5033a9ad930596b4f4d61e2cf09a4e9ec07d372b197c71f6",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-stehekin-foot-approach",
+      "sha256": "5f3417c33c6194d39fd189b7cd57965de54d9a168c1cea69ce5b191f88d371e5",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-stevens-pass",
+      "sha256": "890521e394be752f7d8678d2dc2c19d2ec24c8e1d9c116567a6d38090bc7f94e",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-sunrise-white-river",
+      "sha256": "29112fa6609e58a9897ebf9745392373e6e829d8f8c7e0fd705fc5983e11d1ef",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-teanaway-west-fork",
+      "sha256": "633af423f830c4e06f3eb13ab3e2e30906b46f1989447144255251b50853d6d0",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-trapper-creek-big-hollow",
+      "sha256": "9b690c2192060905d9ca3e1e072521e194f8d3d25e4aa7414b3fbf5905a4205a",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-upper-cispus-blue-lake",
+      "sha256": "cf3f0eec7702f3963bf777bc8af0073ef194b5f92a408387e5e4af89648782e9",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-west-cady-north-fork",
+      "sha256": "995407e2db5291b22921dbb340e265b7c4fb433c5a3cf1d28213d7f4b0ebb847",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-west-glacier-peak-north-fork-sauk",
+      "sha256": "576ffc23148548649577a5f13880e1a03a06ca1b9bc7c5329cedb8522779c876",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-white-pass",
+      "sha256": "9015b327f78b889f0706b55096999b74786cb65019dd497b6436eaa0755060c0",
+      "radiusMeters": 500
+    },
+    {
+      "id": "historical-william-o-douglas-pear-butte",
+      "sha256": "66f57a699edb088d13d9a05fad163feff1cab944d573813afbed4a114db86116",
+      "radiusMeters": 500
+    }
+  ],
+  "california": [
+    {
+      "id": "santa-cruz-mountains",
+      "catalogSha256": "a136c7fc93fefaed8623b719662bbf073fe25668bda728a995f1c31993506811",
+      "startLimitFileSha256": "c212bb3e3aa6701637a3911de7408a9e10c01265acacbdbb49a8d317958102dc",
+      "recipeFileSha256": "d81d6886ad33f8ccd3a2faccf1d12b20aef02ec2f6cf292cefb740655ef95a00"
+    },
+    {
+      "id": "southern-east-bay",
+      "catalogSha256": "03b6f5a840b711f67c505236005e85ca6f3453fcedab8055f530871539772af5",
+      "startLimitFileSha256": "6c7b670b1075190344c6e4ac15aaf57716fefe47dca3354594acff6c56f6e3a2",
+      "recipeFileSha256": "d81d6886ad33f8ccd3a2faccf1d12b20aef02ec2f6cf292cefb740655ef95a00"
+    },
+    {
+      "id": "monterey-carmel",
+      "catalogSha256": "ebe390e48cb3e4586130f8958487ece07e4091811d935773d1afd73658ffdad7",
+      "startLimitFileSha256": "5d819d56a9e40aa8e782ad2a5766189ee7c0209f119590fa8c241febd12b5ccc",
+      "recipeFileSha256": "d81d6886ad33f8ccd3a2faccf1d12b20aef02ec2f6cf292cefb740655ef95a00"
+    },
+    {
+      "id": "henry-coe",
+      "catalogSha256": "da5174d915e94a6635e1504c3f883b200e8076a5a40033ba6f41ea527057aeb4",
+      "startLimitFileSha256": "7d410a95a6598585b8cc7e603bd880869be5edb84cd4aa0159f6ba254d6438e4",
+      "recipeFileSha256": "d81d6886ad33f8ccd3a2faccf1d12b20aef02ec2f6cf292cefb740655ef95a00"
+    }
+  ]
+}

@@ -7,11 +7,18 @@ import { readCoverageRegion } from "./regions";
 
 type Position = [number, number];
 const expectedCounts:Record<string,number>={"north-central":6,"central-rainier":16,"rainier-southwest":2};
+// Preserve the historical source fixture and its exclusion evidence while
+// checking the current districts that own each former seam's routing support.
+const currentDistricts:Record<string,string[]>={
+  "north-central":["north-cascades","central-cascades"],
+  "central-rainier":["snoqualmie-region","mount-rainier-area","central-washington"],
+  "rainier-southwest":["mount-rainier-area","south-cascades","southwest-washington"],
+};
 
 // Coordinates come from pinned source ways, never from the polygons under test.
 for (const seam of fixture.seams) {
   it(`preserves the reviewed ${seam.id} source lines without requiring graph stitching`,async()=>{
-    const regions=await Promise.all(seam.regionIds.map(readCoverageRegion));
+    const regions=await Promise.all(currentDistricts[seam.id]!.map(readCoverageRegion));
     const plans=regions.map(planCoverageRegion);
     const eligibleStarts=unionCoverage(plans.map(plan=>plan.startGeometry));
     const routingSupport=unionCoverage(plans.map(plan=>plan.geometry));
