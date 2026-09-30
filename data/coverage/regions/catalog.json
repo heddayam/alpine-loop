@@ -1504,6 +1504,22 @@
         "17020",
         "17021",
         "17030"
+      ],
+      "unavailableApproaches": [
+        {
+          "id": "historical-june-lake-loowit",
+          "sourceId": "geofabrik-washington-osm",
+          "sourceHash": "sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+          "reviewedAt": "2026-09-29T00:00:00-07:00",
+          "reason": "June Lake Trailhead is unavailable as a route start in this data version: the trail meets a service road, but the mapped entrance has no trailhead or gate evidence and the parking area has no mapped trail contact."
+        },
+        {
+          "id": "historical-upper-cispus-blue-lake",
+          "sourceId": "geofabrik-washington-osm",
+          "sourceHash": "sha256:3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+          "reviewedAt": "2026-09-29T00:00:00-07:00",
+          "reason": "Blue Lake ORV Trailhead is unavailable as a route start in this data version: its mapped parking area has no road or trail contact, and the nearby trail is not connected to the local access road."
+        }
       ]
     },
     {

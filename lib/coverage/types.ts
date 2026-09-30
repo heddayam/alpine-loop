@@ -4,6 +4,15 @@ import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { DataRelease } from "@/lib/contracts/releases";
 import type { SourceRecipe } from "./recipe";
 
+/** A reviewed source-specific gap never creates a route start or connector. */
+export const unavailableReviewedStartSchema = z.object({
+  sourceId: z.string().min(1),
+  sourceHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  reviewedAt: z.iso.datetime({ offset: true }),
+  reason: z.string().trim().min(1),
+}).strict();
+export type UnavailableReviewedStart = z.infer<typeof unavailableReviewedStartSchema>;
+
 /** A named hiking area resolves all developer build inputs through one catalog. */
 export type CoverageRegion = {
   id: string;
@@ -16,7 +25,7 @@ export type CoverageRegion = {
   sources?: DataRelease["sources"];
   /** Retire these published areas only after this graph preserves their start coverage. */
   replaces?: string[];
-  reviewedApproaches?: Array<{id: string; name: string; coordinates: [number, number]; radiusMeters: number}>;
+  reviewedApproaches?: Array<{id: string; name: string; coordinates: [number, number]; radiusMeters: number; unavailableStart?: UnavailableReviewedStart}>;
 };
 
 export const coverageUnitSchema = z.object({

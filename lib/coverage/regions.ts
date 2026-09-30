@@ -5,6 +5,7 @@ import { contentId, intersectCoverage, unionCoverage } from "./geometry";
 import { entranceNeighborhood } from "./plan";
 import { readSourceRecipe } from "./recipe";
 import type { CoverageRegion } from "./types";
+import { unavailableReviewedStartSchema } from "./types";
 import { areaGeometrySchema } from "@/lib/contracts/routes";
 import { packSourceSchema } from "@/lib/contracts/manifest";
 
@@ -22,8 +23,16 @@ const catalogSchema = z.object({schemaVersion:z.literal(1),startLimitPath:z.stri
   approachRadiusMeters:z.number().positive().max(1000),
   approaches:z.array(z.object({id:z.string().min(1),name:z.string().min(1),coordinates:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)]),radiusMeters:z.number().positive().max(1000).optional(),basis:z.string().min(1),url:z.url().nullable()}).strict())
     .refine(points=>new Set(points.map(point=>point.id)).size===points.length,"Approach IDs must be unique within an area"),
+  unavailableApproaches:z.array(unavailableReviewedStartSchema.extend({id:z.string().min(1)})).min(1).optional(),
   limitations:z.array(z.string()),
-}).strict())
+}).strict().superRefine((region,context)=>{
+  const ids=new Set<string>();
+  for(const unavailable of region.unavailableApproaches??[]) {
+    if(ids.has(unavailable.id)||!region.approaches.some(point=>point.id===unavailable.id))
+      context.addIssue({code:"custom",message:`Unavailable approach must identify one reviewed anchor: ${unavailable.id}`});
+    ids.add(unavailable.id);
+  }
+}))
   .refine(regions=>new Set(regions.map(region=>region.id)).size===regions.length,"Region IDs must be unique")}).strict();
 const rangesSchema = z.object({
   type:z.literal("FeatureCollection"), properties:z.object({source:packSourceSchema.omit({contentHash:true})}).passthrough(),
@@ -48,6 +57,10 @@ export async function readCoverageRegion(id:string):Promise<CoverageRegion> {
     readFile(path.resolve(directory,entry.startLimitPath??entries.startLimitPath),"utf8"),
     readSourceRecipe(path.resolve(directory,entry.recipePath)),
   ]);
+  const unavailable=new Map((entry.unavailableApproaches??[]).map(({id,...review})=>[id,review]));
+  for(const [approachId,review] of unavailable)
+    if(!recipe.sources.some(source=>source.config.id===review.sourceId&&source.sha256===review.sourceHash))
+      throw new Error(`Unavailable approach source pin differs: ${approachId}`);
   // These pinned geometries were checked with GEOS during authoring. Structural
   // parsing avoids repeating a quadratic pairwise ring-intersection check.
   const ranges=rangesSchema.parse(JSON.parse(rangeInput)),byId=new Map(ranges.features.map(feature=>[feature.properties.id,feature]));
@@ -75,9 +88,11 @@ export async function readCoverageRegion(id:string):Promise<CoverageRegion> {
   recipe.limitations=[...recipe.limitations,...entry.limitations];
   const provenance={version:entry.reviewedAt,retrievedAt:entry.reviewedAt};
   return {id:entry.id,name:entry.name,aliases:entry.aliases,geometry,startLimitGeometry,recipe,
-    reviewedApproaches:entry.approaches.map(point=>({id:point.id,name:point.name,coordinates:point.coordinates,radiusMeters:point.radiusMeters??entry.approachRadiusMeters})),sources:[
+    reviewedApproaches:entry.approaches.map(point=>({id:point.id,name:point.name,coordinates:point.coordinates,radiusMeters:point.radiusMeters??entry.approachRadiusMeters,
+      ...(unavailable.has(point.id)?{unavailableStart:unavailable.get(point.id)!}:{})})),sources:[
     {...ranges.properties.source,contentHash:`sha256:${contentId(ranges)}`},
     {...provenance,...entry.boundarySource,id:`region-boundary-${id}`,contentHash:`sha256:${contentId({rangeIds:entry.rangeIds,cap:capFeature})}`},
-    {...provenance,...entry.approachSource,id:`region-approaches-${id}`,contentHash:`sha256:${contentId({approaches:entry.approaches,radiusMeters:entry.approachRadiusMeters})}`},
+    {...provenance,...entry.approachSource,id:`region-approaches-${id}`,contentHash:`sha256:${contentId({approaches:entry.approaches,radiusMeters:entry.approachRadiusMeters,
+      ...(entry.unavailableApproaches?{unavailableApproaches:entry.unavailableApproaches}:{})})}`},
   ]};
 }
