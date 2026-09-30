@@ -34,6 +34,8 @@ export type RouteSearchResult = {
     directedValidationRejectionCount: number;
     timeToFirstExactMs?: number;
     hardTruncationReasons: string[];
+    /** Close alternatives are bounded independently of exact-match completion. */
+    closeMatchTruncationReasons?: string[];
     nonBudgetShortfallReasons: string[];
   };
 };

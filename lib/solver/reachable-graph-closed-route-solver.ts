@@ -307,6 +307,7 @@ export class ReachableGraphClosedRouteSolver {
     const budget = effectiveBudget(context.budget);
     const deadlineAt = startedAt + budget.deadlineMs;
     const hardTruncationReasons = new Set<string>();
+    const closeMatchTruncationReasons = new Set<string>();
     const nonBudgetShortfallReasons = new Set<string>();
     const { eligible, starts, feasible, noCycleStartIds, noCycleExcluded } = prepared;
     const noCycleStartCount = starts.filter(({ id }) => noCycleStartIds.has(id)).length;
@@ -399,6 +400,7 @@ export class ReachableGraphClosedRouteSolver {
       this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
       expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
       for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
+      for (const reason of generated.diagnostics.closeMatchTruncationReasons) closeMatchTruncationReasons.add(reason);
       const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].map(candidate => {
         const keys = candidate.traversals.map(({ edge }) => edge.physicalEdgeKey);
         const forward = keys.join(">");
@@ -419,7 +421,9 @@ export class ReachableGraphClosedRouteSolver {
       const selectedAtStart: RankedClosedRoute[] = [];
       for (const { candidate, routeId } of orderedCandidates) {
         if (now() >= startDeadlineAt) {
-          hardTruncationReasons.add("deadline");
+          // Exact candidates precede close candidates. A deadline reached only
+          // while validating the fallback must not reopen exact exploration.
+          (candidate.violatedConstraints.length === 0 ? hardTruncationReasons : closeMatchTruncationReasons).add("deadline");
           break;
         }
         // Ranking uses the same metrics as authoritative validation. Once a
@@ -492,6 +496,7 @@ export class ReachableGraphClosedRouteSolver {
         directedValidationRejectionCount,
         ...(timeToFirstExactMs === undefined ? {} : { timeToFirstExactMs }),
         hardTruncationReasons: truncationReasons,
+        closeMatchTruncationReasons: [...closeMatchTruncationReasons].sort(),
         nonBudgetShortfallReasons: shortfallReasons,
       },
     };
