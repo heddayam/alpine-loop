@@ -47,6 +47,8 @@ export type NormalizedPortalEvidence = {
   coordinates: Coordinate[];
   accessState: AccessState;
   sourceRefs: string[];
+  /** Explicit place-access facts and unresolved conditions; absence inherits the used foot path. */
+  flags?: string[];
 };
 
 export type NormalizedAccessPoint = {

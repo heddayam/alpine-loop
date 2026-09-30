@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import { filteredSourceLines } from "./source-filter";
 import { buildingCentroidOf, parseBuildingCentroids } from "@/lib/data/osm/buildings";
 import { parseOplTags } from "@/lib/data/osm/opl";
-import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmFootDirection, osmNodeFlags, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
+import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmEvidenceFlags, osmFootDirection, osmNodeFlags, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
 import type { NormalizedNode, NormalizedWay, NormalizedPortalEvidence } from "@/lib/data/types";
 import type { SourceSnapshot } from "@/lib/data/adapters";
 import type { AreaGeometry } from "@/lib/data/area-geometry";
@@ -38,7 +38,7 @@ function walkingEntry(row: Row, tags: Record<string,string>, refs: string[], coo
   return {nodes,way:{id:`osm-way-${row.id}`,externalId:`way/${row.id}`,nodeIds:nodes.map(node=>node.id),coordinates,name:tags.name??null,accessState:osmAccessState(tags),bidirectional:direction==="both",edgeClass:row.kind as NormalizedWay["edgeClass"],sourceRefs:[sourceId],flags:osmWayFlags(tags,`way/${row.id}`,direction)}};
 }
 function* portalEvidence(externalId: string, tags: Record<string,string>, nodeIds: string[], coordinates: [number,number][], sourceId: string): Generator<NormalizedPortalEvidence> {
-  for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-${externalId.replace("/","-")}`,externalId,kind,name:tags.name??null,nodeIds,coordinates,accessState:osmAccessState(tags),sourceRefs:[sourceId]};
+  for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-${externalId.replace("/","-")}`,externalId,kind,name:tags.name??null,nodeIds,coordinates,accessState:osmAccessState(tags),flags:osmEvidenceFlags(tags),sourceRefs:[sourceId]};
 }
 function nodeBuilding(row: Node, tags: Record<string,string>): readonly [number,number] | null {
   return isBuilding(tags) ? buildingCentroidOf({type:"Point",coordinates:[row.lon,row.lat]}) : null;
@@ -46,7 +46,7 @@ function nodeBuilding(row: Node, tags: Record<string,string>): readonly [number,
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v9";
+export const NORMALIZATION_VERSION = "source-normalization-v10";
 const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
 export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
   `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;

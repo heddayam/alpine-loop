@@ -5,6 +5,8 @@ import { packSourceSchema } from "@/lib/contracts/manifest";
 import type { DataRelease } from "@/lib/contracts/releases";
 import type { Coordinate } from "./types";
 import { sameSourceContent } from "./source-metadata";
+import { ACCESS_ENTRY_POLICY_VERSION } from "@/lib/contracts/access-policy";
+import { footSegmentAccessState } from "./compiled-edges";
 
 /** Adapt stored provenance without coercing malformed database values. */
 export function readPreparedSources(db:DatabaseSync):DataRelease["sources"] {
@@ -16,9 +18,26 @@ export function readPreparedSources(db:DatabaseSync):DataRelease["sources"] {
 }
 
 /** A single disk-backed scan verifies complete graph consistency before any release is visible. */
-export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRelease,"id"|"geometry"|"sources">, checkpoint:()=>Promise<void>, allowSourceSubset=false) {
+export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRelease,"id"|"geometry"|"sources"> & {accessPolicyVersion?:string}, checkpoint:()=>Promise<void>, allowSourceSubset=false) {
   if(db.prepare("SELECT value FROM metadata WHERE key='schemaVersion'").get()?.value!=="7") throw new Error("Prepared graph schema version differs");
   if(db.prepare("SELECT value FROM metadata WHERE key='releaseId'").get()?.value!==expected.id) throw new Error("Complete graph release identity differs from export inputs");
+  const policy=db.prepare("SELECT value FROM metadata WHERE key='access_policy_version'").get()?.value;
+  if(policy!==expected.accessPolicyVersion) throw new Error("Complete graph entrance policy differs from catalog");
+  if(policy===ACCESS_ENTRY_POLICY_VERSION) {
+    if(db.prepare("SELECT node_id FROM access_points GROUP BY node_id HAVING count(*)<>1 LIMIT 1").get()) throw new Error("Repeated prepared entrance node identity");
+    if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='entry_witnesses'").get()) throw new Error("Missing prepared entrance witnesses");
+    let entranceWork=0;
+    for(const row of db.prepare(`SELECT a.id,a.access_state,w.record FROM access_points a LEFT JOIN entry_witnesses w ON w.access_point_id=a.id ORDER BY a.id`).iterate()) {
+      if(++entranceWork%1000===0) await checkpoint();
+      let witness: Record<string,unknown>;
+      try {witness=JSON.parse(String(row.record)) as Record<string,unknown>;} catch {throw new Error(`Missing prepared entrance witness: ${row.id}`);}
+      if(!witness || !['interface','trailhead','parking'].includes(String(witness.kind)) ||
+        typeof witness.rootNodeId!=='string' || !witness.rootNodeId || typeof witness.departurePhysicalId!=='string' || !witness.departurePhysicalId ||
+        typeof witness.known!=='boolean' || witness.known!==(row.access_state==='public') || !['public','unknown'].includes(String(row.access_state))) {
+        throw new Error(`Invalid prepared entrance witness: ${row.id}`);
+      }
+    }
+  }
   if(db.prepare("PRAGMA integrity_check").get()?.integrity_check!=="ok" || db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Complete graph failed SQLite integrity audit");
   const sources=new Set(expected.sources.map(source=>source.id));
   const stored=readPreparedSources(db);
@@ -66,9 +85,12 @@ export async function auditPreparedGraph(db:DatabaseSync, expected:Pick<DataRele
       GROUP BY profile,access_point_id HAVING count(*)<>1 LIMIT 1`).get()) throw new Error("Repeated entrance family membership");
   }
   let prior:{key:number;from:string;to:string;length:number;gain:number;loss:number}|undefined;
-  for(const edge of db.prepare(`SELECT e.*,s.min_lon AS spatial_w,s.max_lon AS spatial_e,s.min_lat AS spatial_s,s.max_lat AS spatial_n,a.lon AS a_lon,a.lat AS a_lat,a.elevation_m AS a_elevation,b.lon AS b_lon,b.lat AS b_lat,b.elevation_m AS b_elevation,p.geometry_hash,p.from_node_key,p.to_node_key,a.node_key AS a_key,b.node_key AS b_key
+  for(const edge of db.prepare(`SELECT e.*,s.min_lon AS spatial_w,s.max_lon AS spatial_e,s.min_lat AS spatial_s,s.max_lat AS spatial_n,a.lon AS a_lon,a.lat AS a_lat,a.elevation_m AS a_elevation,a.flags AS a_flags,b.lon AS b_lon,b.lat AS b_lat,b.elevation_m AS b_elevation,b.flags AS b_flags,p.geometry_hash,p.from_node_key,p.to_node_key,a.node_key AS a_key,b.node_key AS b_key
     FROM edges e LEFT JOIN edge_spatial s ON s.row_id=e.edge_key LEFT JOIN nodes a ON a.id=e.from_node LEFT JOIN nodes b ON b.id=e.to_node LEFT JOIN physical_edges p ON p.physical_edge_key=e.physical_edge_key ORDER BY e.physical_edge_key,e.edge_key`).iterate()) {
     if(++work%1000===0) await checkpoint();
+    if(policy===ACCESS_ENTRY_POLICY_VERSION && footSegmentAccessState(edge.access_state as import("@/lib/graph/types").AccessState,
+      [JSON.parse(String(edge.a_flags)) as string[],JSON.parse(String(edge.b_flags)) as string[]])!==edge.access_state)
+      throw new Error(`Prepared edge bypasses endpoint foot passage: ${edge.id}`);
     const geometry=JSON.parse(String(edge.geometry)) as Coordinate[];
     if(!Number.isSafeInteger(edge.edge_key)||Number(edge.edge_key)<1||!Number.isSafeInteger(edge.physical_edge_key)||Number(edge.physical_edge_key)<1 ||
       [edge.spatial_w,edge.spatial_e,edge.spatial_s,edge.spatial_n].some(value=>!finite(value)) ||

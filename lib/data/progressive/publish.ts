@@ -118,6 +118,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       if (spatialEdge) spatialEdge.run(key,...preparedEdgeBounds(edge.geometry));
     }
     const insertAccess=output.prepare("INSERT INTO access_points(id,node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_connectivity,inclusive_connectivity,known_out_degree,inclusive_out_degree,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    const insertWitness=output.prepare("INSERT INTO entry_witnesses VALUES (?,?)");
     const usedNode=stage.prepare("SELECT 1 FROM used_nodes WHERE id=?");
     let accessCount=0;
     const derived=Number((stage.prepare("SELECT count(*) AS n FROM derived_portals WHERE coverage_hash=?").get(coverageHash) as {n:number}).n);
@@ -133,6 +134,7 @@ export async function insertGraph(store: ProgressiveGraphStore, output: Database
       if (fields.some((value)=>value===undefined||value===null)) throw new Error(`Access point ${point.id} is missing ranking or portal fields`);
       insertAccess.run(point.id,point.nodeId,point.name,point.kind,point.accessState,point.confidence,point.parkingEvidence,JSON.stringify(point.sourceRefs),
         point.knownConnectivity!,point.inclusiveConnectivity!,point.knownOutDegree!,point.inclusiveOutDegree!,point.nearbyBuildingCount!,point.reachableTrailKm!,point.trailComponentId!,point.portalRoadClass!,point.parkingDistanceM??null);
+      if (point.entryWitness) insertWitness.run(point.id,JSON.stringify(point.entryWitness));
       accessCount++;
     }
     await checkpoint();

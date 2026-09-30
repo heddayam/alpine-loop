@@ -127,17 +127,17 @@ it("publishes short alternate entrance families while retaining every original s
   await expectNoScratch();
 });
 const buildingsAt=(lon:number,lat:number,count:number)=>Array.from({length:count},(_,i)=>`n${9000+i} Tbuilding=yes x${lon+i*.00001} y${lat}`);
-it("excludes dense disconnected trails before elevation and records policy exclusions of reviewed starts",async()=>{
+it("retains dense connected entrances and measures their hiking network",async()=>{
   fixtureLines.push(...buildingsAt(-121.12,47.51,10));
   const input=region("both",consolidatedArea);
   input.reviewedApproaches=[{id:"dense",name:"Dense entrance",coordinates:[-121.12,47.51],radiusMeters:100}];
   await buildCoverageRegion(input,context());
   const measured=vi.mocked(calculateEdgeMetricsBatch).mock.calls.flatMap(([geometries])=>geometries.flat());
   expect(measured.length).toBeGreaterThan(0);
-  expect(measured.every(([lon])=>lon< -121.2)).toBe(true);
+  expect(measured.some(([lon])=>lon> -121.2)).toBe(true);
   const [piece]=await pieces();
-  expect(piece!.access.every(point=>Number(point.nearby_building_count)<10)).toBe(true);
-  expect((await release()).limitations).toContain("Reviewed approaches excluded by the fewer-than-10-buildings-within-500-m rule: Dense entrance.");
+  expect(piece!.access.some(point=>Number(point.nearby_building_count)===10)).toBe(true);
+  expect((await release()).limitations.some(message=>message.includes("buildings-within"))).toBe(false);
   await expectNoScratch();
 });
 it("retains a start with nine nearby buildings",async()=>{
@@ -218,14 +218,14 @@ it("rejects a new approach's missing route support before DEM and preserves publ
   expect(elevationFor).not.toHaveBeenCalled();expect(await release()).toEqual(prior);
   await expectNoScratch();
 });
-it("fails an all-dense selection before acquiring elevation and preserves the published neighbor",async()=>{
+it("publishes a dense selection while preserving its neighbor",async()=>{
   fixtureLines.push(...buildingsAt(-121.12,47.51,10));
   await build();
   const prior=await release(),{elevationFor}=await import("./elevation");
   vi.mocked(elevationFor).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
-  await expect(build(secondArea)).rejects.toThrow("connect to mountain hiking trails");
-  expect(elevationFor).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
-  expect(await release()).toEqual(prior);
+  await expect(build(secondArea)).resolves.toMatchObject({status:"completed"});
+  expect(elevationFor).toHaveBeenCalled();expect(calculateEdgeMetricsBatch).toHaveBeenCalled();
+  expect((await release()).artifacts).toEqual(expect.arrayContaining(prior.artifacts));
   await expectNoScratch();
 });
 async function expectNoScratch(){expect((await readdir(path.join(root,"stage"))).filter(file=>file.startsWith(".region-"))).toEqual([]);}
@@ -487,7 +487,7 @@ it.each(["density","terrain"])("reports an actual %s policy exclusion before an 
   await buildCoverageRegion(input,ctx);
   const published=await release();
   expect(published.limitations).not.toContain(unavailableReason);
-  expect(published.limitations.some(reason=>reason.startsWith("Reviewed approaches excluded")&&reason.includes("Second entrance"))).toBe(true);
+  expect(published.limitations.some(reason=>reason.startsWith("Reviewed approaches excluded")&&reason.includes("Second entrance"))).toBe(kind==="terrain");
   expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Reviewed approach checks complete: both",counts:expect.objectContaining({unavailableReviewedApproaches:0})}));
 });
 it.each(["stale hash","missing input"])("rejects a reviewed gap with %s against verified inputs before normalization or elevation",async kind=>{

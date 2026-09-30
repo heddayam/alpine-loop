@@ -50,6 +50,10 @@ export function createPreparedSchema(database:DatabaseSync):void {
         parking_distance_m REAL CHECK(parking_distance_m IS NULL OR parking_distance_m >= 0)
       ) STRICT;
       CREATE INDEX access_points_node ON access_points(node_id);
+      CREATE TABLE entry_witnesses (
+        access_point_id TEXT PRIMARY KEY REFERENCES access_points(id) ON DELETE CASCADE,
+        record TEXT NOT NULL
+      ) STRICT;
       CREATE TABLE sources (
         id TEXT PRIMARY KEY, authority TEXT NOT NULL, dataset TEXT NOT NULL,
         version TEXT NOT NULL, retrieved_at TEXT NOT NULL, url TEXT NOT NULL,

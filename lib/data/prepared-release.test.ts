@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { gzipSync, gunzipSync } from "node:zlib";
 import type { DataRelease } from "@/lib/contracts/releases";
+import { ACCESS_ENTRY_POLICY_VERSION } from "@/lib/contracts/access-policy";
 import { rectangle } from "@/lib/coverage/geometry";
 import { canonicalTopologyJson, topologySha256 } from "@/lib/graph/topology-hash";
 import { createPreparedSchema } from "./sqlite-writer";
@@ -37,6 +38,34 @@ function fixture(name="a",offset=0,retrievedAt=source.retrievedAt):PreparedRelea
 }
 const combined=(a:DataRelease,b:DataRelease):DataRelease=>({...a,id:"catalog-ab",sections:[...a.sections,...b.sections],artifacts:[...a.artifacts,...b.artifacts]});
 const manifest=()=>readFile(path.join(root,"release.json"),"utf8");
+function entryFixture():PreparedReleaseOptions {
+  const options=fixture();
+  options.compilerVersion="pedestrian-entry-fixture";
+  const db=new DatabaseSync(options.databasePath);
+  try {
+    db.prepare("UPDATE metadata SET value=? WHERE key='releaseId'").run(preparedReleaseId(options));
+    db.prepare("INSERT INTO metadata VALUES ('access_policy_version',?)").run(ACCESS_ENTRY_POLICY_VERSION);
+    db.prepare("INSERT INTO entry_witnesses VALUES (?,?)").run("a-access",JSON.stringify({kind:"interface",rootNodeId:"source-road-node",departurePhysicalId:"source-trail:0",known:true}));
+  } finally {db.close();}
+  return options;
+}
+it("publishes the entrance policy with its frozen source proof and checks it on catalog reuse",async()=>{
+  const options=entryFixture(),release=await exportPreparedRelease(options);
+  expect(release.artifacts[0]!.accessPolicyVersion).toBe(ACCESS_ENTRY_POLICY_VERSION);
+  await publishPreparedCatalog(release,root);
+  const altered={...release,artifacts:release.artifacts.map(artifact=>({...artifact,accessPolicyVersion:"earlier-policy"}))};
+  await expect(publishPreparedCatalog(altered,root)).rejects.toThrow("entrance policy differs");
+});
+it.each(["missing witness","unknown witness","duplicate node","bypassed passage"])("rejects %s in a new-policy prepared graph",async defect=>{
+  const options=entryFixture(),db=new DatabaseSync(options.databasePath);
+  try {
+    if(defect==="missing witness") db.exec("DELETE FROM entry_witnesses");
+    if(defect==="unknown witness") db.prepare("UPDATE entry_witnesses SET record=?").run(JSON.stringify({kind:"interface",rootNodeId:"road",departurePhysicalId:"trail:0",known:false}));
+    if(defect==="duplicate node") db.exec("INSERT INTO access_points SELECT 'second-access',node_id,name,kind,access_state,confidence,parking_evidence,source_refs,known_out_degree,known_connectivity,inclusive_out_degree,inclusive_connectivity,nearby_building_count,reachable_trail_km,trail_component_id,portal_road_class,parking_distance_m,known_minimum_stem_m,inclusive_minimum_stem_m FROM access_points");
+    if(defect==="bypassed passage") db.prepare("UPDATE nodes SET flags=? WHERE id='a-start'").run('["barrier:gate","foot-access:private"]');
+  } finally {db.close();}
+  await expect(exportPreparedRelease(options)).rejects.toThrow(defect==="duplicate node"?"Repeated prepared entrance":defect==="bypassed passage"?"bypasses endpoint":"entrance witness");
+});
 async function mutateArtifact(release:DataRelease,sql:string) {
   const artifact=release.artifacts[0]!,file=path.join(root,"mutate.sqlite");
   await writeFile(file,gunzipSync(await readFile(path.join(root,artifact.path))));

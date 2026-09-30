@@ -32,7 +32,7 @@ export function preparedReleaseId(input: Pick<PreparedReleaseOptions,"geometry"|
 const count=z.number().int().nonnegative();
 const summarySchema=z.object({id:z.string(),nodes:count,directedEdges:count,physicalEdges:count,accessPoints:count}).strict();
 const receiptSchema=z.object({key:z.string(),compressedHash:z.string(),sources:z.array(packSourceSchema),summary:summarySchema}).strict();
-const auditKey=(artifact:DataRelease["artifacts"][number])=>contentId({version:1,id:artifact.id,bytes:artifact.bytes,graphId:artifact.graphId,geometry:artifact.geometry});
+const auditKey=(artifact:DataRelease["artifacts"][number])=>contentId({version:2,id:artifact.id,bytes:artifact.bytes,graphId:artifact.graphId,geometry:artifact.geometry,accessPolicyVersion:artifact.accessPolicyVersion});
 const receiptPath=(root:string,id:string)=>path.join(root,".audits",`${id}.json`);
 async function fileHash(file:string,checkpoint:()=>Promise<void>):Promise<string> {
   const hash=createHash("sha256");
@@ -58,13 +58,15 @@ export async function exportPreparedRelease(options: PreparedReleaseOptions): Pr
     // The preparation writer must be closed before export; hashing the database file
     // cannot include pending WAL pages. Catalog validation also audits the exact bytes.
     if(input.prepare("PRAGMA journal_mode").get()?.journal_mode!=="delete") throw new Error("Area export requires a finalized DELETE-journal database");
-    await auditPreparedGraph(input,{id,geometry:options.geometry,sources:options.sources},checkpoint);
+    const policy=input.prepare("SELECT value FROM metadata WHERE key='access_policy_version'").get()?.value;
+    const accessPolicyVersion=typeof policy==='string'?policy:undefined;
+    await auditPreparedGraph(input,{id,geometry:options.geometry,sources:options.sources,accessPolicyVersion},checkpoint);
     const hash=createHash("sha256"); let bytes=0;
     const compressed=path.join(temporary,"area.gz");
     const measure=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);checkpoint().then(()=>done(null,chunk),done);}});
     await pipeline(createReadStream(options.databasePath),measure,createGzip({level:6}),createWriteStream(compressed));
     const digest=hash.digest("hex"), relative=`objects/${digest}.sqlite.gz`;
-    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id,regionId:options.area.name?options.area.id:undefined,startGeometry:options.area.startGeometry};
+    const artifact={id:digest,path:relative,bytes,compressedBytes:(await stat(compressed)).size,geometry:options.geometry,graphId:id,regionId:options.area.name?options.area.id:undefined,startGeometry:options.area.startGeometry,accessPolicyVersion};
     const release=dataReleaseSchema.parse({schemaVersion:1,graphSchemaVersion:"7",partitioning:"local-areas",id,builtAt:options.builtAt,compilerVersion:options.compilerVersion,metricAlgorithmVersion:options.metricAlgorithmVersion,sources:options.sources,regions:options.regions,geometry:options.geometry,limitations:options.limitations??[],sections:[{id:options.area.id,name:options.area.name,geometry:options.area.startGeometry,artifactIds:[digest],area:{maximumRouteMiles:options.area.maximumRouteMiles,bufferMiles:options.area.bufferMiles}}],artifacts:[artifact]});
     await checkpoint();
     await rename(compressed,path.join(options.outputRoot,relative));
@@ -121,7 +123,7 @@ async function auditCatalog(release:DataRelease,outputRoot:string,checkpoint:()=
       const db=new DatabaseSync(file,{readOnly:true});
       try {
         db.exec("PRAGMA cache_size=-16384; PRAGMA temp_store=FILE");
-        await auditPreparedGraph(db,{id:artifact.graphId??release.id,geometry:release.partitioning==="connected-networks"||release.partitioning==="local-areas"?artifact.geometry:release.geometry,sources:release.sources},checkpoint,true);
+        await auditPreparedGraph(db,{id:artifact.graphId??release.id,geometry:release.partitioning==="connected-networks"||release.partitioning==="local-areas"?artifact.geometry:release.geometry,sources:release.sources,accessPolicyVersion:artifact.accessPolicyVersion},checkpoint,true);
         if (release.partitioning !== "local-areas") {
         identities.exec("BEGIN");
         for(const [table,key,id] of [["nodes","node_key","id"],["edges","edge_key","id"],["physical_edges","physical_edge_key","stable_physical_id"]]) {

@@ -145,6 +145,14 @@ export function hasOsmNodeContext(values: Record<string, string>): boolean {
     || key.endsWith(":conditional"));
 }
 
+/** A place assertion's own foot rule is separate from car/parking certainty. */
+export function osmEvidenceFlags(values: Record<string,string>): string[] {
+  const declared=Object.keys(values).some(key=>key==="access"||key==="foot"||key.startsWith("foot:")||key==="access:conditional");
+  const state=ACCESS_ORDER[Math.max(...[footState(values),footState(values,"forward"),footState(values,"backward")]
+    .map(value=>ACCESS_ORDER.indexOf(value)))]!;
+  return [...(declared?[`foot-access:${state}`]:[]),...permissionFlags(values,false)];
+}
+
 export function osmWayFlags(
   values: Record<string, string>,
   featureId: string,

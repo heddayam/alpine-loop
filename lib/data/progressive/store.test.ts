@@ -177,6 +177,8 @@ it("repairs incomplete derived rows after reopening and resolves evidence when n
     expect(store.database.prepare("SELECT node_id,ordinal FROM way_nodes WHERE way_id='trail' ORDER BY ordinal").all()).toEqual([{ node_id: "a", ordinal: 0 }, { node_id: "b", ordinal: 1 }]);
     expect(store.database.prepare("SELECT count(*) AS n FROM building_spatial").get()!.n).toBe(1);
     store.putNode({ ...node, id: "b", externalId: "node/b", lon: 2 });
+    store.putEdge({ id: "reverse-edge", stablePhysicalId: "trail:0", fromNode: "b", toNode: "a", geometry: [...way.coordinates].reverse(),
+      lengthM: 100, gainM: 0, lossM: 0, maxElevationM: 0, maxSustainedGradePct: 0, accessState: "public", edgeClass: "trail", flags: [], sourceRefs: ["west"] });
     store.putPortalEvidence(evidence);
     store.putPortalEvidence(evidence);
     expect(JSON.parse(String(store.database.prepare("SELECT record FROM evidence").get()!.record))).toEqual(evidence);

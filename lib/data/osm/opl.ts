@@ -6,6 +6,7 @@ import {
   osmAccessState,
   osmFootDirection,
   osmNodeFlags,
+  osmEvidenceFlags,
   hasOsmNodeContext,
   osmPortalEvidenceKinds,
   osmWayFlags,
@@ -120,6 +121,7 @@ function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], s
         nodeIds: [normalizedNode.id],
         coordinates: [[normalizedNode.lon, normalizedNode.lat]],
         accessState: osmAccessState(node.tags),
+        flags: osmEvidenceFlags(node.tags),
         sourceRefs: [sourceId],
       });
     }
@@ -137,6 +139,7 @@ function normalizeOsmRecords(nodes: Map<string, OplNode>, inputWays: OplWay[], s
         nodeIds: wayNodes.map(({ id }) => id),
         coordinates: wayNodes.map(({ lon, lat }) => [lon, lat] as const),
         accessState: osmAccessState(way.tags),
+        flags: osmEvidenceFlags(way.tags),
         sourceRefs: [sourceId],
       });
     }

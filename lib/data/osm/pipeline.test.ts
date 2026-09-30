@@ -60,7 +60,7 @@ describe("resume-safe osmium preparation", () => {
       "nw/amenity=parking",
       "nw/information=trailhead,guidepost,board,map",
       "nw/tourism=information",
-      "nw/barrier=gate",
+      "n/barrier", "n/access", "n/foot", "n/foot:conditional", "n/access:conditional",
     ]));
     const [preparedDirectory] = await readdir(options.preparationRoot);
     const preparedFiles = await readFile(path.join(options.preparationRoot, preparedDirectory, "topology.json"), "utf8");

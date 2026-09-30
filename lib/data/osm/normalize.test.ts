@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { classifyOsmWay, osmAccessState, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
+import { classifyOsmWay, osmAccessState, osmEvidenceFlags, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
 
 describe("OSM tag classification", () => {
+  it("distinguishes an explicit place foot condition from missing parking access",()=>{
+    expect(osmEvidenceFlags({amenity:"parking",motorcar:"yes"})).not.toContain("foot-access:unknown");
+    expect(osmEvidenceFlags({amenity:"parking",foot:"yes","foot:conditional":"no @ (snow)"})).toEqual(expect.arrayContaining([
+      "foot-access:unknown","osm-foot:conditional:no @ (snow)",
+    ]));
+    expect(osmEvidenceFlags({amenity:"parking",access:"private",foot:"yes"})).toContain("foot-access:public");
+  });
   it("defaults ambiguous access to unknown and retains explicit restrictions", () => {
     expect(osmAccessState({})).toBe("unknown");
     expect(osmAccessState({ access: "no" })).toBe("prohibited");
@@ -88,7 +95,7 @@ describe("OSM tag classification", () => {
     ]));
     expect(osmNodeFlags({ access: "private" })).toContain("foot-access:private");
     expect(osmNodeFlags({ barrier: "gate", access: "private", foot: "yes" })).toContain("foot-access:public");
-    for (const object of [{ information: "board" }, { tourism: "information" }, { amenity: "parking" }]) {
+    for (const object of [{ information: "board" }, { tourism: "information" }, { amenity: "parking" }] as Record<string,string>[]) {
       expect(osmNodeFlags({ ...object, access: "private" })).not.toContain("foot-access:private");
       expect(osmNodeFlags({ ...object, access: "private", barrier: "gate" })).toContain("foot-access:private");
     }

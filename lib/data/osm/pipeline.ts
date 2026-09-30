@@ -25,7 +25,7 @@ export type OsmPipelineOptions = {
 export type PreparedOsmRegion = { regionPath: string; identity: string };
 export type OsmRegionOptions = Pick<OsmPipelineOptions, "preparationRoot" | "runner">;
 
-export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-contextual-footways-v10";
+export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-directed-foot-passage-v11";
 const HIGHWAY_FILTER = "w/highway=path,footway,track,pedestrian,steps,bridleway,service,unclassified,residential,living_street,road,tertiary,secondary,primary";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
@@ -83,7 +83,10 @@ export async function prepareOsmTopology(
     await runner("osmium", [
       "tags-filter", extracted, HIGHWAY_FILTER,
       "nw/highway=trailhead", "nw/amenity=parking", "nw/information=trailhead,guidepost,board,map",
-      "nw/tourism=information", "nw/barrier=gate",
+      "nw/tourism=information", "n/barrier", "n/access", "n/foot", "n/foot:forward", "n/foot:backward", "n/oneway:foot",
+      "n/motorcar", "n/motor_vehicle", "n/vehicle", "n/foot:conditional", "n/access:conditional",
+      "n/foot:forward:conditional", "n/foot:backward:conditional", "n/oneway:foot:conditional",
+      "n/motorcar:conditional", "n/motor_vehicle:conditional", "n/vehicle:conditional",
       "r/route=hiking,foot", "--overwrite", "--output", filtered,
     ]);
     await nonempty(filtered, "OSM hiking filter");
