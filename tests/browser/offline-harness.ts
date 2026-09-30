@@ -1,5 +1,7 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import type { AppSettingsV1 } from "../../lib/contracts";
+import { mapRequestSchema } from "../../lib/contracts/map";
+import { coordinateIsInsideArea } from "../../lib/graph/geometry";
 import type { SearchIntent, RouteJobV2 } from "../../lib/contracts/search";
 import { ACCESS_POINTS, PACK_COVERAGE, NAMED_AREA_SUMMARY, TRAIL_NETWORK, savedRoutes } from "./fixtures";
 
@@ -79,7 +81,14 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
       return;
     }
     if (url.pathname === "/api/search/catalog") { await route.fulfill({ json: { regions: [{ id: SEARCH_REGION.id, name: SEARCH_REGION.name }], coverages: [PACK_COVERAGE], display: { center: [-122.16, 37.165], zoom: 12 } } }); return; }
-    if (url.pathname === "/api/map") { await route.fulfill({ json: { accessPoints: ACCESS_POINTS.map((point) => options.entranceFamilies ? { ...point, inclusiveEntranceFamilyId: "fixture-family" } : point), trailNetwork: TRAIL_NETWORK } }); return; }
+    if (url.pathname === "/api/map") {
+      const input=mapRequestSchema.parse(requestBody),filter=input.startFilter;
+      const points=filter===null?[]:ACCESS_POINTS.filter(point=>(filter?.includeUncertainAccess!==false||point.accessState==="public")
+        && (!filter?.namedRegionIds?.length||filter.namedRegionIds.includes(SEARCH_REGION.id))
+        && (filter?.predicates??[]).every(geometry=>coordinateIsInsideArea([point.lon,point.lat],geometry)));
+      await route.fulfill({json:{accessPoints:points.map(point=>options.entranceFamilies?{...point,inclusiveEntranceFamilyId:"fixture-family"}:point),
+        trailNetwork:input.trails?TRAIL_NETWORK:{type:"FeatureCollection",features:[]}}});return;
+    }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/suggest") { await route.fulfill({ json: { suggestions: [{ id: "arcgis-castle-rock", label: "Castle Rock, California", magicKey: "fixture-magic-key" }] } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/resolve") { await route.fulfill({ json: { origin: { lon: -122.14, lat: 37.16, label: "Castle Rock, California" } } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/route-jobs") {

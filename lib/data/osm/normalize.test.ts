@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { classifyOsmWay, osmAccessState, osmEvidenceFlags, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
 
 describe("OSM tag classification", () => {
+  it("keeps track and walkable-road areas as places rather than perimeter routes",()=>{
+    expect(classifyOsmWay({highway:"track",area:"yes",foot:"yes"})).toBe("sidewalk");
+    expect(classifyOsmWay({highway:"service",area:"yes",foot:"yes"})).toBe("sidewalk");
+    expect(classifyOsmWay({highway:"track",foot:"yes"})).toBe("trail");
+  });
   it("distinguishes an explicit place foot condition from missing parking access",()=>{
     expect(osmEvidenceFlags({amenity:"parking",motorcar:"yes"})).not.toContain("foot-access:unknown");
     expect(osmEvidenceFlags({amenity:"parking",foot:"yes","foot:conditional":"no @ (snow)"})).toEqual(expect.arrayContaining([

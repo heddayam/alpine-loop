@@ -335,21 +335,23 @@ describe("ReachableGraphClosedRouteSolver", () => {
       .rejects.toThrow("not prepared for this search");
   });
 
-  test("filters automatic and explicit starts that sit among buildings", async () => {
+  test("includes connected automatic and explicit starts regardless of nearby buildings", async () => {
     const builtUp = accessPoint();
     builtUp.nearbyBuildingCount = 500;
     const testContext = context([builtUp], fixtureGraph("loop"));
     const result = await solver.generate(request(), testContext);
     expect(result.diagnostics).toMatchObject({
-      eligibleAccessPointCount: 0,
-      feasibleAccessPointCount: 0,
-      searchedAccessPointCount: 0,
+      eligibleAccessPointCount: 1,
+      feasibleAccessPointCount: 1,
+      searchedAccessPointCount: 1,
     });
 
-    await expect(solver.generate(
+    const explicit = await solver.generate(
       request({ startAccessPointId: builtUp.id }),
       context([builtUp], fixtureGraph("loop")),
-    )).rejects.toThrow("excluded by the access-point area settings");
+    );
+    expect(result.exact.length).toBeGreaterThan(0);
+    expect(explicit.exact).toEqual(result.exact);
   });
 
   test("is deterministic and honors cancellation and the global deadline", async () => {

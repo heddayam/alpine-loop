@@ -32,7 +32,9 @@ function isWalkingRoad(values: Record<string, string>): boolean {
 export function classifyOsmWay(values: Record<string, string>): EdgeClass | null {
   const highway = values.highway ?? "";
   if (SIDEWALK_SUBTAGS.has(values.footway ?? "")) return "sidewalk";
-  if (values.area === "yes" && (TRAIL_HIGHWAYS.has(highway) || highway === "footway" || highway === "pedestrian")) return "sidewalk";
+  // An area boundary asserts a place, not a linear walk around its perimeter.
+  if (values.area === "yes" && (TRAIL_HIGHWAYS.has(highway) || highway === "footway" || highway === "pedestrian"
+    || highway === "track" || WALKING_ROADS.has(highway))) return "sidewalk";
   // Routing can retain an explicitly walkable road without changing its source role.
   if (isWalkingRoad(values)) return "trail";
   if (TRAIL_HIGHWAYS.has(highway)) return "trail";

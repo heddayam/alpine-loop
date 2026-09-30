@@ -72,6 +72,7 @@ describe("geographic search with prepared installation storage and compute", () 
     release.partitioning = "local-areas";
     release.artifacts[0].startGeometry = core;
     release.artifacts[0].graphId = release.id;
+    release.artifacts[0].regionId = "fixture-section";
     release.sections[0].geometry = core;
     release.sections[0].area = { maximumRouteMiles: 40, bufferMiles: 25 };
     installation.geometry = core;
@@ -81,7 +82,8 @@ describe("geographic search with prepared installation storage and compute", () 
       const result = await searchAllStarts(request);
       expect(result.exact.length).toBeGreaterThan(0);
       expect(result.exact.some(route => route.geometry.coordinates.some(([lon]) => lon! > -122.1599))).toBe(true);
-      const bufferMap = await mapData(new Request("http://localhost/api/map?bbox=-122.158,37.159,-122.155,37.162"));
+      const bufferMap = await mapData(new Request("http://localhost/api/map",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({bbox:[-122.158,37.159,-122.155,37.162],startFilter:{includeUncertainAccess:true,predicates:[core]}})}));
       expect(bufferMap.accessPoints).toEqual([]);
       expect(bufferMap.trailNetwork.features.length).toBeGreaterThan(0);
     } finally {
@@ -269,6 +271,41 @@ describe("geographic search with prepared installation storage and compute", () 
     } finally {candidates.mockRestore();}
   });
 
+  it("uses identical map and Full eligibility for drawn, named, driving and known-only selections",async()=>{
+    const namedId=(await searchCatalog()).regions[0]!.id;
+    for(const includeUncertainAccess of [true,false]) for(const area of [request.area,
+      {mode:"named-regions" as const,regionIds:[namedId]},
+      {mode:"drive-time" as const,origin:{lon:-122.16,lat:37.16,label:"Home"},durationMinutes:30 as const,regionIds:[namedId]}]) {
+      const intent={...request,area,criteria:{...request.criteria,includeUncertainAccess}};
+      const plan=await resolveSearchPlan(intent,signal());
+      if(area.mode==="drive-time") plan.area.filterGeometry=drawnArea(request.area.mode==="drawn-area"?request.area.bbox:fixturePackSeed.coverage.bbox);
+      const session=await openSearchSession({request:intent,plan,signal:signal()});
+      try {
+        const expected=await session.enumerateEligibleAccessPointIds(signal());
+        const map=await mapData(new Request("http://localhost/api/map",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+          bbox:fixturePackSeed.coverage.bbox,trails:false,startFilter:{includeUncertainAccess,
+            predicates:area.mode==="named-regions"?[]:[plan.area.filterGeometry],namedRegionIds:area.mode==="drawn-area"?[]:area.regionIds},
+        })}));
+        expect(map.accessPoints.map(point=>point.id).sort()).toEqual(expected.sort());
+      } finally {await session.close();}
+    }
+    const pending=await mapData(new Request("http://localhost/api/map",{method:"POST",body:JSON.stringify({bbox:fixturePackSeed.coverage.bbox,startFilter:null})}));
+    expect(pending.accessPoints).toEqual([]);
+    expect(pending.trailNetwork.features.length).toBeGreaterThan(0);
+  });
+
+  it("keeps earlier coverage readable while requiring a rebuild for new searches",async()=>{
+    const path=join(root,"releases","fixture-release.json"),before=await readFile(path,"utf8"),release=JSON.parse(before);
+    delete release.artifacts[0].accessPolicyVersion;
+    await writeFile(path,JSON.stringify(release));
+    try {
+      expect(await searchCatalog()).toMatchObject({regions:[],requiresRebuild:true});
+      const map=await mapData(new Request(`http://localhost/api/map?bbox=${fixturePackSeed.coverage.bbox}`));
+      expect(map.accessPoints).toEqual([]);expect(map.trailNetwork.features.length).toBeGreaterThan(0);
+      await expect(resolveSearchPlan(request,signal())).rejects.toMatchObject({code:"DATA_UPDATE_REQUIRED"});
+    } finally {await writeFile(path,before);}
+  });
+
   it("keeps local region IDs stable and excludes uninstalled overlapping neighbors", async () => {
     const oldRelease = JSON.parse(await readFile(join(root, "releases", "fixture-release.json"), "utf8"));
     const oldInstallation = JSON.parse(await readFile(join(root, "installations", "fixture-installation.json"), "utf8"));
@@ -397,7 +434,7 @@ describe("geographic search with prepared installation storage and compute", () 
 
   it("never executes legacy plans or substitutes demo data for an empty installation", async () => {
     await expect(openSearchSession({ request, plan: { installationId: null, area: { label: "Legacy" } }, signal: signal() }))
-      .rejects.toThrow("start a new search");
+      .rejects.toThrow("saved results remain available");
     await expect(resolveSearchPlan({ ...request, area: { mode: "named-regions", regionIds: ["missing"] } }, signal()))
       .rejects.toMatchObject({ code: "REGION_NOT_FOUND" });
     await writeFile(join(root, "current.json"), JSON.stringify({ installationId: null }));

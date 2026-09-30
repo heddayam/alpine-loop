@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SearchIntent, SearchRoute } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, type SearchIntent, type SearchRoute } from "@/lib/contracts";
 import { cleanupInstallations, withInstallationPins } from "@/lib/coverage-install";
 import { createRouteJobCancelHandler, createRouteJobCollectionHandlers } from "./http";
 import { RouteJobService, decodeResultCursor, encodeResultCursor } from "./service";
@@ -24,7 +24,7 @@ const regionWideRequest: SearchIntent = {
 const drawnAreaRequest: SearchIntent = {
   area: { mode: "drawn-area", bbox: [-122.4, 37.1, -122.2, 37.3] }, criteria: request.criteria,
 };
-const plan = { installationId: "v4", area: { label: "Fixture" } };
+const plan = { installationId: "v4", accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, area: { label: "Fixture" } };
 const drawnAreaGeometry = {
   type: "Polygon" as const,
   coordinates: [[
@@ -131,7 +131,7 @@ describe("RouteJobService", () => {
     await service.waitUntilIdle();
     const before = (await service.results(job.id)).results;
     const db = new DatabaseSync(join(directory, "jobs.sqlite"));
-    db.prepare("UPDATE route_jobs SET plan_json=?,status='queued' WHERE id=?").run(JSON.stringify(plan), job.id);
+    db.prepare("UPDATE route_jobs SET plan_json=?,status='queued' WHERE id=?").run(JSON.stringify({ ...plan, accessPolicyVersion: undefined }), job.id);
     vi.mocked(dependencies.openSearchSession).mockClear();
     vi.mocked(dependencies.resolveDriveTime).mockClear();
     service.start(); await service.waitUntilIdle();
@@ -186,7 +186,7 @@ describe("RouteJobService", () => {
     expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
     expect(dependencies.openSearchSession).toHaveBeenCalledWith({
       request: drawnAreaRequest,
-      plan: { installationId: "v4", area: { label: "Drawn area", filterGeometry: drawnAreaGeometry } },
+      plan: { installationId: "v4", accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION, area: { label: "Drawn area", filterGeometry: drawnAreaGeometry } },
       signal: expect.any(AbortSignal),
     });
     store.close();
@@ -404,7 +404,7 @@ describe("RouteJobService", () => {
     await service.waitUntilIdle();
     // Read once for the initial public job and once to claim it, never per start.
     expect(reads).toHaveBeenCalledTimes(2);
-    expect(dependencies.openSearchSession).toHaveBeenCalledWith({ request: regionWideRequest, plan: combined, signal: expect.any(AbortSignal) });
+    expect(dependencies.openSearchSession).toHaveBeenCalledWith({ request: regionWideRequest, plan: { ...combined, accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION }, signal: expect.any(AbortSignal) });
     expect(await service.get(job.id)).toMatchObject({ stale: false, progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 2, exactRouteCount: 10, nearMissRouteCount: 1 } });
     const results = (await service.results(job.id)).results;
     expect(results.map(({ matchType }) => matchType)).toEqual([...Array(10).fill("exact"), "near-miss"]);
