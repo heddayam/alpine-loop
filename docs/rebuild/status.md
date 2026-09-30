@@ -6,6 +6,36 @@ the evidence line.
 
 ## Active system design revision
 
+### Southern East Bay connected gated entrances — 2026-09-30
+
+- [x] Diagnose the user-run reviewed-start failure without restarting a build.
+  Inspect only the closed, completed/sealed normalized Northern California
+  source `215f18449e6cd190200a7dc1188a63dba2bec1f20fb3d1637c4f11c1f9134342`
+  in a network-disabled read-only container. No active data container remains.
+  The current catalog contains six published areas, including South Cascades
+  and Santa Cruz Mountains, in `release-de350c0a36690ca14577c4710cf75b5d`.
+- [x] Confirm connected hiking topology and separate gate nodes. Stanford gate
+  `node/340333590` follows Hidden Valley Trail `way/30775823` for 21.70 m to
+  service-road junction `node/1756331078`. Vargas gate `node/6280389266`
+  follows Golden Eagle Trail `way/416179299` for 7.69 m to junction
+  `node/6280389269`. Its adjacent path gate `node/5315403840` follows
+  `way/550319446` for 70.30 m to junction `node/6280389282`. These are original
+  nonbranching node chains; gate evidence is not at the service-road junctions.
+  Stanford parking `way/97345506` contacts a track but no non-track hiking link;
+  Vargas parking `way/416179301` has no shared road/trail contacts. Independent
+  static review finds no extraction, membership or compaction defect.
+- [ ] Resolve the requested entrance-policy choice before changing admission.
+  The current same-node service-road gate rule deliberately rejects these
+  connected entrances. Recommend a bounded mapped approach that retains the
+  actual gate as the start, without connectors, evidence relocation or access
+  overrides. Do not describe these cases as absent hiking connections. Any
+  refinement requires restrictive/interior/branch/distance regressions and the
+  existing density, mountain, access and route eligibility checks.
+- [ ] Implement the chosen repair, run required integration checks, and provide
+  the user retry instructions. The failed area has no completed region receipt;
+  retain source/elevation/measurement caches and existing publications. No real
+  regional preparation, publication or installation is started by the agent.
+
 ### South Cascades reviewed starting-location gaps — 2026-09-29
 
 - [x] Diagnose the user-run failure using a network-disabled, read-only container
