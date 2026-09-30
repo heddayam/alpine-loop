@@ -75,6 +75,7 @@ export type SearchSnapshot = {
   status: SearchStatus;
   progress: SearchProgress;
   routes: HikeRoute[];
+  selectionNote?: string;
   reason?: string;
 };
 export type SearchEvent =

@@ -24,12 +24,10 @@ export function parseQuery(value: unknown): SearchQuery {
   return { area: [...query.area], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition, includeUnknown: query.includeUnknown };
 }
 
-type Entry = { snapshot: SearchSnapshot; worker?: Worker; timer?: NodeJS.Timeout };
+type Entry = { snapshot: SearchSnapshot; worker?: Worker };
 
 /** Current searches live only as long as this process. Browser disconnects do not stop them. */
-export function createSearches(directory: string, dataset: Awaited<ReturnType<typeof readDataset>>, options = {
-  maxResults: 300, maxExpansions: 20_000_000, maxMilliseconds: 120_000,
-}) {
+export function createSearches(directory: string, dataset: Awaited<ReturnType<typeof readDataset>>) {
   const entries = new Map<string, Entry>();
   function find(id: string): Entry {
     const entry = entries.get(id);
@@ -37,7 +35,6 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     return entry;
   }
   function finish(entry: Entry, status: SearchSnapshot['status'], reason?: string) {
-    clearTimeout(entry.timer);
     entry.snapshot.status = status;
     entry.snapshot.reason = reason;
   }
@@ -61,23 +58,21 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     }
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.graph.info.id, query, status: 'running', routes: [],
+      selectionNote: 'Similar routes are grouped. Up to 10 choices per start and 300 overall are shown; this display limit does not stop exploration.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
     const worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-      workerData: { directory, query, maxResults: options.maxResults, maxExpansions: options.maxExpansions },
+      workerData: { directory, query },
       resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
     const entry: Entry = { snapshot, worker };
     entries.set(snapshot.id, entry);
-    entry.timer = setTimeout(() => {
-      if (snapshot.status !== 'running') return;
-      finish(entry, 'limited', 'The two-minute search allowance ended. Exploration is unfinished.');
-      void worker.terminate();
-    }, options.maxMilliseconds);
     worker.on('message', (event: SearchEvent) => {
       if (snapshot.status !== 'running') return;
       try {
-        if (event.type === 'route') snapshot.routes.push(dataset.route(event.route));
+        if (event.type === 'route') {
+          snapshot.routes.push(dataset.route(event.route));
+        }
         else {
           snapshot.progress = event.progress;
           if (event.type === 'done') finish(entry, event.status, event.reason);

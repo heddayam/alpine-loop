@@ -39,16 +39,21 @@ the server lives. Restarting the server intentionally expires it.
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
 The runtime currently allows two simultaneous searches and retains four recent
-searches. A search stops visibly unfinished at 300 candidates, 20 million examined
-edges, or two minutes. These prototype bounds keep resource use finite; the raw
-candidate cutoff is not a satisfactory final approach to route diversity.
+searches. A search continues until exploration finishes or the user stops it;
+there is no application time or expansion cutoff. Similar routes at a start are
+grouped by shared trail distance; up to
+10 choices per start and 300 overall are shown. Display limits do not stop search.
+Published choices stay stable while someone inspects or exports them. These
+prototype choices require further evaluation, especially for very large areas.
+Longer searches are acceptable; timing benchmarks are descriptive, not a reason
+to truncate exploration or add complexity. The interface currently targets desktop.
 
 ## Evidence and remaining work
 
 `benchmarks/` freezes 24 requests across three Washington areas and checks independent
 source witnesses. The pilot retains historical source omissions, documented in the
 app. It is not complete Washington coverage. A fresh data pipeline, a diverse results
-shortlist independent of exploration, long-hike discovery, automatic setup, full-app
+shortlist quality, long-hike discovery, automatic setup, full-app
 performance measurements and hosted delivery remain unfinished.
 
 ```sh

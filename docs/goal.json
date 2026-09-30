@@ -12,8 +12,8 @@
     "experience": ["area selection", "distance/gain/repetition", "loops and lollipops", "progressive comparison", "route inspection", "GPX", "browser reconnect while server lives"],
     "setup": ["hosted URL", "one local command after prerequisites", "automatic usable data", "no user source processing or API keys"],
     "quality": ["20 frozen real queries across 3 contrasting Washington areas", "independently verified qualifying routes", "independent exhaustive small-graph oracle", "honest constraints and completion"],
-    "performance": {"firstExactP90Ms": 5000, "allStartsAttemptedP90Ms": 60000, "cancelMs": 1000, "runtimeBytes": 1000000000},
+    "performance": {"firstExactP90Ms": null, "allStartsAttemptedP90Ms": null, "cancelMs": 1000, "runtimeBytes": 1000000000, "priority": "User clarified 2026-09-30: longer searches are acceptable. Timing is descriptive; do not complicate architecture or cut exploration to chase sub-10-second results."},
     "delivery": ["working replacement", "reproducible measurements", "brief architecture rationale", "concise setup", "one active application", "temporary scaffolding removed"]
   },
-  "state": "First real-data slice in progress; no acceptance item is claimed complete."
+  "state": "First real-data slice works. Desktop experience, source coverage, independent witness recovery, automatic setup and hosted delivery remain in progress."
 }

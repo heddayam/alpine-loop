@@ -53,7 +53,8 @@ describe('real application integration', () => {
       snapshot = (await app.inject(`/api/search/${id}`)).json();
     }
     expect(snapshot.status).toBe('complete');
-    expect(snapshot.routes).toHaveLength(2);
+    expect(snapshot.routes).toHaveLength(1); // The reverse walk is grouped; exploration still completes.
+    expect(snapshot.selectionNote).toContain('does not stop exploration');
     expect(snapshot.progress).toMatchObject({ totalStarts: 1, attemptedStarts: 1, completedStarts: 1 });
     for (const route of snapshot.routes) {
       expect(route.id).toHaveLength(32);
@@ -81,7 +82,7 @@ describe('real application integration', () => {
 
   it('stops the actual worker promptly and retains an honest unfinished state', async () => {
     const directory = await fixture(true);
-    const searches = createSearches(directory, await readDataset(directory), { maxResults: 10000, maxExpansions: 1e9, maxMilliseconds: 120000 });
+    const searches = createSearches(directory, await readDataset(directory));
     cleanup.push(() => searches.close());
     const snapshot = searches.start({ ...query, area: query.area as [number, number, number, number], distance: [10000, 20000], gain: [0, 1000] });
     await new Promise(resolve => setTimeout(resolve, 100));
