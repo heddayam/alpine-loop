@@ -15,13 +15,14 @@ let root:string;
 beforeEach(async()=>{root=await mkdtemp(path.join(tmpdir(),"network-export-test-"));});
 afterEach(async()=>{await rm(root,{recursive:true,force:true});});
 const source={id:"fixture",authority:"Alpine Loop",dataset:"Synthetic trails",version:"1",retrievedAt:"2026-09-28T00:00:00Z",url:"https://example.invalid/source",license:"CC0",contentHash:`sha256:${"1".repeat(64)}`};
-function fixture(name="a",offset=0):PreparedReleaseOptions {
-  const options:PreparedReleaseOptions={databasePath:path.join(root,`${name}.sqlite`),outputRoot:root,geometry:rectangle([-2,-2,2,2]),sources:[source],regions:[],builtAt:source.retrievedAt,compilerVersion:"fixture",metricAlgorithmVersion:"fixture",area:{id:name,inputFingerprint:`input-${name}`,startGeometry:rectangle([-0.1,-0.1,0.1,0.1]),maximumRouteMiles:40,bufferMiles:25},publish:false};
+function fixture(name="a",offset=0,retrievedAt=source.retrievedAt):PreparedReleaseOptions {
+  const fixtureSource={...source,retrievedAt};
+  const options:PreparedReleaseOptions={databasePath:path.join(root,`${name}.sqlite`),outputRoot:root,geometry:rectangle([-2,-2,2,2]),sources:[fixtureSource],regions:[],builtAt:retrievedAt,compilerVersion:"fixture",metricAlgorithmVersion:"fixture",area:{id:name,inputFingerprint:`input-${name}`,startGeometry:rectangle([-0.1,-0.1,0.1,0.1]),maximumRouteMiles:40,bufferMiles:25},publish:false};
   const db=new DatabaseSync(options.databasePath);
   try {
     createPreparedSchema(db);
     for(const [key,value] of Object.entries({schemaVersion:"7",releaseId:preparedReleaseId(options)})) db.prepare("INSERT INTO metadata VALUES (?,?)").run(key,value);
-    db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)").run(source.id,source.authority,source.dataset,source.version,source.retrievedAt,source.url,source.license,source.contentHash);
+    db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)").run(fixtureSource.id,fixtureSource.authority,fixtureSource.dataset,fixtureSource.version,fixtureSource.retrievedAt,fixtureSource.url,fixtureSource.license,fixtureSource.contentHash);
     db.prepare("INSERT INTO nodes VALUES (?,?,?,?,?,?)").run(`${name}-start`,1+offset,0,0,100,"[]");
     db.prepare("INSERT INTO nodes VALUES (?,?,?,?,?,?)").run(`${name}-end`,2+offset,1,0,100,"[]");
     db.prepare("INSERT INTO node_spatial VALUES (?,?,?,?,?)").run(1+offset,0,0,0,0);
@@ -89,6 +90,49 @@ it("publishes an expanded catalog using unchanged artifact bytes and independent
   await publishPreparedCatalog(release,root);
   expect(await readFile(path.join(root,a.artifacts[0]!.path))).toEqual(before);
   expect(await inspectPreparedRelease(path.join(root,"release.json"))).toMatchObject({verified:true,sections:2});
+});
+it.each([true,false])("publishes identical source contents acquired separately with semantic receipts=%s",async keepReceipts=>{
+  const a=await exportPreparedRelease({...fixture(),publish:true});
+  const laterDate="2026-09-29T12:00:00Z",b=await exportPreparedRelease(fixture("b",10,laterDate));
+  const artifacts=[...a.artifacts,...b.artifacts];
+  const before=await Promise.all(artifacts.map(artifact=>readFile(path.join(root,artifact.path))));
+  if(!keepReceipts) await rm(path.join(root,".audits"),{recursive:true,force:true});
+  await publishPreparedCatalog(combined(a,b),root);
+  expect(await inspectPreparedRelease(path.join(root,"release.json"))).toMatchObject({verified:true,sections:2,artifacts:[{nodes:2,directedEdges:1},{nodes:2,directedEdges:1}]});
+  for(const [index,artifact] of artifacts.entries()) {
+    expect(await readFile(path.join(root,artifact.path))).toEqual(before[index]);
+    const receipt=JSON.parse(await readFile(path.join(root,".audits",`${artifact.id}.json`),"utf8")) as {sources:DataRelease["sources"]};
+    expect(receipt.sources[0]!.retrievedAt).toBe(index===0?source.retrievedAt:laterDate);
+  }
+  expect(JSON.parse(await manifest()).sources).toEqual(a.sources);
+});
+it("requires the artifact's own exact retrieval date during single-area export",async()=>{
+  const options=fixture(),changed={...options,sources:[{...source,retrievedAt:"2026-09-29T00:00:00Z"}]};
+  // Match graph identity so this exercises source provenance, not the identity guard.
+  const db=new DatabaseSync(options.databasePath);
+  try {db.prepare("UPDATE metadata SET value=? WHERE key='releaseId'").run(preparedReleaseId(changed));}
+  finally {db.close();}
+  await expect(exportPreparedRelease(changed)).rejects.toThrow("source differs");
+  await expect(manifest()).rejects.toThrow();
+});
+it.each([
+  {version:"2"},
+  {contentHash:`sha256:${"2".repeat(64)}`},
+  {url:"https://example.invalid/another-source"},
+  {license:"ODbL-1.0"},
+])("rejects catalog source identity changes %j despite compatible acquisition dates",async change=>{
+  const a=await exportPreparedRelease({...fixture(),publish:true}),prior=await manifest();
+  const b=await exportPreparedRelease(fixture("b",10,"2026-09-29T00:00:00Z"));
+  const candidate=combined(a,b);candidate.sources=[{...source,...change}];
+  await expect(publishPreparedCatalog(candidate,root)).rejects.toThrow("source differs");
+  expect(await manifest()).toBe(prior);
+});
+it("rejects an invalid stored acquisition date during full catalog audit",async()=>{
+  const a=await exportPreparedRelease({...fixture(),publish:true}),prior=await manifest();
+  const b=await exportPreparedRelease(fixture("b",10));
+  await mutateArtifact(b,"UPDATE sources SET retrieved_at='not-a-date'");
+  await expect(publishPreparedCatalog(combined(a,b),root)).rejects.toThrow();
+  expect(await manifest()).toBe(prior);
 });
 it("rejects reused artifact corruption before activating the new catalog",async()=>{
   const a=await exportPreparedRelease({...fixture(),publish:true}),prior=await manifest(),b=await exportPreparedRelease(fixture("b",10));

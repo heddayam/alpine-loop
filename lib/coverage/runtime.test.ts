@@ -13,7 +13,7 @@ import { filteredSourceLines } from "./source-filter";
 import { contentId, rectangle, subtractCoverage, unionCoverage } from "./geometry";
 import { buildCoverageRegion } from "./runtime";
 import { calculateEdgeMetricsBatch, type EdgeMetrics } from "@/lib/data/metrics";
-import { preparedReleaseId } from "@/lib/data/prepared-release";
+import { inspectPreparedRelease, preparedReleaseId } from "@/lib/data/prepared-release";
 import { PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION } from "@/lib/data/elevation/uv-rasterio-sampler";
 import type { SourceRecipe } from "./recipe";
 
@@ -281,6 +281,60 @@ it("adding an overlapping area reuses segment measurements and preserves prior b
   expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
   expect(await readFile(path.join(root,"release",artifact.path))).toEqual(bytes);
 });
+async function useAcquisitionDate(retrievedAt:string) {
+  const snapshot={...source,retrievedAt};
+  const {inspectPinnedOsmSnapshot,readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
+  vi.mocked(inspectPinnedOsmSnapshot).mockResolvedValue(snapshot);
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(snapshot);
+  const {elevationFor,describeCanonicalElevation}=await import("./elevation");
+  vi.mocked(elevationFor).mockResolvedValue({source:{...snapshot,id:"dem"},productFingerprint:"fixture-dem",fingerprintForGeometry:()=>"fixture-dem",limitations:[],sampler:{algorithmVersion:"fixture",sample:async coordinates=>coordinates.map(()=>100)}});
+  vi.mocked(describeCanonicalElevation).mockResolvedValue({source:{...snapshot,id:"dem"},productFingerprint:"fixture-dem"});
+}
+it.each(["2026-09-23T12:00:00Z","2026-09-25T12:00:00Z"])("merges adjacent areas acquired at %s using the earliest date independently of publication order",async neighborDate=>{
+  await build();const first=await release(),artifact=first.artifacts[0]!,before=await readFile(path.join(root,"release",artifact.path));
+  await useAcquisitionDate(neighborDate);
+  await build(secondArea);
+  const merged=await release(),earliestDate=[source.retrievedAt,neighborDate].sort()[0]!;
+  expect(merged.sections).toHaveLength(2);
+  expect(merged.sources.every(source=>source.retrievedAt===earliestDate)).toBe(true);
+  const graphs=await pieces();
+  for(const [index,item] of merged.artifacts.entries())
+    expect(graphs[index]!.sources.every(row=>row.retrieved_at===(item.regionId==="first-region"?source.retrievedAt:neighborDate))).toBe(true);
+  expect(await readFile(path.join(root,"release",artifact.path))).toEqual(before);
+  expect(await inspectPreparedRelease(path.join(root,"release/release.json"))).toMatchObject({verified:true,sections:2});
+  // Reuse both immutable checkpoints in reverse order, without changing their dates.
+  await rm(path.join(root,"release/release.json"));
+  await build(secondArea);
+  await useAcquisitionDate(source.retrievedAt);
+  await build();
+  expect(await release()).toEqual(merged);
+  expect(await readFile(path.join(root,"release",artifact.path))).toEqual(before);
+});
+it("retries a saved area receipt after a source-date publication conflict without repeating graph or elevation work",async()=>{
+  await build();const prior=await readFile(path.join(root,"release/release.json"),"utf8");
+  await useAcquisitionDate("2026-09-25T12:00:00Z");
+  const interrupted=context();
+  // Older builders raised this error after the area had already been exported and saved.
+  interrupted.report=async update=>{if(update.stage?.startsWith("Prepared "))throw new Error("Conflicting source metadata fixture");};
+  await expect(build(secondArea,interrupted)).rejects.toThrow("Conflicting source metadata fixture");
+  expect(await readFile(path.join(root,"release/release.json"),"utf8")).toBe(prior);
+  const receipts=await Promise.all((await readdir(path.join(root,"stage/regions"))).map(async name=>{
+    const file=path.join(root,"stage/regions",name),bytes=await readFile(file);
+    return {file,bytes,release:(JSON.parse(bytes.toString()) as {release:DataRelease}).release};
+  }));
+  const saved=receipts.find(receipt=>receipt.release.sections[0]!.id==="second-region")!;
+  expect(saved.release.sources.every(source=>source.retrievedAt==="2026-09-25T12:00:00Z")).toBe(true);
+  const artifact=saved.release.artifacts[0]!,file=path.join(root,"release",artifact.path),bytes=await readFile(file);
+  const {elevationFor}=await import("./elevation"),{writeProgressiveTopology}=await import("@/lib/data/progressive/topology");
+  vi.mocked(elevationFor).mockClear();vi.mocked(writeProgressiveTopology).mockClear();vi.mocked(filteredSourceLines).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await build(secondArea);
+  expect(elevationFor).not.toHaveBeenCalled();expect(writeProgressiveTopology).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(await readFile(saved.file)).toEqual(saved.bytes);
+  expect(await readFile(file)).toEqual(bytes);
+  expect((await release()).sources.every(item=>item.retrievedAt===source.retrievedAt)).toBe(true);
+  expect(await inspectPreparedRelease(path.join(root,"release/release.json"))).toMatchObject({verified:true,sections:2});
+  await expectNoScratch();
+});
 it("replaces one area's reviewed provenance without changing its installed neighbor",async()=>{
   const {localPath,...metadata}=source; void localPath;
   const first=(changed=false)=>({id:"first-region",name:"First region",geometry:startArea,recipe:recipe(),sources:
@@ -456,11 +510,18 @@ it("applies access restrictions before compiling eligible local segments",async(
   const edges=(await pieces())[0]!.edges;
   expect(edges.length).toBeGreaterThan(0);expect(edges.flatMap(edge=>JSON.parse(String(edge.geometry))).some(point=>point[0]===-121.1)).toBe(false);
 });
-it("does not silently combine different source pins across prepared areas",async()=>{
+it.each([
+  {version:"2"},
+  {contentHash:`sha256:${"2".repeat(64)}` as const},
+  {url:"https://example.invalid/another-source"},
+  {license:"ODbL-1.0"},
+])("does not silently combine different source pins across prepared areas: %j",async change=>{
   await build();const before=await release();
   const {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source");
-  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,contentHash:`sha256:${"2".repeat(64)}`});
-  const input=recipe();input.sources[0]!.sha256=`sha256:${"2".repeat(64)}`;
+  const changed={...source,...change,retrievedAt:"2026-09-25T12:00:00Z"};
+  vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(changed);
+  const input=recipe();input.sources[0]!.sha256=changed.contentHash;
+  input.sources[0]!.config={...input.sources[0]!.config,version:changed.version,url:changed.url,license:changed.license};
   await expect(build(secondArea,context(),input)).rejects.toThrow("Conflicting source metadata");
   expect(await release()).toEqual(before);
 });
