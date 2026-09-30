@@ -66,27 +66,76 @@ the North Bay. Each California entry currently supplies its original file throug
 A per-region cap retains its historical approach neighborhoods through the shared
 `entranceNeighborhood` calculation; the statewide cap already includes them.
 
-| Download ID | Selected Standard leaves |
-| --- | ---: |
-| `north-cascades` | 26 |
-| `central-cascades` | 34 |
-| `rainier-goat-rocks` | 11 |
-| `southwest-cascades` | 3 |
-| `olympic-peninsula` | 20 |
-| `north-puget` | 1 |
-| `south-puget` | 3 |
-| `willapa-hills` | 1 |
-| `northeast-washington` | 10 |
-| `spokane-palouse` | 4 |
-| `columbia-basin` | 9 |
-| `blue-mountains` | 1 |
-| `santa-cruz-mountains` | 1 |
-| `southern-east-bay` | 1 |
-| `monterey-carmel` | 2 |
-| `henry-coe` | 1 |
+### Washington hiking districts
+
+Washington uses the eleven region names offered by WTA's
+[Trailblazer app](https://www.wta.org/our-work/about/trailblazer-mobile-app) and
+[Hiking Guide](https://www.wta.org/go-outside/hikes), reviewed 2026-09-29. These
+are independently downloadable hiking districts with explicit whole-leaf
+assignments, not copied WTA boundary polygons or imported WTA hike records.
+WTA's names and representative trailhead classifications inform the organization;
+the pinned GMBA leaves, product cap and connected-approach policy remain the
+coverage authority. The catalog lists Washington in alphabetical district order;
+the four California entries retain their exact former definitions.
+
+| Download ID / name | Standard leaves | Reviewed anchors | Assignment from the former catalog |
+| --- | ---: | ---: | --- |
+| `central-cascades` / Central Cascades | 12 | 16 | Chelan, Entiat, Stevens Pass, Wild Sky, Chiwaukum and Wenatchee/Stuart leaves retained from Central Cascades |
+| `central-washington` / Central Washington | 10 | 0 | Columbia Basin except Columbia Hills; West Manastash–Umtanum and Mission–Naneum from Central Cascades |
+| `eastern-washington` / Eastern Washington | 15 | 0 | Northeast Washington, Spokane–Palouse and Northern Blue Mountains |
+| `issaquah-alps` / Issaquah Alps | 1 | 0 | Issaquah Alps from Central Cascades |
+| `mount-rainier-area` / Mount Rainier Area | 10 | 8 | Rainier–Goat Rocks except Goat Rocks |
+| `north-cascades` / North Cascades | 39 | 17 | Former North Cascades plus thirteen Glacier Peak/Mountain Loop leaves from Central Cascades |
+| `olympic-peninsula` / Olympic Peninsula | 20 | 9 | Former Olympic Peninsula selection unchanged |
+| `puget-sound-and-islands` / Puget Sound and Islands | 4 | 0 | San Juan Islands plus Seattle–Everett, Capitol Hills and Kitsap Peninsula from the former two Puget groups |
+| `snoqualmie-region` / Snoqualmie Region | 6 | 3 | Chikamin–Keechelus, Kachess, North–Middle Forks Snoqualmie, Snoqualmie Pass North, Cedar River–South Snoqualmie Pass and Teanaway from Central Cascades |
+| `south-cascades` / South Cascades | 3 | 9 | Goat Rocks, Mount Adams and Mount Saint Helens |
+| `southwest-washington` / Southwest Washington | 3 | 2 | Willapa Hills, Columbia Gorge North and Columbia Hills |
+| `santa-cruz-mountains` | 1 | 3 | California entry unchanged |
+| `southern-east-bay` | 1 | 5 | California entry unchanged |
+| `monterey-carmel` | 2 | 10 | California entry unchanged |
+| `henry-coe` | 1 | 5 | California entry unchanged |
+
+The thirteen leaves moved into North Cascades are `16956`, `16957`, `16958`,
+`16960`, `16975`, `16976`, `16977`, `16978`, `16979`, `16980`, `16981`, `16982`
+and `19110`. Every one of the former 123 Washington leaves has exactly one
+download-district owner. No leaf or terrain geometry is added, removed or cut
+to obtain these districts. All 64 Washington reviewed approach records retain
+their exact IDs, coordinates, basis, URLs and radii, assigned once to their
+core's district. Indian Heaven's Lemei anchor remains a South Cascades approach
+outside the core; an audit anchor never grants admission.
+
+Whole mountain leaves cross access districts, so this grouping cannot reproduce
+every WTA trailhead classification. For example, WTA assigns
+[Mount Daniel](https://www.wta.org/go-hiking/hikes/mount-daniel) and
+[Lake Ingalls](https://www.wta.org/go-hiking/hikes/lake-ingalls) to Snoqualmie,
+while the whole Mount Daniel and Stuart leaves belong to Central Cascades here.
+[Blanca Lake](https://www.wta.org/go-hiking/hikes/blanca-lake) is Central Cascades
+in WTA but lies in the Monte Cristo leaf assigned to North Cascades here.
+White River, Phelps Creek and Trinity audit coordinates remain in Central-owned
+Wenatchee Ridge/North Entiat leaves even though neighboring Glacier Peak leaves
+move north. This explicit proxy avoids invented trail-scale cuts or duplicated
+leaf ownership; it is not an assertion that WTA uses GMBA boundaries.
+
+Representative WTA checks also place
+[Mountain Loop approaches](https://www.wta.org/go-hiking/hikes/image-lake-via-miners-ridge)
+in North Cascades,
+[White River](https://www.wta.org/go-hiking/hikes/white-river) in Central Cascades,
+[Goat Rocks](https://www.wta.org/go-hiking/hikes/goat-lake-goat-rocks) and
+[Indian Heaven](https://www.wta.org/go-hiking/hikes/indian-heaven) in South Cascades,
+and [Columbia Hills / Washington Gorge](https://www.wta.org/go-hiking/hikes/she-who-watches)
+in Southwest Washington. No WTA text, maps or trail geometry are redistributed.
+
+Aliases describe destinations within a district, not independent narrower
+filters or promises that every named destination has an eligible entrance.
+Retired download IDs are not aliases or replacement guarantees. The Washington
+recipe's historical `reviewedRegionIds` intentionally retain the old `data/regions`
+IDs: they locate pinned restrictions and official-trail audit inputs, rather than
+defining the new selectable districts. The GMBA inventory, recipes, statewide cap,
+eligibility constants and California footprints are unchanged by this regrouping.
 
 The dataset contains 127 distinct leaves: 123 Washington and four California.
-Washington selections carry forward the actual named leaf selection from the
+Washington selections redistribute the actual named leaf selection from the
 previous catalog, restricted to leaves present in Standard and intersecting the
 scope. Standard has no record for Whidbey Island Group (17156), Highline-West
 Seattle (17034), or Frenchman Hills (16221). Gulf Islands (17153), Christina Range
@@ -118,7 +167,7 @@ are omitted explicitly, without a Broad substitute.
    140,063,734,871.7768 m². Its symmetric difference from the quantized union is
    2,399.6691400110726 m² (0.0000017132694213872574%). This is coordinate precision,
    not a claim of survey accuracy. Product cap edges are applied once by the loader.
-5. Run the offline region tests. They plan all 16 cores against recipe source
+5. Run the offline region tests. They plan all 15 cores against recipe source
    coverage and country exclusions, check source pins and mountain controls,
    exclude Arlington and Mount Vernon from Central, preserve exact California
    caps, and prevent starts from expanding to Oregon, Idaho, Canada or North Bay.
