@@ -62,6 +62,8 @@ describe("geographic job migration", () => {
       progress: { eligibleAccessPointCount: 2, processedAccessPointCount: 1, exactRouteCount: 2, truncatedAccessPointCount: 1, elapsedMs: 60_000 },
     });
     expect(store.getStored(jobId(1))?.plan).toEqual({ installationId: null, area: { label: "Old region" } });
+    expect(store.toPublic(jobId(1), false)?.progress).not.toHaveProperty("searchPass");
+    expect(store.beginNextPass(jobId(1))).toBe(false);
     expect(store.toPublic(jobId(2), false)).toMatchObject({ status: "cancelled", partial: true, area: { filterGeometry: { type: "Polygon" } } });
     expect(store.toPublic(jobId(3), false)).toMatchObject({ status: "failed", error: "failure", area: { filterGeometry: contour } });
     const results = store.pageResults(jobId(1), undefined, 50).results;
@@ -102,7 +104,7 @@ describe("geographic job migration", () => {
     const store = new SQLiteRouteJobStore(path);
     expect(store.claimNext()?.id).toBe(jobId(1));
     store.initializeAccessPoints(jobId(1), ["old-pack::pending", "old-pack::access"]);
-    expect(store.nextAccessPoint(jobId(1))).toEqual({ ordinal: 1, accessPointId: "old-pack::pending" });
+    expect(store.nextAccessPoint(jobId(1))).toEqual({ ordinal: 1, accessPointId: "old-pack::pending", attempt: 1 });
     expect(store.pageResults(jobId(1), undefined, 50).results).toHaveLength(1);
     expect(store.getControl(jobId(2))?.status).toBe("cancelled");
     expect(store.getStored(jobId(3))).toBeNull();
@@ -137,5 +139,26 @@ describe("geographic job migration", () => {
     expect(database.prepare("SELECT payload_json FROM route_job_results WHERE job_id = ?").get(jobId(1))?.payload_json).toBe(JSON.stringify(legacyResult));
     expect(database.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     database.close();
+  });
+
+  it("upgrades existing version-two jobs without restarting them or changing saved results", () => {
+    const { database, path } = legacyDatabase();
+    insertJob(database, 1, "completed");
+    migrateLegacyJobs(database);
+    // This represents version-two storage before refinement metadata existed.
+    database.exec("ALTER TABLE route_jobs DROP COLUMN search_pass");
+    const before = database.prepare("SELECT payload_json FROM route_job_results").all();
+    database.close();
+    const store = new SQLiteRouteJobStore(path);
+    expect(store.claimNext()).toBeNull();
+    expect(store.toPublic(jobId(1), false)).toMatchObject({ status: "completed", progress: { processedAccessPointCount: 1 } });
+    expect(store.toPublic(jobId(1), false)?.progress).not.toHaveProperty("searchPass");
+    store.close();
+    const inspect = new DatabaseSync(path);
+    expect(inspect.prepare("SELECT payload_json FROM route_job_results").all()).toEqual(before);
+    expect(inspect.prepare("SELECT completed_attempts, completion_state FROM route_job_access_points ORDER BY ordinal").all()).toEqual([
+      { completed_attempts: 1, completion_state: "unknown" }, { completed_attempts: 0, completion_state: "unknown" },
+    ]);
+    inspect.close();
   });
 });

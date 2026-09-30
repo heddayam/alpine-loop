@@ -1,12 +1,12 @@
 import { PreparedGraphRepository } from "@/lib/graph";
 import { loadInstallation } from "@/lib/coverage-install";
 import {
-  CLOSED_ROUTE_BUDGET,
   type PreparedRouteSearch,
   type RouteGraphContext,
   AccessFilterResolutionError,
   ReachableGraphClosedRouteSolver,
 } from "@/lib/solver";
+import { budgetForSearchAttempt, searchCompletionForReasons } from "@/lib/solver/budget";
 import { ServerApiError } from "./api-error";
 import type {
   StartSearchResult,
@@ -66,16 +66,18 @@ async function preparedSearch(): Promise<PreparedRouteSearch> {
   return session.search;
 }
 
-async function search(accessPointId: string): Promise<StartSearchResult> {
+async function search(accessPointId: string, attempt = 1): Promise<StartSearchResult> {
+  const budget = budgetForSearchAttempt(attempt);
   const prepared = await preparedSearch();
   const routesPerAccessPoint = 10;
   const result = await prepared.generate({
     startAccessPointId: accessPointId,
     limit: routesPerAccessPoint,
-  }, { ...CLOSED_ROUTE_BUDGET });
+  }, budget);
   return {
     exact: result.exact,
     nearMisses: result.nearMisses,
+    completion: result.completion ?? searchCompletionForReasons(result.diagnostics.hardTruncationReasons, budget),
     truncated: result.diagnostics.hardTruncationReasons.length > 0,
     diagnostics: result.diagnostics,
   };
@@ -92,7 +94,7 @@ async function handle(request: RouteSolverRequest): Promise<void> {
     let value: Extract<RouteSolverResponse, { ok: true }>["value"];
     if (request.type === "initialize") await initialize(request.input);
     else if (request.type === "enumerate") value = (await preparedSearch()).eligibleAccessPointIds;
-    else if (request.type === "search") value = await search(request.accessPointId);
+    else if (request.type === "search") value = await search(request.accessPointId, request.attempt);
     else await close();
     send({ id: request.id, ok: true, ...(value === undefined ? {} : { value }) });
   } catch (error) {

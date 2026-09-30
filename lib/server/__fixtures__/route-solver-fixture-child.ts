@@ -31,6 +31,6 @@ process.on("message", (request: RouteSolverRequest) => {
   send({
     id: request.id,
     ok: true,
-    value: { exact: [], nearMisses: [], truncated: false, diagnostics: { pid: process.pid, startedAt, finishedAt: Date.now() } },
+    value: { exact: [], nearMisses: [], truncated: false, diagnostics: { attempt: request.attempt, pid: process.pid, startedAt, finishedAt: Date.now() } },
   });
 });

@@ -2,6 +2,7 @@ import { areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } f
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
 import { SQLiteRouteJobStore, type ResultCursor, type StoredJob } from "./store";
 import type { RouteJobRunnerDependencies, RouteJob, RouteJobResultsPage, RouteJobResult } from "./types";
+import { retainBetterResults } from "./retain-results";
 
 const RESULT_PAGE_SIZE = 50;
 const MAX_CURSOR_LENGTH = 2_048;
@@ -212,10 +213,13 @@ export class RouteJobService {
           if (!point) break;
           const task: Task = { point };
           pending.push(task);
-          running.set(point.ordinal, session.searchAccessPoint(point.accessPointId, signal)
+          running.set(point.ordinal, session.searchAccessPoint(point.accessPointId, signal, point.attempt)
             .then((searched) => ({ task, outcome: { searched } }), (error: unknown) => ({ task, outcome: { error } })));
         }
-        if (running.size === 0) break;
+        if (running.size === 0) {
+          if (this.#store.beginNextPass(id)) continue;
+          break;
+        }
         const completed = await Promise.race(running.values());
         running.delete(completed.task.point.ordinal);
         completed.task.outcome = completed.outcome;
@@ -230,7 +234,7 @@ export class RouteJobService {
           const { point, outcome } = task;
           if ("error" in outcome) {
             if (isCancellationError(outcome.error)) throw outcome.error;
-            this.#store.failAccessPoint(id, point.ordinal, errorMessage(outcome.error));
+            this.#store.failAccessPoint(id, point.ordinal, errorMessage(outcome.error), point.attempt);
           } else {
             const { searched } = outcome;
             const results: RouteJobResult[] = searched.exact.slice(0, 10).map((route) => ({
@@ -239,7 +243,14 @@ export class RouteJobService {
             if (results.length === 0 && searched.nearMisses[0]) results.push({
               matchType: "near-miss", accessPointId: point.accessPointId, route: searched.nearMisses[0],
             });
-            this.#store.completeAccessPoint(id, point.ordinal, results, searched.truncated, searched.diagnostics);
+            const retained = retainBetterResults(this.#store.accessPointResults(id, point.ordinal), results, request.criteria);
+            this.#store.completeAccessPoint(id, point.ordinal, retained, searched.truncated, searched.diagnostics, {
+              attempt: point.attempt,
+              // Older injected sessions did not report completion. Preserve
+              // their one-pass behavior; only an explicit retryable outcome
+              // admits another attempt.
+              completion: searched.completion ?? (searched.truncated ? "limited" : "exhausted"),
+            });
           }
           await yieldToEventLoop(signal);
         }

@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SearchIntent } from "@/lib/contracts";
 import type { SearchPlan } from "@/lib/server/search-plan";
@@ -120,9 +121,9 @@ describe("SQLiteRouteJobStore", () => {
     expect(store.toPublic("00000000-0000-4000-8000-000000000001", false))
       .toMatchObject({ area: { filterGeometry: { type: "Polygon" } } });
     store.initializeAccessPoints(id, ["b", "a"]);
-    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "b" });
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "b", attempt: 1 });
     store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "b", route: route("saved") }], false);
-    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a" });
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a", attempt: 1 });
     store.close();
 
     const reopened = new SQLiteRouteJobStore(path);
@@ -132,7 +133,7 @@ describe("SQLiteRouteJobStore", () => {
     expect(reopened.pageResults(id, undefined, 50).results.map(({ route: result }) => result.id)).toEqual(["saved"]);
     reopened.claimNext();
     expect(reopened.getControl(id)?.status).toBe("running");
-    expect(reopened.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a" });
+    expect(reopened.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "a", attempt: 1 });
     reopened.close();
   });
 
@@ -148,7 +149,7 @@ describe("SQLiteRouteJobStore", () => {
     });
     store.initializeAccessPoints(id, ["first", "second"]);
     store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "first", route: route("saved") }], false);
-    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "second" });
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 1, accessPointId: "second", attempt: 1 });
     expect(store.requestCancel(id)).toBe("requested");
     store.close();
 
@@ -239,6 +240,80 @@ describe("SQLiteRouteJobStore", () => {
     store.finish(deleted, "failed", "late failure");
     expect(store.getStored(deleted)).toBeNull();
     expect(store.pageResults(deleted, undefined, 50).results).toEqual([]);
+    store.close();
+  });
+
+  it("persists pass barriers and retries the same interrupted attempt without losing first-pass progress", () => {
+    const { path, store } = setup();
+    const id = "00000000-0000-4000-8000-000000000031";
+    store.create(id, regionWideRequest, resolved);
+    store.claimNext();
+    store.initializeAccessPoints(id, ["first", "second"]);
+    store.nextAccessPoint(id);
+    const saved: RouteJobResult[] = [{ matchType: "exact", accessPointId: "first", route: route("saved") }];
+    store.completeAccessPoint(id, 0, saved, true, {}, { attempt: 1, completion: "retryable" });
+    expect(store.beginNextPass(id)).toBe(false);
+    store.nextAccessPoint(id);
+    expect(store.beginNextPass(id)).toBe(false);
+    store.completeAccessPoint(id, 1, [], false, {}, { attempt: 1, completion: "exhausted" });
+    expect(store.beginNextPass(id)).toBe(true);
+    expect(store.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "first", attempt: 2 });
+    expect(store.toPublic(id, false)).toMatchObject({ partial: true, progress: {
+      searchPass: 2, processedAccessPointCount: 2, exhaustedAccessPointCount: 1, unfinishedAccessPointCount: 1,
+    } });
+    store.close();
+
+    const reopened = new SQLiteRouteJobStore(path);
+    expect(reopened.claimNext()?.id).toBe(id);
+    expect(reopened.nextAccessPoint(id)).toEqual({ ordinal: 0, accessPointId: "first", attempt: 2 });
+    reopened.completeAccessPoint(id, 0, [], false, {}, { attempt: 1, completion: "exhausted" });
+    expect(reopened.accessPointResults(id, 0)).toEqual(saved);
+    reopened.completeAccessPoint(id, 0, saved, false, {}, { attempt: 2, completion: "exhausted" });
+    expect(reopened.beginNextPass(id)).toBe(false);
+    reopened.finish(id, "completed");
+    expect(reopened.toPublic(id, false)).toMatchObject({ status: "completed", partial: false, progress: {
+      searchPass: 2, processedAccessPointCount: 2, exhaustedAccessPointCount: 2, unfinishedAccessPointCount: 0, limitedAccessPointCount: 0,
+    } });
+    reopened.close();
+  });
+
+  it("retains canonical results and deterministically changes geometry ownership across refinements", () => {
+    const { store } = setup();
+    const id = "00000000-0000-4000-8000-000000000032";
+    store.create(id, regionWideRequest, resolved);
+    store.initializeAccessPoints(id, ["first", "second", "third"]);
+    const saved = (id: string, accessPointId: string): RouteJobResult => ({ matchType: "exact", accessPointId, route: route(id) });
+    store.completeAccessPoint(id, 1, [saved("second-loop", "second")], false);
+    store.completeAccessPoint(id, 2, [saved("third-loop", "third")], false);
+    expect(store.pageResults(id, undefined, 50).results.map(result => result.route.id)).toEqual(["second-loop"]);
+    expect(store.accessPointResults(id, 2)).toHaveLength(1);
+    store.completeAccessPoint(id, 0, [saved("first-loop", "first")], false);
+    expect(store.pageResults(id, undefined, 50).results.map(result => result.route.id)).toEqual(["first-loop"]);
+    const different = saved("better-first-loop", "first");
+    different.route.geometry = { type: "LineString", coordinates: [[-122, 37], [-122.1, 37.1], [-122, 37]] };
+    store.completeAccessPoint(id, 0, [different], false);
+    expect(store.toPublic(id, false)?.progress.exactRouteCount).toBe(2);
+    const firstPage = store.pageResults(id, undefined, 1);
+    expect(firstPage.results.map(result => result.route.id)).toEqual(["better-first-loop"]);
+    expect(store.pageResults(id, firstPage.next, 1).results.map(result => result.route.id)).toEqual(["second-loop"]);
+    store.completeAccessPoint(id, 1, [], false);
+    expect(store.pageResults(id, undefined, 50).results.map(result => result.route.id)).toEqual(["better-first-loop", "third-loop"]);
+    store.close();
+  });
+
+  it("does not combine independent saved rows with missing geometry hashes", () => {
+    const { path, store } = setup();
+    const id = "00000000-0000-4000-8000-000000000033";
+    store.create(id, regionWideRequest, resolved);
+    store.initializeAccessPoints(id, ["first", "second"]);
+    for (const [ordinal, name] of ["first", "second"].entries()) {
+      store.completeAccessPoint(id, ordinal, [{ matchType: "exact", accessPointId: name, route: route(name) }], false);
+    }
+    const database = new DatabaseSync(path);
+    database.prepare("UPDATE route_job_results SET geometry_hash = NULL WHERE job_id = ?").run(id);
+    database.close();
+    expect(store.pageResults(id, undefined, 50).results).toHaveLength(2);
+    expect(store.toPublic(id, false)?.progress.exactRouteCount).toBe(2);
     store.close();
   });
 

@@ -8,6 +8,7 @@ import {
   type SearchIntent, type RouteJobStatus,
 } from "@/lib/contracts";
 import type { SearchPlan } from "@/lib/server/search-plan";
+import type { SearchCompletion } from "@/lib/solver/budget";
 import type { ResolvedDriveTime, RouteJob, RouteJobResult } from "./types";
 import { JOB_COLUMNS, migrateLegacyJobs } from "./migration";
 
@@ -32,6 +33,15 @@ export type ResultCursor = {
 };
 
 const TERMINAL = new Set<RouteJobStatus>(["completed", "cancelled", "failed"]);
+
+// Keep each start's own results so changing one checkpoint cannot erase a
+// different start's fallback. Historical jobs retain their original row view.
+const VISIBLE_RESULT = `(j.search_pass = 0 OR NOT EXISTS (
+  SELECT 1 FROM route_job_results owner
+  WHERE owner.job_id = r.job_id AND owner.geometry_hash = r.geometry_hash
+    AND (owner.match_rank, owner.access_ordinal, owner.result_ordinal, owner.route_id)
+      < (r.match_rank, r.access_ordinal, r.result_ordinal, r.route_id)
+))`;
 
 function requiredString(row: Row, key: string): string {
   const value = row[key];
@@ -97,6 +107,8 @@ export class SQLiteRouteJobStore {
         ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
         access_point_id TEXT NOT NULL,
         status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'done', 'failed')),
+        completed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(completed_attempts >= 0),
+        completion_state TEXT NOT NULL DEFAULT 'unknown' CHECK(completion_state IN ('unknown', 'retryable', 'exhausted', 'limited')),
         truncated INTEGER NOT NULL DEFAULT 0 CHECK(truncated IN (0, 1)),
         diagnostics_json TEXT,
         error TEXT,
@@ -119,6 +131,21 @@ export class SQLiteRouteJobStore {
       CREATE INDEX IF NOT EXISTS route_job_results_order
         ON route_job_results(job_id, match_rank, access_ordinal, result_ordinal, route_id);
     `);
+    this.#transaction(() => {
+      const jobs = this.#database.prepare("PRAGMA table_info(route_jobs)").all();
+      if (!jobs.some(({ name }) => name === "search_pass")) {
+        this.#database.exec("ALTER TABLE route_jobs ADD COLUMN search_pass INTEGER NOT NULL DEFAULT 0 CHECK(search_pass >= 0)");
+      }
+      const starts = this.#database.prepare("PRAGMA table_info(route_job_access_points)").all();
+      if (!starts.some(({ name }) => name === "completed_attempts")) {
+        this.#database.exec("ALTER TABLE route_job_access_points ADD COLUMN completed_attempts INTEGER NOT NULL DEFAULT 0 CHECK(completed_attempts >= 0)");
+        this.#database.exec("UPDATE route_job_access_points SET completed_attempts = 1 WHERE status IN ('done', 'failed')");
+      }
+      if (!starts.some(({ name }) => name === "completion_state")) {
+        this.#database.exec("ALTER TABLE route_job_access_points ADD COLUMN completion_state TEXT NOT NULL DEFAULT 'unknown' CHECK(completion_state IN ('unknown', 'retryable', 'exhausted', 'limited'))");
+      }
+      this.#database.exec("DROP INDEX IF EXISTS route_job_results_geometry");
+    });
     this.#database.exec("CREATE INDEX IF NOT EXISTS route_job_results_geometry_lookup ON route_job_results(job_id, geometry_hash)");
   }
 
@@ -136,8 +163,8 @@ export class SQLiteRouteJobStore {
 
   create(id: string, request: SearchIntent, plan: SearchPlan): void {
     const timestamp = nowIso(this.#now);
-    this.#database.prepare(`INSERT INTO route_jobs(id, request_json, plan_json, status, created_at, updated_at)
-      VALUES (?, ?, ?, 'queued', ?, ?)`).run(
+    this.#database.prepare(`INSERT INTO route_jobs(id, request_json, plan_json, status, search_pass, created_at, updated_at)
+      VALUES (?, ?, ?, 'queued', 1, ?, ?)`).run(
       id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(installationPlanSchema.extend({ installationId: z.string().min(1) }).parse(plan)), timestamp, timestamp,
     );
   }
@@ -197,9 +224,9 @@ export class SQLiteRouteJobStore {
     });
   }
 
-  nextAccessPoint(id: string): { ordinal: number; accessPointId: string } | null {
+  nextAccessPoint(id: string): { ordinal: number; accessPointId: string; attempt: number } | null {
     return this.#transaction(() => {
-      const row = this.#database.prepare(`SELECT ordinal, access_point_id FROM route_job_access_points
+      const row = this.#database.prepare(`SELECT ordinal, access_point_id, completed_attempts FROM route_job_access_points
         WHERE job_id = ? AND status = 'pending' ORDER BY ordinal LIMIT 1`).get(id) as Row | undefined;
       if (!row) return null;
       const timestamp = nowIso(this.#now);
@@ -207,8 +234,38 @@ export class SQLiteRouteJobStore {
       this.#database.prepare(`UPDATE route_job_access_points SET status = 'running', started_at = ?
           WHERE job_id = ? AND ordinal = ?`).run(timestamp, id, ordinal);
       this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(timestamp, id);
-      return { ordinal, accessPointId: requiredString(row, "access_point_id") };
+      return { ordinal, accessPointId: requiredString(row, "access_point_id"), attempt: integer(row, "completed_attempts") + 1 };
     });
+  }
+
+  /** Start another pass only after every checkpoint in this pass is durable. */
+  beginNextPass(id: string): boolean {
+    return this.#transaction(() => {
+      const control = this.getControl(id);
+      if (!control || control.status !== "running" || control.cancelRequested || control.deleteRequested) return false;
+      const job = this.#database.prepare("SELECT search_pass FROM route_jobs WHERE id = ?").get(id) as Row;
+      if (integer(job, "search_pass") === 0) return false;
+      if (this.#database.prepare("SELECT 1 FROM route_job_access_points WHERE job_id = ? AND status IN ('pending', 'running') LIMIT 1").get(id)) return false;
+      const queued = this.#database.prepare(`UPDATE route_job_access_points SET status = 'pending'
+        WHERE job_id = ? AND status = 'done' AND completion_state = 'retryable'`).run(id);
+      if (Number(queued.changes) === 0) return false;
+      this.#database.prepare("UPDATE route_jobs SET search_pass = search_pass + 1, updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
+      return true;
+    });
+  }
+
+  accessPointResults(id: string, ordinal: number): RouteJobResult[] {
+    return (this.#database.prepare(`SELECT payload_json FROM route_job_results WHERE job_id = ? AND access_ordinal = ?
+      ORDER BY match_rank, result_ordinal, route_id`).all(id, ordinal) as Row[])
+      .map(row => routeJobResultV2Schema.parse(parseJson(requiredString(row, "payload_json"))));
+  }
+
+  #canCheckpoint(id: string, ordinal: number, attempt?: number): boolean {
+    const control = this.getControl(id);
+    if (!control || TERMINAL.has(control.status) || control.cancelRequested || control.deleteRequested) return false;
+    if (attempt === undefined) return true;
+    const start = this.#database.prepare("SELECT status, completed_attempts FROM route_job_access_points WHERE job_id = ? AND ordinal = ?").get(id, ordinal) as Row | undefined;
+    return Boolean(start && start.status === "running" && integer(start, "completed_attempts") + 1 === attempt);
   }
 
   completeAccessPoint(
@@ -217,11 +274,11 @@ export class SQLiteRouteJobStore {
     results: readonly RouteJobResult[],
     truncated: boolean,
     diagnostics?: unknown,
+    progress?: { attempt: number; completion: SearchCompletion },
   ): void {
     this.#transaction(() => {
+      if (!this.#canCheckpoint(id, ordinal, progress?.attempt)) return;
       this.#database.prepare("DELETE FROM route_job_results WHERE job_id = ? AND access_ordinal = ?").run(id, ordinal);
-      const existingGeometry = this.#database.prepare(`SELECT rowid, match_rank FROM route_job_results
-        WHERE job_id = ? AND geometry_hash = ?`);
       const insert = this.#database.prepare(`INSERT INTO route_job_results(
         job_id, match_rank, access_ordinal, result_ordinal, route_id, payload_json, geometry_hash
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`);
@@ -232,24 +289,25 @@ export class SQLiteRouteJobStore {
         const matchRank = result.matchType === "exact" ? 0 : 1;
         const resultOrdinal = matchRank === 0 ? exactOrdinal++ : nearOrdinal++;
         const geometryHash = routeGeometryHash(result);
-        const existing = existingGeometry.get(id, geometryHash) as Row | undefined;
-        if (existing && integer(existing, "match_rank") <= matchRank) continue;
-        if (existing) this.#database.prepare("DELETE FROM route_job_results WHERE rowid = ?").run(integer(existing, "rowid"));
         insert.run(id, matchRank, ordinal, resultOrdinal, result.route.id, JSON.stringify(result), geometryHash);
       }
       this.#database.prepare(`UPDATE route_job_access_points SET status = 'done', truncated = ?, diagnostics_json = ?,
-        error = NULL, completed_at = ? WHERE job_id = ? AND ordinal = ?`).run(
+        completed_attempts = completed_attempts + 1, completion_state = ?, error = NULL, completed_at = ? WHERE job_id = ? AND ordinal = ?`).run(
         truncated ? 1 : 0, diagnostics === undefined ? null : JSON.stringify(diagnostics),
-        nowIso(this.#now), id, ordinal,
+        progress?.completion ?? (truncated ? "limited" : "exhausted"), nowIso(this.#now), id, ordinal,
       );
       this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
     });
   }
 
-  failAccessPoint(id: string, ordinal: number, error: string): void {
-    this.#database.prepare(`UPDATE route_job_access_points SET status = 'failed', error = ?, completed_at = ?
-      WHERE job_id = ? AND ordinal = ?`).run(error, nowIso(this.#now), id, ordinal);
-    this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
+  failAccessPoint(id: string, ordinal: number, error: string, attempt?: number): void {
+    this.#transaction(() => {
+      if (!this.#canCheckpoint(id, ordinal, attempt)) return;
+      this.#database.prepare(`UPDATE route_job_access_points SET status = 'failed', error = ?, completed_at = ?,
+        completed_attempts = completed_attempts + 1, completion_state = 'limited'
+        WHERE job_id = ? AND ordinal = ?`).run(error, nowIso(this.#now), id, ordinal);
+      this.#database.prepare("UPDATE route_jobs SET updated_at = ? WHERE id = ?").run(nowIso(this.#now), id);
+    });
   }
 
   /** Deletion and durable cancellation take precedence over worker completion. */
@@ -314,10 +372,13 @@ export class SQLiteRouteJobStore {
   toPublic(id: string, stale: boolean): RouteJob | null {
     const row = this.#database.prepare(`SELECT j.*,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id) AS eligible_count,
-      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.status IN ('done','failed')) AS processed_count,
+      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.completed_attempts > 0) AS processed_count,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.status = 'failed') AS failed_count,
-      (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 0) AS exact_count,
-      (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 1) AS near_count,
+      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.completion_state = 'exhausted') AS exhausted_count,
+      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.completion_state = 'limited') AS limited_count,
+      (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.completion_state IN ('unknown', 'retryable')) AS unfinished_count,
+      (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 0 AND ${VISIBLE_RESULT}) AS exact_count,
+      (SELECT COUNT(*) FROM route_job_results r WHERE r.job_id = j.id AND r.match_rank = 1 AND ${VISIBLE_RESULT}) AS near_count,
       (SELECT COUNT(*) FROM route_job_access_points a WHERE a.job_id = j.id AND a.truncated = 1) AS truncated_count
       FROM route_jobs j WHERE j.id = ?`).get(id) as Row | undefined;
     if (!row) return null;
@@ -327,6 +388,7 @@ export class SQLiteRouteJobStore {
     const started = typeof row.started_at === "string" ? Date.parse(row.started_at) : Date.parse(requiredString(row, "created_at"));
     const ended = typeof row.completed_at === "string" ? Date.parse(row.completed_at) : this.#now().getTime();
     const failed = integer(row, "failed_count");
+    const searchPass = integer(row, "search_pass");
     const error = typeof row.error === "string" ? row.error : failed ? `${failed} trailhead search${failed === 1 ? "" : "es"} failed. Available results are retained.` : undefined;
     return routeJobV2Schema.parse({
       version: 2,
@@ -340,9 +402,17 @@ export class SQLiteRouteJobStore {
         exactRouteCount: integer(row, "exact_count"),
         nearMissRouteCount: integer(row, "near_count"),
         truncatedAccessPointCount: integer(row, "truncated_count"),
+        ...(searchPass > 0 ? {
+          searchPass,
+          exhaustedAccessPointCount: integer(row, "exhausted_count"),
+          unfinishedAccessPointCount: integer(row, "unfinished_count"),
+          limitedAccessPointCount: integer(row, "limited_count"),
+        } : {}),
         elapsedMs: Math.max(0, ended - started),
       },
-      partial: failed > 0 || (status !== "completed" && integer(row, "processed_count") < integer(row, "eligible_count")),
+      partial: failed > 0 || (searchPass > 0
+        ? integer(row, "exhausted_count") < integer(row, "eligible_count")
+        : status !== "completed" && integer(row, "processed_count") < integer(row, "eligible_count")),
       stale,
       createdAt: requiredString(row, "created_at"),
       updatedAt: requiredString(row, "updated_at"),
@@ -353,10 +423,10 @@ export class SQLiteRouteJobStore {
 
   pageResults(id: string, cursor: ResultCursor | undefined, limit: number): { results: RouteJobResult[]; next?: ResultCursor } {
     const clauses = cursor ? `AND (
-      match_rank > ? OR
-      (match_rank = ? AND access_ordinal > ?) OR
-      (match_rank = ? AND access_ordinal = ? AND result_ordinal > ?) OR
-      (match_rank = ? AND access_ordinal = ? AND result_ordinal = ? AND route_id > ?)
+      r.match_rank > ? OR
+      (r.match_rank = ? AND r.access_ordinal > ?) OR
+      (r.match_rank = ? AND r.access_ordinal = ? AND r.result_ordinal > ?) OR
+      (r.match_rank = ? AND r.access_ordinal = ? AND r.result_ordinal = ? AND r.route_id > ?)
     )` : "";
     const parameters: SQLInputValue[] = [id];
     if (cursor) parameters.push(
@@ -366,8 +436,9 @@ export class SQLiteRouteJobStore {
       cursor.matchRank, cursor.accessOrdinal, cursor.resultOrdinal, cursor.routeId,
     );
     parameters.push(limit + 1);
-    const rows = this.#database.prepare(`SELECT * FROM route_job_results WHERE job_id = ? ${clauses}
-      ORDER BY match_rank, access_ordinal, result_ordinal, route_id LIMIT ?`).all(...parameters) as Row[];
+    const rows = this.#database.prepare(`SELECT r.* FROM route_job_results r JOIN route_jobs j ON j.id = r.job_id
+      WHERE r.job_id = ? AND ${VISIBLE_RESULT} ${clauses}
+      ORDER BY r.match_rank, r.access_ordinal, r.result_ordinal, r.route_id LIMIT ?`).all(...parameters) as Row[];
     const page = rows.slice(0, limit);
     const results = page.map((row) => routeJobResultV2Schema.parse(parseJson(requiredString(row, "payload_json"))));
     const last = page.at(-1);

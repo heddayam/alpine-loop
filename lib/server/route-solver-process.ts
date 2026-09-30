@@ -88,8 +88,8 @@ export class RouteSolverProcess {
     return this.#request({ type: "enumerate" }, signal) as Promise<readonly string[]>;
   }
 
-  async searchAccessPoint(accessPointId: string, signal: AbortSignal): Promise<StartSearchResult> {
-    return this.#request({ type: "search", accessPointId }, signal) as Promise<StartSearchResult>;
+  async searchAccessPoint(accessPointId: string, signal: AbortSignal, attempt = 1): Promise<StartSearchResult> {
+    return this.#request({ type: "search", accessPointId, attempt }, signal) as Promise<StartSearchResult>;
   }
 
   async close(): Promise<void> {

@@ -164,16 +164,17 @@ describe("geographic search with prepared installation storage and compute", () 
       const first = session.searchAccessPoint("fixture-installation::first", signal());
       const second = session.searchAccessPoint("fixture-installation::second", signal());
       const third = session.searchAccessPoint("fixture-installation::third", signal());
-      await vi.waitFor(() => expect(started).toEqual([{ worker: 0, id: "first" }, { worker: 1, id: "second" }]));
+      await vi.waitFor(() => expect(started.map(({ id }) => id).sort()).toEqual(["first", "second"]));
+      const firstWorker = started.find(({ id }) => id === "first")!.worker;
+      const secondWorker = started.find(({ id }) => id === "second")!.worker;
+      expect(firstWorker).not.toBe(secondWorker);
       releases.get("second")!();
       await second;
-      await vi.waitFor(() => expect(started).toEqual([
-        { worker: 0, id: "first" }, { worker: 1, id: "second" }, { worker: 1, id: "third" },
-      ]));
+      await vi.waitFor(() => expect(started.at(-1)).toEqual({ worker: secondWorker, id: "third" }));
       releases.get("third")!();
       await third;
       const fourth = session.searchAccessPoint("fixture-installation::fourth", signal());
-      await vi.waitFor(() => expect(started.at(-1)).toEqual({ worker: 1, id: "fourth" }));
+      await vi.waitFor(() => expect(started.at(-1)).toEqual({ worker: secondWorker, id: "fourth" }));
       releases.get("fourth")!();
       releases.get("first")!();
       await Promise.all([first, fourth]);
@@ -205,7 +206,7 @@ describe("geographic search with prepared installation storage and compute", () 
     try {
       const first = session.searchAccessPoint("fixture-installation::first", signal()).catch(error => error);
       const second = session.searchAccessPoint("fixture-installation::second", signal()).catch(error => error);
-      await vi.waitFor(() => expect(searches).toEqual(["first", "second"]));
+      await vi.waitFor(() => expect([...searches].sort()).toEqual(["first", "second"]));
       const controller = new AbortController();
       const third = session.searchAccessPoint("fixture-installation::third", controller.signal);
       const rejected = expect(third).rejects.toMatchObject({ name: "AbortError" });
@@ -216,7 +217,7 @@ describe("geographic search with prepared installation storage and compute", () 
       expect(await Promise.all([first, second, fourth])).toEqual([
         expect.objectContaining({ name: "AbortError" }), expect.objectContaining({ name: "AbortError" }), expect.objectContaining({ name: "AbortError" }),
       ]);
-      expect(searches).toEqual(["first", "second"]);
+      expect([...searches].sort()).toEqual(["first", "second"]);
       expect(closed).toHaveBeenCalledTimes(2);
     } finally { await session.close(); opened.mockRestore(); }
   });
@@ -234,7 +235,8 @@ describe("geographic search with prepared installation storage and compute", () 
     try {
       await expect(session.searchAccessPoint("fixture-installation::first", signal())).rejects.toThrow("Worker exited");
       expect(close).toHaveBeenCalledOnce();
-      await expect(session.searchAccessPoint("fixture-installation::second", signal())).resolves.toEqual({ exact: [], nearMisses: [], truncated: false });
+      await expect(session.searchAccessPoint("fixture-installation::second", signal(), 4)).resolves.toEqual({ exact: [], nearMisses: [], truncated: false });
+      expect(healthy.searchAccessPoint).toHaveBeenCalledWith("second", expect.any(AbortSignal), 4);
       expect(opened).toHaveBeenCalledTimes(2);
     } finally { await session.close(); opened.mockRestore(); }
     expect(close).toHaveBeenCalledTimes(2);

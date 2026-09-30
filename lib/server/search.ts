@@ -69,7 +69,7 @@ export async function openSearchSession({ request, plan: originalPlan, signal }:
           : [];
       } finally { await session?.close(); }
     },
-    async searchAccessPoint(id: string, signal: AbortSignal) {
+    async searchAccessPoint(id: string, signal: AbortSignal, attempt = 1) {
       const combined = AbortSignal.any([lifetime, signal]);
       const { slot, release } = await acquireSlot(combined);
       try {
@@ -79,7 +79,7 @@ export async function openSearchSession({ request, plan: originalPlan, signal }:
         try {
           slot.session ??= await openInstallation(request, plan, combined);
           if (!slot.session) throw new Error("The starting point's data is unavailable");
-          const result = await slot.session.searchAccessPoint(localId, combined);
+          const result = await slot.session.searchAccessPoint(localId, combined, attempt);
           return {
             ...result,
             exact: result.exact.map(route => namespaceRoute(route, installationId, "Installed coverage")),

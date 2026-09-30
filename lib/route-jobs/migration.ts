@@ -12,6 +12,7 @@ export const JOB_COLUMNS = `
   request_json TEXT NOT NULL,
   plan_json TEXT NOT NULL,
   status TEXT NOT NULL,
+  search_pass INTEGER NOT NULL DEFAULT 0 CHECK(search_pass >= 0),
   drive_time_resolved_at TEXT,
   cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK(cancel_requested IN (0, 1)),
   delete_requested INTEGER NOT NULL DEFAULT 0 CHECK(delete_requested IN (0, 1)),

@@ -46,6 +46,11 @@ describe("RouteSolverProcess", () => {
       expect(response.exact.length).toBeLessThanOrEqual(10);
       expect(response.exact.every((route) => generatedClosedRouteV3Schema.safeParse(route).success)).toBe(true);
       expect(response.exact.every((route) => route.startAccessPoint.id === starts[0])).toBe(true);
+      expect(response.completion).toBe("exhausted");
+      const refined = await session.searchAccessPoint(starts[0]!, signal, 2);
+      expect(refined.completion).toBe("exhausted");
+      expect(refined.exact).toEqual(response.exact);
+      await expect(session.searchAccessPoint(starts[0]!, signal, 0)).rejects.toThrow("Invalid search attempt");
       await expect(session.searchAccessPoint("missing", signal)).rejects.toMatchObject({ code: "START_INELIGIBLE" });
     } finally {
       await session?.close();
@@ -66,6 +71,17 @@ describe("RouteSolverProcess", () => {
       const overlap = Math.min(...intervals.map(({ finishedAt }) => finishedAt)) - Math.max(...intervals.map(({ startedAt }) => startedAt));
       expect(overlap).toBeGreaterThan(100);
     } finally { await Promise.all(sessions.map((session) => session.close())); }
+  });
+
+  it("propagates refinement attempt numbers through worker IPC", async () => {
+    const signal = new AbortController().signal;
+    const session = await RouteSolverProcess.open(input, signal, {
+      modulePath: resolve(process.cwd(), "lib/server/__fixtures__/route-solver-fixture-child.ts"),
+    });
+    try {
+      expect((await session.searchAccessPoint("slow-access", signal)).diagnostics).toMatchObject({ attempt: 1 });
+      expect((await session.searchAccessPoint("slow-access", signal, 4)).diagnostics).toMatchObject({ attempt: 4 });
+    } finally { await session.close(); }
   });
 
   it("boots the production child entrypoint and reports pinned installation initialization errors", async () => {

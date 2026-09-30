@@ -8,7 +8,8 @@ import { cleanupInstallations, withInstallationPins } from "@/lib/coverage-insta
 import { createRouteJobCancelHandler, createRouteJobCollectionHandlers } from "./http";
 import { RouteJobService, decodeResultCursor, encodeResultCursor } from "./service";
 import { SQLiteRouteJobStore } from "./store";
-import type { RouteJobRunnerDependencies } from "./types";
+import type { RouteJobRunnerDependencies, RouteJobResult } from "./types";
+import { retainBetterResults } from "./retain-results";
 
 const temporary: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); temporary.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
@@ -542,6 +543,185 @@ describe("RouteJobService", () => {
     await service.waitUntilIdle();
     expect(searched).toEqual(["second", "third", "fourth"]);
     expect(await service.get(id)).toMatchObject({ status: "completed", progress: { processedAccessPointCount: 4 } });
+    store.close();
+  });
+
+  it("finishes every start in a pass before automatically deepening only retryable starts", async () => {
+    const started: string[] = [];
+    const releases = new Map<string, () => void>();
+    const { service, store, dependencies } = harness({
+      openSearchSession: vi.fn(async () => ({
+        concurrency: 2,
+        enumerateEligibleAccessPointIds: async () => ["first", "second", "third", "fourth"],
+        searchAccessPoint: async (id: string, signal: AbortSignal, attempt = 1) => {
+          const key = `${id}:${attempt}`;
+          started.push(key);
+          await new Promise<void>(resolve => {
+            releases.set(key, resolve);
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+          const completion = id === "second" ? "limited" as const
+            : id === "third" || (id === "fourth" && attempt === 2) || attempt === 3 ? "exhausted" as const : "retryable" as const;
+          return { exact: [], nearMisses: [], truncated: completion !== "exhausted", completion };
+        },
+        close: async () => undefined,
+      })),
+    });
+    const job = await service.create(regionWideRequest);
+    try {
+      await vi.waitFor(() => expect(started).toEqual(["first:1", "second:1"]));
+      releases.get("first:1")!();
+      await vi.waitFor(() => expect(started).toContain("third:1"));
+      releases.get("third:1")!();
+      await vi.waitFor(() => expect(started).toContain("fourth:1"));
+      releases.get("fourth:1")!();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(started).toEqual(["first:1", "second:1", "third:1", "fourth:1"]);
+      releases.get("second:1")!();
+      await vi.waitFor(() => expect(started).toContain("fourth:2"));
+      expect(await service.get(job.id)).toMatchObject({ status: "running", partial: true, progress: {
+        searchPass: 2, processedAccessPointCount: 4, exhaustedAccessPointCount: 1, limitedAccessPointCount: 1, unfinishedAccessPointCount: 2,
+      } });
+      releases.get("first:2")!();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(started).not.toContain("first:3");
+      releases.get("fourth:2")!();
+      await vi.waitFor(() => expect(started).toContain("first:3"));
+      releases.get("first:3")!();
+      await service.waitUntilIdle();
+      expect(started).toEqual(["first:1", "second:1", "third:1", "fourth:1", "first:2", "fourth:2", "first:3"]);
+      expect(await service.get(job.id)).toMatchObject({ status: "completed", partial: true, progress: {
+        searchPass: 3, processedAccessPointCount: 4, exhaustedAccessPointCount: 3, limitedAccessPointCount: 1, unfinishedAccessPointCount: 0,
+      } });
+      expect(dependencies.openSearchSession).toHaveBeenCalledOnce();
+    } finally { await service.cancel(job.id); releases.forEach(release => release()); await service.waitUntilIdle(); store.close(); }
+  });
+
+  it("keeps better earlier results across worse attempts and a later worker failure", async () => {
+    const pair = (prefix: string, miles: number) => ["a", "b"].map((loop, index): SearchRoute => ({
+      ...route(`${prefix}-${loop}`), physicalLoopId: loop, distanceMeters: miles * 1609.344,
+      geometry: { type: "LineString", coordinates: [[-122, 37], [-122.1, 37.1 + index / 10], [-122, 37]] },
+    }));
+    const initial = pair("initial", 6.5), better = pair("better", 6), worse = pair("worse", 7.5);
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        enumerateEligibleAccessPointIds: async () => ["first"],
+        searchAccessPoint: async (_id, _signal, attempt = 1) => {
+          if (attempt === 6) throw new Error("Worker exited during improvement");
+          return { exact: attempt === 1 ? initial : attempt === 2 ? better.slice(0, 1) : attempt === 3 ? worse : attempt === 4 ? better : [],
+            nearMisses: [], truncated: true, completion: "retryable" };
+        },
+        close: async () => undefined,
+      }),
+    });
+    const completed = vi.spyOn(store, "completeAccessPoint");
+    const job = await service.create(regionWideRequest);
+    await service.waitUntilIdle();
+    expect(completed.mock.calls.map(call => call[2].map(result => result.route.id))).toEqual([
+      ["initial-a", "initial-b"], ["initial-a", "initial-b"], ["initial-a", "initial-b"], ["better-a", "better-b"], ["better-a", "better-b"],
+    ]);
+    expect((await service.results(job.id)).results.map(result => result.route.id)).toEqual(["better-a", "better-b"]);
+    expect(await service.get(job.id)).toMatchObject({ status: "completed", partial: true,
+      progress: { searchPass: 6, processedAccessPointCount: 1, limitedAccessPointCount: 1, unfinishedAccessPointCount: 0, exactRouteCount: 2 },
+      error: "1 trailhead search failed. Available results are retained.",
+    });
+    store.close();
+  });
+
+  it.each(["cancel", "delete"] as const)("keeps durable refinement checkpoints ahead of %s and late worker completion", async action => {
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    let improving = false;
+    const { service, store } = harness({
+      openSearchSession: async () => ({
+        enumerateEligibleAccessPointIds: async () => ["first"],
+        searchAccessPoint: async (_id, signal, attempt = 1) => {
+          if (attempt > 1) {
+            improving = true;
+            await Promise.race([blocked, new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), { once: true }))]);
+          }
+          return { exact: [route(attempt === 1 ? "first" : "late")], nearMisses: [], truncated: attempt === 1,
+            completion: attempt === 1 ? "retryable" : "exhausted" };
+        },
+        close: async () => { release(); },
+      }),
+    });
+    const job = await service.create(regionWideRequest);
+    await vi.waitFor(() => expect(improving).toBe(true));
+    expect(await service.get(job.id)).toMatchObject({ progress: { searchPass: 2, processedAccessPointCount: 1, exactRouteCount: 1 } });
+    await service[action](job.id);
+    release();
+    await service.waitUntilIdle();
+    if (action === "delete") expect(await service.get(job.id)).toBeNull();
+    else {
+      expect(await service.get(job.id)).toMatchObject({ status: "cancelled", partial: true, progress: { processedAccessPointCount: 1, unfinishedAccessPointCount: 1 } });
+      expect((await service.results(job.id)).results.map(result => result.route.id)).toEqual(["first"]);
+    }
+    store.close();
+  });
+
+  it("uses distance and violation quality to retain better close matches and deterministic ties", () => {
+    const exact: RouteJobResult = { matchType: "exact", accessPointId: "first", route: route("exact") };
+    const close = (id: string, delta: number): RouteJobResult => ({ matchType: "near-miss", accessPointId: "first",
+      route: { ...route(id), violations: [{ constraint: "distance", value: 3, min: 4, max: 8, delta, normalizedDelta: delta / 8 }] },
+    });
+    const bad = close("bad", 2), good = close("good", 1);
+    expect(retainBetterResults([bad], [good], request.criteria)).toEqual([good]);
+    expect(retainBetterResults([good], [bad], request.criteria)).toEqual([good]);
+    expect(retainBetterResults([good], [exact], request.criteria)).toEqual([exact]);
+    expect(retainBetterResults([exact], [good], request.criteria)).toEqual([exact]);
+    const earlier = close("a", 1);
+    expect(retainBetterResults([good], [earlier], request.criteria)).toEqual([earlier]);
+    expect(retainBetterResults([earlier], [good], request.criteria)).toEqual([earlier]);
+  });
+
+  it("resumes the interrupted refinement budget against the saved installation", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "route-job-resume-refinement-"));
+    temporary.push(directory);
+    const path = join(directory, "jobs.sqlite");
+    let store = new SQLiteRouteJobStore(path);
+    const id = "00000000-0000-4000-8000-000000000014";
+    store.create(id, regionWideRequest, plan);
+    store.claimNext();
+    store.initializeAccessPoints(id, ["first", "second"]);
+    store.nextAccessPoint(id);
+    store.completeAccessPoint(id, 0, [{ matchType: "exact", accessPointId: "first", route: route("saved") }], true, {}, { attempt: 1, completion: "retryable" });
+    store.nextAccessPoint(id);
+    store.completeAccessPoint(id, 1, [], false, {}, { attempt: 1, completion: "exhausted" });
+    store.beginNextPass(id);
+    store.nextAccessPoint(id);
+    store.close();
+    store = new SQLiteRouteJobStore(path);
+    const { dependencies, store: unused, service: idle } = harness();
+    await idle.waitUntilIdle(); unused.close();
+    const search = vi.fn(async () => ({ exact: [], nearMisses: [], truncated: false, completion: "exhausted" as const }));
+    const pinned: string[] = [];
+    const service = new RouteJobService({ store, dependencies: { ...dependencies,
+      pinInstallation: (installationId, action) => { pinned.push(installationId); return dependencies.pinInstallation(installationId, action); },
+      openSearchSession: async () => ({ enumerateEligibleAccessPointIds: async () => ["first", "second"], searchAccessPoint: search, close: async () => undefined }),
+    } });
+    await service.waitUntilIdle();
+    expect(search).toHaveBeenCalledExactlyOnceWith("first", expect.any(AbortSignal), 2);
+    expect(pinned).toEqual(["v4"]);
+    expect(await service.get(id)).toMatchObject({ status: "completed", partial: false,
+      progress: { searchPass: 2, processedAccessPointCount: 2, exhaustedAccessPointCount: 2, unfinishedAccessPointCount: 0 },
+    });
+    expect((await service.results(id)).results.map(result => result.route.id)).toEqual(["saved"]);
+    store.close();
+  });
+
+  it.each([false, true])("does not infer retries from legacy sessions without completion (truncated: %s)", async truncated => {
+    const search = vi.fn(async () => ({ exact: [], nearMisses: [], truncated, diagnostics: { hardTruncationReasons: truncated ? ["deadline"] : [] } }));
+    const { service, store } = harness({ openSearchSession: async () => ({
+      enumerateEligibleAccessPointIds: async () => ["first"], searchAccessPoint: search, close: async () => undefined,
+    }) });
+    const job = await service.create(regionWideRequest);
+    await service.waitUntilIdle();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(await service.get(job.id)).toMatchObject({ status: "completed", partial: truncated, progress: {
+      searchPass: 1, processedAccessPointCount: 1, exhaustedAccessPointCount: truncated ? 0 : 1,
+      limitedAccessPointCount: truncated ? 1 : 0, unfinishedAccessPointCount: 0,
+    } });
     store.close();
   });
 
