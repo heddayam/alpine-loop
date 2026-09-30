@@ -11,7 +11,7 @@ import {
   type InducedGraph,
 } from "@/lib/graph";
 
-import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
+import { CLOSED_ROUTE_BUDGET, CLOSE_MATCH_BUDGET, type SolverBudget } from "./budget";
 import { contractCorridors, physicalKeyOf } from "./contract-corridors";
 import { stableHash } from "./route-identity";
 import { RouteSearchCancelledError } from "./control";
@@ -34,8 +34,12 @@ export type SimpleRouteSearchDiagnostics = {
   expandedStates: number;
   candidateCount: number;
   validCandidateCount: number;
+  /** Historical flag: either phase reached a resource limit. */
   exhausted: boolean;
+  /** Only limits that interrupted exact-match exploration. */
   truncationReasons: string[];
+  /** Fallback limits do not require another exact-search attempt. */
+  closeMatchTruncationReasons: string[];
 };
 
 export type SimpleRouteSearchResult = {
@@ -229,6 +233,10 @@ export function searchSimpleRoutes(
     options.signal,
   );
   const truncationReasons = new Set<string>();
+  const closeMatchTruncationReasons = new Set<string>();
+  let phaseReasons = truncationReasons;
+  let phaseDeadlineAt = deadlineAt;
+  let phaseStateCap = options.budget.maximumExpandedStates;
   // Repeated approaches and directions compete within one physical cycle.
   // Work allowances can grow between attempts; this archive stays bounded.
   const archive = new Map<string, Candidate>();
@@ -258,13 +266,13 @@ export function searchSimpleRoutes(
   };
   const outOfTime = (): boolean => {
     checkCancellation();
-    if (now() < deadlineAt) return false;
-    truncationReasons.add("deadline");
+    if (now() < phaseDeadlineAt) return false;
+    phaseReasons.add("deadline");
     return true;
   };
-  const exhausted = (stateCap = options.budget.maximumExpandedStates): boolean => {
-    if (expandedStates >= stateCap) truncationReasons.add("maximum-expanded-states");
-    return outOfTime() || expandedStates >= stateCap || memoryLimited;
+  const exhausted = (): boolean => {
+    if (expandedStates >= phaseStateCap) phaseReasons.add("maximum-expanded-states");
+    return outOfTime() || expandedStates >= phaseStateCap || memoryLimited;
   };
 
   const evaluate = (edges: readonly number[], attachment: number): Metrics => {
@@ -335,11 +343,11 @@ export function searchSimpleRoutes(
     const previous = archive.get(loopKey);
     if (previous && compareCandidate(candidate, previous) >= 0) return;
     if (!previous && archive.size >= options.budget.maximumRetainedCycles) {
-      truncationReasons.add("maximum-retained-cycles"); memoryLimited = true; return;
+      phaseReasons.add("maximum-retained-cycles"); memoryLimited = true; return;
     }
     const nextBytes = retainedBytes - (previous?.retainedBytes ?? 0) + candidateBytes;
     if (nextBytes > maximumRetainedBytes) {
-      truncationReasons.add("candidate-memory-limit"); memoryLimited = true; return;
+      phaseReasons.add("candidate-memory-limit"); memoryLimited = true; return;
     }
     archive.set(loopKey, candidate);
     retainedBytes = nextBytes;
@@ -466,7 +474,15 @@ export function searchSimpleRoutes(
       }
     };
     enumerate(true);
-    if (validCandidateCount === 0 && !exhausted()) enumerate(false);
+    if (validCandidateCount === 0 && !memoryLimited) {
+      // Limits reached while finding a useful close match must not restart
+      // already exhausted exact exploration. The fallback cannot consume more
+      // than this fixed allowance or the remaining whole-attempt resources.
+      phaseReasons = closeMatchTruncationReasons;
+      phaseStateCap = Math.min(options.budget.maximumExpandedStates, expandedStates + CLOSE_MATCH_BUDGET.maximumExpandedStates);
+      phaseDeadlineAt = Math.min(deadlineAt, now() + CLOSE_MATCH_BUDGET.deadlineMs);
+      enumerate(false);
+    }
   }
 
   const select = (pool: readonly Candidate[], limit: number): Candidate[] => {
@@ -492,6 +508,7 @@ export function searchSimpleRoutes(
     violatedConstraints: [...candidate.violations],
   });
   const reasons = [...truncationReasons].sort();
+  const closeReasons = [...closeMatchTruncationReasons].sort();
   return {
     candidates: selected.map(materialize),
     nearCandidates: near.map(materialize),
@@ -500,8 +517,9 @@ export function searchSimpleRoutes(
       expandedStates,
       candidateCount,
       validCandidateCount,
-      exhausted: reasons.length > 0,
+      exhausted: reasons.length > 0 || closeReasons.length > 0,
       truncationReasons: reasons,
+      closeMatchTruncationReasons: closeReasons,
     },
   };
 }

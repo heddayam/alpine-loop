@@ -15,6 +15,12 @@ export const CLOSED_ROUTE_BUDGET = Object.freeze({
   maximumRetainedBytes: 32 * 1024 * 1024,
 }) satisfies Readonly<SolverBudget>;
 
+/** Close matches get a bounded fallback, even as exact exploration deepens. */
+export const CLOSE_MATCH_BUDGET = Object.freeze({
+  maximumExpandedStates: 50_000,
+  deadlineMs: 1_500,
+});
+
 export type SearchCompletion = "retryable" | "exhausted" | "limited";
 
 // Node timeouts overflow above this value; state counters must remain exact.
