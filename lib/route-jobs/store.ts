@@ -5,6 +5,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { z } from "zod";
 import {
   searchIntentSchema, searchAreaSnapshotSchema, routeJobResultV2Schema, routeJobV2Schema,
+  ACCESS_ENTRY_POLICY_VERSION,
   type SearchIntent, type RouteJobStatus,
 } from "@/lib/contracts";
 import type { SearchPlan } from "@/lib/server/search-plan";
@@ -18,6 +19,7 @@ export type StoredJob = { id: string; request: SearchIntent; plan: SearchPlan };
 
 const installationPlanSchema = z.object({
   installationId: z.string().min(1).nullable(),
+  accessPolicyVersion: z.string().min(1).optional(),
   area: searchAreaSnapshotSchema,
 }).strict();
 const planSchema = z.union([installationPlanSchema, z.object({
@@ -165,7 +167,9 @@ export class SQLiteRouteJobStore {
     const timestamp = nowIso(this.#now);
     this.#database.prepare(`INSERT INTO route_jobs(id, request_json, plan_json, status, search_pass, created_at, updated_at)
       VALUES (?, ?, ?, 'queued', 1, ?, ?)`).run(
-      id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(installationPlanSchema.extend({ installationId: z.string().min(1) }).parse(plan)), timestamp, timestamp,
+      id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(installationPlanSchema.extend({ installationId: z.string().min(1) }).parse({
+        ...plan, accessPolicyVersion: plan.accessPolicyVersion ?? ACCESS_ENTRY_POLICY_VERSION,
+      })), timestamp, timestamp,
     );
   }
 

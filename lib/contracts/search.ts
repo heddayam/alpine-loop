@@ -35,6 +35,7 @@ export const closeSearchRouteSchema = searchRouteSchema.extend({ violations: z.a
 export const searchCatalogSchema = z.object({
   regions: z.array(z.object({ id: z.string().min(1), name: z.string().min(1) }).strict()),
   coverages: z.array(areaGeometrySchema),
+  requiresRebuild: z.boolean().optional(),
   display: z.object({ center: z.tuple([z.number().finite(), z.number().finite()]), zoom: z.number().finite() }).strict(),
 }).strict();
 

@@ -1,7 +1,6 @@
-import type { SearchArea, SearchAreaSnapshot, SearchCatalog, SearchIntent } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, type SearchArea, type SearchAreaSnapshot, type SearchCatalog, type SearchIntent } from "@/lib/contracts";
 import { loadInstallation, withInstallationPins } from "@/lib/coverage-install";
 import { areaBounds } from "@/lib/graph";
-import { PORTAL_NAMED_REGION_TOLERANCE_M } from "@/lib/solver";
 import { namespacedId } from "@/lib/search/identity";
 import { ServerApiError } from "./api-error";
 import type { SearchPlan } from "./search-plan";
@@ -13,12 +12,8 @@ export type SearchInstallation = NonNullable<Awaited<ReturnType<typeof loadInsta
 export function boundsOverlap(a: Bounds, b: Bounds): boolean {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
-export function eligibleAreaBounds(geometry: AreaGeometry, namedRegion: boolean): Bounds {
-  const bounds = areaBounds(geometry);
-  if (!namedRegion) return bounds;
-  const latitude = PORTAL_NAMED_REGION_TOLERANCE_M / 110_000;
-  const longitude = latitude / Math.max(0.01, Math.cos(Math.max(Math.abs(bounds[1]), Math.abs(bounds[3])) * Math.PI / 180));
-  return [bounds[0] - longitude, bounds[1] - latitude, bounds[2] + longitude, bounds[3] + latitude];
+export function eligibleAreaBounds(geometry: AreaGeometry): Bounds {
+  return areaBounds(geometry);
 }
 export function combineAreas(areas: AreaGeometry[]): AreaGeometry {
   if (areas.length === 1) return areas[0]!;
@@ -41,12 +36,13 @@ export async function withPinnedSearchInstallation<T>(read: (installed: SearchIn
   throw new Error("Installed coverage changed during discovery.");
 }
 function selectableRegions({ installation, release }: SearchInstallation) {
+  const compatible = new Set(release.artifacts.filter(artifact => installation.artifactIds.includes(artifact.id)
+    && artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION).map(artifact => artifact.regionId));
   if (release.partitioning === "local-areas") {
     const installed = new Set(installation.sectionIds);
-    return release.regions.filter(region => installed.has(region.id));
+    return release.regions.filter(region => installed.has(region.id) && compatible.has(region.id));
   }
-  const bounds = areaBounds(installation.geometry);
-  return release.regions.filter(region => boundsOverlap(bounds, eligibleAreaBounds(region.geometry, true)));
+  return release.regions.filter(region => compatible.has(region.id));
 }
 export async function searchCatalog(): Promise<SearchCatalog> {
   return withPinnedSearchInstallation(async installed => {
@@ -56,6 +52,7 @@ export async function searchCatalog(): Promise<SearchCatalog> {
     return {
       regions: selectableRegions(installed).map(({ id, name }) => ({ id, name })),
       coverages: [installation.geometry],
+      requiresRebuild: installed.artifacts.some(artifact => artifact.accessPolicyVersion !== ACCESS_ENTRY_POLICY_VERSION),
       display: { center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2], zoom: 7 },
     };
   });
@@ -78,14 +75,17 @@ export async function resolveSearchPlan(request: SearchIntent, signal: AbortSign
   return withPinnedSearchInstallation(async installed => {
     signal.throwIfAborted();
     if (!installed) throw new ServerApiError("DATA_UNAVAILABLE", "Install prepared coverage sections before searching.", 503);
+    if (!installed.artifacts.some(artifact => artifact.accessPolicyVersion === ACCESS_ENTRY_POLICY_VERSION))
+      throw new ServerApiError("DATA_UPDATE_REQUIRED", "Rebuild downloaded coverage to update starting points. Saved results remain available.", 409);
     const area = request.area;
     const named = area.mode !== "drawn-area" ? namedArea(area.regionIds, installed) : undefined;
     const geometry = area.mode === "drawn-area" ? drawnArea(area.bbox) : named?.geometry;
-    if (geometry && !boundsOverlap(areaBounds(installed.installation.geometry), eligibleAreaBounds(geometry, area.mode !== "drawn-area"))) {
+    if (area.mode === "drawn-area" && geometry && !boundsOverlap(areaBounds(installed.routingGeometry), eligibleAreaBounds(geometry))) {
       throw new ServerApiError("AREA_UNAVAILABLE", "No installed data covers the selected area.", 422);
     }
     return {
       installationId: installed.installation.id,
+      accessPolicyVersion: ACCESS_ENTRY_POLICY_VERSION,
       area: area.mode === "drive-time"
         ? { label: `${area.minDurationMinutes ?? 0}–${area.durationMinutes} min from ${area.origin.label}${named ? ` · ${named.label}` : ""}`, ...(named ? { refinementGeometry: named.geometry } : {}) }
         : { label: area.mode === "drawn-area" ? "Drawn area" : named!.label, filterGeometry: geometry! },

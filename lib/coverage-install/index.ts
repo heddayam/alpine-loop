@@ -42,7 +42,7 @@ export async function loadInstallation(root = coverageRoot(), id?: string) {
         const artifact = release.artifacts.find(a => a.id === id);
         if (!artifact)
             throw new Error('Missing artifact reference');
-        return { path: join(root, 'artifacts', `${id}.sqlite`), geometry: artifact.geometry, graphId: artifact.graphId, regionId: artifact.regionId, startGeometry: artifact.startGeometry };
+        return { path: join(root, 'artifacts', `${id}.sqlite`), geometry: artifact.geometry, graphId: artifact.graphId, regionId: artifact.regionId, startGeometry: artifact.startGeometry, accessPolicyVersion: artifact.accessPolicyVersion };
     });
     for (const artifact of artifacts)
         await stat(artifact.path);

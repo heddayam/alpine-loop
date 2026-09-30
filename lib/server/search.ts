@@ -1,4 +1,4 @@
-import type { SearchIntent } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, type SearchIntent } from "@/lib/contracts";
 import { loadInstallation } from "@/lib/coverage-install";
 import { areaBounds } from "@/lib/graph";
 import { namespacedId, namespaceRoute, splitNamespacedId } from "@/lib/search/identity";
@@ -12,14 +12,14 @@ async function openInstallation(request: SearchIntent, plan: SearchPlan, signal:
   const installationId = executableInstallationId(plan);
   const installed = await loadInstallation(undefined, installationId);
   if (!installed) throw new ServerApiError("DATA_UNAVAILABLE", "The saved installation is unavailable. Install coverage and start a new search.", 503);
-  const { filterGeometry, refinementGeometry } = plan.area;
+  const { filterGeometry } = plan.area;
   if (!filterGeometry) throw new Error("The search area has not been resolved");
-  const predicates = [filterGeometry, ...(refinementGeometry ? [refinementGeometry] : [])];
-  const namedRegionPredicateIndex = request.area.mode === "named-regions" ? 0 : refinementGeometry ? 1 : undefined;
-  if (predicates.some((geometry, index) => !boundsOverlap(areaBounds(installed.installation.geometry), eligibleAreaBounds(geometry, index === namedRegionPredicateIndex)))) return undefined;
+  const predicates = request.area.mode === "named-regions" ? [] : [filterGeometry];
+  const namedRegionIds = request.area.mode === "drawn-area" ? [] : request.area.regionIds;
+  if (predicates.some(geometry => !boundsOverlap(areaBounds(installed.routingGeometry), eligibleAreaBounds(geometry)))) return undefined;
   return RouteSolverProcess.open({
     installationId, criteria: request.criteria,
-    accessFilter: { predicates, namedRegionPredicateIndex, coverage: installed.routingGeometry },
+    accessFilter: { predicates, namedRegionIds, coverage: installed.routingGeometry },
   }, signal);
 }
 
@@ -27,6 +27,8 @@ async function openInstallation(request: SearchIntent, plan: SearchPlan, signal:
 export async function openSearchSession({ request, plan: originalPlan, signal }: {
   request: SearchIntent; plan: SearchPlan; signal: AbortSignal;
 }) {
+  if (originalPlan.accessPolicyVersion !== ACCESS_ENTRY_POLICY_VERSION) throw new ServerApiError("DATA_UPDATE_REQUIRED",
+    "This saved search uses an earlier starting-point policy. Start a new search; saved results remain available.", 409);
   const plan = await restorePlanArea(request.area, originalPlan);
   const installationId = executableInstallationId(plan);
   const controller = new AbortController();

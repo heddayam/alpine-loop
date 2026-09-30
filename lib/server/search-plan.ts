@@ -4,5 +4,7 @@ import type { SearchAreaSnapshot } from "@/lib/contracts";
 export type SearchPlan = {
   /** Null is reserved for archived legacy jobs; their saved geometry is readable. */
   installationId: string | null;
+  /** Missing on retained jobs whose computation cannot resume under new semantics. */
+  accessPolicyVersion?: string;
   area: SearchAreaSnapshot;
 };

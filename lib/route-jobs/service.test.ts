@@ -125,6 +125,23 @@ describe("RouteJobService", () => {
     db.close(); store.close();
   });
 
+  it("stops earlier entrance-policy jobs without re-enumerating or losing saved results", async () => {
+    const { service, store, directory, dependencies } = harness();
+    const job = await service.create(regionWideRequest);
+    await service.waitUntilIdle();
+    const before = (await service.results(job.id)).results;
+    const db = new DatabaseSync(join(directory, "jobs.sqlite"));
+    db.prepare("UPDATE route_jobs SET plan_json=?,status='queued' WHERE id=?").run(JSON.stringify(plan), job.id);
+    vi.mocked(dependencies.openSearchSession).mockClear();
+    vi.mocked(dependencies.resolveDriveTime).mockClear();
+    service.start(); await service.waitUntilIdle();
+    expect(await service.get(job.id)).toMatchObject({ status: "cancelled", stale: true, error: expect.stringContaining("earlier starting-point policy") });
+    expect(dependencies.openSearchSession).not.toHaveBeenCalled();
+    expect(dependencies.resolveDriveTime).not.toHaveBeenCalled();
+    expect((await service.results(job.id)).results).toEqual(before);
+    db.close(); store.close();
+  });
+
   it("pins the installation throughout an active job while publication and cleanup run", async () => {
     let release!: () => void;
     let started!: () => void;

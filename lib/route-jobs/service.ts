@@ -1,4 +1,4 @@
-import { areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } from "@/lib/contracts";
+import { ACCESS_ENTRY_POLICY_VERSION, areaGeometrySchema, searchIntentSchema, routeJobResultsPageV2Schema } from "@/lib/contracts";
 import { isCancellationError, ServerApiError } from "@/lib/server/api-error";
 import { SQLiteRouteJobStore, type ResultCursor, type StoredJob } from "./store";
 import type { RouteJobRunnerDependencies, RouteJob, RouteJobResultsPage, RouteJobResult } from "./types";
@@ -106,7 +106,7 @@ export class RouteJobService {
       .filter((job): job is NonNullable<typeof job> => job !== null);
     const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
     return stored.flatMap(({ id, plan }) => {
-      const job = this.#store.toPublic(id, !plan.installationId || currentId !== plan.installationId);
+      const job = this.#store.toPublic(id, !plan.installationId || currentId !== plan.installationId || plan.accessPolicyVersion !== ACCESS_ENTRY_POLICY_VERSION);
       return job ? [job] : [];
     });
   }
@@ -115,7 +115,7 @@ export class RouteJobService {
     const stored = this.#store.getStored(id);
     if (!stored) return null;
     const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
-    return this.#store.toPublic(id, !stored.plan.installationId || currentId !== stored.plan.installationId);
+    return this.#store.toPublic(id, !stored.plan.installationId || currentId !== stored.plan.installationId || stored.plan.accessPolicyVersion !== ACCESS_ENTRY_POLICY_VERSION);
   }
 
   async cancel(id: string): Promise<RouteJob> {
@@ -159,6 +159,10 @@ export class RouteJobService {
       try {
         if (!job.plan.installationId) {
           this.#store.finish(job.id, "cancelled", "This saved search uses legacy data. Install prepared coverage and restart the search; saved results remain available.");
+          continue;
+        }
+        if (job.plan.accessPolicyVersion !== ACCESS_ENTRY_POLICY_VERSION) {
+          this.#store.finish(job.id, "cancelled", "This saved search uses an earlier starting-point policy. Rebuild coverage and start a new search; saved results remain available.");
           continue;
         }
         await this.#dependencies.pinInstallation(job.plan.installationId, () => this.#runJob(job, controller.signal));

@@ -5,3 +5,5 @@ export async function GET(request: Request) {
   try { return Response.json(await mapData(request)); }
   catch (error) { return apiFailure(error, "Map data could not be loaded."); }
 }
+
+export const POST = GET;
