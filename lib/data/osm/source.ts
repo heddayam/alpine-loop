@@ -20,7 +20,23 @@ export const osmSourceConfigSchema = z.object({
 
 export type OsmSourceConfig = z.infer<typeof osmSourceConfigSchema>;
 
-type OsmPointer = { configVersion: string; configUrl?: string; cached: Pick<CachedSource, "receipt"> };
+const osmPointerSchema = z.object({
+  configVersion: z.string().min(1),
+  configUrl: z.string().url().optional(),
+  cached: z.object({ receipt: z.unknown() }).passthrough(),
+}).passthrough();
+
+/** A valid cached pin for this source belongs to another configured version. */
+export class OsmCacheVersionMismatchError extends Error {
+  constructor(
+    readonly sourceId: string,
+    readonly cachedVersion: string,
+    readonly configuredVersion: string,
+  ) {
+    super(`Cached OSM snapshot does not match configured version for ${sourceId}: cached ${cachedVersion}, configured ${configuredVersion}`);
+    this.name = "OsmCacheVersionMismatchError";
+  }
+}
 
 export async function readOsmSourceConfig(configPath: string): Promise<OsmSourceConfig> {
   return osmSourceConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
@@ -31,22 +47,28 @@ export function osmPointerPath(cacheRoot: string, sourceId: string): string {
 
 /** Preview availability from receipt identity and file size; the worker still verifies content. */
 export async function inspectPinnedOsmSnapshot(cacheRoot: string, config: OsmSourceConfig): Promise<SourceSnapshot> {
-  const pointer = JSON.parse(await readFile(osmPointerPath(cacheRoot, config.id), "utf8")) as OsmPointer;
-  if (pointer.configVersion !== config.version) throw new Error("Cached OSM snapshot does not match configured version");
-  if (pointer.cached.receipt.sourceId !== config.id || (pointer.configUrl ?? pointer.cached.receipt.originalUrl) !== config.url
-    || pointer.cached.receipt.byteLength !== config.expectedByteLength) throw new Error("Cached OSM snapshot does not match configured source");
-  const localPath = cachedSourcePath(cacheRoot, pointer.cached.receipt);
+  const pointer = osmPointerSchema.parse(JSON.parse(await readFile(osmPointerPath(cacheRoot, config.id), "utf8")));
+  const receipt = pointer.cached.receipt as CachedSource["receipt"];
+  // Validate receipt structure and path segments before classifying a stale pin.
+  const localPath = cachedSourcePath(cacheRoot, receipt);
+  if (receipt.sourceId !== config.id) throw new Error("Cached OSM snapshot does not match configured source");
   const file = await stat(localPath);
-  if (!file.isFile() || file.size !== pointer.cached.receipt.byteLength) throw new Error("Cached OSM source failed integrity validation (file size)");
+  if (!file.isFile() || file.size !== receipt.byteLength) throw new Error("Cached OSM source failed integrity validation (file size)");
+  if (pointer.configVersion !== config.version) {
+    throw new OsmCacheVersionMismatchError(config.id, pointer.configVersion, config.version);
+  }
+  if ((pointer.configUrl ?? receipt.originalUrl) !== config.url || receipt.byteLength !== config.expectedByteLength) {
+    throw new Error("Cached OSM snapshot does not match configured source");
+  }
   return {
     id: config.id,
     authority: config.authority,
     dataset: config.dataset,
     version: config.version,
-    retrievedAt: pointer.cached.receipt.retrievedAt,
+    retrievedAt: receipt.retrievedAt,
     url: config.url,
     license: config.license,
-    contentHash: pointer.cached.receipt.sha256,
+    contentHash: receipt.sha256,
     localPath,
   };
 }
