@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmEvidenceFlags, osmFootDirection, osmMotorAccessState, osmNodeFlags, osmWayFlags } from "./normalize";
 
 describe("OSM tag classification", () => {
+  it.each(["service", "residential", "unclassified", "living_street"])("retains explicitly allowed directional walking on a %s",highway=>{
+    const values={highway,foot:"no","foot:forward":"yes",motor_vehicle:"no"};
+    expect(classifyOsmWay(values)).toBe("trail");
+    expect(osmAccessState(values)).toBe("public");
+    expect(osmWayFlags(values,"way/1","both")).toEqual(expect.arrayContaining([
+      `osm-highway:${highway}`,"foot-forward-access:public","foot-backward-access:prohibited",
+    ]));
+  });
   it("retains a typed vehicle turnaround without inventing foot or parking permission", () => {
     expect(hasOsmNodeContext({highway:"turning_circle"})).toBe(true);
     expect(osmNodeFlags({highway:"turning_circle"})).toEqual(["arrival-place:turning-circle"]);

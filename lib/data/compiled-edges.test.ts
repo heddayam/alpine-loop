@@ -16,6 +16,12 @@ function compile(tags: string, nodeTags = "") {
 }
 
 describe("compiled foot movement", () => {
+  it.each(["forward", "backward"])("retains one allowed %s foot movement on a motor-forbidden service road",direction=>{
+    const {source,edges}=compile(`highway=service,foot=no,foot:${direction}=yes,motor_vehicle=no`);
+    expect(source.ways[0]!.edgeClass).toBe("trail");
+    expect(source.ways[0]!.flags).toContain("osm-highway:service");
+    expect(edges.map(edge=>edge.accessState)).toEqual(direction==="forward"?["public","prohibited"]:["prohibited","public"]);
+  });
   it("folds actual gate restrictions into both departure and arrival segments", () => {
     const { source, edges } = compile("highway=path,foot=yes", "barrier=gate,foot=no");
     expect(source.nodes[0]!.flags).toEqual(expect.arrayContaining(["barrier:gate", "foot-access:prohibited"]));

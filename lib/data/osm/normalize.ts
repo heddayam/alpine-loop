@@ -37,7 +37,9 @@ function hasTrailContext(values: Record<string, string>): boolean {
 }
 
 function isWalkingRoad(values: Record<string, string>): boolean {
-  return WALKING_ROADS.has(values.highway ?? "") && PUBLIC_ACCESS.has(values.foot ?? "");
+  return WALKING_ROADS.has(values.highway ?? "") && (
+    PUBLIC_ACCESS.has(values.foot ?? "") || PUBLIC_ACCESS.has(values["foot:forward"] ?? "")
+    || PUBLIC_ACCESS.has(values["foot:backward"] ?? ""));
 }
 
 /** Classify OSM ways once at the adapter boundary; null means no graph context is retained. */

@@ -26,7 +26,7 @@ export type OsmPipelineOptions = {
 export type PreparedOsmRegion = { regionPath: string; identity: string };
 export type OsmRegionOptions = Pick<OsmPipelineOptions, "preparationRoot" | "runner">;
 
-export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-directed-foot-passage-v14";
+export const OSM_TOPOLOGY_ADAPTER_VERSION = "osmium-complete-ways-directed-foot-passage-v15";
 
 async function nonempty(filePath: string, label: string): Promise<void> {
   const fileStat = await stat(filePath);
