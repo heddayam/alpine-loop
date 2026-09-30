@@ -23,6 +23,11 @@ The working flow is map area → distance/gain/repetition → progressive exact 
 → route inspection → GPX. Reopening the browser restores the latest search while
 the server lives. Restarting the server intentionally expires it.
 
+On desktop, the search form gives way to route choices beside the map. Hovering
+or focusing a choice highlights its route; selecting it fits the map and opens
+details. Editing restores the original search area. Panning while inspecting
+results never changes the submitted query.
+
 ## Why this first implementation
 
 - A small Node server keeps search alive after the page closes. Browser-only work
@@ -53,8 +58,14 @@ to truncate exploration or add complexity. The interface currently targets deskt
 `benchmarks/` freezes 24 requests across three Washington areas and checks independent
 source witnesses. The pilot retains historical source omissions, documented in the
 app. It is not complete Washington coverage. A fresh data pipeline, a diverse results
-shortlist quality, long-hike discovery, automatic setup, full-app
-performance measurements and hosted delivery remain unfinished.
+shortlist, complete long-hike validation, automatic setup, full-app resource
+measurements and hosted delivery remain unfinished.
+
+The recorded engine observation recovered specific independent witnesses in
+10 of 14 proven requests. The other four were still searching and had found other
+exact routes. Seventeen of 24 requests finished within the observation window;
+seven remained unfinished. These are descriptive measurements on the pilot,
+not coverage or speed guarantees. See `benchmarks/README.md` for reproduction.
 
 ```sh
 npm run verify

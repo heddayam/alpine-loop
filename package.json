@@ -11,7 +11,7 @@
     "start": "node dist/server/server.js",
     "dev": "npm run build && npm start",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/pilot.test.mjs",
+    "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/pilot.test.mjs benchmarks/runner.test.mjs",
     "verify": "npm run build && npm run typecheck && npm test",
     "size": "node scripts/source-size.mjs"
   },

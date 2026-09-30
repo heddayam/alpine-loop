@@ -15,5 +15,5 @@
     "performance": {"firstExactP90Ms": null, "allStartsAttemptedP90Ms": null, "cancelMs": 1000, "runtimeBytes": 1000000000, "priority": "User clarified 2026-09-30: longer searches are acceptable. Timing is descriptive; do not complicate architecture or cut exploration to chase sub-10-second results."},
     "delivery": ["working replacement", "reproducible measurements", "brief architecture rationale", "concise setup", "one active application", "temporary scaffolding removed"]
   },
-  "state": "First real-data slice works. Desktop experience, source coverage, independent witness recovery, automatic setup and hosted delivery remain in progress."
+  "state": "First real-data slice and desktop flow are implemented and checked in the browser. Twenty-four frozen engine measurements are recorded; unfinished searches remain explicitly unfinished. Fresh source coverage, shortlist quality, complete witness recovery, automatic setup, full-app resource measurements and hosted delivery remain in progress."
 }
