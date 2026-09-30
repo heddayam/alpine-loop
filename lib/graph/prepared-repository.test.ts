@@ -197,7 +197,7 @@ test("solver exact routes are unchanged; a missing section cannot borrow its cyc
   };
   const solve = (repository: PreparedGraphRepository | SQLiteGraphRepository, coverage = full) => solver.generate(request, {
     repository, accessFilter: { predicates: [rectangle(-0.00001, -0.00001, 0.00001, 0.00001)], coverage },
-    budget: { maximumDirectedEdges: 100, maximumExpandedStates: 20_000, maximumRawCandidates: 2_000, deadlineMs: 10_000 }, now: () => 0,
+    budget: { maximumDirectedEdges: 100, maximumExpandedStates: 20_000, maximumRetainedCycles: 2_000, deadlineMs: 10_000 }, now: () => 0,
   });
   const expected = await solve(mono), actual = await solve(open());
   expect(actual).toEqual(expected);
@@ -511,7 +511,7 @@ test("local area starts retain buffered loops but exclude buffer-only access poi
   const result = await solver.generate({ distanceMiles: { min: 0.6, max: 0.65 }, includeUncertainAccess: true, limit: 1,
     closedRoute: { maximumRepeatedTrailPct: 100 } }, {
     repository, accessFilter: { predicates: [core], coverage: full },
-    budget: { maximumDirectedEdges: 100, maximumExpandedStates: 20_000, maximumRawCandidates: 2_000, deadlineMs: 10_000 }, now: () => 0,
+    budget: { maximumDirectedEdges: 100, maximumExpandedStates: 20_000, maximumRetainedCycles: 2_000, deadlineMs: 10_000 }, now: () => 0,
   });
   expect(result.exact).toHaveLength(1);
   expect(result.exact[0].geometry.coordinates.some(coordinate => !coordinateIsInsideArea(coordinate as [number, number], core))).toBe(true);

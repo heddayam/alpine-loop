@@ -251,7 +251,7 @@ export function searchSimpleRoutes(
     truncationReasons.add("deadline");
     return true;
   };
-  const exhausted = (stateCap = options.budget.maximumExpandedStates, candidateCap = options.budget.maximumRawCandidates): boolean => {
+  const exhausted = (stateCap = options.budget.maximumExpandedStates, candidateCap = options.budget.maximumRetainedCycles): boolean => {
     if (expandedStates >= stateCap) truncationReasons.add("maximum-expanded-states");
     if (candidateCount >= candidateCap) truncationReasons.add("maximum-raw-candidates");
     return outOfTime() || expandedStates >= stateCap || candidateCount >= candidateCap;

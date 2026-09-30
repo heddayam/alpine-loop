@@ -1,5 +1,6 @@
 import type { GeneratedClosedRouteV3, ConstraintViolationV3, RouteCriteria } from "@/lib/contracts";
 import type { AreaGeometry } from "@/lib/graph";
+import type { SearchCompletion } from "./budget";
 
 export type ResolvedAccessFilterContext = {
   predicates: readonly AreaGeometry[];
@@ -15,6 +16,7 @@ export type RouteSearchPolicy = {
 export type RouteSearchRequest = RouteCriteria & RouteSearchPolicy;
 
 export type RouteSearchResult = {
+  completion?: SearchCompletion;
   exact: GeneratedClosedRouteV3[];
   nearMisses: Array<GeneratedClosedRouteV3 & { violations: ConstraintViolationV3[] }>;
   diagnostics: {

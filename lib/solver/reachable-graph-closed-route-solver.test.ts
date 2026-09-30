@@ -144,7 +144,7 @@ function context(
       maximumDirectedEdges: 1_000,
       maximumExpandedStates: 20_000,
       deadlineMs: 10_000,
-      maximumRawCandidates: 2_000,
+      maximumRetainedCycles: 2_000,
     },
     now: () => 0,
     accessFilter: {
@@ -368,7 +368,7 @@ describe("ReachableGraphClosedRouteSolver", () => {
           maximumDirectedEdges: 1_000,
           maximumExpandedStates: 20_000,
           deadlineMs: 1,
-          maximumRawCandidates: 2_000,
+          maximumRetainedCycles: 2_000,
         },
       },
     );

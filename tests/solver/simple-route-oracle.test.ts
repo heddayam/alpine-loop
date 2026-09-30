@@ -16,7 +16,7 @@ const meters = (min: number, max: number) => ({ min: min / 1_609.344, max: max /
 const feet = (min: number, max: number) => ({ min: min / 0.3048, max: max / 0.3048 });
 const budget = {
   maximumDirectedEdges: 10_000, maximumExpandedStates: 1_000_000,
-  maximumRawCandidates: 100_000, deadlineMs: 10_000,
+  maximumRetainedCycles: 100_000, deadlineMs: 10_000,
 };
 
 function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {

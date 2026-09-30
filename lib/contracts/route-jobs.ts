@@ -17,6 +17,11 @@ export const routeJobProgressSchema = z.object({
   exactRouteCount: z.number().int().nonnegative(),
   nearMissRouteCount: z.number().int().nonnegative(),
   truncatedAccessPointCount: z.number().int().nonnegative(),
+  /** Absent on historical jobs. Pass one attempts every eligible start. */
+  searchPass: z.number().int().positive().optional(),
+  exhaustedAccessPointCount: z.number().int().nonnegative().optional(),
+  unfinishedAccessPointCount: z.number().int().nonnegative().optional(),
+  limitedAccessPointCount: z.number().int().nonnegative().optional(),
   elapsedMs: finiteNumberSchema.nonnegative(),
 }).strict();
 

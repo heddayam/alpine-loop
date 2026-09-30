@@ -78,7 +78,7 @@ function effectiveBudget(supplied: SolverBudget): SolverBudget {
     maximumDirectedEdges: Math.min(supplied.maximumDirectedEdges, CLOSED_ROUTE_BUDGET.maximumDirectedEdges),
     maximumExpandedStates: Math.min(supplied.maximumExpandedStates, CLOSED_ROUTE_BUDGET.maximumExpandedStates),
     deadlineMs: Math.min(supplied.deadlineMs, CLOSED_ROUTE_BUDGET.deadlineMs),
-    maximumRawCandidates: Math.min(supplied.maximumRawCandidates, CLOSED_ROUTE_BUDGET.maximumRawCandidates),
+    maximumRetainedCycles: Math.min(supplied.maximumRetainedCycles, CLOSED_ROUTE_BUDGET.maximumRetainedCycles),
   };
 }
 
@@ -320,7 +320,7 @@ export class ReachableGraphClosedRouteSolver {
       if (context.signal?.aborted) throw new RouteSearchCancelledError(context.signal.reason);
       const remainingTime = deadlineAt - now();
       const remainingExpanded = budget.maximumExpandedStates - expandedStates;
-      const remainingRaw = budget.maximumRawCandidates - rawCandidateCount;
+      const remainingRaw = budget.maximumRetainedCycles - rawCandidateCount;
       if (remainingTime <= 0) {
         hardTruncationReasons.add("deadline");
         break search;
@@ -394,7 +394,7 @@ export class ReachableGraphClosedRouteSolver {
           maximumDirectedEdges: budget.maximumDirectedEdges,
           maximumExpandedStates: expansionAllocation,
           deadlineMs: Math.max(1, Math.floor((startDeadlineAt - now()) * 0.7)),
-          maximumRawCandidates: rawAllocation,
+          maximumRetainedCycles: rawAllocation,
         },
         signal: context.signal,
         now,
@@ -403,7 +403,7 @@ export class ReachableGraphClosedRouteSolver {
       );
       this.options.onPhaseTiming?.("generation", Math.max(0, now() - generationStartedAt));
       expandedStates = Math.min(budget.maximumExpandedStates, expandedStates + generated.diagnostics.expandedStates);
-      rawCandidateCount = Math.min(budget.maximumRawCandidates, rawCandidateCount + generated.diagnostics.candidateCount);
+      rawCandidateCount = Math.min(budget.maximumRetainedCycles, rawCandidateCount + generated.diagnostics.candidateCount);
       for (const reason of generated.diagnostics.truncationReasons) hardTruncationReasons.add(reason);
       const orderedCandidates = [...generated.candidates, ...generated.nearCandidates].map(candidate => {
         const keys = candidate.traversals.map(({ edge }) => edge.physicalEdgeKey);

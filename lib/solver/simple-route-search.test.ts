@@ -82,7 +82,7 @@ const budget = {
   maximumDirectedEdges: 10_000,
   maximumExpandedStates: 100_000,
   deadlineMs: 3_000,
-  maximumRawCandidates: 2_000,
+  maximumRetainedCycles: 2_000,
 };
 
 describe("searchSimpleRoutes", () => {
@@ -321,7 +321,7 @@ describe("searchSimpleRoutes", () => {
     }), { budget: { ...budget, maximumExpandedStates: 25_000 }, now: () => 0 });
     expect(result.candidates.length).toBeGreaterThanOrEqual(minimumExact);
     expect(result.diagnostics.expandedStates).toBeLessThanOrEqual(25_000);
-    expect(result.diagnostics.candidateCount).toBeLessThanOrEqual(budget.maximumRawCandidates);
+    expect(result.diagnostics.candidateCount).toBeLessThanOrEqual(budget.maximumRetainedCycles);
   });
 
   it("enforces the directed-edge load cap", () => {

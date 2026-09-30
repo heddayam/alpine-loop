@@ -6,7 +6,7 @@ import type { RouteSearchRequest } from "./types";
 
 const meters = (min: number, max: number) => ({ min: min / 1_609.344, max: max / 1_609.344 });
 const budget = {
-  maximumDirectedEdges: 40_000, maximumExpandedStates: 1_000, maximumRawCandidates: 8_000, deadlineMs: 15_000,
+  maximumDirectedEdges: 40_000, maximumExpandedStates: 1_000, maximumRetainedCycles: 8_000, deadlineMs: 15_000,
 };
 
 function grid(size: number, hilly = false) {
