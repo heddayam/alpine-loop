@@ -27,7 +27,8 @@ class FreshCompiler(unittest.TestCase):
                       30: (.001, .001), 31: (.002, .001), 32: (.002, .002), 40: (-.002, .0025), 41: (.007, .0025)}
             for identity, (lon, lat) in points.items():
                 node = XML.SubElement(osm, "node", id=str(identity), version="1", lon=str(lon), lat=str(lat))
-                tags = {1: {"highway": "trailhead", "foot": "yes", "name": "Loop, 100% — ridge"},
+                tags = {1: {"highway": "trailhead", "name": "Loop, 100% — ridge"},
+                        4: {"highway": "trailhead", "name": "Seasonal entrance", "foot:conditional": "yes @ (May-Sep)"},
                         12: {"barrier": "gate", "foot": "no"}, 20: {"amenity": "parking", "access": "yes"}}.get(identity, {})
                 for key, value in tags.items():
                     XML.SubElement(node, "tag", k=key, v=value)
@@ -47,6 +48,8 @@ class FreshCompiler(unittest.TestCase):
             way(107, [30, 31, 32, 30], {"highway": "pedestrian", "area": "yes"})
             way(108, [30, 31, 32], {"highway": "path", "construction": "yes"})
             way(109, [40, 41], {"highway": "path", "foot": "yes"})
+            way(110, [1, 2, 3, 4, 5, 1], {"amenity": "parking", "access": "yes", "name": "Loop parking"})
+            way(111, [12, 13, 20, 12], {"amenity": "parking", "access": "yes"})
             relation = XML.SubElement(osm, "relation", id="200", version="1")
             XML.SubElement(relation, "member", type="way", ref="105", role="")
             XML.SubElement(relation, "tag", k="route", v="hiking")
@@ -72,7 +75,12 @@ class FreshCompiler(unittest.TestCase):
             self.assertEqual(len(audit["frontiers"]), 3, "Sparse segments crossing the footprint are retained even with no source node inside")
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
-            self.assertEqual(len(graph["starts"]), 2, "Only actual road/trail contacts and mapped access become starts")
+            starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
+            self.assertEqual(set(starts), {"n1", "n3", "n4", "n5"}, "Distinct parking exits remain; only the redundant boundary contact disappears")
+            self.assertEqual(starts["n1"]["access"], "public", "Missing trailhead permission must not erase its parking's public evidence")
+            self.assertEqual(starts["n4"]["access"], "unknown", "Public parking does not erase a node's conditional restriction")
+            self.assertEqual(audit["redundantContacts"], [{"node": "n2", "retained": "n1", "parking": "w110", "ways": ["100"]}])
+            self.assertTrue(any(poi["id"] == "w111" for poi in audit["unresolvedPois"]), "Public parking cannot restore an explicitly blocked gate")
             for trail, item in enumerate(lineage["trails"]):
                 directed = [edge for edge in graph["edges"] if edge["trail"] == trail]
                 if "n2" in item["nodes"]:

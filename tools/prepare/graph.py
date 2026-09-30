@@ -164,9 +164,36 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             entry = entrances.setdefault(node, {"id": "osm-entrance:" + node[1:], "sources": []})
             rank = 2 if poi["kind"] == "trailhead" else 1
             if rank > entry.get("rank", 0):
-                entry.update(name=poi["tags"].get("name") or ("Trailhead" if poi["kind"] == "trailhead" else "Mapped parking access"),
-                             access=combine(access, crossing(tags_by_node.get(node[1:], {}))), rank=rank)
+                entry.update(name=poi["tags"].get("name") or ("Trailhead" if poi["kind"] == "trailhead" else "Mapped parking access"), rank=rank)
+            # Name priority is unrelated to permission evidence. An untagged
+            # trailhead cannot erase public permission from its mapped parking.
+            evidence = "public" if "public" in (entry.get("access"), access) else "unknown"
+            entry["access"] = combine(evidence, crossing(tags_by_node.get(node[1:], {})))
             entry["sources"].append(poi["id"])
+    redundant_contacts = []
+    for poi in pois:
+        boundary = ways.get(poi["id"][1:], {}).get("nodes", []) if poi["id"].startswith("w") else []
+        if poi["kind"] != "parking" or not boundary or boundary[0] != boundary[-1]:
+            continue
+        for left, right in zip(boundary, boundary[1:]):
+            pair = ["n" + left, "n" + right]
+            if not all(node in entrances for node in pair):
+                continue
+            keep, drop = sorted(pair, key=lambda node: entrances[node].get("rank", 0), reverse=True)
+            if (entrances[keep].get("rank") != 2 or not tags_by_node.get(keep[1:], {}).get("name")
+                    or set(entrances[drop]["sources"]) != {poi["id"]}
+                    or entrances[keep]["access"] != entrances[drop]["access"] or len(adjacent[drop]) != 2
+                    or tags_by_node.get(drop[1:], {}).get("barrier")):
+                continue
+            parts = [usable[index] for index in adjacent[drop]]
+            continuation = set.intersection(*({source["way"] for source in part["source"]} for part in parts))
+            if (not continuation or not any(keep in part["ends"] for part in parts)
+                    or any(part["access"] != ["public", "public"] for part in parts)):
+                continue
+            # Only an uninterrupted, public trail coincident with this parking
+            # boundary is redundant. Other exits and named starts stay intact.
+            redundant_contacts.append({"node": drop, "retained": keep, "parking": poi["id"], "ways": sorted(continuation)})
+            del entrances[drop]
     anchors = set(entrances) | (frontiers & adjacent.keys())
     anchors.update(node for node, edges in adjacent.items() if len(edges) != 2 or tags_by_node.get(node[1:], {}).get("barrier"))
     def oriented(index, start):
@@ -204,7 +231,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             corridors.append({"id": "osm-corridor:" + identity, "nodes": path_nodes, "coordinates": [points[node] for node in path_nodes],
                               "access": state, "name": " / ".join(sorted(names)) or None, "source": members})
     return corridors, points, entrances, {"counts": counts, "frontiers": sorted(frontiers & adjacent.keys()),
-                                         "unresolvedPois": unresolved, "entrances": entrances}
+                                         "unresolvedPois": unresolved, "redundantContacts": redundant_contacts, "entrances": entrances}
 
 
 def measure(corridors, sample):

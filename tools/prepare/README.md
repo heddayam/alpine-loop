@@ -55,6 +55,16 @@ pipeline on a tiny offline source and a synthetic planar raster.
   Shared road/trail nodes provide uncertain entrances, not certified parking.
   Unconnected or restricted POIs remain in the audit. No nearest-path connector
   is invented, and ordinary road geometry vertices do not become starts.
+- Naming priority does not choose access evidence. An untagged named trailhead
+  retains applicable public permission from its mapped parking; restrictions
+  on the node still apply.
+- A parking-only boundary contact directly attached to the same named trailhead
+  can be a redundant start. Suppress it only when both are consecutive vertices
+  on that parking polygon and an uninterrupted, bidirectionally public source
+  trail. The contact must have degree two, no barrier, no other access source,
+  and the same start permission. Distinct exits and named trailheads remain.
+  All trail geometry stays intact; the audit records each suppressed contact.
+  There are no proximity thresholds, inferred connectors or routing shortcuts.
 
 Source node identities join paths. Duplicate consecutive source-node segments
 are one physical segment, with conservative permission combination and all
@@ -86,25 +96,33 @@ storage subsystem or compatibility adapter is required.
 
 ## Measured North Bend build
 
-The pinned sources produced 6,203 routing nodes, 6,772 physical corridors,
-13,544 directed edges and 1,826 starts. Eleven starts have explicit public
-permission; 1,815 remain uncertain. The audit records 85 boundary frontiers and
+The access-evidence rebuild (`fresh-north-bend-v2`) removes one redundant start:
+parking contact `n12761651948` directly adjoins named Little Si Trailhead
+`n4729927256` along both parking boundary `w39979446` and trail `w40413381`.
+The named trailhead now retains that parking's explicit public permission.
+Every other start is unchanged. Comparing source lineage before and after
+confirms the same 56,433 physical source-segment records and original geometry
+vertex set; only corridor compaction changes after the redundant start is gone.
+
+The pinned sources produced 6,202 routing nodes, 6,771 physical corridors,
+13,542 directed edges and 1,825 starts. Eleven starts have explicit public
+permission; 1,814 remain uncertain. The audit records 85 boundary frontiers and
 225 unresolved mapped access POIs. All 81,604 distinct DEM samples were valid;
-the geometry contains 88,945 points including shared corridor endpoints.
+the geometry contains 88,944 points including shared corridor endpoints.
 
 | File | Compressed bytes | JSON bytes |
 | --- | ---: | ---: |
-| `graph.json.gz` | 436,842 | 2,085,015 |
-| `geometry.json.gz` | 1,638,646 | 4,617,973 |
-| `source-index.json.gz` (audit only) | 991,793 | 9,723,885 |
-| `audit.json.gz` (audit only) | 32,349 | 272,145 |
+| `graph.json.gz` | 436,799 | 2,084,635 |
+| `geometry.json.gz` | 1,638,642 | 4,617,841 |
+| `source-index.json.gz` (audit only) | 991,694 | 9,723,683 |
+| `audit.json.gz` (audit only) | 32,393 | 272,120 |
 
 An independent check recomputed haversine distances and positive/negative
 profile changes for every exported edge, checked geometry endpoints against
 routing nodes, unique physical corridor/direction pairs, finite coordinates,
 coverage bounds, non-frontier starts and output hashes. The offline fixture
 also checks a gradual climb that would disappear under per-delta suppression.
-The maintainer build took 39.82 seconds with 260,341,760 bytes peak compiler RSS
+The maintainer build took 32.85 seconds with 260,849,664 bytes peak compiler RSS
 on the reference Mac; these are descriptive preparation measurements, not app
 resource or search-completion claims.
 
