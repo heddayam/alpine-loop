@@ -23,7 +23,7 @@ import {
   trailNetworkFeatureDetails,
   trailNetworkLineColor,
   trailNetworkLineWidth,
-  mapRequestUrl,
+  mapRequestBody,
 } from "./HikeMap";
 
 function route(id: string, longitude: number): GeneratedClosedRouteV3 {
@@ -98,8 +98,9 @@ describe("generated route map features", () => {
   it("loads mapped trails only at detailed zoom and keeps hover names useful", () => {
     const bounds = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
 
-    expect(mapRequestUrl(bounds, 12)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178&trails=1");
-    expect(mapRequestUrl(bounds, 11)).toBe("/api/map?bbox=-122.18%2C37.155%2C-122.14%2C37.178&trails=0");
+    const startFilter = { includeUncertainAccess: false, predicates: [], namedRegionIds: ["castle-rock"] };
+    expect(mapRequestBody(bounds, 12, startFilter)).toEqual({ bbox: bounds, trails: true, startFilter });
+    expect(mapRequestBody(bounds, 11, null)).toEqual({ bbox: bounds, trails: false, startFilter: null });
     expect(trailNetworkFeatureDetails({ name: "  Skyline Trail  ", distanceMeters: 965.6064 })).toEqual({
       name: "Skyline Trail",
       copyName: "Skyline Trail",
@@ -307,6 +308,7 @@ describe("generated route map features", () => {
       showRegionBoundaries: false,
       display: { center: [-122.16, 37.165], zoom: 12 },
       includeUncertainAccess: true,
+      startFilter: {includeUncertainAccess:true,predicates:[]},
       routes: [route("first", -122.18)],
       onBoundsChange: () => undefined,
       onStartSelect: () => undefined,

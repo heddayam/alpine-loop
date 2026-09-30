@@ -77,7 +77,7 @@ function route(id: string, longitude = -122): GeneratedClosedRouteV3 {
 }
 const display = { center: [-122, 37] as [number, number], zoom: 13 };
 function props(routes = [route("first"), route("second", -121.8)]): ComponentProps<typeof HikeMap> {
-  return { drawBounds: null, coverages: [], showRegionBoundaries: false, display, includeUncertainAccess: true, routes,
+  return { drawBounds: null, coverages: [], showRegionBoundaries: false, display, includeUncertainAccess: true, startFilter:{includeUncertainAccess:true,predicates:[]}, routes,
     selectedRouteId: routes[0]?.id, onBoundsChange: vi.fn(), onStartSelect: vi.fn(), onRouteSelect: vi.fn(), onRouteHover: vi.fn(), onSegmentSelect: vi.fn(), onSegmentHover: vi.fn() };
 }
 let resize: ResizeObserverCallback;
@@ -104,6 +104,54 @@ function routeUploads(map: RecordingMap) {
 }
 
 describe("MapLibre workspace lifecycle", () => {
+  it("refreshes the server selection without remounting, clears obsolete markers and ignores a late previous filter", async () => {
+    const marker = (id:string,lon:number) => ({id,name:id,lon,lat:37,kind:"trailhead",accessState:"public",confidence:"high"});
+    const payload = (id:string,lon:number) => ({accessPoints:[marker(id,lon)],trailNetwork:{type:"FeatureCollection",features:[]}});
+    let resolveKnown!: (response:Response) => void, resolveRegion!: (response:Response) => void;
+    const known = new Promise<Response>(resolve=>{resolveKnown=resolve;}), region = new Promise<Response>(resolve=>{resolveRegion=resolve;});
+    const response = (id:string,lon:number) => new Response(JSON.stringify(payload(id,lon)));
+    vi.mocked(fetch).mockReset().mockResolvedValueOnce(response("inclusive-owner",-122)).mockReturnValueOnce(known).mockReturnValueOnce(region);
+    const initial = {...props([]),startFilter:{includeUncertainAccess:true,predicates:[],namedRegionIds:["a"]}};
+    const view = render(<HikeMap {...initial} />);
+    const map = await loadMap();
+    await waitFor(()=>expect(map.getSource("access-points")?.data.features[0]?.properties?.id).toBe("inclusive-owner"));
+    const knownFilter = {...initial.startFilter,includeUncertainAccess:false};
+    view.rerender(<HikeMap {...initial} includeUncertainAccess={false} startFilter={knownFilter} />);
+    expect(map.getSource("access-points")?.data.features).toEqual([]);
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    const regionFilter = {...knownFilter,namedRegionIds:["b"]};
+    view.rerender(<HikeMap {...initial} includeUncertainAccess={false} startFilter={regionFilter} />);
+    expect(vi.mocked(fetch).mock.calls[1]?.[1]?.signal?.aborted).toBe(true);
+    await act(async()=>resolveRegion(response("current-known-owner",-121)));
+    expect(map.getSource("access-points")?.data.features[0]?.properties?.id).toBe("current-known-owner");
+    await act(async()=>resolveKnown(response("stale-public-owner",-122)));
+    expect(map.getSource("access-points")?.data.features[0]?.properties?.id).toBe("current-known-owner");
+    expect(vi.mocked(fetch).mock.calls.map(([url,init])=>[url,init?.method,JSON.parse(String(init?.body)).startFilter])).toEqual([
+      ["/api/map","POST",initial.startFilter],["/api/map","POST",knownFilter],["/api/map","POST",regionFilter],
+    ]);
+    view.rerender(<HikeMap {...initial} includeUncertainAccess={false} startFilter={{...regionFilter}} />);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(recording.maps).toHaveLength(1);
+    expect(map.remove).not.toHaveBeenCalled();
+  });
+
+  it("hides unresolved driving markers immediately while retaining context trails", async () => {
+    const network = {type:"FeatureCollection",features:[{type:"Feature",properties:{trailGroupId:"context"},geometry:{type:"LineString",coordinates:[[-122,37],[-121,38]]}}]};
+    const point = {id:"start",name:"Start",lon:-122,lat:37,kind:"trailhead",accessState:"public",confidence:"high"};
+    vi.mocked(fetch).mockResolvedValue({ok:true,json:async()=>({accessPoints:[point],trailNetwork:network})} as Response);
+    const initial = {...props([]),startFilter:{includeUncertainAccess:true,predicates:[],namedRegionIds:["a"]}};
+    const view = render(<HikeMap {...initial} />);
+    const map = await loadMap();
+    await waitFor(()=>expect(map.getSource("access-points")?.data.features).toHaveLength(1));
+    view.rerender(<HikeMap {...initial} startFilter={null} />);
+    expect(map.getSource("access-points")?.data.features).toEqual([]);
+    expect(map.getSource("trail-network")?.data.features).toHaveLength(1);
+    await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body)).startFilter).toBeNull();
+    expect(map.getSource("access-points")?.data.features).toEqual([]);
+    expect(recording.maps).toHaveLength(1);
+  });
+
   it("uploads route geometry once and updates hover/selection through filters", async () => {
     const initial = props();
     const view = render(<HikeMap {...initial} />);

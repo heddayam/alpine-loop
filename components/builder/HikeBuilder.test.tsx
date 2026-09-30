@@ -12,10 +12,10 @@ import type { SearchIntent, SearchRoute, RouteJobV2 } from "@/lib/contracts/sear
 import { DEFAULT_APP_SETTINGS } from "@/lib/settings/defaults";
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filterGeometry, includeUncertainAccess, onStartSelect, onRouteSelect, selectedRouteId, selectedSegmentId }: {
+vi.mock("../map/HikeMap", () => ({ HikeMap: ({ onBoundsChange, routes = [], filterGeometry, includeUncertainAccess, startFilter, onStartSelect, onRouteSelect, selectedRouteId, selectedSegmentId }: {
   onBoundsChange: (bounds: [number, number, number, number]) => void;
-  routes?: SearchRoute[]; filterGeometry?: unknown; includeUncertainAccess?: boolean; onStartSelect: (key: string) => void; onRouteSelect: (id: string) => void; selectedRouteId?: string; selectedSegmentId?: string;
-}) => <div aria-label="Mock map"><output aria-label="Map selection">{JSON.stringify({ selectedRouteId, selectedSegmentId })}</output>{routes.map((route) => <button key={route.id} onClick={() => onRouteSelect(route.id)}>Open map route {route.id}</button>)}{routes[0] ? <button onClick={() => onStartSelect(routeStart(routes[0]!).key)}>Select fixture trailhead</button> : null}<button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess })}</output></div> }));
+  routes?: SearchRoute[]; filterGeometry?: unknown; includeUncertainAccess?: boolean; startFilter?: unknown; onStartSelect: (key: string) => void; onRouteSelect: (id: string) => void; selectedRouteId?: string; selectedSegmentId?: string;
+}) => <div aria-label="Mock map"><output aria-label="Map selection">{JSON.stringify({ selectedRouteId, selectedSegmentId })}</output>{routes.map((route) => <button key={route.id} onClick={() => onRouteSelect(route.id)}>Open map route {route.id}</button>)}{routes[0] ? <button onClick={() => onStartSelect(routeStart(routes[0]!).key)}>Select fixture trailhead</button> : null}<button onClick={() => onBoundsChange([-122.18, 37.15, -122.13, 37.18])}>Draw fixture area</button><button onClick={() => onBoundsChange([-122.17, 37.15, -122.13, 37.18])}>Change fixture area</button><output aria-label="Map routes">{routes.map(({ id }) => id).join(",")}</output><output aria-label="Map context">{JSON.stringify({ filterGeometry, includeUncertainAccess, startFilter })}</output></div> }));
 const appSettings = DEFAULT_APP_SETTINGS;
 const catalog = { regions: [{ id: "castle-rock", name: "Castle Rock" }, { id: "sunol", name: "Sunol" }], coverages: [{ type: "Polygon", coordinates: [[[-122.2,37.1],[-122.1,37.1],[-122.1,37.2],[-122.2,37.2],[-122.2,37.1]]] }], display: { center: [-122.15,37.15], zoom: 12 } };
 const request: SearchIntent = { area: { mode: "drawn-area", bbox: [-122.18,37.15,-122.13,37.18] }, criteria: { closedRoute: { maximumRepeatedTrailPct: 35 }, distanceMiles: { min: 1, max: 4 }, includeUncertainAccess: true } };
@@ -67,6 +67,7 @@ describe("geographic workspace", () => {
   it("submits one saved job for several named regions", async () => {
     render(<HikeBuilder />);
     await chooseRegions();
+    expect(JSON.parse(screen.getByLabelText("Map context").textContent!).startFilter).toEqual({includeUncertainAccess:true,predicates:[],namedRegionIds:["castle-rock","sunol"]});
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
     const posts = vi.mocked(fetch).mock.calls.filter(([url, init]) => url === "/api/route-jobs" && init?.method === "POST");
@@ -136,6 +137,7 @@ describe("geographic workspace", () => {
     expect(await screen.findByText(/Choose a suggested origin or clear/)).toBeVisible();
     expect(vi.mocked(fetch).mock.calls.some(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")).toBe(false);
     await userEvent.click(screen.getByText("Draw fixture area"));
+    expect(JSON.parse(screen.getByLabelText("Map context").textContent!).startFilter).toEqual({includeUncertainAccess:true,predicates:[savedArea.filterGeometry]});
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")?.[1]?.body)).area).toEqual(request.area);
@@ -144,6 +146,7 @@ describe("geographic workspace", () => {
     render(<HikeBuilder />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Full search" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Driving origin"), { target: { value: "37.16, -122.16" } });
+    expect(JSON.parse(screen.getByLabelText("Map context").textContent!).startFilter).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Full search" }));
     await screen.findByRole("dialog", { name: "Jobs" });
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/route-jobs" && init?.method === "POST")?.[1]?.body)).area).toMatchObject({ mode: "drive-time", regionIds: [], minDurationMinutes: 0, durationMinutes: 30, origin: { lon: -122.16, lat: 37.16 } });
@@ -186,6 +189,7 @@ describe("geographic workspace", () => {
     render(<StrictMode><HikeBuilder restoreJobId={job.id} /></StrictMode>);
     await screen.findByRole("heading", { name: "Exact matches" });
     expect(screen.getByText("Generated with older map data.")).toBeVisible();
+    expect(JSON.parse(screen.getByLabelText("Map context").textContent!).startFilter).toEqual({includeUncertainAccess:true,predicates:[savedArea.filterGeometry]});
     const before = screen.getByLabelText("Map context").textContent;
     fireEvent.change(screen.getByLabelText("Distance minimum"), { target: { value: "8" } });
     expect(screen.getByLabelText("Map context")).toHaveTextContent(before!);
@@ -194,6 +198,29 @@ describe("geographic workspace", () => {
     expect(router.replace).toHaveBeenCalledWith("/");
     await userEvent.click(screen.getByRole("button", { name: "Jobs" }));
     expect(await screen.findByRole("button", { name: /View results for Saved area/ })).toBeVisible();
+  });
+  it("shows an actionable rebuild note while keeping saved routes readable", async () => {
+    vi.restoreAllMocks();
+    mockBaseFetch(url=>url==="/api/search/catalog" ? json({...catalog,requiresRebuild:true}) : undefined);
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await screen.findByRole("heading",{name:"Exact matches"});
+    await userEvent.click(screen.getByRole("button",{name:"Plan"}));
+    expect(screen.getByText(/Some installed areas need updated trailhead data/)).toBeVisible();
+    expect(screen.getByRole("button",{name:"Open Coverage"})).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+  });
+  it("uses a viewed saved driving band and profile even when the planning form selects other regions", async () => {
+    vi.restoreAllMocks();
+    const viewedJob:RouteJobV2 = {...job,request:{area:{mode:"drive-time",origin:{lon:-122,lat:37,label:"Home"},durationMinutes:60,minDurationMinutes:15,regionIds:["saved-region"]},criteria:{...job.request.criteria,includeUncertainAccess:false}}};
+    mockBaseFetch(url=>url.includes("/results?") ? json({...savedPage,job:viewedJob}) : undefined);
+    render(<HikeBuilder restoreJobId={job.id} />);
+    await screen.findByRole("heading",{name:"Exact matches"});
+    const before=JSON.parse(screen.getByLabelText("Map context").textContent!);
+    expect(before.startFilter).toEqual({includeUncertainAccess:false,predicates:[savedArea.filterGeometry],namedRegionIds:["saved-region"]});
+    expect(before.includeUncertainAccess).toBe(false);
+    await userEvent.click(screen.getByRole("button",{name:"Plan"}));
+    await chooseRegions();
+    expect(JSON.parse(screen.getByLabelText("Map context").textContent!)).toEqual(before);
   });
   it("uses the same result operation for pagination and ignores completion after closing Jobs", async () => {
     vi.restoreAllMocks(); const pending = deferred<Response>(); let signal: AbortSignal | undefined;

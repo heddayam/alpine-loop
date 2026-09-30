@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from "geojson";
 import type { DataDrivenPropertyValueSpecification, ExpressionSpecification, FilterSpecification, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
-import { lineStringSchema, type GeneratedClosedRouteV3 } from "@/lib/contracts";
+import { lineStringSchema, type GeneratedClosedRouteV3, type MapStartFilter } from "@/lib/contracts";
 import { z } from "zod";
 import type { AccessPointOption, Bounds } from "../builder/types";
 import { boundsCorners, boundsPolygon, normalizeBounds } from "./geometry";
@@ -23,6 +23,7 @@ type HikeMapProps = {
   showRegionBoundaries: boolean;
   display: { center: [number, number]; zoom: number };
   includeUncertainAccess: boolean;
+  startFilter: MapStartFilter | null;
   routes: GeneratedClosedRouteV3[];
   selectedRouteId?: string;
   selectedStartKey?: string;
@@ -136,8 +137,8 @@ export function contextMenuPosition(
   };
 }
 
-export function mapRequestUrl(bounds: Bounds, zoom: number): string {
-  return `/api/map?${new URLSearchParams({ bbox: bounds.join(","), trails: zoom >= TRAIL_NETWORK_MIN_ZOOM ? "1" : "0" })}`;
+export function mapRequestBody(bounds: Bounds, zoom: number, startFilter: MapStartFilter | null) {
+  return { bbox: bounds, trails: zoom >= TRAIL_NETWORK_MIN_ZOOM, startFilter };
 }
 
 export const mapDataSchema = z.object({
@@ -358,6 +359,7 @@ export function HikeMap({
   showRegionBoundaries,
   display,
   includeUncertainAccess,
+  startFilter,
   routes,
   selectedRouteId,
   selectedStartKey,
@@ -383,6 +385,8 @@ export function HikeMap({
   const onStartSelectRef = useRef(onStartSelect);
   const onRouteSelectRef = useRef(onRouteSelect);
   const clearMapHoverRef = useRef<(() => void) | undefined>(undefined);
+  const clearTrailHoverRef = useRef<(() => void) | undefined>(undefined);
+  const clearAccessPointHoverRef = useRef<(() => void) | undefined>(undefined);
   const interactionRef = useRef({ selectedStartKey, selectedRouteId });
   const onSegmentSelectRef = useRef(onSegmentSelect);
   const onSegmentHoverRef = useRef(onSegmentHover);
@@ -418,7 +422,11 @@ export function HikeMap({
   const [contextMenu, setContextMenu] = useState<MapContextMenu>();
   const [coordinateCopyStatus, setCoordinateCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [mapReady, setMapReady] = useState(false);
-  const [mapData, setMapData] = useState<z.infer<typeof mapDataSchema>>({ accessPoints: [], trailNetwork: { type: "FeatureCollection", features: [] } });
+  // A captured selection key keeps prior responses/markers from appearing even
+  // during the render before the previous request's cleanup aborts it.
+  const startFilterKey = useMemo(() => JSON.stringify(startFilter), [startFilter]);
+  const mapAccessProfile = startFilter?.includeUncertainAccess ?? includeUncertainAccess;
+  const [mapData, setMapData] = useState<z.infer<typeof mapDataSchema> & { startFilterKey: string }>({ startFilterKey: "", accessPoints: [], trailNetwork: { type: "FeatureCollection", features: [] } });
   const [mapError, setMapError] = useState("");
 
   useEffect(() => () => {
@@ -480,7 +488,6 @@ export function HikeMap({
     if (!containerRef.current || mapRef.current) return;
     let alive = true;
     let map: MapLibreMap | null = null;
-    let trailNetworkController: AbortController | null = null;
     let resizeObserver: ResizeObserver | undefined;
     void import("maplibre-gl").then(({ Map, NavigationControl, setWorkerUrl }) => {
       if (!alive || !containerRef.current) return;
@@ -803,6 +810,8 @@ export function HikeMap({
           map?.setFilter("access-point-cluster-hover", EMPTY_ACCESS_POINT_CLUSTER_HOVER_FILTER);
           setHoveredAccessPoint(undefined);
         };
+        clearTrailHoverRef.current = clearTrailHover;
+        clearAccessPointHoverRef.current = clearAccessPointHover;
         onFeature("mousemove", "trail-network-hit-target", (event) => {
           const priorityLayers = TRAIL_CLICK_PRIORITY_LAYERS.filter((layerId) => map?.getLayer(layerId));
           if (priorityLayers.length > 0 && map?.queryRenderedFeatures(event.point, { layers: priorityLayers }).length) {
@@ -921,41 +930,51 @@ export function HikeMap({
         });
         map?.on("click", closeContextMenu);
 
-        const refreshMapData = () => {
-          if (!map) return;
-          const bounds = map.getBounds();
-          trailNetworkController?.abort();
-          const controller = new AbortController();
-          trailNetworkController = controller;
-          styleTrailHover();
-          setHoveredTrail(undefined);
-          void fetch(mapRequestUrl([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], map.getZoom()), { signal: controller.signal })
-            .then(async (response) => {
-              if (!response.ok) throw new Error("Trail map data could not be loaded.");
-              const next = mapDataSchema.parse(await response.json());
-              if (!controller.signal.aborted) { setMapData(next); setMapError(""); }
-            }).catch((error: unknown) => {
-              if (!controller.signal.aborted) setMapError(error instanceof Error ? error.message : "Trail map data could not be loaded.");
-            });
-        };
-        map?.on("moveend", refreshMapData);
-        refreshMapData();
         setMapReady(true);
       });
     });
     return () => {
       alive = false;
-      trailNetworkController?.abort();
       resizeObserver?.disconnect();
       previewRoute(undefined);
       onSegmentHoverRef.current?.(undefined);
       clearMapHoverRef.current = undefined;
+      clearTrailHoverRef.current = undefined;
+      clearAccessPointHoverRef.current = undefined;
       map?.remove();
       mapRef.current = null;
       fittedRouteSetRef.current = undefined;
       setMapReady(false);
     };
   }, [closeContextMenu, previewRoute]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    let controller: AbortController | undefined;
+    const filter = JSON.parse(startFilterKey) as MapStartFilter | null;
+    clearAccessPointHoverRef.current?.();
+    (map.getSource("access-points") as GeoJSONSource | undefined)?.setData(EMPTY_POINTS);
+    const refreshMapData = () => {
+      controller?.abort();
+      const current = new AbortController();
+      controller = current;
+      clearTrailHoverRef.current?.();
+      const bounds = map.getBounds();
+      void fetch("/api/map", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(mapRequestBody([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], map.getZoom(), filter)), signal: current.signal })
+        .then(async response => {
+          if (!response.ok) throw new Error("Trail map data could not be loaded.");
+          const next = mapDataSchema.parse(await response.json());
+          if (!current.signal.aborted) { setMapData({ ...next, startFilterKey }); setMapError(""); }
+        }).catch((error: unknown) => {
+          if (!current.signal.aborted) setMapError(error instanceof Error ? error.message : "Trail map data could not be loaded.");
+        });
+    };
+    map.on("moveend", refreshMapData);
+    refreshMapData();
+    return () => { controller?.abort(); map.off("moveend", refreshMapData); };
+  }, [mapReady, startFilterKey]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource("trailhead-filter") as GeoJSONSource | undefined;
@@ -967,9 +986,9 @@ export function HikeMap({
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
-    const accessPoints = (coverageMode ? [] : mapData.accessPoints).filter((point) => includeUncertainAccess || point.accessState !== "unknown");
-    (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes, accessPoints, includeUncertainAccess), includeUncertainAccess));
-  }, [coverageMode, includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
+    const accessPoints = coverageMode || startFilterKey === "null" || mapData.startFilterKey !== startFilterKey ? [] : mapData.accessPoints;
+    (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes, accessPoints, mapAccessProfile), mapAccessProfile));
+  }, [coverageMode, mapAccessProfile, mapData.accessPoints, mapData.startFilterKey, mapReady, routes, startFilterKey]);
 
   useEffect(() => {
     if (!mapReady) return;
