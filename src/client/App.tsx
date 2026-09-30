@@ -3,26 +3,19 @@ import type {
   Bounds,
   DatasetInfo,
   HikeRoute,
+  RouteSummary,
   SearchQuery,
   SearchSnapshot,
 } from "../model.js";
+import { ROUTES_PER_PAGE } from "../model.js";
 import { HikeMap } from "./Map.js";
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
-const CURRENT_SEARCH = "alpine-loop.current-search";
 const miles = (meters: number) => (meters / MILE).toFixed(1);
 const feet = (meters: number) => Math.round(meters / FOOT).toLocaleString();
-const routeName = (route: HikeRoute) =>
+const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
-const remember = (id: string | null) => {
-  try {
-    if (id) localStorage.setItem(CURRENT_SEARCH, id);
-    else localStorage.removeItem(CURRENT_SEARCH);
-  } catch {
-    /* Search still works without storage. */
-  }
-};
 async function request<T>(
   url: string,
   signal: AbortSignal,
@@ -56,9 +49,14 @@ async function request<T>(
   return data as T;
 }
 const routeBounds = (route: HikeRoute): Bounds => {
-  const xs = route.geometry.map((point) => point[0]);
-  const ys = route.geometry.map((point) => point[1]);
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [longitude, latitude] of route.geometry) {
+    bounds[0] = Math.min(bounds[0], longitude);
+    bounds[1] = Math.min(bounds[1], latitude);
+    bounds[2] = Math.max(bounds[2], longitude);
+    bounds[3] = Math.max(bounds[3], latitude);
+  }
+  return bounds;
 };
 
 function Range({
@@ -118,7 +116,7 @@ function RouteDetails({
   searchId,
   onBack,
 }: {
-  route: HikeRoute;
+  route: RouteSummary;
   searchId: string;
   onBack: () => void;
 }) {
@@ -176,8 +174,8 @@ function RouteDetails({
         </div>
       )}
       <p className="quiet">
-        Start: {route.geometry[0]?.[1].toFixed(5)},{" "}
-        {route.geometry[0]?.[0].toFixed(5)}
+        Start: {route.startPosition[1].toFixed(5)},{" "}
+        {route.startPosition[0].toFixed(5)}
       </p>
     </section>
   );
@@ -215,10 +213,30 @@ export function App() {
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [retry, setRetry] = useState(0);
   const operation = useRef<AbortController | null>(null);
+  const pageOperation = useRef<AbortController | null>(null);
+  const [geometry, setGeometry] = useState<HikeRoute | null>(null);
+  const [routeError, setRouteError] = useState("");
+  const [routeRetry, setRouteRetry] = useState(0);
   const selected = search?.routes.find((route) => route.id === selectedId);
   const running = search?.status === "running";
+  const activeId = editing ? null : (selectedId ?? hoveredId);
+  const activeRoute = geometry?.id === activeId ? geometry : null;
+  const acceptSnapshot = (snapshot: SearchSnapshot) => {
+    // Progress-only polls must not rebuild the map's start markers.
+    setSearch((current) =>
+      current?.id === snapshot.id &&
+      current.offset === snapshot.offset &&
+      current.routes.length === snapshot.routes.length &&
+      current.routes.every(
+        (route, index) => route.id === snapshot.routes[index]?.id,
+      )
+        ? { ...snapshot, routes: current.routes }
+        : snapshot,
+    );
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -226,31 +244,15 @@ export function App() {
       .then(async (info) => {
         setArea(info.bounds);
         setCamera({ bounds: info.bounds, revision: 0, selectArea: true });
-        let id: string | null = null;
-        try {
-          id = localStorage.getItem(CURRENT_SEARCH);
-        } catch {
-          /* Storage is optional. */
+        const snapshot = await request<SearchSnapshot | null>(
+          "/api/search",
+          controller.signal,
+        );
+        if (!controller.signal.aborted && snapshot) {
+          setSearch(snapshot);
+          restoreDraft(snapshot);
+          setEditing(false);
         }
-        if (id)
-          await request<SearchSnapshot>(
-            `/api/search/${encodeURIComponent(id)}`,
-            controller.signal,
-          )
-            .then((snapshot) => {
-              setSearch(snapshot);
-              restoreDraft(snapshot);
-              setEditing(false);
-            })
-            .catch((failure) => {
-              if (!controller.signal.aborted) {
-                // Do not let a transient failure replace a still-running search
-                // whose identifier is our only way to reconnect or stop it.
-                if (failure.status !== 404) throw failure;
-                remember(null);
-                setError(failure.message);
-              }
-            });
         if (!controller.signal.aborted) setDataset(info);
       })
       .catch((failure) => {
@@ -259,21 +261,22 @@ export function App() {
     return () => {
       controller.abort();
       operation.current?.abort();
+      pageOperation.current?.abort();
     };
   }, []);
 
   useEffect(() => {
-    if (!search || search.status !== "running" || busy) return;
+    if (!search || search.status !== "running" || busy || loadingPage) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const snapshot = await request<SearchSnapshot>(
-          `/api/search/${encodeURIComponent(search.id)}`,
+          `/api/search/${encodeURIComponent(search.id)}?offset=${search.offset}`,
           controller.signal,
         );
         if (!controller.signal.aborted) {
-          setSearch(snapshot);
+          acceptSnapshot(snapshot);
           setConnectionError("");
         }
         if (snapshot.status !== "running") return;
@@ -290,7 +293,6 @@ export function App() {
           setSearch(undefined);
           setSelectedId(null);
           setEditing(true);
-          remember(null);
           return;
         }
       }
@@ -302,7 +304,67 @@ export function App() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [search?.id, search?.status, retry, busy]);
+  }, [search?.id, search?.status, search?.offset, retry, busy, loadingPage]);
+
+  useEffect(() => {
+    setRouteError("");
+    setGeometry(null);
+    if (!search || !activeId) return;
+    const controller = new AbortController();
+    void request<HikeRoute>(
+      `/api/search/${encodeURIComponent(search.id)}/routes/${encodeURIComponent(activeId)}`,
+      controller.signal,
+    )
+      .then((route) => {
+        if (controller.signal.aborted) return;
+        setGeometry(route);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted)
+          setRouteError(
+            failure instanceof Error
+              ? failure.message
+              : "The route drawing could not load.",
+          );
+      });
+    return () => controller.abort();
+  }, [search?.id, search?.offset, activeId, routeRetry]);
+
+  useEffect(() => {
+    if (selectedId && activeRoute?.id === selectedId)
+      moveTo(routeBounds(activeRoute));
+  }, [selectedId, activeRoute]);
+
+  const changePage = async (offset: number) => {
+    if (!search || busy || loadingPage) return;
+    const controller = new AbortController();
+    pageOperation.current = controller;
+    setLoadingPage(true);
+    setHoveredId(null);
+    setError("");
+    try {
+      const snapshot = await request<SearchSnapshot>(
+        `/api/search/${encodeURIComponent(search.id)}?offset=${offset}`,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) {
+        acceptSnapshot(snapshot);
+        setConnectionError("");
+        requestAnimationFrame(() =>
+          document.getElementById("page-summary")?.focus(),
+        );
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted)
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "This results page could not load. Try again.",
+        );
+    } finally {
+      if (!controller.signal.aborted) setLoadingPage(false);
+    }
+  };
 
   const launch = async (event: FormEvent) => {
     event.preventDefault();
@@ -337,10 +399,11 @@ export function App() {
     setBusy(true);
     setError("");
     setSelectedId(null);
+    setHoveredId(null);
     try {
       if (search?.status === "running") {
         const stopped = await request<SearchSnapshot>(
-          `/api/search/${encodeURIComponent(search.id)}/stop`,
+          `/api/search/${encodeURIComponent(search.id)}/stop?offset=${search.offset}`,
           controller.signal,
           {},
         );
@@ -355,7 +418,6 @@ export function App() {
         setSearch(snapshot);
         setEditing(false);
         setConnectionError("");
-        remember(snapshot.id);
       }
     } catch (failure) {
       if (!controller.signal.aborted)
@@ -370,17 +432,19 @@ export function App() {
   };
   const stop = async () => {
     if (!search || busy) return;
+    pageOperation.current?.abort();
+    setLoadingPage(false);
     const controller = new AbortController();
     operation.current = controller;
     setBusy(true);
     try {
       const snapshot = await request<SearchSnapshot>(
-        `/api/search/${encodeURIComponent(search.id)}/stop`,
+        `/api/search/${encodeURIComponent(search.id)}/stop?offset=${search.offset}`,
         controller.signal,
         {},
       );
       if (!controller.signal.aborted) {
-        setSearch(snapshot);
+        acceptSnapshot(snapshot);
         setError("");
         setConnectionError("");
       }
@@ -420,13 +484,16 @@ export function App() {
     setRepetition(String(snapshot.query.repetition * 100));
     setIncludeUnknown(snapshot.query.includeUnknown);
     setSelectedId(null);
+    setHoveredId(null);
     moveTo(snapshot.query.area);
   };
   const pickRoute = (id: string) => {
     const route = search?.routes.find((route) => route.id === id);
     if (!route || editing) return;
+    pageOperation.current?.abort();
+    setLoadingPage(false);
     setSelectedId(id);
-    moveTo(routeBounds(route));
+    setHoveredId(null);
     requestAnimationFrame(() =>
       document.getElementById("route-detail-heading")?.focus(),
     );
@@ -434,15 +501,14 @@ export function App() {
   const backToRoutes = () => {
     const id = selectedId;
     setSelectedId(null);
+    setHoveredId(null);
     if (search) moveTo(search.query.area);
     requestAnimationFrame(() =>
       document.getElementById(`route-${id}`)?.focus(),
     );
   };
   const currentRoutes = search?.routes ?? [];
-  const selectionNote = (
-    search as (SearchSnapshot & { selectionNote?: string }) | undefined
-  )?.selectionNote;
+  const selectionNote = search?.selectionNote;
   return (
     <main className="workspace">
       <aside className="sidebar" aria-label="Route planner">
@@ -601,6 +667,7 @@ export function App() {
                         <button
                           className="text-button"
                           type="button"
+                          disabled={busy || loadingPage}
                           onClick={() => {
                             restoreDraft();
                             setEditing(true);
@@ -631,8 +698,8 @@ export function App() {
                     >
                       <div className="section-heading results-heading">
                         <h2>
-                          {currentRoutes.length} matching{" "}
-                          {currentRoutes.length === 1 ? "route" : "routes"}
+                          {search.routeCount.toLocaleString()} matching{" "}
+                          {search.routeCount === 1 ? "route" : "routes"}
                         </h2>
                         {running && (
                           <button
@@ -664,9 +731,39 @@ export function App() {
                         )}
                       {selectionNote && (
                         <details className="selection-note">
-                          <summary>Similar routes grouped</summary>
+                          <summary>How routes are selected</summary>
                           <p>{selectionNote}</p>
                         </details>
+                      )}
+                      {!selected && search.routeCount > ROUTES_PER_PAGE && (
+                        <nav
+                          className="result-pages"
+                          aria-label="Results pages"
+                          aria-busy={loadingPage}
+                        >
+                          <button
+                            type="button"
+                            disabled={busy || loadingPage || search.offset === 0}
+                            onClick={() => void changePage(
+                              Math.max(0, search.offset - ROUTES_PER_PAGE),
+                            )}
+                          >
+                            Previous
+                          </button>
+                          <span id="page-summary" tabIndex={-1} aria-live="polite">
+                            {loadingPage
+                              ? "Loading…"
+                              : `${search.offset + 1}–${search.offset + currentRoutes.length} of ${search.routeCount.toLocaleString()}`}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={busy || loadingPage ||
+                              search.offset + ROUTES_PER_PAGE >= search.routeCount}
+                            onClick={() => void changePage(search.offset + ROUTES_PER_PAGE)}
+                          >
+                            Next
+                          </button>
+                        </nav>
                       )}
                       {selected ? (
                         <RouteDetails
@@ -765,7 +862,14 @@ export function App() {
           editing={editing}
           drawn={areaMode === "drawn"}
           routes={editing ? [] : currentRoutes}
-          selectedId={selectedId ?? hoveredId}
+          activeRoute={activeRoute}
+          selectedId={activeId}
+          routeNotice={activeId
+            ? routeError || (!activeRoute ? "Loading route drawing…" : "")
+            : ""}
+          onRetryRoute={routeError
+            ? () => setRouteRetry((value) => value + 1)
+            : undefined}
           camera={camera}
           onArea={(bounds) => {
             setArea(bounds);
@@ -777,6 +881,7 @@ export function App() {
           }}
           onDrawing={setDrawing}
           onSelect={pickRoute}
+          onPreview={setHoveredId}
         />
       ) : (
         <div className="map-placeholder" />

@@ -9,11 +9,11 @@ import {
   DomEvent,
   type Map as LeafletMap,
   type Rectangle,
-  type Polyline,
+  type CircleMarker,
   type LayerGroup,
   type LatLngBoundsExpression,
 } from "leaflet";
-import type { Bounds, DatasetInfo, HikeRoute } from "../model.js";
+import type { Bounds, DatasetInfo, HikeRoute, RouteSummary } from "../model.js";
 
 const leafletBounds = (bounds: Bounds): LatLngBoundsExpression => [
   [bounds[1], bounds[0]],
@@ -35,36 +35,48 @@ export function HikeMap({
   editing,
   drawn,
   routes,
+  activeRoute,
   selectedId,
+  routeNotice,
+  onRetryRoute,
   camera,
   onArea,
   onViewport,
   onDrawing,
   onSelect,
+  onPreview,
 }: {
   dataset: DatasetInfo;
   area: Bounds | null;
   editing: boolean;
   drawn: boolean;
-  routes: HikeRoute[];
+  routes: RouteSummary[];
+  activeRoute: HikeRoute | null;
   selectedId: string | null;
+  routeNotice: string;
+  onRetryRoute?: () => void;
   camera: { bounds: Bounds; revision: number; selectArea?: boolean };
   onArea: (bounds: Bounds) => void;
   onViewport: (bounds: Bounds) => void;
   onDrawing: (drawing: boolean) => void;
   onSelect: (id: string) => void;
+  onPreview: (id: string | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const instance = useRef<LeafletMap | null>(null);
   const outline = useRef<Rectangle | null>(null);
   const routeGroup = useRef<LayerGroup | null>(null);
   const startGroup = useRef<LayerGroup | null>(null);
-  const rendered = useRef(new Map<string, Polyline>());
+  const renderedStarts = useRef(
+    new Map<string, { marker: CircleMarker; routes: RouteSummary[] }>(),
+  );
   const callbacks = useRef({
     onArea,
     onViewport,
     onDrawing,
     onSelect,
+    onPreview,
+    selectedId,
     editing,
     drawn,
   });
@@ -73,6 +85,8 @@ export function HikeMap({
     onViewport,
     onDrawing,
     onSelect,
+    onPreview,
+    selectedId,
     editing,
     drawn,
   };
@@ -153,7 +167,7 @@ export function HikeMap({
     return () => {
       resize.disconnect();
       map.remove();
-      rendered.current.clear();
+      renderedStarts.current.clear();
       instance.current = null;
       outline.current = null;
       routeGroup.current = null;
@@ -164,46 +178,76 @@ export function HikeMap({
   useEffect(() => {
     if (!ready || !routeGroup.current) return;
     const group = routeGroup.current;
-    const ids = new Set(routes.map((route) => route.id));
-    for (const [id, line] of rendered.current) {
-      if (!ids.has(id)) {
-        group.removeLayer(line);
-        rendered.current.delete(id);
+    group.clearLayers();
+    if (!activeRoute) return;
+    const line = polyline(
+      activeRoute.geometry.map(([longitude, latitude]) => [latitude, longitude]),
+      { color: "#b95b2c", weight: 5, opacity: 0.9 },
+    ).addTo(group);
+    line.on("click", (event) => {
+      if (drawingRef.current) return;
+      DomEvent.stopPropagation(event.originalEvent);
+      callbacks.current.onSelect(activeRoute.id);
+    });
+  }, [ready, activeRoute]);
+  useEffect(() => {
+    if (!ready || !startGroup.current) return;
+    const group = startGroup.current;
+    const starts = new Map<string, RouteSummary[]>();
+    for (const route of routes) {
+      const choices = starts.get(route.startId) ?? [];
+      choices.push(route);
+      starts.set(route.startId, choices);
+    }
+    for (const [id, entry] of renderedStarts.current) {
+      if (!starts.has(id)) {
+        group.removeLayer(entry.marker);
+        renderedStarts.current.delete(id);
       }
     }
-    for (const route of routes) {
-      if (rendered.current.has(route.id)) continue;
-      const line = polyline(
-        route.geometry.map(([longitude, latitude]) => [latitude, longitude]),
-        { color: "#315e49", weight: 4 },
-      ).addTo(group);
-      line.on("click", (event) => {
-        if (drawingRef.current) return;
-        DomEvent.stopPropagation(event.originalEvent);
-        callbacks.current.onSelect(route.id);
-      });
-      rendered.current.set(route.id, line);
+    for (const [id, choices] of starts) {
+      const first = choices[0]!;
+      let entry = renderedStarts.current.get(id);
+      if (!entry) {
+        entry = {
+          marker: circleMarker([first.startPosition[1], first.startPosition[0]], {
+            radius: 5,
+            color: "#315e49",
+            weight: 2,
+            fillColor: "white",
+            fillOpacity: 1,
+          }).addTo(group),
+          routes: choices,
+        };
+        const start = entry;
+        start.marker.on("mouseover", () =>
+          callbacks.current.onPreview(start.routes[0]!.id),
+        );
+        start.marker.on("mouseout", () => callbacks.current.onPreview(null));
+        start.marker.on("click", (event) => {
+          DomEvent.stopPropagation(event.originalEvent);
+          const route = start.routes.find(
+            (route) => route.id === callbacks.current.selectedId,
+          ) ?? start.routes[0]!;
+          callbacks.current.onSelect(route.id);
+        });
+        renderedStarts.current.set(id, start);
+      }
+      entry.routes = choices;
+      const label = document.createElement("span");
+      label.textContent = `${first.startName || "Unnamed start"} · ${choices.length} ${choices.length === 1 ? "choice" : "choices"} on this page`;
+      entry.marker.bindTooltip(label, { direction: "right" });
     }
-    for (const [id, line] of rendered.current) {
-      line.setStyle({
-        color: id === selectedId ? "#b95b2c" : "#315e49",
-        weight: id === selectedId ? 5 : 3,
-        opacity: selectedId && id !== selectedId ? 0.25 : 0.85,
+  }, [ready, routes]);
+  useEffect(() => {
+    for (const { marker, routes: choices } of renderedStarts.current.values()) {
+      const active = choices.some((route) => route.id === selectedId);
+      marker.setRadius(active ? 7 : 5).setStyle({
+        color: active ? "#b95b2c" : "#315e49",
+        opacity: selectedId && !active ? 0.4 : 1,
       });
-      if (id === selectedId) line.bringToFront();
+      if (active) marker.bringToFront();
     }
-    startGroup.current?.clearLayers();
-    const start = routes.find((route) => route.id === selectedId)?.geometry[0];
-    if (start && startGroup.current)
-      circleMarker([start[1], start[0]], {
-        radius: 6,
-        color: "#b95b2c",
-        weight: 2,
-        fillColor: "white",
-        fillOpacity: 1,
-      })
-        .bindTooltip("Start", { permanent: true, direction: "right" })
-        .addTo(startGroup.current);
   }, [ready, routes, selectedId]);
   useEffect(() => {
     const map = instance.current;
@@ -274,8 +318,20 @@ export function HikeMap({
           Click two opposite corners. Escape cancels.
         </p>
       )}
+      {!editing && routeNotice && (
+        <div
+          className="map-notice preview-notice"
+          role={onRetryRoute ? "alert" : "status"}
+        >
+          <p>{routeNotice}</p>
+          {onRetryRoute && (
+            <button type="button" onClick={onRetryRoute}>Retry drawing</button>
+          )}
+        </div>
+      )}
       {area && !drawing && (
         <span className="map-caption">
+          {!editing && !!routes.length && "Dots mark starts on this page. "}
           Dashed boundary selects starts. Routes may extend beyond it.
         </span>
       )}

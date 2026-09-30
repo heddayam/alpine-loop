@@ -316,6 +316,30 @@ summary {
   margin: 0;
   padding: 0;
 }
+.result-pages {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  background: white;
+  border-bottom: 1px solid var(--line);
+}
+.result-pages button {
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.result-pages span {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.result-pages span:focus {
+  outline: none;
+}
 .route-list li + li {
   border-top: 1px solid var(--line);
 }
@@ -504,6 +528,14 @@ summary {
   border-radius: 4px;
   font-size: 12px;
   box-shadow: 0 1px 7px #24371b14;
+}
+.preview-notice {
+  top: 16px;
+  max-width: calc(100% - 32px);
+}
+.preview-notice button {
+  margin-top: 8px;
+  font-size: 11px;
 }
 .error-banner {
   margin: 15px 22px 0;
