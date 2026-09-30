@@ -243,6 +243,9 @@ named publication retires anonymous bbox entries from the active catalog, retain
 immutable files needed by saved references. Conflicting source pins in retained
 regions fail explicitly; source refresh is a coherent generation change, not a
 partial mixed-snapshot update.
+Matching source content downloaded at different times can coexist in the catalog;
+each immutable area retains its own acquisition record. A completed region
+checkpoint is reusable after a publication failure when its inputs are unchanged.
 
 Osmium still scans the provider extract, and missing DEM tiles can be large. About
 ten minutes for a first useful region is the **acceptance target, not a measured

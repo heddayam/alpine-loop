@@ -6,6 +6,37 @@ the evidence line.
 
 ## Active system design revision
 
+### Identical source acquisitions across regional publication — 2026-09-29
+
+- [x] Diagnose the user-run Mount Rainier publication failure after its completed
+  region checkpoint. Published Central Cascades and prepared Mount Rainier both
+  pin `washington-260801`, URL and content hash
+  `3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e`;
+  their sole metadata difference is acquisition time (September 22 versus
+  September 30). The saved receipt and 21,078,848-byte compressed artifact match
+  their recorded checksum; the current Central Cascades catalog is unchanged.
+- [x] Merge identical source content across acquisition dates, preserving each
+  artifact's original provenance and rejecting conflicting source content or
+  licensing metadata. Apply the same comparison to semantic receipts and full
+  catalog audits while keeping single-area export provenance exact. Schema,
+  graph/checkpoint identity and compressed artifact bytes are unchanged. Catalog
+  records choose the earliest acquisition per source; build dates retain the
+  latest contributing acquisition even after another area is added. All ten
+  actual retained/new source records merge in a read-only metadata check.
+- [x] 109 focused offline helper/publication/runtime checks pass, including
+  saved-checkpoint retry without normalization, metrics, elevation or topology
+  work; full audits with/without semantic receipts; original artifact acquisition
+  records; genuine version/hash/URL/license conflicts; malformed dates and exact
+  single-area export checks. Two further acquisition-order cases pass after
+  adding a third older acquisition to verify the retained latest build date.
+- [x] `npm run verify` passes twice: 101 test files / 1,063 tests, lint, types,
+  MapLibre checks and production build. `npm run test:browser` passes twice:
+  10 / 10 Chromium desktop/mobile checks. The active catalog, completed Mount
+  Rainier region receipt and compressed artifact remain byte-identical to their
+  pre-repair checksums. Temporary task worktrees/branches are removed; generated
+  data stays ignored. No real build is restarted, published or installed by the
+  agent. The user can retry with unchanged cache settings and without `--rebuild`.
+
 ### Pinned OSM cache version recovery — 2026-09-29
 
 - [x] Diagnose the user-run build failure before any graph preparation or
