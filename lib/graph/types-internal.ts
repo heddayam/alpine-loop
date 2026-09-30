@@ -48,6 +48,9 @@ export type GraphAccessPoint = {
   trailComponentId?: string | null;
   portalRoadClass?: "street" | "service-road" | null;
   parkingDistanceM?: number | null;
+  /** Build-proven alternative entrances, separately for each walking profile. */
+  knownEntranceFamilyId?: string;
+  inclusiveEntranceFamilyId?: string;
 };
 
 export type InducedGraph = {

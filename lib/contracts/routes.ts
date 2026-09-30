@@ -102,6 +102,8 @@ export const routeAccessPointSchema = z.object({
   lat: finiteNumberSchema,
   accessState: accessStateSchema,
   confidence: confidenceSchema,
+  /** Optional for saved routes and packs prepared before entrance grouping. */
+  entranceFamilyId: z.string().min(1).optional(),
 }).strict();
 
 export const elevationSampleSchema = z.object({
@@ -139,6 +141,8 @@ const generatedClosedRouteBaseSchema = z.object({
   id: z.string().min(1),
   geometry: lineStringSchema,
   startAccessPoint: routeAccessPointSchema,
+  /** Exact physical cycle identity; approaches and traversal direction are excluded. */
+  physicalLoopId: z.string().min(1).optional(),
   distanceMeters: finiteNumberSchema.nonnegative(),
   elevationGainMeters: finiteNumberSchema.nonnegative(),
   elevationLossMeters: finiteNumberSchema.nonnegative(),
