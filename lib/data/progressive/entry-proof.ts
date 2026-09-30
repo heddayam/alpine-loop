@@ -34,6 +34,7 @@ function role(source: LinkSource): Role {
 function motorAccess(source: LinkSource, direction: "forward" | "backward"): string {
   return flag(source.flags, `motor-${direction}-access:`) ?? flag(source.flags, "motor-access:") ?? "unknown";
 }
+const contactUsable = (source: LinkSource) => usable(source.accessState) || usable(motorAccess(source,"forward")) || usable(motorAccess(source,"backward"));
 const interfaceSql=(link:string,arrivalRole:string)=>`(${link}.role='hike' OR (${link}.role='track' AND (${arrivalRole}!='track' OR ${link}.frontier=1)) OR (${link}.role='service' AND ${link}.frontier=1))`;
 export type PreparedEntry = EntryWitness & { roadClass: "street" | "service-road"; sourceRefs: string[]; name?: string; approachKnown: boolean; requiresRoleChange: boolean; arrivalRole: Role; rootAssertion: string };
 
@@ -70,25 +71,98 @@ export class ConnectedEntryProof {
     this.run("INSERT OR REPLACE INTO entry_contacts VALUES (?,?,?,?)",node,kind,roadClass,JSON.stringify(references(way.sourceRefs,prior ? JSON.parse(String(prior.source_refs)) : [])));
     if(kind === "road")this.run("INSERT OR IGNORE INTO entry_roots VALUES (?,?,?,?,?,?)",node,kind,roadClass,1,JSON.stringify(way.sourceRefs),`way:${way.id}`);
   }
+  private insertNode(node: NormalizedNode) {
+    this.run("INSERT INTO entry_nodes VALUES (?,?,?,?,?)", node.id, flag(node.flags, "foot-access:") ? footSegmentAccessState("public",[node.flags]) : null, flag(node.flags, "motor-access:"), flag(node.flags, "arrival-place:"),JSON.stringify(node.sourceRefs));
+  }
+  private loadNode(id: string) {
+    if(this.get("SELECT 1 FROM entry_nodes WHERE id=?",id))return;
+    const row=this.get("SELECT record FROM nodes WHERE id=?",id);
+    if(row)this.insertNode(JSON.parse(String(row.record)) as NormalizedNode);
+  }
+  private async placeRoots(nodes: Iterable<string>, known: boolean, sourceRefs: string[], assertion: string) {
+    for(const node of new Set(nodes)) {
+      await this.step();
+      if(restricted(this.get("SELECT foot FROM entry_nodes WHERE id=?",node)?.foot as string|null))continue;
+      for(const contact of this.rows("SELECT * FROM entry_contacts WHERE node_id=? ORDER BY road_class DESC,role",node))
+        this.run("INSERT OR IGNORE INTO entry_roots VALUES (?,?,?,?,?,?)",node,String(contact.role),String(contact.road_class),Number(known),JSON.stringify(references(JSON.parse(String(contact.source_refs)),sourceRefs)),assertion);
+    }
+  }
+  private async parkingRoots(item: NormalizedPortalEvidence, assertion: string, nodes: Iterable<string> = item.nodeIds) {
+    const foot=footSegmentAccessState("public",[item.flags ?? []]);
+    if(usable(item.accessState)&&usable(foot))await this.placeRoots(nodes,foot === "public",item.sourceRefs,assertion);
+  }
   private async arrivalPlaces() {
     for(const place of this.rows("SELECT * FROM entry_nodes WHERE arrival_place='turning-circle' ORDER BY id")) {
       await this.step();
       if(restricted(place.foot as string|null))continue;
-      for(const contact of this.rows("SELECT * FROM entry_contacts WHERE node_id=? ORDER BY road_class DESC,role",String(place.id)))
-        this.run("INSERT OR IGNORE INTO entry_roots VALUES (?,?,?,?,?,?)",String(place.id),String(contact.role),String(contact.road_class),Number(place.foot!=="unknown"),JSON.stringify(references(JSON.parse(String(place.source_refs)),JSON.parse(String(contact.source_refs)))),`node:${place.id}:arrival-place:turning-circle`);
+      await this.placeRoots([String(place.id)],place.foot!=="unknown",JSON.parse(String(place.source_refs)),`node:${place.id}:arrival-place:turning-circle`);
     }
     for(const row of this.rows("SELECT id,record FROM evidence WHERE kind='parking' ORDER BY id")) {
       await this.step();
       const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
-      const foot=footSegmentAccessState("public",[item.flags ?? []]);
-      if(!usable(item.accessState)||!usable(foot))continue;
-      for(const node of new Set(item.nodeIds)) {
-        await this.step();
-        if(restricted(this.get("SELECT foot FROM entry_nodes WHERE id=?",node)?.foot as string|null))continue;
-        for(const contact of this.rows("SELECT * FROM entry_contacts WHERE node_id=? ORDER BY road_class DESC,role",node))
-          this.run("INSERT OR IGNORE INTO entry_roots VALUES (?,?,?,?,?,?)",node,String(contact.role),String(contact.road_class),Number(foot === "public"),JSON.stringify(references(JSON.parse(String(contact.source_refs)),item.sourceRefs)),String(row.id));
+      await this.parkingRoots(item,String(row.id));
+    }
+  }
+
+  private async contactsAt(node: string) {
+    // The node-leading membership index bounds this read by actual local contacts.
+    for(const row of this.rows("SELECT DISTINCT w.id,w.record FROM way_nodes n JOIN ways w ON w.id=n.way_id WHERE n.node_id=? ORDER BY w.id",node)) {
+      await this.step();
+      const way=JSON.parse(String(row.record)) as NormalizedWay,kind=role(way);
+      if(["road","limited-road","service","track"].includes(kind)&&contactUsable(way)&&way.nodeIds.includes(node))this.addContact(way,node,kind);
+    }
+  }
+  private async frozenRoot(node: string, assertion: string, way: NormalizedWay | undefined, wayNodes: ReadonlySet<string>, item: NormalizedPortalEvidence | undefined, placeNodes: ReadonlySet<string>) {
+    this.loadNode(node);
+    if(way&&wayNodes.has(node)&&role(way)==="road"&&contactUsable(way))this.addContact(way,node,"road");
+    if(assertion===`node:${node}:arrival-place:turning-circle`) {
+      const place=this.get("SELECT * FROM entry_nodes WHERE id=?",node);
+      if(place?.arrival_place==="turning-circle"&&!restricted(place.foot as string|null)) {
+        await this.contactsAt(node);
+        await this.placeRoots([node],place.foot!=="unknown",JSON.parse(String(place.source_refs)),assertion);
       }
     }
+    if(item?.kind==="parking"&&placeNodes.has(node)) {
+      await this.contactsAt(node);
+      await this.parkingRoots(item,assertion,[node]);
+    }
+  }
+  private async prepareFrozen() {
+    this.db.exec("CREATE TEMP TABLE entry_refresh_roots(node_id TEXT NOT NULL,assertion TEXT NOT NULL,PRIMARY KEY(node_id,assertion)) WITHOUT ROWID;");
+    for(const row of this.rows("SELECT node_id,witness FROM sparse_portal_candidates ORDER BY node_id")) {
+      await this.step();
+      const prior=JSON.parse(String(row.witness)) as PreparedEntry,node=String(row.node_id);
+      this.run("INSERT OR IGNORE INTO entry_refresh_roots VALUES (?,?)",prior.rootNodeId,prior.rootAssertion);
+      this.loadNode(node);
+      // Final support may change the first measured departure, never the frozen
+      // source assertion or approach profile. Read only this actual start's exits.
+      for(const edgeRow of this.rows("SELECT e.record FROM edges e WHERE e.from_node=? AND EXISTS (SELECT 1 FROM selected_edges s WHERE s.id=e.id) ORDER BY e.id",node)) {
+        await this.step();
+        const edge=JSON.parse(String(edgeRow.record)) as CompiledEdge;
+        this.loadNode(edge.toNode);
+        this.addLink(edge.stablePhysicalId,edge.fromNode,edge.toNode,edge,edge.id.endsWith(":reverse") ? "backward" : "forward",true);
+      }
+    }
+    // Group exact assertions: many frozen starts can share one source way/place.
+    // Keep only that one record and its membership sets in memory at a time.
+    let previous: string | undefined,way:NormalizedWay|undefined,item:NormalizedPortalEvidence|undefined;
+    let wayNodes:ReadonlySet<string>=new Set(),placeNodes:ReadonlySet<string>=new Set();
+    for(const row of this.rows("SELECT node_id,assertion FROM entry_refresh_roots ORDER BY assertion,node_id")) {
+      await this.step();
+      const assertion=String(row.assertion);
+      if(assertion!==previous) {
+        const source=assertion.startsWith("way:") ? this.get("SELECT record FROM ways WHERE id=?",assertion.slice(4)) : undefined;
+        const place=this.get("SELECT record FROM evidence WHERE id=?",assertion);
+        way=source ? JSON.parse(String(source.record)) as NormalizedWay : undefined;
+        item=place ? JSON.parse(String(place.record)) as NormalizedPortalEvidence : undefined;
+        wayNodes=new Set(way?.nodeIds);placeNodes=new Set(item?.nodeIds);previous=assertion;
+      }
+      await this.frozenRoot(String(row.node_id),assertion,way,wayNodes,item,placeNodes);
+    }
+  }
+  private async prepared() {
+    this.db.exec("CREATE INDEX entry_links_from ON entry_links(from_node,known DESC,physical_id,to_node,role); CREATE INDEX entry_roots_assertion ON entry_roots(assertion,node_id,road_class DESC,role);");
+    await this.checkpoint();
   }
 
   async prepare(stage: "sparse" | "measured", discoverRequired=true): Promise<void> {
@@ -100,15 +174,20 @@ export class ConnectedEntryProof {
       CREATE TEMP TABLE entry_links(physical_id TEXT NOT NULL,from_node TEXT NOT NULL,to_node TEXT NOT NULL,known INTEGER NOT NULL,role TEXT NOT NULL,frontier INTEGER NOT NULL,record TEXT NOT NULL,PRIMARY KEY(physical_id,from_node,to_node)) WITHOUT ROWID;
       CREATE TEMP TABLE portal_candidates(node_id TEXT PRIMARY KEY,road_class TEXT NOT NULL,witness TEXT NOT NULL) STRICT;
       CREATE TEMP TABLE portal_evidence(node_id TEXT NOT NULL,evidence_id TEXT NOT NULL,PRIMARY KEY(node_id,evidence_id)) WITHOUT ROWID;`);
+    if(stage==="measured"&&!discoverRequired&&this.get("SELECT 1 FROM sqlite_temp_master WHERE name='sparse_portal_candidates' AND type='table'")) {
+      try { await this.prepareFrozen(); await this.prepared(); }
+      catch(error) { this.clear(); throw error; }
+      return;
+    }
     for (const row of this.rows("SELECT record FROM nodes ORDER BY id")) {
       await this.step();
       const node = JSON.parse(String(row.record)) as NormalizedNode;
-      this.run("INSERT INTO entry_nodes VALUES (?,?,?,?,?)", node.id, flag(node.flags, "foot-access:") ? footSegmentAccessState("public",[node.flags]) : null, flag(node.flags, "motor-access:"), flag(node.flags, "arrival-place:"),JSON.stringify(node.sourceRefs));
+      this.insertNode(node);
     }
     for (const row of this.rows("SELECT record FROM ways ORDER BY id")) {
       await this.step();
       const way = JSON.parse(String(row.record)) as NormalizedWay, kind = role(way);
-      if (["road","limited-road","service","track"].includes(kind) && (usable(way.accessState) || ["forward","backward"].some(direction=>usable(motorAccess(way,direction as "forward"|"backward"))))) {
+      if (["road","limited-road","service","track"].includes(kind) && contactUsable(way)) {
         for (const node of new Set(way.nodeIds)) { await this.step(); this.addContact(way,node,kind); }
       }
       if(discoverRequired && (kind === "service" || kind === "track"))for(let index=0;index<way.nodeIds.length-1;index++) {
@@ -150,8 +229,7 @@ export class ConnectedEntryProof {
       const edge = JSON.parse(String(row.record)) as CompiledEdge;
       this.addLink(edge.stablePhysicalId, edge.fromNode, edge.toNode, edge,edge.id.endsWith(":reverse") ? "backward" : "forward",true);
     }
-    this.db.exec("CREATE INDEX entry_links_from ON entry_links(from_node,known DESC,physical_id,to_node,role); CREATE INDEX entry_roots_assertion ON entry_roots(assertion,node_id,road_class DESC,role);");
-    await this.checkpoint();
+    await this.prepared();
   }
 
   private async arrivals() {
@@ -292,6 +370,6 @@ export class ConnectedEntryProof {
 
   clear(): void {
     this.statements.clear();
-    for (const table of ["entry_queue", "entry_reach", "entry_approach", "entry_arrivals", "entry_links", "entry_spines", "entry_roots", "entry_contacts", "entry_nodes", "portal_evidence", "portal_candidates"]) this.db.exec(`DROP TABLE IF EXISTS temp.${table}`);
+    for (const table of ["entry_refresh_roots", "entry_queue", "entry_reach", "entry_approach", "entry_arrivals", "entry_links", "entry_spines", "entry_roots", "entry_contacts", "entry_nodes", "portal_evidence", "portal_candidates"]) this.db.exec(`DROP TABLE IF EXISTS temp.${table}`);
   }
 }
