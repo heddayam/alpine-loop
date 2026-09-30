@@ -10,7 +10,6 @@ const CONTEXT_FILTERS = [
   "nw/information=trailhead,guidepost,board,map", "nw/tourism=information",
   "nw/barrier=gate", "n/barrier", ...OSM_PERMISSION_CONTEXT_KEYS.map(key => `n/${key}`),
   ...OSM_ARRIVAL_NODE_HIGHWAYS.map(highway => `n/highway=${highway}`),
-  "nwr/building",
 ];
 
 /** One owned child, including cancellation during native scans and early iterator return. */
@@ -68,15 +67,15 @@ async function* osmium(args: string[], checkpoint: () => Promise<void>): AsyncGe
 
 /**
  * Stream only relevant OSM objects, preserving source ordering and references.
- * Buffered local envelopes preserve nearby access/building context.
+ * Buffered local envelopes preserve nearby access context.
  * Osmium extract selects ways with a node inside: context-only segments crossing
  * the entire buffer with both endpoints outside, and enclosing polygons without
  * an inside vertex, can be absent. A closed route within the distance budget has
  * every vertex inside the routing buffer. Complete only matching objects from
  * the original source so unrelated large relations cannot expand local work.
- * Simple extraction supplies local node IDs; two parent scans recover every
- * incident way and its direct relations, even on Osmium versions whose simple
- * selector only checks the first way node or relation member. Keep node seeds
+ * Simple extraction supplies local node IDs; one parent scan recovers every
+ * incident way, even on Osmium versions whose simple selector only checks the
+ * first way node. Keep node seeds
  * out of getid's reference closure to avoid duplicating its dense node ID table.
  * https://docs.osmcode.org/osmium/latest/osmium-extract.html
  * https://docs.osmcode.org/osmium/latest/osmium-tags-filter.html
@@ -97,7 +96,7 @@ export async function* filteredSourceLines(
     const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
     // Pad the actual extent, not each merged component's bounding rectangle.
     // Otherwise an L-shaped support addition re-extracts the entire core.
-    // Expanded segment boxes conservatively cover nearby building/access context.
+    // Expanded segment boxes conservatively cover nearby access context.
     let envelope=geometry;
     let padding: AreaGeometry[]=[];
     const flush=()=>{if(padding.length) envelope=unionCoverage([envelope,...padding]);padding=[];};
@@ -111,7 +110,6 @@ export async function* filteredSourceLines(
     const polygon = path.join(temporary, "context.geojson");
     await writeFile(polygon, JSON.stringify({ type: "Feature", properties: {}, geometry: envelope }));
     const partial = path.join(temporary, "partial.osm.pbf");
-    const parents = path.join(temporary, "parents.osm.pbf");
     const context = path.join(temporary, "context.osm.pbf");
     const seeds = path.join(temporary, "seeds.osm.pbf");
     const references = path.join(temporary, "reference-seeds.osm.opl");
@@ -128,20 +126,17 @@ export async function* filteredSourceLines(
     }
     if (!hasObjects) return;
 
-    // Each scan resolves one parent level: local nodes -> ways -> direct relations.
-    // Do not complete unrelated relation members before filtering their tags.
+    // Resolve local nodes -> incident ways. No retained filter selects relations.
     await onStage?.("Selecting local trails and context");
-    for (const [selected, output] of [[partial, parents], [parents, context]]) {
-      for await (const unused of osmium(["getparents", sourceFile, "--id-osm-file", selected!,
-        "--add-self", "--output", output!], checkpoint)) void unused;
-      await rm(selected!, { force: true });
-    }
+    for await (const unused of osmium(["getparents", sourceFile, "--id-osm-file", partial,
+      "--add-self", "--output", context], checkpoint)) void unused;
+    await rm(partial, { force: true });
 
     await onStage?.("Filtering local trails and context");
     for await (const unused of osmium(["tags-filter", context, ...CONTEXT_FILTERS,
       "--omit-referenced", "--output", seeds], checkpoint)) void unused;
     await rm(context, { force: true });
-    for await (const unused of osmium(["cat", seeds, "--object-type", "way", "--object-type", "relation",
+    for await (const unused of osmium(["cat", seeds, "--object-type", "way",
       "--output-format", "opl", "--output", references], checkpoint)) void unused;
     if ((await stat(references)).size === 0) {
       yield* osmium(["cat", seeds, "--output-format", "opl"], checkpoint);

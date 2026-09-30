@@ -44,7 +44,8 @@ describe("compact coverage source", () => {
     expect([...store.ways(area)].find(({way})=>way.externalId==="way/41")?.way).toMatchObject({edgeClass:"trail",flags:expect.arrayContaining(["possible-walking-link"])});
     expect([...store.ways(area)].find(({way})=>way.externalId==="way/13")?.way.edgeClass).toBe("sidewalk");
     expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/5"]);
-    expect([...store.buildings(area)]).toHaveLength(2);
+    expect(store.db.prepare("SELECT id FROM ways WHERE id='42'").get()).toBeUndefined();
+    expect(store.db.prepare("SELECT name FROM sqlite_master WHERE name='relation_buildings'").get()).toBeUndefined();
     expect(store.db.prepare("SELECT count(*) AS n FROM nodes").get()?.n).toBe(1);
     expect(store.db.prepare("SELECT name FROM sqlite_master WHERE name='metrics'").all()).toEqual([]);
     expect(store.db.prepare("SELECT count(*) AS n FROM inventory").get()?.n).toBe(0);
@@ -101,7 +102,6 @@ describe("compact coverage source", () => {
     }, { lines: phase === "stream" ? failed() : lines(), onStage: async value => { stage=value; } })).rejects.toThrow("paused");
     expect(()=>[...store.ways(area)]).toThrow("completed verified import");
     expect(()=>[...store.evidence(area)]).toThrow("completed verified import");
-    expect(()=>[...store.buildings(area)]).toThrow("completed verified import");
     expect(()=>[...store.context(area)]).toThrow("completed verified import");
     store.db.exec("INSERT OR REPLACE INTO ways(id,kind) VALUES('999','trail')");
     await store.import(async () => {}, { lines: lines() });
@@ -152,7 +152,7 @@ describe("compact coverage source", () => {
     expect([...store.ways(coverage,0)].map(({way})=>way.externalId)).toEqual(["way/10","way/20"]);
   });
 
-  it("retains access evidence and assembles reversed building fragments", async () => {
+  it("retains access evidence without collecting unrelated building fragments", async () => {
     const store = make();
     await store.import(async () => {}, { lines: lines([...fixtures,
       "w40 Thighway=residential Nn1,n3", "w41 Tamenity=parking Nn1,n2",
@@ -160,12 +160,11 @@ describe("compact coverage source", () => {
     expect([...store.ways(area)].find(({way})=>way.externalId==="way/11")?.way.edgeClass).toBe("trail");
     expect([...store.ways(area)].find(({way})=>way.externalId==="way/40")?.way.edgeClass).toBe("street");
     expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/5","way/41"]);
-    expect([...store.buildings(area)]).toEqual([[0.4,0.4]]);
-    expect([...store.buildings(rectangle([2,2,3,3]))]).toEqual([]);
+    expect(store.db.prepare("SELECT id FROM ways WHERE id IN ('20','21')").all()).toEqual([]);
     expect(store.db.prepare("SELECT count(*) AS n FROM nodes").get()?.n).toBe(1);
   });
 
-  it.each(["yes", "hut", "no"])("interprets building=%s consistently across nodes, ways and relations", async (building) => {
+  it.each(["yes", "hut", "no"])("retains independent source roles and raw tags when building=%s", async (building) => {
     const store = make();
     await store.import(async () => {}, { lines: lines([
       ...fixtures.slice(0,4),
@@ -177,32 +176,28 @@ describe("compact coverage source", () => {
       "w40 T Nn1,n2,n3,n4,n1",
       `r30 Ttype=multipolygon,building=${building} Mw40@outer`,
     ]) });
-    expect([...store.buildings(area)]).toEqual(building === "no" ? [] : [
-      [2,0], [2,1], [0.4,0.4], [0.4,0.4], [0.4,0.4], [0.4,0.4],
-    ]);
-    // An explicit non-building can still be a trailhead, parking area or trail.
     expect([...store.evidence(area)].map(item=>item.externalId)).toEqual(["node/11", "way/22"]);
     expect([...store.ways(area)].map(({way})=>way.externalId)).toEqual(["way/21"]);
-    if (building === "no") {
-      expect(store.db.prepare("SELECT id FROM nodes ORDER BY id").all()).toEqual([{id:"11"}]);
-      expect(store.db.prepare("SELECT id,kind FROM ways ORDER BY id").all()).toEqual([
-        {id:"21",kind:"trail"}, {id:"22",kind:"evidence"},
-      ]);
-    }
+    expect(store.db.prepare("SELECT id,tags FROM nodes ORDER BY id").all()).toEqual([{id:"11",tags:`building=${building},highway=trailhead`}]);
+    expect(store.db.prepare("SELECT id,kind,refs,tags FROM ways ORDER BY id").all()).toEqual([
+      {id:"21",kind:"trail",refs:'["1","2","3","4","1"]',tags:JSON.stringify({building,highway:"path"})},
+      {id:"22",kind:"evidence",refs:'["1","2","3","4","1"]',tags:JSON.stringify({building,amenity:"parking"})},
+    ]);
   });
 
-  it("seals malformed building diagnostics and rounds node buildings as before", async () => {
-    const store = make();
-    await store.import(async () => {}, { lines: lines([
-      "n1 Tbuilding=hut x0.123456 y0.654321", "r30 Ttype=multipolygon,building=yes Mw999@outer",
-    ]) });
-    expect([...store.buildings(area)]).toEqual([[0.12346,0.65432]]);
-    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/30'").get()?.disposition).toBe("unsupported");
-    store.db.exec("UPDATE inventory SET reason='changed'");
-    await expect(store.import(async () => {})).rejects.toThrow("failed seal verification");
+  it("ignores standalone building objects even when relation geometry is incomplete", async () => {
+    const clean=make(),withBuildings=make();
+    await clean.import(async()=>{}, {lines:lines()});
+    await withBuildings.import(async()=>{}, {lines:lines([
+      ...fixtures.slice(0,6),"n99 Tbuilding=hut x0.123456 y0.654321",...fixtures.slice(6),
+      "w99 Tbuilding=yes Nn1,n999,n1", "r99 Ttype=multipolygon,building=yes Mw999@outer",
+    ])});
+    expect([...withBuildings.context(area)]).toEqual([...clean.context(area)]);
+    expect(withBuildings.receipt("compact-seal-v1")).toBe(clean.receipt("compact-seal-v1"));
+    expect(withBuildings.db.prepare("SELECT * FROM inventory").all()).toEqual([]);
   });
 
-  it("streams mixed walking/building/evidence context once with the original memberships and ordering", async () => {
+  it("streams walking/evidence context once with the original memberships and ordering", async () => {
     const store=make();
     await store.import(async()=>{}, {lines:lines([
       ...fixtures,
@@ -229,11 +224,10 @@ describe("compact coverage source", () => {
       {context:rectangle([-0.001,-0.001,0.001,0.001]),walking:overlapping},
     ];
     for(const {context,walking} of contexts) {
-      const expected={ways:[...store.ways(walking)],buildings:[...store.buildings(context)],evidence:[...store.evidence(context)]};
+      const expected={ways:[...store.ways(walking)],evidence:[...store.evidence(context)]};
       const entries=[...store.context(context,walking)];
       expect({
         ways:entries.flatMap(entry=>entry.kind==="way" ? [{way:entry.way,nodes:entry.nodes}] : []),
-        buildings:entries.flatMap(entry=>entry.kind==="building" ? [entry.centroid] : []),
         evidence:entries.flatMap(entry=>entry.kind==="evidence" ? [entry.evidence] : []),
       }).toEqual(expected);
     }
@@ -246,25 +240,24 @@ describe("compact coverage source", () => {
     expect(entries.filter(entry=>entry.kind==="evidence"&&entry.evidence.externalId==="node/50")).toHaveLength(4);
     expect(entries.some(entry=>entry.kind==="evidence"&&entry.evidence.externalId==="node/51")).toBe(false);
     expect(entries.filter(entry=>entry.kind==="way"&&entry.way.externalId==="way/40")).toHaveLength(1);
-    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/99'").get()?.disposition).toBe("unsupported");
+    expect(store.db.prepare("SELECT disposition FROM inventory WHERE id='relation/99'").get()).toBeUndefined();
   });
 
-  it("reads way geometry once and reduces nearby-way/tagged-node selections from three/two to one", async () => {
+  it("reads shared walking/evidence geometry once instead of selecting the same ways twice", async () => {
     const store=make();
     await store.import(async()=>{}, {lines:lines([...fixtures,"w40 Thighway=path,building=yes,amenity=parking,information=trailhead,barrier=gate,tourism=information Nn1,n2,n3,n4,n1"])});
     const queries=vi.spyOn(store.db,"prepare"),parses=vi.spyOn(JSON,"parse");
     const geometryReads=()=>parses.mock.calls.filter(([value])=>value==="[[0,0],[1,0],[1,1],[0,1],[0,0]]").length;
-    Array.from(store.ways(area));Array.from(store.buildings(area));Array.from(store.evidence(area));
+    Array.from(store.ways(area));Array.from(store.evidence(area));
     const count=(prefix:string)=>queries.mock.calls.filter(([sql])=>sql.startsWith(prefix)).length;
-    expect(count("SELECT w.*")).toBe(3);
-    expect(count("SELECT p.* FROM nodes")).toBe(2);
-    expect(geometryReads()).toBe(3);
+    expect(count("SELECT w.*")).toBe(2);
+    expect(count("SELECT p.* FROM nodes")).toBe(1);
+    expect(geometryReads()).toBe(2);
     queries.mockClear();parses.mockClear();
     const entries:CoverageContextEntry[]=[...store.context(area)];
     expect(entries).not.toHaveLength(0);
     expect(count("SELECT w.*")).toBe(1);
     expect(count("SELECT p.* FROM nodes")).toBe(1);
-    expect(count("SELECT p.* FROM relation_buildings")).toBe(1);
     expect(geometryReads()).toBe(1);
     queries.mockRestore();parses.mockRestore();
   });
@@ -277,8 +270,8 @@ describe("compact coverage source", () => {
     expect(()=>new CoverageSourceStore(file, source, rectangle([0,0,1,1]))).toThrow("fingerprint mismatch");
     expect(sourceStoreFileName(source,area)).not.toBe(sourceStoreFileName(source,rectangle([0,0,1,1])));
     const identity = store.db.prepare("SELECT value FROM meta WHERE key='source'").get() as {value:string};
-    store.db.prepare("UPDATE meta SET value=? WHERE key='source'").run(identity.value.replace(/^source-normalization-v\d+:/, "source-normalization-v6:"));
+    store.db.prepare("UPDATE meta SET value=? WHERE key='source'").run(identity.value.replace(/^source-normalization-v\d+:/, "source-normalization-v14:"));
     expect(()=>new CoverageSourceStore(file, source, area)).toThrow("fingerprint mismatch");
-    expect(sourceStoreFileName(source,area)).not.toContain("source-normalization-v6");
+    expect(sourceStoreFileName(source,area)).toMatch(/^source-source-normalization-v15-/);
   });
 });

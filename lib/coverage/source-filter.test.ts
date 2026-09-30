@@ -39,17 +39,18 @@ describe.skipIf(spawnSync("osmium", ["--version"]).status !== 0)("native source 
     expect(lines.find((line) => line.startsWith("w1 "))).toContain("oneway:foot=-1,foot=private");
     expect(lines[0]).toContain("highway=trailhead,name=Start");
     const commands = vi.mocked(spawn).mock.calls.map(([, args]) => args as string[]);
-    expect(commands.map(args => args[0])).toEqual(["extract", "cat", "getparents", "getparents", "tags-filter", "cat", "getid", "merge"]);
+    expect(commands.map(args => args[0])).toEqual(["extract", "cat", "getparents", "tags-filter", "cat", "getid", "merge"]);
     expect(commands[0]).toEqual(expect.arrayContaining(["extract", fixture, "--strategy", "simple"]));
-    for (const command of commands.slice(2, 4)) expect(command).toEqual(expect.arrayContaining(["getparents", fixture, "--id-osm-file", "--add-self"]));
-    expect(commands[4]).toEqual(expect.arrayContaining(["tags-filter", "--omit-referenced"]));
-    expect(commands[5]).toEqual(expect.arrayContaining(["cat", "--object-type", "way", "--object-type", "relation"]));
-    expect(commands[6]).toEqual(expect.arrayContaining(["getid", fixture, "--id-osm-file", "--add-referenced"]));
+    expect(commands[2]).toEqual(expect.arrayContaining(["getparents", fixture, "--id-osm-file", "--add-self"]));
+    expect(commands[3]).toEqual(expect.arrayContaining(["tags-filter", "--omit-referenced"]));
+    expect(commands[4]).toEqual(expect.arrayContaining(["cat", "--object-type", "way"]));
+    expect(commands[4]).not.toContain("relation");
+    expect(commands[5]).toEqual(expect.arrayContaining(["getid", fixture, "--id-osm-file", "--add-referenced"]));
     expect(new Set(ids(lines)).size).toBe(lines.length);
     expect(await readdir(directory)).toEqual([]);
   });
 
-  it("loads nearby evidence and completes a building whose first outer member is wholly outside the envelope", async () => {
+  it("loads nearby evidence without completing unrelated building members", async () => {
     const directory = await root();
     let checkedSeeds = false;
     const lines = await collect(filteredSourceLines(fixture, directory, rectangle([0, 0, .005, .005]), async () => {}, async stage => {
@@ -62,10 +63,8 @@ describe.skipIf(spawnSync("osmium", ["--version"]).status !== 0)("native source 
       checkedSeeds = true;
     }));
     expect(checkedSeeds).toBe(true);
-    expect(lines.find(line => line.startsWith("r1 "))).toContain("Mw22@outer,w20@outer,w21@outer");
-    expect(lines.find(line => line.startsWith("w22 "))).toContain("Nn33,n32");
-    expect(ids(lines)).toEqual(expect.arrayContaining(["n20", "n21", "n22", "n23", "n32", "n33", "w12", "w20", "w21", "w22", "r1"]));
-    for (const absent of ["n40", "n41", "w23", "w24", "w30", "w31", "r2"]) expect(ids(lines)).not.toContain(absent);
+    expect(ids(lines)).toEqual(expect.arrayContaining(["n20", "n21", "n23", "w12"]));
+    for (const absent of ["n22", "n32", "n33", "n40", "n41", "w20", "w21", "w22", "w23", "w24", "w30", "w31", "r1", "r2"]) expect(ids(lines)).not.toContain(absent);
     expect(await readdir(directory)).toEqual([]);
   });
 
@@ -73,7 +72,7 @@ describe.skipIf(spawnSync("osmium", ["--version"]).status !== 0)("native source 
     const lines = await collect(filteredSourceLines(fixture, await root(), unionCoverage([
       rectangle([-.005, -.005, .005, .005]), rectangle([3, 3, 3.01, 3.01]),
     ]), async () => {}));
-    expect(ids(lines)).toContain("r1");
+    expect(ids(lines)).toContain("w41");
     expect(ids(lines)).not.toContain("w31");
   });
 
@@ -103,6 +102,23 @@ describe.skipIf(spawnSync("osmium", ["--version"]).status !== 0)("native source 
     const lines = await collect(filteredSourceLines(source, staging, rectangle([0, 0, .005, .005]), async () => {}));
     expect(ids(lines)).toEqual(["n1", "n2"]);
     expect(vi.mocked(spawn).mock.calls.map(([, args]) => args?.[0])).not.toContain("getid");
+    expect(await readdir(staging)).toEqual([]);
+  });
+
+  it("ignores building-only objects and retains independently tagged places and walking geometry unchanged", async () => {
+    const directory=await root(),source=path.join(directory,"buildings.osm.opl"),staging=path.join(directory,"staging");
+    await writeFile(source,[
+      "n1 Tbuilding=hut x0.001 y0.001", "n2 Tbuilding=yes,amenity=parking x0.002 y0.002",
+      "n3 Tbuilding=yes,barrier=gate,foot=no x0.003 y0.003", "n4 T x0.1 y0.1",
+      "w1 Tbuilding=yes Nn1,n4,n1", "w2 Tbuilding=yes,highway=path,foot=yes Nn2,n4",
+      "w3 Tbuilding=roof,amenity=parking Nn2,n3", "r1 Ttype=multipolygon,building=yes Mw1@outer",
+    ].join("\n"));
+    const output=await collect(filteredSourceLines(source,staging,rectangle([0,0,.005,.005]),async()=>{}));
+    expect(ids(output)).toEqual(["n2","n3","n4","w2","w3"]);
+    expect(output.find(line=>line.startsWith("n2 "))).toContain("building=yes,amenity=parking");
+    expect(output.find(line=>line.startsWith("n3 "))).toContain("building=yes,barrier=gate,foot=no");
+    expect(output.find(line=>line.startsWith("w2 "))).toContain("building=yes,highway=path,foot=yes Nn2,n4");
+    expect(output.find(line=>line.startsWith("w3 "))).toContain("building=roof,amenity=parking Nn2,n3");
     expect(await readdir(staging)).toEqual([]);
   });
 
@@ -152,22 +168,23 @@ async function finishChild(child: ReturnType<typeof pendingChild>, code = 0) {
   child.stderr.end();
   child.emit("close", code, null);
 }
-const stages = ["extract", "cat", "getparents", "getparents", "tags-filter", "cat", "getid", "merge"].map((command, index) => ({ command, index }));
+const stages = ["extract", "cat", "getparents", "tags-filter", "cat", "getid", "merge"].map((command, index) => ({ command, index }));
 describe("filter process lifetime", () => {
   it("selects every barrier and node permission family before reference completion", async () => {
     const directory = await root();
-    const children = stages.slice(0, 5).map(() => pendingChild());
+    const children = stages.slice(0, 4).map(() => pendingChild());
     const result = collect(filteredSourceLines(fixture, directory, rectangle([0, 0, .005, .005]), async () => {}));
     const rejected = expect(result).rejects.toThrow("osmium tags-filter failed");
-    for (const child of children.slice(0, 4)) await finishChild(child);
-    await vi.waitFor(() => expect(children[4]!.listenerCount("close")).toBe(1));
+    for (const child of children.slice(0, 3)) await finishChild(child);
+    await vi.waitFor(() => expect(children[3]!.listenerCount("close")).toBe(1));
     const args = vi.mocked(spawn).mock.calls.at(-1)![1] as string[];
     expect(args).toEqual(expect.arrayContaining([
       "n/barrier", "n/foot", "n/access", "n/motorcar", "n/motor_vehicle", "n/vehicle",
       "n/foot:forward", "n/foot:backward", "n/foot:conditional", "n/access:conditional",
       "n/motorcar:conditional", "n/motor_vehicle:conditional", "n/vehicle:conditional",
     ]));
-    await finishChild(children[4]!, 1);
+    expect(args.some(arg=>arg.includes("building"))).toBe(false);
+    await finishChild(children[3]!, 1);
     await rejected;
   });
   it("pads an L-shaped addition without filling the old core's bounding rectangle",async()=>{

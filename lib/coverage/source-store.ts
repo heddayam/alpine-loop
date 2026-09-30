@@ -3,7 +3,6 @@ import { checkSQLiteIntegrity } from "@/lib/data/sqlite-integrity";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import { filteredSourceLines } from "./source-filter";
-import { buildingCentroidOf, parseBuildingCentroids } from "@/lib/data/osm/buildings";
 import { parseOplTags } from "@/lib/data/osm/opl";
 import { classifyOsmWay, hasOsmNodeContext, osmAccessState, osmEvidenceFlags, osmFootDirection, osmNodeFlags, osmPortalEvidenceKinds, osmWayFlags } from "@/lib/data/osm/normalize";
 import type { NormalizedNode, NormalizedWay, NormalizedPortalEvidence } from "@/lib/data/types";
@@ -15,7 +14,6 @@ type Row = { id: string; refs: string; tags: string; kind: string; coordinates: 
 type WalkingEntry = {way:NormalizedWay; nodes:NormalizedNode[]};
 export type CoverageContextEntry =
   | ({kind:"way"} & WalkingEntry)
-  | {kind:"building"; centroid:readonly [number,number]}
   | {kind:"evidence"; evidence:NormalizedPortalEvidence};
 type Envelope = readonly [east:number,west:number,north:number,south:number];
 type Node = { id: string; lon: number; lat: number; tags: string };
@@ -40,44 +38,13 @@ function walkingEntry(row: Row, tags: Record<string,string>, refs: string[], coo
 function* portalEvidence(externalId: string, tags: Record<string,string>, nodeIds: string[], coordinates: [number,number][], sourceId: string): Generator<NormalizedPortalEvidence> {
   for(const kind of osmPortalEvidenceKinds(tags)) yield {id:`osm-evidence-${kind}-${externalId.replace("/","-")}`,externalId,kind,name:tags.name??null,nodeIds,coordinates,accessState:osmAccessState(tags),flags:osmEvidenceFlags(tags),sourceRefs:[sourceId]};
 }
-function nodeBuilding(row: Node, tags: Record<string,string>): readonly [number,number] | null {
-  return isBuilding(tags) ? buildingCentroidOf({type:"Point",coordinates:[row.lon,row.lat]}) : null;
-}
 const SEAL_KEY = "compact-seal-v1";
 const COMPLETE_KEY = "compact-import-v1";
 const CHECKPOINT_ROWS = 10_000;
-export const NORMALIZATION_VERSION = "source-normalization-v14";
+export const NORMALIZATION_VERSION = "source-normalization-v15";
 const geometryHash = (geometry: AreaGeometry) => createHash("sha256").update(JSON.stringify(geometry)).digest("hex");
 export const sourceStoreFileName = (source: SourceSnapshot, geometry: AreaGeometry) =>
   `source-${NORMALIZATION_VERSION}-${source.contentHash.slice(7)}-${geometryHash(geometry).slice(0, 24)}.sqlite`;
-
-// OSM uses building=yes or a building type; building=no explicitly denies one.
-// https://wiki.openstreetmap.org/wiki/Tag:building%3Dno
-function isBuilding(tags: Record<string, string>): boolean {
-  return Boolean(tags.building) && tags.building !== "no";
-}
-
-class UnsupportedBuildingGeometry extends Error {}
-
-/** Join outer member fragments by OSM node identity, preserving closed-ring centroid semantics. */
-function outerRings(parts: string[][]): string[][] {
-  const pending = parts.map((part) => [...part]);
-  const rings: string[][] = [];
-  while (pending.length) {
-    const ring = pending.pop()!;
-    while (ring.at(-1) !== ring[0]) {
-      const index = pending.findIndex((part) => part[0] === ring.at(-1) || part.at(-1) === ring.at(-1));
-      if (index < 0) throw new UnsupportedBuildingGeometry("Building relation has an incomplete outer ring");
-      const next = pending.splice(index, 1)[0]!;
-      if (next[0] !== ring.at(-1)) next.reverse();
-      ring.push(...next.slice(1));
-    }
-    if (ring.length < 4) throw new UnsupportedBuildingGeometry("Building relation has a degenerate outer ring");
-    rings.push(ring);
-  }
-  if (!rings.length) throw new UnsupportedBuildingGeometry("Building relation has no outer ways");
-  return rings;
-}
 
 /** Compact source data; temporary disk joins are discarded before publication. */
 export class CoverageSourceStore {
@@ -90,8 +57,6 @@ export class CoverageSourceStore {
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL,tags TEXT);
       CREATE INDEX IF NOT EXISTS nodes_location ON nodes(lon,lat);
-      CREATE TABLE IF NOT EXISTS relation_buildings(id TEXT PRIMARY KEY,lon REAL,lat REAL);
-      CREATE INDEX IF NOT EXISTS relation_buildings_location ON relation_buildings(lon,lat);
       CREATE TABLE IF NOT EXISTS ways(id TEXT PRIMARY KEY,refs TEXT,tags TEXT,kind TEXT,coordinates TEXT,minx REAL,maxx REAL,miny REAL,maxy REAL);
       CREATE TABLE IF NOT EXISTS receipts(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS inventory(id TEXT PRIMARY KEY,disposition TEXT NOT NULL,reason TEXT NOT NULL);
@@ -113,7 +78,6 @@ export class CoverageSourceStore {
     const tables = {
       ways: "SELECT rowid AS spatialRow,id,refs,tags,kind,coordinates,minx,maxx,miny,maxy FROM ways ORDER BY id",
       nodes: "SELECT id,lon,lat,tags FROM nodes ORDER BY id",
-      buildings: "SELECT id,lon,lat FROM relation_buildings ORDER BY id",
       unsupported: "SELECT id,disposition,reason FROM inventory ORDER BY id",
     };
     for (const [table, sql] of Object.entries(tables)) {
@@ -157,21 +121,18 @@ export class CoverageSourceStore {
     if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid import batch size");
     // Incomplete compact imports are disposable. No raw-prefix checkpoint can
     // certify an interrupted stream, so restart the filtered input atomically.
-    this.db.exec(`DELETE FROM ways; DELETE FROM nodes; DELETE FROM relation_buildings; DELETE FROM inventory; DELETE FROM receipts;
-      CREATE TEMP TABLE import_nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL);
-      CREATE TEMP TABLE source_ways(id TEXT PRIMARY KEY,refs TEXT NOT NULL);`);
+    this.db.exec(`DELETE FROM ways; DELETE FROM nodes; DELETE FROM inventory; DELETE FROM receipts;
+      CREATE TEMP TABLE import_nodes(id TEXT PRIMARY KEY,lon REAL,lat REAL);`);
     const putNode = this.db.prepare("INSERT OR REPLACE INTO import_nodes VALUES(?,?,?)");
     const getNode = this.db.prepare("SELECT * FROM import_nodes WHERE id=?");
     const putContextNode = this.db.prepare("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?)");
-    const putSourceWay = this.db.prepare("INSERT OR REPLACE INTO source_ways VALUES(?,?)");
-    const getSourceWay = this.db.prepare("SELECT refs FROM source_ways WHERE id=?");
     const putWay = this.db.prepare("INSERT OR REPLACE INTO ways(id,refs,tags,kind,coordinates,minx,maxx,miny,maxy) VALUES(?,?,?,?,?,?,?,?,?)");
     const coordinates = (refs: string[]) => refs.map((ref): [number, number] => {
       const node = getNode.get(ref) as Node | undefined;
       if (!node) throw new Error(`Source references missing node/${ref}`);
       return [node.lon, node.lat];
     });
-    const cleanupJoins = () => this.db.exec(`DROP TABLE IF EXISTS temp.import_nodes; DROP TABLE IF EXISTS temp.source_ways;`);
+    const cleanupJoins = () => this.db.exec("DROP TABLE IF EXISTS temp.import_nodes");
     let count = 0;
     this.db.exec("BEGIN");
     try {
@@ -183,40 +144,17 @@ export class CoverageSourceStore {
           if (!field("x") || !field("y") || !Number.isFinite(lon) || !Number.isFinite(lat)) throw new Error(`Invalid source coordinate ${id}`);
           putNode.run(id, lon, lat);
           const tags = parseOplTags(field("T"));
-          if (isBuilding(tags) || osmPortalEvidenceKinds(tags).length || hasOsmNodeContext(tags)) putContextNode.run(id, lon, lat, field("T"));
+          if (osmPortalEvidenceKinds(tags).length || hasOsmNodeContext(tags)) putContextNode.run(id, lon, lat, field("T"));
         } else if (type === "w") {
           const tags = parseOplTags(field("T"));
           const refs = field("N").split(",").filter(Boolean).map((ref) => ref.slice(1));
-          putSourceWay.run(id, JSON.stringify(refs));
           const kind = classifyOsmWay(tags);
-          const retained = kind || isBuilding(tags) || osmPortalEvidenceKinds(tags).length;
+          const retained = kind || osmPortalEvidenceKinds(tags).length;
           if (retained) {
             if (refs.length < 2) throw new Error(`Source way/${id} has fewer than two nodes`);
             const coords = coordinates(refs);
             const bounds = coords.reduce(([w,s,e,n], [x,y]) => [Math.min(w,x),Math.min(s,y),Math.max(e,x),Math.max(n,y)], [Infinity,Infinity,-Infinity,-Infinity]);
-            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), kind ?? (isBuilding(tags) ? "building" : "evidence"), JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
-          }
-        } else if (type === "r") {
-          const tags = parseOplTags(field("T"));
-          if (isBuilding(tags) && tags.type === "multipolygon") {
-            try {
-              const outer = field("M").split(",").filter(Boolean).filter((member) => member.startsWith("w") && ["", "outer"].includes(member.split("@")[1] ?? ""));
-              const parts = outer.map((member) => {
-                const wayId = member.slice(1).split("@")[0]!;
-                const way = getSourceWay.get(wayId) as { refs: string } | undefined;
-                if (!way) throw new UnsupportedBuildingGeometry(`Building relation/${id} references missing way/${wayId}`);
-                return JSON.parse(way.refs) as string[];
-              });
-              const centers = outerRings(parts).map((ring) => {
-                const [center] = parseBuildingCentroids(JSON.stringify({ geometry: { type: "Polygon", coordinates: [coordinates(ring)] } }));
-                if (!center) throw new UnsupportedBuildingGeometry(`Invalid building relation/${id}`);
-                return center;
-              });
-              centers.forEach((center,index) => this.db.prepare("INSERT OR REPLACE INTO relation_buildings VALUES(?,?,?)").run(`${id}:${index}`, ...center));
-            } catch (error) {
-              if (!(error instanceof UnsupportedBuildingGeometry)) throw error;
-              this.db.prepare("INSERT OR REPLACE INTO inventory VALUES(?,'unsupported',?)").run(`relation/${id}`, `building-geometry:${error.message}`);
-            }
+            putWay.run(id, JSON.stringify(refs), JSON.stringify(tags), kind ?? "evidence", JSON.stringify(coords), bounds[0]!, bounds[2]!, bounds[1]!, bounds[3]!);
           }
         }
         if (++count % batchSize === 0) await checkpoint();
@@ -252,13 +190,13 @@ export class CoverageSourceStore {
         AND candidate.miny<=json_extract(b.value,'$[2]') AND candidate.maxy>=json_extract(b.value,'$[3]'))
       ORDER BY w.id`).iterate(JSON.stringify(envelopes)) as Iterable<Row>;
   }
-  private *nearbyPoints(table: "nodes" | "relation_buildings", area: AreaGeometry): Generator<Node> {
+  private *nearbyPoints(area: AreaGeometry): Generator<Node> {
     if (!this.spatialReady) throw new Error("Source spatial index requires a completed verified import");
-    yield* this.db.prepare(`SELECT p.* FROM ${table} p WHERE p.rowid IN (
-      SELECT candidate.rowid FROM json_each(?) b CROSS JOIN ${table} candidate
+    yield* this.db.prepare(`SELECT p.* FROM nodes p WHERE p.rowid IN (
+      SELECT candidate.rowid FROM json_each(?) b CROSS JOIN nodes candidate
       WHERE candidate.lon BETWEEN json_extract(b.value,'$[1]') AND json_extract(b.value,'$[0]')
         AND candidate.lat BETWEEN json_extract(b.value,'$[3]') AND json_extract(b.value,'$[2]')
-        ${table==="nodes"?"AND candidate.tags!=''":""}) ORDER BY p.id`).iterate(componentBounds(area,0.01)) as Iterable<Node>;
+        AND candidate.tags!='') ORDER BY p.id`).iterate(componentBounds(area,0.01)) as Iterable<Node>;
   }
 
   /** One bounded identity join per complete way, not one query per source node. */
@@ -270,28 +208,22 @@ export class CoverageSourceStore {
 
   /** Read the regional import context once, retaining independent walking/context envelopes. */
   *context(area: AreaGeometry, walkingArea: AreaGeometry = area): Generator<CoverageContextEntry> {
-    for(const row of this.nearbyPoints("nodes",area)) {
-      const tags=parseOplTags(row.tags),centroid=nodeBuilding(row,tags);
-      if(centroid) yield {kind:"building",centroid};
+    for(const row of this.nearbyPoints(area)) {
+      const tags=parseOplTags(row.tags);
       for(const evidence of portalEvidence(`node/${row.id}`,tags,[`osm-node-${row.id}`],[[row.lon,row.lat]],this.source.id))
         yield {kind:"evidence",evidence};
     }
-    for(const row of this.nearbyPoints("relation_buildings",area)) yield {kind:"building",centroid:[row.lon,row.lat]};
     const contextBounds=componentEnvelopes(area,0.01), walkingBounds=walkingArea===area ? contextBounds : componentEnvelopes(walkingArea,0.01);
     const sameBounds=walkingBounds===contextBounds || JSON.stringify(walkingBounds)===JSON.stringify(contextBounds);
     const envelopes=sameBounds ? contextBounds : [...contextBounds,...walkingBounds];
     for(const row of this.nearbyWayRows(envelopes)) {
-      const context=sameBounds||intersectsEnvelopes(row,contextBounds), walking=!["building","evidence"].includes(row.kind)&&(sameBounds||intersectsEnvelopes(row,walkingBounds));
+      const context=sameBounds||intersectsEnvelopes(row,contextBounds), walking=row.kind!=="evidence"&&(sameBounds||intersectsEnvelopes(row,walkingBounds));
       const tags=JSON.parse(row.tags) as Record<string,string>;
-      const building=context&&isBuilding(tags), evidence=context&&osmPortalEvidenceKinds(tags).length>0;
-      if(!walking&&!building&&!evidence) continue;
+      const evidence=context&&osmPortalEvidenceKinds(tags).length>0;
+      if(!walking&&!evidence) continue;
       const coordinates=JSON.parse(row.coordinates) as [number,number][];
       const refs=walking||evidence ? JSON.parse(row.refs) as string[] : [];
       if(walking) yield {kind:"way",...walkingEntry(row,tags,refs,coordinates,this.source.id,this.nodeFlags(refs))};
-      if(building) {
-        const centroid=buildingCentroidOf({type:"LineString",coordinates});
-        if(centroid) yield {kind:"building",centroid};
-      }
       if(evidence) for(const item of portalEvidence(`way/${row.id}`,tags,refs.map(id=>`osm-node-${id}`),coordinates,this.source.id))
         yield {kind:"evidence",evidence:item};
     }
@@ -299,31 +231,19 @@ export class CoverageSourceStore {
 
   *ways(area: AreaGeometry, contextDegrees=0.01): Generator<WalkingEntry> {
     for(const row of this.nearbyWays(area,contextDegrees)) {
-      if(["building","evidence"].includes(row.kind)) continue;
+      if(row.kind==="evidence") continue;
       const refs=JSON.parse(row.refs) as string[];
       yield walkingEntry(row,JSON.parse(row.tags),refs,JSON.parse(row.coordinates),this.source.id,this.nodeFlags(refs));
     }
   }
   *evidence(area: AreaGeometry): Generator<NormalizedPortalEvidence> {
     // OSM node tags are compact OPL strings; coordinates filter the local context first.
-    for(const row of this.nearbyPoints("nodes",area))
+    for(const row of this.nearbyPoints(area))
       yield* portalEvidence(`node/${row.id}`,parseOplTags(row.tags),[`osm-node-${row.id}`],[[row.lon,row.lat]],this.source.id);
     for(const row of this.nearbyWays(area)) {
       const tags=JSON.parse(row.tags) as Record<string,string>;
       if(osmPortalEvidenceKinds(tags).length)
         yield* portalEvidence(`way/${row.id}`,tags,(JSON.parse(row.refs) as string[]).map(id=>`osm-node-${id}`),JSON.parse(row.coordinates),this.source.id);
-    }
-  }
-  *buildings(area: AreaGeometry): Generator<readonly [number,number]> {
-    for(const row of this.nearbyPoints("nodes",area)) {
-      const centroid=nodeBuilding(row,parseOplTags(row.tags));
-      if(centroid) yield centroid;
-    }
-    for(const row of this.nearbyPoints("relation_buildings",area)) yield [row.lon,row.lat];
-    for(const row of this.nearbyWays(area)) {
-      if(!isBuilding(JSON.parse(row.tags) as Record<string,string>)) continue;
-      const centroid=buildingCentroidOf({type:"LineString",coordinates:JSON.parse(row.coordinates)});
-      if(centroid) yield centroid;
     }
   }
 }
