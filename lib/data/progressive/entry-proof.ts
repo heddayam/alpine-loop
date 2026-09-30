@@ -108,8 +108,6 @@ export class ConnectedEntryProof {
       this.addLink(edge.stablePhysicalId, edge.fromNode, edge.toNode, edge);
     }
     this.db.exec("CREATE INDEX entry_links_from ON entry_links(from_node,known,role); CREATE INDEX entry_arrivals_node ON entry_arrivals(node_id);");
-    await this.reach("entry_approach", true);
-    await this.reach("entry_reach", false);
     await this.checkpoint();
   }
 
@@ -118,7 +116,11 @@ export class ConnectedEntryProof {
       CREATE TEMP TABLE entry_queue(seq INTEGER PRIMARY KEY,node_id TEXT NOT NULL,root_node TEXT NOT NULL,root_role TEXT NOT NULL,road_class TEXT NOT NULL,source_refs TEXT NOT NULL) STRICT;`);
     for (const profile of [1, 0]) {
       this.db.exec("DELETE FROM entry_queue");
-      for (const root of this.rows("SELECT * FROM entry_arrivals ORDER BY node_id,road_class DESC,role")) {
+      // A root without an outgoing usable movement cannot witness any start or
+      // extend reachability. Keep all physical arrivals for direct parking assertions.
+      for (const root of this.rows(`SELECT a.* FROM entry_arrivals a
+        WHERE EXISTS (SELECT 1 FROM entry_links l WHERE l.from_node=a.node_id)
+        ORDER BY a.node_id,a.road_class DESC,a.role`)) {
         await this.step();
         if (restricted(this.get("SELECT foot FROM entry_nodes WHERE id=?", String(root.node_id))?.foot as string | null)) continue;
         const values = [String(root.node_id), String(root.node_id), String(root.role), String(root.road_class), String(root.source_refs)] as const;
@@ -169,8 +171,23 @@ export class ConnectedEntryProof {
       if (witness) this.offer(node, witness, boundary);
     }
   }
+  private actualEvidenceNode(item:NormalizedPortalEvidence):string|undefined {
+    if(item.nodeIds.length!==1 || !item.externalId.startsWith("node/"))return undefined;
+    const node=item.nodeIds[0]!,actual=this.get("SELECT record FROM nodes WHERE id=?",node);
+    return actual && (JSON.parse(String(actual.record)) as NormalizedNode).externalId===item.externalId ? node : undefined;
+  }
 
   async discover(coverage: AreaGeometry): Promise<void> {
+    await this.reach("entry_approach", true);
+    let hasAssertion=false;
+    for(const row of this.rows("SELECT record FROM evidence WHERE kind='trailhead' ORDER BY id")) {
+      await this.step();
+      const item=JSON.parse(String(row.record)) as NormalizedPortalEvidence;
+      if(usable(item.accessState)&&this.actualEvidenceNode(item)){hasAssertion=true;break;}
+    }
+    // Complete lazy traversal before opening the evidence cursor: SQLite cannot
+    // drop its temporary queue while another statement is iterating the schema.
+    if(hasAssertion)await this.reach("entry_reach",false);
     const boundary = prepareAreaGeometry(coverage);
     for (const row of this.rows("SELECT DISTINCT node_id FROM entry_approach ORDER BY node_id")) { await this.step(); this.best(String(row.node_id), "entry_approach", "interface", boundary, true); }
     for (const row of this.rows("SELECT id,record FROM evidence ORDER BY id")) {
@@ -178,9 +195,8 @@ export class ConnectedEntryProof {
       const item = JSON.parse(String(row.record)) as NormalizedPortalEvidence;
       if (!usable(item.accessState)) continue;
       if (item.kind !== "parking") {
-        if (item.nodeIds.length !== 1 || !item.externalId.startsWith("node/")) continue;
-        const node = item.nodeIds[0]!, actual = this.get("SELECT record FROM nodes WHERE id=?", node);
-        if (!actual || (JSON.parse(String(actual.record)) as NormalizedNode).externalId !== item.externalId) continue;
+        const node=this.actualEvidenceNode(item);
+        if(!node)continue;
         this.run("INSERT OR IGNORE INTO portal_evidence VALUES (?,?)", node, String(row.id));
         if (item.kind === "trailhead") this.best(node, "entry_reach", "trailhead", boundary);
         // A generic gate only constrains crossing. A source motor frontier must have an actual physical approach.
@@ -190,7 +206,7 @@ export class ConnectedEntryProof {
       }
       // Missing place foot metadata inherits the mapped hiking passage. An
       // explicit unresolved foot condition is a used place assertion instead.
-      const placeFlags=(item as NormalizedPortalEvidence & {flags?:readonly string[]}).flags ?? [];
+      const placeFlags=item.flags ?? [];
       const placeFoot=footSegmentAccessState("public",[placeFlags]);
       if(!usable(placeFoot))continue;
       let arrival: Row | undefined;

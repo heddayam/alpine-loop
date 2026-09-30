@@ -432,6 +432,46 @@ describe("sparse starts before elevation",()=>{
     } finally {store.close();}
   });
 
+  it("skips inland reach without a trip-start assertion and all reach during frozen final refresh",async()=>{
+    const {store,measure}=staged(parking);
+    try {
+      let sawDiscovery=false,sawInland=false;
+      await prepareSparsePortalCandidates(store,coverage,async()=>{
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_approach'").get())sawDiscovery=true;
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_reach'").get())sawInland=true;
+      });
+      expect(sawDiscovery).toBe(true);expect(sawInland).toBe(false);
+      const frozen=JSON.parse(String(store.database.prepare("SELECT record FROM sparse_portal_candidates").get()!.record)) as NormalizedAccessPoint;
+      measure();
+      let sawRefresh=false,sawReach=false;
+      await store.derivePortals(coverage,async()=>{
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_links_from'").get())sawRefresh=true;
+        if(store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name IN ('entry_approach','entry_reach')").get())sawReach=true;
+      });
+      expect(sawRefresh).toBe(true);expect(sawReach).toBe(false);
+      expect(JSON.parse(String(store.database.prepare("SELECT record FROM derived_portals").get()!.record))).toMatchObject(frozen);
+    } finally {store.close();}
+  });
+
+  it("cleans a cancelled lazy asserted traversal and retries with identical directed starts",async()=>{
+    const count=6000;
+    const lines=Array.from({length:count+1},(_,index)=>`n${index} ${index===count?"Thighway=trailhead ":""}x${-122+index*.00001} y48`);
+    lines.push("n7000 x-122.001 y48",`w1 Thighway=path,foot=yes N${Array.from({length:count+1},(_,index)=>`n${index}`).join(",")}`,"w2 Thighway=residential Nn7000,n0");
+    const {store}=staged(lines.join("\n"));
+    try {
+      let visited=0;
+      await expect(prepareSparsePortalCandidates(store,coverage,async()=>{
+        if(!store.database.prepare("SELECT 1 FROM sqlite_temp_master WHERE name='entry_reach'").get())return;
+        visited=Number(store.database.prepare("SELECT count(*) AS n FROM entry_reach").get()!.n);
+        if(visited>1000)throw new Error("cancel asserted traversal");
+      })).rejects.toThrow("cancel asserted traversal");
+      expect(visited).toBeGreaterThan(1000);
+      expect(store.database.prepare("SELECT name FROM sqlite_temp_master WHERE type='table'").all()).toEqual([{name:"eligible_segments"}]);
+      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:2,eligibleAccessPoints:2});
+      expect(seedIds(store)).toEqual(["osm-node-0","osm-node-6000"]);
+    } finally {store.close();}
+  });
+
   it("loads many directed links with quoted source IDs without source-wide JS collections",async()=>{
     const {store}=staged(direct,topology=>{
       const base=topology.ways[0]!;
