@@ -13,7 +13,7 @@ import {
 
 import { CLOSED_ROUTE_BUDGET, type SolverBudget } from "./budget";
 import {
-  validateReconstructedClosedRoute,
+  prepareClosedRouteValidator,
   type ValidatedClosedRoute,
 } from "./closed-route-validation";
 import { RouteSearchCancelledError } from "./control";
@@ -414,6 +414,14 @@ export class ReachableGraphClosedRouteSolver {
       }).sort((left, right) => Number(left.candidate.violatedConstraints.length > 0) - Number(right.candidate.violatedConstraints.length > 0)
         || left.candidate.score - right.candidate.score || left.routeId.localeCompare(right.routeId));
       const validationStartedAt = now();
+      const validateRoute = prepareClosedRouteValidator({
+          start: feasibleStart.start,
+          includeUncertainAccess: request.includeUncertainAccess,
+          coverage: context.accessFilter.coverage,
+          sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
+          sourceConfidence: this.options.sourceConfidence ?? "high",
+          fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
+      });
       const selectedAtStart: RankedClosedRoute[] = [];
       for (const { candidate, routeId } of orderedCandidates) {
         if (now() >= startDeadlineAt) {
@@ -433,15 +441,7 @@ export class ReachableGraphClosedRouteSolver {
           this.options.onValidationRejection?.("missing-schema-3-edge-identity");
           continue;
         }
-        const validated = validateReconstructedClosedRoute(reconstructed, {
-          start: feasibleStart.start,
-          includeUncertainAccess: request.includeUncertainAccess,
-          coverage: context.accessFilter.coverage,
-          sourceFreshness: this.options.sourceFreshness ?? this.options.pack.builtAt,
-          sourceConfidence: this.options.sourceConfidence ?? "high",
-          fallbackSourceIds: this.options.fallbackSourceIds ?? [`${this.options.pack.id}:manifest`],
-          routeId,
-        });
+        const validated = validateRoute(reconstructed, routeId);
         if (!validated.valid) {
           directedValidationRejectionCount += 1;
           this.options.onValidationRejection?.(validated.reason);
