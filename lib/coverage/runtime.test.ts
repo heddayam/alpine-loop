@@ -351,9 +351,7 @@ it("applies current retirement metadata to a reused graph and does not resurrect
   expect(elevationFor).not.toHaveBeenCalled();expect(writeProgressiveTopology).not.toHaveBeenCalled();expect(filteredSourceLines).not.toHaveBeenCalled();
   await buildCoverageRegion(region("neighbor"),context());
   expect((await release()).sections.find(section=>section.id==="consolidated")!.replaces).toEqual(["pilot-one","pilot-two"]);
-  // Six sequential fixture preparations include native SQLite and process checks.
-  // Their wall-clock duration is not a regional performance acceptance criterion.
-},15000);
+});
 it.each(["failed approach","cancelled publication"])("keeps pilot publication intact after %s",async kind=>{
   await buildCoverageRegion(region("pilot"),context());
   const before=await readFile(path.join(root,"release/release.json"),"utf8");
