@@ -10,7 +10,7 @@ import {
   type AreaGeometry,
   type ReconstructedDirectedEdge,
 } from "@/lib/graph";
-import { gradeExperienceMetrics, maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
+import { routeElevationMetrics } from "./route-elevation";
 import { trailSegmentsForRoute } from "./trail-segments";
 
 export type ClosedRouteValidationFailure =
@@ -101,39 +101,6 @@ function routeCoordinates(edges: readonly ReconstructedDirectedEdge[]): Array<[n
   return coordinates;
 }
 
-function routeElevationSamples(
-  edges: readonly ReconstructedDirectedEdge[],
-): Array<{ distanceMeters: number; elevationMeters: number }> | undefined {
-  if (edges.length === 0 || edges.some((edge) =>
-    edge.fromElevationMeters === null
-    || edge.fromElevationMeters === undefined
-    || edge.toElevationMeters === null
-    || edge.toElevationMeters === undefined)) return undefined;
-  const samples = [{ distanceMeters: 0, elevationMeters: edges[0]!.fromElevationMeters! }];
-  let distanceMeters = 0;
-  for (const edge of edges) {
-    distanceMeters += edge.lengthMeters;
-    samples.push({ distanceMeters, elevationMeters: edge.toElevationMeters! });
-  }
-  return samples;
-}
-
-function exactRouteElevationSamples(
-  edges: readonly ReconstructedDirectedEdge[],
-): Array<{ distanceMeters: number; elevationMeters: number }> | undefined {
-  if (edges.length === 0 || edges.some((edge) => !edge.elevationProfile || edge.elevationProfile.length < 2)) return undefined;
-  const result: Array<{ distanceMeters: number; elevationMeters: number }> = [];
-  let offset = 0;
-  for (const [edgeIndex, edge] of edges.entries()) {
-    for (const sample of edge.elevationProfile!) {
-      if (edgeIndex > 0 && sample.distanceMeters === 0) continue;
-      result.push({ distanceMeters: offset + sample.distanceMeters, elevationMeters: sample.elevationMeters });
-    }
-    offset += edge.lengthMeters;
-  }
-  return result;
-}
-
 export function validateReconstructedClosedRoute(
   edges: readonly ReconstructedDirectedEdge[],
   options: ClosedRouteValidationOptions,
@@ -172,19 +139,7 @@ export function validateReconstructedClosedRoute(
     ...options.fallbackSourceIds,
   ])].sort();
   const trailNames = [...new Set(edges.map(({ trailName }) => trailName).filter((name): name is string => Boolean(name)))].sort();
-  const exactElevationSamples = exactRouteElevationSamples(edges);
-  const elevationSamples = exactElevationSamples ?? routeElevationSamples(edges);
-  const routeWindowGrade = elevationSamples ? maximumSustainedGradePct(elevationSamples) : null;
-  const gradeExperience = exactElevationSamples ? gradeExperienceMetrics(exactElevationSamples) : null;
-  // Older packs persisted fragment grades on edges shorter than 100 m. Those
-  // values are not sustained grades; route-wide endpoint windows replace them.
-  // Long-edge values retain DEM samples that are not present in the route
-  // endpoint profile.
-  const longEdgeGrades = edges
-    .filter(({ lengthMeters }) => lengthMeters >= SUSTAINED_GRADE_WINDOW_M)
-    .map(({ maximumSustainedGradePct: grade }) => grade)
-    .filter((grade): grade is number => grade !== null);
-  const steepestSustainedGradePct = Math.max(0, routeWindowGrade ?? 0, ...longEdgeGrades);
+  const { samples: elevationSamples, grade: steepestSustainedGradePct, experience: gradeExperience } = routeElevationMetrics(edges);
   return {
     valid: true,
     value: {

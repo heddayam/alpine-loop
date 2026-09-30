@@ -1,6 +1,8 @@
 import type { RouteSearchRequest } from "./types";
 import { CLOSE_MATCH_DISTANCE_MULTIPLIER } from "@/lib/contracts/routes";
-import { maximumSustainedGradePct, SUSTAINED_GRADE_WINDOW_M } from "@/lib/data/metrics";
+import { routeElevationMetrics } from "./route-elevation";
+import { rankRouteMetrics } from "./route-quality";
+import type { GradeExperienceMetrics } from "@/lib/contracts";
 import {
   edgeIsTraversable,
   type EdgeTraversal,
@@ -14,10 +16,6 @@ import { stableHash } from "./route-identity";
 import { RouteSearchCancelledError } from "./control";
 
 const METERS_PER_MILE = 1_609.344;
-const METERS_PER_FOOT = 0.3048;
-
-const MAXIMUM_VALID_ARCHIVE = 256;
-const MAXIMUM_NEAR_ARCHIVE = 64;
 const MAXIMUM_NEAR_RESULTS = 5;
 
 export type SimpleRouteCandidate = {
@@ -73,6 +71,8 @@ type Metrics = {
   gain: number;
   maximumElevation: number;
   maximumGrade: number;
+  gradeExperience?: GradeExperienceMetrics;
+  trailNames: string[];
   repeated: number;
   repeatedFraction: number;
   physicalLengths: Map<string, number>;
@@ -84,6 +84,7 @@ type Candidate = {
   metrics: Metrics;
   score: number;
   violations: string[];
+  violationMagnitude: number;
 };
 
 function buildGraph(
@@ -217,19 +218,14 @@ export function searchSimpleRoutes(
   );
   const truncationReasons = new Set<string>();
   const seen = new Set<string>();
-  const validArchive: Candidate[] = [];
-  const nearBelow: Candidate[] = [];
-  const nearAbove: Candidate[] = [];
+  // The raw-candidate budget bounds this archive. Repeated approaches and
+  // directions compete within one physical cycle instead of crowding other
+  // loops out of a fixed top-score list.
+  const archive = new Map<string, Candidate>();
   let expandedStates = 0;
   let candidateCount = 0;
   let validCandidateCount = 0;
-  const minMeters = request.distanceMiles.min * METERS_PER_MILE;
   const maxMeters = request.distanceMiles.max * METERS_PER_MILE;
-  const targetMeters = (minMeters + maxMeters) / 2;
-  const maximumRepeatedFraction = request.closedRoute.maximumRepeatedTrailPct / 100;
-  const maximumSharedStemMeters = request.closedRoute.maximumSharedStemMiles === undefined
-    ? Number.POSITIVE_INFINITY
-    : request.closedRoute.maximumSharedStemMiles * METERS_PER_MILE;
   const overlapLimit = options.maximumRouteOverlapFraction ?? 0.8;
 
   if (sourceGraph.edges.length > options.budget.maximumDirectedEdges) {
@@ -251,110 +247,62 @@ export function searchSimpleRoutes(
     return outOfTime() || expandedStates >= stateCap || candidateCount >= candidateCap;
   };
 
-  const evaluate = (edges: readonly number[]): Metrics => {
+  const evaluate = (edges: readonly number[], attachment: number): Metrics => {
     let distance = 0;
     let gain = 0;
     let maximumElevation = Number.NEGATIVE_INFINITY;
-    let maximumGrade = 0;
     let repeated = 0;
     const physicalLengths = new Map<string, number>();
-    const elevationProfile = request.steepestSustainedGradePct
-      ? [{ distanceMeters: 0, elevationMeters: sourceGraph.nodes.get(graph.nodeIds[graph.start]!)?.elevationMeters ?? Number.NaN }]
-      : null;
-    for (const edge of edges) {
+    const visited = new Set<string>();
+    const names = new Set<string>();
+    for (const [index, edge] of edges.entries()) {
       distance += graph.length[edge]!;
       gain += graph.gain[edge]!;
       maximumElevation = Math.max(maximumElevation, graph.maximumElevation[edge]!);
-      if (elevationProfile) {
-        let offset = distance - graph.length[edge]!;
-        for (const traversal of graph.traversals[edge]!) {
-          if (traversal.edge.lengthMeters >= SUSTAINED_GRADE_WINDOW_M) {
-            maximumGrade = Math.max(maximumGrade, traversal.edge.maximumSustainedGradePct ?? 0);
-          }
-          offset += traversal.edge.lengthMeters;
-          elevationProfile.push({ distanceMeters: offset, elevationMeters: traversal.to.elevationMeters ?? Number.NaN });
-        }
-      }
-      if (physicalLengths.has(graph.physical[edge]!)) repeated += graph.length[edge]!;
-      else physicalLengths.set(graph.physical[edge]!, graph.length[edge]!);
+      if (visited.has(graph.physical[edge]!)) repeated += graph.length[edge]!;
+      visited.add(graph.physical[edge]!);
+      // Diversity describes the loop itself; a common approach is not overlap
+      // between two otherwise distinct physical loops.
+      if (index >= attachment && index < edges.length - attachment) physicalLengths.set(graph.physical[edge]!, graph.length[edge]!);
+      for (const traversal of graph.traversals[edge]!) if (traversal.edge.trailName) names.add(traversal.edge.trailName);
     }
-    if (elevationProfile?.every(({ elevationMeters }) => Number.isFinite(elevationMeters))) {
-      maximumGrade = Math.max(maximumGrade, maximumSustainedGradePct(elevationProfile) ?? 0);
-    }
-    return {
-      distance,
-      gain,
-      maximumElevation,
-      maximumGrade,
-      repeated,
-      repeatedFraction: distance > 0 ? repeated / distance : 0,
-      physicalLengths,
-    };
+    const elevation = request.steepestSustainedGradePct || request.gradeExperience
+      ? routeElevationMetrics(edges.flatMap(edge => graph.traversals[edge]!.map(traversal => ({
+        ...traversal.edge, fromElevationMeters: traversal.from.elevationMeters, toElevationMeters: traversal.to.elevationMeters,
+      }))), Boolean(request.gradeExperience)) : null;
+    return { distance, gain, maximumElevation, maximumGrade: elevation?.grade ?? 0,
+      ...(elevation?.experience ? { gradeExperience: elevation.experience } : {}), trailNames: [...names],
+      repeated, repeatedFraction: distance > 0 ? repeated / distance : 0, physicalLengths };
   };
 
-  const violations = (edges: readonly number[], metrics: Metrics, stemDistance: number): string[] => {
-    const result: string[] = [];
-    if (edges.length === 0 || graph.to[edges.at(-1)!] !== graph.start) result.push("not-closed");
-    if (metrics.distance < minMeters) result.push("distance-below-minimum");
-    if (metrics.distance > maxMeters) result.push("distance-above-maximum");
-    if (request.elevationGainFeet) {
-      const min = request.elevationGainFeet.min * METERS_PER_FOOT;
-      const max = request.elevationGainFeet.max * METERS_PER_FOOT;
-      if (metrics.gain < min) result.push("gain-below-minimum");
-      if (metrics.gain > max) result.push("gain-above-maximum");
-    }
-    if (request.maximumElevationFeet) {
-      const value = metrics.maximumElevation / METERS_PER_FOOT;
-      if (value < request.maximumElevationFeet.min || value > request.maximumElevationFeet.max) {
-        result.push("maximum-elevation-outside-range");
-      }
-    }
-    if (request.steepestSustainedGradePct
-      && (metrics.maximumGrade < request.steepestSustainedGradePct.min
-        || metrics.maximumGrade > request.steepestSustainedGradePct.max)) {
-      result.push("sustained-grade-outside-range");
-    }
-    if (metrics.repeatedFraction > maximumRepeatedFraction + 1e-9) result.push("repeated-trail-above-maximum");
-    if (stemDistance > maximumSharedStemMeters) result.push("shared-stem-above-maximum");
-    return result;
-  };
-
-  const score = (metrics: Metrics): number => {
-    let result = Math.abs(metrics.distance - targetMeters);
-    if (request.elevationGainFeet) {
-      const min = request.elevationGainFeet.min * METERS_PER_FOOT;
-      const max = request.elevationGainFeet.max * METERS_PER_FOOT;
-      if (metrics.gain < min) result += (min - metrics.gain) * 5;
-      if (metrics.gain > max) result += (metrics.gain - max) * 5;
-    }
-    return result + metrics.repeated * 0.5;
-  };
-
-  const compareCandidate = (left: Candidate, right: Candidate): number => left.score - right.score
-    || left.id.localeCompare(right.id);
-  const insertBounded = (list: Candidate[], candidate: Candidate, cap: number, reason: string): void => {
-    list.push(candidate);
-    list.sort(compareCandidate);
-    if (list.length > cap) {
-      list.length = cap;
-      truncationReasons.add(reason);
-    }
-  };
-  const offer = (edges: number[], stemDistance: number): void => {
-    const id = `route-${stableHash(edges.map((edge) => graph.directed[edge]).join(","))}`;
-    if (seen.has(id)) return;
-    seen.add(id);
+  const compareCandidate = (left: Candidate, right: Candidate): number => left.violations.length - right.violations.length
+    || left.violationMagnitude - right.violationMagnitude || left.score - right.score || left.id.localeCompare(right.id);
+  const offer = (edges: number[], attachment: number, stemDistance: number): void => {
+    const identity = edges.map((edge) => graph.directed[edge]).join(",");
+    if (seen.has(identity)) return;
+    seen.add(identity);
     candidateCount += 1;
-    const metrics = evaluate(edges);
-    const candidateViolations = violations(edges, metrics, stemDistance);
-    const candidate = { id, edges, metrics, score: score(metrics), violations: candidateViolations };
-    if (candidateViolations.length === 0) {
-      validCandidateCount += 1;
-      insertBounded(validArchive, candidate, MAXIMUM_VALID_ARCHIVE, "valid-archive-limit");
-    } else {
-      const target = candidateViolations.some((item) => item.includes("below")) ? nearBelow : nearAbove;
-      insertBounded(target, candidate, MAXIMUM_NEAR_ARCHIVE, "near-archive-limit");
-    }
+    const metrics = evaluate(edges, attachment);
+    if (request.gradeExperience && !metrics.gradeExperience) return;
+    const ranked = rankRouteMetrics({ distanceMeters: metrics.distance, elevationGainMeters: metrics.gain,
+      maximumElevationMeters: metrics.maximumElevation, steepestSustainedGradePct: metrics.maximumGrade,
+      gradeExperience: metrics.gradeExperience, trailNames: metrics.trailNames,
+      topology: { repeatedTrailFraction: metrics.repeatedFraction, sharedStemDistanceMeters: stemDistance },
+      startAccessPoint: { confidence: typeof start === "string" ? "high" : start.confidence } }, request);
+    const violations = ranked.violations.map(({ constraint, value, min }) => {
+      const side = value < min ? "below-minimum" : "above-maximum";
+      if (constraint === "distance") return `distance-${side}`;
+      if (constraint === "elevation-gain") return `gain-${side}`;
+      if (constraint === "maximum-elevation") return "maximum-elevation-outside-range";
+      if (constraint === "steepest-sustained-grade") return "sustained-grade-outside-range";
+      return `${constraint}-${side}`;
+    });
+    if (ranked.exact) validCandidateCount += 1;
+    const candidate: Candidate = { id: identity, edges, metrics, score: ranked.score, violations,
+      violationMagnitude: ranked.violations.reduce((sum, item) => sum + item.normalizedDelta, 0) };
+    const loopKey = JSON.stringify([...metrics.physicalLengths.keys()].sort());
+    const previous = archive.get(loopKey);
+    if (!previous || compareCandidate(candidate, previous) < 0) archive.set(loopKey, candidate);
   };
 
   // A simple path from the start contains every possible stem + unfinished
@@ -401,7 +349,7 @@ export function searchSimpleRoutes(
       if (attachment !== undefined) {
         if (irreversiblePrefixCounts[attachment] !== 0) continue;
         const stemDistance = distances[attachment]!;
-        offer([...path, edge, ...reverses.slice(0, attachment).reverse()], stemDistance);
+        offer([...path, edge, ...reverses.slice(0, attachment).reverse()], attachment, stemDistance);
         continue;
       }
       if (!Number.isFinite(returnDistances[next]) || distance + returnDistances[next]! > explorationDistance) continue;
@@ -427,10 +375,10 @@ export function searchSimpleRoutes(
     }
     return selected;
   };
-  const selected = select(validArchive, request.limit);
-  const near = [...nearBelow, ...nearAbove].sort(compareCandidate).slice(0, MAXIMUM_NEAR_RESULTS);
+  const selected = select([...archive.values()].filter(candidate => candidate.violations.length === 0), request.limit);
+  const near = select([...archive.values()].filter(candidate => candidate.violations.length > 0), MAXIMUM_NEAR_RESULTS);
   const materialize = (candidate: Candidate): SimpleRouteCandidate => ({
-    id: candidate.id,
+    id: `route-${stableHash(candidate.id)}`,
     traversals: candidate.edges.flatMap((edge) => graph.traversals[edge]!),
     distanceMeters: candidate.metrics.distance,
     elevationGainMeters: candidate.metrics.gain,
