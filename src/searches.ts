@@ -28,11 +28,10 @@ type Entry = { snapshot: SearchSnapshot; candidates: Map<string, RouteCandidate>
 
 /** Current searches live only as long as this process. Browser disconnects do not stop them. */
 export function createSearches(directory: string, dataset: Awaited<ReturnType<typeof readDataset>>) {
-  const entries = new Map<string, Entry>();
+  let current: Entry | undefined;
   function find(id: string): Entry {
-    const entry = entries.get(id);
-    if (!entry) throw new RequestError('This search has expired. Start a new search.', 404);
-    return entry;
+    if (!current || current.snapshot.id !== id) throw new RequestError('This search has expired. Open the current search or start a new one.', 404);
+    return current;
   }
   function finish(entry: Entry, status: SearchSnapshot['status'], reason?: string) {
     entry.snapshot.status = status;
@@ -53,13 +52,8 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     return page(entry, offset);
   }
   function start(query: SearchQuery) {
-    if ([...entries.values()].filter(entry => entry.snapshot.status === 'running').length >= 2) {
-      throw new RequestError('Two searches are already running. Stop a search or try again shortly.', 503);
-    }
-    // Bound retained results without creating a job-history database.
-    for (const [id, entry] of entries) {
-      if (entries.size < 4) break;
-      if (entry.snapshot.status !== 'running') entries.delete(id);
+    if (current?.snapshot.status === 'running') {
+      throw new RequestError('A search is already running. Reload to reconnect, or stop it before starting another.', 409);
     }
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.graph.info.id, query, status: 'running', routes: [], routeCount: 0, offset: 0,
@@ -71,7 +65,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
       resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
     const entry: Entry = { snapshot, candidates: new Map(), worker };
-    entries.set(snapshot.id, entry);
+    current = entry;
     worker.on('message', (event: SearchEvent) => {
       if (snapshot.status !== 'running') return;
       try {
@@ -99,11 +93,12 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     });
     return page(entry);
   }
-  return { start, get: (id: string, offset = 0) => page(find(id), offset), stop,
+  return { start, latest: () => current ? page(current) : null,
+    get: (id: string, offset = 0) => page(find(id), offset), stop,
     route: (id: string, routeId: string) => {
       const candidate = find(id).candidates.get(routeId);
       if (!candidate) throw new RequestError('This route is not available.', 404);
       return dataset.route(candidate);
     },
-    close: () => Promise.all([...entries.keys()].map(id => stop(id))) };
+    close: async () => { if (current) await stop(current.snapshot.id); } };
 }

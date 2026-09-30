@@ -45,6 +45,7 @@ describe('real application integration', () => {
     const app = await builtApp(directory);
     cleanup.push(() => app.close());
     expect((await app.inject('/api/catalog')).json().id).toBe('fixture');
+    expect((await app.inject('/api/search')).json()).toBeNull();
     const response = await app.inject({ method: 'POST', url: '/api/search', payload: query });
     expect(response.statusCode).toBe(202);
     const id = response.json().id;
@@ -73,12 +74,17 @@ describe('real application integration', () => {
       expect(route.geometry.some(point => point[0] > query.area[2]!)).toBe(true);
     }
     expect((await app.inject(`/api/search/${id}`)).json()).toEqual(snapshot);
+    expect((await app.inject('/api/search')).json()).toEqual(snapshot);
     const exported = await app.inject(`/api/search/${id}/routes/${lastPage.routes[0]!.id}.gpx`);
     expect(exported.statusCode).toBe(200);
     expect(exported.headers['content-type']).toContain('application/gpx+xml');
     expect(exported.body).toContain('Creek &amp; Ridge &lt;loop&gt;');
     expect(exported.body.match(/<trkpt /g)).toHaveLength(4);
     expect(exported.body).toContain('<ele>120</ele>');
+    const replacement = await app.inject({ method: 'POST', url: '/api/search', payload: query });
+    expect(replacement.statusCode).toBe(202);
+    expect((await app.inject('/api/search')).json().id).toBe(replacement.json().id);
+    expect((await app.inject(`/api/search/${id}`)).statusCode).toBe(404);
   });
 
   it('rejects malformed constraints and reports expired searches without starting work', async () => {

@@ -23,6 +23,7 @@ export async function createApp(directory: string, clientDirectory?: string) {
     }
   });
   app.get('/api/catalog', async () => dataset.graph.info);
+  app.get('/api/search', async () => searches.latest());
   app.post('/api/search', async (request, reply) => reply.code(202).send(searches.start(parseQuery(request.body))));
   app.get<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id', async request => searches.get(request.params.id, Number(request.query.offset ?? 0)));
   app.post<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id, Number(request.query.offset ?? 0)));
