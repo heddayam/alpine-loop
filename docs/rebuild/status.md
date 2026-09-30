@@ -6,6 +6,53 @@ the evidence line.
 
 ## Active system design revision
 
+### Conservative alternate entrance families — 2026-09-29
+
+- [x] Annotate short alternate entrances during the existing compact topology
+  pass, separately for known and inclusive access. Require physical leaf starts,
+  bidirectional bridge approaches of at most 250 m, one shared junction with
+  exactly one onward physical edge, matching access states and approach
+  uncertainty, and members within 100 m of a deterministic real entrance. Full
+  profile incidence includes cross-SCC exits. Cycles, parallel approaches, extra
+  exits, one-way links, partial subsets and spatial chains remain separate.
+  Every original start, edge, coordinate, observation and metric remains intact.
+- [x] Add optional schema-7 family records and exact physical-cycle identities.
+  Read family profiles with existing candidate batches and namespace them per
+  installation. Continue independent search and geographic filtering at every
+  original entrance. Group rows only for the same family and cycle, separately
+  for exact and close matches; preserve expandable variants, original numbers,
+  metrics, warnings, counts and pagination. Native map families use actual member
+  coordinates and respect viewport and unknown-access eligibility. Older packs
+  and saved jobs retain their existing behavior.
+- [x] Audit a disposable copy of Central artifact
+  `1f7afe4756cb5d8aeba4dd5d9e9d4fc5383f513297db3f82a397242578796044`
+  from `release-49f55acd30d59a8bb3a1a045c7c7a60e`. It retains 25,834 nodes,
+  27,276 physical edges and all 2,681 starts, with 33 inclusive families / 66
+  members and one known family / two members. The four reported entrances form
+  two inclusive pairs at `osm-node-2938329228` and `osm-node-2930482828`, with
+  68.2–78.5 m approaches. The separate long approach remains distinct. The new
+  family passes total 333 ms in an instrumented host run; whole topology samples
+  take 3.56–4.57 s with cache effects, so their difference is not a speedup claim.
+  This measures the compact pass, not a complete regional rebuild. The real-copy
+  prepared-graph audit passes; no live WAL database or installed pack is modified.
+- [x] Two consecutive `npm run verify` runs pass 947 tests across 98 files,
+  lint, type checking and the production build; two `npm run test:browser` runs
+  pass all ten offline Chromium flows. Focused compiler/map integration: 59
+  cases pass; isolated data: 81 cases, runtime: 111 cases, UI/map: 56 cases, and
+  the dedicated offline Chromium family flow pass. Live in-app review against
+  localhost with committed fixtures confirms expansion, variant details and
+  Back/focus restoration, real-member marker zoom/pan anchoring, and mobile
+  internal-panel scrolling (99 px panel scroll, zero page scroll), with zero
+  browser console errors. An initially unsorted synthetic node fixture was
+  corrected; sandboxed macOS process identity required an unsandboxed test retry.
+  All task worktrees, branches, audit copies, fixture tools, servers and tabs
+  are removed; user review files, installed packs, source/metric caches and jobs
+  remain intact. No generated data or new dependency is committed.
+- [ ] Rebuild and explicitly install desired areas to receive family metadata;
+  rerun searches for grouped results. Existing saved jobs and installations are
+  preserved. Compiler identity includes the family policy while physical metric
+  caches remain reusable. No regional build or installation is started here.
+
 ### Named Standard mountain cores and connected approaches — 2026-09-29
 
 - [x] Replace twelve Washington Broad/EPA boundary files and the separate terrain
