@@ -6,6 +6,33 @@ the evidence line.
 
 ## Active system design revision
 
+### Whole-application access-point review — 2026-09-30
+
+- [x] Review extraction, normalization, nomination, passage permissions, building
+  and mountain qualification, frozen publication, overlapping ownership, map
+  display, geographic selection, Full enumeration and saved-job semantics across
+  regions. Evidence and exact code references are in the independent
+  [topology](access-review/topology-audit.md),
+  [source](access-review/source-audit.md), and
+  [geography](access-review/geography-audit.md) audits against `9fff8d7`.
+- [x] Record the [coherent replacement recommendation](access-point-review.md):
+  one mode-aware source topology and connected-entry proof, explicit prepared
+  region membership, and one profile-aware start selector for map and search.
+  The proposed removal of the building-count veto is an explicit product
+  revision; existing application policy remains unchanged. The review includes
+  cross-region precision/recall labels, holdouts, source-gap accounting,
+  compatibility and implementation acceptance requirements.
+- [x] Verify baseline evidence with offline committed fixtures: topology audit
+  79/79 cases and geography/reader/search audit 62/62 cases, with overlapping
+  eligibility-suite coverage. The server suite needed the documented macOS
+  process-identity sandbox retry. Documentation/link checks pass. This is a
+  documentation-only review; no regional processing, publication, installation
+  or measured accuracy comparison was performed.
+- [ ] Implement and independently evaluate the replacement before adopting it.
+  Existing entrance-policy/repair gates below remain pending. Synthetic fixture
+  success and nearby reviewed anchors do not establish regional precision or
+  recall. Preserve installed packs, saved work and source/metric caches.
+
 ### Southern East Bay connected gated entrances — 2026-09-30
 
 - [x] Diagnose the user-run reviewed-start failure without restarting a build.

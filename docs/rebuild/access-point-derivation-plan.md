@@ -1,5 +1,12 @@
 # Access-point derivation plan
 
+Historical source study and migration proposal. The active implemented rules are
+in [the data policy](data-sources.md) and [status](status.md). The broader
+[2026-09-30 access review](access-point-review.md) recommends their next replacement;
+its recommendations are not yet implemented. Radius clustering, permissive
+authority joins and several migration steps below are historical, not the active
+schema-7 contract.
+
 This document replaces per-authority access-point sourcing with a derivation
 computed from the OSM extract the pack already downloads. It defines the
 measured problem, the portal-based design, what happens to the existing

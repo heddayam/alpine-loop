@@ -59,7 +59,9 @@ compiler in `lib/data/testing/compiler.ts`.
    (`lib/data/progressive/publish.ts:14–29`, `120–135`).
 7. **Apply runtime eligibility.** Area predicates, requested public/unknown
    access, the same building threshold, and inclusive closed-cycle reachability
-   gate map/search starts (`lib/solver/eligible-access-points.ts:114–122`).
+   gate search starts (`lib/solver/eligible-access-points.ts:114–122`). The map
+   reuses base access/building/cycle checks but does not apply active-area predicates;
+   see the geography audit for that distinction.
    Restrictive access states are never allowed (`lib/graph/policy.ts:3–8`).
    Named predicates alone permit a 500 m approach band; drawn/driving filters
    remain exact (`lib/solver/eligible-access-points.ts:20–26`, `43–54`). These
