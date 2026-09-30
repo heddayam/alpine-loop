@@ -31,7 +31,7 @@ export function useJobs(open: boolean) {
         const next = routeJobListV2Schema.parse(await response.json()).jobs;
         if (requestController.signal.aborted) return;
         const finished = next.find((job) => !ACTIVE_JOB_STATUSES.has(job.status) && latest.current.some((previous) => previous.id === job.id && ACTIVE_JOB_STATUSES.has(previous.status)));
-        if (finished) setAnnouncement(`${finished.area.label}: ${finished.status}.`);
+        if (finished) setAnnouncement(`${finished.area.label}: ${finished.status === "cancelled" ? "stopped" : finished.status}.`);
         latest.current = next;
         setJobs(next);
         setPending((current) => Object.fromEntries(Object.entries(current).filter(([id, action]) =>
@@ -67,14 +67,17 @@ export function useJobs(open: boolean) {
   useEffect(() => { void refresh(true); return () => controller.current?.abort(); }, [refresh]);
 
   const mutate = async (id: string, action: "cancel" | "delete") => {
+    setError(undefined);
     setPending((current) => ({ ...current, [id]: action === "cancel" ? "cancelling" : "deleting" }));
     try {
       const response = await fetch(`/api/route-jobs/${id}${action === "cancel" ? "/cancel" : ""}`, { method: action === "cancel" ? "POST" : "DELETE" });
-      if (!response.ok) throw new Error(`Job could not be ${action === "cancel" ? "cancelled" : "deleted"}.`);
+      if (!response.ok) throw new Error(`Job could not be ${action === "cancel" ? "stopped" : "deleted"}.`);
       await refresh(true);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Job could not be updated.");
+      const message = failure instanceof Error ? failure.message : "Job could not be updated.";
+      setError(message);
       setPending((current) => { const next = { ...current }; delete next[id]; return next; });
+      return message;
     }
   };
   return { jobs, loadState, error, refreshedAt, pending, announcement, refresh, mutate };

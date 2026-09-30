@@ -87,6 +87,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const [batchLaunching, setBatchLaunching] = useState(false);
   const batchLaunchRef = useRef(false);
   const [launchMessage, setLaunchMessage] = useState("");
+  const [stopError, setStopError] = useState<{ jobId: string; message: string }>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
   const openCoverage = () => { setSettingsOpen(false); setCoverageOpen(true); setMapExpanded(false); };
@@ -119,6 +120,17 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
   const operation = useRef<AbortController | null>(null);
   const originRequestSequenceRef = useRef(0);
   const routeResults = workspace.status === "done" ? workspace.results : workspace.status === "idle" ? null : workspace.previous ?? null;
+  const listedJob = jobs.find(({ id }) => id === routeResults?.job.id);
+  // Metadata can advance while route detail geometry remains a frozen snapshot.
+  const currentResultsJob = listedJob && routeResults && Date.parse(listedJob.updatedAt) > Date.parse(routeResults.job.updatedAt)
+    ? listedJob : routeResults?.job;
+  const stopViewedSearch = async () => {
+    if (!currentResultsJob) return;
+    const jobId = currentResultsJob.id;
+    setStopError(undefined);
+    const message = await jobsResource.mutate(jobId, "cancel");
+    if (message) setStopError({ jobId, message });
+  };
   const generationState = workspace.status === "error" ? "error" : routeResults ? "done" : workspace.status;
   const generationMessage = workspace.status === "error" ? workspace.message : launchMessage;
   const activeJobCount = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length;
@@ -321,7 +333,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
     try {
       const raw = await requestJson("/api/route-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ area: request.area, criteria: request.criteria }) });
       routeJobV2Schema.parse(raw);
-      setLaunchMessage("Full search queued. Every eligible trailhead will be attempted, with up to ten exact routes per start.");
+      setLaunchMessage("Full search queued. Every eligible trailhead will be attempted, then unfinished searches will keep improving. Stop at any time and keep saved routes.");
       setJobsOpen(true);
       await refreshJobs(true);
     } catch (error) { setLaunchMessage(error instanceof Error ? error.message : "Full search could not be started."); }
@@ -472,7 +484,7 @@ export function HikeBuilder({ restoreJobId }: { restoreJobId?: string }) {
           </footer>
         </aside>
         <div className="results-panel-container" hidden={panel === "plan" || coverageOpen}>
-          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults && !ACTIVE_JOB_STATUSES.has(routeResults.job.status) ? { hasNext: Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
+          {hasResultsPanel ? <ResultsPanel previewsEnabled={!coverageOpen && panel !== "plan" && !mapExpanded && !jobsOpen && !settingsOpen} startKey={focus.startKey} onClearStart={() => setFocus((current) => ({ ...current, startKey: undefined }))} status={generationState === "idle" ? "done" : generationState} results={routeResults} currentJob={currentResultsJob} stopAction={currentResultsJob && ACTIVE_JOB_STATUSES.has(currentResultsJob.status) ? { onStop: () => void stopViewedSearch(), pending: jobsResource.pending[currentResultsJob.id] === "cancelling", error: stopError?.jobId === currentResultsJob.id ? stopError.message : undefined } : undefined} message={generationMessage} selectedRouteId={selectedRouteId} hoveredRouteId={hoveredRouteId} selectedSegmentId={selectedSegmentId} hoveredSegmentId={hoveredSegmentId} nearMissesOpen={nearMissesOpen} onToggleNearMisses={toggleNearMisses} onSelectRoute={selectRoute} onHoverRoute={setHoveredRouteId} onSelectSegment={setSelectedSegmentId} onHoverSegment={setHoveredSegmentId} onClose={clearResults} detail={panel === "route"} onBack={() => changePanel("results")} pagination={routeResults && !ACTIVE_JOB_STATUSES.has(routeResults.job.status) ? { hasNext: Boolean(routeResults.nextCursor), loading: workspace.status === "loading", onNext: () => void loadJob(routeResults.job.id, routeResults.nextCursor, routeResults) } : undefined} /> : null}
         </div>
         </section>
 

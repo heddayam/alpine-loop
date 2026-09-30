@@ -7,6 +7,7 @@ import type {
 } from "@/lib/contracts";
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
+import { explorationSummary, isImprovingResults, jobStage, jobStatusLabel } from "../builder/job-progress";
 import { ACTIVE_JOB_STATUSES } from "../builder/useJobs";
 import { routeStart } from "./route-start";
 import { entranceRouteGroups, type EntranceRouteGroup } from "./entrance-groups";
@@ -18,6 +19,8 @@ type ResultsPanelProps = {
   status: ResultsStatus;
   results: RouteResults | null;
   message?: string;
+  currentJob?: RouteResults["job"];
+  stopAction?: { onStop: () => void; pending: boolean; error?: string };
   startKey?: string;
   onClearStart?: () => void;
   selectedRouteId?: string;
@@ -378,6 +381,8 @@ export function ResultsPanel({
   status,
   results,
   message,
+  currentJob,
+  stopAction,
   startKey,
   onClearStart,
   selectedRouteId,
@@ -542,11 +547,37 @@ export function ResultsPanel({
   const closeCount = results.nearMisses.filter(matchesStart).length;
   const total = exactCount + closeCount;
   const start = startKey ? routes.find(matchesStart)?.startAccessPoint : undefined;
-  const job = results.job;
+  const job = currentJob?.id === results.job.id ? currentJob : results.job;
   const visibleExactGroups = exactGroups.filter(({ entries }) => matchesStart(entries[0]!.route));
   const visibleCloseGroups = closeGroups.filter(({ entries }) => matchesStart(entries[0]!.route));
   const rowCount = visibleExactGroups.length + visibleCloseGroups.length;
   const variantCount = total - rowCount;
+
+  const active = ACTIVE_JOB_STATUSES.has(job.status);
+  const exploration = explorationSummary(job);
+  const searchProgress = <>
+    <div className="results-state" role="status">
+      <strong>Full search {jobStatusLabel(job).toLowerCase()}.</strong>
+      <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
+      {isImprovingResults(job) ? <span>{jobStage(job)}</span> : null}
+      {exploration ? <span>{exploration}</span> : null}
+      {job.status === "completed" && exploration ? <span>{jobStage(job)}</span> : null}
+      {active ? <span>{status === "error"
+        ? " Live updates paused. Reopen this job from Jobs to retry."
+        : detail ? " Search continues while you read. Return to results to see new routes."
+          : ` Results update as trailheads finish.${job.progress.searchPass === undefined ? "" : " The search keeps improving unfinished trailheads."} Paging is available when the search stops.`}</span>
+        : job.partial ? <span> Partial results retained.</span> : null}
+      {stopAction?.pending && active ? <span>Stopping the search. Saved routes will be kept.</span> : null}
+      {job.stale ? <span> Generated with older map data.</span> : null}
+      {job.progress.limitedAccessPointCount === undefined && job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
+      {job.error ? <span> {job.error}</span> : null}
+    </div>
+    {stopAction && active ? <div className="results-state">
+      <button type="button" className="btn" disabled={stopAction.pending} onClick={stopAction.onStop}>{stopAction.pending ? "Stopping…" : "Stop search"}</button>
+      <span>Saved routes will be kept.</span>
+      {stopAction.error ? <p className="error-state" role="alert">{stopAction.error}</p> : null}
+    </div> : null}
+  </>;
 
   const selectedIndex = routes.findIndex((route) => route.id === selectedRouteId);
   const selectedRoute = routes[selectedIndex];
@@ -567,6 +598,7 @@ export function ResultsPanel({
           <span className={`route-match-label${closeMatch ? " close-match" : ""}`}>{closeMatch ? "Close match" : "Exact match"}</span>
         </div>
         {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
+        {searchProgress}
         {closeMatch ? <p className="results-state close-match">This route falls outside your requested constraints. Highlighted metrics show where it differs.</p> : null}
         {renderCard(selectedRoute, selectedIndex, true)}
       </aside>
@@ -580,16 +612,7 @@ export function ResultsPanel({
       {status === "error" ? <p className="results-state error-state" role="alert">{message ?? "Results could not be loaded."}</p> : null}
       <p className="viewed-search-context">Viewing {job.area.label} · {job.request.criteria.distanceMiles.min}–{job.request.criteria.distanceMiles.max} mi</p>
 
-      <div className="results-state" role="status">
-        <strong>Full search {job.status.replaceAll("-", " ")}.</strong>
-        <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
-        {ACTIVE_JOB_STATUSES.has(job.status) ? <span>{status === "error"
-          ? " Live updates paused. Reopen this job from Jobs to retry."
-          : " Results update as trailheads finish. Paging is available when the search stops."}</span> : job.partial ? <span> Partial results retained.</span> : null}
-        {job.stale ? <span> Generated with older map data.</span> : null}
-        {job.progress.truncatedAccessPointCount > 0 ? <span> {job.progress.truncatedAccessPointCount} trailhead {job.progress.truncatedAccessPointCount === 1 ? "search reached its search limit" : "searches reached their search limits"}.</span> : null}
-        {job.error ? <span> {job.error}</span> : null}
-      </div>
+      {searchProgress}
 
       {variantCount > 0 ? <p className="entrance-group-context">{rowCount} route rows on this page · {variantCount} alternate entrance variant{variantCount === 1 ? "" : "s"} expandable below.</p> : null}
 

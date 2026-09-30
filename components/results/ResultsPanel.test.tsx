@@ -450,7 +450,7 @@ describe("ResultsPanel", () => {
       },
     };
     render(<ResultsPanel onHoverRoute={() => undefined} status="done" results={saved} onSelectRoute={() => undefined} />);
-    expect(screen.getByText("Full search cancelled.")).toBeVisible();
+    expect(screen.getByText("Full search stopped.")).toBeVisible();
     expect(screen.getByText("4 of 10 trailheads attempted.")).toBeVisible();
     expect(screen.getByText("Partial results retained.")).toBeVisible();
     expect(screen.getByText("Generated with older map data.")).toBeVisible();
@@ -462,6 +462,44 @@ describe("ResultsPanel", () => {
     expect(screen.getByText("Elapsed").nextElementSibling).toHaveTextContent("12,000 ms");
     expect(screen.queryByText("States explored")).not.toBeInTheDocument();
     expect(screen.queryByText("Graph queries")).not.toBeInTheDocument();
+  });
+
+  it("shows refinement, unfinished searches, and Stop in both results and route detail", () => {
+    const saved = results();
+    saved.job = { ...saved.job, status: "running", progress: { ...saved.job.progress,
+      searchPass: 2, exhaustedAccessPointCount: 0, unfinishedAccessPointCount: 1, limitedAccessPointCount: 0,
+    } };
+    const onStop = vi.fn();
+    const props = { status: "done" as const, results: saved, onHoverRoute: vi.fn(), onSelectRoute: vi.fn(), stopAction: { onStop, pending: false } };
+    const view = render(<ResultsPanel {...props} />);
+    expect(screen.getByText("Full search improving results.")).toBeVisible();
+    expect(screen.getByText("1 of 1 trailheads attempted.")).toBeVisible();
+    expect(screen.getByText("Trailhead searches: 0 fully explored · 1 unfinished · 0 at search limits.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
+    expect(onStop).toHaveBeenCalledOnce();
+    view.rerender(<ResultsPanel {...props} selectedRouteId="exact-loop" detail stopAction={{ onStop, pending: true }} />);
+    expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+    expect(screen.getByText(/Search continues while you read/)).toBeVisible();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    view.rerender(<ResultsPanel {...props} selectedRouteId="exact-loop" detail currentJob={{ ...saved.job, status: "cancelled", partial: true }} />);
+    expect(screen.getByText("Full search stopped.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Stop search" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+  });
+
+  it("labels a completed search with limits as partial without inventing exploration counts for legacy jobs", () => {
+    const saved = results();
+    const props = { status: "done" as const, results: saved, onHoverRoute: vi.fn(), onSelectRoute: vi.fn() };
+    const view = render(<ResultsPanel {...props} currentJob={{ ...saved.job, partial: true, progress: { ...saved.job.progress,
+      searchPass: 4, exhaustedAccessPointCount: 0, unfinishedAccessPointCount: 0, limitedAccessPointCount: 1,
+    } }} />);
+    expect(screen.getByText("Full search completed with limits.")).toBeVisible();
+    expect(screen.getByText(/More suitable routes may exist/)).toBeVisible();
+    expect(screen.getByText("Partial results retained.")).toBeVisible();
+    view.rerender(<ResultsPanel {...props} />);
+    expect(screen.getByText("Full search completed.")).toBeVisible();
+    expect(screen.getByText("1 of 1 trailheads attempted.")).toBeVisible();
+    expect(screen.queryByText(/fully explored|unfinished|at search limits/)).not.toBeInTheDocument();
   });
 
   it("keeps the previous page visible on a paging error and advances only when available", async () => {

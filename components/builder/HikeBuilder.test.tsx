@@ -449,6 +449,75 @@ describe("live saved results", () => {
     expect(screen.getByLabelText("Map routes")).toHaveTextContent("second-page");
   });
 
+  it("continues refining after all starts were attempted and stops while retaining saved routes", async () => {
+    useClock();
+    const stopped = deferred<Response>();
+    let stopRequested = false;
+    let reads = 0;
+    const refined = page("running");
+    refined.job = { ...refined.job, progress: { ...refined.job.progress, processedAccessPointCount: 2,
+      searchPass: 2, exhaustedAccessPointCount: 1, unfinishedAccessPointCount: 1, limitedAccessPointCount: 0,
+    } };
+    const additional = { ...savedPage.results[0]!, route: { ...generatedRoute, id: "additional-loop" } };
+    mockBaseFetch((url, init) => {
+      if (url.endsWith("/cancel")) { stopRequested = true; expect(init?.method).toBe("POST"); return stopped.promise; }
+      const current = { ...refined, results: reads > 1 ? [...refined.results, additional] : refined.results,
+        job: { ...refined.job, status: stopRequested ? "cancelled" as const : "running" as const,
+          updatedAt: stopRequested ? "2026-08-06T00:01:00Z" : refined.job.updatedAt,
+        } };
+      if (url === "/api/route-jobs") return json({ version: 2, jobs: [current.job] });
+      if (url.includes("/results?")) { reads += 1; return json({ ...current, results: reads > 1 ? [...refined.results, additional] : refined.results }); }
+    });
+    await mount();
+    expect(screen.getByText("Full search improving results.")).toBeVisible();
+    expect(screen.getByText("2 of 2 trailheads attempted.")).toBeVisible();
+    await advance(2_000);
+    expect(reads).toBe(2);
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("additional-loop");
+    fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
+    expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+    await act(async () => stopped.resolve(json({ ok: true })));
+    expect(screen.getByText("Full search stopped.")).toBeVisible();
+    expect(screen.getByText("Partial results retained.")).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route,additional-loop");
+    expect(screen.queryByRole("button", { name: "Stop search" })).not.toBeInTheDocument();
+    await advance(2_000);
+    expect(screen.getByRole("button", { name: "Next 50 routes" })).toBeEnabled();
+    const finishedReads = reads;
+    await advance(6_000);
+    expect(reads).toBe(finishedReads);
+  });
+
+  it("allows retrying Stop from a frozen route detail without replacing the selected route", async () => {
+    useClock();
+    let attempts = 0;
+    let reads = 0;
+    const active = page("running");
+    mockBaseFetch(url => {
+      if (url.endsWith("/cancel")) return ++attempts === 1 ? json({}, 503) : json({ ok: true });
+      if (url === "/api/route-jobs") return json({ version: 2, jobs: [{ ...active.job,
+        status: attempts >= 2 ? "cancelled" : "running",
+        updatedAt: attempts >= 2 ? "2026-08-06T00:01:00Z" : active.job.updatedAt,
+      }] });
+      if (url.includes("/results?")) { reads += 1; return json(active); }
+    });
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Open map route exact-route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
+    await act(async () => {});
+    expect(screen.getByRole("alert")).toHaveTextContent("Job could not be stopped.");
+    expect(screen.getByRole("button", { name: "Stop search" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
+    await act(async () => {});
+    expect(screen.getByText("Full search stopped.")).toBeVisible();
+    expect(screen.getByRole("complementary", { name: "Route details" })).toBeVisible();
+    expect(screen.getByLabelText("Map routes")).toHaveTextContent("exact-route");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await advance(10_000);
+    expect(reads).toBe(1);
+    expect(attempts).toBe(2);
+  });
+
   it("serializes slow first-page refreshes and waits two seconds after each response", async () => {
     useClock();
     const pending = deferred<Response>();

@@ -3,20 +3,11 @@
 import { useEffect, useState } from "react";
 import type { RouteJobV2 as RouteJob } from "@/lib/contracts/search";
 import { ACTIVE_JOB_STATUSES as ACTIVE_STATUSES, type JobAction } from "./useJobs";
+import { explorationSummary, isImprovingResults, jobStage, jobStatusLabel } from "./job-progress";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type JobsLoadState = "loading" | "ready" | "error";
 type PendingAction = JobAction | "opening";
-
-const STATUS_LABELS: Record<RouteJob["status"], string> = {
-  queued: "Queued",
-  "resolving-drive-time": "Resolving drive time",
-  running: "Running",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  failed: "Failed",
-  deleting: "Deleting",
-};
 
 function elapsed(milliseconds: number) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -25,17 +16,9 @@ function elapsed(milliseconds: number) {
 }
 
 function stage(job: RouteJob, pending?: PendingAction) {
-  const { processedAccessPointCount: processed, eligibleAccessPointCount: eligible } = job.progress;
-  if (pending === "cancelling") return "Stopping the search. Completed routes will be kept.";
-  if (pending === "deleting" || job.status === "deleting") return "Removing this job and its saved routes.";
-  switch (job.status) {
-    case "queued": return "Waiting in queue.";
-    case "resolving-drive-time": return "Calculating the drive-time area.";
-    case "running": return eligible ? `Searching trailheads — ${processed} of ${eligible} attempted.` : "Finding eligible trailheads.";
-    case "completed": return "All eligible trailheads were attempted.";
-    case "cancelled": return eligible ? `Stopped after ${processed} of ${eligible} trailheads.` : "Search stopped before trailhead processing began.";
-    case "failed": return "Stopped with an error.";
-  }
+  if (pending === "cancelling") return "Stopping the search. Saved routes will be kept.";
+  if (pending === "deleting") return "Removing this job and its saved routes.";
+  return jobStage(job);
 }
 
 function displayedElapsed(job: RouteJob, now: number, refreshedAt?: number) {
@@ -99,11 +82,13 @@ export function JobsModal({
               : storedPending;
             const canOpen = job.status !== "deleting";
             const canCancel = ACTIVE_STATUSES.has(job.status) && pending !== "cancelling";
-            const determinate = progress.eligibleAccessPointCount > 0 || ["completed", "cancelled", "failed"].includes(job.status);
+            const improving = isImprovingResults(job);
+            const exploration = explorationSummary(job);
+            const determinate = !improving && (progress.eligibleAccessPointCount > 0 || ["completed", "cancelled", "failed"].includes(job.status));
             const percent = progress.eligibleAccessPointCount > 0 ? Math.min(100, Math.round(progress.processedAccessPointCount / progress.eligibleAccessPointCount * 100)) : job.status === "completed" ? 100 : 0;
             const titleId = `job-${job.id}-title`;
             const stageId = `job-${job.id}-stage`;
-            const statusLabel = pending === "cancelling" ? "Cancelling" : pending === "deleting" ? "Deleting" : STATUS_LABELS[job.status];
+            const statusLabel = pending === "cancelling" ? "Stopping" : pending === "deleting" ? "Deleting" : jobStatusLabel(job);
             const busy = Boolean(pending);
             return (
               <article className="job-card" key={job.id} aria-labelledby={titleId} aria-describedby={stageId} aria-busy={busy || undefined}>
@@ -113,22 +98,23 @@ export function JobsModal({
                 <p className="job-stage" id={stageId}>{stage(job, pending)}</p>
                 {determinate
                   ? <progress max="100" value={percent} aria-label={`${progress.processedAccessPointCount} of ${progress.eligibleAccessPointCount} trailheads attempted`} />
-                  : <progress max="100" aria-label="Preparing trailhead search" />}
+                  : <progress max="100" aria-label={improving ? "Improving results" : "Preparing trailhead search"} />}
                 <dl>
-                  <div><dt>Trailheads</dt><dd>{progress.processedAccessPointCount}/{progress.eligibleAccessPointCount || "—"}</dd></div>
+                  <div><dt>Attempted</dt><dd>{progress.processedAccessPointCount}/{progress.eligibleAccessPointCount || "—"}</dd></div>
                   <div><dt>Exact</dt><dd>{progress.exactRouteCount}</dd></div>
                   <div><dt>Close matches</dt><dd>{progress.nearMissRouteCount}</dd></div>
-                  <div><dt>Truncated</dt><dd>{progress.truncatedAccessPointCount}</dd></div>
+                  {progress.limitedAccessPointCount === undefined ? <div><dt>Reached limit</dt><dd>{progress.truncatedAccessPointCount}</dd></div> : null}
                   <div><dt>Elapsed</dt><dd>{elapsed(displayedElapsed(job, now, refreshedAt))}</dd></div>
                 </dl>
+                {exploration ? <p className="job-note">{exploration}</p> : null}
                 {job.stale ? <p className="job-note">Generated with older map data.</p> : null}
                 {job.partial ? <p className="job-note">Partial results retained.</p> : null}
-                {job.status === "cancelled" && !job.partial && progress.exactRouteCount + progress.nearMissRouteCount === 0 ? <p className="job-note">No routes were saved before cancellation.</p> : null}
+                {job.status === "cancelled" && !job.partial && progress.exactRouteCount + progress.nearMissRouteCount === 0 ? <p className="job-note">No routes were saved before stopping.</p> : null}
                 {job.error ? <p className="error-state">{job.error}</p> : null}
                 <footer>
                   {canOpen ? <button type="button" className="btn" disabled={busy} aria-label={`View results for ${job.area.label}`} onClick={() => onOpenResults(job.id)}>{pending === "opening" ? "Opening…" : "View results"}</button> : null}
-                  {canCancel ? <button type="button" className="btn" disabled={busy} aria-label={`Cancel ${job.area.label} search`} onClick={() => onMutate(job.id, "cancel")}>Cancel</button> : null}
-                  {pending === "cancelling" ? <button type="button" className="btn" disabled>Cancelling…</button> : null}
+                  {canCancel ? <button type="button" className="btn" disabled={busy} aria-label={`Stop ${job.area.label} search`} onClick={() => onMutate(job.id, "cancel")}>Stop</button> : null}
+                  {pending === "cancelling" ? <button type="button" className="btn" disabled>Stopping…</button> : null}
                   <button type="button" className="btn btn-danger" disabled={busy || job.status === "deleting"} aria-label={`Delete ${job.area.label} job and saved routes`} onClick={() => onMutate(job.id, "delete")}>{pending === "deleting" || job.status === "deleting" ? "Deleting…" : "Delete"}</button>
                 </footer>
               </article>

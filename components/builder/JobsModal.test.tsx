@@ -122,13 +122,43 @@ describe("JobsModal", () => {
   it("emits mutation intent and retains pending state until the refreshed job is terminal", async () => {
     const onMutate = vi.fn();
     const view = render(<JobsModal {...baseProps} onMutate={onMutate} jobs={[job]} />);
-    await userEvent.click(screen.getByRole("button", { name: "Cancel Santa Cruz Mountains search" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stop Santa Cruz Mountains search" }));
     expect(onMutate).toHaveBeenCalledWith(job.id, "cancel");
     view.rerender(<JobsModal {...baseProps} onMutate={onMutate} pendingByJob={{ [job.id]: "cancelling" }} jobs={[job]} />);
-    expect(screen.getByRole("button", { name: "Cancelling…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
     view.rerender(<JobsModal {...baseProps} pendingByJob={{ [job.id]: "cancelling" }} jobs={[{ ...job, status: "cancelled", partial: true }]} />);
-    expect(screen.getByText("Cancelled", { exact: true })).toBeVisible();
+    expect(screen.getByText("Stopped", { exact: true })).toBeVisible();
     expect(screen.getByText("Partial results retained.")).toBeVisible();
+  });
+
+  it("keeps refinement indeterminate after every trailhead has been attempted", () => {
+    render(<JobsModal {...baseProps} jobs={[{ ...job, progress: { ...job.progress,
+      processedAccessPointCount: 10, searchPass: 2, exhaustedAccessPointCount: 5,
+      unfinishedAccessPointCount: 3, limitedAccessPointCount: 2,
+    } }]} />);
+    expect(screen.getByText("Improving results — pass 2.")).toBeVisible();
+    expect(screen.getByRole("progressbar", { name: "Improving results" })).not.toHaveAttribute("value");
+    expect(screen.getByText("Trailhead searches: 5 fully explored · 3 unfinished · 2 at search limits.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Stop Santa Cruz Mountains search" })).toBeEnabled();
+  });
+
+  it("distinguishes terminal limits from fully explored and legacy attempted searches", () => {
+    const completed: RouteJob = { ...job, status: "completed", partial: true, progress: { ...job.progress,
+      processedAccessPointCount: 10, searchPass: 3, exhaustedAccessPointCount: 8,
+      unfinishedAccessPointCount: 0, limitedAccessPointCount: 2,
+    } };
+    const view = render(<JobsModal {...baseProps} jobs={[completed]} />);
+    expect(screen.getByText("Completed with limits")).toBeVisible();
+    expect(screen.getByText(/More suitable routes may exist/)).toBeVisible();
+    expect(screen.getByText("Partial results retained.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Stop .* search/ })).not.toBeInTheDocument();
+    view.rerender(<JobsModal {...baseProps} jobs={[{ ...completed, partial: false, progress: {
+      ...completed.progress, exhaustedAccessPointCount: 10, limitedAccessPointCount: 0,
+    } }]} />);
+    expect(screen.getByText("Search space fully explored for every eligible trailhead.")).toBeVisible();
+    view.rerender(<JobsModal {...baseProps} jobs={[{ ...job, status: "completed", progress: { ...job.progress, processedAccessPointCount: 10 } }]} />);
+    expect(screen.getByText("All eligible trailheads were attempted.")).toBeVisible();
+    expect(screen.queryByText(/fully explored/)).not.toBeInTheDocument();
   });
 
   it("retains saved data during a refresh error and offers retry", async () => {
