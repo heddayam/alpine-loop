@@ -1,33 +1,30 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import type { AreaGeometry } from "../area-geometry";
-import { BUILDING_RADIUS_M } from "../building-context";
 import type { NormalizedAccessPoint, NormalizedNode, NormalizedPortalEvidence } from "../types";
 import type { ProgressiveGraphStore } from "./store";
 import { selectProgressiveEdges } from "./publish";
 import { ConnectedEntryProof, type PreparedEntry } from "./entry-proof";
 
-const EARTH_RADIUS_M=6_371_008.8;
 type Row=Record<string,string|number|null>;
 const statementCaches=new WeakMap<DatabaseSync,Map<string,StatementSync>>();
+const activeCursors=new WeakSet<StatementSync>();
 function statement(db:DatabaseSync,sql:string):StatementSync {
   const cache=statementCaches.get(db)!;
   let prepared=cache.get(sql);
   if(!prepared){prepared=db.prepare(sql);cache.set(sql,prepared);}
+  // A nested cursor must not reset the cached statement's active iteration.
+  if(activeCursors.has(prepared))return db.prepare(sql);
   return prepared;
 }
 const one=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>statement(db,sql).get(...args) as Row|undefined;
-const rows=(db:DatabaseSync,sql:string,...args:Array<string|number>)=>db.prepare(sql).iterate(...args) as Iterable<Row>;
+function* rows(db:DatabaseSync,sql:string,...args:Array<string|number>):Generator<Row> {
+  const prepared=statement(db,sql);
+  activeCursors.add(prepared);
+  try {yield* prepared.iterate(...args) as Iterable<Row>;}
+  finally {activeCursors.delete(prepared);}
+}
 const run=(db:DatabaseSync,sql:string,...args:Array<string|number|null>)=>statement(db,sql).run(...args);
-function distance(a:readonly [number,number],b:readonly [number,number]):number {
-  const radians=Math.PI/180,deltaLat=(b[1]-a[1])*radians,deltaLon=(b[0]-a[0])*radians;
-  const x=Math.sin(deltaLat/2)**2+Math.cos(a[1]*radians)*Math.cos(b[1]*radians)*Math.sin(deltaLon/2)**2;
-  return 2*EARTH_RADIUS_M*Math.asin(Math.min(1,Math.sqrt(x)));
-}
-function box(lon:number,lat:number,radius:number):[number,number,number,number] {
-  const dy=radius/111_000,dx=radius/(111_000*Math.max(0.05,Math.cos(lat*Math.PI/180)));
-  return [lon-dx,lon+dx,lat-dy,lat+dy];
-}
 
 /** SQLite-backed union-find; source-wide components and clusters occupy disk, not JS maps. */
 export class DiskUnion {
@@ -42,10 +39,11 @@ export class DiskUnion {
     this.increaseRank=db.prepare(`UPDATE ${table} SET rank=rank+1 WHERE id=?`);
   }
   find(id:string):string {
-    let root=id;
-    for(;;){const row=this.getParent.get(root) as {parent:string}|undefined;if(!row)throw new Error(`Unknown union node ${root}`);if(row.parent===root)break;root=row.parent;}
-    let current=id;
-    while(current!==root){const parent=(this.getParent.get(current) as {parent:string}).parent;if(parent===root)break;this.setParent.run(root,current);current=parent;}
+    let root=id;const path:string[]=[];
+    for(;;){const row=this.getParent.get(root) as {parent:string}|undefined;if(!row)throw new Error(`Unknown union node ${root}`);if(row.parent===root)break;path.push(root);root=row.parent;}
+    // Union by rank bounds this temporary path. Its last node already points
+    // at the root; update only deeper nodes without rereading their parents.
+    for(let index=0;index<path.length-1;index++)this.setParent.run(root,path[index]!);
     return root;
   }
   union(a:string,b:string):void {
@@ -57,18 +55,6 @@ export class DiskUnion {
   }
 }
 
-async function nearbyBuildings(db:DatabaseSync,lon:number,lat:number,checkpoint:()=>Promise<void>):Promise<number> {
-  let work=0;
-  await checkpoint();
-  const [minLon,maxLon,minLat,maxLat]=box(lon,lat,BUILDING_RADIUS_M);let count=0;
-  for(const row of rows(db,`SELECT b.lon,b.lat FROM building_spatial s JOIN buildings b ON b.id=s.id
-    WHERE s.max_lon>=? AND s.min_lon<=? AND s.max_lat>=? AND s.min_lat<=?`,minLon,maxLon,minLat,maxLat))
-    {
-      if (++work%1000===0) await checkpoint();
-      if(distance([lon,lat],[Number(row.lon),Number(row.lat)])<=BUILDING_RADIUS_M)count++;
-    }
-  return count;
-}
 function ranking(db:DatabaseSync,nodeId:string,profile:"known"|"inclusive",reuseInclusive:boolean):{connectivity:number;outDegree:number} {
   const table=profile==="inclusive"&&reuseInclusive?"portal_components":`rank_${profile}`;
   const root=one(db,`SELECT parent FROM ${table} WHERE id=?`,nodeId);
@@ -97,7 +83,7 @@ async function rankComponents(db:DatabaseSync,profile:"known"|"inclusive",checkp
   run(db,`INSERT INTO portal_component_counts SELECT ?,parent,count(*) FROM rank_${profile} GROUP BY parent`,profile);
 }
 
-async function candidateRecord(db:DatabaseSync,row:Row,checkpoint:()=>Promise<void>):Promise<NormalizedAccessPoint> {
+function candidateRecord(db:DatabaseSync,row:Row):NormalizedAccessPoint {
   const node=JSON.parse(String(row.record)) as NormalizedNode,witness=JSON.parse(String(row.witness)) as PreparedEntry;
   const evidence=[...rows(db,"SELECT e.record FROM portal_evidence p JOIN evidence e ON e.id=p.evidence_id WHERE p.node_id=? ORDER BY e.id",node.id)]
     .map(({record})=>JSON.parse(String(record)) as NormalizedPortalEvidence);
@@ -107,7 +93,7 @@ async function candidateRecord(db:DatabaseSync,row:Row,checkpoint:()=>Promise<vo
   return {id:`portal:${node.id}`,externalId:node.externalId,nodeId:node.id,name:named?.name??(witness.name?`${witness.name} trailhead`:"Trailhead"),kind:"trailhead",accessState:known?"public":"unknown",
     confidence:evidence.some(item=>item.kind==="trailhead")?"high":evidence.length?"medium":"low",parkingEvidence:parking?`portal-evidence:${parking.externalId}`:null,
     sourceRefs:[...new Set([...node.sourceRefs,...witness.sourceRefs,...evidence.flatMap(item=>item.sourceRefs)])].sort(),entryWitness:{kind,rootNodeId,departurePhysicalId,known},
-    portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?0:null,nearbyBuildingCount:await nearbyBuildings(db,node.lon,node.lat,checkpoint)};
+    portalRoadClass:String(row.road_class) as "street"|"service-road",parkingDistanceM:parking?0:null};
 }
 
 /** Freeze sparse local starts before distance pruning and expensive DEM work.
@@ -128,13 +114,13 @@ export async function prepareSparsePortalCandidates(store:ProgressiveGraphStore,
     let work=0;
     db.exec(`CREATE TEMP TABLE sparse_start_nodes(node_id TEXT PRIMARY KEY) STRICT;
       CREATE TEMP TABLE sparse_portal_candidates(node_id TEXT PRIMARY KEY,record TEXT NOT NULL,witness TEXT NOT NULL) STRICT;
-      CREATE TEMP TABLE portal_candidate_audit(node_id TEXT PRIMARY KEY,nearby_building_count INTEGER NOT NULL,access_state TEXT NOT NULL) STRICT;`);
+      CREATE TEMP TABLE portal_candidate_audit(node_id TEXT PRIMARY KEY,access_state TEXT NOT NULL) STRICT;`);
     let candidateAccessPoints=0,eligibleAccessPoints=0;
     for(const row of rows(db,"SELECT c.node_id,c.road_class,c.witness,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id")) {
       if(++work%1000===0)await checkpoint();
       candidateAccessPoints++;
-      const point=await candidateRecord(db,row,checkpoint);
-      run(db,"INSERT INTO portal_candidate_audit VALUES (?,?,?)",point.nodeId,point.nearbyBuildingCount!,point.accessState);
+      const point=candidateRecord(db,row);
+      run(db,"INSERT INTO portal_candidate_audit VALUES (?,?)",point.nodeId,point.accessState);
       run(db,"INSERT INTO sparse_start_nodes VALUES (?)",point.nodeId);
       run(db,"INSERT INTO sparse_portal_candidates VALUES (?,?,?)",point.nodeId,JSON.stringify(point),String(row.witness));
       eligibleAccessPoints++;
@@ -196,7 +182,7 @@ export async function deriveProgressivePortals(store:ProgressiveGraphStore,cover
     : rows(db,"SELECT c.node_id,c.road_class,c.witness,n.record FROM portal_candidates c JOIN nodes n ON n.id=c.node_id ORDER BY c.node_id");
   for(const row of candidates) {
     if(++work%1000===0)await checkpoint();
-    const point=prepared?JSON.parse(String(row.record)) as NormalizedAccessPoint:await candidateRecord(db,row,checkpoint);
+    const point=prepared?JSON.parse(String(row.record)) as NormalizedAccessPoint:candidateRecord(db,row);
     if(!one(db,"SELECT 1 FROM portal_components WHERE id=?",point.nodeId))continue;
     if(prepared && point.entryWitness) {
       const finalWitness=proof.refresh(point.nodeId,JSON.parse(String(row.witness)) as PreparedEntry);

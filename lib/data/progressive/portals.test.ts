@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { describe, expect, it, vi } from "vitest";
 import type { AreaGeometry } from "../area-geometry";
 import { compiledEdgesForSegment } from "../compiled-edges";
 import { distanceMeters } from "../metrics";
 import { normalizeOsmOpl } from "../osm/opl";
 import type { NormalizedAccessPoint, NormalizedTopology } from "../types";
 import { openProgressiveGraphStore } from "./store";
-import { prepareSparsePortalCandidates } from "./portals";
+import { DiskUnion, prepareSparsePortalCandidates } from "./portals";
 
 // Reduced local representations from the pinned WA 260801 source: entrance IDs,
 // coordinates and tags are retained; long trails/roads omit intermediate nodes.
@@ -101,6 +102,43 @@ w10 Thighway=residential Nn1,n2,n3,n4,n5,n6`;
     ["osm-node-5",2,2,1,1,"trail-component:osm-node-5"],
     ["osm-node-6",2,2,1,1,"trail-component:osm-node-5"],
   ]);
+});
+
+it("compresses union paths with one parent read per vertex and preserves ranked root ties",()=>{
+  const db=new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TEMP TABLE components(id TEXT PRIMARY KEY,parent TEXT NOT NULL,rank INTEGER NOT NULL) STRICT");
+    const insert=db.prepare("INSERT INTO components VALUES (?,?,0)");
+    for(const id of ["a","b","c","d","e","f","g","h"])insert.run(id,id);
+    const nativePrepare=db.prepare.bind(db);let parentReads=0,parentWrites=0;
+    const spy=vi.spyOn(db,"prepare").mockImplementation(sql=>{
+      const prepared=nativePrepare(sql);
+      if(sql==="SELECT parent FROM components WHERE id=?") {
+        const get=prepared.get.bind(prepared);
+        vi.spyOn(prepared,"get").mockImplementation((...args)=>{parentReads++;return get(...args);});
+      }
+      if(sql==="UPDATE components SET parent=? WHERE id=?") {
+        const run=prepared.run.bind(prepared);
+        vi.spyOn(prepared,"run").mockImplementation((...args)=>{parentWrites++;return run(...args);});
+      }
+      return prepared;
+    });
+    const union=new DiskUnion(db,"components");
+    for(const [a,b] of [["b","a"],["d","c"],["f","e"],["h","g"],["c","a"],["g","e"],["e","a"]])union.union(a!,b!);
+    parentReads=0;parentWrites=0;
+    expect(union.find("h")).toBe("a");
+    expect(parentReads).toBe(4);
+    expect(parentWrites).toBe(2);
+    expect(nativePrepare("SELECT id,parent,rank FROM components WHERE id IN ('a','e','g','h') ORDER BY id").all()).toEqual([
+      {id:"a",parent:"a",rank:3},{id:"e",parent:"a",rank:2},{id:"g",parent:"a",rank:1},{id:"h",parent:"a",rank:0},
+    ]);
+    parentReads=0;parentWrites=0;
+    expect(union.find("h")).toBe("a");
+    expect(parentReads).toBe(2);
+    expect(parentWrites).toBe(0);
+    expect(()=>union.find("missing")).toThrow("Unknown union node missing");
+    spy.mockRestore();
+  } finally {db.close();}
 });
 
 function detachTrack(topology: NormalizedTopology) {
@@ -286,8 +324,21 @@ n6 x-122.001 y48
 w1 Thighway=path Nn1,n2,n3,n1
 w2 Thighway=residential Nn6,n4
 w3 Tamenity=parking Nn4,n1,n5,n4`;
-function addBuildings(store:ReturnType<typeof openProgressiveGraphStore>,count:number,lon=-122,lat=48) {
-  for(let index=0;index<count;index++)store.putBuilding([lon+index*.000001,lat+.00001]);
+function legacyBuildingNoise(store:ReturnType<typeof openProgressiveGraphStore>,count:number,lon=-122,lat=48) {
+  // Old staging databases may contain this unused context. Production must not
+  // consult it, even when a candidate is surrounded by mapped buildings.
+  store.database.exec(`CREATE TABLE IF NOT EXISTS buildings(id INTEGER PRIMARY KEY,lon REAL NOT NULL,lat REAL NOT NULL,UNIQUE(lon,lat)) STRICT;
+    CREATE VIRTUAL TABLE IF NOT EXISTS building_spatial USING rtree(id,min_lon,max_lon,min_lat,max_lat)`);
+  const insert=store.database.prepare("INSERT INTO buildings VALUES (?,?,?)"),spatial=store.database.prepare("INSERT INTO building_spatial VALUES (?,?,?,?,?)");
+  for(let index=0;index<count;index++) {
+    const x=lon+index*.000001,y=lat+.00001;
+    insert.run(index+1,x,y);spatial.run(index+1,x,x,y,y);
+  }
+  const prepare=store.database.prepare.bind(store.database);
+  return vi.spyOn(store.database,"prepare").mockImplementation(sql=>{
+    if(/\b(?:buildings|building_spatial)\b/i.test(sql))throw new Error("Production attempted building spatial counting");
+    return prepare(sql);
+  });
 }
 function seedIds(store:ReturnType<typeof openProgressiveGraphStore>) {
   return store.database.prepare("SELECT node_id FROM sparse_start_nodes ORDER BY node_id").all().map(row=>String(row.node_id));
@@ -683,39 +734,41 @@ describe("sparse starts before elevation",()=>{
     expect(early.points).toEqual(legacy.points);
   });
 
-  it.each([0,9,10,12])("records all %s nearby buildings without treating density as entry permission",async count=>{
-    const {store}=staged(direct);
+  it.each([0,9,10,12,1000])("preserves admission and complete records around %s buildings without spatial counting",async count=>{
+    const baseline=await deriveAtStage(direct,undefined,undefined,true);
+    const unrelated=Array.from({length:count},(_,index)=>`n${100+index} Tbuilding=yes x${-122+index*.000001} y48.00001`).join("\n");
+    const {store,measure}=staged(`${direct}\n${unrelated}`);
+    const noBuildingReads=legacyBuildingNoise(store,count);
     try {
-      addBuildings(store,count);
-      // The descriptive count still uses its exact 500m radius.
-      store.putBuilding([-122,48.01]);
-      const eligible=1;
-      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:eligible});
-      expect(seedIds(store)).toEqual(eligible?["osm-node-1"]:[]);
-      expect(store.database.prepare("SELECT * FROM portal_candidate_audit").all()).toEqual([{node_id:"osm-node-1",nearby_building_count:count,access_state:"unknown"}]);
+      expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:1});
+      expect(seedIds(store)).toEqual(["osm-node-1"]);
+      expect(store.database.prepare("SELECT * FROM portal_candidate_audit").all()).toEqual([{node_id:"osm-node-1",access_state:"unknown"}]);
+      expect(JSON.parse(String(store.database.prepare("SELECT record FROM sparse_portal_candidates").get()!.record))).not.toHaveProperty("nearbyBuildingCount");
       expect(store.database.prepare("SELECT count(*) AS n FROM edges").get()!.n).toBe(0);
       expect([...store.iterateNodes()].every(node=>node.elevationM===null)).toBe(true);
       const tables=store.database.prepare("SELECT name FROM sqlite_temp_master WHERE type='table'").all().map(row=>row.name);
       expect(tables).toEqual(expect.arrayContaining(["sparse_start_nodes","sparse_portal_candidates","eligible_segments"]));
       expect(tables).not.toContain("portal_components");
       expect(tables).not.toContain("rank_known");
-    } finally {store.close();}
+      measure();await store.derivePortals(coverage);
+      expect(store.database.prepare("SELECT record FROM derived_portals ORDER BY id").all().map(row=>JSON.parse(String(row.record)))).toEqual(baseline.points);
+    } finally {noBuildingReads.mockRestore();store.close();}
   });
 
-  it("freezes both dense and sparse entrances before selected graph measurement",async()=>{
+  it("freezes both entrances before selected graph measurement without consulting building density",async()=>{
     const other=direct.replaceAll(/n([1-4])/g,(_match,id)=>`n${Number(id)+10}`).replaceAll(/w([1-2])/g,(_match,id)=>`w${Number(id)+10}`)
       .replaceAll(/y48(?=\s|$)/gm,"y48.02").replaceAll("y48.001","y48.021");
     const {store,measure}=staged(`${direct}\n${other}`);
+    const noBuildingReads=legacyBuildingNoise(store,10,-122,48.02);
     try {
-      addBuildings(store,10,-122,48.02);
       expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:2,eligibleAccessPoints:2});
       expect(seedIds(store)).toEqual(["osm-node-1","osm-node-11"]);
       expect(store.database.prepare("SELECT count(*) AS n FROM edges").get()!.n).toBe(0);
-      // Mimic distance pruning: only the sparse start's component is measured.
+      // Mimic distance pruning: only the first start's component is measured.
       measure(id=>!id.startsWith("osm-way-11:"));
       await store.derivePortals(coverage);
       expect(store.database.prepare("SELECT node_id FROM derived_portals").all()).toEqual([{node_id:"osm-node-1"}]);
-    } finally {store.close();}
+    } finally {noBuildingReads.mockRestore();store.close();}
   });
 
   it("freezes all parking exits and never discovers a new contact from expanded support",async()=>{
@@ -741,7 +794,7 @@ describe("sparse starts before elevation",()=>{
       try {
         expect(await prepareSparsePortalCandidates(store,coverage)).toEqual({candidateAccessPoints:1,eligibleAccessPoints:1});
         expect(seedIds(store)).toEqual(["osm-node-1"]);
-        expect(store.database.prepare("SELECT access_state,nearby_building_count FROM portal_candidate_audit").get()).toEqual({access_state:"unknown",nearby_building_count:0});
+        expect(store.database.prepare("SELECT access_state FROM portal_candidate_audit").get()).toEqual({access_state:"unknown"});
       } finally {store.close();}
     }
   });
