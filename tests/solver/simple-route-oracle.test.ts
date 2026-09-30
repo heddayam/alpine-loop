@@ -154,6 +154,51 @@ describe("independent simple-route coverage oracle", () => {
     }
   });
 
+  it("matches 128 asymmetric multigraphs with independently varied minimum and maximum resources", () => {
+    let state = 0x13579ace;
+    const random = () => { state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0; return state / 2 ** 32; };
+    for (let example = 0; example < 128; example += 1) {
+      const ids = ["s", "a", "b", "c", "d"];
+      const trails: PhysicalTrail[] = Array.from({ length: 8 }, (_, index) => ({
+        id: index + 1, from: ids[Math.floor(random() * ids.length)]!, to: ids[Math.floor(random() * ids.length)]!,
+        length: 50 + Math.floor(random() * 300), reverseLength: 50 + Math.floor(random() * 300),
+        oneWay: random() < 0.3, gain: Math.floor(random() * 40), reverseGain: Math.floor(random() * 40),
+        access: random() < 0.2 ? "unknown" : "public",
+      }));
+      compareOracle(oracleGraph(trails), request({
+        includeUncertainAccess: random() < 0.5,
+        closedRoute: {
+          maximumRepeatedTrailPct: Math.floor(random() * 55),
+          maximumSharedStemMiles: Math.floor(random() * 500) / 1_609.344,
+        },
+        distanceMiles: meters(Math.floor(random() * 400), 400 + Math.floor(random() * 700)),
+        elevationGainFeet: feet(Math.floor(random() * 70), 70 + Math.floor(random() * 90)),
+      }));
+    }
+  });
+
+  it("checks maximum-elevation minima against the return stem as well as the outward path", () => {
+    const graph = oracleGraph([
+      { id: 1, from: "s", to: "p", length: 100 },
+      { id: 2, from: "p", to: "a", length: 100 },
+      { id: 3, from: "a", to: "b", length: 100 },
+      { id: 4, from: "b", to: "p", length: 100 },
+      { id: 5, from: "s", to: "x", length: 100 },
+      { id: 6, from: "x", to: "y", length: 100 },
+      { id: 7, from: "y", to: "s", length: 100 },
+    ]);
+    // Exercise the directed-record contract without assuming reverse metadata
+    // is identical. Another exact loop ensures a fallback cannot mask the loss.
+    for (const edge of graph.edges) {
+      if (edge.id === "1:back" || edge.physicalEdgeKey! >= 5) edge.maximumElevationMeters = 200;
+    }
+    const criteria = request({ maximumElevationFeet: feet(150, 250) });
+    expect(new Set(enumerateSimpleRoutes(graph, "s", criteria)
+      .filter(({ violations }) => violations.length === 0).map(({ loopKey }) => loopKey)))
+      .toEqual(new Set(["2,3,4", "5,6,7"]));
+    compareOracle(graph, criteria);
+  });
+
   it("does not lose a grade-minimum match whose sustained climb spans edge interiors", () => {
     const graph = oracleGraph([
       { id: 1, from: "s", to: "a", length: 75, oneWay: true, profile: [
