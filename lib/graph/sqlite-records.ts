@@ -123,6 +123,8 @@ export function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
   const confidence = requiredString(row, "confidence");
   if (!["trailhead", "parking", "transit"].includes(kind)) throw new Error(`Invalid access point kind: ${kind}`);
   if (!["high", "medium", "low"].includes(confidence)) throw new Error(`Invalid confidence: ${confidence}`);
+  const knownEntranceFamilyId = parseEntranceFamilyId(row, "known_entrance_family_id");
+  const inclusiveEntranceFamilyId = parseEntranceFamilyId(row, "inclusive_entrance_family_id");
   return {
     id: requiredString(row, "id"),
     nodeId: requiredString(row, "node_id"),
@@ -137,7 +139,18 @@ export function parseAccessPoint(row: SqliteRow): GraphAccessPoint {
     trailComponentId: requiredString(row, "trail_component_id"),
     portalRoadClass: parsePortalRoadClass(row.portal_road_class),
     parkingDistanceM: nullableNumber(row, "parking_distance_m"),
+    ...(knownEntranceFamilyId ? { knownEntranceFamilyId } : {}),
+    ...(inclusiveEntranceFamilyId ? { inclusiveEntranceFamilyId } : {}),
   };
+}
+
+function parseEntranceFamilyId(row: SqliteRow, column: string): string | undefined {
+  const value = row[column];
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== "string" || !/^entrance-family:[0-9a-f]{64}$/.test(value)) {
+    throw new Error(`Graph database corruption: invalid ${column}`);
+  }
+  return value;
 }
 
 export function assertNotAborted(signal?: AbortSignal): void {

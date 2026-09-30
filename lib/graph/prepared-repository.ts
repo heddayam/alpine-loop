@@ -47,6 +47,7 @@ export class PreparedGraphRepository implements GraphRepository {
   readonly #localAreas: boolean;
   readonly #coverageJson: string;
   readonly #statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+  readonly #entranceFamilies = new WeakMap<DatabaseSync, boolean>();
   readonly #pool = new Map<string, DatabaseSync>();
   #closed = false;
   #peakConnections = 0;
@@ -91,6 +92,9 @@ export class PreparedGraphRepository implements GraphRepository {
       if (metadata.get("schemaVersion") !== "7") throw new Error("expected schema version 7");
       if (metadata.get("releaseId") !== this.#graphIds.get(path)) throw new Error("release identity mismatch");
       database.prepare("SELECT known_minimum_stem_m, inclusive_minimum_stem_m FROM access_points LIMIT 0");
+      const hasEntranceFamilies = database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'access_entrance_families'").get() !== undefined;
+      if (hasEntranceFamilies) database.prepare("SELECT profile, access_point_id, family_id, junction_node_id, approach_distance_m FROM access_entrance_families LIMIT 0");
+      this.#entranceFamilies.set(database, hasEntranceFamilies);
       database.exec("PRAGMA cache_size = -2048");
     } catch (error) {
       database.close();
@@ -146,10 +150,19 @@ export class PreparedGraphRepository implements GraphRepository {
       let after = "";
       while (true) {
         assertNotAborted(query.signal);
-        const rows = this.#statement(artifact.path, `SELECT a.*, n.lon AS candidate_lon, n.lat AS candidate_lat, ${FIRST_DEPARTURE_COLUMNS}
+        // Optional metadata keeps existing schema-7 artifacts readable. Read
+        // both profiles with the batch so ownership checks can evict this
+        // connection without retaining a live statement or doing per-start SQL.
+        const hasEntranceFamilies = this.#entranceFamilies.get(this.#database(artifact.path));
+        const familyColumns = hasEntranceFamilies ? ", known_family.family_id AS known_entrance_family_id, inclusive_family.family_id AS inclusive_entrance_family_id" : "";
+        const familyJoins = hasEntranceFamilies ? `
+          LEFT JOIN access_entrance_families known_family ON known_family.profile = 'known' AND known_family.access_point_id = a.id
+          LEFT JOIN access_entrance_families inclusive_family ON inclusive_family.profile = 'inclusive' AND inclusive_family.access_point_id = a.id` : "";
+        const rows = this.#statement(artifact.path, `SELECT a.*, n.lon AS candidate_lon, n.lat AS candidate_lat, ${FIRST_DEPARTURE_COLUMNS}${familyColumns}
           FROM access_points a JOIN nodes n ON n.id = a.node_id
           JOIN node_spatial s ON s.row_id = n.node_key
           LEFT JOIN edges departure ON departure.id = (SELECT id FROM edges WHERE from_node = a.node_id ORDER BY id LIMIT 1)
+          ${familyJoins}
           WHERE s.max_lon >= ? AND s.min_lon <= ? AND s.max_lat >= ? AND s.min_lat <= ?
             AND a.id > ? ${query.accessPointId === undefined ? "" : "AND a.id = ?"}
           ORDER BY a.id LIMIT ?`).all(west, east, south, north, after,

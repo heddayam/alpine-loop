@@ -96,6 +96,58 @@ const query: ReachableGraphQuery = {
   includeUncertainAccess: true, coverage: full,
 };
 const sortedEdges = (graph: InducedGraph) => [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
+const knownFamily = `entrance-family:${"1".repeat(64)}`;
+const inclusiveFamily = `entrance-family:${"2".repeat(64)}`;
+
+function addEntranceFamilies(path: string, rows: Array<["known" | "inclusive", string, string]>): void {
+  const database = new DatabaseSync(path);
+  try {
+    database.exec(`CREATE TABLE access_entrance_families (
+      profile TEXT NOT NULL, access_point_id TEXT NOT NULL, family_id TEXT NOT NULL,
+      junction_node_id TEXT NOT NULL, approach_distance_m REAL NOT NULL,
+      PRIMARY KEY (profile, access_point_id)
+    )`);
+    const insert = database.prepare("INSERT INTO access_entrance_families VALUES (?, ?, ?, 's', 75)");
+    for (const row of rows) insert.run(...row);
+  } finally { database.close(); }
+}
+
+test("optional entrance families preserve old packs and all candidate identities and filters", async () => {
+  const { prepared, open } = fixture();
+  const candidatesQuery = { bbox: [-1, -1, 1, 1] as const, includeUncertainAccess: true };
+  const legacy = open([{ path: prepared, geometry: full }]);
+  const [legacyPoint] = await legacy.getAccessPointCandidates(candidatesQuery);
+  expect(legacyPoint).not.toHaveProperty("knownEntranceFamilyId");
+  expect(legacyPoint).not.toHaveProperty("inclusiveEntranceFamilyId");
+  await legacy.close();
+
+  const database = new DatabaseSync(prepared);
+  const columns = database.prepare("PRAGMA table_info(access_points)").all().map(row => String(row.name));
+  for (const [id, nodeId] of [["access-a", "a"], ["uncertain", "e"]]) {
+    database.prepare(`INSERT INTO access_points SELECT ?, ?, ${columns.slice(2).join(",")} FROM access_points WHERE id='start'`).run(id, nodeId);
+  }
+  database.exec("UPDATE access_points SET access_state='unknown' WHERE id='uncertain'");
+  database.close();
+  addEntranceFamilies(prepared, [["known", "start", knownFamily], ["known", "access-a", knownFamily],
+    ["inclusive", "start", inclusiveFamily], ["inclusive", "access-a", inclusiveFamily], ["inclusive", "uncertain", inclusiveFamily]]);
+  const repository = open([{ path: prepared, geometry: full }]);
+  const inclusive = await repository.getAccessPointCandidates(candidatesQuery);
+  expect(inclusive.map(point => point.id)).toEqual(["access-a", "start", "uncertain"]);
+  expect(inclusive.find(point => point.id === "start")).toEqual({ ...legacyPoint, knownEntranceFamilyId: knownFamily, inclusiveEntranceFamilyId: inclusiveFamily });
+  expect(inclusive.find(point => point.id === "access-a")).toMatchObject({ nodeId: "a", lon: -0.001, lat: -0.001 });
+  expect(inclusive.find(point => point.id === "uncertain")).not.toHaveProperty("knownEntranceFamilyId");
+  const known = await repository.getAccessPointCandidates({ ...candidatesQuery, includeUncertainAccess: false });
+  expect(known.map(point => point.id)).toEqual(["access-a", "start"]);
+  expect(known.every(point => point.knownEntranceFamilyId === knownFamily && point.inclusiveEntranceFamilyId === inclusiveFamily)).toBe(true);
+  expect((await repository.getAccessPointCandidates({ ...candidatesQuery, bbox: [-0.00001, -0.00001, 0.00001, 0.00001] })).map(point => point.id)).toEqual(["start"]);
+  expect((await repository.getAccessPointCandidates({ ...candidatesQuery, accessPointId: "access-a" })).map(point => point.id)).toEqual(["access-a"]);
+});
+
+test.each(["", "entrance-family:bad", `entrance-family:${"A".repeat(64)}`])("rejects malformed entrance family metadata %j", async family => {
+  const { prepared, open } = fixture();
+  addEntranceFamilies(prepared, [["inclusive", "start", family]]);
+  await expect(open([{ path: prepared, geometry: full }]).getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: false })).rejects.toThrow("invalid inclusive_entrance_family_id");
+});
 
 test("pins immutable network identity independently of an expanded release catalog", async () => {
   const { prepared, mono } = fixture();
@@ -203,6 +255,7 @@ test("missing compact hint columns and unsafe numerical identities are errors", 
 
 test("bounds concurrent reader lifetime to eight handles and closes all on shutdown", async () => {
   const { directory, prepared, open } = fixture();
+  addEntranceFamilies(prepared, [["known", "start", knownFamily], ["inclusive", "start", inclusiveFamily]]);
   const artifacts = Array.from({ length: 24 }, (_, index) => {
     const path = join(directory, `duplicate-${index}.sqlite`);
     copyFileSync(prepared, path);
@@ -211,7 +264,8 @@ test("bounds concurrent reader lifetime to eight handles and closes all on shutd
   const repository = open(artifacts);
   const generator = repository.iterateMapTrails({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
   expect((await generator.next()).done).toBe(false);
-  await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true });
+  expect((await repository.getAccessPointCandidates({ bbox: [-1, -1, 1, 1], includeUncertainAccess: true }))[0])
+    .toMatchObject({ knownEntranceFamilyId: knownFamily, inclusiveEntranceFamilyId: inclusiveFamily });
   expect(repository.connectionStats).toEqual({ open: 8, peak: 8, limit: 8 });
   // Resume after the generator's original handle was evicted.
   let count = 1;

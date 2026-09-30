@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   ClosedRouteTopologyV3,
   GeneratedClosedRouteV3,
@@ -43,7 +44,7 @@ export type ClosedRouteValidationOptions = {
 };
 
 /** Peel the one permitted retrace, then require exactly one simple cycle. */
-function topologyFor(edges: readonly ReconstructedDirectedEdge[], startNodeId: string): ClosedRouteTopologyV3 | null {
+function topologyFor(edges: readonly ReconstructedDirectedEdge[], startNodeId: string): { topology: ClosedRouteTopologyV3; physicalLoopId: string } | null {
   let left = 0;
   let right = edges.length - 1;
   let sharedStemDistanceMeters = 0;
@@ -66,22 +67,29 @@ function topologyFor(edges: readonly ReconstructedDirectedEdge[], startNodeId: s
   if (left > right) return null;
   const attachment = edges[left]!.fromNodeId;
   if (edges[right]!.toNodeId !== attachment || usedNodes.has(attachment)) return null;
+  const cyclePhysicalKeys: number[] = [];
   for (let index = left; index <= right; index += 1) {
     const edge = edges[index]!;
     if (usedNodes.has(edge.fromNodeId) || usedPhysical.has(edge.physicalEdgeKey)) return null;
     usedNodes.add(edge.fromNodeId);
     usedPhysical.add(edge.physicalEdgeKey);
+    cyclePhysicalKeys.push(edge.physicalEdgeKey);
   }
   if (edges[0]!.fromNodeId !== startNodeId) return null;
   const totalDistanceMeters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
   return {
-    kind: left === 0 ? "simple-loop" : "lollipop",
-    cycleCount: 1,
-    cycleBlockCount: 1,
-    sharedStemDistanceMeters,
-    repeatedTrailDistanceMeters,
-    repeatedTrailFraction: totalDistanceMeters > 0 ? repeatedTrailDistanceMeters / totalDistanceMeters : 0,
-    connectorCount: left === 0 ? 0 : 1,
+    topology: {
+      kind: left === 0 ? "simple-loop" : "lollipop",
+      cycleCount: 1,
+      cycleBlockCount: 1,
+      sharedStemDistanceMeters,
+      repeatedTrailDistanceMeters,
+      repeatedTrailFraction: totalDistanceMeters > 0 ? repeatedTrailDistanceMeters / totalDistanceMeters : 0,
+      connectorCount: left === 0 ? 0 : 1,
+    },
+    // A valid simple cycle is uniquely identified by its physical edge set.
+    // Sorting removes traversal rotation/direction; the peeled stem is excluded.
+    physicalLoopId: `physical-loop-v1:${createHash("sha256").update(JSON.stringify(cyclePhysicalKeys.sort((a, b) => a - b))).digest("hex")}`,
   };
 }
 
@@ -142,8 +150,9 @@ export function validateReconstructedClosedRoute(
   if (edges.some((edge) => !lineIsInsideArea(edge.coordinates, options.coverage))) {
     return { valid: false, reason: "outside-coverage" };
   }
-  const topology = topologyFor(edges, options.start.nodeId);
-  if (!topology) return { valid: false, reason: "unsupported-route-shape" };
+  const shape = topologyFor(edges, options.start.nodeId);
+  if (!shape) return { valid: false, reason: "unsupported-route-shape" };
+  const entranceFamilyId = options.includeUncertainAccess ? options.start.inclusiveEntranceFamilyId : options.start.knownEntranceFamilyId;
   const distanceMeters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
   const knownMinimumElevations = edges.map(({ minimumElevationMeters }) => minimumElevationMeters);
   if (knownMinimumElevations.some((value) => value === null)) {
@@ -191,6 +200,7 @@ export function validateReconstructedClosedRoute(
           lat: options.start.lat,
           accessState: options.start.accessState,
           confidence: options.start.confidence,
+          ...(entranceFamilyId ? { entranceFamilyId } : {}),
         },
         distanceMeters,
         elevationGainMeters: edges.reduce((sum, edge) => sum + edge.gainMeters, 0),
@@ -208,7 +218,8 @@ export function validateReconstructedClosedRoute(
           confidence: options.sourceConfidence,
           sourceIds: sourceIds.length > 0 ? sourceIds : ["unknown-source"],
         },
-        topology,
+        topology: shape.topology,
+        physicalLoopId: shape.physicalLoopId,
       },
     },
   };

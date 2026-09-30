@@ -14,7 +14,11 @@ export function namespaceRoute<T extends GeneratedClosedRouteV3>(route: T, packI
   return {
     ...route,
     id: namespacedId(packId, route.id),
-    startAccessPoint: { ...route.startAccessPoint, id: namespacedId(packId, route.startAccessPoint.id) },
+    startAccessPoint: {
+      ...route.startAccessPoint,
+      id: namespacedId(packId, route.startAccessPoint.id),
+      ...(route.startAccessPoint.entranceFamilyId ? { entranceFamilyId: namespacedId(packId, route.startAccessPoint.entranceFamilyId) } : {}),
+    },
     regionLabel,
     ...(route.trailSegments ? {
       trailSegments: route.trailSegments.map((segment) => ({ ...segment, id: namespacedId(packId, segment.id) })),

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import type { AccessPointCandidate, ReconstructedDirectedEdge } from "@/lib/graph";
 
-import { validateReconstructedClosedRoute } from "./closed-route-validation";
+import { validateReconstructedClosedRoute, type ClosedRouteValidationOptions } from "./closed-route-validation";
 
 const positions: Record<string, [number, number]> = {
   s: [0, 0], h: [0.001, 0], a: [0.002, 0.001], b: [0.002, -0.001],
@@ -51,7 +51,7 @@ function start(nodeId = "s"): AccessPointCandidate {
   };
 }
 
-function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s") {
+function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s", overrides: Partial<ClosedRouteValidationOptions> = {}) {
   return validateReconstructedClosedRoute(edges, {
     start: start(startNodeId),
     includeUncertainAccess: false,
@@ -63,6 +63,7 @@ function validate(edges: ReconstructedDirectedEdge[], startNodeId = "s") {
     sourceConfidence: "high",
     fallbackSourceIds: ["fixture"],
     routeId: "closed_fixture",
+    ...overrides,
   });
 }
 
@@ -120,6 +121,80 @@ describe("closed-route reconstruction validation", () => {
       sharedStemDistanceMeters: 100,
       connectorCount: 1,
     });
+  });
+
+  test("physical loop identity is exact and independent of rotation and traversal direction", () => {
+    const clockwise = [edge(1, 1, "s", "a"), edge(2, 2, "a", "b"), edge(3, 3, "b", "s")];
+    const walks = [
+      validate(clockwise),
+      validate([clockwise[1]!, clockwise[2]!, clockwise[0]!], "a"),
+      validate([edge(4, 3, "s", "b"), edge(5, 2, "b", "a"), edge(6, 1, "a", "s")]),
+    ];
+    for (const result of walks) expect(result.valid).toBe(true);
+    const routes = walks.filter(result => result.valid).map(result => result.value.route);
+    expect(routes[0]!.physicalLoopId).toMatch(/^physical-loop-v1:[0-9a-f]{64}$/);
+    expect(new Set(routes.map(route => route.physicalLoopId)).size).toBe(1);
+    const changedEdge = validate([edge(7, 1, "s", "a"), edge(8, 20, "a", "b"), edge(9, 3, "b", "s")]);
+    expect(changedEdge.valid).toBe(true);
+    if (changedEdge.valid) expect(changedEdge.value.route.physicalLoopId).not.toBe(routes[0]!.physicalLoopId);
+  });
+
+  test("alternative short entrances share a loop identity while retaining each route's geometry, metrics and access", () => {
+    const family = `entrance-family:${"1".repeat(64)}`;
+    const cycle = [edge(2, 2, "h", "a"), edge(3, 3, "a", "b"), edge(4, 4, "b", "h")];
+    const first = validate([edge(1, 1, "s", "h", 76), ...cycle, edge(5, 1, "h", "s", 76)], "s", {
+      start: { ...start(), knownEntranceFamilyId: family },
+      routeId: "first-entrance",
+    });
+    const secondApproach = edge(6, 6, "x", "h", 68);
+    secondApproach.accessState = "unknown";
+    secondApproach.gainMeters = 3;
+    const second = validate([secondApproach, ...cycle, edge(7, 6, "h", "x", 68)], "x", {
+      start: { ...start("x"), accessState: "unknown", inclusiveEntranceFamilyId: family },
+      includeUncertainAccess: true,
+      routeId: "second-entrance",
+      sourceConfidence: "low",
+    });
+    expect(first.valid).toBe(true);
+    expect(second.valid).toBe(true);
+    if (!first.valid || !second.valid) return;
+    expect(first.value.route.physicalLoopId).toBe(second.value.route.physicalLoopId);
+    expect(first.value.route.startAccessPoint.entranceFamilyId).toBe(second.value.route.startAccessPoint.entranceFamilyId);
+    expect(first.value.route.startAccessPoint.id).not.toBe(second.value.route.startAccessPoint.id);
+    expect(first.value.route.geometry).not.toEqual(second.value.route.geometry);
+    expect(first.value.route.distanceMeters - second.value.route.distanceMeters).toBe(16);
+    expect(first.value.route.elevationGainMeters).not.toBe(second.value.route.elevationGainMeters);
+    expect(first.value.route.warnings).toEqual([]);
+    expect(second.value.route.warnings).toContain("Access is uncertain");
+    expect(second.value.route.warnings).toContain("Route uses trail access marked uncertain");
+    expect(second.value.route.source.confidence).toBe("low");
+    expect(first.value.route.trailSegments![0]!.id).not.toBe(second.value.route.trailSegments![0]!.id);
+    const differentLoop = validate([edge(1, 1, "s", "h", 76), cycle[0]!, edge(8, 8, "a", "c"), edge(9, 9, "c", "h"), edge(5, 1, "h", "s", 76)], "s", {
+      start: { ...start(), knownEntranceFamilyId: family },
+    });
+    expect(differentLoop.valid).toBe(true);
+    if (differentLoop.valid) {
+      expect(differentLoop.value.route.startAccessPoint.entranceFamilyId).toBe(family);
+      expect(differentLoop.value.route.physicalLoopId).not.toBe(first.value.route.physicalLoopId);
+    }
+  });
+
+  test("selects entrance identity by the requested access profile without borrowing the other profile", () => {
+    const knownEntranceFamilyId = `entrance-family:${"1".repeat(64)}`;
+    const inclusiveEntranceFamilyId = `entrance-family:${"2".repeat(64)}`;
+    const edges = [edge(1, 1, "s", "a"), edge(2, 2, "a", "b"), edge(3, 3, "b", "s")];
+    for (const includeUncertainAccess of [false, true]) {
+      const result = validate(edges, "s", { start: { ...start(), knownEntranceFamilyId, inclusiveEntranceFamilyId }, includeUncertainAccess });
+      expect(result.valid).toBe(true);
+      if (result.valid) expect(result.value.route.startAccessPoint.entranceFamilyId).toBe(includeUncertainAccess ? inclusiveEntranceFamilyId : knownEntranceFamilyId);
+    }
+    for (const includeUncertainAccess of [false, true]) {
+      const result = validate(edges, "s", {
+        start: { ...start(), ...(includeUncertainAccess ? { knownEntranceFamilyId } : { inclusiveEntranceFamilyId }) }, includeUncertainAccess,
+      });
+      expect(result.valid).toBe(true);
+      if (result.valid) expect(result.value.route.startAccessPoint).not.toHaveProperty("entranceFamilyId");
+    }
   });
 
   test("measures sustained grade across short edge boundaries", () => {
