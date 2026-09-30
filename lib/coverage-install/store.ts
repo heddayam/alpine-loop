@@ -39,7 +39,7 @@ export class Store {
     constructor(readonly root: string) {
         mkdirSync(root, { recursive: true });
         this.db = new DatabaseSync(join(root, 'downloads.sqlite'));
-        this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;
+        this.db.exec(`PRAGMA busy_timeout=30000; PRAGMA journal_mode=WAL;
       CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, payload TEXT NOT NULL, release TEXT NOT NULL, source TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS publication_lease(id INTEGER PRIMARY KEY CHECK(id=1), token TEXT NOT NULL, pid INTEGER NOT NULL);
