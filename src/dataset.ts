@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import type { HikeRoute, Position, RouteCandidate, TrailGeometry, TrailGraph } from './model.js';
+import type { HikeRoute, Position, RouteCandidate, RouteSummary, TrailGeometry, TrailGraph } from './model.js';
 
 export async function readGraph(directory: string): Promise<TrailGraph> {
   const graph = JSON.parse(gunzipSync(await readFile(join(directory, 'graph.json.gz'))).toString()) as TrailGraph;
@@ -15,26 +14,35 @@ export async function readGraph(directory: string): Promise<TrailGraph> {
 export async function readDataset(directory: string) {
   const graph = await readGraph(directory);
   const geometry = JSON.parse(gunzipSync(await readFile(join(directory, 'geometry.json.gz'))).toString()) as TrailGeometry[];
-  function route(candidate: RouteCandidate): HikeRoute {
+  function describe(candidate: RouteCandidate): RouteSummary {
     const start = graph.starts[candidate.start];
     if (!start) throw new Error('Route has an unknown start');
-    const coordinates: Position[] = [];
     const names = new Set<string>();
+    for (const index of candidate.edges) {
+      const edge = graph.edges[index];
+      if (!edge || !geometry[edge.trail]) throw new Error('Route drawing is missing');
+      const name = geometry[edge.trail]!.name;
+      if (name) names.add(name);
+    }
+    const { id, distance, gain, repetition, kind, uncertain } = candidate;
+    return { id, distance, gain, repetition, kind, uncertain, startId: start.id,
+      startName: start.name, startPosition: graph.nodes[start.node]!, trailNames: [...names] };
+  }
+  function route(candidate: RouteCandidate): HikeRoute {
+    const coordinates: Position[] = [];
     for (const index of candidate.edges) {
       const edge = graph.edges[index];
       const trail = edge && geometry[edge.trail];
       if (!edge || !trail?.coordinates.length) throw new Error('Route drawing is missing');
-      if (trail.name) names.add(trail.name);
       const points = edge.reverse ? trail.coordinates.toReversed() : trail.coordinates;
       for (const point of points) {
         const previous = coordinates.at(-1);
         if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) coordinates.push(point);
       }
     }
-    const id = createHash('sha256').update(candidate.id).digest('hex').slice(0, 32);
-    return { ...candidate, id, startId: start.id, startName: start.name, geometry: coordinates, trailNames: [...names] };
+    return { ...describe(candidate), geometry: coordinates };
   }
-  return { graph, route };
+  return { graph, describe, route };
 }
 
 export function gpx(route: HikeRoute): string {

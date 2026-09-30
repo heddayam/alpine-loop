@@ -6,20 +6,22 @@ import { gzipSync } from 'node:zlib';
 import { createApp } from '../../src/server.js';
 import { createSearches } from '../../dist/server/searches.js';
 import { readDataset } from '../../src/dataset.js';
-import type { SearchQuery, SearchSnapshot, TrailGraph, TrailGeometry } from '../../src/model.js';
+import { ROUTES_PER_PAGE, type HikeRoute, type SearchQuery, type SearchSnapshot, type TrailGraph, type TrailGeometry } from '../../src/model.js';
 
 const query: SearchQuery = { area: [-122.001, 46.999, -121.999, 47.001], distance: [600, 600], gain: [0, 100], repetition: 0, includeUnknown: true };
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const remove of cleanup.splice(0).reverse()) await remove(); });
 
-async function fixture(dense = false) {
+async function fixture(dense = false, startCount = 1) {
   const directory = await mkdtemp(join(tmpdir(), 'alpine-test-'));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   const graph: TrailGraph = {
     version: 1,
-    info: { id: 'fixture', name: 'Offline trails', bounds: [-122.01, 46.99, -121.95, 47.05], sourceDate: '2026-01-01', attribution: [], limitations: [], places: [], startCount: 1 },
+    info: { id: 'fixture', name: 'Offline trails', bounds: [-122.01, 46.99, -121.95, 47.05], sourceDate: '2026-01-01', attribution: [], limitations: [], places: [], startCount },
     nodes: [[-122, 47, 100], [-121.99, 47.01, 120], [-121.98, 47, 100]], edges: [],
-    starts: [{ id: 'start', node: 0, name: 'Creek & Ridge <loop>', access: 'public' }],
+    // Multiple access records share this tiny loop to exercise result transport
+    // without turning an integration test into a large search benchmark.
+    starts: Array.from({ length: startCount }, (_, index) => ({ id: `start-${index}`, node: 0, name: 'Creek & Ridge <loop>', access: 'public' })),
   };
   const geometry: TrailGeometry[] = [];
   if (dense) for (let i = 3; i < 14; i++) graph.nodes.push([-122 + i / 10000, 47 + i / 10000]);
@@ -37,7 +39,7 @@ async function fixture(dense = false) {
 
 describe('real application integration', () => {
   it('serves exact worker results, keeps them across reconnect, and exports continuous GPX beyond the selected start area', async () => {
-    const directory = await fixture();
+    const directory = await fixture(false, 301);
     // Exercise the built worker, not a mocked solver or development TS loader.
     const { createApp: builtApp } = await import('../../dist/server/server.js');
     const app = await builtApp(directory);
@@ -53,10 +55,17 @@ describe('real application integration', () => {
       snapshot = (await app.inject(`/api/search/${id}`)).json();
     }
     expect(snapshot.status).toBe('complete');
-    expect(snapshot.routes).toHaveLength(1); // The reverse walk is grouped; exploration still completes.
+    expect(snapshot.routes).toHaveLength(ROUTES_PER_PAGE);
+    expect(snapshot.routeCount).toBe(301); // Reversals are omitted, but later starts remain visible.
     expect(snapshot.selectionNote).toContain('does not stop exploration');
-    expect(snapshot.progress).toMatchObject({ totalStarts: 1, attemptedStarts: 1, completedStarts: 1 });
-    for (const route of snapshot.routes) {
+    expect(snapshot.progress).toMatchObject({ totalStarts: 301, attemptedStarts: 301, completedStarts: 301 });
+    const lastPage = (await app.inject(`/api/search/${id}?offset=300`)).json() as SearchSnapshot;
+    expect(lastPage.routes).toHaveLength(1);
+    expect(lastPage.offset).toBe(300);
+    for (const summary of [snapshot.routes[0]!, lastPage.routes[0]!]) {
+      expect(summary).not.toHaveProperty('geometry');
+      expect(summary).not.toHaveProperty('edges');
+      const route = (await app.inject(`/api/search/${id}/routes/${summary.id}`)).json() as HikeRoute;
       expect(route.id).toHaveLength(32);
       expect(route.distance).toBe(600);
       expect(route.gain).toBe(60);
@@ -64,7 +73,7 @@ describe('real application integration', () => {
       expect(route.geometry.some(point => point[0] > query.area[2]!)).toBe(true);
     }
     expect((await app.inject(`/api/search/${id}`)).json()).toEqual(snapshot);
-    const exported = await app.inject(`/api/search/${id}/routes/${snapshot.routes[0]!.id}.gpx`);
+    const exported = await app.inject(`/api/search/${id}/routes/${lastPage.routes[0]!.id}.gpx`);
     expect(exported.statusCode).toBe(200);
     expect(exported.headers['content-type']).toContain('application/gpx+xml');
     expect(exported.body).toContain('Creek &amp; Ridge &lt;loop&gt;');

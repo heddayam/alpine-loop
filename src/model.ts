@@ -54,12 +54,14 @@ export type RouteCandidate = {
   kind: 'loop' | 'lollipop';
   uncertain: boolean;
 };
-export type HikeRoute = RouteCandidate & {
+export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'repetition' | 'kind' | 'uncertain'> & {
   startId: string;
   startName: string;
-  geometry: Position[];
+  startPosition: Position;
   trailNames: string[];
 };
+export type HikeRoute = RouteSummary & { geometry: Position[] };
+export const ROUTES_PER_PAGE = 50;
 export type SearchStatus = 'running' | 'complete' | 'stopped' | 'limited' | 'failed';
 export type SearchProgress = {
   totalStarts: number;
@@ -74,7 +76,9 @@ export type SearchSnapshot = {
   query: SearchQuery;
   status: SearchStatus;
   progress: SearchProgress;
-  routes: HikeRoute[];
+  routes: RouteSummary[];
+  routeCount: number;
+  offset: number;
   selectionNote?: string;
   reason?: string;
 };

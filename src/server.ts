@@ -24,11 +24,11 @@ export async function createApp(directory: string, clientDirectory?: string) {
   });
   app.get('/api/catalog', async () => dataset.graph.info);
   app.post('/api/search', async (request, reply) => reply.code(202).send(searches.start(parseQuery(request.body))));
-  app.get<{ Params: { id: string } }>('/api/search/:id', async request => searches.get(request.params.id));
-  app.post<{ Params: { id: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id));
+  app.get<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id', async request => searches.get(request.params.id, Number(request.query.offset ?? 0)));
+  app.post<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id, Number(request.query.offset ?? 0)));
+  app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId', async request => searches.route(request.params.id, request.params.routeId));
   app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId.gpx', async (request, reply) => {
-    const route = searches.get(request.params.id).routes.find(route => route.id === request.params.routeId);
-    if (!route) throw new RequestError('This route is not available.', 404);
+    const route = searches.route(request.params.id, request.params.routeId);
     return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));
   });
   if (clientDirectory) await app.register(fastifyStatic, { root: clientDirectory });
