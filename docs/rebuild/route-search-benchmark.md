@@ -25,7 +25,9 @@ node --import tsx scripts/research/current-route-search-benchmark.ts \
 
 Use `--mode=deadline` for the production 15-second / 500,000-state budget. The
 fixed-work default uses 50,000 expanded states with the solver clock disabled;
-both retain the production 8,000 raw-candidate and 40,000 loaded-edge caps. The
+the accepted historical comparison retains the then-production 8,000 raw-candidate
+and 40,000 loaded-edge caps. Current runs use the 8,000 retained-cycle and 32 MiB
+accounted candidate-payload caps instead. The
 reader's real 15-second safety timeout remains active in fixed-work mode. A
 sample hitting that timeout is not an equal-work comparison. Cap counters can
 also represent different work after an algorithm change, so compare recorded
@@ -197,3 +199,21 @@ saved as `/private/tmp/alpine-search-baseline-{fixed,deadline}.json`,
 compare input fingerprints before comparing results. The revised graph/solver
 source fingerprint is
 `897843e357b803654206463b0867a323cfdf1efc90fd4f1621a9281d02f3e4bb`.
+
+## Final per-attempt check
+
+Commit `2a23461` was measured with the same release, starts, request ranges,
+500,000-state / 15-second allowance, and three repetitions. Loaded-graph
+fingerprints match the baseline, and retained outputs remain deterministic.
+It retains **32 distinct loops**, with **805 ms** summed per-start median search
+time versus the baseline's 2,409 ms. Whole-harness peak RSS was approximately
+425 MiB. The final run includes per-start prepared validation reuse, original-edge
+floating-point metric order, and fixed cycle/payload memory limits instead of
+a raw candidate-offer limit. Its report is
+`/private/tmp/alpine-search-final-deadline.json`.
+
+This measures one engine attempt, not a complete multi-pass Full job. Full now
+starts at 50,000 states / 1.5 seconds and doubles unfinished starts' allowances
+after each committed pass. Replay overhead and total Full-search latency are
+not represented by the 805 ms figure. The earlier 21 → 22 loop result at
+50,000 states illustrates why the initial pass alone must not be called complete.

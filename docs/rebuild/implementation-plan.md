@@ -48,9 +48,12 @@ broaden the area.
   trail without removing any start. Results group identical physical loops from
   these entrances and retain expandable starting-point variants with their own
   geometry and constraint matches.
-- Exact and clearly labeled close matches remain separate. A completed Full
-  search means every eligible start was attempted, not that every possible
-  closed walk was enumerated. Computation limits remain visible.
+- Exact and clearly labeled close matches remain separate. Full search gives
+  every eligible start an initial attempt, then automatically improves unfinished
+  searches with increasing work allowances. Stop keeps saved results. Attempted
+  starts and exhausted exploration are separate progress measures; fixed memory
+  limits remain visible. Completion does not claim every regional hike is known.
+  See [route-search policy](route-search-optimization.md).
 
 New routes are simple loops or lollipops only. A simple loop revisits no node
 except its start/end. A lollipop has one node-simple stem, traversed out and
@@ -92,9 +95,10 @@ Drawing owns pointer gestures until completion, and container resizing updates
 the map without reconstructing it. Results show metrics, route topology, warnings, source
 confidence, elevation profiles, and segment observations.
 
-The Jobs dialog lists saved work, progress, cancellation, and deletion. Opening
-completed or cancelled work loads its exact-first result page. Cancellation
-retains partial results; deletion removes the job and its results. Settings
+The Jobs dialog lists saved work, progress, Stop, and deletion. Opening running
+or finished work loads its exact-first result page. The active overview refreshes
+as results arrive; route details keep a stable collection. Stop retains partial
+results; deletion removes the job and its results. Settings
 have one validated value and one ordered persistence path. Incomplete numeric
 input stays local to the form.
 
@@ -111,8 +115,9 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 The route engine accepts prepared starts, criteria, graph context, and budget.
 A bounded pool of local processes owns graph-reader lifetime so CPU work cannot
 block app status or cancellation. Full searches read one pinned installation and parallelize across trailheads,
-retaining ordered durable checkpoints. Each start uses one solver path and one
-bounded budget.
+retaining ordered durable checkpoints. Each start uses one solver path, increasing
+state/time allowances across attempts, and fixed graph/candidate-memory limits.
+Only work-limited starts repeat after every checkpoint in the pass commits.
 
 Provider submission, polling, deadlines, and cancellation stay inside driving
 area resolution. Completed contours are cached for 30 minutes. Credentials
@@ -145,8 +150,8 @@ must pass before large-region feasibility or migration is declared complete.
 
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
 internal plan pins contributing data versions. One FIFO coordinator resumes
-interrupted work from its first unfinished start while the pinned data remains
-available. Old saved geometry stays viewable when data changes. Cancellation and
+interrupted work from its first unfinished attempt, with the same allowance,
+while the pinned data remains available. Old saved geometry stays viewable when data changes. Cancellation and
 deletion take precedence over late worker completion.
 
 Generated packs, source downloads, caches, secrets, and local databases stay out

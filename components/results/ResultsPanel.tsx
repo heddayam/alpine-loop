@@ -559,9 +559,9 @@ export function ResultsPanel({
     <div className="results-state" role="status">
       <strong>Full search {jobStatusLabel(job).toLowerCase()}.</strong>
       <span>{job.progress.processedAccessPointCount} of {job.progress.eligibleAccessPointCount} trailheads attempted.</span>
-      {isImprovingResults(job) ? <span>{jobStage(job)}</span> : null}
-      {exploration ? <span>{exploration}</span> : null}
-      {job.status === "completed" && exploration ? <span>{jobStage(job)}</span> : null}
+      {isImprovingResults(job) ? <span> {jobStage(job)}</span> : null}
+      {exploration ? <span> {exploration}</span> : null}
+      {job.status === "completed" && exploration ? <span> {jobStage(job)}</span> : null}
       {active ? <span>{status === "error"
         ? " Live updates paused. Reopen this job from Jobs to retry."
         : detail ? " Search continues while you read. Return to results to see new routes."

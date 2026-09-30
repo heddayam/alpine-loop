@@ -6,6 +6,33 @@ the evidence line.
 
 ## Active system design revision
 
+### Route-search completeness, efficiency, and continuing results — 2026-09-30
+
+- [x] Implement shared route metrics/ranking, physical-cycle retention, iterative
+  block localization, and conservative residual return bounds. Prepare and cache
+  decoded graph rows and exact geometry checks. Evidence and primary sources:
+  [search design](route-search-optimization.md).
+- [x] Preserve correctness against independent stem/cycle enumeration, asymmetric
+  directed fixtures, profile minima, shared approaches, and archive pressure.
+  The initial integrated solver suite passes 92 tests across nine files; later
+  budget and numerical boundary regressions are part of the remaining gate.
+- [x] Measure the production schema-7 path on sealed Santa Cruz and Snoqualmie
+  artifacts. The recorded comparison finds 21 → 32 distinct physical loops and
+  2,409 → 889 ms summed per-start medians; the topology-stratified sample does
+  not establish universal speed or regional completeness. See the
+  [benchmark](route-search-benchmark.md) for reproduction and negative outcomes.
+- [x] Refill workers on completion with ordered durable checkpoints and expose
+  saved results while running. Refresh the active overview, freeze route details,
+  and reject late results after context changes.
+- [ ] Finish and verify automatic improvement after every eligible start gets
+  its initial attempt. The user explicitly selected continued improvement with
+  Stop retaining results. Separate increasing work allowances from fixed graph
+  and candidate-memory caps; persist typed completion and attempts, preserve
+  better incumbent results, and expose unfinished/limited exploration honestly.
+- [ ] Pass the full verification and browser suites twice, verify live desktop
+  and mobile behavior, and clean up task worktrees/branches. No regional schema
+  or published pack changes are included.
+
 ### Whole-application access-point review — 2026-09-30
 
 - [x] Review extraction, normalization, nomination, passage permissions, building

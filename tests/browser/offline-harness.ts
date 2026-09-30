@@ -13,8 +13,9 @@ export type OfflineHarness = {
   batchRequests: SearchIntent[];
   settingsRequests: AppSettingsV1[];
   blockedExternalRequests: string[];
+  publishRouteCount(count: number): void;
 };
-type HarnessOptions = { routeCount?: number; entranceFamilies?: boolean };
+type HarnessOptions = { routeCount?: number; entranceFamilies?: boolean; improving?: boolean };
 
 async function body(route: Route): Promise<unknown> {
   const text = route.request().postData();
@@ -35,6 +36,18 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
   const batchRequests: SearchIntent[] = [];
   const settingsRequests: AppSettingsV1[] = [];
   const blockedExternalRequests: string[] = [];
+  let currentRouteCount = options.routeCount ?? 2;
+  let stopped = false;
+  const jobFor = (request: SearchIntent): RouteJobV2 => {
+    const job = completedJob(request, currentRouteCount);
+    if (!options.improving) return job;
+    return { ...job, status: stopped ? "cancelled" : "running", partial: true,
+      completedAt: stopped ? "2026-08-06T00:00:03Z" : undefined,
+      updatedAt: stopped ? "2026-08-06T00:00:03Z" : "2026-08-06T00:00:02Z",
+      progress: { ...job.progress, searchPass: 2, exhaustedAccessPointCount: 1,
+        unfinishedAccessPointCount: 1, limitedAccessPointCount: 0, truncatedAccessPointCount: 1 },
+    };
+  };
   let settings: AppSettingsV1 = {
     schemaVersion: 1,
     includeUncertainAccess: true,
@@ -72,23 +85,24 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     if (request.method() === "POST" && url.pathname === "/api/route-jobs") {
       const batchRequest = requestBody as SearchIntent;
       batchRequests.push(batchRequest);
-      await route.fulfill({ status: 202, json: completedJob(batchRequest, options.routeCount ?? 2) });
+      await route.fulfill({ status: 202, json: jobFor(batchRequest) });
       return;
     }
-    if (request.method() === "GET" && url.pathname === "/api/route-jobs") { await route.fulfill({ json: { version: 2, jobs: batchRequests.map((request) => completedJob(request, options.routeCount ?? 2)) } }); return; }
+    if (request.method() === "GET" && url.pathname === "/api/route-jobs") { await route.fulfill({ json: { version: 2, jobs: batchRequests.map((request) => jobFor(request)) } }); return; }
     if (request.method() === "GET" && url.pathname === `/api/route-jobs/${JOB_ID}/results`) {
-      const requestFixture = savedRoutes(batchRequests[0]!, options.routeCount ?? 2);
+      const requestFixture = savedRoutes(batchRequests[0]!, currentRouteCount);
       const routes = requestFixture.exact.map((result, index) => options.entranceFamilies
         ? { ...result, physicalLoopId: `fixture-loop-${Math.floor(index / 2)}`, startAccessPoint: { ...result.startAccessPoint, entranceFamilyId: "fixture-family" } }
         : result);
-      await route.fulfill({ json: { version: 2, job: completedJob(batchRequests[0]!, options.routeCount ?? 2), results: routes.map((result) => ({ matchType: "exact", accessPointId: result.startAccessPoint.id, route: result })) } });
+      await route.fulfill({ json: { version: 2, job: jobFor(batchRequests[0]!), results: routes.map((result) => ({ matchType: "exact", accessPointId: result.startAccessPoint.id, route: result })) } });
       return;
     }
-    if ((request.method() === "POST" && url.pathname.endsWith("/cancel")) || request.method() === "DELETE") { await route.fulfill({ json: { ok: true } }); return; }
+    if (request.method() === "POST" && url.pathname.endsWith("/cancel")) { stopped = true; await route.fulfill({ json: { ok: true } }); return; }
+    if (request.method() === "DELETE") { await route.fulfill({ json: { ok: true } }); return; }
     await route.fulfill({ status: 404, json: { error: { code: "UNEXPECTED_TEST_REQUEST", message: `No offline fixture for ${url.pathname}` } } });
   });
 
-  return { calls, batchRequests, settingsRequests, blockedExternalRequests };
+  return { calls, batchRequests, settingsRequests, blockedExternalRequests, publishRouteCount(count) { currentRouteCount = count; } };
 }
 
 export async function enterDrawnArea(page: Page): Promise<number[]> {
