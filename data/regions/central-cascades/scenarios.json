@@ -64,6 +64,26 @@
       }
     },
     {
+      "id": "west-cady-north-fork",
+      "cluster": "West Cady Ridge–North Fork Skykomish",
+      "referencePoint": {
+        "name": "North Fork Skykomish Trailhead",
+        "coordinates": [-121.2769283, 47.9267716]
+      },
+      "searchRegionId": "pack:central-cascades",
+      "maximumRepeatedTrailPct": 55,
+      "exactExpectation": {
+        "distanceMiles": { "min": 20, "max": 27 },
+        "elevationGainFeet": { "min": 0, "max": 15000 },
+        "result": "at-least-one-exact"
+      },
+      "impossibleExpectation": {
+        "distanceMiles": { "min": 20, "max": 27 },
+        "elevationGainFeet": { "min": 30000, "max": 35000 },
+        "result": "near-miss-only"
+      }
+    },
+    {
       "id": "stevens-pass",
       "cluster": "Stevens Pass",
       "referencePoint": {

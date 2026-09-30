@@ -77,31 +77,35 @@ export class RouteJobService {
         issues: parsed.error.issues.map(({ path, message }) => ({ path: path.map(String).join("."), message })),
       });
     }
-    let resolved;
-    try {
-      resolved = await this.#dependencies.resolveJob(parsed.data, signal);
-    } catch (error) {
-      if (error instanceof ServerApiError) throw error;
-      if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
-      throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
-    }
-    if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
     const id = this.#id();
-    this.#store.create(id, parsed.data, resolved);
-    this.start();
-    return (await this.get(id))!;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let resolved;
+      try { resolved = await this.#dependencies.resolveJob(parsed.data, signal); }
+      catch (error) {
+        if (error instanceof ServerApiError) throw error;
+        if (signal.aborted || isCancellationError(error)) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
+        throw new ServerApiError("BATCH_JOB_UNAVAILABLE", errorMessage(error), 503);
+      }
+      if (signal.aborted) throw new ServerApiError("REQUEST_CANCELLED", "The request was cancelled.", 499);
+      if (!resolved.installationId) throw new ServerApiError("COVERAGE_REQUIRED", "Install prepared coverage and restart this search.", 409);
+      try {
+        await this.#dependencies.pinInstallation(resolved.installationId, async () => {
+          this.#store.create(id, parsed.data, resolved);
+        });
+        this.start();
+        return (await this.get(id))!;
+      } catch (error) { if (attempt || this.#store.getStored(id)) throw error; }
+    }
+    throw new Error("Local coverage changed during route-job planning");
   }
 
   async list(): Promise<RouteJob[]> {
     const stored = this.#store.listIds()
       .map((id) => this.#store.getStored(id))
       .filter((job): job is NonNullable<typeof job> => job !== null);
-    const versions = new Map(await Promise.all([...new Set(stored.flatMap(({ plan }) => plan.packs.map(({ id }) => id)))].map(async (packId) => [
-      packId,
-      await this.#dependencies.currentDataVersion(packId).catch(() => null),
-    ] as const)));
+    const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
     return stored.flatMap(({ id, plan }) => {
-      const job = this.#store.toPublic(id, plan.packs.some((pack) => versions.get(pack.id) !== pack.dataVersion));
+      const job = this.#store.toPublic(id, !plan.installationId || currentId !== plan.installationId);
       return job ? [job] : [];
     });
   }
@@ -109,9 +113,8 @@ export class RouteJobService {
   async get(id: string): Promise<RouteJob | null> {
     const stored = this.#store.getStored(id);
     if (!stored) return null;
-    const changed = await Promise.all(stored.plan.packs.map(async (pack) =>
-      (await this.#dependencies.currentDataVersion(pack.id).catch(() => null)) !== pack.dataVersion));
-    return this.#store.toPublic(id, changed.some(Boolean));
+    const currentId = await this.#dependencies.currentInstallationId().catch(() => null);
+    return this.#store.toPublic(id, !stored.plan.installationId || currentId !== stored.plan.installationId);
   }
 
   async cancel(id: string): Promise<RouteJob> {
@@ -125,6 +128,7 @@ export class RouteJobService {
     const outcome = this.#store.requestDelete(id);
     if (outcome === "missing") throw new ServerApiError("ROUTE_JOB_NOT_FOUND", "That batch route job was not found.", 404);
     if (outcome === "requested" && this.#active?.id === id) this.#active.controller.abort(new DOMException("Deleted", "AbortError"));
+    await this.#dependencies.cleanupInstallations?.();
   }
 
   async results(id: string, cursorText?: string): Promise<RouteJobResultsPage> {
@@ -149,12 +153,17 @@ export class RouteJobService {
       const controller = new AbortController();
       this.#active = { id: job.id, controller };
       try {
-        await this.#runJob(job, controller.signal);
+        if (!job.plan.installationId) {
+          this.#store.finish(job.id, "cancelled", "This saved search uses legacy data. Install prepared coverage and restart the search; saved results remain available.");
+          continue;
+        }
+        await this.#dependencies.pinInstallation(job.plan.installationId, () => this.#runJob(job, controller.signal));
         this.#store.finish(job.id, "completed");
       } catch (error) {
         this.#store.finish(job.id, controller.signal.aborted || isCancellationError(error) ? "cancelled" : "failed", errorMessage(error));
       } finally {
         this.#active = undefined;
+        await this.#dependencies.cleanupInstallations?.();
       }
     }
   }

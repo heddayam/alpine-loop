@@ -4,7 +4,8 @@ export default defineConfig({
   resolve: { alias: { "@": new URL(".", import.meta.url).pathname } },
   test: {
     environment: "node",
-    maxWorkers: 2,
+    // Integration fixtures launch their own solver and SQLite worker processes.
+    maxWorkers: 1,
     include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules/**", "legacy/**"],
   },

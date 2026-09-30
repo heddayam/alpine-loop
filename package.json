@@ -17,8 +17,7 @@
     "verify": "npm run maplibre:check && npm run lint && npm run typecheck && npm test && npm run build",
     "maplibre:check": "node scripts/maplibre-assets.mjs --check",
     "maplibre:sync": "node scripts/maplibre-assets.mjs --sync",
-    "pack:bootstrap": "tsx scripts/pack-bootstrap.ts",
-    "pack:checkpoint": "node --import tsx scripts/research/regional-pack-checkpoint.ts"
+    "data": "tsx scripts/data.ts"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -26,9 +25,11 @@
   "dependencies": {
     "maplibre-gl": "^6.1.0",
     "next": "^16.3.0",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "tsx": "^4.23.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -42,7 +43,6 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.0",
     "jsdom": "^29.1.1",
-    "tsx": "^4.23.5",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

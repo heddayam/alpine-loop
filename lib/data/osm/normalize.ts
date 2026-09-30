@@ -29,70 +29,6 @@ function hasTrailContext(values: Record<string, string>): boolean {
     || /(?:^|\s)(trail|path)(?:\s|$)/i.test(values.name ?? "");
 }
 
-function needsTrailContext(values: Record<string, string>): boolean {
-  return (values.highway === "footway" || values.highway === "pedestrian")
-    && !SIDEWALK_SUBTAGS.has(values.footway ?? "")
-    && !hasTrailContext(values);
-}
-
-type ContextualWay = {
-  id: string;
-  nodeIds: readonly string[];
-  values: Record<string, string>;
-};
-
-/**
- * Promotes only connected components of otherwise ambiguous footways that
- * actually attach to an explicit trail. Explicit sidewalk/crossing subtags
- * never enter this inference.
- */
-export function contextualTrailWayIds(ways: readonly ContextualWay[]): ReadonlySet<string> {
-  const explicitTrailNodes = new Set<string>();
-  const ambiguousByNode = new Map<string, string[]>();
-  const ambiguousById = new Map<string, ContextualWay>();
-  for (const way of ways) {
-    if (needsTrailContext(way.values)) {
-      ambiguousById.set(way.id, way);
-      for (const nodeId of new Set(way.nodeIds)) {
-        const existing = ambiguousByNode.get(nodeId);
-        if (existing) existing.push(way.id);
-        else ambiguousByNode.set(nodeId, [way.id]);
-      }
-      continue;
-    }
-    if (classifyOsmWay(way.values) === "trail") {
-      for (const nodeId of way.nodeIds) explicitTrailNodes.add(nodeId);
-    }
-  }
-
-  const promoted = new Set<string>();
-  const visited = new Set<string>();
-  for (const startId of [...ambiguousById.keys()].sort()) {
-    if (visited.has(startId)) continue;
-    const componentIds: string[] = [];
-    const componentNodes = new Set<string>();
-    const stack = [startId];
-    visited.add(startId);
-    while (stack.length > 0) {
-      const id = stack.pop()!;
-      componentIds.push(id);
-      const way = ambiguousById.get(id)!;
-      for (const nodeId of way.nodeIds) {
-        componentNodes.add(nodeId);
-        for (const neighborId of ambiguousByNode.get(nodeId) ?? []) {
-          if (visited.has(neighborId)) continue;
-          visited.add(neighborId);
-          stack.push(neighborId);
-        }
-      }
-    }
-    if ([...componentNodes].some((nodeId) => explicitTrailNodes.has(nodeId))) {
-      for (const id of componentIds) promoted.add(id);
-    }
-  }
-  return promoted;
-}
-
 function hasAffirmativeMotorVehicleEvidence(values: Record<string, string>): boolean {
   const motorAccess = values.motor_vehicle ?? values.vehicle ?? values.access;
   return AFFIRMATIVE_MOTOR_ACCESS.has(motorAccess ?? "");
@@ -108,16 +44,13 @@ function wasWalkingConnector(values: Record<string, string>): boolean {
 /** Classify OSM ways once at the adapter boundary; null means no graph context is retained. */
 export function classifyOsmWay(values: Record<string, string>): EdgeClass | null {
   const highway = values.highway ?? "";
+  if (SIDEWALK_SUBTAGS.has(values.footway ?? "")) return "sidewalk";
   if (wasWalkingConnector(values)) return "trail";
-  if (SIDEWALK_SUBTAGS.has(values.footway ?? "")) {
-    return "sidewalk";
-  }
   if (TRAIL_HIGHWAYS.has(highway)) return "trail";
   if (highway === "track") {
     return hasAffirmativeMotorVehicleEvidence(values) && values.foot === "no" ? "service-road" : "trail";
   }
-  if (highway === "footway") return hasTrailContext(values) ? "trail" : "sidewalk";
-  if (highway === "pedestrian") return hasTrailContext(values) ? "trail" : "sidewalk";
+  if (highway === "footway" || highway === "pedestrian") return "trail";
   if (highway === "service") return "service-road";
   if (STREET_HIGHWAYS.has(highway)) return "street";
   return null;
@@ -156,6 +89,8 @@ export function osmWayFlags(
   return [
     `osm-feature:${featureId}`,
     `osm-highway:${values.highway}`,
+    ...((values.highway === "footway" || values.highway === "pedestrian")
+      && !SIDEWALK_SUBTAGS.has(values.footway ?? "") && !hasTrailContext(values) ? ["possible-walking-link"] : []),
     ...(direction === "both" ? [] : [direction === "reverse" ? "oneway-reversed" : "oneway"]),
     ...(values.surface ? [`surface:${values.surface}`] : []),
     ...(values.smoothness ? [`smoothness:${values.smoothness}`] : []),

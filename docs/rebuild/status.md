@@ -6,6 +6,1327 @@ the evidence line.
 
 ## Active system design revision
 
+### Named Standard mountain cores and connected approaches — 2026-09-29
+
+- [x] Replace twelve Washington Broad/EPA boundary files and the separate terrain
+  mask/document with one licensed GMBA Standard Basic inventory: 127 full named
+  leaves, 721,719 bytes, SHA-256
+  `ede170c4e2a6626e6db4ee324bdd753788d91c72c31dd0423adbd4a83c1aeb4a`.
+  Full source extents remain reusable across state borders; generic product caps
+  select cores and nomination territory. Dataset/paper credit and modification
+  attribution travel in exported provenance. No per-city exclusions, raster,
+  new dependency, request setting or graph-schema change is added.
+- [x] Remove automatic anchor enlargement of mountain cores. Preserve reviewed
+  anchors as source checks and California's exact historical nomination caps;
+  Washington's pinned state/US scope limits nomination without clipping routes.
+  Central excludes Arlington Airport and Mount Vernon while retaining reviewed
+  mountain controls. A generic Oregon cap reuses an existing full Standard leaf.
+- [x] Qualify frozen sparse entrances through hiking/possible walking links to
+  the selected core; ordinary roads never establish an approach. Share one bounded
+  CSR/Dijkstra implementation across disposable sequential passes. Register only
+  actual outside entrances with 500 m neighborhoods, then complete their individual
+  25-mile routing envelopes. Import additions without another nomination pass;
+  source gaps fail before DEM. Physical metric caches remain reusable.
+- [x] Hash/reconstruct derived geometry in completed receipts and verify all
+  final-extent source pins before reuse. Normalize only additional support when
+  needed, padding the actual extraction polygon rather than its merged bounding
+  box. Deduplicate overlapping unsupported-building inventory records and source
+  provenance. Saved/running installations and the prior publication remain intact
+  on failure; intentionally narrower installed coverage requires explicit removal.
+- [x] Verification: 188 unique focused cases pass across region/catalog (15),
+  planning/pruning (22), runtime/filtering (74), source-cache/prepared-release (46),
+  installer (27), and source seams (4). The unsupported-disclosure case passes
+  after final deduplication. Type checking, targeted ESLint, diff checking and one
+  production build pass. macOS installer checks required unsandboxed read-only
+  process identity; their initial sandbox failure was environmental. A concurrent
+  indexing integration briefly lacked its implementation during an earlier runtime
+  run; the integrated cases subsequently pass. No regional build or full/browser
+  suite is repeated. All task worktrees, branches, raw authoring files and tools
+  are removed; preserve the user's review file, source/metric caches and pinned data.
+- [ ] User rebuilds desired areas and explicitly replaces old installed broad
+  versions. Actual retained starts, bytes, build/search costs and representative
+  mountain/valley routes remain acceptance evidence. Standard omits some low-relief
+  terrain; missing mapped connections can exclude useful starts. Neither boundary
+  shape nor fixture success establishes real-source trail completeness or speedups.
+- [x] User reported the revised Central Cascades build Ready in 20m 51s:
+  24,464 access candidates, 8,414 sparse candidates, 5,733 terrain exclusions,
+  2,681 eligible starts and 160 outside approach starts. Its 2,344,040 nodes /
+  2,332,226 candidate segments retain 782,929 segments, compacting to 25,834 nodes /
+  27,276 physical edges. Two reviewed approaches remain density excluded and none
+  terrain excluded. Pack size is 58,505,990 compressed / 177,188,864 installed bytes.
+  This observes preparation under the new policy; installation, useful routes and
+  completeness across all regions remain open.
+
+This supersedes Broad/EPA land assignment, the separate terrain mask and full
+historical polygon-containment obligations. See [range inputs](../../data/coverage/regions/README.md)
+and [the build commands](../../README.md#developer-data-builds). Repository cleanup
+is mainly boundary data and authoring policy; the compiler adds two-stage support
+completion to avoid losing routes from outside approaches.
+
+### Mountain entrances and evidence simplification — 2026-09-29
+
+- [x] Preserve the user's selected unmarked mountain entrances. Replace arbitrary
+  nearby evidence borrowing with actual entrance-node associations and one parking
+  feature nomination. Remove nearby-road detection and disconnected parking snaps;
+  retain the connected marked Top Lake approach and Heather Lake lot contacts.
+  Delete the unused schema-6 portal module and its tests (1,090 lines), updating
+  active guidance instead of keeping two implementations. The progressive entrance
+  implementation itself is 43 lines smaller before later performance integrations.
+- [x] Pin the licensed GMBA Standard v2 terrain separately from Broad download
+  groupings. Preserve all 276 polygons, 49 holes and 36,007 coordinates; use only
+  eight-decimal GEOS quantization, without simplifying or buffering the mask.
+  Source pins, dataset/paper credit and modification attribution travel in exported
+  graph provenance. No network, terrain raster, dependency, request setting or
+  schema change is required during ordinary preparation/runtime search.
+- [x] Filter sparse entrance candidates through one multi-source walking-distance
+  pass to hiking links touching terrain before elevation work. Reuse the existing
+  pruning arrays/heap for the subsequent surviving-start pass. Actual mountain
+  tracks qualify, preserving forest/fire-road hikes; ambiguous footways and ordinary
+  roads can provide approaches but cannot qualify terrain alone. Unknown access
+  remains included and density remains fewer than ten buildings within 500 m.
+  New policy/input identities rebuild artifacts while physical metrics stay reusable;
+  actual reviewed candidates rejected by terrain are named separately from density
+  exclusions, while missing/restricted topology still fails publication.
+- [x] Audit the current immutable Central artifact inside its Docker environment:
+  30,345 nodes, 32,015 physical edges and 3,684 starts. A compact-graph approximation
+  retains 3,043 / excludes 641 starts (17.4%); cycle-capable starts retain 1,371 /
+  exclude 154 (10.1%). All 26 reviewed neighborhoods containing an installed start
+  retain one; Stevens Pass PCT and Snow Lake were already absent in this artifact.
+  Track inclusion restores Tarpiscan, Wenas and legitimate mountain road loops;
+  Flowing Lake, Crescent Lake and Highline Canal lowland examples remain excluded.
+  Prior evidence labels can contain borrowed parking/sign data. Compact endpoints
+  can miss interior contacts or understate distances, so these are estimates of
+  terrain's effect, not the new compiler's output or measured search savings.
+  Export/analysis peak RSS stayed about 80 / 230 MiB; analysis took about one second.
+- [x] Offline terrain calibration: 39 of 45 reviewed WA/CA anchors are directly
+  inside, including all sampled Santa Cruz/East Bay and Cascades approaches.
+  Fort Ord, Ozette and four other anchors are outside; their actual trail connection
+  remains the deciding criterion. Five synthetic lowland controls are outside,
+  but geographical distance alone cannot establish rejection. Standard can omit
+  low foothills and this rule qualifies starts, not every route's terrain.
+- [x] Focused verification: 86 portal/store/publisher cases, 51 pruning/runtime
+  cases and 16 catalog cases pass. Independent review found an outside-endpoints
+  terrain crossing; the indexed contact predicate and compiler regression fix it.
+  Nine geometry cases and the final five terrain compiler cases / 24 pruning and
+  catalog cases pass; targeted ESLint and integrated TypeScript checking pass.
+  The initial all-area overlay test exceeded the five-second fixture timeout;
+  reuse the existing planning loop and give that geometric fixture 15 seconds.
+  No full/browser suite or regional preparation is repeated. All task worktrees,
+  branches, raw terrain authoring tools, audit exports and processes are removed;
+  the user's review file, sources, metric caches, installed artifacts and jobs remain.
+- [x] User reported Central Cascades Ready in 18m 56s after the performance and
+  terrain/evidence revisions: 6,522 access candidates, 3,091 sparse candidates,
+  463 terrain exclusions and 2,628 retained starts. The unchanged candidate graph
+  has 2,452,576 nodes / 2,440,075 segments; 768,898 retained segments compact to
+  25,346 nodes / 26,698 physical edges. Two reviewed approaches remain density
+  excluded and none terrain excluded. Pack size is 57,389,985 compressed /
+  173,756,416 installed bytes. This establishes Central build observations, not
+  installation, route-search acceptance or all-region completeness.
+- [ ] User rebuilds other desired regions and installs their updates. Actual regional
+  retained counts, pack bytes, build/search times and Fort Ord/Ozette connectivity
+  remain acceptance gates. No regional build or full/browser suite is repeated here.
+
+Implementation and source limitations: [network design](network-design.md),
+[hiking terrain](../../data/coverage/regions/README.md). This supersedes the earlier
+no-mountain eligibility policy without changing complete download-territory
+assignment or clipping routes at start-selection boundaries.
+
+### Further bounded import optimization — 2026-09-29
+
+- [x] Profile a production-equivalent synthetic import using the committed Central
+  routing boundary and clipped terrain: 1,600 ways, 94,384 physical segments,
+  95,984 node puts and 1,200 shared-node duplicates. SQL writes/commits and exact
+  geometry predicates dominate this sample; warm source decoding is a small share.
+  The actual clipped terrain has 27 polygons / 3,326 vertices, not the full mask's
+  276 polygons. No source download or live regional SQLite inspection was performed.
+- [x] Delete unused staging node/evidence spatial indexes and evidence-point rows,
+  including their unique index and replay bookkeeping. Portal discovery already
+  reads canonical evidence and actual node associations. Preserve building spatial
+  queries/repair, provenance conflicts, elevation checks and transaction rollback.
+  Bulk-insert ordered way memberships with fixed SQL and json_each; create way
+  and edge lookup indexes once at their first read phases. Independent callers
+  retain eager indexing. Batches remain bounded at 1,000 operations.
+- [x] Add conservative prepared ring-envelope rejection before exact predicates.
+  Retain inclusive boundaries, holes, overlapping polygons, tiny/degenerate edges,
+  endpoint tolerances and positive-length terrain contact. No geometry is simplified,
+  no public interface changes, and no imported-identity/query-result cache is added.
+- [x] In isolated one-CPU, 1 GiB Linux containers, the same uninstrumented import
+  takes 2,218 ms before / 893 ms after (59.7% shorter), including deferred index
+  creation. Both produce identical business records and admissions, SHA-256
+  e0b6e2e490dad26b89cc6c90b1a4a6c25c36961b7fc49ab2d77364a09a4ac414.
+  Process peaks are 263.8 / 264.4 MiB, including fixture construction/clipping.
+  Instrumented passes take 2,016 / 857 ms. These are bounded synthetic measurements;
+  they do not establish total regional build time or additive savings.
+- [x] Avoid changes unsupported by the samples: copying an 83 MB synthetic source
+  database costs 287 ms versus a 102 ms median warm-read improvement; increasing
+  batches to 4,000 is slower in the alternating host sample. Insert-first improves
+  fresh writes but slows duplicate replay from 365 to 637 ms, so select-first remains.
+  No new cache storage, worker pool, dependency, pack schema or data identity is added.
+- [x] Verification: 12 geometry, 81 store/portal and 44 regional compiler cases pass;
+  targeted ESLint and TypeScript checking pass in an isolated coherent worktree
+  containing only these performance commits. The separate mountain-area revision
+  remains active in the shared checkout. No full/browser suite or regional build
+  is repeated. All owned benchmark containers, scripts, fixtures and task worktrees
+  are removed; unrelated work, useful caches, installed packs and jobs are preserved.
+- [x] Record the user's next actual Central build and completed JSON status:
+  20m 51s total, with import plus its new membership index taking 3m 27s versus
+  8m 27s previously (about 59% shorter). Fresh extraction/selection/filtering/reference
+  completion contributes about 3m 05s that the prior run skipped; elevation remains
+  almost entirely cached (25 measured / 782,904 reused segments). Subtracting that
+  source work gives about 17m 47s, a normalization of this run rather than a measured
+  repeat-build forecast. The concurrent named-core revision changes nominations
+  and adds approaches; retained segments increase 1.8% and eligible starts 2.0%.
+- [ ] Attribute the later-stage increase before claiming another speedup: writing
+  plus compression rises from 2m 37s to 4m 58s, while ranking and export also grow.
+  The small retained-graph increase alone does not establish an explanation. Peak
+  process-tree RSS is 2,806 MiB versus 601 MiB previously; it includes native child
+  processes used by fresh extraction, so it is not a measurement of Node alone.
+  Both container peaks reach 4,096 MiB; disk peak is now 25,950 MiB. Existing status
+  records cumulative memory peaks without phase/process attribution, so the cause
+  remains unverified. No new regional build, benchmark or live SQLite read is run.
+
+Primary references: SQLite [bulk INSERT SELECT](https://www.sqlite.org/lang_insert.html),
+[JSON table functions](https://www.sqlite.org/json1.html#jeach), and
+[JTS prepared polygons](https://locationtech.github.io/jts/javadoc/org/locationtech/jts/geom/prep/PreparedPolygon.html).
+Envelope rejection follows the established broad-phase practice but preserves
+this application's exact tolerances and overlapping-polygon semantics.
+
+### Regional preparation toward 20–25 minutes — 2026-09-29
+
+- [x] Record the user's warm Central Cascades baseline: 31m 46s, with 10m 17s
+  importing context, 4m 35s preparing sparse starts, 3m 23s writing and 5m 9s
+  compressing. Candidate/eligible/retained counts match the previous run;
+  all 822,526 segment measurements were reused. The earlier approximately
+  49-minute build measured 44,120 segments and included extraction, so total
+  savings are not an isolated compiler comparison.
+- [x] Keep disposable graph databases on an anonymous Docker-native volume,
+  removed by `run --rm`; retain host source/context, elevation, metric and receipt
+  caches. Explicit WAL NORMAL and a bounded 16 MiB working-store cache remove
+  per-transaction durability syncs for rebuildable data. External scratch remains
+  included in disk accounting and is cleaned on completion or interruption.
+- [x] Populate node/edge spatial indexes once after compression. Keep foreign-key
+  indexes, graph schema, stable IDs, geometry, float metrics, access and source
+  validation. Independent publisher/compaction callers retain their defaults;
+  deferred compaction rejects stale indexes and final indexing is transactional.
+- [x] Stream walking/building/evidence context in one way scan and one tagged-node
+  scan, retaining separate source/context envelopes and shared conversion helpers
+  for independent audits. Load temporary portal links in bounded 1,000-ID SQL
+  batches and create endpoint indexes afterward. Preserve source validation,
+  hiking/access flags, exact building counts, checkpoints and recovery.
+- [x] Bounded synthetic evidence preserves exact logical output hashes: in an
+  isolated 1 GiB Docker container, 100,000 node writes took 7,108 ms on shared
+  storage/default settings versus 3,550 ms on native storage/tuned settings.
+  A 30,000-physical-edge graph at approximately 96% compression took 11,160 ms
+  writing/compressing with immediate indexes versus 3,732 ms including final
+  deferred indexing, with about 144 MiB process peak. A 300,000-segment portal
+  load including all indexes took 10,536 versus 2,502 ms; a complete 3,000-segment
+  candidate preparation took 76 versus 41 ms. Combined source reading took
+  176.7 versus 94.4 ms median over alternating passes. These are synthetic
+  measurements, not regional runtime predictions or additive savings.
+- [x] Verification: 166 focused cases pass across portals, publisher/compaction,
+  source-store, progressive-store, runtime and resources; targeted ESLint and one
+  integrated `npm run typecheck` pass. `docker compose config --quiet`, one data
+  image build and a normal-user scratch-volume write/remove probe pass. No
+  regional build or live SQLite inspection was performed; benchmark scratch and
+  managed task worktrees are removed, preserving separate terrain work and the
+  user-owned publication review.
+- [x] User reported the next warm Central Cascades preparation completed in
+  18m 56s, beating the 20–25-minute target and reducing 31m 46s by 12m 50s (40.4%).
+  Import took 8m 27s, sparse candidate preparation 1m 19s, graph writing 1m 20s
+  and compression 1m 17s; final indexing rounded below one second. Writing plus
+  compression/indexing fell from 8m 32s to 2m 37s (69.3%); sparse preparation fell
+  from 4m 35s to 1m 19s (71.3%). Process peak was 601 MiB, container peak 4,096 MiB
+  and measured build disk peak 24,197 MiB. All 768,898 measurements were reused.
+  Candidate graph counts match the baseline, but terrain/evidence changes reduced
+  retained segments by 6.5% and changed start counts, so total savings are not an
+  isolated optimization comparison. This meets the warm Central target; cold
+  first-build time, other regions and installed-route acceptance remain unverified.
+
+Primary references: [Docker volumes](https://docs.docker.com/engine/storage/volumes/),
+SQLite [WAL synchronization and cache bounds](https://www.sqlite.org/pragma.html#pragma_synchronous),
+[R-tree rounding](https://www.sqlite.org/rtree.html#roundoff_error),
+[INSERT SELECT](https://www.sqlite.org/lang_insert.html),
+[JSON table functions](https://www.sqlite.org/json1.html#jeach), and
+[index construction](https://www.sqlite.org/lang_createindex.html).
+NORMAL preserves transaction consistency but may lose recent commits after a
+power failure; only reproducible working graph data changes synchronization.
+
+### Checkpoint identity and explicit rebuild — 2026-09-29
+
+- [x] Reproduce Central Cascades' checkpoint rejection using JSON only: export
+  hashed region-source fields in producer insertion order, but release parsing
+  reordered them. Normalize sources with the same source schema before hashing;
+  already schema-ordered inputs keep their identities. This uses a stable input
+  representation as required for repeatable hashing ([RFC 8785 rationale](https://www.rfc-editor.org/rfc/rfc8785)).
+  Invalid older checkpoints remain rejected rather than weakening verification.
+- [x] Add `build REGION [REGION...] --rebuild`: skip only the completed region
+  receipt, retaining verified source/context, DEM and metric caches. Publish a
+  replacement only after successful preparation; failures keep the previous
+  catalog and receipt. CLI preflights all selections and rejects invalid flags.
+  Document the combined Compose `--build` and CLI `--rebuild` command in README.
+- [x] 28 focused CLI, release and runtime cases pass, including source-order
+  round-trip identity, rejected-checkpoint rebuild, failure preservation, cached
+  input reuse and subsequent ordinary receipt reuse. Targeted ESLint and
+  `npm run typecheck` pass. No regional build, cache removal or live SQLite
+  inspection was performed; the user runs the timed preparation.
+
+### Ranking, metric reuse and compression overhead — 2026-09-29
+
+- [x] Aggregate component sizes once per access profile, instead of recounting
+  them for every start. Union each physical link once per profile and skip parent
+  writes that already point at the root. Keep directed degrees and public/unknown
+  ranking unchanged. Reuse prepared geometry for candidate admission and final
+  selected-edge checks. Counts remain in disposable SQLite tables, not a graph
+  cache on the JS heap.
+- [x] Skip valid geometry-metric cache replacements; retain measurements, legacy
+  promotions and invalid-row repair. Reuse the backup inventory's fingerprint
+  function until its shared immutable product-array snapshot changes. Same-size
+  replacements and acquisitions by another sampler refresh keys and provenance.
+  Separate `Writing prepared graph` from `Ranking retained access points` in logs.
+- [x] Replace compression's temporary physical-only direction index with
+  `(physical_edge_key,id)` and reuse narrow direction records within the existing
+  2,048-member / 8 MiB corridor bounds. Preserve query ordering, LIMIT 3 checks,
+  direction, float accumulation, stable IDs, cancellation and graph output.
+- [x] Verification: 132 focused cases pass across portals/store/publisher,
+  compaction and runtime/elevation; one optional local rasterio fixture is absent.
+  Three selected end-to-end runtime cases pass after integration, along with
+  targeted ESLint and `npm run typecheck`. No full suite or regional build repeated.
+- [x] Disposable synthetic comparisons preserve exact output hashes: full portal
+  derivation on 1,500 nodes / 2,998 directed edges / 150 starts with Central's
+  boundary took 296 / 117 ms before/after. On 4,000 metric lookups, inventory work
+  took 67.9 / 1.85 ms and warm-cache read/parse/write took 15.35 / 6.95 ms. File-backed
+  compression of 2,500 segments took 222 / 220 ms: no meaningful end-to-end gain
+  established at that size. Its combined benchmark process peaked at 226 MB RSS.
+- [x] Preserve the user's baseline build, which finished Ready in about 49 minutes
+  with compression taking 8m 18s. Archive completed worktrees, delete task branches,
+  remove benchmark scratch, and preserve caches/artifacts and the user review file.
+- [x] Observe the user's rebuilt preparation: 31m 47s with a warm metric cache.
+  Stage measurements and attribution limits are recorded above; this is not a
+  controlled code-only speedup. A normal completed-region rerun intentionally
+  reuses its valid receipt; explicit `--rebuild` retains source/elevation caches.
+
+References: SQLite [grouped counts](https://www.sqlite.org/lang_aggfunc.html),
+[search-and-sort indexes](https://www.sqlite.org/queryplanner.html#searching_and_sorting_at_the_same_time),
+and [REPLACE semantics](https://www.sqlite.org/lang_conflict.html); Princeton's
+[union-find with path compression](https://algs4.cs.princeton.edu/15uf/WeightedQuickUnionPathCompressionUF.java.html).
+These justify the retained mechanisms, not a prediction of regional speedup.
+
+### Regional import overhead — 2026-09-29
+
+- [x] Reuse fixed SQL statements for the working graph store and remove duplicate
+  node lookups and complete derived-row writes. Statement lifetime is bounded by
+  the store; no node/record cache grows with the import. Preserve provenance and
+  elevation conflicts, rollback, partial-import repair and late evidence resolution.
+- [x] Prepare each routing boundary once during import with a static y-interval
+  index, following JTS's prepared point-in-area approach. Reuse the exact existing
+  predicates, including holes, islands, concavities and tolerance rules; remove
+  per-segment coordinate slicing. No pack schema, cache identity, dependencies or
+  user controls changed.
+- [x] Verification: 50 focused offline cases pass (8 geometry, 6 store, 36 runtime),
+  plus targeted ESLint and `npm run typecheck`. Differential tests cover small
+  edges, boundary tolerances, replay and recovery. Independent predicate review
+  found no omitted candidates in its bounded threshold check. No full build or
+  repeated full test suite was run.
+- [x] Bounded synthetic measurements: 800 overlapping five-node ways replayed
+  twice (8,000 node puts plus other context) took 320 ms before / 96 ms after in
+  memory, with identical hashes of all nine affected tables. For 2,000 generated
+  short segments per boundary, linear / indexed checks took 117 / 4.6 ms for
+  Central Cascades (2,017 vertices), 24.7 / 5.0 ms for North Cascades, and 2.85 /
+  2.94 ms for a rectangle. Every result matched; Central's index setup took 1.2 ms.
+  These are single microbenchmarks, not end-to-end build measurements.
+- [x] Integrate focused commits, archive the SQL worktree, delete its branch and
+  remove benchmark scratch. Preserve the running Docker build, source/DEM/metric
+  caches, published artifacts and user-owned publication review.
+- [x] Observe context reading at 10m 18s in the completed user-run preparation,
+  against the earlier reported 16m 18s. Cache/other changes prevent isolating the
+  import change's contribution; see the observed run above. Existing running
+  containers keep their original code; do not restart them solely for this change.
+
+### Mountain-led download boundaries — 2026-09-29
+
+- [x] Replace Washington's county grouping with twelve static mountain-led and
+  surrounding-area outlines. Pin GMBA v2 Broad range ancestry and EPA Level III
+  ecoregions, retain historical mountain footprints and reviewed approaches, and
+  allocate shoreline/source-edge residuals without dropping start coverage.
+  California's four entries remain unchanged. Mountain geography groups downloads;
+  the 0–9 buildings within 500 m rule still decides start eligibility.
+- [x] Delete the county registry, assignment/validation code and superseded Central
+  boundary. The catalog requires one direct boundary file per area. No new runtime
+  dependency, boundary generator, request control or graph schema is introduced.
+- [x] Guard changed same-ID installations using collective selected start and route
+  coverage. Unchanged geometry uses the existing fast path; retired pilots still
+  require one declared complete replacement. Publication can remain sequential;
+  installation switches atomically and saved jobs keep their old pins. All 27
+  focused installer tests and targeted lint pass.
+- [x] Verify all sixteen plans offline, the complete Washington geometry obligation,
+  historical Central/pilot footprints, reviewed approaches, unchanged California
+  fingerprints, retained trail seams and adjacent source support. The 25 focused
+  regional/seam/source tests pass; one initial sample was outside the old footprint,
+  so it was replaced with the existing Friday Harbor checkpoint and the affected
+  case passed. `npm run typecheck` and targeted ESLint pass. Installer verification
+  above adds 27 cases; no full test suite was repeated.
+- [x] Normalize authored outlines with one GEOS precision policy, resolving observed
+  floating-point overlay failures without runtime fallback code. The shared grid
+  and small outward allowance preserve every baseline point; all outputs are within
+  0.09 m of their raw inputs. All twelve files total 670,635 bytes. Runtime union,
+  baseline containment and installed-route comparison complete without exceptions.
+  Source hashes, measured effects and primary references are pinned with the data.
+- [x] Integrate focused commits and archive/remove completed worktrees and branches.
+  Remove temporary authoring downloads, tools and scripts. No worker remains;
+  root configuration and lockfile are unchanged. Preserve the user-owned untracked
+  publication review.
+- [ ] User rebuilds the data/app images and desired areas, then installs updates.
+  Build/select surrounding areas as needed when starts move between groups;
+  old rectangular route-buffer corners can still require explicit removal before
+  installing revised areas. The aggregate new routing footprint omits about
+  0.29665 square degrees of old offshore/southern Oregon rectangle corners; do not
+  expand start areas merely to retain those overestimates. Start coverage and the
+  25-mile buffer guarantee remain required.
+  Existing caches, prepared/installed artifacts and saved jobs are preserved.
+- [ ] Real-data completeness and performance acceptance remain pending: no regional
+  build, full app build or browser suite was run for this boundary revision.
+
+Sources, derivation and limitations are in the [region definitions](../../data/coverage/regions/README.md).
+This supersedes county-based grouping below, while retaining its statewide
+coverage obligation and early sparse-start preparation.
+
+### Sparse starts and complete territory assignment — 2026-09-28
+
+- [x] Apply the user's explicit rule: 0–9 mapped buildings within 500 metres;
+  ten or more excludes a start. Include quiet foothills/lowlands throughout
+  Washington and the exact existing four California footprints. No mountain
+  heuristic or additional user control. Unknown access remains enabled by default.
+- [x] Correct explicit `building=no` handling for nodes, ways and supported
+  relations, retaining unrelated trail/parking roles. Normalization v7 invalidates
+  old context stores/receipts; valid physical metric cache entries remain reusable.
+- [x] Discover/freeze access candidates before distance pruning and DEM work.
+  Pruning starts only at those candidates, preserving the admissible undirected
+  closed-route bound. Parking snaps cannot move when other trails are pruned.
+  Rank/components run once on measured topology. Scratch tables use disk, failed
+  preparation removes scratch, and all-dense selections stop before DEM acquisition
+  without changing publication. Admission constants participate in cache identity.
+- [x] Preserve reviewed-approach checks. An actual public/unknown mapped candidate
+  rejected solely by building count is named in release limitations; missing or
+  restricted access evidence still fails. Dense disconnected fixture trails are
+  never sampled; nine-building starts remain and ten-building starts are rejected.
+- [x] Assign all 39 pinned Census 2025 counties once across twelve Washington
+  download groups, unioned with existing footprints/approaches. Catalog loading
+  rejects missing, duplicate and unknown assignments. All four California effective
+  footprint hashes remain unchanged. This is complete declared territory assignment,
+  not proof of source-trail completeness or generalized shoreline precision.
+- [x] Add the matching August 1 Idaho extract: 127,365,914 bytes, SHA-256
+  `6cb0ef33774b5580d618749b0b0a54d4f7a0b1bc0674e1df2bfa73024ea0f7b8`,
+  upstream timestamp `2026-08-01T20:21:21Z`, same as Washington/Oregon. Streamed
+  acquisition and header-only inspection retained one useful cache copy/receipts;
+  no live/cache SQLite was opened on the host. Provider polygon/date mismatch is
+  recorded rather than expanding advertised coverage to the PBF header bbox.
+- [x] Extend the surveyed IBC mask through eastern route buffers while preserving
+  all 855 original border vertices. Declare a narrow offshore scope cap west of
+  −125.25 north of 46.4; it removes Olympic's ocean-only source gap without clipping
+  any county/retained start footprint. Real mainland source gaps still fail.
+- [x] Focused verification: 36 compiler-runtime, six pruning, 18 regional-catalog,
+  three recipe, 29 CLI and four retained-seam cases passed, together with the
+  portal/store/publication, building-context, eligibility and six adjacent-source
+  cases run by the bounded agents. Initial runtime fixtures without access roads
+  were corrected to retain their stated test purpose; the two affected cases then
+  passed. The initial full-territory plan exposed the offshore gap above; all 16
+  plans pass after its explicit scope correction. Targeted ESLint and integrated
+  TypeScript checking passed. No full app/browser suite or regional build ran.
+- [ ] User rebuilds the data/app images, rebuilds desired named areas and installs
+  the updates. Existing prepared/installed artifacts remain until replaced normally.
+  Larger groups have unmeasured source-reading time, peak memory, download bytes
+  and total build cost; early pruning does not establish the ten-minute target.
+- [ ] Real-data start/trail completeness, shoreline/boundary margins, representative
+  loops/lollipops and performance acceptance across the expanded territory.
+
+Current inputs, tradeoffs and commands are in [region definitions](../../data/coverage/regions/README.md),
+[network design](network-design.md), [coverage roadmap](regional-expansion-plan.md)
+and [README](../../README.md#developer-data-builds). User caches, prepared/installed
+artifacts, saved jobs and the untracked publication review are preserved.
+
+### Download worker packaging repair — 2026-09-28
+
+- [x] Reproduce Central Cascades installation failing at zero bytes in the user's
+  running app image. The raw `tsx` worker imported the shared containment helper
+  from `lib/coverage`, which Docker deliberately removes. Next's bundled API
+  worked, but the child failed module resolution before its ready handshake.
+- [x] Move the containment implementation into `lib/graph/coverage-containment.ts`
+  and import it directly from installation, preparation and regional tests.
+  Delete the old implementation; preparation modules remain excluded from the
+  runtime image. Add an import check after pruning, as the production user, so
+  missing worker dependencies fail image creation. Preserve worker stderr in app
+  logs using Node's [inherited stdio](https://nodejs.org/api/child_process.html#optionsstdio).
+- [x] Thirty-eight installation/regional tests, integrated typechecking and
+  targeted ESLint pass. A network-disabled, 512 MiB container using the existing
+  production image with only the two repaired runtime files mounted loaded the
+  imports, received the real worker's ready IPC and observed exit code zero with
+  an empty temporary queue. The first probe awaited `close` after IPC disconnect;
+  corrected diagnostic waiting on `exit` passed. Temporary containers and queues
+  were removed. No user database, installed artifact or build cache was changed.
+- [x] User rebuilt the app and reported downloads working. Regional graph
+  rebuilding was unnecessary for this packaging fix.
+
+### Area consolidation and elevation gap repair — 2026-09-28
+
+- [x] Consolidate the complete Glacier Peak and Henry M. Jackson pilot start
+  footprints into Central Cascades, preserving all 28 distinct approach records
+  and effective radii. Delete the two pilot catalog entries and production
+  polygons; nine named build areas remain. Henry Coe in California is unchanged.
+  Independent fixtures preserve the old coverage obligation and review provenance.
+- [x] Guard the three reviewed Cascades seams with 24 complete pinned OSM ways
+  (8,869 coordinates). Full-line checks include segment interiors; negatives catch
+  a gap despite covered endpoints. The PCT's 15 segments intersecting the explicit
+  Yakama exclusion stay excluded. This is not a claim of exhaustive statewide
+  coverage or proof of every mapped trail's presence in compiled artifacts.
+- [x] Require replacement start/routing containment before source preparation;
+  retire predecessor entries only after successful audited publication. Updates
+  preserve the actual installed extents and switch atomically, while running/saved
+  pins retain older files. Missing or undeclared replacement coverage still fails.
+  The shared containment predicate handles only negligible overlay-rounding area;
+  actual holes and lost approaches remain failing tests.
+- [x] Consolidation verification: 83 runtime, installer, regional geometry and UI
+  tests; three release-contract tests; four seam tests; targeted ESLint and one
+  integrated TypeScript check passed. The first installer run was blocked by
+  sandboxed process identity inspection and the first UI fixture had an orphan
+  artifact; the corrected focused run passed with host process inspection enabled.
+  No full app/browser or regional build was run for consolidation.
+- [x] Diagnose the user-run North Cascades elevation failure. Central Cascades
+  published in the old batch; North stopped after 448.082 seconds on Depot Creek
+  segment `osm-way-1381017880:20`. The affected points are inside the precise US
+  border mask but outside valid 10 m DEM cells. Official 30 m USGS raster range
+  probes cover these and the historical Chilliwack void without changing the border.
+  [Resolution study](elevation-resolution-study.md) records source URLs, measured
+  size/grade/gain tradeoffs and the user's decision: keep 10 m primary, use 30 m
+  only for missing primary samples.
+- [x] Implement lazy backup acquisition, offline reuse and final provenance/cache
+  identity after sampling. Valid 10 m samples remain unchanged; remaining NoData
+  still fails. Incomplete metric-cache rows from failed older builds are misses,
+  and new incomplete rows fail before cache commit. No trail removal or fabricated
+  elevations. Twenty-six elevation/collection and 33 runtime tests passed, plus
+  targeted ESLint. Integrated typechecking caught one missing test-fixture field;
+  the fixture now explicitly supplies the new limitations member, and the final
+  integrated TypeScript check and targeted lint passed.
+- [x] Verify the actual Depot Creek failure using two coordinates in the existing
+  Docker image: 837.034668 m stayed unchanged and the missing sample became
+  836.936523 m. One verified 55,903,776-byte backup tile was acquired. Offline
+  sampling and resume identity matched, all nine primary product pins survived,
+  and the check took 7.867 seconds with 536,768,512 bytes peak cgroup memory.
+  The backup remains cached for the user's retry; no regional build ran. The
+  diagnostic container/scripts and completed agent worktrees were removed.
+- [x] Keep explicit removal of installed retired pilots available before a larger
+  replacement download. Both focused predecessor/removal UI cases and lint passed.
+- [ ] User rebuilds the consolidated Central Cascades graph and retries the batch,
+  then updates the app/installed areas. The current published catalog still holds
+  the pre-consolidation Central graph and the two pilots until that successful build.
+
+Source/metric caches, published/installed artifacts and the user-owned publication
+review are preserved. Washington-wide inventory, full-trail completeness and
+representative end-to-end routes remain separate acceptance gates.
+
+### Large-area extraction OOM repair — 2026-09-28
+
+The first user-run Central Cascades build failed in native extraction. Docker's
+OOM event identifies container `alpine-loop-data-run-7d85ef0d0347`; its build report
+records SIGKILL at 2.792 seconds and a 4 GiB cgroup peak. The warning was also real:
+Docker has Osmium 1.15.0/libosmium 2.18.0, while `smart -S tags=building` requires
+Osmium 1.16 or newer. The ignored option allowed unrelated multipolygon completion.
+
+- [x] Research installed-version behavior before changing extraction. `simple`
+  alone is also incorrect in this version: only the first way node and first
+  relation member are tested. `complete_ways` avoids that omission but a capped
+  extraction probe reached 3,946 MiB sampled RSS and subsequent `getid` was killed.
+- [x] Use geographic node selection plus two sequential parent scans; tag-filter
+  before reference completion; exclude node seeds from `getid`'s copied ID tables
+  and merge unchanged seed objects back into the completed stream. This preserves
+  original identities and direct-way building multipolygons, without a native
+  upgrade, a statewide normalized cache, a higher Docker limit, or parallel scans.
+  The source normalization version changes to v6; segment metric caches remain
+  reusable. Consumed intermediate files are removed immediately.
+- [x] The revised nonempty extraction pipeline passed against the actual pinned
+  Washington source and exact Central Cascades route buffer in the existing Docker
+  image at the unchanged 4 GiB cap: 19.867 seconds, 2,549,178,368 bytes sampled
+  process-tree RSS, 2,607,124,480 bytes cgroup peak (2.43 GiB). Memory `max`, `oom`
+  and `oom_kill` counters remained zero from start to finish. It streamed 9,801,054
+  nodes, 1,273,430 ways and 600 relations; no records were accumulated in JS memory.
+  Extraction staging was empty afterward. No normalization, SQLite, elevation,
+  route search or pack publication ran in either diagnostic probe.
+- [x] Final checks: 38 source-filter/source-store tests and 18 compiler-runtime
+  tests passed; targeted ESLint and one integrated TypeScript check passed.
+  The committed regression fixture also passed in Docker's Osmium 1.15.0:
+  41 unique objects with complete way references, preserved access/direction tags,
+  interior-node trail selection, outside-first-member building completion, and no
+  unrelated multipolygon expansion. Empty selection also passed; scratch was empty
+  after both fixture cases. The temporary containers, scripts and task worktree
+  were cleaned up; useful caches and the user's publication review were preserved.
+- [ ] User reruns the full regional build. Extraction measurements do not establish
+  complete-build time, peak resource use or geographic acceptance.
+
+Primary-source reasoning and limitations are recorded in
+[data sources](data-sources.md). Tests must preserve a trail with only an interior
+node inside the envelope, a building whose first member is wholly outside, original
+IDs/tags, empty and standalone-node selections, missing-reference failure, and
+child/file cleanup on cancellation, failure and early iterator return.
+
+### Named-area restoration and sequential builds — 2026-09-28
+
+- [x] Replace the generic loader's hardcoded Washington/USFS assumptions with
+  explicit boundary and approach provenance. Preserve the pilot IDs and reviewed
+  locations; recipes remain responsible for provider/support geography.
+- [x] Configure the nine historical coverage groups alongside Glacier Peak and
+  Henry M. Jackson: eleven named selections, 88 representative approach checks.
+  Existing regional geometries are referenced rather than duplicated. These are
+  configured inputs, not nine completed new builds or a statewide-completeness claim.
+- [x] Add sequential explicit multi-area `plan`/`build` selection. Resolve and plan
+  every selection before preparation; reject duplicates, stop on failure/pause,
+  and publish each successful area independently. Each result preserves the
+  single-area output shape. Multi-area installation already shares one download job.
+- [x] Add Oregon support as explicitly selected by the user. The 252,076,488-byte
+  Geofabrik `oregon-260801` extract matches Washington's upstream timestamp
+  `2026-08-01T20:21:21Z`. SHA-256
+  `777d9898e1cf0a80b73b2c503028fe0c15120f6547ae692cc48d6fae26b0847e`
+  and provider MD5 were verified; one copy is cached under the ignored shared
+  source root. Provider polygon metadata retains the historical-extent caveat.
+- [x] Remove the obsolete pack registry, size table and registry schema/tests.
+  Retained elevation configs are cache hints discovered from source-input folders;
+  the named-area catalog is the sole developer availability list.
+- [x] Final integrated geometry, source, exclusion and compiler fixture checks.
+- [ ] User-run builds, installation, route/approach acceptance and measured costs
+  for the nine new definitions. No regional/Docker build was run by the agent.
+- [ ] Reconcile the remaining Washington inventory recorded in the roadmap.
+  Puget/island, lowland, eastern and southeastern systems are still outstanding.
+  Source-refresh generations and full-trail completeness remain separate gates.
+
+The California recipe retains all 78 reviewed exact-way restrictions. Restoration
+also preserves explicit exclusions for unreviewed extensions beyond prior Henry Coe
+and Olympic coverage. Source polygons are geographic evidence, not new access
+permissions. The region restoration notes describe derivations and unresolved
+signed-corridor/authority review. Larger historical groups have unmeasured first-build
+costs; the ten-minute target is not yet established for them.
+
+Verification: 70 focused tests across catalog geometry, source recipes, planning,
+compiler runtime, elevation cache and CLI passed. The first integrated run found
+one obsolete source-order assertion (Washington-only); it now verifies both pins
+and their shared timestamp, and its three-test file passed on rerun. All other
+69 tests passed on the initial run. One TypeScript check and targeted ESLint passed;
+no repeated full suite, app build or browser suite for this data/CLI change.
+
+Completed task worktrees were archived and branches removed. Diagnostic handoff
+files and transient extracts were deleted. Useful source/DEM/metric caches,
+installed releases, saved work and the user-owned publication review remain intact.
+Source download and small geometry review only; no live SQLite reads or regional
+processing. The additional Oregon payload remains cached for the user's builds.
+
+### Coverage correctness and full geographic scope — 2026-09-28
+
+The user reaffirmed that the target is Washington-wide hiking coverage plus the
+Bay Area and nearby California areas previously available. The two-area pilot
+does not satisfy that scope. The rewritten [coverage roadmap](regional-expansion-plan.md)
+distinguishes historical coverage, current restoration and statewide gaps; obsolete
+pack-registry/activation instructions were removed, and the old onboarding checklist
+is explicitly historical. The user's untracked publication review remains untouched.
+
+- [x] Recover the historical baseline: Santa Cruz Mountains, Southern East Bay,
+  Monterey–Carmel, Henry Coe, Central Cascades, North Cascades, Rainier–Goat Rocks,
+  Southwest Cascades and Olympic Peninsula. These nine were built and activated
+  in later rebuild gates; August 4 archive tags describe earlier prototype samples.
+  Marin/Mount Tam and Tahoe–Eldorado were planned only. The historical Washington
+  groups did not cover every statewide hiking system.
+- [x] Diagnose the three approach omissions against bounded extracts of pinned
+  Washington 260801 OSM and isolated, hash-verified copies of finished packs.
+  No live/cache SQLite database was opened, and no regional/Docker build ran.
+  Top Lake Trail way 1356527414 and its approach track 428036699 are present;
+  trailhead node 3761092329 is 20.813 m along the path from junction 3761092325.
+  The exact-junction-only portal rule missed it. Heather's parking way 380176709
+  shares different vertices with approach track 5847190 and trail 380176708;
+  its hiking contact 3835171557 is 528.312 m from the USFS point and outside the
+  previous 500 m start neighborhood. Both Heather ways are present in the graph.
+  Lost Creek entrance node 12244685006 and trail way 372783759 are present, but
+  the start footprint omitted the entrance.
+- [x] Correct the regional inputs: add USFS Lost Creek Ridge recreation site 48232
+  as Glacier Peak's ninth reviewed approach; retain Heather's agency coordinate
+  with an explicitly reviewed 600 m registration neighborhood. These select
+  existing mapped starts and do not add trail connections or grant access.
+  Lost Creek evidence: [USFS recreation sites](https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0)
+  (`site_id=48232`, WGS84) and [the USFS Mountain Loop guide](https://www.fs.usda.gov/Internet/FSE_DOCUMENTS/fseprd530006.pdf).
+- [x] Correct shared portal derivation, without region-name conditions. A mapped
+  trailhead can associate with a track approach through up to 250 m of selected,
+  non-restricted hiking edges, across source-way splits and branches. Parking
+  may touch its track and hiking path at different explicitly shared vertices;
+  no connecting edge is created and tracks remain walking links. Restricted
+  evidence/ways, unrelated nearby features, missing segments and unmarked track
+  junctions remain excluded. The compiler version changes so prior artifacts
+  cannot bypass the fix. Implementation: `08a2bc8`, `a19775f`.
+  Research basis: [OSM trailhead placement](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrailhead)
+  and [Dijkstra with a distance cutoff](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.shortest_paths.weighted.single_source_dijkstra_path_length.html).
+  Association uses undirected physical distance; route generation still enforces
+  travel direction. Tests use reduced pinned-source representations and synthetic
+  negatives; no unbounded network exploration is introduced.
+- [x] Add a general publication check: every reviewed approach must have a
+  public/unknown mapped start within its declared neighborhood in the final graph,
+  after start filtering and compaction. Missing entries stop publication with
+  named diagnostics; existing coverage remains active. Include the approach checks
+  in receipt identity so an unchanged-artifact shortcut cannot skip new expectations.
+  This verifies declared approaches, not an exhaustive inventory or loop feasibility.
+- [x] Fix replacement provenance: rebuilding one area drops its previous boundary/
+  approach sources from the retained catalog while preserving neighboring artifacts
+  and rejecting incompatible shared provider pins. A regression covers A+B →
+  revised A+B with unchanged B bytes. Historical global limitation text can still
+  accumulate; precise per-artifact limitation replacement belongs to release maintenance.
+- [x] User rebuilt and installed corrected Glacier Peak and Henry M. Jackson
+  packs. Verify all declared approach neighborhoods and the three exact corrected
+  starts; rebuilt-artifact evidence below.
+- [ ] Representative useful/boundary-crossing routes on the rebuilt packs and
+  independent full-trail/compaction completeness remain open.
+- [x] Expansion prerequisite: remove Washington-specific longitude bounds and
+  hardcoded USFS wilderness provenance from the generic region loader, retaining
+  explicit source/border validation in the appropriate regional inputs.
+- [ ] Restore the four California coverage groups and remaining historical
+  Washington systems, then reconcile the full statewide inventory. Eleven definitions are now configured;
+  nine new real builds, acceptance and full statewide reconciliation remain.
+
+Verification: 20 focused portal/store tests, 20 regional runtime/catalog tests,
+targeted ESLint and one integrated TypeScript check passed. No UI change or
+repeated full suite/build. The completed task worktree is archived and its branch
+deleted; 25 MiB of diagnostic artifact/source copies were removed. Source caches,
+published/installed packs and saved searches remain intact. Rebuilt-pack start
+acceptance subsequently passed; route/completeness acceptance remains partial.
+
+User-run rebuild/update verification: the app's coverage API reports both areas
+active on `release-ced3161b417c45e6c031d0a89456a291`, using `compact-regions-v2`.
+Its installed artifact IDs exactly match the published catalog. Finalized artifact
+copies were checked against declared raw sizes/SHA-256, queried immutably, and
+deleted immediately; no live/cache SQLite files were opened.
+
+- Glacier Peak artifact `e973cbb649777255366a6c2a4587f11f971ea67138ff30bed22f9dc0918113c8`:
+  5,982,160 compressed bytes, 17,580,032 raw bytes, 15 access records; all nine
+  declared approach neighborhoods have mapped starts. The exact Lost Creek Ridge
+  start `portal:osm-node-12244685006` exists and is public. Its nearest-cycle
+  lower bound is 20,505.70 m; that is not a guarantee of a feasible requested hike.
+- Henry M. Jackson artifact `843fa0d229898e88ee27d77c5732de58f028f0e3cd5eb7ec17b8d1d967d56619`:
+  2,003,031 compressed bytes, 5,976,064 raw bytes, 17 access records; all eleven
+  declared neighborhoods have mapped starts. Top Lake `portal:osm-node-3761092329`
+  and Heather Lake `portal:osm-node-3835171557` exist and are public. Top Lake's
+  nearest-cycle lower bound is 17,598.61 m. Heather's inclusive minimum stem is
+  null: no reachable physical cycle in this prepared graph, so the approach fix
+  does not promise a loop/lollipop result there.
+- The latest Henry build report records 102.272 seconds with all 33,750 segment
+  metrics reused and 607,764,480 bytes (about 580 MiB) sampled process-tree RSS.
+  Its 4 GiB cgroup figure is read from `memory.peak`, not the configured limit,
+  but reports the cgroup's lifetime high-water mark including file/kernel memory.
+  No initial baseline or memory-events delta is recorded. It cannot establish
+  an OOM, an attributable working-memory requirement, or cold-build performance;
+  see [Linux cgroup memory accounting](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory).
+
+### Named regional preparation study — 2026-09-28
+
+The user requested a comprehensive design/cost study before another overhaul.
+[Regional preparation study](regional-preparation-study.md) records alternatives,
+primary references, measured costs, lifecycle/UI consequences and replacement
+criteria. Implementation is now integrated; real-region performance acceptance remains open.
+
+- [x] Inspect the current pipeline and compare named independent graphs against
+  shared storage, statewide graphs and connected-component preparation.
+- [x] Bounded read-only experiment on the finished artifact: 406,472 physical
+  edges become 11,664 (2.87%) under a conservative 25-mile undirected bound from
+  all 4,009 core nodes. Probe: 4.924 seconds, 137.5 MiB peak RSS. Its isolated
+  625 MB copy was deleted; no cache/live WAL database was opened. Shape-node
+  counts also show compaction potential, not measured final bytes or runtime.
+- [x] Record product answers: about ten minutes for a first useful region;
+  named areas select trailheads including approaches; initial coverage is
+  US-only with the international border explicitly shown as a hard limit.
+- [x] Use wilderness-sized hiking areas initially. Glacier Peak is pinned from the
+  USFS wilderness layer (WID 207, generalized to about 11 m) plus eight reviewed
+  USFS approach neighborhoods with a 500 m registration tolerance. Entiat River,
+  Phelps Creek, White River, Trinity, North Fork Sauk, Suiattle, Downey Creek and
+  Little Wenatchee Ford are included. This is not an exhaustive approach inventory.
+  The same footprint drives build planning, download selection and Plan filtering.
+- [x] Implement and verify named-region preparation. Shared seams 9567f53,
+  pinned catalog/audit reuse e5d6928, compact graph compiler d351013, regional
+  runtime 3747613, named CLI/download UI 428b3b7 and map selection 9948d41.
+  Bounded CSR pruning precedes elevation, only actual sample-owner DEM tiles are
+  resolved, unchanged action receipts skip staging, and physical metric keys
+  survive changed way segment ordinals. Corridors retain geometry/profiles,
+  access nodes, direction/metadata boundaries and rings. Final VACUUM reclaims
+  removed SQLite pages. Semantic audit reuse verifies compressed bytes and source
+  provenance; explicit inspect always performs the complete audit.
+- [x] Remove superseded paths and complete one integrated verification pass.
+  Deleted the old bbox CLI and five OSM named-area discovery/orchestration files;
+  no alternate active builder remains. `npm run verify` passed lint, TypeScript,
+  687 tests in 93 files, and the production Next.js build. The two changed offline
+  desktop/mobile coverage flows passed once (1280/390 px); screenshots inspected.
+  Native `regions` and `plan glacier-peak` resolve the pinned catalog without
+  downloads. Docker application/tooling images were not rebuilt in this turn.
+  Against 33dd23e, production has 688 additions/479 deletions (net +209 lines),
+  tests under lib/scripts/components have 382 additions/243 deletions (net +139);
+  browser fixtures and documentation/data are counted separately. This pass removes
+  obsolete mechanisms but is not a net LOC reduction: bounded pruning/compaction
+  add necessary code. All three task worktrees were archived and their branches
+  deleted. Removed 3.7 MiB of obsolete anonymous-area receipts/search-region cache;
+  retained source/DEM/metric caches, installed data and saved references. No live
+  Docker database was opened; only the app container was running before cleanup.
+- [ ] User-run Glacier Peak build/install/search acceptance: cold acquisition and
+  processing separately, warm no-op reuse, peak RAM/disk, artifact size, expected
+  approach starts and useful loop/lollipop results. About ten minutes remains a
+  target, not a demonstrated first-build runtime. No real regional build was run
+  during implementation; commands are in README.
+
+The study itself used only a bounded read-only probe. Implementation subsequently
+retrieved small public USFS boundary/approach metadata for committed offline inputs;
+no OSM or DEM download was launched. The user's untracked
+progressive-publication-review.md remains untouched.
+
+### Regional compaction performance correction — 2026-09-28
+
+The first user-run Glacier Peak build reached compaction after 155.7 seconds:
+622,002 candidate segments pruned to 103,560; four DEM tiles; 65,829 measured
+segments and 37,731 metric-cache hits. Compaction then exceeded ten minutes while
+using one CPU core and about 315 MiB current container memory; no OOM kill occurred.
+Read-only process/status inspection did not open the live database.
+
+An isolated `EXPLAIN QUERY PLAN` reproduction confirmed repeated full child-table
+scans for FK checks on every physical-edge deletion and final node cleanup.
+Added `edges(physical_edge_key)`, `physical_edges(to_node_key)` and
+`access_points(node_id)` indexes; FK checks now use indexed searches. This follows
+[SQLite's child-key indexing guidance](https://www.sqlite.org/foreignkeys.html#required_and_suggested_database_indexes).
+The schema-7 data contract is unchanged. A query-plan regression plus compaction
+and export cases passed: 29 tests, with targeted lint. No full suite or regional
+build repeated. The existing container cannot pick up the fix; rebuild the data
+image and rerun using the retained caches. End-to-end savings remain unmeasured.
+
+### Glacier Peak initial acceptance inspection — 2026-09-28
+
+The user completed and installed `release-418f3e22c7a40acbc7cb75bb791f92e4`,
+artifact `20fa88fb1388d296cf9cf744fe247545d6ef967d66a60986539d78fa52338d19`.
+The app API confirms the installed artifact matches publication. Its retry with
+cached normalized source/DEM/metrics completed in 167.236 seconds, including
+18.998 seconds compaction. All 103,560 segment metrics were reused; this is not
+an empty-cache first-build or an unchanged-artifact no-op benchmark. Measured
+process-tree peak was 642,764,800 bytes. Final graph: 1,214 nodes, 1,342 physical
+edges, 2,684 directed edges; 5,979,754 compressed and 17,580,032 raw bytes.
+
+Bounded read-only acceptance checks (no rebuild):
+
+- [x] Explicit full `data inspect` passed transport, SQLite and graph integrity.
+- [x] All eight declared approach neighborhoods contain final access points within
+  500 m. The graph has 13 access-point records, including duplicate candidates at
+  some trailheads; this is not 13 distinct approach locations. Suiattle's nearest
+  Sulphur Creek candidate has no cycle hint, but the other nearby Suiattle candidate
+  does. Checks used an isolated copy of the finalized compressed artifact, deleted
+  afterward; no live/cache DB was opened.
+- [ ] Complete approach inventory: the current eight are explicitly non-exhaustive.
+  The USFS Lost Creek Ridge trailhead point (-121.33288424882707,
+  48.09445575270973) lies outside the current start footprint and no corresponding
+  access point is installed. Review this and other omitted Glacier Peak gateways.
+- [ ] Independent final-graph trail/connectivity comparison. Existing references
+  are partial-source and compare normalized OSM against official linework, not the
+  installed graph. Of 601 geometrically covered reference features, 226 are flagged
+  (205 proximity gaps, 12 beyond the reference envelope, 9 mixed). These are not 226
+  proven missing trails; some are in the surrounding support buffer. The report's
+  installed-feature/length fields mean polygon coverage and must not be used as
+  final graph membership evidence. Spider Gap is flagged even though the final
+  artifact contains a mapped Spider Gap Snowfield Route.
+- [ ] Real-data compaction preservation audit and representative known-loop/approach
+  connectivity checks, followed by bounded Full-search usefulness checks. Existing
+  pre-compaction membership checks and small equivalence fixtures are useful but
+  do not independently prove every necessary real trail survived end to end.
+
+The pack is structurally valid. Complete Glacier Peak trail/approach coverage is
+not established. Remaining acceptance must account for omissions explicitly:
+source absence/disagreement, intended policy restriction, budget pruning, or an
+unexplained pipeline loss.
+
+### Neighboring Henry M. Jackson configuration — 2026-09-28
+
+- [x] Register `henry-m-jackson` using the USFS wilderness boundary WID 241,
+  generalized to 0.0001 degrees with five-decimal coordinates, plus eleven
+  reviewed USFS approach neighborhoods. Same Washington source recipe/pins and
+  existing compiler; no runtime, schema, dependency, or solver changes.
+  Little Wenatchee Ford is deliberately shared with Glacier Peak. Other reviewed
+  approaches are Blanca Lake, North Fork Skykomish (also Quartz Creek/West Cady),
+  Elliot Creek–Goat Lake, Top Lake, Heather Lake (Wenatchee), Meadow Creek,
+  Bald Eagle, Lake Minotaur, Barlow Pass, and Smithbrook.
+- [x] Pin small public inputs with provenance. Boundary query: `wid=241`,
+  `outSR=4326`, `maxAllowableOffset=0.0001`, `geometryPrecision=5` from the
+  USFS EDW Wilderness layer. Approach review used the EDW Recreation Sites 02
+  layer, WGS84 envelope `-121.7,47.68,-120.9,48.13`, intersection, all fields.
+  Source URLs and descriptions remain in the catalog. Excluded the Stevens Pass
+  North record `6300.005511`, which has mismatched Snoqualmie coordinates and
+  I-90 directions. This initial approach inventory is explicitly non-exhaustive;
+  agency descriptions do not create access or imply current opening.
+- [x] Native `data regions` lists both areas and `data plan henry-m-jackson`
+  succeeds without source processing. Focused offline verification: 36 tests in
+  `regions.test.ts`, `runtime.test.ts`, and `prepared-repository.test.ts` passed,
+  including shared Little Wenatchee starts, distinct Smithbrook eligibility,
+  source compatibility, artifact preservation, and independent graph ownership.
+  Targeted ESLint and `git diff --check` passed. No repeated full verification,
+  browser run, Docker image build, real regional build, or OSM/DEM acquisition.
+- [x] User-run neighboring build/install, artifact preservation, marginal bytes,
+  cache reuse and bounded shared-start search checks; evidence below.
+- [ ] Independent boundary-route and final-graph completeness acceptance, including
+  the two configured Henry M. Jackson approaches missing from its access points.
+
+Build correction: the new test accessed optional `CoverageRegion.sources` without
+narrowing, failing the app's TypeScript check despite passing Vitest. Optional
+chaining now preserves the equality assertion (missing provenance still fails).
+The two region tests pass. The Docker retry was canceled at the user's request;
+the user will rerun the production build.
+
+### Plan/Downloads integration and neighboring-area acceptance — 2026-09-28
+
+- [x] Plan lists installed named areas using stable region IDs, so an unrelated
+  publication does not invalidate a selection. Removed areas remain visible as
+  unavailable filters; searches cannot silently widen until those filters are
+  removed or the areas reinstalled. Historical release-prefixed IDs remain
+  restorable against saved installations. Integrated `773fe6c`.
+- [x] Downloads distinguishes new areas, unchanged installed areas and actual
+  artifact updates. Actions are Download, Update, or Download and update;
+  publishing an unrelated region no longer makes unchanged data appear outdated.
+  The summary describes download bytes and resulting active data, excluding old
+  installations retained by saved searches. Integrated `a2298b9`.
+- [x] Focused offline verification: 37 server/Plan tests and 18 download-panel
+  tests, targeted ESLint, and one integrated `npm run typecheck` pass. The browser
+  size-label assertion was updated to match the more precise active-data wording.
+  Both desktop/mobile download/pause flows then passed at 1280/390 px; screenshots
+  inspected. No repeated full suite or production build.
+
+The user's completed release `release-4691aadbbe67dc8d719541b0b02fdc2b` contains
+both areas. Glacier Peak's artifact is unchanged. Henry M. Jackson's artifact
+`d862238578f600d6421d47912df04ba3129df0c5e5775117f14e4061bf776e01`
+is 2,000,763 compressed bytes / 5,971,968 raw bytes, with 474 nodes and 516 physical
+edges. The reported build took 110.633 seconds, retained 33,750 of 525,419 candidate
+segments, reused all retained segment metrics, and spent 4.653 seconds compacting.
+This measures a build with existing source/DEM/metric caches, not cold acquisition.
+
+Bounded acceptance used isolated copies of finalized artifacts, never Docker's
+live database or WAL files:
+
+- [x] Both artifacts match their raw size/hash; SQLite integrity and foreign-key
+  checks pass. Access-point counts are 13 for Glacier Peak, 15 for Henry M. Jackson,
+  and 26 unique records together. All previous Glacier Peak records are preserved.
+- [x] Representative single-start solver probes: North Fork Skykomish yields eight
+  exact routes (10–30 miles, at most 35% repeat), North Fork Sauk two (20–40 miles,
+  35%), and Elliot Creek one (2–12 miles, 50%). Smithbrook yields a labeled close
+  match for 10–25 miles / 50%; an impossible 0.1–0.2-mile request yields none.
+  Exact results have closed geometry and meet the requested distance interval;
+  all have zero directed-validation rejections. Per-probe times were 0–311 ms.
+  Some probes reached candidate/archive limits: these are usefulness samples,
+  not exhaustive enumeration or whole-area Full-search performance measurements.
+- [x] Little Wenatchee Ford yields the same four exact route geometry/topology/
+  distance signatures with Glacier Peak alone and both packs installed (10–30
+  miles, at most 35% repeat). This checks stable ownership, not graph stitching.
+- [x] Isolated real-pack install lifecycle: A → A+B downloads only B's 2,000,763
+  bytes and leaves A's file unchanged. Removing B retains its old installation
+  while a saved-job reference exists; deleting that reference reclaims B.
+  The user's actual installation and saved searches were not modified.
+- [ ] Henry M. Jackson approach gaps: nine of eleven declared neighborhoods have
+  final access points within 500 m. Top Lake and Heather Lake (Wenatchee) do not;
+  their nearest installed start is Little Wenatchee, 4.16 km and 5.48 km away.
+  Determine whether source mapping, access eligibility or compilation explains
+  the omissions before claiming complete coverage. Glacier Peak's eight configured
+  neighborhoods pass, but its previously identified Lost Creek Ridge gap remains.
+- [ ] Build memory: the Henry report records a 4,196,126,720-byte process-tree RSS
+  peak and a 4,294,967,296-byte cgroup peak (the configured 4 GiB limit), despite
+  successful completion. Stage-specific attribution is unavailable; neither an
+  OOM nor a cause is established. Investigate before making a low-memory claim.
+  The reported 5,189,812,224-byte disk peak includes shared caches, not just this pack.
+
+No regional build, Docker build/restart, source download, or production data
+mutation was performed for this pass. Full cold-build acceptance, independent
+trail/compaction completeness and source-generation refresh remain open.
+Both completed task worktrees are archived and their branches deleted. Temporary
+acceptance copies, installation fixtures and browser output were removed after
+recording this evidence; source/DEM/metric caches and user data were retained.
+
+### Local preparation with a distance budget — 2026-09-28
+
+This active revision supersedes the complete-network/discovery builder recorded
+below. Accepted design: [network-design.md](network-design.md). The user approved
+including ambiguous footways as possible walking links without global connectivity
+promotion; explicit sidewalk/crossing exclusions and access rules remain.
+
+- [x] Shared 40-mile request / 50-mile close-match / 25-mile buffer contract.
+  Conservative geographic planning rejects provider gaps before work. Eligible
+  start geometry is separate from routing geometry. Focused planner/route tests:
+  17 passed; release ownership metadata tests: 2 passed.
+- [x] Bounded source extraction and local classification. Integrated fbb001f;
+  38 focused offline source/store/adapter tests pass, including native Osmium and
+  cancellation. Removed global promotion, unbounded trail import, and per-source
+  metric tables (production/test total net 135 lines removed).
+- [x] Independent buffered graph reads and area-download UI. Integrated 0fa83e8;
+  66 focused reader/install/server/UI tests pass. Searches pin one graph, can leave
+  the start core, and exclude buffer-only starts. Overlapping graph records need
+  not be identical. Desktop/mobile offline download/pause flows pass (2 tests),
+  with screenshots inspected at 1280px and 390px.
+- [x] Integrate local compiler, reusable segment metrics, and retire discovery CLI.
+  Integrated 22cc84f and 80277a7. Segment cache dependencies include geometry,
+  metric/sampler versions and every DEM tile owning an actual sample. Offline
+  fixtures cover provider seams, unrelated DEM-tile reuse, local graph append,
+  unchanged artifact reuse, empty areas before DEM work, interruption and corrupt
+  receipts. Deleted statewide discovery, network inventory/catalog and HTML inspector.
+- [x] Final integrated verification and cleanup.
+  One integrated lint/type/test pass: 668 tests in 93 files, all passed. Docker
+  data and app images built successfully, including the production Next.js build;
+  restarted the local app. Native and rebuilt-container `plan` commands return
+  the same Index-area geometry with no source processing. The live in-app browser
+  displays the 40-mile constraint; Coverage interactions were verified by the two
+  offline browser cases above (the live browser session became unavailable).
+  No repeated full verification or regional builds were run. All three task
+  worktrees are archived and branches deleted. Against c7c6643, production source
+  has 437 additions / 833 deletions (net 396 removed); tests/fixtures have 410
+  additions / 527 deletions (net 117 removed). Seven files removed and four added,
+  leaving three fewer tracked files. Documentation is counted separately.
+  The user's untracked progressive-publication-review.md remains untouched.
+- [ ] One user-run local real-source build/install/search measurement, including
+  elapsed time, peak memory/disk, source continuity and usefulness of results.
+
+First user-run local build: bounded source extraction/normalization finished in
+26.3 seconds. Metric preparation advanced to 372,000 cached segments, then Docker
+recorded SIGBUS (exit 135) at 587 seconds with no OOM event and no published release.
+The crash immediately followed agent SQL inspection through the macOS bind mount;
+a cross-environment WAL shared-memory interaction is the leading explanation,
+not a confirmed algorithm/resource failure. The last observed Docker memory was
+562 MiB. Cache integrity was subsequently checked inside Docker and passed for all
+372,000 entries. Removed the abandoned graph scratch, retained metric/source/DEM
+caches, and corrected the stale status to failed. Do not reopen live container WAL
+databases from the host. No real build was restarted by the agent.
+
+The canceled statewide discovery is no longer running. Its obsolete 248,000,512-byte
+normalized store, empty discovery scratch and stale progress report were removed;
+its status watcher was stopped. Compressed source/DEM caches, saved results and
+settings remain. No regional data build was launched during this revision.
+
+### Loops/lollipops and complete networks — 2026-09-28
+
+Accepted design: [network-design.md](network-design.md). This supersedes
+arbitrary closed walks and geographic preparation units; developer-only builds,
+prepared downloads, saved-result preservation and the real-data gates remain.
+
+- [x] Strict loop/lollipop generation and validation; remove multi-cycle controls.
+  Integrated 8e30829 and a726a01. Solver focused suite: 91 tests. Combined solver,
+  reader, installer and UI checks: 117 tests; integrated type checking passes.
+- [x] Separate immutable graph identity from catalog identity; preview complete
+  network extent and size. Integrated 85df60b and a726a01. Offline tests verify
+  graph identity, unchanged-artifact reuse across catalog versions, full-extent
+  selection, overlapping map hits and legacy saved request parsing.
+- [x] Connected-source discovery and stable publication primitives.
+  Integrated 2d21421, now wired into the active builder. Source boundaries,
+  exclusions, reviewed access and source-node identity determine connectivity;
+  full member-way context remains available without publishing excluded segments.
+- [x] Replace the geographic builder and exporter with independent network
+  preparation, reuse, auditing and publication. User reauthorized this on
+  2026-09-28 after reviewing the earlier blocked proposal. Integrated 6603297,
+  0993cfc and f8e89a7; bcf2ad6 removes repeated provider-wide audit scans and
+  limits restriction application to matching source identities. Offline tests
+  prove A→A+B leaves A's artifact digest and mtime unchanged, with no elevation
+  sampling or topology work for A; selection within A is stable; changed DEMs,
+  algorithms and connecting trails invalidate dependent artifacts; interruption
+  preserves the old catalog and resumes completed networks. Exact membership,
+  corruption, collision, independent readers, source-boundary context and
+  West Cady/Pilchuck/approach fixtures pass. There is no persistent merger or
+  graph-key registry. Every candidate artifact is audited before atomic activation.
+  Named-area cache hits no longer re-extract source files; per-network scratch
+  files are removed on success or interruption. Old geographic staging receipts
+  are deleted. Source caches and saved results remain untouched. The subsequent
+  user-authorized clean cutover is recorded below.
+- [x] Final integrated verification and cleanup for the builder replacement.
+  Two `npm run verify` passes each passed 658 tests in 92 files, lint, type
+  checking and production build. Two offline browser runs each passed nine
+  flows (1.5 min and 1.2 min). The clean-cutover empty-catalog follow-up passed
+  24 installer tests and 11 panel tests, lint and type checking. Missing local
+  catalogs now show a normal empty state; malformed catalogs still report errors.
+  Rebuilt/restarted Docker app; `/api/coverage` returns all-null empty state with
+  `error:null`. Live in-app browser confirms “No trail networks available yet.”
+  with zero available/installed and no filesystem alert.
+  The initial restricted test run could not inspect process identities; final
+  passes used the required local process access. A stale extraction mock was
+  corrected to invoke the adapter's cache-miss runner. All task worktrees and
+  task branches are retired; obsolete proposal copies were deleted.
+- [x] Replace geographic build selection with saved discovery and explicit IDs.
+  `data discover recipes/washington.json` (full repository path in README)
+  inventories every eligible network in the pinned sources without DEM, metrics,
+  route topology, named-area preparation or reference downloads. Discovery stores
+  a verified catalog and disk inventory; `data build catalog.json --network ID`
+  reopens them without rerunning connectivity. Offline fixtures cover cache reuse,
+  changed-source/restriction invalidation, unknown/duplicate/empty selections,
+  corrupt catalogs/inventories, interruption cleanup and selected-only builds.
+  The offline inspector shows bounded pages of network extents and source size,
+  with byte sizes explicitly unknown before compilation. The app keeps graph IDs,
+  statistics and build controls out of its download UI; no selection shows one
+  map hint instead of zero-byte summaries and inactive buttons.
+  Removed the old collection/area planner, request schemas, geographic membership
+  flags, area-wide classification/frontier audit, three geographic recipes (replaced
+  by one source recipe), old feasibility runner and standalone export command.
+  Relative to b597ca4, production/configuration is net 242 lines smaller
+  (547 additions, 789 deletions); tests are net 25 lines larger. Seven files were
+  deleted, six added and one recipe renamed: one fewer tracked file overall.
+- [x] Verify the discovery-first workflow and simplified app interface.
+  Two `npm run verify` passes each passed 678 tests in 93 files, lint, types and
+  production build. Two offline browser passes each passed nine desktop/mobile
+  flows (1.5 min and 1.1 min); screenshots inspected at 1280px and 390px. The
+  developer inspector's four offline interaction tests and desktop/mobile visual
+  checks passed. Rebuilt Docker tooling; its recipe-only build invocation rejects
+  before data work, requiring explicit network IDs. All three task worktrees
+  archived and branches deleted. No real regional discovery/build was launched.
+- [x] Correct discovery status reporting after the first user-run import exposed
+  stale area-builder progress text. Removed synthetic classification/export states,
+  zero-total percentages, old tile-rate ETA and obsolete context sidecar loading.
+  Source import now emits its own phase; the native watcher shows only observed
+  phase and nonzero network totals. Focused CLI/status tests pass. The user's
+  running Docker discovery was left uninterrupted; restart only the native watcher
+  to pick up its display fix. The import-phase label change applies after rebuilding
+  the tooling image for a future run.
+- [x] Replace broad source normalization with filter-first trail discovery and
+  selected-network context extraction. Integrated efa8b63 and e513a25 plus the
+  runtime wiring. Osmium streams candidate walking ways and complete references;
+  normalized SQLite retains only exact/promoted trails. Selected context is
+  extracted, verified and cached independently. Removed durable raw-node/way
+  inventories, raw-batch checksum/resume logic and legacy seal compatibility.
+  Context uses global trail classification and cannot change network membership.
+  Node-based context extraction can omit crossing/enclosing features without an
+  inside vertex; the release and design document disclose this limitation.
+  Focused verification: 8 filter tests (including real host Osmium), 12 compact
+  store tests, and 29 runtime/reference/inventory tests pass; lint and type
+  checking pass. Rebuilt the Docker data image; its offline native fixture run
+  produced 23 trail-filter objects and 36 context objects and removed all scratch
+  files. Per the user's request to stop repeating checks, no repeated full build
+  or browser suites were run for this backend-only change. No Washington job was
+  restarted; real-source time, disk and continuity measurements remain pending.
+  Removed the cancelled normalization database (1,911,586,816 bytes); compressed
+  downloads, other source caches and saved app data remain intact. Both task
+  worktrees were archived and their branches deleted. Relative to 3f7149b,
+  production source is 11 lines smaller and tests 45 lines smaller; the committed
+  native fixture adds 44 lines. Documentation is counted separately.
+- [x] Raise the requested hike-distance limit to 40 miles. API criteria, client
+  validation and the distance tooltip share one limit. The focused route-contract
+  and builder-validation suite passes 16 tests, including acceptance at 40 and
+  rejection at 40.1 miles. For the proposed local preparation model, this implies
+  a 20-mile exact-route buffer, or 25 miles preserving the current 125% close-match
+  exploration bound. That preparation redesign is documented but not implemented.
+- [ ] Real-source continuity and bounded real-network build/install/search measurement.
+- [x] User-authorized clean data cutover: removed host `.local-data/packs` (2.7 GiB),
+  published `.local-data/releases` (107 MiB), Docker runtime installed coverage
+  and obsolete coverage-job database. Restarted app returns `release:null`,
+  `installed:null`, no jobs, and empty search regions/coverages. SHA-256 checks
+  verified retained Docker saved-route DB, settings and provider data unchanged.
+  User will run discovery and the new build; no real network build was launched.
+  The temporary Pilchuck selector has been deleted. The Washington source recipe
+  now feeds discovery; the user selects actual network IDs from its output. Transport compatibility code remains,
+  but old geographic data is no longer available to the app. Retired old pack
+  validation copies, migration views and prepared-reader trial artifacts were
+  also removed; reusable source caches remain.
+
+Synthetic fixed-work search comparison (25,000 expansion / 2,000 raw-candidate
+caps) found old/new exact-route counts 4/4, 7/10 and 9/10 on 3x3, 5x5 and 7x7
+grids. New expansion counts were 128, 4,198 and 9,790 versus 282, 1,731 and 3,631.
+These are small regression fixtures, not evidence of regional performance or
+optimality. No regional build was started for this revision.
+
+Earlier builder-cutover accounting against 0635351: production/configuration/research source is
+net 473 lines smaller (1,488 additions, 1,961 deletions); tests are net 647 lines
+larger (876 additions, 229 deletions). Documentation is counted separately.
+This builder step and follow-ups add a net 62 production/configuration lines,
+including the 50-line initial-build recipe: removing geographic orchestration is
+offset by network reuse and integrity checks.
+The old 990-line search engine is deleted and replaced by a 453-line engine;
+its test file is renamed. One network implementation, five test files and one
+design document and one build recipe are added, so total file count increases
+by eight. This is not
+claimed as an enormous repository reduction. The three new task worktrees are
+archived and their branches deleted; the six pre-existing branches are preserved.
+
+### Full-only search — active user revision
+
+- [x] Remove foreground search UI, endpoint, settings, and worker protocol.
+- [x] Remove the internal alternative solver pass and effort modes.
+- [x] Verify persistent searches, saved results, desktop/mobile flows, and final deletion inventory.
+
+Evidence: two `npm run verify` passes each passed 597 tests in 86 files, lint,
+types, and production build. Two browser passes each passed nine flows (27.1 s
+and 30.2 s). The 232,272,093-byte production image returned 404 for the removed
+endpoint and completed a real one-start Full job with five exact routes in
+2.17 s under a 512 MiB swap-disabled limit, with no OOM events. Full-only reader
+comparison matched all nine cases; three-start session medians were 2.10 s for
+the monolithic baseline and 2.31 s for prepared files, including preparation.
+The current revision removes 225 production-source lines relative to 04e2544
+(excluding tests, fixtures, and documentation). Completed agent worktrees were
+removed; the integration branch remains unmerged.
+
+### Developer builds and downloadable coverage — active
+
+2026-09-25 repair in progress: the default Docker app had no published catalog;
+the retained 26-section benchmark was temporarily connected and installed, but
+this is not regional acceptance. The Coverage panel is now minimal, with direct
+map selection, hover/pointer feedback, selected-tile emphasis, and no section
+list or explanatory paragraphs. Actual desktop/mobile canvas selection passes
+the two focused offline browser flows; the deployed localhost:3000 was visually
+checked and a real tile selected without browser errors. Ten panel and fourteen
+map lifecycle tests pass. Attribution lives on the map. Download starts directly without a preview step;
+the partial-release label was removed at the user’s request. Nine final panel
+tests and two direct-download browser flows pass.
+
+The production build failure on BR717 way/1186146299 was traced to an approximate
+country boundary: all forty source nodes lie in Canada according to the pinned
+IBC mapping boundary. The provider north edge is corrected and the Cascades
+intent includes US slivers above latitude 49. Focused border/elevation/compiler
+tests pass (30 tests); acquisition now filters nominal DEM tiles before download.
+The same retained 4 GiB, swap-disabled container attempted one coherent
+Cascades/Olympics release using the existing normalized inventory and metric
+cache; its later stopped state is recorded below. Current benchmark coverage and saved results remain active until a
+replacement is verified. Per user instruction, validation uses small offline
+tests and targeted checks; no repeated regional builds are run as tests.
+`npm run data -- status --watch` now reads the active report through the local
+`.cache/build/status.json` link. Future CLI builds persist their own status there
+(or under `ALPINE_COVERAGE_ROOT`), including failure and pause state. Two tiny
+status-format tests, lint, and type checking pass.
+
+
+This revision supersedes app-driven progressive compilation below. Users select
+map sections and install immutable prepared data; developer tooling builds one
+coherent release. The existing branch and draft PR remain the integration path.
+
+- [x] Graph-reading proof and release/installation/download contracts.
+  Evidence: schema-7 prepared reader versus schema-6 monolithic offline fixtures;
+  113 graph/solver/server tests passed in 17 files, including actual child-process
+  search, cross-file routes, partial coverage, seam/corner contacts, and bounded
+  connection eviction. Integrated commits f0d0d61 and e92491c.
+- [x] Developer-only coherent builds, compact feasibility hints, release export.
+  Evidence: offline end-to-end compiler/export/inventory regressions pass in the
+  final 597-test suite. Large-source acceptance remains a separate gate below.
+- [x] Download lifecycle and clickable coverage sections on the shared map.
+  Evidence: final installer corruption/recovery/retention regressions, two
+  desktop/mobile browser passes, and real 26-section download/activation.
+- [ ] Real-data build/install/search measurements, including the 4 GiB gate.
+- [ ] Verified one-time reinstall, saved-result preservation, and legacy deletion.
+
+Latest retained constrained-build report records 150 prepared units and missing
+elevation on way/53658218. The container is stopped; no release was activated. Verified
+source/metric caches and completed receipts remain available; diagnose the missing
+samples before resuming. The 4 GiB gate remains open. Disk cleanup retired old
+validation outputs and a superseded stage, consolidated identical raw downloads,
+and increased host free space from about 9 GiB to 31 GiB while retaining installed
+packs and all saved results.
+
+Preserve existing generated data until replacement is verified. Earlier partial
+scale measurements remain diagnostic evidence, not acceptance of this revision.
+
+### Progressive coverage — implementation in progress
+
+- [x] **A — Contracts and baseline.** Version-1 coverage plans, jobs, snapshots,
+  and catalog contracts; schema-6 routing compatibility retained. Baseline
+  regional disk footprint and unchanged bounded solver behavior documented in
+  [progressive coverage](progressive-coverage.md).
+- [x] **B — Resumable builder.** Disk-backed inventory, indexed context frontier,
+  streaming publisher, global topology, receipts, source reconciliation, input
+  invalidation, and deterministic DEM sampling pass offline regressions.
+- [x] **C — Progressive installation.** Cross-unit cycles, opposite installation
+  orders, overlap, interruption, changed-input replay, atomic activation, and
+  live/saved generation retention pass integrated tests.
+- [x] **D — App and CLI.** Shared job service, controls, aliases, recovery, and
+  main-map coverage panel implemented. Coverage sits beside Settings; installation
+  drawing preserves the separate search draft and results.
+- [ ] **E — Scale and migration.** Real-source 4 GiB/swap-disabled container
+  measurement is in progress. Cascades-sized and second-geography acceptance,
+  expansion/resume timings, and final search measurements remain unproven.
+
+Evidence (2026-09-24): two final `npm run verify` passes each passed 704 tests
+in 105 files, lint, types, and production build. Two `npm run test:browser`
+passes each passed nine desktop/mobile flows (35.2 s and 28.6 s). Live Docker
+preview checks passed collection focus, exact status overlays, zoom/pan,
+installation drawing, restoration of untouched search bounds, panel scrolling,
+and mobile map/panel switching; no browser console errors. App and CLI both
+launched persistent workers; the isolated cached-only request recorded the
+expected missing-source failure. Docker runtime includes osmium and Rasterio
+1.4.3/GDAL 3.6.2; Compose configuration validates.
+
+The real-source trial imported 54.3 million Washington records, recovered after
+an unsupported building-relation failure, and exposed repeated full-table
+context scans. Those scans now use an indexed disk frontier; the durable source
+inventory is being reused in the 4 GiB/swap-disabled trial. This remains Gate E
+work, not a successful Cascades-sized build. The two-unit real-source build
+completed in 17 min 46 s, with 1.06 GiB peak measured process-tree RSS and a
+670 ms Quick search returning an exact loop. A later real integrity-check pause
+completed in 0.60 s; the kernel limits were verified as 4 GiB memory and zero
+swap. See the measurement notes in progressive-coverage.md. Current work is on
+`codex/progressive-coverage`; it is not ready to merge. No production installation
+has been replaced by the benchmark.
+
+The latest runtime image builds successfully. Source lookups now use a verified
+temporary spatial index and per-component envelopes; context ingestion and
+publication yield at bounded checkpoints. Disk measurement includes unlinked
+SQLite temporary files. Real Rasterio tests verify deterministic north-west DEM
+tile ownership, and metric/topology versions participate in snapshot identity.
+The full build is running with these fixes; previous partial timings are not
+final large-region acceptance. A read-only migration audit preserved 35 region
+selectors and 17 saved jobs containing 894 results. Central Cascades contains
+supplemental official routing whose replacement is unverified, so its legacy
+installation is explicitly retained even when coverage geometry is contained.
+
+The final review fixed collection-plus-drawing selection, classified intended
+and intentionally excluded source trails, batched temporary-index writes, and
+replaced a quadratic physical-member export query with indexed joins. The v5
+ten-unit snapshot published successfully before resuming with those query
+improvements. A real search against that snapshot while the builder ran took
+783 ms and returned one exact loop and one close match with budget truncation
+explicitly reported. The current full-region trial retains verified work;
+large-region completion is still required. Download and disk preview totals
+remain unknown beyond the configured OSM download/cache sizes.
+
+Preview now reads receipt metadata and file sizes without hashing whole OSM
+downloads. It reports cached source/preparation bytes and explicitly defers
+content/checkpoint verification to the worker. Exclusion classification uses
+conservative bounds before exact predicates. The larger 18-unit graph export
+took 6.30 s after the indexed-join fix; this is a publication substage, not the
+full build. The Cascades trial remains active and Gate E remains open.
+
+The next measured bottleneck was per-record context commits in dense units.
+Shared context ingestion now commits batches of up to 1,000 node records or
+building centroids, with a single larger source way kept intact. Transactions
+close before metric work and pause checkpoints. All 22 runtime regressions pass;
+two subsequent full verification passes again passed 693 tests, and both browser
+passes passed nine flows (35.2 s and 26.0 s). The runtime image builds. The real
+trial paused cleanly with 24 prepared units and resumed in the same constrained
+container, preserving the active 18-unit snapshot and verified caches. Isolated
+3,000-row writes improved from 608 to 159 ms for ways and 469 to 30 ms for
+buildings; end-to-end improvement remains under measurement.
+
+Real source checks found all five West Cady/Pilchuck/approach regression ways
+inside supported Cascades coverage, but also exposed incorrect OPL escape
+decoding of numeric names (Forest Road 63 became Forest Road c). The smaller
+decoder now consumes delimited Unicode escapes correctly. Versioned source
+paths and build identities invalidate affected preparation and graph caches;
+the corrected import is running under the same hard limits with the old
+snapshot retained until replacement passes audit. The 704-test verification,
+both browser passes, and runtime image above include this fix. Earlier partial
+build measurements predate the decoder correction and do not establish final
+acceptance. Original downloads and elevation data remain reusable.
+
+The corrected run has now published 26 units with 289,041 nodes and 578,733
+directed edges. A real search against its first corrected 18-unit snapshot
+returned one exact route and one close match in 580 ms while construction ran,
+with budget and partial-coverage limits explicit. Dense-unit preparation fell
+from 470/376 s in earlier runs to 105/107 s. These are partial-build results;
+the full Cascades and Olympic acceptance runs remain unfinished and Gate E stays
+open. The updated preview at localhost:3105 is healthy and retains its local
+settings and saved job. Production data remains unchanged.
+
+The corrected trial published 42 units with no audit failure, then paused and
+resumed to apply bounded topology transactions. The prior cycle pass took 441 s;
+an isolated 15,000-node ring improved from 11.44 to 5.06 s with identical hashes.
+Checkpoints run outside transactions and interrupted batches roll back. Two
+full verification passes each passed 704 tests, lint, types, and production
+build; two browser passes each passed nine flows (24.0 s and 25.1 s), and the
+runtime image built. Independent review found no transaction/publication blocker.
+The fixed eight-unit publication policy remains unchanged. Full Cascades and
+Olympic measurements are still required; Gate E remains open.
+
+The subsequent bounded scalar-statement cache reduced the same batched fixture
+from 4.86 to 1.44 s without changing its hash. Streaming statements remain
+independent, and caches clear after success/failure. Both final verification
+passes again passed 704 tests and builds; browser passes passed nine flows each
+(29.1 s and 24.4 s), and the runtime image built. The real trial has prepared
+50 units and is publishing them; its running worker currently uses transaction
+batching and will pick up the statement cache at the next publication restart.
+
 - [x] 2026-09-22 — completed a solver acceleration investigation without changing
   production code or settings. The observed Full job completed 156 starts in
   594.997 seconds. Profiles of two real starts put 70–76% of elapsed time in graph
@@ -739,6 +2060,38 @@ port 3000. Original saved jobs and installed artifacts remain intact.
     mobile map switching, no horizontal overflow, and zero browser/page errors.
     Basemap tile availability was not established in this local run. Generated
     packs, downloads, caches, receipts, and runtime databases remain ignored.
+
+- [x] Gate 17 — Central Cascades West Cady Ridge correction
+  - The prior hard boundary omitted every mapped West Cady Ridge Trail vertex,
+    and the generic portal rule omitted the mapped North Fork Skykomish
+    trailhead because its path meets a walkable OSM track rather than a
+    street/service-road context way. Central boundary v2 adds the pinned Wild
+    Sky and Henry M. Jackson wilderness outlines plus the measured trailhead
+    approach, preserving the original bbox and all original coverage. Generic
+    portal derivation v4 requires an exact OSM trailhead node at a usable
+    track/non-track trail junction; nearby markers and track-only contacts do
+    not create starts. The [Central charter](../../data/regions/central-cascades/charter.md#v2-west-cady-acceptance-2026-09-23)
+    records the review, source decisions, and all six artifact hashes.
+  - Two fresh, independent offline builds from the pinned August 1 Washington
+    OSM, existing 3DEP collection, and July USGS Trails source produced
+    byte-identical schema-6 `cc-d9160473291fdf6b` artifacts. Audit: 279,344
+    nodes, 555,865 directed edges, 573 persisted portals, 270 inclusive and
+    64 known cycle-feasible portals, 30 named areas, four reviewed search
+    regions, zero errors/conflicts, missing elevation, outside-coverage edges,
+    non-trail published edges, or SQLite integrity/foreign-key failures.
+    The North Fork Skykomish portal is 23.0 m from the mapped trailhead and is
+    high-confidence with unknown access (default included). All nine Thorough
+    scenario pairs passed exact and labeled-impossible close expectations with
+    zero directed-validation rejections. Direct result inspection confirmed a
+    23.92-mile simple loop with 8.05 miles of West Cady Ridge Trail, 7,697 ft
+    gain, and no repeated trail. Two mapped fords remain trip-time conditions.
+  - The locally activated pack's six files match the validated build hashes.
+    The live catalog lists Central Cascades; the live map API returns the
+    North Fork Skykomish trailhead and 12.96 km of named West Cady Ridge Trail
+    in its viewport. Two `npm run verify` runs each passed 556 offline tests in
+    88 files, lint, types, and production build; two `npm run test:browser`
+    runs each passed seven Chromium flows. The temporary boundary and portal
+    worktrees/branches were removed; generated packs and caches remain ignored.
 
 ## Post-gate fixes
 

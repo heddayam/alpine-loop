@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "geofabrik-oregon-osm",
+  "authority": "Geofabrik GmbH / OpenStreetMap contributors",
+  "dataset": "Geofabrik Oregon OpenStreetMap extract",
+  "version": "oregon-260801",
+  "upstreamTimestamp": "2026-08-01T20:21:21.000Z",
+  "url": "https://download.geofabrik.de/north-america/us/oregon-260801.osm.pbf",
+  "expectedByteLength": 252076488,
+  "license": "Open Data Commons Open Database License (ODbL) 1.0; https://www.openstreetmap.org/copyright",
+  "attribution": "\u00a9 OpenStreetMap contributors; extract provided by Geofabrik GmbH"
+}

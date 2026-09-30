@@ -6,7 +6,6 @@ import type { SourceSnapshot } from "../adapters";
 import { sha256File } from "../file-source";
 import type { CommandRunner } from "./command";
 import { prepareOsmBuildings } from "./buildings";
-import { OsmPbfNamedAreaAdapter } from "./named-areas";
 import { prepareOsmTopology } from "./pipeline";
 
 const temporaryDirectories: string[] = [];
@@ -95,11 +94,6 @@ describe("resume-safe osmium preparation", () => {
       if (args[0] === "cat") await copyFile(path.resolve("data/fixtures/source/osm/hiking.opl"), output);
       else if (args[0] === "export" && output.endsWith("buildings.geojsonseq")) {
         await writeFile(output, `\u001e${JSON.stringify({ geometry: { type: "Point", coordinates: [extraction, 0] } })}\n`);
-      } else if (args[0] === "export") {
-        await writeFile(output, JSON.stringify({ type: "FeatureCollection", features: [{
-          type: "Feature", properties: { "@id": `r${extraction}`, name: `Park ${extraction}`, leisure: "park" },
-          geometry: JSON.parse(boundary(1)).geometry,
-        }] }));
       } else await writeFile(output, "fixture");
       return { stdout: "", stderr: "" };
     });
@@ -114,14 +108,11 @@ describe("resume-safe osmium preparation", () => {
       if (revision === 4) snapshot.version = "2";
       const prepared = await prepareOsmTopology(snapshot, options);
       identities.add(prepared.identity);
-      const namedAreas = new OsmPbfNamedAreaAdapter(prepared, options);
       expect(await prepareOsmBuildings(prepared, options)).toEqual([[revision, 0]]);
-      expect((await namedAreas.normalize(snapshot)).map(({ id }) => id)).toEqual([`osm:relation/${revision}`]);
       const calls = vi.mocked(runner).mock.calls.length;
       expect(await prepareOsmBuildings(prepared, options)).toEqual([[revision, 0]]);
-      expect((await namedAreas.normalize(snapshot)).map(({ id }) => id)).toEqual([`osm:relation/${revision}`]);
       expect(vi.mocked(runner).mock.calls).toHaveLength(calls);
-      for (const kind of ["buildings", "named-areas"]) {
+      for (const kind of ["buildings"]) {
         const childRoot = path.join(options.preparationRoot, kind);
         for (const childDirectory of await readdir(childRoot)) {
           expect(await readdir(path.join(childRoot, childDirectory))).toEqual([`${kind}.json`]);

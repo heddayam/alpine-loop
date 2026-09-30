@@ -7,11 +7,11 @@ import { queryThreeDepProducts, threeDepQueryUrl, type ThreeDepQuery } from "./p
 
 export const threeDepCollectionSchema = z.object({
   schemaVersion: z.literal(1),
-  sourceId: z.literal("usgs-3dep-13-arc-second"),
+  sourceId: z.enum(["usgs-3dep-13-arc-second", "usgs-3dep-1-arc-second"]),
   authority: z.literal("U.S. Geological Survey"),
   dataset: z.string().min(1),
   catalogId: z.string().min(1),
-  resolution: z.literal("1/3 arc-second (nominal 10 m)"),
+  resolution: z.enum(["1/3 arc-second (nominal 10 m)", "1 arc-second (nominal 30 m)"]),
   horizontalDatum: z.literal("NAD83"),
   verticalDatum: z.literal("NAVD88"),
   retrievedAt: z.string().datetime(),
@@ -29,7 +29,7 @@ export const threeDepCollectionSchema = z.object({
       etag: z.string().optional(), lastModified: z.string().optional(),
     }).strict(),
   }).strict()).min(1),
-}).strict();
+}).strict().refine(value => (value.sourceId === "usgs-3dep-1-arc-second") === (value.resolution === "1 arc-second (nominal 30 m)"), { message: "3DEP source identifier and resolution disagree" });
 
 export type ThreeDepCollection = z.infer<typeof threeDepCollectionSchema>;
 
@@ -38,6 +38,8 @@ export type RefreshThreeDepOptions = {
   collectionRoot: string;
   query: ThreeDepQuery;
   catalogId: string;
+  resolution?: ThreeDepCollection["resolution"];
+  latestOnly?: boolean;
   retrievedAt?: string;
   fetchImpl?: typeof fetch;
   onProgress?: CacheDownloadOptions["onProgress"];
@@ -54,7 +56,10 @@ export async function refreshThreeDepCollection(options: RefreshThreeDepOptions)
   collectionPath: string;
 }> {
   const retrievedAt = options.retrievedAt ?? new Date().toISOString();
-  const products = await queryThreeDepProducts(options.query, options.fetchImpl);
+  const candidates = await queryThreeDepProducts(options.query, options.fetchImpl);
+  const products = options.latestOnly
+    ? candidates.sort((a, b) => b.publicationDate.localeCompare(a.publicationDate) || a.productId.localeCompare(b.productId)).slice(0, 1)
+    : candidates;
   const cached = [] as Array<{
     productId: string;
     title: string;
@@ -90,11 +95,11 @@ export async function refreshThreeDepCollection(options: RefreshThreeDepOptions)
   const collectionPath = path.join(destination, "collection.json");
   const collection = threeDepCollectionSchema.parse({
     schemaVersion: 1,
-    sourceId: "usgs-3dep-13-arc-second",
+    sourceId: options.resolution === "1 arc-second (nominal 30 m)" ? "usgs-3dep-1-arc-second" : "usgs-3dep-13-arc-second",
     authority: "U.S. Geological Survey",
     dataset: options.query.dataset,
     catalogId: options.catalogId,
-    resolution: "1/3 arc-second (nominal 10 m)",
+    resolution: options.resolution ?? "1/3 arc-second (nominal 10 m)",
     horizontalDatum: "NAD83",
     verticalDatum: "NAVD88",
     retrievedAt,

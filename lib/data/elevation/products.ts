@@ -32,6 +32,7 @@ export type ThreeDepQuery = {
   bbox: readonly [west: number, south: number, east: number, north: number];
   productExtent?: string;
   expectedProductIds?: readonly string[];
+  nominalTile?: string;
 };
 
 export function threeDepQueryUrl(query: ThreeDepQuery): string {
@@ -71,6 +72,9 @@ export async function queryThreeDepProducts(
       format: raw.format ?? "GeoTIFF",
     };
   });
+  // A bbox query also returns neighboring buffered tiles. Select before download.
+  if (query.nominalTile) products = products.filter(({ title }) =>
+    title.toLowerCase().split(/\s+/).includes(query.nominalTile!.toLowerCase()));
   if (products.length === 0) throw new Error("USGS 3DEP query returned no products for the pack boundary");
   const identifiers = new Set(products.map(({ productId }) => productId));
   if (identifiers.size !== products.length) throw new Error("USGS 3DEP query returned duplicate product identifiers");

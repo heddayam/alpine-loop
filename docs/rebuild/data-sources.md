@@ -1,9 +1,12 @@
 # Data sources and storage policy
 
+Coverage delivery and developer commands follow [prepared coverage](prepared-coverage.md).
+Historical pack-specific measurements below remain provenance, not runtime instructions.
+
 ## Decision summary
 
 The application must not query OpenStreetMap while serving a user request. Build
-a local, versioned regional graph pack in an explicit refresh pipeline. This is
+a local, versioned routing snapshot in an explicit refresh pipeline. This is
 more reliable, faster, reproducible, and friendlier to community services than
 using the public editing API or Overpass as a routing backend.
 
@@ -27,11 +30,33 @@ input so it can be adjusted without changing app or solver code.
   and verify their URLs from an empty cache when reviewing setup; cached builds
   cannot prove fresh-install availability. These upstream URLs are not permanent
   archives, so pins still need periodic review.
-- Use [`osmium extract`](https://docs.osmcode.org/osmium/latest/osmium-extract.html)
-  with the versioned pack polygon and a reference-complete strategy before
-  retaining ways/nodes needed for pedestrian topology.
+- Filter potential hiking connections and complete node references from the
+  pinned extract before normalization. Extract only the chosen start area and its required
+  routing buffer before normalization. Include ambiguous footways as possible
+  walking links without distant-connectivity promotion; retain access rules and
+  explicit sidewalk/crossing exclusions. Retain the compressed source, bounded
+  normalized context and shared metric cache; discard transient extracts and raw
+  joins. See [network design](network-design.md) for extraction
+  semantics and limitations. No legacy broad importer remains.
 - Interpret hiking-relevant highway/path/foot/access/oneway/route/relation tags
   through a versioned adapter with fixture tests.
+- Local extraction uses sequential native scans: select geographic nodes, recover
+  their ways and then direct parent relations, filter relevant objects, and
+  complete their references from the original pinned PBF. Original IDs and tags
+  are retained. The two parent scans correct old Osmium `simple` selection, which
+  can inspect only the first way node or relation member. Building geometry uses
+  direct outer way members; arbitrary nested outer relations remain unsupported.
+  Node seeds are excluded from `getid`'s input and merged back afterward, avoiding
+  a second large node-ID table. Consumed intermediate files are deleted promptly.
+  This replaces `smart -S tags=building`: Docker's Osmium 1.15 ignores the `tags`
+  option (introduced in 1.16), and broad multipolygon completion exceeded 4 GiB.
+  The tradeoff is more sequential source scans for a lower memory peak, without
+  a statewide normalized cache or a new source download.
+  Primary references: [Osmium changelog](https://github.com/osmcode/osmium-tool/blob/v1.19.1/CHANGELOG.md),
+  [parent selection](https://docs.osmcode.org/osmium/latest/osmium-getparents.html),
+  [reference completion](https://docs.osmcode.org/osmium/latest/osmium-getid.html),
+  [sorted merge](https://docs.osmcode.org/osmium/latest/osmium-merge.html), and
+  [ID-table allocation](https://github.com/osmcode/libosmium/blob/v2.18.0/include/osmium/index/id_set.hpp).
 - Use Overpass only for small manual QA queries while developing an adapter, not
   for a pack build dependency or at runtime.
 - The main OSM API is an editing API and is not an appropriate bulk data or
@@ -55,9 +80,12 @@ unlicensed inputs fail or remain rejected evidence.
 
 Derive route starts from the same pinned OSM extract as the hiking graph. During
 preparation, classify hiking ways plus only the road classes needed to detect
-where a drivable network touches a trail. Cluster those contacts into portals,
-rank them by reachable trail network and nearby trailhead/parking evidence, then
-discard every road, sidewalk, and evidence-only row before publishing the pack.
+where a drivable network touches a trail. Preserve actual entrance nodes, with
+evidence attached to their mapped node and parking nominated only through its
+own road/track and hiking contacts. No radius clustering, nearby-road guess or
+disconnected parking-to-trail snap remains. Unmarked street-to-trail entrances
+are included. Rank surviving starts by their prepared trail network, then
+discard every context-only road, sidewalk, and evidence row before publishing.
 The runtime graph remains trail-only.
 
 OSM access tags remain the baseline. Preserve `public` and `unknown` separately
@@ -71,10 +99,10 @@ and covered by a pinned content hash; a missing, duplicate, or conflicting targe
 fails the build. Do not call a live authority restriction service or spatially
 infer a restriction during a pack build.
 
-Official entrance points are optional cosmetic evidence. A validated, pinned
-entrance snapshot may rename or raise confidence on a nearby derived portal, but
-it cannot create a portal, change its access state, or add a connector edge. A
-region without such a source gets generic portal names, not missing routes.
+Official entrance snapshots remain independent review anchors in the named-area
+compiler. They cannot invent an entrance, grant access, add connectors or lend
+names/confidence to unrelated nearby starts. The old schema-6 overlay and clustered
+portal implementation has been removed; generated packs are schema 7.
 
 ### Elevation
 
@@ -92,21 +120,33 @@ region without such a source gets generic portal names, not missing routes.
   direction-aware gain/loss, maximum elevation, and rolling-100 m grade.
 - Never calculate route elevation by calling a remote elevation API at request
   time.
+- Primary 10 m samples take precedence. If a sample is NoData, the developer
+  builder may acquire the official USGS 1-arc-second (nominal 30 m) product for
+  that owned tile and retry only the missing samples. This user-approved policy
+  preserves valid primary values; it does not interpolate a void, replace NoData
+  with zero, or remove trails. An unresolved sample still fails publication.
+  Backup pins use verified bytes/hash receipts and explicit resolution/provenance.
+  Metric keys and final artifact identity must include applicable backup inputs;
+  offline runs require the backup to be cached. See the measured tradeoffs in
+  [elevation resolution](elevation-resolution-study.md).
 
 ### Buildings (is this start in a neighbourhood)
 
-- Source: the **same pinned OSM extract** as the trail topology. `wa/building`
-  is filtered out of the prepared region, exported, and reduced to centroids by
-  `lib/data/osm/buildings.ts`. No second dataset, no raster, no Python.
-- Purpose: the product only ever wants wilderness starts, so this is one
-  measurement and one rule, not a taxonomy the user picks from. An access point
-  is rejected when **50 or more buildings** sit within **500 m** of its snapped
-  node (`lib/data/wilderness.ts`).
-- Only centroids are retained, rounded to five decimal places (about a metre,
-  against a 500 m counting radius). The filtered `.pbf` and the export are
-  deleted before the staging directory is committed: it is renamed into place,
-  so anything left behind is kept forever. Santa Cruz retains 3.9 MB for
-  189,826 buildings.
+- Source: the **same pinned OSM extract** as the trail topology. The local source
+  store records supported building centroids, deduplicated by source identity.
+  Nodes, ways and supported relations count; explicit `building=no` does not.
+  Unsupported relations remain disclosed in the context inventory and release.
+- An access point requires **0–9 mapped buildings within 500 m** of its
+  actual entrance node (`lib/data/wilderness.ts`). This measures immediate
+  surroundings; it is combined with the mountain connection below. Administrative
+  boundaries and forest membership are not access evidence. Unknown access remains
+  enabled by default.
+- Candidate discovery uses a SQLite spatial index followed by an exact distance
+  check before distance pruning and elevation acquisition. The prepared candidates
+  retain their original nominations through final topology/ranking. Runtime search
+  and map eligibility use the same threshold. Source snapshots and admission
+  constants participate in preparation identity; changed policy rebuilds artifacts,
+  while unchanged physical segment measurements remain reusable.
 - This **replaces GHS-POP**, which was previously used for the same decision.
   The reasoning for the swap, and why the earlier argument against OSM
   built-up signals did not survive measurement:
@@ -117,15 +157,37 @@ region without such a source gets generic portal names, not missing routes.
   - A population figure summed over kilometres describes the wrong thing. Fall
     Creek Fire Road and the Henry Cowell nature centre sat in near-identical
     population fields (380 and 368 people/km², both "populated") because Felton
-    is inside the radius. Buildings separate them 9 against 28, and both are
-    correctly kept.
+    is inside the radius. Buildings separate them 9 against 28. The current
+    stricter rule includes the first and excludes the second; the earlier
+    50-building rule included both.
   - Every start GHS-POP flagged as urban is also flagged by the building rule,
     so nothing is lost at the top end.
 - Deleting the raster path removed the pinned GHSL download, the tile-grid
   arithmetic, the uv/rasterio sampler, and `tools/dem/sample_population.py`, and
   cut about 35 MB per region from the source cache.
-- No fallback: a region whose extract yields no buildings fails the build rather
-  than silently treating every start as wild.
+- Sparse OSM evidence does not prove absence of buildings. The active source
+  pipeline reports unsupported context and fails malformed/missing references;
+  a locally valid zero count is allowed. There is no population fallback.
+  Historical source-wide building counts above are observations, not a completeness
+  guarantee for every new Washington area.
+
+### Mountain terrain and connected approaches
+
+Use one static, licensed [GMBA Standard Basic inventory](../../data/coverage/regions/README.md)
+for named mountain cores and eligibility. A sparse public/unknown entrance must
+reach an unambiguous hiking link touching its selected core through hiking links
+within 25 miles. Ambiguous footways may connect approaches; ordinary roads do not.
+Unmarked entrances remain eligible. Reviewed anchors cannot create entrances.
+
+Freeze admission before extending route support. Display the core plus 500 m
+registration neighborhoods around actual admitted outside entrances, and include
+25-mile routing envelopes around those entrances. Normalize only additional
+support, then prune before DEM acquisition. One bounded multi-source Dijkstra
+implementation serves both passes; arrays do not persist across them. The data,
+product nomination scope and admission policy participate in artifact/receipt
+identity. Physical metrics remain reusable. Conservative GMBA foothill omissions
+and missing mapped connections are explicit limits; reviewed policy exclusions
+are distinguished from unexplained missing topology.
 
 ### Basemap
 
@@ -142,7 +204,9 @@ still function if tiles are temporarily unavailable.
 ```text
 .cache/sources/<source>/<snapshot>/     ignored immutable downloads
 .cache/build/<pack>/<run-id>/           ignored staging and audit artifacts
-.local-data/packs/<pack>/<version>/     ignored validated runtime pack
+.local-data/releases/prepared/          ignored exported catalog and artifacts
+.local-data/coverage/                   ignored installed artifacts and references
+.cache/build/                          ignored resumable developer staging
 data/fixtures/                          committed tiny deterministic inputs
 ```
 
@@ -152,8 +216,10 @@ data/fixtures/                          committed tiny deterministic inputs
   builds reuse verified configured pins, acquiring only missing/unusable inputs;
   `--offline` prohibits acquisition and `--refresh` explicitly rediscovers sources.
 - Build to a staging directory and publish only after all validation succeeds.
-- Point an atomic `current` manifest/symlink at the new version, then prune older
-  validated builds for that pack. Failed builds leave the current build intact.
+- Point an atomic `current` manifest/symlink at the new version. Progressive
+  snapshot cleanup preserves the current generation, live search pins, and
+  every saved job reference under a shared publication lock. Unknown reference
+  history prevents deletion. Failed builds leave the current build intact.
 - Database and manifest schema versions are separate from data versions.
 - Runtime opens packs read-only and verifies manifest/database compatibility.
 - Large files are not committed and Git LFS is unnecessary for the first slice.
@@ -172,12 +238,23 @@ terms. A pack build fails if a source lacks a recorded license/terms decision.
 
 ## Adding another region
 
+Choose published GMBA Standard range IDs in the catalog and pin their Basic
+features in the single inventory. Product territory, provider coverage and reviewed
+access restrictions remain separate inputs. The [range definitions](../../data/coverage/regions/README.md)
+record hashes, attribution and the authoring recipe. Ordinary builds load committed
+inputs without acquiring or regenerating mountain boundaries.
+
+The [prepared coverage design](prepared-coverage.md) is the forward path:
+add independently reviewed coverage intent and verified provider extent to
+a coherent release. Existing pack definitions below remain migration
+inputs and legacy maintenance instructions.
+
 The authoritative region order, boundary intent, selector behavior, and
 onboarding/activation gates are defined in the [regional expansion
 roadmap](regional-expansion-plan.md). At the data layer, adding a region should
 require only:
 
-1. a new versioned coverage polygon and manifest seed;
+1. a stable catalog name, published Standard range IDs and product territory;
 2. a pinned OSM extract plus any reviewed exact-way removals, optional
    entrance-name overlay, and optional pinned official-trail supplement;
 3. the same topology, elevation, metric, validation, and publish pipeline;

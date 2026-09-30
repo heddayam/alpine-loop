@@ -35,6 +35,16 @@ function point(id: string, patch: Partial<AccessPointCandidate> = {}): AccessPoi
 }
 
 describe("eligible access-point enumeration", () => {
+  it("queries the selected area and looks up an outside explicit start by identity", async () => {
+    const calls: Parameters<GraphRepository["getAccessPointCandidates"]>[0][]=[];
+    const repository={getAccessPointCandidates:async (query:typeof calls[number])=>{calls.push(query);return query.accessPointId ? [point(query.accessPointId,{lon:3})] : [point("inside")];}} as GraphRepository;
+    const result=await listEligibleAccessPointCandidates({repository,accessFilter:{predicates:[AREA],coverage:{type:"Polygon",coordinates:[[[-4,-4],[4,-4],[4,4],[-4,4],[-4,-4]]]}},includeUncertainAccess:true,startAccessPointId:"outside"});
+    expect(calls.map(call=>call.bbox)).toEqual([[-1,-1,1,1],[-4,-4,4,4]]);
+    expect(calls[1]?.accessPointId).toBe("outside");
+    expect(result.all.map(point=>point.id)).toEqual(["inside","outside"]);
+    expect(result.eligible.map(point=>point.id)).toEqual(["inside"]);
+  });
+
   it("ranks schema-6 portals by trail reach and evidence, not public/unknown connectivity", () => {
     const smallerPublicGraph = point("public", {
       reachableTrailKm: 2,

@@ -23,7 +23,6 @@ export const searchAreaSchema = z.discriminatedUnion("mode", [
 ]);
 
 export const searchIntentSchema = z.object({ area: searchAreaSchema, criteria: routeCriteriaSchema }).strict();
-export const searchRequestSchema = searchIntentSchema.extend({ limit: z.number().int().min(1).max(20).default(10) });
 
 export const searchAreaSnapshotSchema = z.object({
   label: z.string().min(1),
@@ -33,15 +32,6 @@ export const searchAreaSnapshotSchema = z.object({
 
 export const searchRouteSchema = generatedClosedRouteV3Schema.extend({ regionLabel: z.string() });
 export const closeSearchRouteSchema = searchRouteSchema.extend({ violations: z.array(constraintViolationV3Schema).min(1) });
-export const searchResultSchema = z.object({
-  request: searchRequestSchema,
-  area: searchAreaSnapshotSchema,
-  exact: z.array(searchRouteSchema).max(20),
-  nearMisses: z.array(closeSearchRouteSchema).max(20),
-  incomplete: z.boolean(),
-  messages: z.array(z.string()),
-}).strict();
-
 export const searchCatalogSchema = z.object({
   regions: z.array(z.object({ id: z.string().min(1), name: z.string().min(1) }).strict()),
   coverages: z.array(areaGeometrySchema),
@@ -69,9 +59,7 @@ export const routeJobListV2Schema = z.object({ version: z.literal(2), jobs: z.ar
 
 export type SearchArea = z.infer<typeof searchAreaSchema>;
 export type SearchIntent = z.infer<typeof searchIntentSchema>;
-export type SearchRequest = z.infer<typeof searchRequestSchema>;
 export type SearchAreaSnapshot = z.infer<typeof searchAreaSnapshotSchema>;
-export type SearchResult = z.infer<typeof searchResultSchema>;
 export type SearchCatalog = z.infer<typeof searchCatalogSchema>;
 export type SearchRoute = z.infer<typeof searchRouteSchema>;
 export type CloseSearchRoute = z.infer<typeof closeSearchRouteSchema>;

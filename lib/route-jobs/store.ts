@@ -15,10 +15,14 @@ type Row = Record<string, SQLInputValue>;
 type JobControl = { status: RouteJobStatus; cancelRequested: boolean; deleteRequested: boolean };
 export type StoredJob = { id: string; request: SearchIntent; plan: SearchPlan };
 
-const planSchema = z.object({
-  packs: z.array(z.object({ id: z.string().min(1), dataVersion: z.string().min(1), builtAt: z.string().datetime() }).strict()).min(1),
+const installationPlanSchema = z.object({
+  installationId: z.string().min(1).nullable(),
   area: searchAreaSnapshotSchema,
 }).strict();
+const planSchema = z.union([installationPlanSchema, z.object({
+  packs: z.array(z.object({ id: z.string().min(1), dataVersion: z.string().min(1), builtAt: z.string().datetime() }).strict()).min(1),
+  area: searchAreaSnapshotSchema,
+}).strict().transform(({ area }) => ({ installationId: null, area }))]);
 
 export type ResultCursor = {
   matchRank: number;
@@ -134,7 +138,7 @@ export class SQLiteRouteJobStore {
     const timestamp = nowIso(this.#now);
     this.#database.prepare(`INSERT INTO route_jobs(id, request_json, plan_json, status, created_at, updated_at)
       VALUES (?, ?, ?, 'queued', ?, ?)`).run(
-      id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(planSchema.parse(plan)), timestamp, timestamp,
+      id, JSON.stringify(searchIntentSchema.parse(request)), JSON.stringify(installationPlanSchema.extend({ installationId: z.string().min(1) }).parse(plan)), timestamp, timestamp,
     );
   }
 
@@ -257,7 +261,7 @@ export class SQLiteRouteJobStore {
         const terminal = control.cancelRequested ? "cancelled" : status;
         const timestamp = nowIso(this.#now);
         this.#database.prepare(`UPDATE route_jobs SET status = ?, error = ?, completed_at = ?, updated_at = ?
-          WHERE id = ?`).run(terminal, terminal === "failed" ? error ?? null : null, timestamp, timestamp, id);
+          WHERE id = ?`).run(terminal, terminal === "failed" || (terminal === "cancelled" && !control.cancelRequested) ? error ?? null : null, timestamp, timestamp, id);
       }
     });
   }

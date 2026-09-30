@@ -1,7 +1,7 @@
 import { topologySha256 } from "@/lib/graph/topology-hash";
 import { CLOSED_ROUTE_TOPOLOGY_ALGORITHM_VERSION } from "@/lib/graph/closed-route-topology";
 import { describe, expect, it } from "vitest";
-import { buildClosedRouteTopology } from "./topology-compiler";
+import { buildClosedRouteTopology } from "./testing/topology-compiler";
 import type { CompiledEdge, NormalizedAccessPoint, NormalizedNode } from "./types";
 
 const builtAt = "2026-08-05T00:00:00Z";

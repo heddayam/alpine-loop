@@ -4,6 +4,8 @@ import {
   areaBounds,
   coordinateIsInsideArea,
   lineIsInsideArea,
+  prepareAreaGeometry,
+  segmentIntersectsArea,
   segmentIsInsideArea,
 } from "./geometry";
 
@@ -20,6 +22,14 @@ describe("area geometry", () => {
     expect(coordinateIsInsideArea([0, 5], polygonWithHole)).toBe(true);
     expect(coordinateIsInsideArea([4, 5], polygonWithHole)).toBe(true);
     expect(coordinateIsInsideArea([5, 5], polygonWithHole)).toBe(false);
+  });
+
+  it("detects positive-length segment contact through coverage, not a hole or corner tangent", () => {
+    expect(segmentIntersectsArea([-1, 5], [11, 5], polygonWithHole)).toBe(true);
+    expect(segmentIntersectsArea([4.5, 4.5], [5.5, 5.5], polygonWithHole)).toBe(false);
+    expect(segmentIntersectsArea([-1, 1], [1, -1], polygonWithHole)).toBe(false);
+    expect(segmentIntersectsArea([-1, 0], [5, 0], polygonWithHole)).toBe(true);
+    expect(segmentIntersectsArea([1, 1], [1, 1], polygonWithHole)).toBe(false);
   });
 
   it("supports disjoint multipolygon islands", () => {
@@ -57,5 +67,167 @@ describe("area geometry", () => {
     const detailed: Polygon = { type: "Polygon", coordinates: [coordinates] };
 
     expect(areaBounds(detailed)).toEqual([-123, 36, -122.00000666666666, 36.9]);
+  });
+
+  it("keeps prepared boundaries inclusive without bridging holes, concavities or islands", () => {
+    const prepared = prepareAreaGeometry(polygonWithHole);
+    expect(prepared.containsPoint([4, 5])).toBe(true);
+    expect(prepared.containsPoint([5, 5])).toBe(false);
+    expect(prepared.containsSegment([1, 5], [9, 5])).toBe(false);
+    expect(prepared.containsSegment([0, 0], [10, 0])).toBe(true);
+    expect(prepared.containsSegment([1, 1], [1, 1])).toBe(true);
+    expect(prepared.containsPoint([NaN, 1])).toBe(false);
+    expect(prepared.containsSegment([1, 1], [Infinity, 1])).toBe(false);
+    const islands: MultiPolygon = {type: "MultiPolygon", coordinates: [
+      polygonWithHole.coordinates,
+      [[[20, 0], [30, 0], [30, 10], [28, 10], [28, 2], [22, 2], [22, 10], [20, 10], [20, 0]]],
+    ]};
+    const indexed = prepareAreaGeometry(islands);
+    expect(indexed.containsSegment([1, 1], [21, 1])).toBe(false);
+    expect(indexed.containsSegment([21, 9], [29, 9])).toBe(false);
+    expect(indexed.containsSegment([21, 1], [29, 1])).toBe(true);
+  });
+
+  it("finds prepared segment contact across narrow areas without accepting isolated point touches", () => {
+    const narrow: Polygon = {type: "Polygon", coordinates: [
+      [[4.9, 0], [5.1, 0], [5.1, 10], [4.9, 10], [4.9, 0]],
+    ]};
+    const prepared = prepareAreaGeometry(narrow);
+    expect(prepared.containsPoint([0, 5])).toBe(false);
+    expect(prepared.containsPoint([10, 5])).toBe(false);
+    expect(prepared.intersectsSegment([0, 5], [10, 5])).toBe(true);
+    const islands: MultiPolygon = {type: "MultiPolygon", coordinates: [
+      narrow.coordinates, [[[20, 0], [22, 0], [22, 2], [20, 2], [20, 0]]],
+    ]};
+    expect(prepareAreaGeometry(islands).intersectsSegment([15, 1], [25, 1])).toBe(true);
+    expect(prepareAreaGeometry(islands).intersectsSegment([10, 1], [15, 1])).toBe(false);
+    const withHole = prepareAreaGeometry(polygonWithHole);
+    const cases: Array<[[number, number], [number, number], boolean]> = [
+      [[-1, 5], [11, 5], true],
+      [[4.5, 4.5], [5.5, 5.5], false],
+      [[-1, 1], [1, -1], false],
+      [[-1, 5], [0, 5], false],
+      [[-1, 0], [5, 0], true],
+      [[4, 4], [6, 4], true],
+      [[-2, -2], [-1, -1], false],
+      [[1, 1], [1, 1], false],
+      [[1, 1], [1 + 1e-11, 1], false],
+    ];
+    for (const [start, end, expected] of cases) {
+      expect(withHole.intersectsSegment(start, end)).toBe(expected);
+      expect(withHole.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, polygonWithHole));
+    }
+  });
+
+  it("matches one-shot predicates across detailed rings, tolerances and short or parallel segments", () => {
+    let seed = 1729;
+    const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    const ring = Array.from({length: 128}, (_, i) => {
+      const angle = i * 2 * Math.PI / 128;
+      const radius = i % 2 ? 5 : 10;
+      return [radius * Math.cos(angle), radius * Math.sin(angle)];
+    });
+    ring.push(ring[0]);
+    // Repeated points and an unclosed ring also retain the one-shot behavior.
+    const shapes: Polygon[] = [polygonWithHole, {type: "Polygon", coordinates: [ring]},
+      {type: "Polygon", coordinates: [[[0, 0], [10, 0], [10, 0], [10, 10], [0, 10]]]}];
+    for (const shape of shapes) for (const scale of [1, 1e-3, 1e-6]) {
+      const geometry: Polygon = {type: "Polygon", coordinates: shape.coordinates.map((ring) =>
+        ring.map(([x, y]) => [-121 + x * scale, 48 + y * scale]))};
+      const prepared = prepareAreaGeometry(geometry);
+      const points: [number, number][] = Array.from({length: 200}, () =>
+        [-121 + (random() * 24 - 12) * scale, 48 + (random() * 24 - 12) * scale]);
+      for (const ring of geometry.coordinates) for (const [x, y] of ring) {
+        for (const offset of [0, -1e-10, 1e-10, 1e-7]) points.push([x + offset, y + offset]);
+      }
+      for (let i = 0; i < points.length; i++) {
+        const start = points[i], end = points[(i * 31 + 17) % points.length];
+        expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+        expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+        expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+        const nearby: [number, number] = [start[0] + 1e-7, start[1]];
+        expect(prepared.containsSegment(start, nearby)).toBe(segmentIsInsideArea(start, nearby, geometry));
+        expect(prepared.intersectsSegment(start, nearby)).toBe(segmentIntersectsArea(start, nearby, geometry));
+      }
+    }
+  });
+
+  it("prepares an independent snapshot and accepts empty areas", () => {
+    const geometry = structuredClone(polygonWithHole);
+    const prepared = prepareAreaGeometry(geometry);
+    geometry.coordinates.length = 0;
+    expect(prepared.containsPoint([1, 1])).toBe(true);
+    expect(prepared.containsSegment([1, 1], [3, 1])).toBe(true);
+    expect(prepareAreaGeometry(geometry).containsPoint([1, 1])).toBe(false);
+    expect(prepareAreaGeometry({type: "Polygon", coordinates: [[]]}).containsSegment([0, 0], [1, 1])).toBe(false);
+  });
+
+  it("keeps envelope rejection conservative for cross/dot tolerances and parallel projections", () => {
+    const shapes: Polygon[] = [polygonWithHole,
+      {type: "Polygon", coordinates: [[[0, 0], [2e-5, 0], [2e-5, 2e-5], [0, 2e-5], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1e-6, 0], [0, 1e-6], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [4, 0], [4, 0], [4, 4], [0, 4]]]},
+    ];
+    for (const geometry of shapes) {
+      const prepared = prepareAreaGeometry(geometry);
+      for (const ring of geometry.coordinates) for (let i = 1; i < ring.length; i++) {
+        const a = ring[i - 1], b = ring[i];
+        const dx = b[0] - a[0], dy = b[1] - a[1], length = Math.hypot(dx, dy);
+        // Longer edges accept perpendicular and endpoint offsets much larger
+        // than epsilon when their squared length is just above the tiny-edge rule.
+        const allowance = length > 1e-5 ? 1e-10 / length : 1e-10;
+        for (const offset of [0, allowance * 0.5, allowance * 1.5, allowance * 3]) {
+          const start: [number, number] = [(a[0] + b[0]) / 2 - dy / (length || 1) * offset,
+            (a[1] + b[1]) / 2 + dx / (length || 1) * offset];
+          const end: [number, number] = [b[0] + dx / (length || 1) * offset, b[1] + dy / (length || 1) * offset];
+          expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+          expect(prepared.containsPoint(end)).toBe(coordinateIsInsideArea(end, geometry));
+          expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+          expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+        }
+      }
+    }
+  });
+
+  it("preserves holes, overlapping islands and outside-endpoint crossings with prepared envelopes", () => {
+    const geometry: MultiPolygon = {type: "MultiPolygon", coordinates: [
+      polygonWithHole.coordinates,
+      [[[5, 0], [12, 0], [12, 3], [5, 3], [5, 0]]].map(ring => ring.reverse()),
+      [[[20, 0], [20.00001, 0], [20.00001, 10], [20, 10], [20, 0]]],
+    ]};
+    const prepared = prepareAreaGeometry(geometry);
+    const cases: Array<[[number, number], [number, number]]> = [
+      [[-5, 5], [25, 5]], [[15, 5], [25, 5]], [[4.5, 5], [5.5, 5]],
+      [[-1, 1], [1, -1]], [[-1, 0], [11, 0]], [[1, 1], [11, 1]],
+      [[5, 5], [5, 5]], [[19, 11], [21, 11]], [[12, 0], [20, 0]],
+    ];
+    for (const [start, end] of cases) {
+      expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+      expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+      expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+    }
+    expect(prepared.intersectsSegment([15, 5], [25, 5])).toBe(true);
+    expect(prepared.intersectsSegment([-1, 1], [1, -1])).toBe(false);
+  });
+
+  it("retains exact predicate behavior for empty, degenerate and nonfinite input", () => {
+    const shapes: Polygon[] = [
+      {type: "Polygon", coordinates: [[]]},
+      {type: "Polygon", coordinates: [[[0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1, 1], [0, 0]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [NaN, 0], [1, 1], [0, 1]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [Infinity, 0], [1, 1], [0, 1]]]},
+      {type: "Polygon", coordinates: [[[0, 0], [1e200, 0], [1e200, 1], [0, 1]]]},
+    ];
+    const points: [number, number][] = [[0, 0], [1e-11, 0], [0.5, 0.5], [-1, 1], [2, 2],
+      [NaN, 0], [0, Infinity], [2e200, 0]];
+    for (const geometry of shapes) {
+      const prepared = prepareAreaGeometry(geometry);
+      for (const start of points) for (const end of points) {
+        expect(prepared.containsPoint(start)).toBe(coordinateIsInsideArea(start, geometry));
+        expect(prepared.containsSegment(start, end)).toBe(segmentIsInsideArea(start, end, geometry));
+        expect(prepared.intersectsSegment(start, end)).toBe(segmentIntersectsArea(start, end, geometry));
+      }
+    }
   });
 });

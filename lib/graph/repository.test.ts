@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import policy from "@/data/fixtures/graph/policy.json";
 import { packManifestSchema } from "@/lib/contracts";
-import { compilePack } from "@/lib/data/compiler";
+import { compilePack } from "@/lib/data/testing/compiler";
 import { fixtureCompileOptions } from "@/lib/data/fixture-pack";
 import { lineLengthMeters } from "./geometry";
 import { writeGraphFixture } from "./test-helpers";
@@ -143,9 +143,11 @@ describe("SQLiteGraphRepository", () => {
     const repository = open();
     const candidates = await repository.getAccessPointCandidates({ bbox: [-0.001, -0.001, 0.001, 0.001], includeUncertainAccess: true });
     expect(candidates.map(({ id }) => id)).toEqual(["public-start"]);
+    expect((await repository.getAccessPointCandidates({bbox,includeUncertainAccess:true,accessPointId:"unknown-start"})).map(point=>point.id)).toEqual(["unknown-start"]);
     const query = { startNodeId: "s", maximumDistanceMeters: 10_000, maximumDirectedEdges: 10, includeUncertainAccess: true, coverage };
     const reachable = await repository.getReachableGraph(query);
     expect(reachable.graph.edges.map(({ id }) => id)).toEqual(["one-way", "unknown"]);
+    expect(reachable.graph.accessPoints).toEqual([]); // The solver supplies the selected start.
     expect(reachable.graph.edges.some(({ toNodeId }) => toNodeId === "s")).toBe(false);
     expect(reachable.truncated).toBe(false);
     expect((await repository.getReachableGraph({ ...query, maximumDirectedEdges: 1 })).truncated).toBe(true);

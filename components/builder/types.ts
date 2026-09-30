@@ -28,7 +28,6 @@ export type BuilderValues = {
   maximumRepeatedTrailPct: string;
   maximumSharedStemEnabled: boolean;
   maximumSharedStemMiles: string;
-  allowMultiCycle: boolean;
   distanceMiles: RangeField;
   elevationGainFeet: RangeField;
   maximumElevationFeet: RangeField;
@@ -36,7 +35,6 @@ export type BuilderValues = {
   selectedGradePreset: GradePresetId;
   gradePresets: GradePresets;
   includeUncertainAccess: boolean;
-  limit: string;
 };
 
 export type DriveTimeDraft = {
@@ -62,14 +60,12 @@ export function builderValues(settings: AppSettingsV1, draft: BuilderDraft): Bui
   return {
     ...draft,
     includeUncertainAccess: settings.includeUncertainAccess,
-    limit: String(settings.quickSearchRouteCount),
     gradeConstraintEnabled: settings.gradeConstraintEnabled,
     selectedGradePreset: settings.selectedGradePreset,
     gradePresets: settings.gradePresets,
     maximumRepeatedTrailPct: draft.maximumRepeatedTrailPct ?? String(settings.loopOptions.maximumRepeatedTrailPct),
     maximumSharedStemEnabled: settings.loopOptions.sharedApproachEnabled,
     maximumSharedStemMiles: draft.maximumSharedStemMiles ?? String(settings.loopOptions.maximumSharedApproachMiles),
-    allowMultiCycle: settings.loopOptions.allowMultiCycle,
   };
 }
 

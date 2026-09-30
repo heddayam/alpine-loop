@@ -26,14 +26,15 @@ function cluster(count: number, lon: number, lat: number): BuildingCentroid[] {
 
 describe("accessPointIsWildEnough", () => {
   it("is half-open at the threshold", () => {
+    expect(BUILDING_RADIUS_M).toBe(500);
+    expect(MAXIMUM_NEARBY_BUILDINGS).toBe(10);
     expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS - 1 })).toBe(true);
     expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS })).toBe(false);
     expect(accessPointIsWildEnough({ nearbyBuildingCount: MAXIMUM_NEARBY_BUILDINGS + 1 })).toBe(false);
   });
 
   it("keeps a start with a handful of neighbours", () => {
-    // A park gateway beside a hamlet must survive; only built-up surroundings
-    // are rejected. Fall Creek Fire Road measures 9 in the real pack.
+    // The accepted rule admits nine nearby buildings and excludes ten.
     expect(accessPointIsWildEnough({ nearbyBuildingCount: 9 })).toBe(true);
   });
 });

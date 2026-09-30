@@ -47,17 +47,12 @@ Areas select starts. Exact installed coverage remains the route boundary.
 
 Route criteria have one definition independent of HTTP, a pack, saved settings,
 or execution strategy. Unknown access remains included by default and may be
-excluded. Exact and close matches remain separate. Route count is explicit,
-1 through 20, default 10.
+excluded. Exact and close matches remain separate.
 
-Quick and Full currently differ in more than execution: Quick returns a global
-requested count while Full retains up to ten routes per start. Do not describe
-these as equivalent. The target is shared preparation and execution primitives.
-The final interaction must make requested alternatives versus an exhaustive
-trailhead attempt explicit, without requiring users to manage one job per data
-partition. Preserve useful exhaustive work and existing saved results while
-removing duplicated lifecycle machinery. Saving every foreground search is not
-a prerequisite for shared execution.
+Full search is the only workflow. It attempts each eligible starting point,
+retains up to ten exact routes per start (or a clearly labeled close match), and
+saves progress. Each start uses one bounded solver path; there is no foreground
+search endpoint or alternative effort mode. Cancellation retains completed work.
 
 ## Responsibility boundaries
 
@@ -75,7 +70,10 @@ for a framework, class per row, or directory per operation. Pure domain types
 can be shared. An HTTP DTO must not be the engine's input just because its fields
 happen to be convenient.
 
-## Evidence and replacement plan
+## Historical evidence and replacement plan
+
+The notes below describe the earlier redesign baseline. The current product
+uses Full search only; obsolete foreground search code has been removed.
 
 ### 1. Domain and search orchestration
 

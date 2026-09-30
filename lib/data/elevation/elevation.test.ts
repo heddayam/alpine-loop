@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandRunner } from "../osm/command";
 import { queryThreeDepProducts, threeDepQueryUrl } from "./products";
-import { UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
+import { DEM_METRIC_ALGORITHM_VERSION, PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION, UvRasterioThreeDepElevationSampler, validateUvRasterioPrerequisites } from "./uv-rasterio-sampler";
 
 const query = {
   endpoint: "https://tnmaccess.nationalmap.gov/api/v1/products",
@@ -20,6 +20,13 @@ describe("USGS 3DEP product ingestion", () => {
     expect(products.map(({ productId }) => productId)).toEqual(["USGS_13_n38w122", "USGS_13_n38w123"]);
     expect(fetchImpl).toHaveBeenCalledWith(threeDepQueryUrl(query));
     expect(products.every(({ format }) => format === "GeoTIFF")).toBe(true);
+  });
+
+  it("selects only the requested nominal tile before acquisition", async () => {
+    const body = await readFile(path.resolve("data/fixtures/source/elevation/products.json"), "utf8");
+    const products = await queryThreeDepProducts({ ...query, nominalTile: "n38w122" }, async () => new Response(body));
+    expect(products.map(({ productId }) => productId)).toEqual(["USGS_13_n38w122"]);
+    await expect(queryThreeDepProducts({ ...query, nominalTile: "n50w122" }, async () => new Response(body))).rejects.toThrow("no products");
   });
 
   it("fails loudly on an empty or drifting product response", async () => {
@@ -52,6 +59,8 @@ describe("uv-managed Rasterio elevation sampling", () => {
       scriptPath: "/fixture/tools/dem/sample_dem.py",
       runner,
     });
+    expect(sampler.algorithmVersion).toBe(DEM_METRIC_ALGORITHM_VERSION);
+    expect(DEM_METRIC_ALGORITHM_VERSION).toContain("metrics-v3");
     await expect(sampler.sample([[-122.2, 37.2], [-122.1, 37.1]])).resolves.toEqual([314.25, null]);
   });
 
@@ -63,5 +72,15 @@ describe("uv-managed Rasterio elevation sampling", () => {
       uv: "uv 0.9.0",
       rasterio: "rasterio 1.4.3; GDAL 3.9.3",
     });
+  });
+
+  it("passes deterministic tile ownership only for progressive sampling", async () => {
+    const runner: CommandRunner = vi.fn(async (_command, arguments_) => {
+      expect(arguments_).toContain("--tile-owner");
+      return { stdout: "200\n", stderr: "" };
+    });
+    const sampler = new UvRasterioThreeDepElevationSampler("/fixture/collection.json", { tileOwnership: true, runner });
+    expect(sampler.algorithmVersion).toBe(PROGRESSIVE_DEM_METRIC_ALGORITHM_VERSION);
+    await expect(sampler.sample([[-121.9, 48]])).resolves.toEqual([200]);
   });
 });

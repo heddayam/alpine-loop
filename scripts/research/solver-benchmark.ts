@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { PackManifest, GeneratedClosedRouteV3 } from "../../lib/contracts";
 import type { EdgeTraversal } from "../../lib/graph";
 import type { ResolvedAccessFilterContext, RouteSearchRequest, RouteSearchResult } from "../../lib/solver";
-import type { PenalizedClosedRouteCandidate, PenalizedClosedRouteSearchResult } from "../../lib/solver/penalized-closed-route-search";
+import type { SimpleRouteCandidate, SimpleRouteSearchResult } from "../../lib/solver/simple-route-search";
 import { fixtureCases, request, type BenchmarkCase } from "./solver-benchmark-cases";
 
 const argument = (name: string, fallback: string): string =>
@@ -33,10 +33,9 @@ if (process.env.TSX_TSCONFIG_PATH !== tsconfig) {
 const mode = argument("mode", "fixed-work");
 const suite = argument("suite", "fixtures");
 const layer = argument("layer", "both");
-const effort = argument("effort", "quick");
 if (!["fixed-work", "deadline"].includes(mode) || !["fixtures", "packs", "all"].includes(suite)
-  || !["raw", "pipeline", "both"].includes(layer) || (effort !== "quick" && effort !== "thorough")) {
-  throw new Error("Expected --mode=fixed-work|deadline --suite=fixtures|packs|all --layer=raw|pipeline|both --effort=quick|thorough");
+  || !["raw", "pipeline", "both"].includes(layer)) {
+  throw new Error("Expected --mode=fixed-work|deadline --suite=fixtures|packs|all --layer=raw|pipeline|both");
 }
 const integer = (name: string, fallback: string, min = 0): number => {
   const value = Number(argument(name, fallback));
@@ -49,10 +48,11 @@ const casePattern = new RegExp(argument("case", ".*"));
 const dataRoot = resolve(argument("data-root", join(ownRoot, ".local-data")));
 const output = argument("output", "");
 const moduleUrl = (path: string): string => pathToFileURL(join(solverRoot, path)).href;
-const { searchPenalizedClosedRoutes } = await import(moduleUrl("lib/solver/penalized-closed-route-search.ts")) as typeof import("../../lib/solver/penalized-closed-route-search");
+const { searchSimpleRoutes } = await import(moduleUrl("lib/solver/simple-route-search.ts")) as typeof import("../../lib/solver/simple-route-search");
 const { ReachableGraphClosedRouteSolver } = await import(moduleUrl("lib/solver/reachable-graph-closed-route-solver.ts")) as typeof import("../../lib/solver/reachable-graph-closed-route-solver");
-const { CLOSED_ROUTE_EFFORT_BUDGETS } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
-const { SQLiteGraphRepository, SQLiteClosedRouteFeasibilityRepository, distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
+const { CLOSED_ROUTE_BUDGET } = await import(moduleUrl("lib/solver/budget.ts")) as typeof import("../../lib/solver/budget");
+const { distanceMetersBetween, edgeIsTraversable } = await import(moduleUrl("lib/graph/index.ts")) as typeof import("../../lib/graph");
+const { SQLiteGraphRepository } = await import(moduleUrl("lib/graph/sqlite-repository.ts")) as typeof import("../../lib/graph/sqlite-repository");
 const contractionPath = "lib/solver/contract-corridors.ts";
 const contraction = existsSync(join(solverRoot, contractionPath)) ? await import(moduleUrl(contractionPath)) as {
   contractCorridors: (edges: EdgeTraversal[], startNodeId: string) => EdgeTraversal[][];
@@ -61,7 +61,7 @@ const { writeGraphFixture } = await import(moduleUrl("lib/graph/test-helpers.ts"
 const { packManifestSchema } = await import(moduleUrl("lib/contracts/index.ts")) as typeof import("../../lib/contracts");
 const { listEligibleAccessPointCandidates } = await import(moduleUrl("lib/solver/eligible-access-points.ts")) as typeof import("../../lib/solver/eligible-access-points");
 const { getSearchRegion } = await import(moduleUrl("lib/data/named-area-catalog.ts")) as typeof import("../../lib/data/named-area-catalog");
-const budget = { ...CLOSED_ROUTE_EFFORT_BUDGETS[effort], deadlineMs: integer("deadline-ms", String(CLOSED_ROUTE_EFFORT_BUDGETS[effort].deadlineMs), 1) };
+const budget = { ...CLOSED_ROUTE_BUDGET, deadlineMs: integer("deadline-ms", String(CLOSED_ROUTE_BUDGET.deadlineMs), 1) };
 const now = mode === "fixed-work" ? () => 0 : Date.now;
 const hash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const stableDiagnostics = (value: object): object => Object.fromEntries(Object.entries(value)
@@ -73,7 +73,7 @@ const median = (values: number[]): number => {
 };
 const mean = (values: number[]): number | null => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 
-function summarizeRoute(route: PenalizedClosedRouteCandidate | GeneratedClosedRouteV3, target: RouteSearchRequest) {
+function summarizeRoute(route: SimpleRouteCandidate | GeneratedClosedRouteV3, target: RouteSearchRequest) {
   const raw = "traversals" in route;
   const fingerprint = hash(raw ? route.traversals.map(({ edge }) => edge.edgeKey ?? edge.id) : route.geometry);
   const center = (target.distanceMiles.min + target.distanceMiles.max) * 1609.344 / 2;
@@ -88,7 +88,7 @@ function summarizeRoute(route: PenalizedClosedRouteCandidate | GeneratedClosedRo
   };
 }
 
-function summarize(result: PenalizedClosedRouteSearchResult | RouteSearchResult, target: RouteSearchRequest) {
+function summarize(result: SimpleRouteSearchResult | RouteSearchResult, target: RouteSearchRequest) {
   const exact = ("candidates" in result ? result.candidates : result.exact).map((route) => summarizeRoute(route, target));
   const near = ("nearCandidates" in result ? result.nearCandidates : result.nearMisses).map((route) => summarizeRoute(route, target));
   const diagnostics = stableDiagnostics(result.diagnostics);
@@ -105,7 +105,7 @@ function summarize(result: PenalizedClosedRouteSearchResult | RouteSearchResult,
   };
 }
 
-async function measure(id: string, target: RouteSearchRequest, run: () => Promise<RouteSearchResult> | PenalizedClosedRouteSearchResult) {
+async function measure(id: string, target: RouteSearchRequest, run: () => Promise<RouteSearchResult> | SimpleRouteSearchResult) {
   for (let index = 0; index < warmup; index += 1) await run();
   const samples = [];
   for (let index = 0; index < repeats; index += 1) {
@@ -124,12 +124,11 @@ async function measure(id: string, target: RouteSearchRequest, run: () => Promis
 type PreparedCase = BenchmarkCase & {
   manifest: PackManifest;
   repository: InstanceType<typeof SQLiteGraphRepository>;
-  topologyRepository: InstanceType<typeof SQLiteClosedRouteFeasibilityRepository>;
   accessFilter: ResolvedAccessFilterContext;
 };
 
 async function runCase(item: PreparedCase) {
-  const target: RouteSearchRequest = { ...item.request, startAccessPointId: item.start.id, searchEffort: effort as RouteSearchRequest["searchEffort"] };
+  const target: RouteSearchRequest = { ...item.request, startAccessPointId: item.start.id };
   const chains = contraction?.contractCorridors(item.graph.edges.filter((edge) => edgeIsTraversable(edge, target.includeUncertainAccess))
     .map((edge) => ({ edge, from: item.graph.nodes.get(edge.fromNodeId)!, to: item.graph.nodes.get(edge.toNodeId)! }))
     .sort((a, b) => a.edge.id.localeCompare(b.edge.id) || a.from.id.localeCompare(b.from.id) || a.to.id.localeCompare(b.to.id)), item.start.nodeId);
@@ -140,11 +139,11 @@ async function runCase(item: PreparedCase) {
     target, budget, dataVersion: item.manifest.dataVersion, accessFilter: item.accessFilter });
   const runs = [];
   if (layer !== "pipeline") runs.push(await measure(`${item.id}/raw`, target,
-    () => searchPenalizedClosedRoutes(item.graph, item.start, target, { budget, now })));
+    () => searchSimpleRoutes(item.graph, item.start, target, { budget, now })));
   if (layer !== "raw") {
     const solver = new ReachableGraphClosedRouteSolver({ pack: item.manifest });
     runs.push(await measure(`${item.id}/pipeline`, target, () => solver.generate(target, {
-      repository: item.repository, topologyRepository: item.topologyRepository, accessFilter: item.accessFilter, budget, now,
+      repository: item.repository, accessFilter: item.accessFilter, budget, now,
     })));
   }
   return { id: item.id, inputFingerprint, pack: { id: item.manifest.id, dataVersion: item.manifest.dataVersion },
@@ -161,12 +160,10 @@ try {
     const databasePath = join(directory, `fixture-${index}.sqlite`);
     const manifest = writeGraphFixture(databasePath, item.graph, [item.start]);
     const repository = new SQLiteGraphRepository(databasePath, manifest.id);
-    const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
     try {
-      cases.push(await runCase({ ...item, manifest, repository, topologyRepository,
+      cases.push(await runCase({ ...item, manifest, repository,
         accessFilter: { predicates: [manifest.coverage.boundary], coverage: manifest.coverage.boundary } }));
     } finally {
-      await topologyRepository.close();
       await repository.close();
     }
   }
@@ -179,7 +176,6 @@ try {
     const manifest = packManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
     const databasePath = join(dirname(manifestPath), "pack.sqlite");
     const repository = new SQLiteGraphRepository(databasePath, packId);
-    const topologyRepository = new SQLiteClosedRouteFeasibilityRepository({ databasePath, manifest });
     try {
       const scenariosPath = join(ownRoot, "data/regions", packId, "scenarios.json");
       const scenario = existsSync(scenariosPath) ? (JSON.parse(readFileSync(scenariosPath, "utf8")) as { scenarios: Array<{
@@ -203,14 +199,13 @@ try {
         const target = request({ ...(expectation ?? (kind === "exact"
           ? { distanceMiles: { min: 4, max: 10 }, elevationGainFeet: { min: 500, max: 3500 } }
           : { distanceMiles: { min: 1, max: 2 }, elevationGainFeet: { min: 8000, max: 9000 } })),
-        closedRoute: { maximumRepeatedTrailPct: scenario?.maximumRepeatedTrailPct ?? 35, allowMultiCycle: true } });
+        closedRoute: { maximumRepeatedTrailPct: scenario?.maximumRepeatedTrailPct ?? 35 } });
         const { graph, truncated } = await repository.getReachableGraph({ startNodeId: start.nodeId,
           maximumDistanceMeters: target.distanceMiles.max * 1609.344, maximumDirectedEdges: budget.maximumDirectedEdges,
           includeUncertainAccess: true, coverage: manifest.coverage.boundary });
-        cases.push(await runCase({ id, graph, graphTruncated: truncated, start, request: target, manifest, repository, topologyRepository, accessFilter }));
+        cases.push(await runCase({ id, graph, graphTruncated: truncated, start, request: target, manifest, repository, accessFilter }));
       }
     } finally {
-      await topologyRepository.close();
       await repository.close();
     }
   }
@@ -223,7 +218,7 @@ const sourceFiles = ["lib/solver", "lib/graph"].flatMap((folder) => readdirSync(
   .map((file) => [join(folder, file), readFileSync(join(solverRoot, folder, file), "utf8")]));
 const report = { formatVersion: 1, solverRoot,
   commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: solverRoot, encoding: "utf8" }).trim(),
-  solverSourceFingerprint: hash(sourceFiles), node: process.version, mode, suite, layer, effort, warmup, repeats, budget,
+  solverSourceFingerprint: hash(sourceFiles), node: process.version, mode, suite, layer, warmup, repeats, budget,
   notes: ["Raw inputs are loaded before timing; pipeline timing includes SQLite reads and validation.",
     "Target deviation is descriptive, not a complete measure of hike quality. Compare exact counts, diversity, topology, repetition and violations together.",
     "Fixed-work retains expansion and candidate caps. Run benchmarks serially on an idle machine."],

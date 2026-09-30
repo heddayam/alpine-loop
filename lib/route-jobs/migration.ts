@@ -65,7 +65,7 @@ export function migrateLegacyJobs(database: DatabaseSync): void {
             : { mode: "named-regions", regionIds },
       });
       const plan: SearchPlan = {
-        packs: [{ id: String(row.pack_id), dataVersion: String(row.pack_data_version), builtAt: String(row.pack_built_at) }],
+        installationId: null,
         area: { label: String(row.search_region_name) },
       };
       if (row.drive_time_geometry_json !== null) {

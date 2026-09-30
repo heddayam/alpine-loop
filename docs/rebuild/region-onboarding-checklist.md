@@ -1,16 +1,28 @@
-# Region-pack onboarding checklist (schema 6)
+# Historical region-pack onboarding checklist (schema 6)
 
-Use this runbook for every new regional pack. It turns the approval gates in
-the [regional expansion roadmap](regional-expansion-plan.md) into the current,
-repeatable build procedure. The governing product rules remain in the
+**Superseded:** this document records the former regional builder. It is not the
+current execution procedure. Use the [coverage roadmap](regional-expansion-plan.md),
+[prepared coverage](prepared-coverage.md), and [developer build commands](../../README.md#developer-data-builds).
+Historical fixtures, source reviews and acceptance evidence below remain reference
+material; do not restore the registry, bootstrap commands or repeat-build workflow.
+
+This checklist recorded the former regional-pack approval and build procedure.
+The governing product rules remain in the
 [implementation plan](implementation-plan.md), source rules in
 [data-sources.md](data-sources.md), and the rationale for topology-derived
 starts in the [access-point derivation plan](access-point-derivation-plan.md).
 
-This checklist describes the code as it exists now: schema 6, OSM-derived
+This checklist described the former code: schema 6, OSM-derived
 trail/street portals, cycle reachability, and nearby OSM building counts. Do not
 copy schema-5 population, parking-snap, or authority-line work from an older
 charter or status entry.
+
+The former in-memory portal implementation and its tests have been removed.
+Current start preparation uses
+[`lib/data/progressive/portals.ts`](../../lib/data/progressive/portals.ts)
+through [`lib/coverage/runtime.ts`](../../lib/coverage/runtime.ts). The clustering,
+official-entrance overlays, and build-context helper described below are retained
+as historical behavior, not instructions to recreate those exports.
 
 ## Completion rule
 
@@ -261,18 +273,18 @@ Do not change solver logic, route/API contracts, UI labels, database tables, or
 portal/building thresholds for a region. Those are shared contracts owned by
 the integrator.
 
-Run focused offline tests while implementing:
+The former offline suite covered regional builders, portal derivation, buildings,
+wilderness filtering, and pack audits. Its retired files remain in Git history.
+For current start-preparation changes, the focused offline suite is:
 
 ```sh
-npm test -- lib/data/<pack-id>-pack.test.ts lib/data/regional-pack.test.ts \
-  lib/data/regional-builder.test.ts lib/data/portals.test.ts lib/data/osm/buildings.test.ts \
-  lib/data/wilderness.test.ts lib/data/audit/sqlite-pack-audit.test.ts
+npm test -- lib/data/progressive/portals.test.ts lib/data/wilderness.test.ts
 ```
 
-## 4. Understand the current trailhead pipeline
+## 4. Historical schema-6 trailhead pipeline
 
-This sequence is owned by the shared builder. A configured official-trail
-supplement is conflated after OSM normalization and before restrictions:
+This sequence records the retired shared builder. A configured official-trail
+supplement was conflated after OSM normalization and before restrictions:
 
 1. `osmium extract` uses the exact Polygon with `complete_ways`. The topology
    filter includes trail classes, road context, parking, trailhead/information/

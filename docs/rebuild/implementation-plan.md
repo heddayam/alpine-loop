@@ -1,5 +1,11 @@
 # Alpine Loop implementation plan
 
+The accepted [network and route revision](network-design.md) restricts generated
+routes to loops/lollipops and uses locally prepared start areas with distance-derived
+routing buffers. [Status](status.md) distinguishes implemented work from
+pending gates. Developer builds and downloadable coverage remain the delivery
+model established by [prepared coverage](prepared-coverage.md).
+
 The [system design revision](system-design.md) records the current design and
 its acceptance evidence. [Status](status.md) is the execution resume point.
 
@@ -7,7 +13,23 @@ its acceptance evidence. [Status](status.md) is the execution resume point.
 
 Alpine Loop generates closed hiking routes from installed trail data. It is not
 a catalog of known hikes. Users choose an area, physical route constraints,
-acceptable repetition, and whether unknown access is included.
+acceptable repetition, and whether unknown access is included. Requested route
+distance may be up to 40 miles; longer close matches remain explicitly labeled.
+
+Coverage targets mountain hiking starts in Washington and the previously available
+Bay Area/nearby California territory. One pinned GMBA Standard Basic inventory
+supplies named mountain cores for all sixteen download areas. Washington's state
+scope and the four existing California footprints limit approach nomination;
+these product limits never clip routes. Broad outlines, EPA residual allocation
+and the separate terrain mask are removed.
+
+A start needs fewer than ten mapped buildings within 500 metres and a hiking
+connection to its selected core within 25 miles. Unmarked entrances remain
+eligible; ordinary roads cannot establish mountain approaches. Preparation freezes
+actual eligible entrances, adds only their registration neighborhoods to the core,
+and completes each entrance's route buffer before elevation work. Reviewed anchors
+audit source topology rather than enlarging the core. Low foothills omitted by
+GMBA and unmapped/disconnected trails remain explicit limitations.
 
 An area can be drawn, named, or based on typical driving time. Named regions
 may refine a driving area. Driving time has a minimum (default zero) and a
@@ -16,8 +38,6 @@ filters select eligible starting points; they never clip hiking routes. Exact
 installed coverage is the hard route boundary. Failed filters never silently
 broaden the area.
 
-- Quick search returns up to the requested number of alternatives across the
-  eligible data. The count ranges from 1 through 20 and defaults to 10.
 - Full search attempts every eligible trailhead and retains up to ten exact
   routes per start, or one close match if no exact route was found there.
   One request creates one saved job regardless of internal data partitions.
@@ -25,22 +45,22 @@ broaden the area.
   search means every eligible start was attempted, not that every possible
   closed walk was enumerated. Computation limits remain visible.
 
-Routes contain a physical trail cycle and finish at their starting point.
-Simple loop, lollipop, figure-eight, chained-loop, and complex-closed describe
-results. The search preserves direction, access restrictions, metric accuracy,
-repetition limits, and topology. Unknown access is included by default.
-Search removes minor side loops and retraced spurs before checking constraints;
-it does not pad a hike with tiny excursions to meet its distance target. The
-relative size rule preserves intentionally short hikes and substantial chains.
+New routes are simple loops or lollipops only. A simple loop revisits no node
+except its start/end. A lollipop has one node-simple stem, traversed out and
+back along the same physical trails, meeting one simple loop only at its
+attachment. No additional spurs, figure-eights, chained cycles, or complex
+closed walks are accepted, including as close matches. Direction, access,
+metrics, grade and repetition limits still apply. Unknown access is included
+by default. Legacy saved route geometry and topology remain readable.
 
 ## Workspace
 
 A persistent map shares the workspace with one panel for Plan, Results, and
 selected-route details. Mobile switches between the panel and the full map
 without remounting either. The visual language remains compact, neutral, and
-utilitarian. Route count is directly available beside the search actions.
+utilitarian. Full search is the sole search action.
 
-One editable form supplies both search actions. The viewed result has its own
+One editable form supplies the search intent. The viewed result has its own
 area and criteria snapshot; editing the form does not change the meaning of
 saved results. Search, opening saved work, and paging share one cancellation
 scope and reject stale completion. Closing a pending saved view cancels it.
@@ -77,19 +97,15 @@ The app uses local Next.js, React, MapLibre, Zod, and SQLite.
 
 - `GET /api/search/catalog` provides named regions, installed coverage, and the
   initial map view. No installed coverage means data is unavailable.
-- `POST /api/search` accepts one area, route criteria, and the global count.
-  The application resolves driving time, selects data, executes bounded work,
-  namespaces identities, and combines results.
 - `GET /api/map?bbox=...` supplies viewport access points and trails.
 - `/api/route-jobs` and its detail, cancel, delete, and results operations retain
   version-2 jobs. Public records contain intent and area, not internal plans.
 
 The route engine accepts prepared starts, criteria, graph context, and budget.
 A bounded pool of local processes owns graph-reader lifetime so CPU work cannot
-block app status or cancellation. Quick searches parallelize across packs; Full
-searches parallelize across trailheads, retaining ordered durable checkpoints. Quick and Full share execution primitives. Full
-preserves the union of Quick and Thorough candidates because the heuristic is
-not monotonic in its budget.
+block app status or cancellation. Full searches read one pinned installation and parallelize across trailheads,
+retaining ordered durable checkpoints. Each start uses one solver path and one
+bounded budget.
 
 Provider submission, polling, deadlines, and cancellation stay inside driving
 area resolution. Completed contours are cached for 30 minutes. Credentials
@@ -97,14 +113,28 @@ remain server-only. Runtime never requests trail or elevation data remotely.
 
 ## Local data and preparation
 
-Schema 6 is the supported graph representation. Pack selection, storage paths,
-version pinning, and provider jobs are backend details. Saved result geometry
-remains readable independently of graph-format support.
+Schema 7 remains the prepared graph record representation. Developers select a
+pinned named mountain core and prepare its graph plus connected approaches. A 25-mile geographic buffer around every admitted start
+covers closed routes up to the 50-mile close-match exploration bound; requested
+hikes remain limited to 40 miles. Source gaps fail before preparation, and explicit
+exclusions remain hard boundaries. Geographic search filters still select starts
+only and never clip a hike.
 
-Preparation converts pinned sources into normalized records. The artifact
-builder computes metrics and feasibility, writes SQLite, audits the artifact,
-and activates it only after acceptance. Failed builds leave the previous
-artifact and current pointer intact. Downloads are immutable and cached.
+Each local area has an independent immutable SQLite artifact. The catalog and
+installation distinguish eligible start coverage from buffered routing coverage.
+One graph owns each start; overlapping artifacts are never joined. An admissible graph-distance bound prunes before DEM work, and persisted corridors
+retain geometry and metric profiles. Segment metric caches are reusable across
+overlapping builds, while topology is local to each artifact. Ambiguous footways are possible walking links without a global
+connectivity prerequisite; explicit sidewalks/crossings remain excluded and access
+restrictions still apply.
+
+Users select start areas and review download sizes. Downloads include their route
+buffers, require no source processing, and activate atomically. Running and saved
+jobs retain their referenced data; saved route geometry remains readable.
+
+The [prepared coverage revision](prepared-coverage.md) defines the release,
+installation, download, and migration contracts. Its acceptance gates in status
+must pass before large-region feasibility or migration is declared complete.
 
 Jobs persist in ignored `.local-data/runtime/route-jobs.sqlite`. The immutable
 internal plan pins contributing data versions. One FIFO coordinator resumes

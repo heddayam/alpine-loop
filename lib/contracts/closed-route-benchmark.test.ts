@@ -19,8 +19,6 @@ describe("closedRouteBenchmarkOutputSchema", () => {
         timeToFirstExactMs: 7,
         expandedStates: 4,
         directedValidationRejectionCount: 0,
-        attachmentGroupCount: 1,
-        probedAttachmentGroupCount: 1,
         topologyKinds: ["simple-loop"],
         routeIds: ["route-1"],
         truncationReasons: [],

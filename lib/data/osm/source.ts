@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { SourceSnapshot } from "../adapters";
@@ -29,13 +29,15 @@ export function osmPointerPath(cacheRoot: string, sourceId: string): string {
   return path.join(cacheRoot, sourceId, "pinned.json");
 }
 
-export async function readPinnedOsmSnapshot(cacheRoot: string, config: OsmSourceConfig): Promise<SourceSnapshot> {
+/** Preview availability from receipt identity and file size; the worker still verifies content. */
+export async function inspectPinnedOsmSnapshot(cacheRoot: string, config: OsmSourceConfig): Promise<SourceSnapshot> {
   const pointer = JSON.parse(await readFile(osmPointerPath(cacheRoot, config.id), "utf8")) as OsmPointer;
   if (pointer.configVersion !== config.version) throw new Error("Cached OSM snapshot does not match configured version");
   if (pointer.cached.receipt.sourceId !== config.id || (pointer.configUrl ?? pointer.cached.receipt.originalUrl) !== config.url
     || pointer.cached.receipt.byteLength !== config.expectedByteLength) throw new Error("Cached OSM snapshot does not match configured source");
   const localPath = cachedSourcePath(cacheRoot, pointer.cached.receipt);
-  if (await sha256File(localPath) !== pointer.cached.receipt.sha256) throw new Error("Cached OSM source failed integrity validation");
+  const file = await stat(localPath);
+  if (!file.isFile() || file.size !== pointer.cached.receipt.byteLength) throw new Error("Cached OSM source failed integrity validation (file size)");
   return {
     id: config.id,
     authority: config.authority,
@@ -47,6 +49,12 @@ export async function readPinnedOsmSnapshot(cacheRoot: string, config: OsmSource
     contentHash: pointer.cached.receipt.sha256,
     localPath,
   };
+}
+
+export async function readPinnedOsmSnapshot(cacheRoot: string, config: OsmSourceConfig): Promise<SourceSnapshot> {
+  const snapshot = await inspectPinnedOsmSnapshot(cacheRoot, config);
+  if (await sha256File(snapshot.localPath) !== snapshot.contentHash) throw new Error("Cached OSM source failed integrity validation");
+  return snapshot;
 }
 
 export async function refreshPinnedOsmSnapshot(

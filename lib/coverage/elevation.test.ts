@@ -1,0 +1,345 @@
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, expect, it, vi } from "vitest";
+import type { CoverageUnit } from "./types";
+import type { ThreeDepCollection } from "@/lib/data/elevation/collection";
+import { rectangle } from "./geometry";
+import * as coverageGeometry from "./geometry";
+import { UvRasterioThreeDepElevationSampler } from "@/lib/data/elevation/uv-rasterio-sampler";
+import { geometryElevationFingerprint, describeCanonicalElevation, elevationCache, elevationFor, missingDemTiles, validateDemProducts } from "./elevation";
+
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/data/elevation/collection", async (original) => ({
+  ...await original<typeof import("@/lib/data/elevation/collection")>(),
+  refreshThreeDepCollection: refresh,
+}));
+const dirs: string[] = [];
+afterEach(async () => { refresh.mockReset(); vi.restoreAllMocks(); await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))); });
+
+const unit: CoverageUnit = {
+  id: "cross-tile", geometry: rectangle([-121.8, 47.8, -121.2, 48.2]), status: "pending",
+};
+function product(id: string, title: string, filePath: string, bytes: Buffer): ThreeDepCollection["products"][number] {
+  const hash = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  return {
+    productId: id, title, publicationDate: "2026-01-01", filePath,
+    receipt: {
+      schemaVersion: 1, sourceId: `usgs-3dep-${id}`, originalUrl: `https://example.invalid/${id}.tif`,
+      resolvedUrl: `https://example.invalid/${id}.tif`, retrievedAt: "2026-09-24T00:00:00.000Z",
+      byteLength: bytes.length, sha256: hash, fileName: `${id}.tif`,
+    },
+  };
+}
+function collection(products: ThreeDepCollection["products"]): ThreeDepCollection {
+  return {
+    schemaVersion: 1, sourceId: "usgs-3dep-13-arc-second", authority: "U.S. Geological Survey",
+    dataset: "National Elevation Dataset (NED) 1/3 arc-second", catalogId: "fixture",
+    resolution: "1/3 arc-second (nominal 10 m)", horizontalDatum: "NAD83", verticalDatum: "NAVD88",
+    retrievedAt: "2026-09-24T00:00:00.000Z", queryUrl: "https://example.invalid/query",
+    license: "U.S. public domain", products,
+  };
+}
+async function fixture() {
+  const root = await mkdtemp(path.join(tmpdir(), "coverage-dem-")); dirs.push(root);
+  const cacheRoot = path.join(root, "cache"), preparationRoot = path.join(root, "prep");
+  const directory = path.join(preparationRoot, "dem", "canonical");
+  await mkdir(directory, { recursive: true });
+  const one = Buffer.from("one"), two = Buffer.from("two");
+  const firstPath = path.join(directory, "one.tif"), secondPath = path.join(directory, "two.tif");
+  await writeFile(firstPath, one); await writeFile(secondPath, two);
+  const first = product("one", "USGS 1/3 Arc Second n48w122 20260101", "one.tif", one);
+  const second = product("two", "USGS 1/3 Arc Second n49w122 20260101", "two.tif", two);
+  const cachedPath = path.join(directory, "collection.json");
+  await writeFile(cachedPath, JSON.stringify(collection([first])));
+  return { cacheRoot, preparationRoot, cachedPath, first, second, firstPath, secondPath };
+}
+
+it("tests the entire unit geometry against one-degree DEM tiles", () => {
+  const bytes = Buffer.from("tile");
+  const first = product("one", "USGS 1/3 Arc Second n48w122 20260101", "one.tif", bytes);
+  const second = product("two", "USGS 1/3 Arc Second n49w122 20260101", "two.tif", bytes);
+  expect(missingDemTiles(unit, [first])).toEqual(["-122,48"]);
+  expect(missingDemTiles(unit, [first, second])).toEqual([]);
+});
+
+it("rejects a cached raster whose bytes no longer match its receipt", async () => {
+  const value = await fixture();
+  await writeFile(value.firstPath, "tampered");
+  await expect(validateDemProducts(collection([value.first]), value.cachedPath)).rejects.toThrow(/integrity validation/);
+  await expect(elevationFor(unit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow(/integrity validation/);
+});
+
+it("acquires missing tiles when a verified saved collection overlaps only part of the unit", async () => {
+  const value = await fixture();
+  await expect(elevationFor(unit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow(/entire area/);
+  refresh.mockResolvedValue({ collection: collection([{ ...value.second, filePath: "two.tif" }]), collectionPath: value.cachedPath });
+  const result = await elevationFor(unit, value.cacheRoot, value.preparationRoot, false);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(refresh.mock.calls[0]?.[0]?.query.bbox).toEqual([-122, 48, -121, 49]);
+  const saved = JSON.parse(await readFile(value.cachedPath, "utf8")) as ThreeDepCollection;
+  expect(saved.products.map(({ productId }) => productId)).toEqual(["one", "two"]);
+  expect(result.source.contentHash).toBe(result.source.version);
+  expect(result.productFingerprint).toMatch(/^sha256:/);
+});
+
+it("keeps the same DEM priority and unit fingerprint when a new tile is appended", async () => {
+  const value = await fixture();
+  const cache = elevationCache();
+  const south = { ...unit, geometry: rectangle([-121.8,47.8,-121.2,47.9]) };
+  const north = { ...unit, geometry: rectangle([-121.8,48.1,-121.2,48.2]) };
+  const before = await elevationFor(south, value.cacheRoot, value.preparationRoot, true, cache);
+  refresh.mockResolvedValue({ collection: collection([{ ...value.second, filePath: "two.tif" }]), collectionPath: value.cachedPath });
+  const added = await elevationFor(north, value.cacheRoot, value.preparationRoot, false, cache);
+  const after = await elevationFor(south, value.cacheRoot, value.preparationRoot, true, cache);
+  expect(after.productFingerprint).toBe(before.productFingerprint);
+  expect(added.source.contentHash).not.toBe(before.source.contentHash);
+  const saved = JSON.parse(await readFile(value.cachedPath, "utf8")) as ThreeDepCollection;
+  expect(saved.products.map(({ productId }) => productId)).toEqual(["one", "two"]);
+});
+
+it("describes acquired DEM without downloading tiles for an empty area", async () => {
+  const value = await fixture();
+  const cache = elevationCache();
+  const partial = await describeCanonicalElevation(unit.geometry, value.cacheRoot, value.preparationRoot, cache);
+  expect(partial).toBeNull();
+  expect(await describeCanonicalElevation(rectangle([-120.9,47.8,-120.8,47.9]), value.cacheRoot, value.preparationRoot, cache)).toBeNull();
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it("uses the same raster identity when adjacent tiles arrive in reverse order", async () => {
+  const forward = await fixture();
+  refresh.mockResolvedValueOnce({ collection: collection([{ ...forward.second, filePath: "two.tif" }]), collectionPath: forward.cachedPath });
+  const first = await elevationFor(unit, forward.cacheRoot, forward.preparationRoot, false);
+  const reverse = await fixture();
+  await writeFile(reverse.cachedPath, JSON.stringify(collection([reverse.second])));
+  refresh.mockResolvedValueOnce({ collection: collection([{ ...reverse.first, filePath: "one.tif" }]), collectionPath: reverse.cachedPath });
+  const second = await elevationFor(unit, reverse.cacheRoot, reverse.preparationRoot, false);
+  expect(second.source.contentHash).toBe(first.source.contentHash);
+  expect({ ...second.source, localPath: "" }).toEqual({ ...first.source, localPath: "" });
+  expect(second.productFingerprint).toBe(first.productFingerprint);
+  const saved = JSON.parse(await readFile(reverse.cachedPath, "utf8")) as ThreeDepCollection;
+  expect(saved.products.map(({ productId }) => productId)).toEqual(["one", "two"]);
+});
+
+const rasterPython = path.resolve("tools/dem/.venv/bin/python");
+it.skipIf(!existsSync(rasterPython))("samples exact seams by north-west tile ownership, regardless of product order", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "coverage-dem-overlap-")); dirs.push(root);
+  const tiles=[
+    {name:"south",title:"n48w122",west:-122,north:48,value:100},
+    {name:"north",title:"n49w122",west:-122,north:49,value:200},
+    {name:"west",title:"n48w123",west:-123,north:48,value:300},
+    {name:"equator",title:"n00w122",west:-122,north:0,value:400},
+    {name:"negative",title:"s01w122",west:-122,north:-1,value:500},
+  ];
+  execFileSync(rasterPython, ["-c", `
+import sys, json
+import numpy as np
+import rasterio
+from rasterio.transform import from_bounds
+for tile in json.loads(sys.argv[2]):
+    west, north = tile["west"], tile["north"]
+    with rasterio.open(f"{sys.argv[1]}/{tile['name']}.tif", "w", driver="GTiff", width=40, height=40, count=1,
+                       dtype="float32", crs="EPSG:4326", transform=from_bounds(west - .1, north - 1.1, west + 1.1, north + .1, 40, 40)) as output:
+        output.write(np.full((40, 40), tile["value"], dtype="float32"), 1)
+`, root, JSON.stringify(tiles)]);
+  const products=tiles.map(tile=>({title:`USGS 1/3 Arc Second ${tile.title} 20260101`,filePath:`${tile.name}.tif`}));
+  const points="-121.9 47.9\n-121.9 48.1\n-121.9 48\n-121.9 49\n-122.000001 47.9\n-122 47.9\n-121.9 0\n-121.9 -1\n-121.9 -0.999999\n-121.9 -1.000001\n";
+  const file=path.join(root,"collection.json");
+  const sample=(input:string)=>execFileSync(rasterPython,[path.resolve("tools/dem/sample_dem.py"),"--collection",file,"--tile-owner"],{input,encoding:"utf8"}).trim().split("\n");
+  for (const ordered of [products,[...products].reverse()]) {
+    await writeFile(file,JSON.stringify({products:ordered}));
+    expect(sample(points).map(Number)).toEqual([100,200,100,200,300,100,400,500,400,500]);
+  }
+  // The n49 tile owns latitude49; its overlap at latitude48 cannot replace n48.
+  await writeFile(file,JSON.stringify({products:[products[1]]}));
+  expect(sample("-121.9 48\n-121.9 49\n")).toEqual(["nan","200.000000"]);
+});
+
+it("validates only relevant raster bytes when describing a cached network",async()=>{
+  const value=await fixture();
+  await writeFile(value.cachedPath,JSON.stringify(collection([value.first,value.second])));
+  await writeFile(value.secondPath,"corrupt unrelated product");
+  const cache=elevationCache();
+  const south=rectangle([-121.8,47.8,-121.2,47.9]);
+  expect(await describeCanonicalElevation(south,value.cacheRoot,value.preparationRoot,cache)).not.toBeNull();
+  await expect(describeCanonicalElevation(rectangle([-121.8,48.1,-121.2,48.2]),value.cacheRoot,value.preparationRoot,cache)).rejects.toThrow("integrity validation");
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it("keys segment metrics by every sampled tile, independent of unrelated area tiles", () => {
+  const bytes=Buffer.from("tile");
+  const south=product("south","n48w122","south.tif",bytes);
+  const north=product("north","n49w122","north.tif",bytes);
+  const far=product("far","n50w122","far.tif",bytes);
+  const segment:[number,number][]=[[-121.5,47.99],[-121.5,48.01]];
+  const before=geometryElevationFingerprint([south,north])(segment);
+  expect(geometryElevationFingerprint([far,north,south])(segment)).toBe(before);
+  const changed={...north,receipt:{...north.receipt,sha256:`sha256:${"2".repeat(64)}`}};
+  expect(geometryElevationFingerprint([south,changed])(segment)).not.toBe(before);
+  expect(()=>geometryElevationFingerprint([south,far])([[-121.5,47.9],[-121.5,49.1]])).toThrow("-122,48");
+});
+it("uses exact seam ownership, including zero and negative latitudes", () => {
+  const bytes=Buffer.from("tile");
+  const tiles=[product("south","n48w122","a",bytes),product("north","n49w122","b",bytes),product("west","n48w123","c",bytes),product("equator","n00w122","d",bytes),product("negative","s01w122","e",bytes)];
+  const fingerprint=geometryElevationFingerprint(tiles);
+  for(const [point,owner] of [
+    [[-121.9,48],tiles[0]], [[-122,47.9],tiles[0]], [[-122.000001,47.9],tiles[2]], [[-121.9,0],tiles[3]], [[-121.9,-1],tiles[4]],
+  ] as const) expect(fingerprint([point,point])).toBe(geometryElevationFingerprint([owner!])([point,point]));
+  expect(()=>geometryElevationFingerprint([tiles[1]!])([[-121.9,48],[-121.9,48]])).toThrow("-122,47");
+});
+
+it("writes only required products to the disposable sampling collection",async()=>{
+  const value=await fixture();
+  await writeFile(value.cachedPath,JSON.stringify(collection([value.first,value.second])));
+  const sampling=path.join(value.preparationRoot,"scratch","sample-dem.json");
+  await elevationFor({...unit,geometry:rectangle([-121.8,47.8,-121.2,47.9])},value.cacheRoot,value.preparationRoot,true,elevationCache(),sampling);
+  const selected=JSON.parse(await readFile(sampling,"utf8")) as ThreeDepCollection;
+  expect(selected.products.map(product=>product.productId)).toEqual(["one"]);
+  expect(selected.products[0]!.filePath).toBe(value.firstPath);
+  expect((JSON.parse(await readFile(value.cachedPath,"utf8")) as ThreeDepCollection).products).toHaveLength(2);
+});
+
+
+async function backupFixture(value: Awaited<ReturnType<typeof fixture>>, persist = false) {
+  const bytes = Buffer.from("30 m backup");
+  const file = path.join(value.preparationRoot, "backup.tif");
+  await writeFile(file, bytes);
+  const backup = product("backup", "USGS 1 Arc Second n48w122 20260101", file, bytes);
+  const data: ThreeDepCollection = { ...collection([backup]), sourceId: "usgs-3dep-1-arc-second", resolution: "1 arc-second (nominal 30 m)", dataset: "National Elevation Dataset (NED) 1 arc-second" };
+  const filePath = path.join(value.preparationRoot, "dem", "backup", "canonical", "collection.json");
+  if (persist) { await mkdir(path.dirname(filePath), { recursive: true }); await writeFile(filePath, JSON.stringify(data)); }
+  return { backup, data, file, filePath };
+}
+const southUnit = { ...unit, geometry: rectangle([-121.8, 47.8, -121.2, 47.9]) };
+const points: [number, number][] = [[-121.7, 47.85], [-121.6, 47.85], [-121.5, 47.85]];
+
+it("leaves valid 10 m samples and their cache identity unchanged without acquiring backup", async () => {
+  const value = await fixture();
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample").mockResolvedValue([100, 200, 300]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  const before = result.productFingerprint;
+  await expect(result.sampler.sample(points)).resolves.toEqual([100, 200, 300]);
+  expect(sample).toHaveBeenCalledOnce();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(result.productFingerprint).toBe(before);
+  expect(result.fingerprintForGeometry(points)).toBe(geometryElevationFingerprint([value.first])(points));
+  expect(result.limitations).toEqual([]);
+});
+
+it("acquires only a missing sample's owned 30 m tile and updates provenance, keys and resume identity", async () => {
+  const value = await fixture(), backup = await backupFixture(value);
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([100, null, 300]).mockResolvedValueOnce([210]);
+  refresh.mockResolvedValue({ collection: backup.data, collectionPath: backup.filePath });
+  const onBackup = vi.fn(async () => {});
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, false, elevationCache(), path.join(value.preparationRoot, "sample.json"), onBackup);
+  const before = result.productFingerprint, metricBefore = result.fingerprintForGeometry(points);
+  await expect(result.sampler.sample(points)).resolves.toEqual([100, 210, 300]);
+  expect(sample.mock.calls[1]![0]).toEqual([points[1]]);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(refresh.mock.calls[0]![0]).toMatchObject({ resolution: "1 arc-second (nominal 30 m)", latestOnly: true,
+    query: { dataset: "National Elevation Dataset (NED) 1 arc-second", nominalTile: "n48w122", bbox: [-122, 47, -121, 48] } });
+  expect(onBackup.mock.calls).toEqual([["-122,47"], [null]]);
+  expect(result.productFingerprint).not.toBe(before);
+  expect(result.fingerprintForGeometry(points)).not.toBe(metricBefore);
+  expect(result.source.dataset).toContain("30 m");
+  expect(result.limitations).toEqual([expect.stringContaining("only where the 10 m raster has NoData")]);
+  const persisted = JSON.parse(await readFile(backup.filePath, "utf8")) as ThreeDepCollection;
+  expect(persisted.resolution).toBe("1 arc-second (nominal 30 m)");
+  expect(persisted.products.map(item => item.productId)).toEqual(["backup"]);
+  const resumed = await describeCanonicalElevation(southUnit.geometry, value.cacheRoot, value.preparationRoot);
+  expect(resumed?.productFingerprint).toBe(result.productFingerprint);
+  expect(resumed?.source).toEqual(result.source);
+});
+
+it("uses a verified cached backup offline and preserves genuine remaining NoData", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true);
+  const sample = vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([null, 200, null]).mockResolvedValueOnce([110, null]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  await expect(result.sampler.sample(points)).resolves.toEqual([110, 200, null]);
+  expect(sample.mock.calls[1]![0]).toEqual([points[0], points[2]]);
+  expect(refresh).not.toHaveBeenCalled();
+  expect((JSON.parse(await readFile(backup.filePath, "utf8")) as ThreeDepCollection).products).toHaveLength(1);
+});
+
+it("reuses the relevant backup inventory across metric fingerprints", async () => {
+  const value = await fixture();
+  await backupFixture(value, true);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  const intersections = vi.spyOn(coverageGeometry, "intersectCoverage");
+  const before = result.fingerprintForGeometry(points);
+  expect(intersections).toHaveBeenCalled();
+  intersections.mockClear();
+  expect(result.fingerprintForGeometry(points)).toBe(before);
+  expect(result.fingerprintForGeometry([...points].reverse())).toBe(before);
+  expect(result.limitations).toHaveLength(1);
+  expect(intersections).not.toHaveBeenCalled();
+});
+
+it("refreshes an existing sampler's metric keys and provenance after another sampler acquires backup", async () => {
+  const value = await fixture(), backup = await backupFixture(value), cache = elevationCache();
+  const observer = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true, cache);
+  const before = observer.fingerprintForGeometry(points), sourceBefore = observer.source;
+  const writer = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, false, cache);
+  vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample")
+    .mockResolvedValueOnce([null, 200, 300]).mockResolvedValueOnce([110]);
+  refresh.mockResolvedValue({ collection: backup.data, collectionPath: backup.filePath });
+  await expect(writer.sampler.sample(points)).resolves.toEqual([110, 200, 300]);
+  expect(observer.fingerprintForGeometry(points)).not.toBe(before);
+  expect(observer.fingerprintForGeometry(points)).toBe(writer.fingerprintForGeometry(points));
+  expect(observer.source).not.toEqual(sourceBefore);
+  expect(observer.source).toEqual(writer.source);
+  expect(observer.productFingerprint).toBe(writer.productFingerprint);
+  expect(observer.limitations).toEqual(writer.limitations);
+});
+
+it("invalidates a same-size backup replacement without retaining stale metric keys or source identity", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true), cache = elevationCache();
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true, cache);
+  const before = result.fingerprintForGeometry(points), sourceBefore = result.source;
+  const replacement = {...backup.backup, productId:"replacement",
+    receipt:{...backup.backup.receipt,sha256:`sha256:${"2".repeat(64)}`,retrievedAt:"2026-09-25T00:00:00.000Z"}};
+  cache.backup!.products = [replacement];
+  expect(result.fingerprintForGeometry(points)).not.toBe(before);
+  expect(result.fingerprintForGeometry(points)).toBe(geometryElevationFingerprint([value.first], [replacement])(points));
+  expect(result.source.contentHash).not.toBe(sourceBefore.contentHash);
+  expect(result.source.retrievedAt).toBe(replacement.receipt.retrievedAt);
+  expect(result.productFingerprint).toBe(result.source.contentHash);
+});
+
+it("explains a missing offline backup without making a request", async () => {
+  const value = await fixture();
+  vi.spyOn(UvRasterioThreeDepElevationSampler.prototype, "sample").mockResolvedValue([null]);
+  const result = await elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true);
+  await expect(result.sampler.sample([points[0]!])).rejects.toThrow("no verified cached 30 m backup");
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it("rejects changed backup bytes before reusing a prepared area's receipt", async () => {
+  const value = await fixture(), backup = await backupFixture(value, true);
+  await writeFile(backup.file, "corrupt");
+  await expect(describeCanonicalElevation(southUnit.geometry, value.cacheRoot, value.preparationRoot)).rejects.toThrow("integrity validation");
+});
+
+it("includes only applicable backup content and the resolution policy in metric keys", () => {
+  const bytes = Buffer.from("tile");
+  const primary = product("primary", "n48w122", "a", bytes), backup = product("backup", "n48w122", "b", bytes);
+  const unrelated = product("far", "n50w122", "c", bytes);
+  const before = geometryElevationFingerprint([primary])(points);
+  expect(geometryElevationFingerprint([primary], [unrelated])(points)).toBe(before);
+  const after = geometryElevationFingerprint([primary], [backup])(points);
+  expect(after).not.toBe(before);
+  expect(geometryElevationFingerprint([primary], [unrelated, backup])(points)).toBe(after);
+  expect(geometryElevationFingerprint([primary], [{ ...backup, receipt: { ...backup.receipt, sha256: `sha256:${"2".repeat(64)}` } }])(points)).not.toBe(after);
+});
+
+it("does not accept a 30 m collection as the primary 10 m input", async () => {
+  const value = await fixture(), backup = await backupFixture(value);
+  await writeFile(value.cachedPath, JSON.stringify(backup.data));
+  await expect(elevationFor(southUnit, value.cacheRoot, value.preparationRoot, true)).rejects.toThrow("Expected a 10 m primary");
+});

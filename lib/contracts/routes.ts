@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { accessStateSchema, confidenceSchema, finiteNumberSchema, isoDateSchema, orderedRangeSchema } from "./common";
 
+export const MAX_ROUTE_DISTANCE_MILES = 40;
+export const CLOSE_MATCH_DISTANCE_MULTIPLIER = 1.25;
+export const PREPARATION_BUFFER_MILES = MAX_ROUTE_DISTANCE_MILES * CLOSE_MATCH_DISTANCE_MULTIPLIER / 2;
+
 export const DRIVE_TIME_DURATIONS_MINUTES = [
   5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
   75, 90, 105, 120, 135, 150, 165, 180, 210, 240, 270, 300,
@@ -44,10 +48,13 @@ export const bboxSchema = z
 export const closedRouteTopologyPreferenceV3Schema = z.object({
   maximumRepeatedTrailPct: z.number().int().min(0).max(100),
   maximumSharedStemMiles: finiteNumberSchema.nonnegative().max(30).optional(),
-  allowMultiCycle: z.boolean(),
-}).strict();
+  // Read old saved requests, but never expose the retired preference to search.
+  allowMultiCycle: z.boolean().optional(),
+}).strict().transform(({ allowMultiCycle, ...preferences }) => {
+  void allowMultiCycle;
+  return preferences;
+});
 
-export const searchEffortV3Schema = z.enum(["quick", "thorough"]);
 
 export const GRADE_WINDOW_METERS = 100;
 export const STEEP_GRADE_THRESHOLD_PCT = 10;
@@ -70,8 +77,8 @@ export const gradeExperienceMetricsSchema = z.object({
 
 export const routeCriteriaSchema = z.object({
   closedRoute: closedRouteTopologyPreferenceV3Schema,
-  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= 30, {
-    message: "Route distance may not exceed 30 miles",
+  distanceMiles: orderedRangeSchema.refine(({ max }) => max <= MAX_ROUTE_DISTANCE_MILES, {
+    message: `Route distance may not exceed ${MAX_ROUTE_DISTANCE_MILES} miles`,
   }),
   elevationGainFeet: orderedRangeSchema.optional(),
   maximumElevationFeet: orderedRangeSchema.optional(),
@@ -190,7 +197,6 @@ export const constraintViolationV3Schema = constraintViolationSchema.extend({
 }).strict();
 
 export type ClosedRouteTopologyPreferenceV3 = z.infer<typeof closedRouteTopologyPreferenceV3Schema>;
-export type SearchEffortV3 = z.infer<typeof searchEffortV3Schema>;
 export type GradeExperienceConstraints = z.infer<typeof gradeExperienceConstraintsSchema>;
 export type GradeExperienceMetrics = z.infer<typeof gradeExperienceMetricsSchema>;
 export type TrailSegmentCondition = z.infer<typeof trailSegmentConditionSchema>;

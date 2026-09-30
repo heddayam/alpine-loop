@@ -160,7 +160,7 @@ export async function downloadToSourceCache(options: CacheDownloadOptions): Prom
     snapshotStaging = path.join(sourceRoot, `.snapshot-${sha256.slice(7, 23)}-${randomUUID()}`);
     const stagingDirectory = snapshotStaging;
     await mkdir(stagingDirectory);
-    const stagedFilePath = path.join(stagingDirectory, fileName);
+    const stagedFilePath = path.join(/* turbopackIgnore: true */ stagingDirectory, fileName);
     await rename(temporaryPath, stagedFilePath);
     const receipt: SourceReceipt = {
       schemaVersion: 1,

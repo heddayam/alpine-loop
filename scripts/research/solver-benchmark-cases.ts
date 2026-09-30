@@ -9,9 +9,9 @@ type PhysicalEdge = { id: string; from: string; to: string; directions: string; 
 
 export function request(overrides: Partial<RouteSearchRequest> = {}): RouteSearchRequest {
   return {
-    closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+    closedRoute: { maximumRepeatedTrailPct: 35 },
     distanceMiles: { min: 2, max: 8 }, includeUncertainAccess: true,
-    searchEffort: "quick", limit: 10, ...overrides,
+    limit: 10, ...overrides,
   };
 }
 
@@ -72,11 +72,11 @@ export function fixtureCases(root: string): BenchmarkCase[] {
     { ...loop, id: "fixture/grade-near", request: request({ ...loop.request, steepestSustainedGradePct: { min: 0, max: 1 } }) },
     { ...loop, id: "fixture/elevation-near", request: request({ ...loop.request, maximumElevationFeet: { min: 0, max: 250 } }) },
     { ...lollipop, id: "fixture/no-repetition", request: request({ ...lollipop.request,
-      closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: true } }) },
+      closedRoute: { maximumRepeatedTrailPct: 0 } }) },
     { ...lollipop, id: "fixture/stem-cap", request: request({ ...lollipop.request,
-      closedRoute: { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1, allowMultiCycle: true } }) },
+      closedRoute: { maximumRepeatedTrailPct: 100, maximumSharedStemMiles: 0.1 } }) },
     { ...eight, id: "fixture/single-cycle", request: request({ ...eight.request,
-      closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: false } }) },
+      closedRoute: { maximumRepeatedTrailPct: 0 } }) },
   );
   for (const connector of [0, 1_000]) {
     const hub = connector ? "p" : "s";
@@ -105,7 +105,7 @@ export function fixtureCases(root: string): BenchmarkCase[] {
       }
     }
     cases.push({ id: `fixture/grid-${width}`, ...makeGraph(ids, edges, ids[0]!),
-      request: request({ distanceMiles: { min: 2, max: 5 }, closedRoute: { maximumRepeatedTrailPct: 0, allowMultiCycle: false } }) });
+      request: request({ distanceMiles: { min: 2, max: 5 }, closedRoute: { maximumRepeatedTrailPct: 0 } }) });
   }
   return cases;
 }

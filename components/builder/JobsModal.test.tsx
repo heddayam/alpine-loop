@@ -15,7 +15,7 @@ const job: RouteJob = {
   request: {
     area: { mode: "drive-time", origin: { lon: -122.16, lat: 37.16, label: "Castle Rock" }, durationMinutes: 30, regionIds: ["region-1"] },
     criteria: {
-      closedRoute: { maximumRepeatedTrailPct: 35, allowMultiCycle: true },
+      closedRoute: { maximumRepeatedTrailPct: 35 },
       distanceMiles: { min: 3, max: 8 },
       includeUncertainAccess: true,
     },
