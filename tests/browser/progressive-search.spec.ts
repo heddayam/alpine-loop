@@ -20,7 +20,7 @@ test("Full search publishes improving results and Stop preserves the open route"
   await expect(page.getByRole("complementary", { name: "Route details" })).toBeVisible();
   await expect(page.locator(".route-card.selected .route-summary-main strong")).toHaveText(routeTitle!);
   await expect(page.getByRole("button", { name: "Stop search", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Back to results", exact: true }).click();
+  await page.getByRole("button", { name: "← Back to results", exact: true }).click();
   await expect(page.locator(".route-card")).toHaveCount(3);
   expect(harness.calls.filter(call => call.method === "POST" && call.pathname.endsWith("/cancel"))).toHaveLength(1);
   expect(harness.blockedExternalRequests).toEqual([]);
