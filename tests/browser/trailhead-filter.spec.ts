@@ -211,6 +211,70 @@ test("Jobs and Settings dialogs trap focus, close with Escape, and work on mobil
   expect(harness.blockedExternalRequests).toEqual([]);
 });
 
+test("proven entrance variants preserve original numbers, keyboard focus and mobile expansion", async ({ page }) => {
+  const harness = await installOfflineHarness(page, { routeCount: 4, entranceFamilies: true });
+  await page.goto("/");
+  await enterDrawnArea(page);
+  await launchAndOpenResults(page);
+  const visibleCards = page.locator(".route-card:visible");
+  await expect(page.getByText("4 routes", { exact: true })).toBeVisible();
+  await expect(visibleCards.locator(".route-number")).toHaveText(["1", "3"]);
+  const first = visibleCards.first().locator(".route-card-select");
+  await first.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(visibleCards.nth(1).locator(".route-card-select")).toBeFocused();
+  const toggles = page.getByRole("button", { name: "1 other entrance" });
+  await toggles.first().click();
+  await expect(toggles.first()).toHaveAttribute("aria-expanded", "true");
+  await expect(visibleCards.locator(".route-number")).toHaveText(["1", "2", "3"]);
+  await first.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(visibleCards.nth(1).locator(".route-card-select")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Back to results" })).toBeFocused();
+  await expect(page.locator(".route-number")).toHaveText(["2"]);
+  await page.getByRole("button", { name: "Back to results" }).click();
+  await expect(toggles.first()).toHaveAttribute("aria-expanded", "true");
+  await expect(visibleCards.nth(1).locator(".route-card-select")).toBeFocused();
+
+  // Clicking a route line must still open an original entrance variant even
+  // while its card is folded. Project the real fixture geometry, without
+  // depending on a private MapLibre instance or DOM markers.
+  const mercator = ([lon, lat]: number[]) => [(lon! + 180) / 360, .5 - Math.log(Math.tan(Math.PI / 4 + lat! * Math.PI / 360)) / (2 * Math.PI)];
+  const points = savedRoutes(harness.batchRequests[0]!, 4).exact.flatMap((route) => route.geometry.coordinates.map(mercator));
+  const xs = points.map(([x]) => x!), ys = points.map(([, y]) => y!);
+  const west = Math.min(...xs), east = Math.max(...xs), north = Math.min(...ys), south = Math.max(...ys);
+  const box = (await page.locator(".maplibregl-canvas").boundingBox())!;
+  const scale = Math.min((box.width - 128) / (east - west), (box.height - 128) / (south - north), 512 * 2 ** 14);
+  const project = (coordinates: number[]) => {
+    const [x, y] = mercator(coordinates);
+    return { x: box.x + box.width / 2 + (x! - (west + east) / 2) * scale, y: box.y + box.height / 2 + (y! - (north + south) / 2) * scale };
+  };
+  const start = project([ACCESS_POINTS[0]!.lon, ACCESS_POINTS[0]!.lat]);
+  await page.mouse.move(start.x, start.y);
+  await expect(page.locator(".map-trail-label")).toContainText("4 routes");
+  await page.mouse.click(start.x, start.y);
+  await expect(page.locator(".start-filter")).toContainText("4 of 4 routes on this page");
+  await page.getByRole("button", { name: "All trailheads" }).click();
+  const line = project([-122.14003, 37.1735]);
+  await page.mouse.move(line.x, line.y);
+  await expect(page.locator(".route-card.hovered .route-number")).toHaveText("4");
+  await expect(page.locator(".route-card.hovered")).toBeHidden();
+  await page.mouse.click(line.x, line.y);
+  await expect(page.locator(".route-number")).toHaveText("4");
+  await page.getByRole("button", { name: "Back to results" }).click();
+  await expect(toggles.nth(1)).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".route-card-select").filter({ has: page.locator(".route-number", { hasText: /^4$/ }) })).toBeFocused();
+  await toggles.nth(1).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await toggles.first().click();
+  await expect(visibleCards.locator(".route-number")).toHaveText(["1", "3"]);
+  await toggles.nth(1).click();
+  await expect(visibleCards.locator(".route-number")).toHaveText(["1", "3", "4"]);
+  expect(harness.blockedExternalRequests).toEqual([]);
+});
+
 test("grade and loop defaults persist across reloads", async ({ page }) => {
   const harness = await installOfflineHarness(page);
   await page.goto("/");

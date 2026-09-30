@@ -8,6 +8,7 @@ import type {
 import { COPY_FEEDBACK_MS, copyTextToClipboard, copyTextWithDocument } from "../clipboard";
 import type { RouteResults } from "./types";
 import { routeStart } from "./route-start";
+import { entranceRouteGroups, type EntranceRouteGroup } from "./entrance-groups";
 import { routeGpx, routeGpxFilename } from "@/lib/export/route-gpx";
 
 export type ResultsStatus = "loading" | "done" | "error";
@@ -403,6 +404,11 @@ export function ResultsPanel({
     () => results ? [...results.exact, ...results.nearMisses] : [],
     [results],
   );
+  const exactGroups = useMemo(() => entranceRouteGroups(results?.exact ?? []), [results]);
+  const closeGroups = useMemo(() => entranceRouteGroups(results?.nearMisses ?? [], results?.exact.length ?? 0), [results]);
+  const [openEntranceGroups, setOpenEntranceGroups] = useState<ReadonlySet<string>>(new Set());
+  const groupKey = (group: EntranceRouteGroup<(typeof routes)[number]>, close: boolean) =>
+    JSON.stringify([results?.job.id, close, group.entries[0]!.route.id]);
 
   const previews = useRef<{ route: { pointer?: string; focus?: string }; segment: { pointer?: string; focus?: string } }>({ route: {}, segment: {} });
   const preview = (kind: "route" | "segment", id: string | undefined, source: "pointer" | "focus") => {
@@ -440,9 +446,8 @@ export function ResultsPanel({
 
   const handleKeyboardNavigation = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    const buttons = cardRefs.current.filter((button): button is HTMLButtonElement =>
-      Boolean(button && !button.closest("details:not([open])")),
-    );
+    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(".route-card-select")]
+      .filter((button) => !button.closest("[hidden], details:not([open])"));
     const currentIndex = buttons.findIndex((button) => button === event.target);
     if (currentIndex < 0) return;
     event.preventDefault();
@@ -480,6 +485,37 @@ export function ResultsPanel({
     />
   );
 
+  const renderGroup = (group: EntranceRouteGroup<(typeof routes)[number]>, close: boolean) => {
+    const [representative, ...variants] = group.entries;
+    if (!representative) return null;
+    if (!variants.length) return renderCard(representative.route, representative.index);
+    const key = groupKey(group, close);
+    const open = openEntranceGroups.has(key);
+    const variantsId = `route-entrances-${close ? "close" : "exact"}-${representative.route.id}`;
+    return (
+      <div className="route-entrance-group" key={key}>
+        {renderCard(representative.route, representative.index)}
+        <button type="button" className="route-entrance-toggle" aria-expanded={open} aria-controls={variantsId} onClick={() => {
+          setOpenEntranceGroups((current) => {
+            const next = new Set(current);
+            if (open) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+          if (open) {
+            previews.current.route = {};
+            onHoverRoute(undefined);
+          }
+        }}>
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span> {variants.length} other entrance{variants.length === 1 ? "" : "s"}
+        </button>
+        <div className="route-entrance-variants" id={variantsId} hidden={!open}>
+          {variants.map(({ route, index }) => renderCard(route, index))}
+        </div>
+      </div>
+    );
+  };
+
   if (status === "loading") {
     return (
       <aside className={panelClassName} aria-labelledby="results-title">
@@ -506,6 +542,10 @@ export function ResultsPanel({
   const total = exactCount + closeCount;
   const start = startKey ? routes.find(matchesStart)?.startAccessPoint : undefined;
   const job = results.job;
+  const visibleExactGroups = exactGroups.filter(({ entries }) => matchesStart(entries[0]!.route));
+  const visibleCloseGroups = closeGroups.filter(({ entries }) => matchesStart(entries[0]!.route));
+  const rowCount = visibleExactGroups.length + visibleCloseGroups.length;
+  const variantCount = total - rowCount;
 
   const selectedIndex = routes.findIndex((route) => route.id === selectedRouteId);
   const selectedRoute = routes[selectedIndex];
@@ -515,6 +555,11 @@ export function ResultsPanel({
       <aside className={`${panelClassName} route-detail-view`} aria-label="Route details">
         <div className="results-heading">
           <button ref={backRef} type="button" className="btn detail-back" onClick={() => {
+            const group = (closeMatch ? closeGroups : exactGroups).find(({ entries }) => entries.some(({ route }) => route.id === selectedRouteId));
+            if (group && group.entries.length > 1) {
+              setOpenEntranceGroups((current) => new Set([...current, groupKey(group, closeMatch)]));
+            }
+            if (closeMatch) onToggleNearMisses?.(true);
             pendingFocus.current = "list";
             onBack?.();
           }}>← Back to results</button>
@@ -543,6 +588,8 @@ export function ResultsPanel({
         {job.error ? <span> {job.error}</span> : null}
       </div>
 
+      {variantCount > 0 ? <p className="entrance-group-context">{rowCount} route rows on this page · {variantCount} alternate entrance variant{variantCount === 1 ? "" : "s"} expandable below.</p> : null}
+
       {total === 0 ? (
         <div className="no-results" role="status">
           <strong>{startKey ? "No routes at this trailhead on this page." : "No routes found."}</strong>
@@ -555,7 +602,7 @@ export function ResultsPanel({
               <h3 id="exact-results-title">Exact matches</h3>
               <span>{exactCount}</span>
             </div>
-            {results.exact.map((route, index) => matchesStart(route) ? renderCard(route, index) : null)}
+            {visibleExactGroups.map((group) => renderGroup(group, false))}
           </section>
 
           {closeCount > 0 ? (
@@ -563,7 +610,7 @@ export function ResultsPanel({
                read; with none, they are the only thing left to look at. */
             <details className="result-section near-misses" open={nearMissesOpen} aria-labelledby="near-results-title" onToggle={(event) => { if (!event.currentTarget.open) onHoverRoute(undefined); onToggleNearMisses?.(event.currentTarget.open); }}>
               <summary className="result-section-heading"><h3 id="near-results-title">Close matches</h3><span>{closeCount}</span></summary>
-              {results.nearMisses.map((route, index) => matchesStart(route) ? renderCard(route, results.exact.length + index) : null)}
+              {visibleCloseGroups.map((group) => renderGroup(group, true))}
             </details>
           ) : null}
         </div>

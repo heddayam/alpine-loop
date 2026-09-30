@@ -115,6 +115,21 @@ function ControlledResultsPanel() {
     onSelectRoute={(id) => { setSelectedRouteId(id); setDetail(true); }} />;
 }
 
+function entranceRoute(id: string, entrance: string, loop = "shared-loop") {
+  return route({ id, physicalLoopId: loop, startAccessPoint: {
+    ...route().startAccessPoint, id: entrance, name: `Entrance ${entrance}`, entranceFamilyId: "family",
+  } });
+}
+
+function ControlledEntrancePanel({ response, initialSelected, initialDetail = false }: { response: RouteResults; initialSelected?: string; initialDetail?: boolean }) {
+  const [selectedRouteId, setSelectedRouteId] = useState(initialSelected);
+  const [detail, setDetail] = useState(initialDetail);
+  const [nearMissesOpen, setNearMissesOpen] = useState(false);
+  return <ResultsPanel status="done" results={response} selectedRouteId={selectedRouteId} detail={detail}
+    onBack={() => setDetail(false)} onSelectRoute={(id) => { setSelectedRouteId(id); setDetail(true); }}
+    nearMissesOpen={nearMissesOpen} onToggleNearMisses={setNearMissesOpen} onHoverRoute={() => undefined} />;
+}
+
 describe("ResultsPanel", () => {
   afterEach(cleanup);
 
@@ -505,5 +520,79 @@ describe("ResultsPanel", () => {
     expect(screen.getByRole("status")).toHaveTextContent("generating routes");
     rerender(<ResultsPanel onHoverRoute={() => undefined} status="error" results={null} message="Fixture pack is unavailable." onSelectRoute={() => undefined} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Fixture pack is unavailable.");
+  });
+
+  it("folds only proven alternate entrances and preserves original numbers and exact/close counts", async () => {
+    const a = entranceRoute("a", "a");
+    const b = entranceRoute("b", "b");
+    const otherLoop = entranceRoute("other-loop", "c", "different-loop");
+    const close = { ...entranceRoute("close", "d"), violations: results().nearMisses[0]!.violations };
+    const response = results({ exact: [a, otherLoop, b], nearMisses: [close] });
+    render(<ResultsPanel status="done" results={response} onSelectRoute={() => undefined} onHoverRoute={() => undefined} nearMissesOpen />);
+    expect(screen.getByText("4 routes")).toBeVisible();
+    expect(screen.getByText("3 route rows on this page · 1 alternate entrance variant expandable below.")).toBeVisible();
+    expect(screen.getAllByRole("article").map((card) => card.querySelector(".route-number")!.textContent)).toEqual(["1", "2", "4"]);
+    expect(screen.getByRole("heading", { name: "Exact matches" }).nextElementSibling).toHaveTextContent("3");
+    expect(screen.getByRole("heading", { name: "Close matches" }).nextElementSibling).toHaveTextContent("1");
+    const toggle = screen.getByRole("button", { name: "1 other entrance" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("article").map((card) => card.querySelector(".route-number")!.textContent)).toEqual(["1", "3", "2", "4"]);
+    expect(response.exact).toEqual([a, otherLoop, b]);
+  });
+
+  it("skips folded entrances with arrows and restores the selected variant and focus on Back", async () => {
+    const response = results({ exact: [entranceRoute("a", "a"), entranceRoute("other", "c", "other-loop"), entranceRoute("b", "b")], nearMisses: [] });
+    render(<ControlledEntrancePanel response={response} />);
+    const summary = (name: string) => screen.getByRole("button", { name: new RegExp(`Entrance ${name}.*Ridge Trail`) });
+    const a = summary("a");
+    a.focus();
+    fireEvent.keyDown(a, { key: "ArrowDown" });
+    expect(summary("c")).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "1 other entrance" }));
+    a.focus();
+    fireEvent.keyDown(a, { key: "ArrowDown" });
+    expect(summary("b")).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: /Back to results/ })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: /Back to results/ }));
+    expect(screen.getByRole("button", { name: "1 other entrance" })).toHaveAttribute("aria-expanded", "true");
+    expect(summary("b")).toHaveFocus();
+    expect(summary("b").querySelector(".route-number")).toHaveTextContent("3");
+  });
+
+  it("opens a map-selected hidden close variant and preserves its metrics and warnings on return", async () => {
+    const variant = { ...entranceRoute("b", "b"), distanceMeters: 11265.408, warnings: ["Alternate entrance warning."], violations: results().nearMisses[0]!.violations };
+    const response = results({ exact: [entranceRoute("exact", "a")], nearMisses: [
+      { ...entranceRoute("a", "a"), violations: variant.violations }, variant,
+    ] });
+    render(<ControlledEntrancePanel response={response} initialSelected="b" initialDetail />);
+    expect(screen.getByRole("list", { name: "Route warnings" })).toHaveTextContent("Alternate entrance warning.");
+    expect(within(screen.getByRole("article")).getByTitle("Distance")).toHaveTextContent("7.0 mi");
+    await userEvent.click(screen.getByRole("button", { name: /Back to results/ }));
+    expect(screen.getByRole("heading", { name: "Close matches" }).closest("details")).toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: "1 other entrance" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Entrance b.*Ridge Trail/ })).toHaveFocus();
+  });
+
+  it("filters all family entrances, leaves legacy rows flat, and clears hidden variant previews", async () => {
+    const a = entranceRoute("a", "a");
+    const b = entranceRoute("b", "b");
+    const legacy = route({ id: "legacy", startAccessPoint: { ...route().startAccessPoint, id: "legacy" } });
+    const onHoverRoute = vi.fn();
+    const props = { status: "done" as const, results: results({ exact: [legacy, a, b], nearMisses: [] }), onSelectRoute: vi.fn(), onHoverRoute };
+    const { rerender } = render(<ResultsPanel {...props} startKey={routeStart(b).key} />);
+    expect(screen.getByText("Entrance a · 2 of 3 routes on this page")).toBeVisible();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "1 other entrance" }));
+    expect(screen.getAllByRole("article").map((card) => card.querySelector(".route-number")!.textContent)).toEqual(["2", "3"]);
+    fireEvent.mouseEnter(screen.getByRole("article", { name: /Entrance b/ }));
+    expect(onHoverRoute).toHaveBeenLastCalledWith("b");
+    await userEvent.click(screen.getByRole("button", { name: "1 other entrance" }));
+    expect(onHoverRoute).toHaveBeenLastCalledWith(undefined);
+    rerender(<ResultsPanel {...props} />);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByRole("article", { name: /Saratoga Gap/ })).toBeVisible();
   });
 });

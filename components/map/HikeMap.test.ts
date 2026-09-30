@@ -255,6 +255,49 @@ describe("generated route map features", () => {
     expect(routeStartFeatures([mismatched]).features[0]?.geometry.coordinates).toEqual(mismatched.geometry.coordinates[0]);
   });
 
+  it("groups family result starts at a deterministic real member while keeping every original route feature", () => {
+    const first = route("first", -122.18);
+    first.startAccessPoint = { ...first.startAccessPoint, id: "b", entranceFamilyId: "family" };
+    const second = route("second", -122.16);
+    second.startAccessPoint = { ...second.startAccessPoint, id: "a", entranceFamilyId: "family" };
+    expect(routeStart(first).key).toBe(routeStart(second).key);
+    expect(routeStart(first).coordinates).toEqual([-122.18, 37.15]);
+    expect(routeStartFeatures([first, second]).features).toEqual(routeStartFeatures([second, first]).features);
+    expect(routeStartFeatures([first, second]).features[0]).toMatchObject({ properties: { count: 2 }, geometry: { coordinates: [-122.16, 37.15] } });
+    expect(routeFeatures([first, second]).features.map(({ geometry }) => geometry)).toEqual([first.geometry, second.geometry]);
+  });
+
+  it("groups only fetched eligible map entrances using the active access profile", () => {
+    const base = { name: "Entrance", kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const, lat: 37.15 };
+    const points = [
+      { ...base, id: "b", lon: -122.18, knownEntranceFamilyId: "known-b", inclusiveEntranceFamilyId: "inclusive" },
+      { ...base, id: "a", lon: -122.16, knownEntranceFamilyId: "known-a", inclusiveEntranceFamilyId: "inclusive" },
+      { ...base, id: "unknown", lon: -122.14, accessState: "unknown" as const, inclusiveEntranceFamilyId: "inclusive" },
+      { ...base, id: "legacy", lon: -122.12 },
+    ];
+    expect(mapDataSchema.parse({ accessPoints: points, trailNetwork: { type: "FeatureCollection", features: [] } }).accessPoints[0]).toMatchObject({ knownEntranceFamilyId: "known-b", inclusiveEntranceFamilyId: "inclusive" });
+    expect(accessPointFeatures(points).features.map(({ properties, geometry }) => [properties!.id, geometry.coordinates])).toEqual([["a", [-122.16, 37.15]], ["legacy", [-122.12, 37.15]]]);
+    expect(accessPointFeatures(points, new Set(), false).features.map(({ properties }) => properties!.id)).toEqual(["b", "a", "legacy"]);
+    expect(accessPointFeatures([points[0]!]).features[0]!.geometry.coordinates).toEqual([-122.18, 37.15]);
+    expect(accessPointFeatures(points, new Set(["a"])).features[0]!.geometry.coordinates).toEqual([-122.18, 37.15]);
+  });
+
+  it("suppresses every fetched family member when its result marker is shown", () => {
+    const generated = route("first", -122.18);
+    generated.startAccessPoint = { ...generated.startAccessPoint, id: "b", entranceFamilyId: "inclusive" };
+    const base = { name: "Entrance", kind: "trailhead" as const, accessState: "public" as const, confidence: "high" as const, lat: 37.15, lon: -122.18 };
+    const points = [
+      { ...base, id: "a", inclusiveEntranceFamilyId: "inclusive", knownEntranceFamilyId: "known-a" },
+      { ...base, id: "b", inclusiveEntranceFamilyId: "inclusive", knownEntranceFamilyId: "known-b" },
+      { ...base, id: "c", inclusiveEntranceFamilyId: "inclusive" },
+      { ...base, id: "other" },
+    ];
+    const hidden = resultAccessPointIds([generated], points);
+    expect([...hidden].sort()).toEqual(["a", "b", "c"]);
+    expect(accessPointFeatures(points, hidden).features.map(({ properties }) => properties!.id)).toEqual(["other"]);
+    expect([...resultAccessPointIds([generated], points, false)]).toEqual(["b"]);
+  });
+
   it("renders compact accessible map controls and a collapsed complete key", () => {
     const boundary = [-122.18, 37.155, -122.14, 37.178] as [number, number, number, number];
     const markup = renderToStaticMarkup(createElement(HikeMap, {

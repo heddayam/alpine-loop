@@ -14,7 +14,7 @@ export type OfflineHarness = {
   settingsRequests: AppSettingsV1[];
   blockedExternalRequests: string[];
 };
-type HarnessOptions = { routeCount?: number };
+type HarnessOptions = { routeCount?: number; entranceFamilies?: boolean };
 
 async function body(route: Route): Promise<unknown> {
   const text = route.request().postData();
@@ -66,7 +66,7 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
       return;
     }
     if (url.pathname === "/api/search/catalog") { await route.fulfill({ json: { regions: [{ id: SEARCH_REGION.id, name: SEARCH_REGION.name }], coverages: [PACK_COVERAGE], display: { center: [-122.16, 37.165], zoom: 12 } } }); return; }
-    if (url.pathname === "/api/map") { await route.fulfill({ json: { accessPoints: ACCESS_POINTS, trailNetwork: TRAIL_NETWORK } }); return; }
+    if (url.pathname === "/api/map") { await route.fulfill({ json: { accessPoints: ACCESS_POINTS.map((point) => options.entranceFamilies ? { ...point, inclusiveEntranceFamilyId: "fixture-family" } : point), trailNetwork: TRAIL_NETWORK } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/suggest") { await route.fulfill({ json: { suggestions: [{ id: "arcgis-castle-rock", label: "Castle Rock, California", magicKey: "fixture-magic-key" }] } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/geocoding/resolve") { await route.fulfill({ json: { origin: { lon: -122.14, lat: 37.16, label: "Castle Rock, California" } } }); return; }
     if (request.method() === "POST" && url.pathname === "/api/route-jobs") {
@@ -78,7 +78,10 @@ export async function installOfflineHarness(page: Page, options: HarnessOptions 
     if (request.method() === "GET" && url.pathname === "/api/route-jobs") { await route.fulfill({ json: { version: 2, jobs: batchRequests.map((request) => completedJob(request, options.routeCount ?? 2)) } }); return; }
     if (request.method() === "GET" && url.pathname === `/api/route-jobs/${JOB_ID}/results`) {
       const requestFixture = savedRoutes(batchRequests[0]!, options.routeCount ?? 2);
-      await route.fulfill({ json: { version: 2, job: completedJob(batchRequests[0]!, options.routeCount ?? 2), results: requestFixture.exact.map((result) => ({ matchType: "exact", accessPointId: result.startAccessPoint.id, route: result })) } });
+      const routes = requestFixture.exact.map((result, index) => options.entranceFamilies
+        ? { ...result, physicalLoopId: `fixture-loop-${Math.floor(index / 2)}`, startAccessPoint: { ...result.startAccessPoint, entranceFamilyId: "fixture-family" } }
+        : result);
+      await route.fulfill({ json: { version: 2, job: completedJob(batchRequests[0]!, options.routeCount ?? 2), results: routes.map((result) => ({ matchType: "exact", accessPointId: result.startAccessPoint.id, route: result })) } });
       return;
     }
     if ((request.method() === "POST" && url.pathname.endsWith("/cancel")) || request.method() === "DELETE") { await route.fulfill({ json: { ok: true } }); return; }

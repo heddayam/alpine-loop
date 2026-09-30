@@ -5,5 +5,8 @@ export function routeStart(route: Pick<GeneratedClosedRouteV3, "geometry" | "sta
   const point = route.startAccessPoint;
   const coordinate = route.geometry.coordinates[0] ?? [point.lon, point.lat];
   const coordinates: [number, number] = [coordinate[0], coordinate[1]];
-  return { key: JSON.stringify([point.id, ...coordinates]), name: point.name, coordinates };
+  const key = point.entranceFamilyId
+    ? JSON.stringify(["entrance-family", point.entranceFamilyId])
+    : JSON.stringify([point.id, ...coordinates]);
+  return { key, name: point.name, coordinates };
 }

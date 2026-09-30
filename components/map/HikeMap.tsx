@@ -144,6 +144,7 @@ export const mapDataSchema = z.object({
   accessPoints: z.array(z.object({
     id: z.string(), name: z.string(), lon: z.number().finite(), lat: z.number().finite(),
     kind: z.enum(["trailhead", "parking", "transit"]), accessState: z.enum(["public", "unknown"]), confidence: z.enum(["high", "medium", "low"]),
+    knownEntranceFamilyId: z.string().min(1).optional(), inclusiveEntranceFamilyId: z.string().min(1).optional(),
   })),
   trailNetwork: z.object({ type: z.literal("FeatureCollection"), features: z.array(z.object({
     type: z.literal("Feature"), geometry: lineStringSchema, properties: z.record(z.string(), z.unknown()),
@@ -233,17 +234,47 @@ export const REGION_BOUNDARY_PAINT = {
   "line-opacity": 0.58,
 } as const;
 
-export function resultAccessPointIds(routes: GeneratedClosedRouteV3[]): Set<string> {
-  return new Set(routes.map((route) => route.startAccessPoint.id));
+type MapAccessPoint = AccessPointOption & {
+  knownEntranceFamilyId?: string;
+  inclusiveEntranceFamilyId?: string;
+};
+
+function mapEntranceFamily(point: MapAccessPoint, includeUncertainAccess: boolean) {
+  return includeUncertainAccess ? point.inclusiveEntranceFamilyId : point.knownEntranceFamilyId;
+}
+
+export function resultAccessPointIds(
+  routes: GeneratedClosedRouteV3[],
+  accessPoints: MapAccessPoint[] = [],
+  includeUncertainAccess = true,
+): Set<string> {
+  const ids = new Set(routes.map((route) => route.startAccessPoint.id));
+  const families = new Set(routes.flatMap((route) => route.startAccessPoint.entranceFamilyId ? [route.startAccessPoint.entranceFamilyId] : []));
+  for (const point of accessPoints) {
+    const family = mapEntranceFamily(point, includeUncertainAccess);
+    if (family && families.has(family)) ids.add(point.id);
+  }
+  return ids;
 }
 
 export function accessPointFeatures(
-  accessPoints: AccessPointOption[],
+  accessPoints: MapAccessPoint[],
   hiddenAccessPointIds: ReadonlySet<string> = new Set(),
+  includeUncertainAccess = true,
 ): FeatureCollection<Point> {
+  // Work only from fetched eligible members. A family representative is an
+  // actual entrance, selected by ID so source ordering cannot move its dot.
+  const groups = new Map<string, MapAccessPoint>();
+  for (const point of accessPoints) {
+    if ((!includeUncertainAccess && point.accessState === "unknown") || hiddenAccessPointIds.has(point.id)) continue;
+    const family = mapEntranceFamily(point, includeUncertainAccess);
+    const key = JSON.stringify(family ? ["family", family] : ["entrance", point.id]);
+    const existing = groups.get(key);
+    if (!existing || point.id < existing.id) groups.set(key, point);
+  }
   return {
     type: "FeatureCollection",
-    features: accessPoints.filter((point) => !hiddenAccessPointIds.has(point.id)).map((point) => ({
+    features: [...groups.values()].map((point) => ({
       type: "Feature",
       properties: {
         id: point.id,
@@ -291,17 +322,28 @@ function routeFilter(id?: string): ExpressionSpecification {
   return ["in", ["get", "id"], ["literal", id === undefined ? [] : [id]]];
 }
 
-/** One feature per real start; nearby starts never acquire an invented midpoint. */
+/** One feature per start/family, anchored to a real member rather than a midpoint. */
 export function routeStartFeatures(routes: GeneratedClosedRouteV3[]): FeatureCollection<Point> {
   const starts = new Map<string, Feature<Point, { key: string; name: string; count: number }>>();
+  const representatives = new Map<string, string>();
   for (const route of routes) {
     const { key, name, coordinates } = routeStart(route);
     const existing = starts.get(key);
-    if (existing) existing.properties.count += 1;
-    else starts.set(key, {
-      type: "Feature", properties: { key, name, count: 1 },
-      geometry: { type: "Point", coordinates },
-    });
+    const memberKey = JSON.stringify([route.startAccessPoint.id, ...coordinates]);
+    if (existing) {
+      existing.properties.count += 1;
+      if (memberKey < representatives.get(key)!) {
+        existing.geometry.coordinates = coordinates;
+        existing.properties.name = name;
+        representatives.set(key, memberKey);
+      }
+    } else {
+      starts.set(key, {
+        type: "Feature", properties: { key, name, count: 1 },
+        geometry: { type: "Point", coordinates },
+      });
+      representatives.set(key, memberKey);
+    }
   }
   return { type: "FeatureCollection", features: [...starts.values()] };
 }
@@ -926,7 +968,7 @@ export function HikeMap({
     if (!mapReady) return;
     const map = mapRef.current;
     const accessPoints = (coverageMode ? [] : mapData.accessPoints).filter((point) => includeUncertainAccess || point.accessState !== "unknown");
-    (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes)));
+    (map?.getSource("access-points") as GeoJSONSource | undefined)?.setData(accessPointFeatures(accessPoints, resultAccessPointIds(routes, accessPoints, includeUncertainAccess), includeUncertainAccess));
   }, [coverageMode, includeUncertainAccess, mapData.accessPoints, mapReady, routes]);
 
   useEffect(() => {
