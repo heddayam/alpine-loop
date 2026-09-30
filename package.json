@@ -1,49 +1,37 @@
 {
   "name": "alpine-loop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "predev": "npm run maplibre:check",
-    "dev": "next dev",
-    "prebuild": "npm run maplibre:check",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint . --max-warnings=0",
-    "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:browser": "node scripts/run-browser-tests.mjs --config=tests/browser/playwright.config.ts",
-    "verify": "npm run maplibre:check && npm run lint && npm run typecheck && npm test && npm run build",
-    "maplibre:check": "node scripts/maplibre-assets.mjs --check",
-    "maplibre:sync": "node scripts/maplibre-assets.mjs --sync",
-    "data": "tsx scripts/data.ts"
-  },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/server.js",
+    "dev": "npm run build && npm start",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/pilot.test.mjs",
+    "test:browser": "playwright test",
+    "verify": "npm run build && npm run typecheck && npm test",
+    "size": "node scripts/source-size.mjs"
   },
   "dependencies": {
-    "maplibre-gl": "^6.1.0",
-    "next": "^16.3.0",
-    "polygon-clipping": "^0.15.7",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "zod": "^4.4.3",
-    "tsx": "^4.23.5"
+    "@fastify/static": "10.1.5",
+    "fastify": "5.12.5",
+    "leaflet": "1.9.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
-    "@testing-library/jest-dom": "^7.0.0",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.3",
-    "@types/geojson": "^7946.0.16",
-    "@types/node": "^26.1.2",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.0",
-    "jsdom": "^29.1.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "@playwright/test": "1.62.1",
+    "@types/leaflet": "1.9.22",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "tsx": "4.23.5",
+    "typescript": "6.0.3",
+    "vite": "8.2.0",
+    "vitest": "4.1.10"
   }
 }

@@ -1,8 +1,0 @@
-[
-  {"id":"discovery-park","source":"washington","context":"dense urban forest park","bbox":[-122.437,47.650,-122.392,47.680]},
-  {"id":"tiger-high-point","source":"washington","context":"forest foothill and highway approaches","bbox":[-121.994,47.510,-121.945,47.545]},
-  {"id":"denny-creek","source":"washington","context":"mountain valley and forest-road arrival","bbox":[-121.465,47.413,-121.424,47.449]},
-  {"id":"mitchell-canyon","source":"norcal","context":"urban-edge mountain staging area","bbox":[-121.959,37.902,-121.928,37.936]},
-  {"id":"sunol","source":"norcal","context":"rural foothills and mixed-use tracks","bbox":[-121.856,37.500,-121.810,37.534]},
-  {"id":"alum-rock","source":"norcal","context":"urban-edge canyon and hillside trails","bbox":[-121.843,37.385,-121.779,37.434]}
-]
