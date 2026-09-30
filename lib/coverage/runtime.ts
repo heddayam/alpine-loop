@@ -37,12 +37,12 @@ import { qualifyMountainStarts, pruneWalkingGraph, PRUNING_ALGORITHM_VERSION } f
 import type { AreaGeometry } from "@/lib/data/area-geometry";
 import type { NormalizedWay } from "@/lib/data/types";
 import { coordinateIsInsideArea, prepareAreaGeometry } from "@/lib/graph/geometry";
-import type { CoverageRegion, CoverageRunnerContext, CoverageRunResult } from "./types";
+import { unavailableReviewedStartSchema, type CoverageRegion, type CoverageRunnerContext, type CoverageRunResult } from "./types";
 export const COVERAGE_PACK_ID = "regional-coverage";
 const BUILD_VERSION = `named-mountain-regions-v3:${NORMALIZATION_VERSION}:${PRUNING_ALGORITHM_VERSION}:${ENTRANCE_FAMILY_ALGORITHM_VERSION}`;
 const HIKING_HIGHWAYS=new Set(["path","track","bridleway","steps","footway","pedestrian"].map(kind=>`osm-highway:${kind}`));
 type ReferenceAudit = Awaited<ReturnType<typeof auditOfficialTrailReferences>>;
-type Receipt = { release: DataRelease; approaches: [number,number][]; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"] };
+type Receipt = { release: DataRelease; approaches: [number,number][]; compressedHash: string; demGeometry: AreaGeometry; elevationFingerprint: string; references: ReferenceAudit[]; referenceSources: DataRelease["sources"]; unavailableReviewedApproaches?: number };
 const durable = (source: SourceSnapshot) => { const { localPath, ...value } = source; void localPath; return value; };
 
 /** One named place is an independently usable graph, with reusable physical measurements. */
@@ -68,7 +68,12 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         if (!containsCoverage(area.geometry, artifact.geometry))
           throw new Error(`Cannot replace ${section.id}: ${area.id} does not preserve its complete routing coverage`);
     }
-    let inputs = await preparationInputs(recipe, session, area.geometry);
+    const verifiedInputs = async (geometry: AreaGeometry) => {
+      const inputs = await preparationInputs(recipe, session, geometry);
+      validateUnavailableReviewedStarts(region, inputs.snapshots);
+      return inputs;
+    };
+    let inputs = await verifiedInputs(area.geometry);
     const declared = contentId({id:area.id, startGeometry:area.startGeometry, geometry:area.geometry, maximumRouteMiles:area.maximumRouteMiles,
       sources:inputs.snapshots.map(durable), restrictions:inputs.restrictions.map(({snapshot,...rest})=>({...rest,snapshot:durable(snapshot)})), boundarySources:region.sources ?? [], reviewedApproaches:region.reviewedApproaches ?? [],
       recipe, startLimitGeometry:region.startLimitGeometry,
@@ -87,6 +92,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       try { cached = JSON.parse(await readFile(receiptPath, "utf8")); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     }
+    let unavailableReviewedApproaches=0;
     let prepared: DataRelease | undefined, approaches: [number,number][] = [], referenceAudits: ReferenceAudit[] = [], referenceSources: DataRelease["sources"] = [];
     if (cached) {
       const stored = dataReleaseSchema.parse(cached.release);
@@ -103,7 +109,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
       await report(`Verifying cached elevation: ${area.name}`);
       // Approaches can add another provider. Verify every final-extent pin even
       // when the completed receipt avoids all normalization and graph work.
-      inputs = await preparationInputs(recipe,session,area.geometry);
+      inputs = await verifiedInputs(area.geometry);
       const actual = await describeCanonicalElevation(cached.demGeometry, cacheRoot, root, dem);
       if (actual?.productFingerprint === cached.elevationFingerprint) {
         const artifact = stored.artifacts[0]!, file = path.join(outputRoot, artifact.path);
@@ -112,14 +118,17 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         prepared = {...stored, regions:[searchRegion(stored.sources)], sections:[{...stored.sections[0]!, name:area.name}]};
         approaches=cached.approaches;
         referenceAudits = cached.references; referenceSources = cached.referenceSources;
+        unavailableReviewedApproaches=cached.unavailableReviewedApproaches ?? 0;
+        if(!Number.isSafeInteger(unavailableReviewedApproaches) || unavailableReviewedApproaches<0 || unavailableReviewedApproaches>(region.reviewedApproaches?.length ?? 0))
+          throw new Error(`Invalid region checkpoint unavailable approaches: ${area.id}`);
         unit.status = "prepared";
-        await report(`Reused ${area.name}`, {reusedRegions:1});
+        await report(`Reused ${area.name}`, {reusedRegions:1,unavailableReviewedApproaches});
       }
     }
     if (!prepared) {
       area = initialArea;
       unit.geometry=area.geometry;
-      if(cached) inputs=await preparationInputs(recipe,session,area.geometry);
+      if(cached) inputs=await verifiedInputs(area.geometry);
       await importLocalSources(session, inputs, area.geometry);
       scratch = await mkdtemp(path.join(scratchRoot, ".region-"));
       const databasePath = path.join(scratch, "region.sqlite");
@@ -204,7 +213,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           await report(`Completing route coverage for ${approaches.length} outside entrances: ${area.name}`);
           // Freeze membership before extending support: distant approaches may
           // have loops going away from the core, but support cannot nominate starts.
-          inputs=await preparationInputs(recipe,session,area.geometry);
+          inputs=await verifiedInputs(area.geometry);
           const begin=raws.length;
           await importLocalSources(session,{...inputs,snapshots:inputs.snapshots.filter(snapshot=>
             intersectCoverage(additional,recipe.sources.find(source=>source.config.id===snapshot.id)!.geometry))},additional);
@@ -267,10 +276,12 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
           await report(`Analyzing loops and approaches: ${area.name}`,compact);
           await writeProgressiveTopology(db,check);
           await report(`Checking reviewed approach starts: ${area.name}`);
-          const {densityExcluded,terrainExcluded}=await checkReviewedApproaches(db,store.database,region,check);
+          const {densityExcluded,terrainExcluded,unavailable}=await checkReviewedApproaches(db,store.database,region,check);
+          unavailableReviewedApproaches=unavailable.length;
+          limitations.push(...unavailable);
           if(densityExcluded.length) limitations.push(`Reviewed approaches excluded by the fewer-than-${MAXIMUM_NEARBY_BUILDINGS}-buildings-within-${BUILDING_RADIUS_M}-m rule: ${densityExcluded.join(", ")}.`);
           if(terrainExcluded.length) limitations.push(`Reviewed approaches excluded because no mountain hiking trail is reachable within the route-distance bound: ${terrainExcluded.join(", ")}.`);
-          await report(`Reviewed approach checks complete: ${area.name}`,{densityExcludedReviewedApproaches:densityExcluded.length,terrainExcludedReviewedApproaches:terrainExcluded.length});
+          await report(`Reviewed approach checks complete: ${area.name}`,{densityExcludedReviewedApproaches:densityExcluded.length,terrainExcludedReviewedApproaches:terrainExcluded.length,unavailableReviewedApproaches});
           db.prepare("INSERT INTO metadata VALUES ('schemaVersion','7')").run();
           db.prepare("INSERT INTO metadata VALUES ('releaseId',?)").run(preparedReleaseId(options));
           const add = db.prepare("INSERT INTO sources VALUES (?,?,?,?,?,?,?,?)");
@@ -304,7 +315,7 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
         }
         if (!compared) referenceAudits.push(await auditOfficialTrailReferences({checkpoint:check,osm:raw,coverage:referenceCoverage,installedCoverage:area.geometry}));
       }
-      await writeJsonAtomically(receiptPath,{release:prepared,approaches,compressedHash:await sha256File(path.join(outputRoot,prepared.artifacts[0]!.path)),demGeometry,elevationFingerprint,references:referenceAudits,referenceSources} satisfies Receipt);
+      await writeJsonAtomically(receiptPath,{release:prepared,approaches,compressedHash:await sha256File(path.join(outputRoot,prepared.artifacts[0]!.path)),demGeometry,elevationFingerprint,references:referenceAudits,referenceSources,unavailableReviewedApproaches} satisfies Receipt);
       unit.status = "prepared";
       await report(`Prepared ${area.name}`,{compressedBytes:prepared.artifacts[0]!.compressedBytes,installedBytes:prepared.artifacts[0]!.bytes});
     }
@@ -339,11 +350,22 @@ export async function buildCoverageRegion(region: CoverageRegion, context: Cover
     await report(`Publishing ${area.name}`);
     await publishPreparedCatalog(release,outputRoot,check);
     unit.status = "installed";
-    await report(`Ready: ${area.name}`);
+    await report(`Ready: ${area.name}`,{unavailableReviewedApproaches});
     return {status:"completed",units,completedUnits:1,snapshot:{schemaVersion:1,id:COVERAGE_PACK_ID,dataVersion:release.id,geometry,unitIds:[area.id],createdAt:release.builtAt,sourceFingerprint:contentId(release.sources),auditStatus:"passed",limitations:release.limitations}};
   } finally {
     if (scratch) await rm(scratch,{recursive:true,force:true});
     await session.close();
+  }
+}
+
+/** Gap reviews apply only to the verified input bytes, never recipe declarations alone. */
+function validateUnavailableReviewedStarts(region: CoverageRegion, snapshots: SourceSnapshot[]) {
+  for(const approach of region.reviewedApproaches ?? []) {
+    if(approach.unavailableStart === undefined) continue;
+    const reviewed=unavailableReviewedStartSchema.parse(approach.unavailableStart);
+    const source=snapshots.find(snapshot=>snapshot.id===reviewed.sourceId);
+    if(!source || source.contentHash!==reviewed.sourceHash)
+      throw new Error(`Unavailable reviewed start ${approach.name} requires verified source ${reviewed.sourceId} at ${reviewed.sourceHash}; ${source ? `actual hash is ${source.contentHash}` : "source is absent from verified inputs"}. Review the gap against the current source before publishing.`);
   }
 }
 
@@ -353,7 +375,7 @@ async function checkReviewedApproaches(db: DatabaseSync, stage: DatabaseSync, re
   const rejected=stage.prepare(`SELECT n.lon,n.lat,CASE WHEN a.nearby_building_count>=? THEN 'density' ELSE 'terrain' END AS reason
     FROM portal_candidate_audit a JOIN nodes n ON n.id=a.node_id
     WHERE a.access_state IN ('public','unknown') AND (a.nearby_building_count>=? OR a.node_id IN (SELECT node_id FROM terrain_excluded_start_nodes))`);
-  const missing:string[]=[],densityExcluded:string[]=[],terrainExcluded:string[]=[];
+  const missing:string[]=[],densityExcluded:string[]=[],terrainExcluded:string[]=[],unavailable:string[]=[];
   let work=0;
   for(const approach of region.reviewedApproaches??[]) {
     await checkpoint();
@@ -368,10 +390,13 @@ async function checkReviewedApproaches(db: DatabaseSync, stage: DatabaseSync, re
         (row.reason==='density'?densityExcluded:terrainExcluded).push(approach.name);matched=true;break;
       }
     }
-    if(!matched) missing.push(`${approach.name} (${approach.radiusMeters} m)`);
+    if(!matched) {
+      if(approach.unavailableStart) unavailable.push(unavailableReviewedStartSchema.parse(approach.unavailableStart).reason);
+      else missing.push(`${approach.name} (${approach.radiusMeters} m)`);
+    }
   }
   if(missing.length) throw new Error(`Reviewed approaches have no mapped starting point in the final graph: ${missing.join(", ")}. Review source topology and the start footprint before publishing.`);
-  return {densityExcluded,terrainExcluded};
+  return {densityExcluded,terrainExcluded,unavailable};
 }
 
 async function prepareMetrics(store: ReturnType<typeof openProgressiveGraphStore>, cachePath: string, elevation: Awaited<ReturnType<typeof elevationFor>>, check: () => Promise<void>) {

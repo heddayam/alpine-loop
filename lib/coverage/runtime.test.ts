@@ -443,6 +443,90 @@ it("checks every reviewed approach after final start filtering and preserves pub
   expect(await release()).toEqual(before);
   await expectNoScratch();
 });
+const unavailableReason="Reviewed unavailable start Missing entrance: the pinned source has no mapped parking-to-trail contacts; this start is unavailable without adding a connector.";
+const unavailableStart=()=>({sourceId:source.id,sourceHash:source.contentHash,reviewedAt:"2026-09-29T00:00:00Z",reason:unavailableReason});
+const missingReviewedApproach=()=>({id:"missing",name:"Missing entrance",coordinates:[-121.25,47.54] as [number,number],radiusMeters:100,unavailableStart:unavailableStart()});
+it("publishes only a pinned reviewed gap as a limitation without adding starts or trails, and retains it on reuse",async()=>{
+  const input=region("first-region");
+  await buildCoverageRegion(input,context());
+  const [before]=await pieces();
+  input.reviewedApproaches=[missingReviewedApproach()];
+  const ctx=context();ctx.report=vi.fn();
+  await buildCoverageRegion(input,ctx);
+  const published=await release(),[after]=await pieces();
+  expect(after!.access).toEqual(before!.access);
+  expect(after!.edges).toEqual(before!.edges);
+  expect(after!.nodes).toEqual(before!.nodes);
+  expect(published.limitations).toContain(unavailableReason);
+  expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Reviewed approach checks complete: first-region",counts:expect.objectContaining({unavailableReviewedApproaches:1})}));
+  const receipts=await Promise.all((await readdir(path.join(root,"stage/regions"))).map(async file=>JSON.parse(await readFile(path.join(root,"stage/regions",file),"utf8"))));
+  expect(receipts.find(receipt=>receipt.release.limitations.includes(unavailableReason))).toMatchObject({unavailableReviewedApproaches:1});
+  vi.mocked(filteredSourceLines).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  const {elevationFor}=await import("./elevation");vi.mocked(elevationFor).mockClear();vi.mocked(ctx.report).mockClear();
+  await buildCoverageRegion(input,ctx);
+  expect(await release()).toEqual(published);
+  expect(filteredSourceLines).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();expect(elevationFor).not.toHaveBeenCalled();
+  expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Reused first-region",counts:{reusedRegions:1,unavailableReviewedApproaches:1}}));
+  expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Ready: first-region",counts:{unavailableReviewedApproaches:1}}));
+  await expectNoScratch();
+});
+it("keeps an actually mapped start eligible despite a reviewed gap declaration and emits no unavailable warning",async()=>{
+  const input=region("first-region");
+  input.reviewedApproaches=[{...missingReviewedApproach(),coordinates:[-121.26,47.51]}];
+  const ctx=context();ctx.report=vi.fn();
+  await buildCoverageRegion(input,ctx);
+  expect((await pieces())[0]!.access.some(point=>point.node_id==="osm-node-1")).toBe(true);
+  expect((await release()).limitations).not.toContain(unavailableReason);
+  expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Reviewed approach checks complete: first-region",counts:expect.objectContaining({unavailableReviewedApproaches:0})}));
+});
+it.each(["density","terrain"])("reports an actual %s policy exclusion before an unavailable declaration",async kind=>{
+  const input=region("both",kind==="density"?consolidatedArea:rectangle([-121.245,47.50,-121.235,47.52]));
+  input.reviewedApproaches=[{...missingReviewedApproach(),name:"Second entrance",coordinates:[-121.12,47.51]}];
+  if(kind==="density") fixtureLines.push(...buildingsAt(-121.12,47.51,10));
+  const ctx=context();ctx.report=vi.fn();
+  await buildCoverageRegion(input,ctx);
+  const published=await release();
+  expect(published.limitations).not.toContain(unavailableReason);
+  expect(published.limitations.some(reason=>reason.startsWith("Reviewed approaches excluded")&&reason.includes("Second entrance"))).toBe(true);
+  expect(ctx.report).toHaveBeenCalledWith(expect.objectContaining({stage:"Reviewed approach checks complete: both",counts:expect.objectContaining({unavailableReviewedApproaches:0})}));
+});
+it.each(["stale hash","missing input"])("rejects a reviewed gap with %s against verified inputs before normalization or elevation",async kind=>{
+  const input=region("first-region");
+  await buildCoverageRegion(input,context());
+  const before=await release(), {readPinnedOsmSnapshot}=await import("@/lib/data/osm/source"),{elevationFor}=await import("./elevation");
+  input.reviewedApproaches=[missingReviewedApproach()];
+  if(kind==="stale hash") {
+    const changed={...source,contentHash:`sha256:${"2".repeat(64)}` as const};
+    // The recipe agrees with the verified bytes; the review still pins the old source.
+    input.recipe.sources[0]!.sha256=changed.contentHash;
+    vi.mocked(readPinnedOsmSnapshot).mockResolvedValue(changed);
+  } else {
+    // A matching recipe hash alone cannot stand in for the required source identity.
+    vi.mocked(readPinnedOsmSnapshot).mockResolvedValue({...source,id:"other-source"});
+  }
+  vi.mocked(filteredSourceLines).mockClear();vi.mocked(elevationFor).mockClear();vi.mocked(calculateEdgeMetricsBatch).mockClear();
+  await expect(buildCoverageRegion(input,context())).rejects.toThrow(kind==="stale hash"?"actual hash is":"source is absent from verified inputs");
+  expect(filteredSourceLines).not.toHaveBeenCalled();expect(elevationFor).not.toHaveBeenCalled();expect(calculateEdgeMetricsBatch).not.toHaveBeenCalled();
+  expect(await release()).toEqual(before);await expectNoScratch();
+});
+it.each([
+  {sourceId:""},{sourceHash:"not-a-hash"},{reviewedAt:"not-a-date"},{reason:"  "},{unexpected:"extra"},
+])("rejects a malformed direct-call reviewed gap before preparation: %j",async malformed=>{
+  const input=region("first-region"),{elevationFor}=await import("./elevation");
+  input.reviewedApproaches=[{...missingReviewedApproach(),unavailableStart:{...unavailableStart(),...malformed}}];
+  await expect(buildCoverageRegion(input,context())).rejects.toThrow();
+  expect(filteredSourceLines).not.toHaveBeenCalled();expect(elevationFor).not.toHaveBeenCalled();
+  await expectNoScratch();
+});
+it("still blocks an undeclared second missing approach while preserving a published reviewed gap",async()=>{
+  const input=region("first-region");
+  input.reviewedApproaches=[missingReviewedApproach()];
+  await buildCoverageRegion(input,context());
+  const before=await release();
+  input.reviewedApproaches.push({id:"other-missing",name:"Undeclared entrance",coordinates:[-121.24,47.55],radiusMeters:100});
+  await expect(buildCoverageRegion(input,context())).rejects.toThrow("Reviewed approaches have no mapped starting point in the final graph: Undeclared entrance (100 m)");
+  expect(await release()).toEqual(before);await expectNoScratch();
+});
 it("cancellation leaves the prior catalog active and removes scratch",async()=>{
   await build();const prior=await readFile(path.join(root,"release/release.json"),"utf8");
   const paused=context();paused.report=async update=>{if(update.stage?.startsWith("Prepared "))throw new Error("paused after area");};
