@@ -77,7 +77,7 @@ export async function readDataset(directory: string) {
     }
     const bounds = envelope([...starts.values()].map(record => record[2]), query.distance[1]);
     const sections = new Map<number, NetworkSection>();
-    const edges = new Map<number, TrailEdge>();
+    const edges = new Map<number, Omit<TrailEdge, 'connector'>>();
     if (bounds) for (const { path } of selectedFiles('graph', bounds)) {
       const tile = await load<NetworkCell>(path);
       const endpoints = new Map(tile.nodes);
@@ -94,7 +94,7 @@ export async function readDataset(directory: string) {
           if (edge.trail !== section.id || edges.has(id)) throw new Error('Conflicting trail direction identity');
           if (!query.includeUnknown && edge.access !== 'public') continue;
           position(edge.from, endpoints.get(edge.from)); position(edge.to, endpoints.get(edge.to));
-          edges.set(id, { ...edge, connector: section.kind === 'connector' });
+          edges.set(id, edge);
         }
       }
     }
@@ -102,7 +102,8 @@ export async function readDataset(directory: string) {
     const local = new Map(nodes.map(([id], index) => [id, index]));
     const graph: TrailGraph = {
       version: 1, info: manifest.info, nodes: nodes.map(([, point]) => point),
-      edges: [...edges].sort((a, b) => a[0] - b[0]).map(([, edge]) => ({ ...edge, from: local.get(edge.from)!, to: local.get(edge.to)! })),
+      edges: [...edges].sort((a, b) => a[0] - b[0]).map(([, edge]) => ({ ...edge, from: local.get(edge.from)!, to: local.get(edge.to)!,
+        connector: sections.get(edge.trail)!.kind === 'connector' })),
       starts: [...starts].sort((a, b) => a[0] - b[0]).map(([, [, start]]) => ({ ...start, node: local.get(start.node)! })),
     };
     const coverageNote = !contained(query.area, manifest.info.bounds)

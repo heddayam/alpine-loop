@@ -69,7 +69,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     };
     const worker = new Worker(new URL('./search-worker.js', import.meta.url), {
       workerData: { directory, query, snapshotId: dataset.info.id },
-      resourceLimits: { maxOldGenerationSizeMb: 256 },
+      resourceLimits: { maxOldGenerationSizeMb: 512 },
     });
     const entry: Entry = { snapshot, candidates: new Map(), worker };
     current = entry;
