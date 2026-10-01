@@ -9,6 +9,7 @@ import { createApp } from '../../dist/server/server.js';
 const [dataset, sourceReport] = process.argv.slice(2);
 if (!dataset || !sourceReport) throw new Error('Usage: node run.mjs DATASET SOURCE_REPLAY_JSON');
 const directory = resolve(dataset);
+const audit = join(directory, 'audit');
 const fixed = JSON.parse(await readFile(new URL('./witness.json', import.meta.url), 'utf8'));
 const frozen = JSON.parse(await readFile(new URL('../queries.json', import.meta.url), 'utf8'));
 assert.deepEqual(fixed.query, frozen.queries.find(query => query.id === 'north-bend-known').query);
@@ -18,8 +19,9 @@ assert.equal(witness.sourceSnapshotVerified, true);
 assert.equal(witness.querySatisfied, true);
 const hashes = {};
 for (const name of ['graph', 'geometry']) {
-  hashes[name] = createHash('sha256').update(await readFile(join(directory, `${name}.json.gz`))).digest('hex');
+  hashes[name] = createHash('sha256').update(await readFile(join(audit, `${name}.json.gz`))).digest('hex');
 }
+hashes.manifest = createHash('sha256').update(await readFile(join(directory, 'manifest.json'))).digest('hex');
 assert.equal(hashes.graph, witness.graphSha256, 'Replay the independent source witness on this exact dataset first');
 
 const observationMs = 30_000;
@@ -70,11 +72,13 @@ try {
     repetition: detail.repetition, kind: detail.kind, uncertain: detail.uncertain, points: positions.length,
     closed: true, gpxStatus: exported.statusCode, gpxPoints: gpxPoints.length, gpxMatchesGeometry: true,
     gpxSha256: createHash('sha256').update(exported.body).digest('hex') };
+  const cellsVisited = [...new Set(positions.map(([lon, lat]) => `${Math.floor(lon * 10)}_${Math.floor(lat * 10)}`))];
+  assert.ok(cellsVisited.length > 1, 'The real witness must cross a storage division');
   console.log(JSON.stringify({ createdAt: new Date().toISOString(), node: process.version,
     machine: { cpu: cpus()[0]?.model, memoryBytes: totalmem(), platform: platform(), architecture: arch() },
     hashes, query, observationMs, firstExactMs, allAttemptedMs, cancelMs, status: snapshot.status,
     progress: snapshot.progress, routeCount: snapshot.routeCount, independentWitnessRetained: true,
-    peakObservedServerWorkerRssBytes: peakRss, reconnectsToSameSearch: true, inspected,
+    peakObservedServerWorkerRssBytes: peakRss, reconnectsToSameSearch: true, inspected, cellsVisited,
     limitation: 'Single real-data server/worker observation using injected API requests. RSS sampled every 20 ms; browser memory and transport are not measured. The observation window is not an application timeout.' }, null, 2));
 } finally {
   clearInterval(monitor);

@@ -185,7 +185,7 @@ function progressLabel(search: SearchSnapshot) {
   if (search.status === "running") return "Searching";
   if (search.status === "complete") return "Search complete";
   if (search.status === "stopped") return "Stopped early";
-  if (search.status === "limited") return "Exploration unfinished";
+  if (search.status === "limited") return "Search incomplete";
   return "Search interrupted";
 }
 
@@ -739,6 +739,9 @@ export function App() {
                           {search.progress.completedStarts} fully explored.
                         </p>
                       </div>
+                      {search.coverageNote && search.coverageNote !== search.reason && (
+                        <p className="search-notice">{search.coverageNote}</p>
+                      )}
                       {search.status !== "running" &&
                         search.status !== "complete" && (
                           <p className="search-notice">

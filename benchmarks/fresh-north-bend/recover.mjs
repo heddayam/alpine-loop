@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { readGraph } from '../../dist/server/dataset.js';
 import { search } from '../../dist/server/engine/search.js';
 
 const [dataset, sourceReport] = process.argv.slice(2);
@@ -19,7 +18,7 @@ assert.equal(witness.querySatisfied, true);
 const graphHash = createHash('sha256').update(await readFile(join(directory, 'graph.json.gz'))).digest('hex');
 assert.equal(graphHash, witness.graphSha256, 'Replay the independent source witness on this exact dataset first');
 const index = JSON.parse(gunzipSync(await readFile(join(directory, 'source-index.json.gz'))));
-const graph = await readGraph(directory);
+const graph = JSON.parse(gunzipSync(await readFile(join(directory, 'graph.json.gz'))));
 const expected = witness.orderedEdges.join('|');
 const observationMs = 30_000;
 let recovery = null, final = null, candidates = 0;

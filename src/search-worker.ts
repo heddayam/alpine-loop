@@ -1,17 +1,25 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { readGraph } from './dataset.js';
+import { readDataset } from './dataset.js';
 import { search } from './engine/search.js';
 import { createShortlist } from './shortlist.js';
 import type { SearchQuery } from './model.js';
 
-const { directory, query } = workerData as {
-  directory: string; query: SearchQuery;
+const { directory, query, snapshotId } = workerData as {
+  directory: string; query: SearchQuery; snapshotId: string;
 };
-const graph = await readGraph(directory);
+const dataset = await readDataset(directory);
+if (dataset.info.id !== snapshotId) throw new Error('Trail data changed before this search could start. Start a new search.');
+const selection = await dataset.select(query);
+const { graph } = selection;
+parentPort!.postMessage({ type: 'coverage', note: selection.coverageNote });
 const shortlist = createShortlist(graph);
 let lastProgress = 0;
 for await (const event of search(graph, query)) {
-  if (event.type === 'route' && !shortlist(event.route)) continue;
+  if (event.type === 'route') {
+    const route = selection.describe(event.route);
+    if (route && shortlist(event.route)) parentPort!.postMessage({ type: 'route', route });
+    continue;
+  }
   if (event.type !== 'progress' || Date.now() - lastProgress >= 100) {
     parentPort!.postMessage(event);
     lastProgress = Date.now();

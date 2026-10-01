@@ -1,4 +1,4 @@
-import type { Bounds, DatasetInfo, Position, RouteSummary, TrailEdge, TrailGeometry, TrailStart } from './model.js';
+import type { Bounds, DatasetInfo, Position, RouteSummary, SearchEvent, TrailEdge, TrailGeometry, TrailStart } from './model.js';
 
 /** A snapshot is partitioned after its topology is compiled. Numeric identities
  * are shared by all files in that snapshot, never joined across snapshots. */
@@ -32,3 +32,7 @@ export type StoredRoute = {
   summary: RouteSummary;
   sections: { cell: string; id: number; reverse: boolean }[];
 };
+
+export type WorkerEvent = Exclude<SearchEvent, { type: 'route' }>
+  | { type: 'route'; route: StoredRoute }
+  | { type: 'coverage'; note?: string };

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import { ROUTES_PER_PAGE, type RouteCandidate, type SearchEvent, type SearchQuery, type SearchSnapshot } from './model.js';
+import { ROUTES_PER_PAGE, type SearchQuery, type SearchSnapshot } from './model.js';
+import type { StoredRoute, WorkerEvent } from './data-format.js';
 import type { readDataset } from './dataset.js';
 
 export class RequestError extends Error {
@@ -24,7 +25,7 @@ export function parseQuery(value: unknown): SearchQuery {
   return { area: [...query.area], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition, includeUnknown: query.includeUnknown };
 }
 
-type Entry = { snapshot: SearchSnapshot; candidates: Map<string, RouteCandidate>; worker?: Worker };
+type Entry = { snapshot: SearchSnapshot; candidates: Map<string, StoredRoute>; worker?: Worker };
 
 /** Current searches live only as long as this process. Browser disconnects do not stop them. */
 export function createSearches(directory: string, dataset: Awaited<ReturnType<typeof readDataset>>) {
@@ -34,8 +35,8 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     return current;
   }
   function finish(entry: Entry, status: SearchSnapshot['status'], reason?: string) {
-    entry.snapshot.status = status;
-    entry.snapshot.reason = reason;
+    entry.snapshot.status = status === 'complete' && entry.snapshot.coverageNote ? 'limited' : status;
+    entry.snapshot.reason = reason ?? (status === 'complete' ? entry.snapshot.coverageNote : undefined);
   }
   function page(entry: Entry, offset = 0): SearchSnapshot {
     if (!Number.isSafeInteger(offset) || offset < 0) throw new RequestError('Choose a valid results page.', 400);
@@ -56,23 +57,25 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
       throw new RequestError('A search is already running. Reload to reconnect, or stop it before starting another.', 409);
     }
     const snapshot: SearchSnapshot = {
-      id: randomUUID(), datasetId: dataset.graph.info.id, query, status: 'running', routes: [], routeCount: 0, offset: 0,
+      id: randomUUID(), datasetId: dataset.info.id, query, status: 'running', routes: [], routeCount: 0, offset: 0,
       selectionNote: 'Up to 10 different choices are kept per start. Similar variations are omitted; this selection does not stop exploration of any start.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
     const worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-      workerData: { directory, query },
+      workerData: { directory, query, snapshotId: dataset.info.id },
       resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
     const entry: Entry = { snapshot, candidates: new Map(), worker };
     current = entry;
-    worker.on('message', (event: SearchEvent) => {
+    worker.on('message', (event: WorkerEvent) => {
       if (snapshot.status !== 'running') return;
       try {
-        if (event.type === 'route') {
-          const candidate = { ...event.route, id: createHash('sha256').update(event.route.id).digest('hex').slice(0, 32) };
-          snapshot.routes.push(dataset.describe(candidate));
-          entry.candidates.set(candidate.id, candidate);
+        if (event.type === 'coverage') snapshot.coverageNote = event.note;
+        else if (event.type === 'route') {
+          const id = createHash('sha256').update(event.route.summary.id).digest('hex').slice(0, 32);
+          const candidate = { ...event.route, summary: { ...event.route.summary, id } };
+          snapshot.routes.push(candidate.summary);
+          entry.candidates.set(id, candidate);
           snapshot.routeCount = snapshot.routes.length;
         }
         else {

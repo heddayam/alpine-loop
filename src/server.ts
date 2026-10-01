@@ -22,14 +22,14 @@ export async function createApp(directory: string, clientDirectory?: string) {
       throw new RequestError('Open this app directly before starting or stopping a search.', 403);
     }
   });
-  app.get('/api/catalog', async () => dataset.graph.info);
+  app.get('/api/catalog', async () => dataset.info);
   app.get('/api/search', async () => searches.latest());
   app.post('/api/search', async (request, reply) => reply.code(202).send(searches.start(parseQuery(request.body))));
   app.get<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id', async request => searches.get(request.params.id, Number(request.query.offset ?? 0)));
   app.post<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id, Number(request.query.offset ?? 0)));
   app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId', async request => searches.route(request.params.id, request.params.routeId));
   app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId.gpx', async (request, reply) => {
-    const route = searches.route(request.params.id, request.params.routeId);
+    const route = await searches.route(request.params.id, request.params.routeId);
     return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));
   });
   if (clientDirectory) await app.register(fastifyStatic, { root: clientDirectory });
@@ -37,7 +37,7 @@ export async function createApp(directory: string, clientDirectory?: string) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const directory = resolve(process.env.ALPINE_DATA ?? '.local-data/rewrite/fresh-north-bend');
+  const directory = resolve(process.env.ALPINE_DATA ?? '.local-data/rewrite/network-north-bend');
   const app = await createApp(directory, fileURLToPath(new URL('../client', import.meta.url)));
   const address = await app.listen({ host: process.env.HOST ?? '127.0.0.1', port: Number(process.env.PORT ?? 3000) });
   console.log(`Alpine Loop: ${address}`);
