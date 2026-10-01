@@ -1103,5 +1103,126 @@
     "change": "Delete preparation-time suppression of distinct parking contacts. Exact original Little Si start restored. Existing 11647 starts preserve stable source IDs, position, access and names; two new starts.",
     "witnessEvidence": "prepared-witnesses.json",
     "installedInLiveApp": false
+  },
+  "compilerMemoryStages": {
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "scope": "Same pinned Cascades sources and full production compiler, with before/after stage wrappers; Python process RSS only, excluding native child processes. External 5 GB process and 3 GB free-disk guards; no guard triggered. All generated comparison outputs removed after verification.",
+    "runs": [
+      {
+        "sourceRevision": "b3bb72b",
+        "elapsedMs": 216755,
+        "sampledPeakRssBytes": 3195633664,
+        "processHighWaterRssBytes": 3197403136,
+        "guard": null,
+        "exitCode": 0,
+        "stages": [
+          {
+            "stage": "read_source",
+            "elapsedSeconds": 28.980011707986705,
+            "rssBytes": 885112832,
+            "peakRssBytes": 885129216
+          },
+          {
+            "stage": "topology",
+            "elapsedSeconds": 61.87511949997861,
+            "rssBytes": 2581086208,
+            "peakRssBytes": 3100786688
+          },
+          {
+            "stage": "measure",
+            "elapsedSeconds": 150.11218212498352,
+            "rssBytes": 2486370304,
+            "peakRssBytes": 3100786688
+          },
+          {
+            "stage": "assemble",
+            "elapsedSeconds": 150.9349977079546,
+            "rssBytes": 2832252928,
+            "peakRssBytes": 3100786688
+          },
+          {
+            "stage": "write_network",
+            "elapsedSeconds": 177.80691104196012,
+            "rssBytes": 1638252544,
+            "peakRssBytes": 3197403136
+          }
+        ],
+        "equivalence": {
+          "files": 766,
+          "manifestIdentical": true,
+          "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff"
+        },
+        "evidenceHashes": {
+          "report.json": "9c4f41585d6b3b8d178350bc3bc5d42666fb215c253619b1703fb1b013e3dc9d",
+          "stages.jsonl": "484b2762b03cb33b0cf1d489ebaed2e5ff2bb261ff9bc5336b29fab19f00c209",
+          "provenance.json": "9479d0d2feca9473bcf1dfc31b67d47021420cb2ce2e48839f0feb6533b32f47",
+          "equivalence.json": "d7f27208447f72a894e1b448676ff2a3b51ef900e11bfd2a954cada271485798",
+          "profile.py": "1583bbbe53554c90b568fcec2208da122ba85dc1fad212777c5ad3aa120e063d",
+          "run.mjs": "67bdbfd6cbeea2bbf55df1f27c7b341628bd50ac73c078efa4f9f7f6983489f2"
+        }
+      },
+      {
+        "sourceRevision": "591acd9",
+        "elapsedMs": 208254,
+        "sampledPeakRssBytes": 3912859648,
+        "processHighWaterRssBytes": 3913695232,
+        "guard": null,
+        "exitCode": 0,
+        "stages": [
+          {
+            "stage": "read_source",
+            "elapsedSeconds": 27.61012445797678,
+            "rssBytes": 894976000,
+            "peakRssBytes": 894976000
+          },
+          {
+            "stage": "topology",
+            "elapsedSeconds": 57.24230974994134,
+            "rssBytes": 3669606400,
+            "peakRssBytes": 3913695232
+          },
+          {
+            "stage": "measure",
+            "elapsedSeconds": 143.705657665967,
+            "rssBytes": 3056025600,
+            "peakRssBytes": 3913695232
+          },
+          {
+            "stage": "assemble",
+            "elapsedSeconds": 144.34594758297317,
+            "rssBytes": 3164897280,
+            "peakRssBytes": 3913695232
+          },
+          {
+            "stage": "write_network",
+            "elapsedSeconds": 169.46567700000014,
+            "rssBytes": 2038939648,
+            "peakRssBytes": 3913695232
+          }
+        ],
+        "equivalence": {
+          "files": 766,
+          "runtimeBytesIdentical": true,
+          "auditGeometrySourceIndexAndTopologyIdentical": true,
+          "metadataIdenticalExceptCompilerIdentity": true,
+          "snapshotId": "network-c14860384ca25517ee279f7b7863409dbbffd1a743a31585d8a34e4b8419d092"
+        },
+        "evidenceHashes": {
+          "report.json": "33097cdc0bb409cc44a9ddbfc4d07f6b5ee8f1e5031c1ec8bf5e5173c0d26055",
+          "stages.jsonl": "08ac016d09ae0de55140f01e90c23298fd3b421b2c040304fb853e0d4c348c32",
+          "provenance.json": "b36603c1bcc43af4d8379a1505c69b0124aaf7c6c32826c12fa0c9dba75a5f10",
+          "equivalence.json": "693683a5b28bce9e92ef7c43f71db36d5e02525852c41eb6dabeb2d9df596e3d",
+          "profile.py": "6b4b5eea654d3b4c2d3c25e456b3dc30281303927b7716e72f5893e2673b1f66",
+          "run.mjs": "6368c82df32e3f7c5e3dd024825016615949dbe77cc09bd799aa2151dc42e01f"
+        }
+      }
+    ],
+    "decision": "Do not integrate 591acd9: deleting the segment dictionary after building usable adjacency did not demonstrate lower memory and occurs after the full segment working set already exists. Both builds preserve all 766 runtime-file contents. The unchanged baseline also preserves the installed manifest exactly.",
+    "finding": "Topology already reaches 3.10 GB before elevation or writing. Full source ways/positions, per-segment topology and lineage, adjacency, and newly assembled corridors coexist. Output cell wrappers predominantly reference existing data; output partitioning alone does not bound preparation memory.",
+    "limitations": [
+      "One observation of each implementation; baseline overlapped a Node retention run while candidate ran under different machine pressure. Neither RSS nor timing difference establishes a causal regression or improvement.",
+      "Resident memory and Python allocator behavior do not quantify individual object families. No statewide build or bounded-memory claim."
+    ],
+    "nextQuestion": "Can compact topology records retain shared source identities while lineage and completed geometry are streamed, preserving deterministic connectivity and source audit? Measure the working set before selecting a storage implementation."
   }
 }
