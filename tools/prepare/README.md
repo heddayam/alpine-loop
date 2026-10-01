@@ -3,10 +3,9 @@
 This is an offline maintainer tool. Users install its prepared gzip files; they
 do not need Osmium, Python, raw OSM, DEM tiles, or a database.
 
-The initial source footprint is the explicit rectangle
-`[-121.9, 47.4, -121.6, 47.62]` around North Bend. This small slice is intended to prove
-the complete data/application path before coverage expands; it is not complete
-Washington coverage. No mountain inventory, start-to-mountain
+The original proof footprint was the explicit rectangle
+`[-121.9, 47.4, -121.6, 47.62]` around North Bend. The current broader Cascades snapshot uses
+`[-122.1, 46.5, -120.5, 48.1]`; neither is complete Washington coverage. No mountain inventory, start-to-mountain
 qualification, hiking-distance maximum, road-arrival proof, or reachability
 buffer is used. Map selection later filters starts inside this finite graph.
 
@@ -55,8 +54,10 @@ hashes. It makes no network requests.
   and hiking-relation membership are insufficient. Specific foot prohibitions
   still win, and unresolved conditions remain uncertain. `trunk` alone uses the
   ordinary-road rule. This fallback is not a claim about universal traffic law.
-- Admitted explicit roads and `footway=sidewalk/crossing` carry the `connector`
-  role. Other admitted paths carry `trail`. This is a candidate classification,
+- Admitted roads, including `highway=track`, and `footway=sidewalk/crossing` carry
+  the `connector` role. Other admitted paths carry `trail`. A track remains a
+  connection even if walking is designated or vehicles are restricted; names
+  and permissions do not change its physical source classification. This is a candidate classification,
   not proof of a recreational hike. An explicit connector wins if duplicate
   source ways classify the same physical segment differently; the audit retains
   each source classification. Admission and access permissions remain separate.
@@ -88,7 +89,8 @@ hashes. It makes no network requests.
 Tag semantics follow the OSM documentation for
 [access precedence](https://wiki.openstreetmap.org/wiki/Key:access#Transport_mode_restrictions),
 [pedestrian access](https://wiki.openstreetmap.org/wiki/Key:foot), and
-[motorroad](https://wiki.openstreetmap.org/wiki/Tag:motorroad%3Dyes).
+[motorroad](https://wiki.openstreetmap.org/wiki/Tag:motorroad%3Dyes), and
+[vehicle tracks](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack).
 These distinguish pedestrian permissions from motor-vehicle restrictions;
 motorroad implications vary by jurisdiction. The fallback above is deliberately
 stated as application policy rather than an inferred legal guarantee.
@@ -148,7 +150,11 @@ POIs, verified source hashes/URLs, compiler identity and build observations.
 These files are excluded from the runtime manifest. There is no old runtime
 format compatibility layer.
 
-The independent Little Si proof in `benchmarks/fresh-north-bend` describes the
-earlier whole-file `fresh-north-bend-v2` build. Its counts, file sizes, identities
-and timing are historical evidence, not measurements of this network writer.
-The broader ignored Cascades experiment likewise is not delivered coverage.
+The Little Si proof in `benchmarks/fresh-north-bend` contains separately pinned
+whole-file and geographic-network observations. Current Cascades builds and
+fixed-witness road shares are recorded in `benchmarks/network-review.json`.
+The latest snapshot occupies 73.86 MB, but preparation still materializes the
+whole footprint and peaked at 3.31 GB in the compiler process. These measurements
+do not prove statewide capacity. An old road converted to a trail but still
+tagged `highway=track` remains a connector; source corrections are not guessed
+from its name or permission tags.

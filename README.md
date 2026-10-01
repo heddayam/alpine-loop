@@ -14,7 +14,8 @@ npm run build
 npm start
 ```
 
-The first slice reads the ignored `.local-data/rewrite/fresh-north-bend` dataset. Open
+The app reads its installed snapshot from the ignored `.local-data/network` directory;
+`ALPINE_DATA` can point a development instance at another snapshot. Open
 http://127.0.0.1:3000; set `PORT=3011` if another app uses that port. This development
 slice currently requires the prepared files on this machine. Automatic first-run
 data acquisition remains unfinished. Hosting is deferred at the user's request.
@@ -32,9 +33,11 @@ results never changes the submitted query.
 
 - A small Node server keeps search alive after the page closes. Browser-only work
   cannot satisfy that lifetime. A worker keeps route computation off the HTTP thread.
-- The fresh North Bend graph and drawings total about 2 MB compressed. Loading
-  these immutable files directly needs no query engine, database server or
-  migrations. This is a choice for the measured slice, not a statewide format.
+- A versioned network is stored in geographic files. The map selects starts;
+  files share physical trail identities and keep crossing sections whole.
+  Search loads only a conservative surrounding network for its requested hike
+  length. Drawings load separately when a route is inspected. Snapshot IDs and
+  file hashes prevent mixing versions; missing topology fails visibly.
 - Current searches stay in memory. No job database, migrations or restart recovery
   are needed for the confirmed experience.
 - Vite builds a static React interface. There is no server-rendered page requirement
@@ -44,40 +47,60 @@ results never changes the submitted query.
   build it reduced main JavaScript from 306 kB gzip with MapLibre to 109 kB and
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
-The server keeps one current search. A search continues until exploration
-finishes or the user stops it; there is no application time or expansion cutoff.
-Up to ten distinct choices per start are kept, with no global results cap.
-Similar variations are omitted. Results are paged and drawings load when needed;
-published choices stay stable while someone inspects or exports them.
-The solver shares its graph indexes and retains each start's current path.
-Per-start graph-sized distance tables were deleted after the broader data
-experiment exposed an 11.56 GiB startup allocation. Slower exhaustive traversal
-is acceptable; the remaining memory use still needs measurement on every
-acceptance case.
-Longer searches are acceptable; timing benchmarks are descriptive, not a reason
-to truncate exploration or add complexity. The interface currently targets desktop.
+The server keeps one current search. It continues until exploration finishes or
+you stop it; there is no application time or result-count cutoff. Similar routes
+are grouped across all starting places: both the overall physical path and the
+loop must overlap by at least 85%. One stable representative stays available;
+substantially different loops and approaches remain separate. Results are paged,
+and geometry loads when needed. This similarity rule is a product heuristic,
+not a universal definition of a distinct hike.
+
+Road connections have adjustable limits on both total miles and percentage of
+the hike. The initial defaults are 1 mile and 10%. Both count every road section
+walked, including the return along a lollipop stem. Mapped vehicle tracks and
+explicit sidewalks count as connections. Walking permission does not turn a
+road into a hiking trail. Route details show the measured road contribution.
+Unknown access stays labeled; mapped access is not proof of legal parking or
+current trail conditions.
+
+Choosing a named area outlines its exact rectangle. Panning or zooming preserves
+that rectangle until you choose “Use map view” or draw another area. The rectangle
+is a selection aid, not an official park boundary. It selects starting places;
+hikes may extend beyond it. Incomplete prepared coverage is disclosed separately
+from unfinished exploration.
 
 ## Evidence and remaining work
 
-The immediate delivery target is one complete North Bend experience. The
-[fresh compiler](tools/prepare/README.md) reads pinned OSM and elevation sources
-without mountain qualification, a mileage-derived buffer or a runtime database.
-It records finite coverage and unresolved access explicitly. An independent
-review of actual entrances is still finding source-interpretation issues; the
-small slice must pass before coverage expands.
+The installed Cascades snapshot has 222,173 physical sections and 11,647 starts
+in 73.86 MB of runtime files. Preparation took about 198 seconds and peaked at
+3.31 GB in the Python compiler process; native children were not included in
+that peak. Partitioned output does not establish bounded statewide preparation.
+The [compiler notes](tools/prepare/README.md) describe pinned OSM/DEM sources,
+access policy, topology, elevation and the storage contract.
 
-`benchmarks/` freezes 24 requests across three Washington areas and checks
-independent source witnesses. Existing results use the inherited pilot, with
-its historical omissions. Fresh-source witness recovery, complete long-hike
-validation, automatic setup and full-app resource measurements remain unfinished.
+An audit of the earlier 2,056-option Rainier search exposed three product defects:
+an expanded map selection, duplicate hikes from different starts, and road-heavy
+walks passing the trail requirement. See `benchmarks/route-quality-review.json`.
+The implemented corrections must still be judged against useful real hiking
+choices; large result counts are not a quality certificate.
 
-The recorded engine observation recovered specific independent witnesses in
-10 of 14 proven requests. The other four were still searching and had found other
-exact routes. Seventeen of 24 requests finished within the observation window;
-seven remained unfinished. These are descriptive measurements on the pilot,
-not coverage or speed guarantees. They also predate removal of the per-start
-distance optimization, so are not current-engine timings.
-See `benchmarks/README.md` for reproduction.
+`benchmarks/queries.json` freezes 24 requests across three Washington areas.
+The current [HTTP measurement harness](benchmarks/README.md) records resolved
+road settings, incomplete exploration, memory and cancellation. The current 24-case
+run had no failures: 7 completed, 16 were still searching after 30 seconds, and
+1 was limited by prepared coverage. Peak measured process RSS was 569 MB,
+excluding the browser; all Stops returned within 5.7 ms. Independent
+source replay keeps the Little Si and Paradise witnesses eligible under the road
+defaults. The fixed Middle Fork witness remains in the network, but its 1.88 miles
+of roads/tracks exceed both defaults. That is a constraint exclusion, not missing
+topology. `benchmarks/network-review.json` records the source and storage evidence.
+
+A five-second installed-area observation attempted all 11,647 starts and fully
+explored 2,059. It peaked at about 758 MB of RSS including the server, worker and
+HTTP measurement client; browser memory was excluded. Stop returned in 11 ms.
+The window included loading and 3.5 seconds of solver time, not completion. Statewide preparation, broader fresh
+source validation, and automatic first-run data acquisition remain unfinished.
+Timing measurements are descriptive. Longer searches are acceptable.
 
 ```sh
 npm run verify

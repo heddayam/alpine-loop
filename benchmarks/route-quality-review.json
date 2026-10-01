@@ -1,0 +1,798 @@
+{
+  "searchId": "45ab5738-8c7a-46fe-80ec-541cdf4e71b0",
+  "routeCandidates": 2056,
+  "uniqueStarts": 479,
+  "selectedBounds": [
+    -122.32177734375001,
+    46.39904104733026,
+    -121.07757568359376,
+    47.1981110637904
+  ],
+  "namedNavigationBounds": [
+    -122,
+    46.6,
+    -121.4,
+    47
+  ],
+  "candidatesStartingInsideNamedRectangle": 534,
+  "candidatesStartingOutsideNamedRectangle": 1522,
+  "exactWholeFootprints": 1804,
+  "exactCycleFootprints": 675,
+  "greedyGlobal85PercentGroups": 778,
+  "scope": "Read-only audit of the exact stopped search on the afbd snapshot, before track reclassification and road limits. Physical footprints use identical consecutive coordinates from actual API profiles and ignore direction/start rotation. Greedy 85% whole-and-cycle grouping is an analogous geometric diagnostic on old retained routes, not a replay of current physical-section grouping or a count under current road defaults. Named rectangles are navigation aids, not park boundaries.",
+  "snapshotId": "network-afbd3e49e5f323632034004640540684bb0fe5dc977ebd7c488906d5dcfb05c2",
+  "insideNamedRectangle": {
+    "routeCandidates": 534,
+    "uniqueStarts": 165,
+    "exactWholeFootprints": 444,
+    "exactCycleFootprints": 217,
+    "greedyGlobal85PercentGroups": 177
+  },
+  "sourceSample": {
+    "snapshotId": "network-afbd3e49e5f323632034004640540684bb0fe5dc977ebd7c488906d5dcfb05c2",
+    "sourceExtractSha256": "3e0f5bccf693822bad4bb3cb640cc5e5a78e4942a1c8051523c15ae5d0c31eb9",
+    "scope": "Five deliberately selected examples from saved API routes, not a representative sample. API full 3D profiles were matched uniquely and exactly to runtime sections; every source segment verified against pinned raw OSM references and original vertices. Lengths sum profile distances including repeated traversal, not unique footprint. Tags are mapping evidence, not current recreation or vehicle-access guarantees. No new app searches or UI operations. Historical roleDistance/rolePercent classify highway=track as trail; use highwayDistance/Percent to distinguish those tracks. These are not current road-policy metrics.",
+    "checks": {
+      "uniqueOrderedSectionMatch": true,
+      "fullApiProfileMatch": true,
+      "sourceWaySegmentIdsMatch": true,
+      "sourceOriginalVerticesPreserved": true,
+      "allSectionLengthsAndRouteTotalsMatchWithinMeters": 1e-07
+    },
+    "routes": [
+      {
+        "summary": {
+          "id": "fe83b7bff29cb09f08fd270d9194dcda",
+          "distance": 18907.348063854457,
+          "gain": 747.0776480609337,
+          "repetition": 0.06397946533369737,
+          "kind": "lollipop",
+          "uncertain": true,
+          "startId": "osm-entrance:3974174858",
+          "startName": "Trail entrance",
+          "startPosition": [
+            -121.4046481,
+            47.0936794,
+            1419.1206743168427
+          ],
+          "trailNames": [
+            "Greenwater Road",
+            "Naches Trail",
+            "National Forest Development Road 7080",
+            "Pacific Crest Trail",
+            "Natches Trail"
+          ]
+        },
+        "roleDistance": {
+          "trail": 9654.933717395921,
+          "connector": 9252.414346458536
+        },
+        "geometryPointCount": 1318,
+        "highwayDistance": {
+          "track": 7677.451146066307,
+          "unclassified": 9252.414346458536,
+          "path": 1977.4825713296152
+        },
+        "rolePercent": {
+          "trail": 51.06445221608548,
+          "connector": 48.93554778391453
+        },
+        "highwayPercent": {
+          "track": 40.60564770975703,
+          "unclassified": 48.93554778391453,
+          "path": 10.458804506328452
+        },
+        "sourceWayIds": [
+          {
+            "id": "376339891",
+            "distance": 4185.7444639284195,
+            "percent": 22.13818907755968,
+            "tags": {
+              "atv": "designated",
+              "foot": "designated",
+              "highway": "track",
+              "motor_vehicle": "yes",
+              "name": "Naches Trail",
+              "tracktype": "grade5"
+            }
+          },
+          {
+            "id": "1134375202",
+            "distance": 3805.662405287523,
+            "percent": 20.127954446255114,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "394405933",
+            "distance": 3462.9080799623134,
+            "percent": 18.31514429346346,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "6347862",
+            "distance": 2548.089803576421,
+            "percent": 13.4767170677291,
+            "tags": {
+              "atv": "designated",
+              "foot": "designated",
+              "highway": "track",
+              "motor_vehicle": "yes",
+              "name": "Naches Trail",
+              "tracktype": "grade5"
+            }
+          },
+          {
+            "id": "979689958",
+            "distance": 1915.7456115758855,
+            "percent": 10.13228087358403,
+            "tags": {
+              "highway": "unclassified",
+              "name": "National Forest Development Road 7080",
+              "surface": "unpaved"
+            }
+          },
+          {
+            "id": "1545803896",
+            "distance": 1826.0084990060777,
+            "percent": 9.657665860062593,
+            "tags": {
+              "foot": "yes",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "name": "Pacific Crest Trail",
+              "surface": "ground"
+            }
+          },
+          {
+            "id": "925419216",
+            "distance": 884.1788092641484,
+            "percent": 4.676376646148754,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "376339892",
+            "distance": 142.79327262992288,
+            "percent": 0.7552263392395232,
+            "tags": {
+              "foot": "designated",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "name": "Natches Trail",
+              "surface": "dirt"
+            }
+          },
+          {
+            "id": "1134375203",
+            "distance": 68.09824963281362,
+            "percent": 0.36016817061192397,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "617097377",
+            "distance": 59.43806929731836,
+            "percent": 0.3143649183194933,
+            "tags": {
+              "highway": "track",
+              "surface": "unpaved"
+            }
+          },
+          {
+            "id": "1354423422",
+            "distance": 8.680799693614423,
+            "percent": 0.04591230702633372,
+            "tags": {
+              "highway": "path"
+            }
+          }
+        ]
+      },
+      {
+        "summary": {
+          "id": "88e22b941183fa98492e243f974c87e4",
+          "distance": 17575.513742782896,
+          "gain": 538.55507466766,
+          "repetition": 0.2218935215215351,
+          "kind": "lollipop",
+          "uncertain": true,
+          "startId": "osm-entrance:760854192",
+          "startName": "Trail entrance",
+          "startPosition": [
+            -121.5567319,
+            47.1204227,
+            623.8829568830416
+          ],
+          "trailNames": [
+            "Forest Road 7222",
+            "Forest Road 7222-210",
+            "Forest Road 7220",
+            "Twentyeight Mile Creek Road",
+            "Greenwater Road"
+          ]
+        },
+        "roleDistance": {
+          "connector": 12299.204841074328,
+          "trail": 5276.308901708562
+        },
+        "geometryPointCount": 950,
+        "highwayDistance": {
+          "unclassified": 12299.20484107433,
+          "track": 5276.308901708562
+        },
+        "rolePercent": {
+          "connector": 69.97920527998677,
+          "trail": 30.020794720013203
+        },
+        "highwayPercent": {
+          "unclassified": 69.97920527998677,
+          "track": 30.020794720013203
+        },
+        "sourceWayIds": [
+          {
+            "id": "1415935105",
+            "distance": 4012.7709639422037,
+            "percent": 22.831599819322403,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "asphalt"
+            }
+          },
+          {
+            "id": "837443012",
+            "distance": 2741.990625393835,
+            "percent": 15.601197583881666,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Twentyeight Mile Creek Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "12189345",
+            "distance": 2271.5189937848777,
+            "percent": 12.924339094882168,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Forest Road 7222",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "12174927",
+            "distance": 2222.2978717884175,
+            "percent": 12.644283998247099,
+            "tags": {
+              "highway": "track",
+              "surface": "unpaved",
+              "tracktype": "grade5"
+            }
+          },
+          {
+            "id": "12172723",
+            "distance": 1672.0689453056123,
+            "percent": 9.513627708278062,
+            "tags": {
+              "highway": "track",
+              "name": "Forest Road 7222-210"
+            }
+          },
+          {
+            "id": "12174805",
+            "distance": 1666.1768135177183,
+            "percent": 9.48010304507831,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Forest Road 7220",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "435822207",
+            "distance": 1574.0200674907699,
+            "percent": 8.955755663968093,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "asphalt"
+            }
+          },
+          {
+            "id": "12201212",
+            "distance": 1187.8076471273484,
+            "percent": 6.758309683067459,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "12174906",
+            "distance": 194.1344374871834,
+            "percent": 1.1045733304205778,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "1415935106",
+            "distance": 32.727376944923876,
+            "percent": 0.18621007285413121,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "asphalt"
+            }
+          }
+        ]
+      },
+      {
+        "summary": {
+          "id": "d6312d5127a78d832df67d19554145c0",
+          "distance": 16403.219236532386,
+          "gain": 650.4107297069257,
+          "repetition": 0,
+          "kind": "loop",
+          "uncertain": true,
+          "startId": "osm-entrance:3797793943",
+          "startName": "Trail entrance",
+          "startPosition": [
+            -121.4184146,
+            47.0972767,
+            1406.9045473642645
+          ],
+          "trailNames": [
+            "Greenwater Road",
+            "Forest Road 7065 / Forest Road 7068",
+            "Naches Trail",
+            "Forest Road 7068",
+            "Forest Road 7065",
+            "Pacific Crest Trail",
+            "Natches Trail"
+          ]
+        },
+        "roleDistance": {
+          "trail": 8819.265000280204,
+          "connector": 7583.954236252184
+        },
+        "geometryPointCount": 1021,
+        "highwayDistance": {
+          "track": 8486.836638671673,
+          "service": 247.2855013695355,
+          "path": 332.42836160853005,
+          "unclassified": 7336.66873488265
+        },
+        "rolePercent": {
+          "trail": 53.76545221463846,
+          "connector": 46.23454778536155
+        },
+        "highwayPercent": {
+          "track": 51.73884782183632,
+          "service": 1.5075425000648301,
+          "path": 2.0266043928021342,
+          "unclassified": 44.72700528529673
+        },
+        "sourceWayIds": [
+          {
+            "id": "1134375202",
+            "distance": 3805.662405287523,
+            "percent": 23.200704388634595,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "394405933",
+            "distance": 3462.9080799623134,
+            "percent": 21.11114915936688,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "435866847",
+            "distance": 2580.4163701600637,
+            "percent": 15.73115821321888,
+            "tags": {
+              "highway": "track",
+              "name": "Forest Road 7065",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "6347862",
+            "distance": 1251.8027286974964,
+            "percent": 7.631445453765242,
+            "tags": {
+              "atv": "designated",
+              "foot": "designated",
+              "highway": "track",
+              "motor_vehicle": "yes",
+              "name": "Naches Trail",
+              "tracktype": "grade5"
+            }
+          },
+          {
+            "id": "436046029",
+            "distance": 1042.9918165606223,
+            "percent": 6.358458065583406,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "954772815",
+            "distance": 1038.7293275945153,
+            "percent": 6.332472380062519,
+            "tags": {
+              "highway": "track",
+              "name": "Forest Road 7068",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "925419216",
+            "distance": 884.1788092641484,
+            "percent": 5.390276119061751,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "376339891",
+            "distance": 846.8055310677381,
+            "percent": 5.1624350004526995,
+            "tags": {
+              "atv": "designated",
+              "foot": "designated",
+              "highway": "track",
+              "motor_vehicle": "yes",
+              "name": "Naches Trail",
+              "tracktype": "grade5"
+            }
+          },
+          {
+            "id": "394405932",
+            "distance": 782.4739860297705,
+            "percent": 4.770246466541675,
+            "tags": {
+              "highway": "track"
+            }
+          },
+          {
+            "id": "394405931",
+            "distance": 247.2855013695355,
+            "percent": 1.5075425000648301,
+            "tags": {
+              "highway": "service",
+              "surface": "unpaved"
+            }
+          },
+          {
+            "id": "1545803896",
+            "distance": 180.95428928499274,
+            "percent": 1.1031632673785208,
+            "tags": {
+              "foot": "yes",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "name": "Pacific Crest Trail",
+              "surface": "ground"
+            }
+          },
+          {
+            "id": "376339892",
+            "distance": 142.79327262992288,
+            "percent": 0.8705198081599813,
+            "tags": {
+              "foot": "designated",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "name": "Natches Trail",
+              "surface": "dirt"
+            }
+          },
+          {
+            "id": "1134375203",
+            "distance": 68.09824963281362,
+            "percent": 0.41515173729525473,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Greenwater Road",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "617097377",
+            "distance": 59.43806929731836,
+            "percent": 0.3623561231501498,
+            "tags": {
+              "highway": "track",
+              "surface": "unpaved"
+            }
+          },
+          {
+            "id": "1354423422",
+            "distance": 8.680799693614423,
+            "percent": 0.05292131726363202,
+            "tags": {
+              "highway": "path"
+            }
+          }
+        ]
+      },
+      {
+        "summary": {
+          "id": "719053ebf617ea99d5f8189b865286b3",
+          "distance": 13462.327576843236,
+          "gain": 548.0832582319495,
+          "repetition": 0.23332116964535438,
+          "kind": "lollipop",
+          "uncertain": true,
+          "startId": "osm-entrance:110354520",
+          "startName": "Trail entrance",
+          "startPosition": [
+            -121.5049389,
+            47.099102,
+            1129.210464023317
+          ],
+          "trailNames": [
+            "Forest Road 7222",
+            "Noble Knob Trail",
+            "Forest Road 7222-410"
+          ]
+        },
+        "roleDistance": {
+          "connector": 11098.392379482195,
+          "trail": 2363.935197361042
+        },
+        "geometryPointCount": 648,
+        "highwayDistance": {
+          "unclassified": 11098.392379482195,
+          "path": 2363.935197361042
+        },
+        "rolePercent": {
+          "connector": 82.44036787942018,
+          "trail": 17.559632120579835
+        },
+        "highwayPercent": {
+          "unclassified": 82.44036787942018,
+          "path": 17.559632120579835
+        },
+        "sourceWayIds": [
+          {
+            "id": "12189345",
+            "distance": 10149.906150582672,
+            "percent": 75.3948831852947,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Forest Road 7222",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "376339991",
+            "distance": 2317.216098574608,
+            "percent": 17.212596301403988,
+            "tags": {
+              "foot": "designated",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "name": "Noble Knob Trail",
+              "surface": "ground"
+            }
+          },
+          {
+            "id": "837443011",
+            "distance": 948.4862288995225,
+            "percent": 7.045484694125471,
+            "tags": {
+              "highway": "unclassified",
+              "name": "Forest Road 7222-410",
+              "surface": "gravel"
+            }
+          },
+          {
+            "id": "827927636",
+            "distance": 46.719098786433655,
+            "percent": 0.3470358191758453,
+            "tags": {
+              "foot": "designated",
+              "highway": "path",
+              "motor_vehicle": "no",
+              "surface": "dirt"
+            }
+          }
+        ]
+      },
+      {
+        "summary": {
+          "id": "57e10d3399d2aa8b6bb0be0247aeb239",
+          "distance": 11684.82845356018,
+          "gain": 550.4971252026835,
+          "repetition": 0,
+          "kind": "loop",
+          "uncertain": true,
+          "startId": "osm-entrance:10251711861",
+          "startName": "Russell Ridge Trailhead",
+          "startPosition": [
+            -121.2057933,
+            46.6645984,
+            1522.7989407810574
+          ],
+          "trailNames": [
+            "Russell Ridge Trail",
+            "Wildcat Trail",
+            "Ironstone Mountain Trail",
+            "Ironstone Mountain Spur Trail"
+          ]
+        },
+        "roleDistance": {
+          "trail": 11684.82845356018
+        },
+        "geometryPointCount": 650,
+        "highwayDistance": {
+          "path": 11684.828453560182
+        },
+        "rolePercent": {
+          "trail": 100.0
+        },
+        "highwayPercent": {
+          "path": 100.0
+        },
+        "sourceWayIds": [
+          {
+            "id": "698172278",
+            "distance": 6646.923442272056,
+            "percent": 56.885075109911824,
+            "tags": {
+              "highway": "path",
+              "motor_vehicle": "no",
+              "motorcycle": "yes",
+              "name": "Russell Ridge Trail",
+              "surface": "ground"
+            }
+          },
+          {
+            "id": "1120875973",
+            "distance": 3379.7235925081777,
+            "percent": 28.924032611522254,
+            "tags": {
+              "highway": "path",
+              "name": "Wildcat Trail",
+              "surface": "ground",
+              "trail_visibility": "bad"
+            }
+          },
+          {
+            "id": "1190881206",
+            "distance": 1620.9754859274872,
+            "percent": 13.872479962969434,
+            "tags": {
+              "highway": "path",
+              "motor_vehicle": "no",
+              "motorcycle": "no",
+              "name": "Ironstone Mountain Trail",
+              "surface": "ground",
+              "trail_visibility": "intermediate"
+            }
+          },
+          {
+            "id": "1189792956",
+            "distance": 37.205932852461025,
+            "percent": 0.31841231559651156,
+            "tags": {
+              "highway": "path",
+              "name": "Ironstone Mountain Spur Trail",
+              "surface": "ground"
+            }
+          }
+        ]
+      }
+    ],
+    "tagSelection": "Only tags relevant to classification, walking permission, surface, name and source-quality interpretation are retained here; full extracted tags are in the local source audit."
+  },
+  "decisions": [
+    "Named presets select their explicit visible rectangle; fitting the camera must not expand the selected start area.",
+    "Compare similar full paths and cycles across all starts, with no result count cap. Keep one stable representative; substantial differences remain separate.",
+    "Roads are short connections within a trail hike. User requested adjustable distance and percentage settings; both limits apply to the total walked road distance, including returns. Initial defaults are 1 mile and 10%.",
+    "Mapped highway=track is a road connector; foot permissions do not turn a vehicle track into a hiking trail. Preserve these sections for walking connectivity."
+  ],
+  "limitations": [
+    "This stopped search is not exhaustive and its counts do not establish how many useful hikes exist.",
+    "The diagnostic grouping is greedy and order dependent. It is not a validated universal definition of a distinct hike.",
+    "The five source-audited examples were selected to examine road-heavy results; their prevalence must not be generalized.",
+    "A named rectangle is a navigation/selection aid, not an official park boundary."
+  ],
+  "localEvidence": "/private/tmp/alpine-rainier-route-audit and /private/tmp/alpine-rainier-source-audit",
+  "currentDesktopCheck": {
+    "searchId": "f175a90f-1e67-43f2-b286-e23515512479",
+    "snapshotId": "network-1b04494a15eb6e72754debbda8f5972a7a91f6a5771b7c89d0ce58ace6edc44a",
+    "query": {
+      "area": [
+        -122,
+        46.6,
+        -121.4,
+        47
+      ],
+      "distance": [
+        9656.064,
+        19312.128
+      ],
+      "gain": [
+        457.20000000000005,
+        1371.6000000000001
+      ],
+      "repetition": 0.3,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "status": "stopped",
+    "routeCount": 320,
+    "progress": {
+      "totalStarts": 476,
+      "attemptedStarts": 476,
+      "completedStarts": 196,
+      "expansions": 291681740,
+      "elapsedMs": 73702
+    },
+    "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+    "summaryConstraintViolations": 0,
+    "uniqueRouteIds": 320,
+    "maximumRoadDistance": 1608.2492396397627,
+    "maximumRoadFraction": 0.09997432756928928,
+    "download": {
+      "routeId": "0ed7a88450bbb1c48a148a32079e6fb4",
+      "route": {
+        "id": "0ed7a88450bbb1c48a148a32079e6fb4",
+        "distance": 10693.436084994162,
+        "gain": 809.2973707737016,
+        "roadDistance": 951.347784318091,
+        "repetition": 0.01592300888119219,
+        "kind": "lollipop",
+        "uncertain": true,
+        "startId": "osm-entrance:11167461338",
+        "startName": "Trailhead",
+        "startPosition": [
+          -121.486859,
+          46.7103642,
+          1053.654246033113
+        ],
+        "trailNames": [
+          "Kincaid Trail",
+          "Forest Road 4510"
+        ]
+      },
+      "browserDownloadMatchesApi": true,
+      "gpxSha256": "5713a6b298a6cda0d38b476c8aaa45f22094eb3489c8ee59d1942a783f73094b",
+      "gpxPoints": 529
+    },
+    "limitations": "Summary checks use app-computed metrics. They do not independently validate every route geometry, source classification, or recreational quality. The search was stopped, not completed.",
+    "browserChecks": [
+      "Road controls edited from 1 mi/10% to 0.5 mi/5%, then restored before submission.",
+      "Named Rainier rectangle used in submitted query.",
+      "Reload restores the stopped search, counts, query and paging.",
+      "Edit search restores the road settings.",
+      "Selected route shows 0.59 mi (8.9%) road connections; browser GPX matches API bytes."
+    ]
+  }
+}

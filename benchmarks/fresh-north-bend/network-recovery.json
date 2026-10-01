@@ -1,0 +1,72 @@
+{
+  "query": {
+    "area": [
+      -121.82,
+      47.43,
+      -121.68,
+      47.54
+    ],
+    "distance": [
+      6437.376,
+      16093.44
+    ],
+    "gain": [
+      0,
+      1066.8
+    ],
+    "repetition": 0.3,
+    "includeUnknown": false
+  },
+  "graphSha256": "9c82b6ea865b111d49696c3862996f117d7c80d82186cdab9265f58301b2bb8c",
+  "node": "v24.11.0",
+  "observationMs": 30000,
+  "candidates": 550,
+  "recovered": true,
+  "recovery": {
+    "elapsedMs": 18.712083000000007,
+    "route": {
+      "id": "route-1095-6804-6679-6675-6672-9047-9050-6777-5623-5621-5618-8256-8255-5613-5616-5622-6776-9051-9046-6673-6674-6678-6805",
+      "start": 1095,
+      "edges": [
+        6804,
+        6679,
+        6675,
+        6672,
+        9047,
+        9050,
+        6777,
+        5623,
+        5621,
+        5618,
+        8256,
+        8255,
+        5613,
+        5616,
+        5622,
+        6776,
+        9051,
+        9046,
+        6673,
+        6674,
+        6678,
+        6805
+      ],
+      "distance": 9527.115782264873,
+      "gain": 679.8482805175611,
+      "repetition": 0.27629515145820205,
+      "kind": "lollipop",
+      "uncertain": false
+    }
+  },
+  "final": {
+    "type": "done",
+    "status": "complete",
+    "progress": {
+      "totalStarts": 4,
+      "attemptedStarts": 4,
+      "completedStarts": 4,
+      "expansions": 108172,
+      "elapsedMs": 35
+    }
+  }
+}

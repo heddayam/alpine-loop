@@ -8,6 +8,46 @@ The input file SHA-256 is
 Do not tune these queries to make an implementation pass. Add new cases
 separately when a real gap is found.
 
+## Current application measurements
+
+After `npm run build`, measure the geographic dataset through a fresh HTTP server
+and its actual worker for each frozen request:
+
+```sh
+node benchmarks/app/run.mjs --dataset .local-data/network --output /tmp/alpine-app-results.json --observation-ms 30000
+```
+
+Use `--query north-bend-known` for one case. The observation window belongs to the
+harness, not the application. Its default 1 GB sampled RSS guard and outer process
+deadline keep the measurement bounded. RSS includes the server, worker and local
+HTTP measurement client; it excludes the browser and batch coordinator. Reports
+record sampling gaps, OS peak RSS, Stop response/worker-exit times, reconnects,
+source and compiled-code hashes. Failures are not no-match evidence.
+
+Requests remain frozen. New road settings absent from an old request use the
+app defaults; the full resolved query is recorded in each observation. Historical
+witnesses must be checked against those additional constraints. Matching numeric
+constraints or producing many results does not establish useful hiking choices.
+The real result audit is in `route-quality-review.json`; geographic storage and
+source evidence are in `network-review.json` and `fresh-north-bend/`.
+
+The pinned `results/trail-hikes-network-30s.json` run at `1871032` measured all
+24 requests on snapshot `1b044…`: 7 completed, 16 were still searching at the
+30-second observation cutoff, and 1 exhausted the available graph with a
+coverage limitation. There were no app/measurement failures. Peak process RSS
+was 569,344,000 bytes; every Stop returned within 5.7 ms with its worker exited.
+API reconnects preserved the search and resolved query. These measurements
+exclude the browser and do not bound memory during arbitrarily long searches.
+The report separately records old witnesses whose starts or road share no longer
+qualify; labels such as `known` are frozen case names, not current proof.
+
+## Historical pilot evidence
+
+Everything below describes the earlier inherited pilot and earlier engine
+captures. It is retained as source evidence, not as a current runtime or quality
+claim. Its graph lacks the newer road classifications and is not a current
+whole-app input. Use the current harness above for present behavior.
+
 `pilot-provenance.json` pins the exact sealed inputs, original OSM/DEM source
 identities, output hashes and inherited limitations. The raw OSM snapshot is
 Washington `washington-260801`, SHA-256

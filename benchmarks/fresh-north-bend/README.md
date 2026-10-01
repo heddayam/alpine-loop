@@ -73,6 +73,15 @@ The earlier 24-query timings in `../results/` concern retired pilot data and
 earlier engine revisions. They are historical evidence, not current timings
 for this fresh slice. They do not establish current long-hike completeness.
 
+`network-source-replay.json`, `network-recovery.json` and `network-report.json`
+record the same checks on the geographic-file implementation at `3370d84`.
+The fixed source walk and exported GPX are unchanged. All four available starts
+were explored and 17 choices retained; the app correctly reports **limited**
+because the possible hike extent exceeds this small prepared footprint.
+Observed server/worker RSS was 124,059,648 bytes. The witness stays entirely in
+cell `-1218_474`, so this is not a real cross-cell route proof. The separate
+Paradise source/solver observation is recorded in `../network-review.json`.
+
 A separate manual desktop check used a **drawn rectangle around Little Si**,
 with the same distance/gain/repetition/access limits. It completed **1 of 1
 starts with 7 choices**, including the independently verified displayed
@@ -89,9 +98,9 @@ the corrected source dataset first, then run from the repository root:
 
 ```sh
 npm run build
-python3 benchmarks/fresh-north-bend/replay.py .local-data/rewrite/fresh-north-bend-v2 > /tmp/alpine-source-replay.json
-node benchmarks/fresh-north-bend/recover.mjs .local-data/rewrite/fresh-north-bend-v2 /tmp/alpine-source-replay.json > /tmp/alpine-engine-recovery.json
-node benchmarks/fresh-north-bend/run.mjs .local-data/rewrite/fresh-north-bend-v2 /tmp/alpine-source-replay.json > /tmp/alpine-app-observation.json
+python3 benchmarks/fresh-north-bend/replay.py .local-data/rewrite/network-north-bend/audit > /tmp/alpine-source-replay.json
+node benchmarks/fresh-north-bend/recover.mjs .local-data/rewrite/network-north-bend/audit /tmp/alpine-source-replay.json > /tmp/alpine-engine-recovery.json
+node benchmarks/fresh-north-bend/run.mjs .local-data/rewrite/network-north-bend /tmp/alpine-source-replay.json > /tmp/alpine-app-observation.json
 ```
 
 The dataset path is an argument. Raw OSM defaults to

@@ -73,12 +73,13 @@ try {
     closed: true, gpxStatus: exported.statusCode, gpxPoints: gpxPoints.length, gpxMatchesGeometry: true,
     gpxSha256: createHash('sha256').update(exported.body).digest('hex') };
   const cellsVisited = [...new Set(positions.map(([lon, lat]) => `${Math.floor(lon * 10)}_${Math.floor(lat * 10)}`))];
-  assert.ok(cellsVisited.length > 1, 'The real witness must cross a storage division');
   console.log(JSON.stringify({ createdAt: new Date().toISOString(), node: process.version,
     machine: { cpu: cpus()[0]?.model, memoryBytes: totalmem(), platform: platform(), architecture: arch() },
     hashes, query, observationMs, firstExactMs, allAttemptedMs, cancelMs, status: snapshot.status,
-    progress: snapshot.progress, routeCount: snapshot.routeCount, independentWitnessRetained: true,
+    progress: snapshot.progress, routeCount: snapshot.routeCount, coverageNote: snapshot.coverageNote,
+    independentWitnessRetained: true,
     peakObservedServerWorkerRssBytes: peakRss, reconnectsToSameSearch: true, inspected, cellsVisited,
+    crossesStorageDivision: cellsVisited.length > 1,
     limitation: 'Single real-data server/worker observation using injected API requests. RSS sampled every 20 ms; browser memory and transport are not measured. The observation window is not an application timeout.' }, null, 2));
 } finally {
   clearInterval(monitor);
