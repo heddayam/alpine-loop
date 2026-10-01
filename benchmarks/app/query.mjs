@@ -29,7 +29,7 @@ async function api(method, route, body) {
   return data;
 }
 const compact = snapshot => ({ status: snapshot.status, reason: snapshot.reason ?? null, coverageNote: snapshot.coverageNote ?? null,
-  routeCount: snapshot.routeCount, progress: snapshot.progress });
+  routeCount: snapshot.routeCount, groupCount: snapshot.groupCount, progress: snapshot.progress });
 function observe(snapshot) {
   const at = elapsed(); last = snapshot;
   if (snapshot.routeCount > 0) result.firstRetainedRouteObservedMs ??= at;
@@ -44,7 +44,8 @@ function observe(snapshot) {
 async function reconnect() {
   const at = elapsed(), current = await api('GET', '/api/search');
   result.reconnect = { atMs: at, latencyMs: elapsed() - at, sameSearch: current?.id === id,
-    sameQuery: JSON.stringify(current?.query) === JSON.stringify(result.effectiveQuery), status: current?.status, routeCount: current?.routeCount };
+    sameQuery: JSON.stringify(current?.query) === JSON.stringify(result.effectiveQuery), status: current?.status,
+    routeCount: current?.routeCount, groupCount: current?.groupCount };
   assert(result.reconnect.sameSearch && result.reconnect.sameQuery, 'Current-search reconnect differs from the original query');
 }
 function stop(trigger) {

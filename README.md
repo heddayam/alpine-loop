@@ -21,8 +21,8 @@ is implemented and tested, but its internal release descriptor remains unset
 until prepared data is approved for publication. A fresh checkout without data
 fails clearly; automatic first-run delivery is not yet complete. Hosting is deferred.
 
-The working flow is map area → distance/gain/repetition → progressive exact routes
-→ route inspection → GPX. Reopening the browser restores the latest search while
+The working flow is map area → distance/gain/repetition → progressive route groups
+→ compare alternatives → route inspection → GPX. Reopening the browser restores the latest search while
 the server lives. Restarting the server intentionally expires it.
 
 On desktop, the search form gives way to route choices beside the map. Hovering
@@ -49,11 +49,14 @@ results never changes the submitted query.
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
 The server keeps one current search. It continues until exploration finishes or
-you stop it; there is no application time or result-count cutoff. The current
-presentation keeps one stable representative when both the overall physical path
-and the loop overlap by at least 85%. It compares routes across starting places.
-Results are paged, and geometry loads when needed. This approximate filter can
-hide useful alternate starts; exposing those choices remains unfinished.
+you stop it; there is no application time or result-count cutoff. Related routes
+are grouped when both the overall physical path and the loop overlap by at least
+85% with the group's first representative. Grouping organizes the list without
+discarding alternatives. Open a group to compare every walk and starting place.
+Both levels are paged, and geometry loads when needed. A route and its exact
+reverse from the same original start count as one option. Direction switching
+uses only separately discovered qualifying directions, with their own metrics,
+access and GPX. Counts describe generated options, not a catalog of named hikes.
 
 Road connections have adjustable limits on both total miles and percentage of
 the hike. The initial defaults are 1 mile and 10%. Both count every road section
@@ -71,9 +74,9 @@ from unfinished exploration.
 
 ## Evidence and remaining work
 
-The installed Cascades snapshot has 222,173 physical sections and 11,647 starts
-in 73.86 MB of runtime files. Preparation took about 198 seconds and peaked at
-3.31 GB in the Python compiler process; native children were not included in
+The installed Cascades snapshot has 222,175 physical sections and 11,649 starts
+in 73.86 MB of runtime files. Preparation took about 222 seconds and peaked at
+3.06 GB in the Python compiler process; native children were not included in
 that peak. Partitioned output does not establish bounded statewide preparation.
 The [compiler notes](tools/prepare/README.md) describe pinned OSM/DEM sources,
 access policy, topology, elevation and the storage contract.
@@ -86,7 +89,8 @@ choices; large result counts are not a quality certificate. A separate corrected
 snapshot also restores two distinct parking contacts that preparation had
 suppressed. Every prior start is unchanged, and the original Little Si witness
 now passes exact HTTP/GPX recovery; see `benchmarks/prepared-witnesses.json`.
-That new snapshot has not replaced the running app's data, preserving its search.
+That corrected snapshot is now installed locally. The previous stopped search
+was preserved as an ignored review artifact, and its unchanged query was replayed.
 
 `benchmarks/queries.json` freezes 24 requests across three Washington areas.
 The current [HTTP measurement harness](benchmarks/README.md) records resolved
@@ -117,11 +121,20 @@ On the corrected snapshot, all seven independently qualifying original walks
 were recovered exactly from their original starts: six within sixty seconds,
 and the long Sunrise example in a separate 214-second observation. These
 engine checks stopped after recovery; they do not prove complete enumeration.
-Engine recovery happens before the app's similarity filter. Separate HTTP/GPX
+Engine recovery happens before the app's presentation layer. Earlier HTTP/GPX
 checks recovered similar Paradise and Stevens routes
-from alternate starts, not those exact original walks. The current filter can
-hide alternate starts and needs further product work. See
+from alternate starts, not those exact original walks. See
 `benchmarks/results/discovery-review.json` for limits and pinned evidence.
+
+The grouped app's completed North Bend check preserves all 376 reversal-paired
+options in 112 groups, matching all 752 directed walks in the separate enumeration audit.
+The original Little Si start and both Cedar Falls approaches are available;
+their six directional detail/GPX exports match independently reconstructed data.
+The old filter hid a Cedar Falls approach more than a mile longer. Separate
+thirty-second whole-app observations retained 5,115 options for Paradise-day
+at 304 MB peak RSS and loaded Pass-long at 580 MB; neither search completed.
+Stops returned within 3 ms. These are bounded observations, not unlimited-duration
+memory guarantees or an endorsement of every generated option's hiking quality.
 
 An earlier five-second installed-area observation, using the previous traversal,
 attempted all 11,647 starts and fully

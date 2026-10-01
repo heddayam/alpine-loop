@@ -685,9 +685,9 @@
   "decision": {
     "integrated": "Depth-layer enumeration at f9003a5. Eight additional production lines; no route/time cap or auxiliary return-distance data structure. Independent finite-graph oracle remains exact; a dense-detour regression verifies discovery of simpler loops before exhausting deep branches.",
     "rejected": "Dead-tree pruning, trail-first ordering, road-share prefix bound and shared conservative return-distance pruning did not recover their measured fixed witnesses within five minutes. Their additional machinery was removed despite increased result counts in some cases.",
-    "remaining": "All seven qualifying source witnesses have now been recovered exactly by the engine (six within60seconds, Sunrise-long in214.244seconds in a separate300second observation). This proves discovery of these fixed routes, not complete enumeration. App similarity filtering can suppress meaningful alternate starts even when the engine recovers them. Coverage limits, route-family presentation, broader fresh-source validation and automatic delivery remain unfinished."
+    "remaining": "All seven qualifying source witnesses were recovered exactly by the engine. Grouped HTTP presentation now preserves every emitted physical-walk/original-start option and its observed qualifying directions; completed North Bend matches the full raw audit. This does not establish complete discovery for the unfinished larger queries or recreational quality of every variant. Long-duration retention, coverage, broader fresh-source validation, statewide preparation and automatic delivery remain unfinished."
   },
-  "updatedAt": "2026-10-01T02:25:56.963492+00:00",
+  "updatedAt": "2026-10-01T02:53:43.604Z",
   "currentDataExactEngine": {
     "createdAt": "2026-10-01T02:22:09.310Z",
     "finishedAt": "2026-10-01T02:23:59.416Z",
@@ -1400,7 +1400,7 @@
         "fraction": 0.1
       }
     },
-    "scope": "Finite unchanged north-bend-known engine enumeration plus the current unmodified diversity filter; independent collection of exact walks, footprints and first direct retained suppressors. No app, browser, geometry or GPX claim. Counts characterize this query only.",
+    "scope": "Finite unchanged north-bend-known engine enumeration plus the prior suppressing diversity filter; independent collection of exact walks, footprints and first direct retained suppressors. No app, browser, geometry or GPX claim. Counts characterize this query only.",
     "provenance": {
       "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
       "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
@@ -1599,5 +1599,401 @@
       }
     ],
     "implication": "One raw count conflates directions and near-identical starts. Current similarity filtering removes some trivial duplication but also hides alternative approaches differing by overone mile. Preserve meaningful variants when improving presentation; do not accept output counts as route-quality proof."
+  },
+  "groupedPresentation": {
+    "sourceCommit": "3dec1088362ec3631489e768ee94433992b16b10",
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "query": {
+      "area": [
+        -121.82,
+        47.43,
+        -121.68,
+        47.54
+      ],
+      "distance": [
+        6437.376,
+        16093.44
+      ],
+      "gain": [
+        0,
+        1066.8
+      ],
+      "repetition": 0.3,
+      "includeUnknown": false,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "inputs": {
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "rawAuditSha256": "026e94e73b04b9547b22b9db38737009f2458decaf16670e86298affdb9407b4",
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "11452af936dfcca0717707f0cda2ae6c7b2338e4629fd57ed0398da2558caa7d",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "20203bb629a55e1460f8dc6aefda5be19d64ca909d2f4084e0ba2891ef90fb41",
+        "searches.js": "64fe7b54299b6ead635b6970485eb2e88bdae73a4a6aac872018d0fe1c1d83cd",
+        "server.js": "30f2921453cdc71ee7d25bac2320a98100b973c220326790c1ac1a57510b1511"
+      },
+      "harnessSha256": "9faa4faa389b82307d7b4b1329eda3406dc21e80f41dfbfcf07d884bc5d8f9be"
+    },
+    "scope": "Fresh ephemeral HTTP app and actual worker. All group/member pages and every actually emitted direction are checked against the earlier complete 752-walk raw audit. Independent pinned topology/profile reconstruction checks six important emitted directions: original Little Si and Cedar Falls raw ordinals 323/433 plus their actual opposites. No reverse is inferred. RSS includes server, worker, independent verifier and HTTP client; browser excluded. No live 3011 requests. Timing is descriptive.",
+    "counts": {
+      "groups": 112,
+      "options": 376,
+      "directions": 752,
+      "rawAuditDirections": 752,
+      "missingOptions": 0,
+      "extraOptions": 0,
+      "verifiedDirections": 6
+    },
+    "pagesVerified": 115,
+    "directionsVerified": [
+      {
+        "ordinal": 1,
+        "apiId": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+        "groupId": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+        "reverseId": "b32c843da6a4cb36808317f15f968ab2",
+        "startId": "osm-entrance:12761651948",
+        "geometryPoints": 1047,
+        "geometrySha256": "5ab660ca80716f16dfa81048ec4b8e7f17bac8ebba89f6782913779924e1d5cd",
+        "gpxSha256": "130d38e1801deb9405f51826831f4dcdaefb75aade3bb984a32f34d0819e3b58",
+        "distance": 9524.474384434225,
+        "gain": 679.8037607038207,
+        "roadDistance": 0,
+        "repetition": 0.27623311197124806,
+        "publicAccessVerified": true
+      },
+      {
+        "ordinal": 3,
+        "apiId": "b32c843da6a4cb36808317f15f968ab2",
+        "groupId": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+        "reverseId": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+        "startId": "osm-entrance:12761651948",
+        "geometryPoints": 1047,
+        "geometrySha256": "ca36fe780ccea0627800d20e5388c09cd5f4b0ff9ad84fe4d7788c06a724e518",
+        "gpxSha256": "a676c8a4c9a669269eff8463c05ff461b271522ce3e21fd90eebd39ae04c0e2b",
+        "distance": 9524.474384434225,
+        "gain": 679.8037607038207,
+        "roadDistance": 0,
+        "repetition": 0.27623311197124806,
+        "publicAccessVerified": true
+      },
+      {
+        "ordinal": 323,
+        "apiId": "93c4bc813e81df48367479dd4f33b5e8",
+        "groupId": "93c4bc813e81df48367479dd4f33b5e8",
+        "reverseId": "9947d3e86acfc9d7e3c5cb12849c3a86",
+        "startId": "osm-entrance:1982064677",
+        "geometryPoints": 837,
+        "geometrySha256": "e1e96d8bdbc72ccfa55ad8a53852ffabf7ca65dd3fe44ca8da8dd87bcc1d9d62",
+        "gpxSha256": "2ee0cd62355b1cd29c8cc824807cee4f4231b30fea2a7025ec865075e5d399e7",
+        "distance": 13806.312169854631,
+        "gain": 447.8155757719214,
+        "roadDistance": 527.6687099494104,
+        "repetition": 0.2628650084894595,
+        "publicAccessVerified": true
+      },
+      {
+        "ordinal": 325,
+        "apiId": "9947d3e86acfc9d7e3c5cb12849c3a86",
+        "groupId": "93c4bc813e81df48367479dd4f33b5e8",
+        "reverseId": "93c4bc813e81df48367479dd4f33b5e8",
+        "startId": "osm-entrance:1982064677",
+        "geometryPoints": 837,
+        "geometrySha256": "39b31af2919c8b11984352221f41bc2535f85cb5e0fdbf6732f51e885f20bfbb",
+        "gpxSha256": "28f30fe47ad175d7c871b31976f894064229b371eff7ce10ec3ad57da3e6bcb3",
+        "distance": 13806.312169854633,
+        "gain": 447.8155757719214,
+        "roadDistance": 527.6687099494104,
+        "repetition": 0.2628650084894595,
+        "publicAccessVerified": true
+      },
+      {
+        "ordinal": 433,
+        "apiId": "9048435ae3e169338348a6931ceb8963",
+        "groupId": "93c4bc813e81df48367479dd4f33b5e8",
+        "reverseId": "9b8c7b1ce44b422fb4ff1e324b98da94",
+        "startId": "osm-entrance:1982064677",
+        "geometryPoints": 945,
+        "geometrySha256": "bf0f05f8091ea78f8e036c7cae9f1a77e4f79b4fbf9548612fd6510a0172946f",
+        "gpxSha256": "663f063755f2294621c92c18fe49d61078486c08d72b18eaa945424d79b2433a",
+        "distance": 15477.262355860303,
+        "gain": 536.9030480125774,
+        "roadDistance": 527.6687099494104,
+        "repetition": 0.2884664843230044,
+        "publicAccessVerified": true
+      },
+      {
+        "ordinal": 434,
+        "apiId": "9b8c7b1ce44b422fb4ff1e324b98da94",
+        "groupId": "93c4bc813e81df48367479dd4f33b5e8",
+        "reverseId": "9048435ae3e169338348a6931ceb8963",
+        "startId": "osm-entrance:1982064677",
+        "geometryPoints": 945,
+        "geometrySha256": "d0f4535927d6438aa9db0a86616310589b00fa9bf44c6440472717ea3779dabf",
+        "gpxSha256": "f26ac3bf049787fc34adfdcb9fa41420a5fc9d4212427da4cd1545f986484f9b",
+        "distance": 15477.262355860305,
+        "gain": 536.9030480125774,
+        "roadDistance": 527.6687099494104,
+        "repetition": 0.2884664843230044,
+        "publicAccessVerified": true
+      }
+    ],
+    "independentRuntimeReads": {
+      "graph/-1218_474.json.gz": {
+        "bytes": 530839,
+        "jsonBytes": 2585147,
+        "sha256": "ed6602cfd691e8373818e30f582dcacdc7768267689c43324178089cb6f2215c"
+      },
+      "geometry/-1218_474.json.gz": {
+        "bytes": 751674,
+        "jsonBytes": 2411231,
+        "sha256": "1708e38dcc6bde819d565d560d38878782b8550237dded13897064f38b69bb06"
+      }
+    },
+    "completeNorthBend": {
+      "outcome": "verified",
+      "counts": {
+        "groups": 112,
+        "options": 376,
+        "directions": 752,
+        "rawAuditDirections": 752,
+        "missingOptions": 0,
+        "extraOptions": 0,
+        "verifiedDirections": 6
+      },
+      "sampledPeakRssBytes": 296779776,
+      "osProcessPeakRssBytes": 296927232,
+      "elapsedMs": 1251.319166,
+      "reconnectVerified": true,
+      "stop": {
+        "latencyMs": 0.9377079999999296,
+        "status": "complete",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "errors": []
+    },
+    "resourceObservations": [
+      {
+        "id": "paradise-day",
+        "outcome": "unfinished",
+        "observation": {
+          "atMs": 30001.919583,
+          "status": "running",
+          "reason": null,
+          "coverageNote": null,
+          "routeCount": 5115,
+          "progress": {
+            "totalStarts": 195,
+            "attemptedStarts": 195,
+            "completedStarts": 37,
+            "expansions": 231512950,
+            "elapsedMs": 29927
+          }
+        },
+        "afterStop": {
+          "status": "stopped",
+          "reason": "Stopped. The routes found so far are still available; exploration is unfinished.",
+          "coverageNote": null,
+          "routeCount": 5115,
+          "progress": {
+            "totalStarts": 195,
+            "attemptedStarts": 195,
+            "completedStarts": 37,
+            "expansions": 231512950,
+            "elapsedMs": 29927
+          }
+        },
+        "firstRetainedRouteObservedMs": 105.71383299999997,
+        "sampledPeakRssBytes": 303169536,
+        "osProcessPeakRssBytes": 303661056,
+        "stop": {
+          "trigger": "observation_window",
+          "requestedMs": 30001.997833,
+          "latencyMs": 2.157374999998865,
+          "status": "stopped",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 1.7170829999995476
+        },
+        "reconnect": {
+          "atMs": 1018.5033330000001,
+          "latencyMs": 0.49024999999983265,
+          "sameSearch": true,
+          "sameQuery": true,
+          "status": "running",
+          "routeCount": 105
+        },
+        "memoryGuard": null,
+        "measurementError": null,
+        "activeWorkersAtEnd": 0,
+        "processOutcome": {
+          "exitCode": 0,
+          "signal": null,
+          "error": null,
+          "stderr": ""
+        }
+      },
+      {
+        "id": "pass-long",
+        "outcome": "unfinished",
+        "observation": {
+          "atMs": 30001.652042,
+          "status": "running",
+          "reason": null,
+          "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+          "routeCount": 0,
+          "progress": {
+            "totalStarts": 145,
+            "attemptedStarts": 145,
+            "completedStarts": 42,
+            "expansions": 228341556,
+            "elapsedMs": 29063
+          }
+        },
+        "afterStop": {
+          "status": "stopped",
+          "reason": "Stopped. The routes found so far are still available; exploration is unfinished.",
+          "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+          "routeCount": 0,
+          "progress": {
+            "totalStarts": 145,
+            "attemptedStarts": 145,
+            "completedStarts": 42,
+            "expansions": 228341556,
+            "elapsedMs": 29063
+          }
+        },
+        "firstRetainedRouteObservedMs": null,
+        "sampledPeakRssBytes": 579813376,
+        "osProcessPeakRssBytes": 579911680,
+        "stop": {
+          "trigger": "observation_window",
+          "requestedMs": 30001.724458,
+          "latencyMs": 2.9633749999993597,
+          "status": "stopped",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 2.683667000001151
+        },
+        "reconnect": {
+          "atMs": 1027.2698329999998,
+          "latencyMs": 0.6053750000000946,
+          "sameSearch": true,
+          "sameQuery": true,
+          "status": "running",
+          "routeCount": 0
+        },
+        "memoryGuard": null,
+        "measurementError": null,
+        "activeWorkersAtEnd": 0,
+        "processOutcome": {
+          "exitCode": 0,
+          "signal": null,
+          "error": null,
+          "stderr": ""
+        }
+      }
+    ],
+    "countsMeaning": "routeCount is total physical-walk/start options, not group cards; the two 30-second harness reports do not record groupCount.",
+    "reportHashes": {
+      "report.json": "c93c5cb95dfa98786336816b095464e5f9a57d3afdedb56b09a83ffed6259067",
+      "paradise-day-30s.json": "418c43cf086eb717726d17183a016bab5244d35b58373700a117eae7a679ffba",
+      "pass-long-30s.json": "a83b7b7be1e3f87f807883dd7fba3fa62ae64248705599819bc0a81321de7c46",
+      "proof.mjs": "9faa4faa389b82307d7b4b1329eda3406dc21e80f41dfbfcf07d884bc5d8f9be",
+      "overview.json": "af68912a526ee8b59ddda0f4491fd83bf43cb84f4aa7eda1de7fa27da4665867",
+      "groups.json": "0d823975abd71c2075c75bc8e87266833265bffa050f08b558532a46283b157e"
+    },
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M3",
+      "memoryBytes": 17179869184
+    },
+    "identity": "Original source start ID plus the entire ordered physical section/direction sequence. Only the full reversed/inverted walk shares an option. Both directions retain their separately emitted metrics, access and geometry; neither is inferred.",
+    "grouping": "Stable first representatives, 85% length-weighted overlap for both full footprint and cycle. No candidate suppression, group merging, result cap or search cutoff.",
+    "limitations": [
+      "Complete retention proof is for the finite North Bend query. The two larger observations were stopped by the harness at thirty seconds, with exploration unfinished.",
+      "Geometry/GPX is independently reconstructed for six selected directions, not all 752.",
+      "Memory includes app retention, worker and local HTTP client; North Bend additionally includes the verifier. Browser is excluded. No arbitrary-duration memory bound is established.",
+      "Approximate groups can contain trivial map variations as well as useful alternate approaches. Option counts are not named-hike counts or recreational-quality certificates."
+    ],
+    "harnessUpdate": {
+      "file": "benchmarks/app/query.mjs",
+      "groupCountRecorded": true,
+      "smokeReportSha256": "949f7e4535e074cb4a63090c6e738936d4c9a7fc4cd345835b37c1c9f1aa1f6b",
+      "smokeObservation": {
+        "atMs": 923.2967500000001,
+        "status": "complete",
+        "reason": null,
+        "coverageNote": null,
+        "routeCount": 376,
+        "groupCount": 112,
+        "progress": {
+          "totalStarts": 7,
+          "attemptedStarts": 7,
+          "completedStarts": 7,
+          "expansions": 6501488,
+          "elapsedMs": 853
+        }
+      },
+      "activeWorkersAtEnd": 0,
+      "measurementError": null
+    },
+    "desktopVerification": {
+      "sourceCommit": "55b196a",
+      "dataSnapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "checks": [
+        "Overview and member paging, including a group with 306 options during active search",
+        "Back restores group page, original member and overview focus",
+        "Actual opposite direction changes GPX and visible selection status together",
+        "Selected route remains stable through live progress and Stop",
+        "Browser reload reconnects to unchanged query and current search",
+        "Original Little Si and previously hidden 9.6-mile Cedar Falls approach are accessible"
+      ],
+      "fix": "Delayed detail or progress responses preserve already-discovered reverse direction and group size.",
+      "liveReplay": {
+        "query": {
+          "area": [
+            -122,
+            46.6,
+            -121.4,
+            47
+          ],
+          "distance": [
+            9656.064,
+            19312.128
+          ],
+          "gain": [
+            457.20000000000005,
+            1371.6000000000001
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "stopped",
+        "routeCount": 4686,
+        "groupCount": 304,
+        "progress": {
+          "totalStarts": 476,
+          "attemptedStarts": 476,
+          "completedStarts": 162,
+          "expansions": 223614822,
+          "elapsedMs": 29924
+        }
+      },
+      "note": "Manual localhost desktop check; replay deliberately stopped after 30 seconds for review. Not a complete search or benchmark timing claim."
+    }
   }
 }

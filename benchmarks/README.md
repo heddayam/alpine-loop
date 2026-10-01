@@ -23,6 +23,10 @@ deadline keep the measurement bounded. RSS includes the server, worker and local
 HTTP measurement client; it excludes the browser and batch coordinator. Reports
 record sampling gaps, OS peak RSS, Stop response/worker-exit times, reconnects,
 source and compiled-code hashes. Failures are not no-match evidence.
+Current reports record `groupCount` separately from `routeCount`. The latter
+counts full physical-walk/original-start options, pairing only exact opposite
+directions. Earlier reports used the then-current retained representative count;
+their counts are not directly comparable to the expanded inventory.
 
 Requests remain frozen. New road settings absent from an old request use the
 app defaults; the full resolved query is recorded in each observation. Historical
@@ -56,9 +60,21 @@ observation. Sunrise's original sixty-second unfinished observation is preserved
 These are engine checks before app filtering, not HTTP recovery or complete
 enumeration. Separate HTTP/GPX checks on `1b044…` verified similar
 Paradise and Stevens choices from different starts. Their exact original-start
-walks were also recovered in isolated engine checks. The app still suppresses
-alternate starts through its global similarity filter. Timing is descriptive;
+walks were also recovered in isolated engine checks. Those observations preceded
+the grouped presentation that now preserves alternate starts. Timing is descriptive;
 concurrent work and cache state were uncontrolled.
+
+The `groupedPresentation` record in `results/discovery-review.json` pins the
+subsequent real HTTP proof: all 112 groups, 376 options and 752 emitted directions
+from completed North Bend match the full independent raw audit. All 115
+overview/member pages were checked; six selected direction-specific detail/GPX
+exports were independently reconstructed. Both audited Cedar Falls approaches
+are accessible in the same group. Separate thirty-second whole-app observations
+retained 5,115 Paradise-day options at 304 MB peak RSS and loaded Pass-long at
+580 MB with no option found in that window. Both remained unfinished, reconnects
+passed and Stops completed within 3 ms. These two older harness captures did not
+record group counts; do not infer those from their option counts. The updated
+harness's completed North Bend smoke records both counts correctly.
 
 ## Current exact-witness measurements
 
