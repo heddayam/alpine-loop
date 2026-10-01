@@ -64,7 +64,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     }
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.info.id, query, status: 'running', routes: [], routeCount: 0, offset: 0,
-      selectionNote: 'Choices found so far are available across these pages, with similar routes grouped at each start. Routes sharing at least 85% of both their overall path and their loop are grouped; this does not stop exploration.',
+      selectionNote: 'Similar routes are grouped across all starting places. Routes sharing at least 85% of both their overall path and their loop share one representative; this does not stop exploration. Substantially different loops or approaches remain separate, without a result-count limit.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
     const worker = new Worker(new URL('./search-worker.js', import.meta.url), {

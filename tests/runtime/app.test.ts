@@ -9,8 +9,8 @@ import { createNetworkFixture, query } from './network-fixture.js';
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const remove of cleanup.splice(0).reverse()) await remove(); });
 
-async function fixture(dense = false, startCount = 1) {
-  const data = await createNetworkFixture(dense, startCount);
+async function fixture(dense = false, startCount = 1, routeCount = 1, connectorSections: number[] = []) {
+  const data = await createNetworkFixture(dense, startCount, routeCount, connectorSections);
   cleanup.push(() => rm(data.directory, { recursive: true, force: true }));
   return data;
 }
@@ -27,7 +27,8 @@ async function finished(app: Awaited<ReturnType<typeof createApp>>, initial: Sea
 
 describe('real application integration', () => {
   it('searches across cells without geometry, reconnects through pages, and exports GPX beyond the start area', async () => {
-    const { directory, geometryDirectory } = await fixture(false, 301);
+    const { directory, geometryDirectory } = await fixture(false, 2, ROUTES_PER_PAGE + 1, [0]);
+    const criteria = { ...query, roads: { distance: 200, fraction: 1 / 3 } };
     const heldGeometry = `${geometryDirectory}-held`;
     await rename(geometryDirectory, heldGeometry);
     // Exercise the built worker, not a mocked solver or development TS loader.
@@ -36,18 +37,19 @@ describe('real application integration', () => {
     cleanup.push(() => app.close());
     expect((await app.inject('/api/catalog')).json().id).toBe('fixture');
     expect((await app.inject('/api/search')).json()).toBeNull();
-    const response = await app.inject({ method: 'POST', url: '/api/search', payload: query });
+    const response = await app.inject({ method: 'POST', url: '/api/search', payload: criteria });
     expect(response.statusCode).toBe(202);
     const id = response.json().id;
     const snapshot = await finished(app, response.json());
     expect(snapshot.status).toBe('complete');
+    expect(snapshot.query.roads).toEqual(criteria.roads);
     expect(snapshot.routes).toHaveLength(ROUTES_PER_PAGE);
-    expect(snapshot.routeCount).toBe(301); // Reversals are omitted, but later starts remain visible.
+    expect(snapshot.routeCount).toBe(ROUTES_PER_PAGE + 1); // Neither reversal nor another start multiplies a hike.
     expect(snapshot.selectionNote).toContain('does not stop exploration');
-    expect(snapshot.progress).toMatchObject({ totalStarts: 301, attemptedStarts: 301, completedStarts: 301 });
-    const lastPage = (await app.inject(`/api/search/${id}?offset=300`)).json() as SearchSnapshot;
+    expect(snapshot.progress).toMatchObject({ totalStarts: 2, attemptedStarts: 2, completedStarts: 2 });
+    const lastPage = (await app.inject(`/api/search/${id}?offset=${ROUTES_PER_PAGE}`)).json() as SearchSnapshot;
     expect(lastPage.routes).toHaveLength(1);
-    expect(lastPage.offset).toBe(300);
+    expect(lastPage.offset).toBe(ROUTES_PER_PAGE);
     // Startup, worker search and summaries have succeeded with all drawings absent.
     await rename(heldGeometry, geometryDirectory);
     for (const summary of [snapshot.routes[0]!, lastPage.routes[0]!]) {
@@ -57,6 +59,7 @@ describe('real application integration', () => {
       expect(route.id).toHaveLength(32);
       expect(route.distance).toBe(600);
       expect(route.gain).toBe(60);
+      expect(route.roadDistance).toBe(summary === snapshot.routes[0] ? 200 : 0);
       expect(route.geometry[0]).toEqual(route.geometry.at(-1));
       expect(route.geometry.some(point => point[0] > query.area[2]!)).toBe(true);
     }
@@ -68,10 +71,13 @@ describe('real application integration', () => {
     expect(exported.body).toContain('Creek &amp; Ridge &lt;loop&gt;');
     expect(exported.body.match(/<trkpt /g)).toHaveLength(4);
     expect(exported.body).toContain('<ele>120</ele>');
-    const replacement = await app.inject({ method: 'POST', url: '/api/search', payload: query });
+    const replacement = await app.inject({ method: 'POST', url: '/api/search', payload: { ...criteria, roads: { distance: 0, fraction: 0 } } });
     expect(replacement.statusCode).toBe(202);
     expect((await app.inject('/api/search')).json().id).toBe(replacement.json().id);
     expect((await app.inject(`/api/search/${id}`)).statusCode).toBe(404);
+    const trailOnly = await finished(app, replacement.json());
+    expect(trailOnly.routeCount).toBe(ROUTES_PER_PAGE);
+    expect(trailOnly.routes.every(route => route.roadDistance === 0)).toBe(true);
   });
 
   it('rejects malformed constraints and reports expired searches without starting work', async () => {

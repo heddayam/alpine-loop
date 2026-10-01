@@ -5,7 +5,7 @@ type Choice = { full: Footprint; cycle: Footprint };
 
 /** Omit similar routes without limiting distinct choices or search exploration. */
 export function createDiversityFilter(graph: TrailGraph) {
-  const choices = new Map<number, Choice[]>();
+  const choices: Choice[] = [];
   const physicalLengths = new Map(graph.edges.map(edge => [edge.trail, edge.distance]));
   function footprint(edges: number[]): Footprint {
     const trails = new Set(edges.map(index => graph.edges[index]!.trail));
@@ -17,7 +17,6 @@ export function createDiversityFilter(graph: TrailGraph) {
     return shared / (a.length + b.length - shared) >= 0.85;
   }
   return (route: RouteCandidate): boolean => {
-    const siblings = choices.get(route.start) ?? [];
     // Valid lollipops have matching outbound/return stem corridors at both ends.
     let first = 0;
     let last = route.edges.length - 1;
@@ -28,10 +27,9 @@ export function createDiversityFilter(graph: TrailGraph) {
     const full = footprint(route.edges);
     const cycle = footprint(route.edges.slice(first, last + 1));
     // Neither a shared approach nor a shared cycle alone makes two hikes similar.
-    if (siblings.some(choice => similar(full, choice.full) && similar(cycle, choice.cycle))) return false;
+    if (choices.some(choice => similar(full, choice.full) && similar(cycle, choice.cycle))) return false;
     // Published choices stay stable while someone inspects or exports them.
-    siblings.push({ full, cycle });
-    choices.set(route.start, siblings);
+    choices.push({ full, cycle });
     return true;
   };
 }
