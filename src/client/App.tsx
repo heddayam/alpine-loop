@@ -124,6 +124,7 @@ function RouteDetails({
   backLabel,
   onReverse,
   reversing,
+  reversed,
   directionError,
   onRetry,
 }: {
@@ -133,6 +134,7 @@ function RouteDetails({
   backLabel: string;
   onReverse: () => void;
   reversing: boolean;
+  reversed: boolean;
   directionError: string;
   onRetry: () => void;
 }) {
@@ -158,9 +160,10 @@ function RouteDetails({
       </p>
       {route.reverseId && (
         <button type="button" className="text-button reverse-direction" onClick={onReverse}>
-          Reverse direction
+          {reversed ? "Use original direction" : "Reverse direction"}
         </button>
       )}
+      {reversed && <p className="field-hint" role="status">Reverse direction selected. GPX follows this direction.</p>}
       <dl className="detail-metrics">
         <div>
           <dt>Distance</dt>
@@ -290,9 +293,10 @@ export function App() {
       if (!current) return null;
       const entry = snapshot.routes.find(route => route.id === current.id || route.reverseId === current.id);
       if (!entry) return current;
-      const reverseId = entry.id === current.id ? entry.reverseId : entry.id;
-      return current.groupSize === entry.groupSize && current.reverseId === reverseId
-        ? current : { ...current, groupSize: entry.groupSize, reverseId };
+      const reverseId = current.reverseId ?? (entry.id === current.id ? entry.reverseId : entry.id);
+      const groupSize = Math.max(current.groupSize, entry.groupSize);
+      return current.groupSize === groupSize && current.reverseId === reverseId
+        ? current : { ...current, groupSize, reverseId };
     });
   };
 
@@ -378,7 +382,12 @@ export function App() {
         if (controller.signal.aborted) return;
         setGeometry(route);
         const { geometry: _coordinates, ...choice } = route;
-        setSelected(current => current && (current.id === route.id || current.reverseId === route.id) ? choice : current);
+        setSelected(current => {
+          if (!current || (current.id !== route.id && current.reverseId !== route.id)) return current;
+          // A delayed detail response must not erase alternatives discovered by a newer poll.
+          return { ...choice, groupSize: Math.max(choice.groupSize, current.groupSize),
+            reverseId: choice.reverseId ?? (current.id === choice.id ? current.reverseId : current.id) };
+        });
         setReverseTarget(null);
       })
       .catch((failure) => {
@@ -965,6 +974,7 @@ export function App() {
                               requestAnimationFrame(() => document.getElementById("route-detail-heading")?.focus());
                             }}
                             reversing={reverseTarget !== null}
+                            reversed={currentRoutes.some(route => route.reverseId === selected.id)}
                             directionError={routeError}
                             onRetry={() => setRouteRetry(value => value + 1)}
                           />
