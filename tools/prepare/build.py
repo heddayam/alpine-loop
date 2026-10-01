@@ -42,7 +42,8 @@ def build(source, products, bounds, info):
         opl = extract(source, bounds, Path(temporary))
         ways, pois, node_tags, positions = read_source(opl, bounds)
         print(f"Read {len(ways):,} context ways; {len(positions):,} trail geometry nodes", flush=True)
-        corridors, _, entrances, audit = topology(ways, pois, node_tags, positions, bounds)
+        corridors, points, entrances, audit = topology(ways, pois, node_tags, positions, bounds)
+        del ways, pois, node_tags, positions, points
         print(f"Compile {len(corridors):,} physical corridors; {len(entrances):,} starts", flush=True)
         samples = measure(corridors, Elevation(products).sample)
         graph, geometry, source_index = assemble(corridors, entrances, info)

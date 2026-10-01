@@ -5,6 +5,7 @@ import io
 import json
 import math
 from collections import defaultdict
+from contextlib import nullcontext
 from pathlib import Path
 
 
@@ -13,17 +14,20 @@ def json_bytes(value):
 
 
 def write_json(file, value, compressed=False):
-    raw = json_bytes(value)
-    if compressed:
-        buffer = io.BytesIO()
+    size = 0
+    encoder = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    with file.open("wb") as destination:
         # No filename, timestamp or platform-specific gzip header bytes.
-        with gzip.GzipFile(fileobj=buffer, mode="wb", filename="", compresslevel=6, mtime=0) as stream:
-            stream.write(raw)
-        data = buffer.getvalue()
-    else:
-        data = raw
-    file.write_bytes(data)
-    return {"bytes": len(data), "jsonBytes": len(raw), "sha256": hashlib.sha256(data).hexdigest()}
+        output = gzip.GzipFile(fileobj=destination, mode="wb", filename="", compresslevel=6, mtime=0) if compressed else nullcontext(destination)
+        with output as stream, io.BufferedWriter(stream) as buffered:
+            for part in encoder.iterencode(value):
+                data = part.encode()
+                buffered.write(data)
+                size += len(data)
+            buffered.write(b"\n")
+    with file.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {"bytes": file.stat().st_size, "jsonBytes": size + 1, "sha256": digest}
 
 
 def cell(point):

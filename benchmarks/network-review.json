@@ -1005,5 +1005,30 @@
     "scope": "Five-second request window includes loading. Engine elapsed time was 3545 ms. This does not establish full-exploration or long-running memory bounds.",
     "precedingFailure": "The same whole-footprint query failed while loading with a 256 MB worker heap, even after removing redundant edge copies. Raising the worker heap allowance to 512 MB allowed this observation. The allowance is not a process RSS limit."
   },
-  "currentAppObservation": "results/trail-hikes-network-30s.json"
+  "currentAppObservation": "results/trail-hikes-network-30s.json",
+  "preparationSerializationExperiment": {
+    "oldSnapshot": "network-1b04494a15eb6e72754debbda8f5972a7a91f6a5771b7c89d0ce58ace6edc44a",
+    "newSnapshot": "network-efe4b23aa17f2976cabaa3c0a4bfa7f657075925c36c23cb8f2163890ad7ae90",
+    "runtimeFileCount": 766,
+    "byteIdenticalRuntimeFiles": 766,
+    "runtimeFilesWithDifferentCompression": [],
+    "everyDecodedRuntimeFileIdentical": true,
+    "sourceIndexGeometryAndAuditIdentical": true,
+    "fullAuditGraphIdenticalExceptSnapshotId": true,
+    "previousCompilerSelfPeakRssBytes": 3305979904,
+    "newCompilerSelfPeakRssBytes": 3197353984,
+    "previousElapsedSeconds": 197.93877745897043,
+    "newElapsedSeconds": 224.89553049998358,
+    "newCompilerHashes": {
+      "build.py": "7ae94ee3db8acea367fb5b441546d80bfe2860236cebcf9f722877f702c8307d",
+      "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+      "graph.py": "c0369ab590d7a19bddf15eebdc7f8308cdb5926278ccf59c8ada9f45c55e6df1",
+      "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+      "tiles.py": "9897b6988494a425cf952cde26c19eda2e4365fd475616fa974ef784758ebef3"
+    },
+    "scope": "Same pinned OSM and nine DEM tiles; one uncontrolled build each. Compiler self high-water memory excludes native children; new separate sampled process-tree observation includes children. The new snapshot is not installed in the live app.",
+    "allNewRuntimeHashesAndSizesVerified": true,
+    "sampledProcessTreePeakRssBytes": 3197321216,
+    "measurementNote": "Peak compiler memory fell by about 3.3% in this pair of uncontrolled runs; elapsed preparation increased from 198 to 225 seconds. This is not a demonstrated statewide-memory solution. Streaming removes whole serialized copies without changing any of the 766 runtime files."
+  }
 }
