@@ -39,8 +39,11 @@ results never changes the submitted query.
   Search loads only a conservative surrounding network for its requested hike
   length. Drawings load separately when a route is inspected. Snapshot IDs and
   file hashes prevent mixing versions; missing topology fails visibly.
-- Current searches stay in memory. No job database, migrations or restart recovery
-  are needed for the confirmed experience.
+- The current search keeps route summaries and section references in a disposable
+  SQLite file through Node’s built-in module. This replaces growing object maps
+  so longer searches can retain alternatives without keeping them all in RAM.
+  The file is closed when the search is replaced or the server shuts down. There
+  is no saved-job history, migration system, database setup or restart recovery.
 - Vite builds a static React interface. There is no server-rendered page requirement
   to justify Next.js here. React owns the asynchronous form/results state; this
   choice can still be replaced if it increases total complexity.
@@ -77,7 +80,8 @@ from unfinished exploration.
 The installed Cascades snapshot has 222,175 physical sections and 11,649 starts
 in 73.86 MB of runtime files. Preparation took about 222 seconds and peaked at
 3.06 GB in the Python compiler process; native children were not included in
-that peak. Partitioned output does not establish bounded statewide preparation.
+that peak. Stage measurements put the main memory peak in topology construction, before
+elevation sampling. Partitioned output does not establish bounded statewide preparation.
 The [compiler notes](tools/prepare/README.md) describe pinned OSM/DEM sources,
 access policy, topology, elevation and the storage contract.
 
@@ -135,6 +139,17 @@ thirty-second whole-app observations retained 5,115 options for Paradise-day
 at 304 MB peak RSS and loaded Pass-long at 580 MB; neither search completed.
 Stops returned within 3 ms. These are bounded observations, not unlimited-duration
 memory guarantees or an endorsement of every generated option's hiking quality.
+
+A longer Paradise-day run exposed growing result retention: 67,199 options after
+five minutes used 914 MB peak RSS. Disposable disk storage and removal of the
+worker’s duplicate option history retained 133,411 options after ten minutes at
+277 MB, with Stop returning in 19 ms. At five minutes the new version had 62,085
+options, so throughput was not identical. One disk sample was 608 MB at 412 seconds;
+it was not a peak measurement. Both searches remained unfinished. Final integrated
+checks still preserve every North Bend option and the six independent GPX examples.
+The long observation precedes subsequent small lifecycle and grouping-roundoff
+fixes; exact code hashes and limitations are in the discovery review. Temporary
+storage grows with results; this is not an unlimited-duration memory guarantee.
 
 An earlier five-second installed-area observation, using the previous traversal,
 attempted all 11,647 starts and fully

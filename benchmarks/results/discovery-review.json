@@ -1995,5 +1995,317 @@
       },
       "note": "Manual localhost desktop check; replay deliberately stopped after 30 seconds for review. Not a complete search or benchmark timing claim."
     }
+  },
+  "retainedSearchStorage": {
+    "reportSha256": "28f15d1b20da8e1d82e2af3b9f61dede1303d418893600f90f69fabcea0113bb",
+    "measuredBuild": "Frozen compiled storage experiment before lifecycle/canonicalization fixes. Worktree source changed during observation; compiled JS hashes, not current source HEAD, define the measured code.",
+    "inputs": {
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "06592ccf3ab69d789a1455c986b52441364dbc7a70283f3518712593f53a7214",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "route-store.js": "7ca33ce196a4a02e05141bad762c6d7e77aa48c8a7c759c91635c5368e18b359",
+        "search-worker.js": "20203bb629a55e1460f8dc6aefda5be19d64ca909d2f4084e0ba2891ef90fb41",
+        "searches.js": "edfa51657668749de3e121869f64eec508de949d659c1fd7ad34cd68606fda81",
+        "server.js": "30f2921453cdc71ee7d25bac2320a98100b973c220326790c1ac1a57510b1511"
+      },
+      "packageLockSha256": "7aa428c57ae8de861daadd43790f1281f9aa23bff72111c81d001d74581b9944",
+      "harnessHashes": {
+        "run.mjs": "f2dba51b245b46fb256b962619b2545fb48991b7823d3b575e109c3a471c32d8",
+        "query.mjs": "973ed3dc542d4b64f9672ad9fec0b35771ef53b2e0d977f253387f6ea25f2ced"
+      }
+    },
+    "compiledHashesAfter": {
+      "route-store.js": "7ca33ce196a4a02e05141bad762c6d7e77aa48c8a7c759c91635c5368e18b359",
+      "searches.js": "edfa51657668749de3e121869f64eec508de949d659c1fd7ad34cd68606fda81",
+      "server.js": "30f2921453cdc71ee7d25bac2320a98100b973c220326790c1ac1a57510b1511",
+      "search-worker.js": "20203bb629a55e1460f8dc6aefda5be19d64ca909d2f4084e0ba2891ef90fb41",
+      "diversity.js": "06592ccf3ab69d789a1455c986b52441364dbc7a70283f3518712593f53a7214",
+      "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+      "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+      "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+      "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a"
+    },
+    "compiledHashesMatchBefore": true,
+    "matchesBaselineQuerySnapshot": true,
+    "harnessHashesMatchBaseline": true,
+    "nodeVersionMatchesBaseline": true,
+    "scope": "Fresh actual HTTP app+worker. RSS includes server, worker threads and in-process measurement client; browser/coordinator excluded. Sampled RSS values are cumulative high-water marks, not retained-heap measurements. Timing/cache/concurrent activity uncontrolled. Disk is one live logical-size sample, not final or peak.",
+    "baseline300": {
+      "report": "/private/tmp/alpine-paradise-retention-300s.json",
+      "sha256": "83c643382f50d89582c224b31806b8c407d2a2dec957c7c280c1e8cda8fd116a",
+      "observation": {
+        "atMs": 300002.072667,
+        "status": "running",
+        "reason": null,
+        "coverageNote": null,
+        "routeCount": 67195,
+        "groupCount": 968,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 2115920246,
+          "elapsedMs": 299848
+        }
+      },
+      "osProcessPeakRssBytes": 914210816
+    },
+    "storage300": {
+      "checkpointMs": 300869.34908300004,
+      "observation": {
+        "atMs": 300869.34908300004,
+        "status": "running",
+        "reason": null,
+        "coverageNote": null,
+        "routeCount": 62085,
+        "groupCount": 915,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 2016817014,
+          "elapsedMs": 300751
+        }
+      },
+      "sampledPeakRssBytes": 276725760
+    },
+    "storage600": {
+      "outcome": "unfinished",
+      "observation": {
+        "atMs": 600010.131833,
+        "status": "running",
+        "reason": null,
+        "coverageNote": null,
+        "routeCount": 133408,
+        "groupCount": 1294,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 3727267702,
+          "elapsedMs": 599880
+        }
+      },
+      "afterStop": {
+        "status": "stopped",
+        "reason": "Stopped. The routes found so far are still available; exploration is unfinished.",
+        "coverageNote": null,
+        "routeCount": 133411,
+        "groupCount": 1294,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 3727267702,
+          "elapsedMs": 599880
+        }
+      },
+      "sampledPeakRssBytes": 276725760,
+      "osProcessPeakRssBytes": 276725760,
+      "maxSampleGapMs": 1375.580958000006,
+      "memoryGuard": null,
+      "stop": {
+        "trigger": "observation_window",
+        "requestedMs": 600010.4380409999,
+        "latencyMs": 18.82529200008139,
+        "status": "stopped",
+        "activeWorkersBefore": 1,
+        "activeWorkersAfterResponse": 0,
+        "workerExitLatencyMs": 13.913416999974288
+      },
+      "reconnect": {
+        "atMs": 1024.348125,
+        "latencyMs": 0.6027500000000146,
+        "sameSearch": true,
+        "sameQuery": true,
+        "status": "running",
+        "routeCount": 101,
+        "groupCount": 16
+      },
+      "workers": [
+        {
+          "threadId": 1,
+          "createdMs": 4.781333000000018,
+          "exitMs": 600024.3514579999,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "processOutcome": {
+        "exitCode": 0,
+        "signal": null,
+        "error": null,
+        "stderr": "(node:33536) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "measurementError": null
+    },
+    "hasFailures": false,
+    "diskSample": {
+      "capturedAt": "2026-10-01T03:17:27.110876+00:00",
+      "pid": 33536,
+      "observation": {
+        "atMs": 412339.169333,
+        "status": "running",
+        "reason": null,
+        "coverageNote": null,
+        "routeCount": 90210,
+        "groupCount": 1093,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 2726465398,
+          "elapsedMs": 412237
+        }
+      },
+      "openStorageFiles": [
+        {
+          "fd": "19",
+          "type": "REG",
+          "logicalBytes": 0,
+          "path": "/private/var/folders/fk/h_psw85d7sjf11by4t_86zlh0000gn/T/etilqs_1e3ae090d28e514"
+        },
+        {
+          "fd": "20",
+          "type": "REG",
+          "logicalBytes": 607510528,
+          "path": "/private/var/folders/fk/h_psw85d7sjf11by4t_86zlh0000gn/T/etilqs_a798f0a674094530"
+        }
+      ],
+      "totalLogicalBytes": 607510528,
+      "method": "Filtered lsof REG etilqs/SQLite file records for the authorized active child; lsof logical size only, no database open/query. Temporary SQLite files can be unnamed/unlinked. This is one live sample, not peak or allocated-block size."
+    },
+    "cleanup": {
+      "checkedAt": "2026-10-01T03:21:03.152082+00:00",
+      "pid": 33536,
+      "pidAbsent": true,
+      "noOpenHandlesReported": true,
+      "storagePaths": [
+        {
+          "path": "/private/var/folders/fk/h_psw85d7sjf11by4t_86zlh0000gn/T/etilqs_1e3ae090d28e514",
+          "existsAfterClose": false
+        },
+        {
+          "path": "/private/var/folders/fk/h_psw85d7sjf11by4t_86zlh0000gn/T/etilqs_a798f0a674094530",
+          "existsAfterClose": false
+        }
+      ],
+      "psExit": 1,
+      "lsofExit": 1
+    },
+    "summarySha256": "9868c1c3b76c244ec11ee7e28c346f39bc37e3ba251eeef7648e367463ebc914",
+    "adoption": {
+      "sourceCommit": "ef54869",
+      "decision": "Replace retained route object maps with disposable SQLite storage via Node builtin; delete worker all-option identity history. Stable representative footprints remain in the worker; actual summaries and section sequences remain available through indexed pages/directional details. No new dependency, saved jobs or restart recovery.",
+      "subsequentFixes": [
+        "Re-resolve search after awaiting Stop so replacement returns expired404 rather than accessing a closed store.",
+        "Shutdown captures and closes its own store after worker termination regardless of status.",
+        "Canonical footprint summation preserves reverse grouping at floating-point overlap boundaries."
+      ],
+      "verification": "Final npm run verify passed:22existing application/engine checks plus5Node checks. Exact reversed-boundary example extends an existing oracle-backed fixture. Actual-worker lifecycle smoke confirms Stop/replacement expired404, replacement preserved and zero workers after close.",
+      "liveReview": {
+        "query": {
+          "area": [
+            -122,
+            46.6,
+            -121.4,
+            47
+          ],
+          "distance": [
+            9656.064,
+            19312.128
+          ],
+          "gain": [
+            457.20000000000005,
+            1371.6000000000001
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "stopped",
+        "routeCount": 4112,
+        "groupCount": 292,
+        "progress": {
+          "totalStarts": 476,
+          "attemptedStarts": 476,
+          "completedStarts": 162,
+          "expansions": 189219942,
+          "elapsedMs": 29812
+        },
+        "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+        "checks": [
+          "Reload reconnects to replayed query and current stopped search",
+          "Edit search restores road miles/share and other constraints",
+          "Road connection settings visible; desktop screenshot saved locally"
+        ]
+      }
+    },
+    "finalNorthBend": {
+      "rootCommit": "ef54869",
+      "inputs": {
+        "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+        "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+        "rawAuditSha256": "026e94e73b04b9547b22b9db38737009f2458decaf16670e86298affdb9407b4",
+        "compiledHashes": {
+          "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+          "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+          "diversity.js": "8e75a6bad4e3b784895ec143491c2119a2b6110b8a213cb195b8c848aa43d6d6",
+          "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+          "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+          "route-store.js": "7ca33ce196a4a02e05141bad762c6d7e77aa48c8a7c759c91635c5368e18b359",
+          "search-worker.js": "20203bb629a55e1460f8dc6aefda5be19d64ca909d2f4084e0ba2891ef90fb41",
+          "searches.js": "07d871708bd27f8615be29368eced67909bf1edbea6d74beed2c5949bf020df4",
+          "server.js": "30f2921453cdc71ee7d25bac2320a98100b973c220326790c1ac1a57510b1511"
+        },
+        "harnessSha256": "da38fb78988dbf03eb552d8c3b2d58897cf9d73574a9c4a047570bceef0bb07d"
+      },
+      "scope": "Fresh ephemeral HTTP app and actual worker. All group/member pages and every actually emitted direction are checked against the earlier complete752-walk raw audit. Independent pinned topology/profile reconstruction checks six important emitted directions: original Little Si and Cedar Falls raw ordinals323/433 plus their actual opposites. No reverse is inferred. RSS includes server, worker, independent verifier and HTTP client; browser excluded. No live3011 requests. Timing is descriptive.",
+      "counts": {
+        "groups": 112,
+        "options": 376,
+        "directions": 752,
+        "rawAuditDirections": 752,
+        "missingOptions": 0,
+        "extraOptions": 0,
+        "verifiedDirections": 6
+      },
+      "outcome": "verified",
+      "elapsedMs": 1444.97375,
+      "sampledPeakRssBytes": 313556992,
+      "osProcessPeakRssBytes": 318259200,
+      "reconnectVerified": true,
+      "stop": {
+        "latencyMs": 1.35550000000012,
+        "status": "complete",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "errors": [],
+      "pagesVerified": 115,
+      "geometryAndGpxChecks": 6,
+      "reportSha256": "65618b6e4ca6b9a402a6900d44d0338b313be10f42599c2be0326bec52e2e084"
+    },
+    "failureObservation": {
+      "sourceCommit": "52fed83",
+      "runtime": "Node24.11.0 / SQLite3.50.4",
+      "method": "One-off local module smoke, not an added permanent test suite. Forced SQLITE_FULL after107options/53groups by lowering max_page_count; failed30000-section add rolled back without losing earlier results. Restoring capacity allowed another add. Separate10MBtemp-database smoke confirmed file handles closed.",
+      "limitations": "Smoke scripts were run from stdin; no replayable harness was retained."
+    },
+    "limitations": [
+      "Ten-minute observation is for Paradise-day, not an unlimited-duration memory bound. Browser and benchmark coordinator excluded; OS peak and sampled peak agree, but maximum sampling gap was1.376seconds.",
+      "Measured compiled build precedes small lifecycle and canonical-footprint fixes. Final integrated build passed offline tests, lifecycle smoke and complete North Bend HTTP/GPX preservation. No second ten-minute measurement was performed.",
+      "Timing/cache/machine pressure were uncontrolled. Earlier compiler profiling overlapped the baseline. Fewer options at300seconds means this is not an equal-throughput comparison.",
+      "Temporary disk consumption grows with retained results. Group representatives and loaded graph still use RAM. Disk/cache size is not a whole-app RSS guarantee."
+    ]
   }
 }

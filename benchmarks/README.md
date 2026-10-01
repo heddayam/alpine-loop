@@ -17,6 +17,14 @@ and its actual worker for each frozen request:
 node benchmarks/app/run.mjs --dataset .local-data/network --output /tmp/alpine-app-results.json --observation-ms 30000
 ```
 
+For the longer retention observation, use `--query paradise-day --observation-ms 600000`.
+The measured temporary-storage experiment held 133,411 options after Stop at
+277 MB peak RSS over ten minutes; exploration remained unfinished. The earlier
+five-minute in-memory version reached 914 MB. Disk storage grows instead: one
+sample measured 608 MB at 412 seconds. See `results/discovery-review.json` →
+`retainedSearchStorage` for compiled hashes, throughput differences, subsequent
+lifecycle/grouping fixes, cleanup evidence and the final complete North Bend check.
+
 Use `--query north-bend-known` for one case. The observation window belongs to the
 harness, not the application. Its default 1 GB sampled RSS guard and outer process
 deadline keep the measurement bounded. RSS includes the server, worker and local

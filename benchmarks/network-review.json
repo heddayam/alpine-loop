@@ -1223,6 +1223,166 @@
       "One observation of each implementation; baseline overlapped a Node retention run while candidate ran under different machine pressure. Neither RSS nor timing difference establishes a causal regression or improvement.",
       "Resident memory and Python allocator behavior do not quantify individual object families. No statewide build or bounded-memory claim."
     ],
-    "nextQuestion": "Can compact topology records retain shared source identities while lineage and completed geometry are streamed, preserving deterministic connectivity and source audit? Measure the working set before selecting a storage implementation."
+    "nextQuestion": "Can compact topology records retain shared source identities while lineage and completed geometry are streamed, preserving deterministic connectivity and source audit? Measure the working set before selecting a storage implementation.",
+    "workingSetProbe": {
+      "complete": true,
+      "processExitCode": 0,
+      "wallSecondsIncludingTeardown": 88.832,
+      "topologyResultSeconds": 75.55978033295833,
+      "sampledCompilerPeakRssBytes": 2911928320,
+      "osCompilerHighWaterBeforeTeardownBytes": 3011215360,
+      "probeSeconds": 1.1733397928765044,
+      "counts": {
+        "selectedWays": 142442,
+        "outsideSegments": 29914,
+        "prohibitedSegments": 251515,
+        "duplicateSegments": 18,
+        "zeroLengthSegments": 0,
+        "corridors": 222175,
+        "entrances": 11649
+      },
+      "finalCheckpointContainers": {
+        "ways": {
+          "count": 146363,
+          "bytes": 3844864
+        },
+        "positions": {
+          "count": 1864213,
+          "bytes": 61516544
+        },
+        "pois": {
+          "count": 3843,
+          "bytes": 33048
+        },
+        "tags_by_node": {
+          "count": 37161,
+          "bytes": 961280
+        },
+        "segments": {
+          "count": 1887639,
+          "bytes": 83886160
+        },
+        "points": {
+          "count": 1834653,
+          "bytes": 61516544
+        },
+        "frontiers": {
+          "count": 1144,
+          "bytes": 32984
+        },
+        "usable": {
+          "count": 1636124,
+          "bytes": 13533400
+        },
+        "adjacent": {
+          "count": 1591619,
+          "bytes": 61516552
+        },
+        "entrances": {
+          "count": 11649,
+          "bytes": 415152
+        },
+        "anchors": {
+          "count": 177670,
+          "bytes": 8388824
+        },
+        "trail_nodes": {
+          "count": 483553,
+          "bytes": 16777432
+        },
+        "unresolved": {
+          "count": 2781,
+          "bytes": 23128
+        },
+        "corridors": {
+          "count": 222175,
+          "bytes": 1827096
+        },
+        "visited": {
+          "count": 1636124,
+          "bytes": 67109080
+        }
+      },
+      "estimatedOwnedContainerFamilies": {
+        "sourceWays": {
+          "count": 146363,
+          "sampleCount": 128,
+          "sampleMinBytes": 456,
+          "sampleMaxBytes": 2568,
+          "estimatedOwnedContainerBytes": 85137527.5625
+        },
+        "sourceCoordinateTuples": {
+          "count": 1864213,
+          "sampleCount": 128,
+          "sampleMinBytes": 56,
+          "sampleMaxBytes": 56,
+          "estimatedOwnedContainerBytes": 104395928.0
+        },
+        "topologyCoordinateTuples": {
+          "count": 1834653,
+          "sampleCount": 128,
+          "sampleMinBytes": 56,
+          "sampleMaxBytes": 56,
+          "estimatedOwnedContainerBytes": 102740568.0
+        },
+        "nodeTagDictionaries": {
+          "count": 37161,
+          "sampleCount": 128,
+          "sampleMinBytes": 184,
+          "sampleMaxBytes": 272,
+          "estimatedOwnedContainerBytes": 6914268.5625
+        },
+        "segmentRouting": {
+          "count": 1887639,
+          "sampleCount": 128,
+          "sampleMinBytes": 544,
+          "sampleMaxBytes": 544,
+          "estimatedOwnedContainerBytes": 1026875616.0
+        },
+        "segmentLineage": {
+          "count": 1887639,
+          "sampleCount": 128,
+          "sampleMinBytes": 480,
+          "sampleMaxBytes": 480,
+          "estimatedOwnedContainerBytes": 906066720.0
+        },
+        "adjacencyLists": {
+          "count": 1591619,
+          "sampleCount": 128,
+          "sampleMinBytes": 88,
+          "sampleMaxBytes": 88,
+          "estimatedOwnedContainerBytes": 140062472.0
+        },
+        "entrances": {
+          "count": 11649,
+          "sampleCount": 128,
+          "sampleMinBytes": 272,
+          "sampleMaxBytes": 272,
+          "estimatedOwnedContainerBytes": 3168528.0
+        },
+        "corridors": {
+          "count": 222175,
+          "sampleCount": 128,
+          "sampleMinBytes": 752,
+          "sampleMaxBytes": 34560,
+          "estimatedOwnedContainerBytes": 498880076.5625
+        }
+      },
+      "limitations": [
+        "At most128evenly spaced records/family; no random-sample confidence claim. Corridor sample is skewed;752to34560bytes.",
+        "Only owned containers; shared strings,numbers,native/allocator memory omitted. Family estimates do not sum to RSS.",
+        "One topology-only Cascades run with uncontrolled machine pressure; not a controlled timing comparison or statewide RAM prediction.",
+        "No DEM work, data publication or production edits; native extraction temporary directory removed."
+      ],
+      "recommendation": "Test one compiler-only compact segment representation with compact origin records and shared immutable way facts. The1.027GB routing-container estimate is as material as0.906GB lineage, so separate provenance storage alone would leave roughly half this measured container burden. Preserve source lineage and existing output identities; require unchanged-input equality before adoption.",
+      "filesSha256": {
+        "probe.py": "8be5d83ecf8e4446dc2a565cd8a9953eae6cb3c8ae66fa3052ade255352adeaf",
+        "run.mjs": "9ba01bb3d6066bbe058943b8763a2e1a55681a5fdfbfbdd36055de3fefdaf42e",
+        "inputs.json": "c4f01d24359e0f36fc1adb23503caed136e707d60142e3730565b6e72786c318",
+        "result.json": "cbcddadfec13b3402ed24b721c2d7da6b3ba76cb3b0dc629630ab02f105876c9",
+        "checkpoints.jsonl": "99efaa0793fa2a408be8becc7969323de3b99057ee3dd14a362125d852a5a5cb",
+        "monitor.json": "45feb2623cb1fb4dc5538996811888953a09066094ba9b2b0298389f408f8621"
+      }
+    }
   }
 }
