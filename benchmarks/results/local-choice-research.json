@@ -5,7 +5,8 @@
     "solver": "archive/research-local-choices-2026-09-30",
     "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
     "roadPrimitive": "archive/research-road-connections-2026-09-30",
-    "jointRoads": "archive/research-joint-roads-2026-09-30"
+    "jointRoads": "archive/research-joint-roads-2026-09-30",
+    "trailCorridors": "archive/research-trail-corridors-2026-09-30"
   },
   "inputs": {
     "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
@@ -859,16 +860,217 @@
           "joint": 23404,
           "shortest": 18088
         }
+      },
+      {
+        "scope": "Prototype composition: bounded pending joint realizations plus an outer trail-plan cursor. Timing describes this scheduler only; no app transport, result store, reverse pairing, or claim of comprehensive discovery.",
+        "outerSha256": "aa4ce023510bf7f45e4bbc80a6d3ba7cbee56c190cf280ba58b037ec0a08b0a8",
+        "roadsSha256": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+        "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+        "querySha256": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+        "preparationMs": 17.747500000000002,
+        "elapsedMs": 45003.533291,
+        "maximumStepMs": 46.580667000001995,
+        "peakRSS": 307445760,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.058915999994496815,
+        "progress": {
+          "work": 136842240,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "plans": 500,
+        "found": 0,
+        "none": 500,
+        "belowMinimum": 0,
+        "pendingAtStop": 0,
+        "roadYields": 587951,
+        "phaseWork": {
+          "validate": 19943,
+          "bounds": 191495,
+          "joint": 165985,
+          "shortest": 210528
+        }
       }
     ],
     "minimumDistancePolicy": "Minimum distance cannot steer road ranking or choose padding. A COMPLETE fixed-trail plan may be rejected when a conservative upper-capacity bound proves no permitted road realization could meet that minimum. Growing trail prefixes do not receive this upper-capacity rejection.",
-    "decision": "Do not integrate either measured composition. Known-plan realization is cheap on the saved corpus, but discovering useful plans remains the failure. The corrected bound reduced frontier memory and road work; it did not recover a hike within45seconds. Next isolate trail-only degree-two corridors with all original starts and road exits protected.",
+    "decision": "Reject all three measured whole-search compositions: each finds zero hikes in45seconds. Fixed-plan road realization is independently valid and cheap on the saved corpus. Complete-plan capacity bounds remove the memory explosion; safe trail-only degree-two corridors preserve47tiny classes but do not fix discovery. The road-port abstraction overgenerates potential trail connections whose original road realizations conflict. Diagnose this before more optimization or production replacement; next measure necessary blocked-road reachability on growing fixed-trail prefixes, without steering minimum mileage or discarding valid alternatives.",
     "limitations": [
       "211saved structural plans are not211meaningfully different hikes; remaining small trail differences require separate treatment.",
       "Tiny oracle coverage and known-plan replay do not prove broad source quality, statewide scalability, real discovery coverage, or app behavior.",
       "The two observations use a research scheduler and different work units from the existing solver; no speedup factor is claimed.",
       "Current factory copies the immutable graph; frontiers remain uncapped. These choices are not protected requirements."
     ],
-    "replay": "git checkout archive/research-joint-roads-2026-09-30 in a separate checkout; follow research/proof/README.md. Generated inputs stay outside Git."
+    "replay": "git checkout archive/research-joint-roads-2026-09-30 in a separate checkout; follow research/proof/README.md. Generated inputs stay outside Git.",
+    "corridorCoverage": {
+      "checks": [
+        {
+          "name": "trail triangle / multiple starts",
+          "rawWalks": 4,
+          "expectedClasses": 4,
+          "generatedCandidates": 4,
+          "work": 75
+        },
+        {
+          "name": "road junction attachment",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 10,
+          "work": 235
+        },
+        {
+          "name": "road cycle after trail stem",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 36
+        },
+        {
+          "name": "original start splits wrapping road run",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 6,
+          "work": 98
+        },
+        {
+          "name": "road junction also a trail port",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 10,
+          "work": 371
+        },
+        {
+          "name": "directed roads and public-only",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 37
+        },
+        {
+          "name": "physical road self loop",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 26
+        },
+        {
+          "name": "two parallel roads form attachment cycle",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 2,
+          "work": 64
+        },
+        {
+          "name": "one-way fixed stem",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 67
+        },
+        {
+          "name": "overlapping possible road connections",
+          "rawWalks": 8,
+          "expectedClasses": 8,
+          "generatedCandidates": 37,
+          "work": 865
+        },
+        {
+          "name": "exact decimal boundary",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 62
+        },
+        {
+          "name": "road budget cannot reach minimum",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 135
+        },
+        {
+          "name": "road share cannot reach minimum",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 135
+        },
+        {
+          "name": "equality with full road allowance",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 4,
+          "work": 139
+        },
+        {
+          "name": "exact asymmetric fixed-stem return",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 3,
+          "work": 95
+        },
+        {
+          "name": "road stem returns as variable trail",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 2,
+          "work": 44
+        },
+        {
+          "name": "unsafe capacity arithmetic skips rejection",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 36
+        },
+        {
+          "name": "road contact inside trail chain",
+          "rawWalks": 8,
+          "expectedClasses": 8,
+          "generatedCandidates": 15,
+          "work": 227
+        },
+        {
+          "name": "broken directed trail chain",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 10
+        },
+        {
+          "name": "physical trail self loop",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 2,
+          "work": 13
+        },
+        {
+          "name": "anchored trail ring and inaccessible ring",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 2,
+          "work": 33
+        },
+        {
+          "name": "parallel trail corridors / internal original starts",
+          "rawWalks": 4,
+          "expectedClasses": 4,
+          "generatedCandidates": 4,
+          "work": 90
+        },
+        {
+          "name": "multi-edge trail corridor exact decimal",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 34
+        }
+      ],
+      "allRawWalkClassesCovered": true,
+      "duplicatePlans": 0,
+      "cancellationPassed": true,
+      "scope": "Tiny source-walk projection coverage only; emitted plans may be infeasible until joint road realization."
+    }
   }
 }
