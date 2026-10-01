@@ -40,9 +40,9 @@ def build(source, products, bounds, info):
     with tempfile.TemporaryDirectory(prefix="alpine-fresh-") as temporary:
         print("Scan source-wide ways with inline node locations; retain footprint intersections", flush=True)
         opl = extract(source, bounds, Path(temporary))
-        ways, hiking, pois, node_tags, positions = read_source(opl, bounds)
+        ways, pois, node_tags, positions = read_source(opl, bounds)
         print(f"Read {len(ways):,} context ways; {len(positions):,} trail geometry nodes", flush=True)
-        corridors, _, entrances, audit = topology(ways, hiking, pois, node_tags, positions, bounds)
+        corridors, _, entrances, audit = topology(ways, pois, node_tags, positions, bounds)
         print(f"Compile {len(corridors):,} physical corridors; {len(entrances):,} starts", flush=True)
         samples = measure(corridors, Elevation(products).sample)
         graph, geometry, source_index = assemble(corridors, entrances, info)
@@ -65,7 +65,8 @@ def main():
             "attribution": [{"name": "OpenStreetMap contributors", "url": "https://www.openstreetmap.org/copyright", "license": "ODbL 1.0"},
                             {"name": "USGS 3DEP", "url": "https://www.usgs.gov/3d-elevation-program", "license": "U.S. public domain"}],
             "limitations": ["Finite source coverage: routes stop at the advertised rectangle; starts are filtered independently within it.",
-                            "Includes mapped linear walking paths, tracks and cycleways; road connectors require mapped hiking/foot route membership.",
+                            "Includes mapped linear walking paths, tracks, cycleways and road connectors; uncertain pedestrian access remains unknown.",
+                            "Motorways, motorway links and motorroad=yes require explicit affirmative foot permission for each direction as a routing policy.",
                             "Uncertain access is included and labeled. Mapped road contact is not proof of legal parking, arrival access or current conditions.",
                             "Conditional access is not evaluated for a trip date. Explicit default prohibitions remain excluded; other unresolved conditions remain uncertain.",
                             "Elevation gain is an estimate from bilinear 3DEP samples at source vertices and at most 25 m intervals; DEM noise is not suppressed.",

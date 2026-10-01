@@ -45,9 +45,16 @@ hashes. It makes no network requests.
 - Linear `path`, `footway`, `bridleway`, `steps`, `track`, `pedestrian` and
   `cycleway` ways are candidates. `area=yes` perimeters and ways explicitly
   tagged disused, abandoned, construction or proposed are excluded.
-- Other roads provide entrance context. Only roads belonging to a mapped
-  hiking/foot route relation become hiking connectors. Road membership alone
-  never overrides a foot-access prohibition.
+- Ordinary roads are walking-connection candidates without a hiking/foot route
+  relation. Unknown pedestrian access stays unknown; explicit pedestrian
+  prohibitions still exclude traversal. Vehicle restrictions such as
+  `motor_vehicle=private` do not override `foot=yes`.
+- As a product routing policy, `motorway`, `motorway_link` and any way tagged
+  `motorroad=yes` have no pedestrian traversal unless that direction has explicit
+  affirmative `foot` or `foot:forward/backward` evidence. Generic `access=yes`
+  and hiking-relation membership are insufficient. Specific foot prohibitions
+  still win, and unresolved conditions remain uncertain. `trunk` alone uses the
+  ordinary-road rule. This fallback is not a claim about universal traffic law.
 - Admitted explicit roads and `footway=sidewalk/crossing` carry the `connector`
   role. Other admitted paths carry `trail`. This is a candidate classification,
   not proof of a recreational hike. An explicit connector wins if duplicate
@@ -63,6 +70,8 @@ hashes. It makes no network requests.
   passage. Parking-object restrictions do not invent crossing restrictions.
 - Mapped trailheads/parking connect only through shared routable OSM nodes.
   Shared road/trail nodes provide uncertain entrances, not certified parking.
+  Explicit sidewalk/crossing contacts do not create inferred trail entrances;
+  mapped trailheads and parking retain their shared-node connections.
   Unconnected or restricted POIs remain in the audit. No nearest-path connector
   is invented, and ordinary road geometry vertices do not become starts.
 - Naming priority does not choose access evidence. An untagged named trailhead
@@ -75,6 +84,14 @@ hashes. It makes no network requests.
   and the same start permission. Distinct exits and named trailheads remain.
   All trail geometry stays intact; the audit records each suppressed contact.
   There are no proximity thresholds, inferred connectors or routing shortcuts.
+
+Tag semantics follow the OSM documentation for
+[access precedence](https://wiki.openstreetmap.org/wiki/Key:access#Transport_mode_restrictions),
+[pedestrian access](https://wiki.openstreetmap.org/wiki/Key:foot), and
+[motorroad](https://wiki.openstreetmap.org/wiki/Tag:motorroad%3Dyes).
+These distinguish pedestrian permissions from motor-vehicle restrictions;
+motorroad implications vary by jurisdiction. The fallback above is deliberately
+stated as application policy rather than an inferred legal guarantee.
 
 Source node identities join paths. Duplicate consecutive source-node segments
 are one physical segment, with conservative permission combination and all

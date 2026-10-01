@@ -23,6 +23,12 @@ def permission(tags, direction=None):
 
 def directions(tags):
     result = [permission(tags, side) for side in ("forward", "backward")]
+    # Product routing policy: motor-only roads need pedestrian-specific evidence,
+    # even when generic access is public. More-specific foot tags still win.
+    if tags.get("highway") in ("motorway", "motorway_link") or tags.get("motorroad") == "yes":
+        for index, side in enumerate(("forward", "backward")):
+            if tags.get(f"foot:{side}", tags.get("foot")) not in PUBLIC:
+                result[index] = None
     oneway = tags.get("oneway:foot")
     if oneway == "-1":
         result[0] = None
@@ -57,11 +63,11 @@ def combine(*states):
     return None if None in states else "unknown" if "unknown" in states else "public"
 
 
-def routable(way, hiking):
+def routable(way):
     tags = way["tags"]
     highway = tags.get("highway")
     non_current = any(tags.get(key) in ("yes", "1", "true") for key in ("disused", "abandoned", "construction", "proposed"))
-    return not non_current and tags.get("area") != "yes" and (highway in PATHS or (highway in ROADS and way["id"] in hiking))
+    return not non_current and tags.get("area") != "yes" and (highway in PATHS or highway in ROADS)
 
 
 def role(tags):
@@ -92,11 +98,11 @@ def clip(a, b, bounds):
     return low, high
 
 
-def topology(ways, hiking, pois, tags_by_node, positions, bounds):
+def topology(ways, pois, tags_by_node, positions, bounds):
     segments, points, frontiers = {}, {}, set()
     counts = {"selectedWays": 0, "outsideSegments": 0, "prohibitedSegments": 0, "duplicateSegments": 0, "zeroLengthSegments": 0}
     for way in sorted(ways.values(), key=lambda item: item["id"]):
-        if not routable(way, hiking):
+        if not routable(way):
             continue
         counts["selectedWays"] += 1
         access = directions(way["tags"])
@@ -151,13 +157,15 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
 
     # Road contact is a starting possibility, never proof of legal parking.
     entrances = {}
-    trail_nodes = {node for way in ways.values() if routable(way, hiking) and way["tags"].get("highway") in PATHS for node in way["nodes"]}
+    # Use resolved physical roles: an explicit sidewalk wins over a duplicate
+    # generic path, and a prohibited segment cannot establish a trail contact.
+    trail_nodes = {node for segment in usable if segment["kind"] == "trail" for node in segment["ends"]}
     for way in ways.values():
         if way["tags"].get("highway") not in ROADS or all(value is None for value in directions(way["tags"])):
             continue
         for node in way["nodes"]:
             key = "n" + node
-            if node in trail_nodes and key in adjacent and key not in frontiers and crossing(tags_by_node.get(node, {})) is not None:
+            if key in trail_nodes and key not in frontiers and crossing(tags_by_node.get(node, {})) is not None:
                 entrances.setdefault(key, {"id": "osm-entrance:" + node, "name": "Trail entrance", "access": "unknown", "sources": []})
                 entrances[key]["sources"].append("w" + way["id"])
     unresolved = []

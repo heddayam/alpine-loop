@@ -30,7 +30,10 @@ class FreshCompiler(unittest.TestCase):
                       14: (.005, .001), 15: (.005, .002), 16: (.001, -.0005), 17: (.002, -.0005),
                       18: (.001, .005), 19: (.002, .005), 20: (.003, .003),
                       30: (.001, .001), 31: (.002, .001), 32: (.002, .002), 40: (-.002, .0025), 41: (.007, .0025),
-                      50: (.003, .005), 51: (.004, .005), 52: (.005, .005), 53: (.0055, .005)}
+                      50: (.003, .005), 51: (.004, .005), 52: (.005, .005), 53: (.0055, .005),
+                      60: (.005, .0005), 61: (.005, .0015), 62: (.005, .0025), 63: (.005, .0035),
+                      64: (.005, .0045), 65: (.0045, .0055), 66: (.0035, .0055), 67: (.0025, .0055),
+                      68: (.0055, .0045)}
             for identity, (lon, lat) in points.items():
                 node = XML.SubElement(osm, "node", id=str(identity), version="1", lon=str(lon), lat=str(lat))
                 tags = {1: {"highway": "trailhead", "name": "Loop, 100% — ridge"},
@@ -49,21 +52,36 @@ class FreshCompiler(unittest.TestCase):
             way(102, [3, 11], {"highway": "track", "foot": "yes"})
             way(103, [5, 12, 13], {"highway": "footway", "foot": "yes"})
             way(104, [3, 14, 15, 3], {"highway": "cycleway"})
-            way(105, [1, 16, 17, 3], {"highway": "service", "foot": "yes", "oneway": "yes"})
+            way(105, [1, 16, 17, 3], {"highway": "unclassified", "name": "Bessemer-like connection",
+                                    "foot": "yes", "motor_vehicle": "private", "oneway": "yes"})
             way(106, [5, 18, 19, 4], {"highway": "footway", "foot": "yes", "oneway:foot": "yes"})
             way(107, [30, 31, 32, 30], {"highway": "pedestrian", "area": "yes"})
             way(108, [30, 31, 32], {"highway": "path", "construction": "yes"})
             way(109, [40, 41], {"highway": "path", "foot": "yes"})
             way(110, [1, 2, 3, 4, 5, 1], {"amenity": "parking", "access": "yes", "name": "Loop parking"})
-            way(111, [12, 13, 20, 12], {"amenity": "parking", "access": "yes"})
+            way(111, [12, 13, 20, 12], {})
             way(112, [50, 51], {"highway": "path", "foot": "yes"})
             way(113, [51, 52], {"highway": "footway", "footway": "sidewalk", "foot": "yes"})
             way(114, [52, 53], {"highway": "footway", "footway": "crossing", "foot": "yes"})
             way(115, [52, 53], {"highway": "path", "foot": "yes"})
+            way(116, [3, 60], {"highway": "service", "access": "yes", "foot": "no"})
+            way(117, [3, 61], {"highway": "motorway", "access": "yes"})
+            way(118, [3, 62], {"highway": "motorway_link", "foot:conditional": "yes @ (May-Sep)"})
+            way(119, [3, 63], {"highway": "trunk", "motorroad": "yes", "access": "yes"})
+            way(120, [3, 64], {"highway": "motorway", "foot": "yes", "foot:backward": "no"})
+            way(121, [3, 65], {"highway": "primary", "motorroad": "yes", "foot:forward": "yes"})
+            way(122, [3, 66], {"highway": "trunk"})
+            way(123, [3, 67], {"highway": "motorway_link", "access": "private", "foot": "yes"})
+            way(124, [53, 68], {"highway": "residential"})
+            # A relation is neither required for way 105 nor permission for 117.
             relation = XML.SubElement(osm, "relation", id="200", version="1")
-            XML.SubElement(relation, "member", type="way", ref="105", role="")
+            XML.SubElement(relation, "member", type="way", ref="117", role="")
             XML.SubElement(relation, "tag", k="route", v="hiking")
             XML.SubElement(relation, "tag", k="type", v="route")
+            parking = XML.SubElement(osm, "relation", id="201", version="1")
+            XML.SubElement(parking, "member", type="way", ref="111", role="outer")
+            for key, value in {"type": "multipolygon", "amenity": "parking", "access": "yes"}.items():
+                XML.SubElement(parking, "tag", k=key, v=value)
             source = root / "source.osm"
             XML.ElementTree(osm).write(source, encoding="utf-8", xml_declaration=True)
             transform = from_origin(-.01, .01, .0001, .0001)
@@ -84,15 +102,36 @@ class FreshCompiler(unittest.TestCase):
             all_nodes = {node for trail in lineage["trails"] for node in trail["nodes"]}
             self.assertTrue({"n2", "n16", "n17"} <= all_nodes)
             self.assertTrue({"n9", "n10", "n11", "n12", "n13", "n30", "n31", "n32"}.isdisjoint(all_nodes))
-            self.assertEqual(len(audit["frontiers"]), 3, "Sparse segments crossing the footprint are retained even with no source node inside")
+            self.assertEqual(len(audit["frontiers"]), 5, "Paths and ordinary roads crossing the footprint retain their boundary intersections")
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
             starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
             self.assertEqual(set(starts), {"n1", "n3", "n4", "n5"}, "Distinct parking exits remain; only the redundant boundary contact disappears")
+            self.assertNotIn("n53", starts, "An explicit sidewalk/crossing-to-road contact is not a trail entrance")
             self.assertEqual(starts["n1"]["access"], "public", "Missing trailhead permission must not erase its parking's public evidence")
             self.assertEqual(starts["n4"]["access"], "unknown", "Public parking does not erase a node's conditional restriction")
             self.assertEqual(audit["redundantContacts"], [{"node": "n2", "retained": "n1", "parking": "w110", "ways": ["100"]}])
-            self.assertTrue(any(poi["id"] == "w111" for poi in audit["unresolvedPois"]), "Public parking cannot restore an explicitly blocked gate")
+            self.assertTrue(any(poi["id"] == "r201" and poi["nodes"] == ["12", "13", "20", "12"] for poi in audit["unresolvedPois"]),
+                            "Parking multipolygon members are retained, but public parking cannot restore an explicitly blocked gate")
+            source_edges = {}
+            for edge in graph["edges"]:
+                sources = {source["way"] for segment in lineage["trails"][edge["trail"]]["segments"] for source in segment["source"]}
+                for source_way in sources:
+                    source_edges.setdefault(source_way, []).append(edge)
+            self.assertTrue({"116", "117", "118", "119"}.isdisjoint(source_edges),
+                            "Foot prohibition and motor-only defaults remain closed despite generic access or relation membership")
+            self.assertEqual({edge["access"] for edge in source_edges["105"]}, {"public"},
+                             "Explicit foot permission overrides motor-vehicle restrictions without a hiking relation")
+            for source_way in ("101", "122", "124"):
+                self.assertEqual({edge["access"] for edge in source_edges[source_way]}, {"unknown"},
+                                 "Ordinary roads, including trunk without motorroad, retain unresolved walking access")
+            for source_way, endpoint in (("120", "n64"), ("121", "n65")):
+                directed = source_edges[source_way]
+                self.assertEqual([(lineage["nodeIds"][edge["from"]], lineage["nodeIds"][edge["to"]], edge["access"]) for edge in directed],
+                                 [("n3", endpoint, "public")], "Motor-only foot exceptions apply to the permitted direction only")
+            self.assertEqual(len(source_edges["123"]), 2)
+            self.assertEqual({edge["access"] for edge in source_edges["123"]}, {"public"},
+                             "An explicit bidirectional foot exception overrides generic private access on a motorway link")
             for trail, item in enumerate(lineage["trails"]):
                 directed = [edge for edge in graph["edges"] if edge["trail"] == trail]
                 if "n2" in item["nodes"]:
@@ -127,9 +166,9 @@ class FreshCompiler(unittest.TestCase):
             # Same OSM segment clipped at a different location must not reuse a frontier identity.
             sparse = {"109": {"id": "109", "nodes": ["40", "41"], "tags": {"highway": "path", "foot": "yes"}}}
             source_points = {str(node): point for node, point in points.items()}
-            _, original_points, _, _ = topology(sparse, set(), [], {}, source_points, bounds)
+            _, original_points, _, _ = topology(sparse, [], {}, source_points, bounds)
             shifted_bounds = [-.0005, *bounds[1:]]
-            _, shifted_points, _, _ = topology(sparse, set(), [], {}, source_points, shifted_bounds)
+            _, shifted_points, _, _ = topology(sparse, [], {}, source_points, shifted_bounds)
             original_frontier = min(original_points, key=lambda node: original_points[node][0])
             shifted_frontier = min(shifted_points, key=lambda node: shifted_points[node][0])
             self.assertNotEqual(original_frontier, shifted_frontier)

@@ -44,7 +44,7 @@ def extract(source, bounds, temporary):
     # intersecting ways and their context, never a statewide routing graph.
     subprocess.run(["osmium", "tags-filter", str(source), "w/highway", "nwr/amenity=parking",
                     "nw/highway=trailhead", "nw/information=trailhead", "n/barrier", "n/foot", "n/access",
-                    "r/route=hiking,foot", "-o", str(filtered)], check=True)
+                    "-o", str(filtered)], check=True)
     subprocess.run(["osmium", "add-locations-to-ways", str(filtered), "-f", "opl", "-o", str(opl)], check=True)
     return opl
 
@@ -74,7 +74,6 @@ def read_source(opl, bounds):
             tagged_nodes[identity[1:]] = tags
             if poi_kind(tags):
                 pois.append({"id": identity, "nodes": [identity[1:]], "tags": tags, "kind": poi_kind(tags)})
-    hiking = set()
     def members(relation_id, seen=None):
         if seen is None:
             seen = set()
@@ -89,11 +88,9 @@ def read_source(opl, bounds):
                 result.extend(members(member[1:], seen))
         return result
     for identity, relation in relations.items():
-        if relation["tags"].get("route") in ("hiking", "foot"):
-            hiking.update(members(identity))
         if poi_kind(relation["tags"]):
             refs = [node for way in members(identity) for node in ways.get(way, {}).get("nodes", [])]
             if refs:
                 pois.append({"id": "r" + identity, "nodes": refs, "tags": relation["tags"], "kind": poi_kind(relation["tags"])})
-    needed = {node for way in ways.values() if routable(way, hiking) for node in way["nodes"]}
-    return ways, hiking, pois, tagged_nodes, {node: positions[node] for node in needed}
+    needed = {node for way in ways.values() if routable(way) for node in way["nodes"]}
+    return ways, pois, tagged_nodes, {node: positions[node] for node in needed}
