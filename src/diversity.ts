@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { RouteCandidate, TrailGraph } from './model.js';
 
 type Footprint = { trails: Set<number>; length: number };
@@ -7,7 +8,6 @@ type Identity = { groupId: string; optionId: string };
 /** Organize every qualifying route; callers retain each emitted direction and its facts. */
 export function createRouteGroups(graph: TrailGraph) {
   const choices: Choice[] = [];
-  const options = new Map<string, Identity>();
   const physicalLengths = new Map(graph.edges.map(edge => [edge.trail, edge.distance]));
   function footprint(edges: number[]): Footprint {
     const trails = new Set(edges.map(index => graph.edges[index]!.trail));
@@ -26,8 +26,7 @@ export function createRouteGroups(graph: TrailGraph) {
     const forward = JSON.stringify(walk);
     const backward = JSON.stringify(walk.toReversed().map(([trail, reverse]) => [trail, !reverse]));
     const key = JSON.stringify([graph.starts[route.start]!.id, forward < backward ? forward : backward]);
-    const existing = options.get(key);
-    if (existing) return existing;
+    const optionId = createHash('sha256').update(key).digest('hex').slice(0, 32);
 
     // Valid lollipops have matching outbound/return stem corridors at both ends.
     let first = 0;
@@ -40,10 +39,9 @@ export function createRouteGroups(graph: TrailGraph) {
     const cycle = footprint(route.edges.slice(first, last + 1));
     // Neither a shared approach nor a shared cycle alone makes two hikes similar.
     const group = choices.find(choice => similar(full, choice.full) && similar(cycle, choice.cycle));
-    const identity = { groupId: group?.groupId ?? route.id, optionId: route.id };
+    const identity = { groupId: group?.groupId ?? route.id, optionId };
     // Only first representatives define groups; later similar options never move them.
     if (!group) choices.push({ groupId: identity.groupId, full, cycle });
-    options.set(key, identity);
     return identity;
   };
 }

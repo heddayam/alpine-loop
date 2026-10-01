@@ -1,8 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import { DEFAULT_ROAD_LIMITS, ROUTES_PER_PAGE, type RouteChoice, type SearchQuery, type SearchSnapshot } from './model.js';
-import type { StoredRoute, WorkerEvent } from './data-format.js';
+import { DEFAULT_ROAD_LIMITS, type SearchQuery, type SearchSnapshot } from './model.js';
+import type { WorkerEvent } from './data-format.js';
 import type { readDataset } from './dataset.js';
+import { createRouteStore } from './route-store.js';
 
 export class RequestError extends Error {
   constructor(message: string, public statusCode: number) { super(message); }
@@ -31,11 +32,9 @@ export function parseQuery(value: unknown): SearchQuery {
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 
-type Choice = { groupId: string; directions: StoredRoute[] };
 type Entry = {
   snapshot: SearchSnapshot;
-  candidates: Map<string, { route: StoredRoute; choice: Choice }>;
-  groups: Map<string, Choice[]>;
+  store: ReturnType<typeof createRouteStore>;
   worker?: Worker;
 };
 
@@ -50,16 +49,11 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     entry.snapshot.status = status === 'complete' && entry.snapshot.coverageNote ? 'limited' : status;
     entry.snapshot.reason = reason ?? (status === 'complete' ? entry.snapshot.coverageNote : undefined);
   }
-  function summary(entry: Entry, route: StoredRoute, choice: Choice): RouteChoice {
-    return { ...route.summary, groupId: choice.groupId, groupSize: entry.groups.get(choice.groupId)!.length,
-      reverseId: choice.directions.find(other => other.summary.id !== route.summary.id)?.summary.id };
-  }
   function page(entry: Entry, offset = 0, groupId?: string): SearchSnapshot {
     if (!Number.isSafeInteger(offset) || offset < 0) throw new RequestError('Choose a valid results page.', 400);
-    const choices = groupId === undefined ? [...entry.groups.values()].map(group => group[0]!) : entry.groups.get(groupId);
+    const choices = entry.store.page(offset, groupId);
     if (!choices) throw new RequestError('This route group is not available.', 400);
-    return { ...entry.snapshot, offset, groupId, pageTotal: choices.length,
-      routes: choices.slice(offset, offset + ROUTES_PER_PAGE).map(choice => summary(entry, choice.directions[0]!, choice)) };
+    return { ...entry.snapshot, ...entry.store.counts, ...choices, offset, groupId };
   }
   async function stop(id: string, offset = 0, groupId?: string) {
     const entry = find(id);
@@ -69,45 +63,33 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
       await entry.worker?.terminate();
       entry.worker = undefined;
     }
-    return page(entry, offset, groupId);
+    return page(find(id), offset, groupId);
   }
   function start(query: SearchQuery) {
     if (current?.snapshot.status === 'running') {
       throw new RequestError('A search is already running. Reload to reconnect, or stop it before starting another.', 409);
     }
+    const store = createRouteStore();
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.info.id, query, status: 'running', routes: [], routeCount: 0, groupCount: 0, pageTotal: 0, offset: 0,
       selectionNote: 'Groups organize routes using approximate overlap of their paths and loops. Open a group to compare every starting point and path. Opposite directions share one route option; you can switch direction in its details when both qualify. Grouping does not stop exploration or limit the number of routes.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
-    const worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-      workerData: { directory, query, snapshotId: dataset.info.id },
-      resourceLimits: { maxOldGenerationSizeMb: 512 },
-    });
-    const entry: Entry = { snapshot, candidates: new Map(), groups: new Map(), worker };
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./search-worker.js', import.meta.url), {
+        workerData: { directory, query, snapshotId: dataset.info.id },
+        resourceLimits: { maxOldGenerationSizeMb: 512 },
+      });
+    } catch (error) { store.close(); throw error; }
+    current?.store.close();
+    const entry: Entry = { snapshot, store, worker };
     current = entry;
     worker.on('message', (event: WorkerEvent) => {
       if (snapshot.status !== 'running') return;
       try {
         if (event.type === 'coverage') snapshot.coverageNote = event.note;
-        else if (event.type === 'route') {
-          const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
-          const id = hash(event.route.summary.id);
-          if (entry.candidates.has(id)) return;
-          const groupId = hash(event.groupId), optionId = hash(event.optionId);
-          const candidate = { ...event.route, summary: { ...event.route.summary, id } };
-          let choice = entry.candidates.get(optionId)?.choice;
-          if (!choice) {
-            choice = { groupId, directions: [] };
-            const group = entry.groups.get(groupId) ?? [];
-            group.push(choice);
-            entry.groups.set(groupId, group);
-            snapshot.routeCount++;
-            snapshot.groupCount = entry.groups.size;
-          }
-          choice.directions.push(candidate);
-          entry.candidates.set(id, { route: candidate, choice });
-        }
+        else if (event.type === 'route') entry.store.add(event);
         else {
           snapshot.progress = event.progress;
           if (event.type === 'done') finish(entry, event.status, event.reason);
@@ -129,9 +111,19 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
   return { start, latest: () => current ? page(current) : null,
     get: (id: string, offset = 0, groupId?: string) => page(find(id), offset, groupId), stop,
     route: (id: string, routeId: string) => {
-      const candidate = find(id).candidates.get(routeId);
+      const candidate = find(id).store.route(routeId);
       if (!candidate) throw new RequestError('This route is not available.', 404);
-      return dataset.route(candidate.route).then(route => ({ ...route, ...summary(find(id), candidate.route, candidate.choice) }));
+      return dataset.route(candidate.stored).then(route => {
+        find(id);
+        return { ...route, ...candidate.summary };
+      });
     },
-    close: async () => { if (current) await stop(current.snapshot.id); } };
+    close: async () => {
+      const entry = current;
+      current = undefined;
+      if (!entry) return;
+      if (entry.snapshot.status === 'running') finish(entry, 'stopped');
+      try { await entry.worker?.terminate(); }
+      finally { entry.store.close(); }
+    } };
 }

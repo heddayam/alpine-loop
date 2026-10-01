@@ -22,38 +22,43 @@ it('keeps every route option within stable groups and gives emitted reversals on
   const group = createRouteGroups(graph);
   const first = route(0, [0, 2, 4, 1]);
   expect(first).toMatchObject({ distance: 8000, repetition: 0.4375 });
-  const firstIdentity = { groupId: first.id, optionId: first.id };
-  expect(group(first)).toEqual(firstIdentity);
+  const firstIdentity = group(first);
+  expect(firstIdentity.groupId).toBe(first.id);
   expect(group(route(0, [0, 5, 3, 1]))).toEqual(firstIdentity); // Full reversed walk, same original start.
   expect(group({ ...first, id: 'repeated-emission' })).toEqual(firstIdentity);
 
   const otherCycle = route(0, [0, 2, 6, 1]);
-  const otherCycleIdentity = { groupId: otherCycle.id, optionId: otherCycle.id };
-  expect(group(otherCycle)).toEqual(otherCycleIdentity); // Shared long approach must not hide another cycle.
+  const otherCycleIdentity = group(otherCycle);
+  expect(otherCycleIdentity.groupId).toBe(otherCycle.id); // Shared long approach must not hide another cycle.
   expect(group(route(0, [0, 7, 3, 1]))).toEqual(otherCycleIdentity);
   const otherApproach = route(0, [8, 10, 2, 4, 11, 9]);
-  const otherApproachIdentity = { groupId: otherApproach.id, optionId: otherApproach.id };
-  expect(group(otherApproach)).toEqual(otherApproachIdentity);
+  const otherApproachIdentity = group(otherApproach);
+  expect(otherApproachIdentity.groupId).toBe(otherApproach.id);
   expect(group(route(0, [8, 10, 5, 3, 11, 9]))).toEqual(otherApproachIdentity);
 
   const pureCycle = route(1, [2, 4]);
-  const cycleIdentity = { groupId: pureCycle.id, optionId: pureCycle.id };
-  expect(group(pureCycle)).toEqual(cycleIdentity); // No approach to peel off.
+  const cycleIdentity = group(pureCycle);
+  expect(cycleIdentity.groupId).toBe(pureCycle.id); // No approach to peel off.
   expect(group(route(1, [5, 3]))).toEqual(cycleIdentity);
   const otherEntrance = route(4, [4, 2]);
-  expect(group(otherEntrance)).toEqual({ groupId: pureCycle.id, optionId: otherEntrance.id });
+  const entranceIdentity = group(otherEntrance);
+  expect(entranceIdentity.groupId).toBe(pureCycle.id);
+  expect(entranceIdentity.optionId).not.toBe(cycleIdentity.optionId);
   const sameNodeEntrance = route(5, [2, 4]);
-  expect(group(sameNodeEntrance)).toEqual({ groupId: pureCycle.id, optionId: sameNodeEntrance.id });
+  const sameNodeIdentity = group(sameNodeEntrance);
+  expect(sameNodeIdentity.groupId).toBe(pureCycle.id);
+  expect(new Set([cycleIdentity.optionId, entranceIdentity.optionId, sameNodeIdentity.optionId]).size).toBe(3);
 
-  // The first emitted direction supplies the option ID, even when it is reverse.
+  // The same option identity is recovered when either direction arrives first.
   const reverseRing = route(2, [13]);
-  expect(group(reverseRing)).toEqual({ groupId: reverseRing.id, optionId: reverseRing.id });
-  expect(group(route(2, [12]))).toEqual({ groupId: reverseRing.id, optionId: reverseRing.id });
-  const rings = [reverseRing.id];
+  const ringIdentity = group(reverseRing);
+  expect(ringIdentity.groupId).toBe(reverseRing.id);
+  expect(group(route(2, [12]))).toEqual(ringIdentity);
+  const rings = [ringIdentity.optionId];
   for (let ring = 1; ring < 11; ring++) {
     const next = route(2, [12 + ring * 2]);
-    const identity = { groupId: next.id, optionId: next.id };
-    expect(group(next)).toEqual(identity);
+    const identity = group(next);
+    expect(identity.groupId).toBe(next.id);
     expect(group(route(2, [13 + ring * 2]))).toEqual(identity);
     rings.push(identity.optionId);
   }
@@ -61,10 +66,13 @@ it('keeps every route option within stable groups and gives emitted reversals on
 
   const nearFirst = route(3, [34, 36]);
   const nearOther = route(3, [34, 38]);
-  expect(group(nearFirst)).toEqual({ groupId: nearFirst.id, optionId: nearFirst.id });
+  const nearIdentity = group(nearFirst);
+  expect(nearIdentity.groupId).toBe(nearFirst.id);
   // Both footprints overlap by975/1025 (>85%); the25m substitution remains available.
-  expect(group(nearOther)).toEqual({ groupId: nearFirst.id, optionId: nearOther.id });
-  expect(group(route(3, [39, 35]))).toEqual({ groupId: nearFirst.id, optionId: nearOther.id });
+  const nearOtherIdentity = group(nearOther);
+  expect(nearOtherIdentity.groupId).toBe(nearFirst.id);
+  expect(nearOtherIdentity.optionId).not.toBe(nearIdentity.optionId);
+  expect(group(route(3, [39, 35]))).toEqual(nearOtherIdentity);
   expect(group(first)).toEqual(firstIdentity); // Later options never replace the representative.
-  expect(group(otherEntrance)).toEqual({ groupId: pureCycle.id, optionId: otherEntrance.id });
+  expect(group(otherEntrance)).toEqual(entranceIdentity);
 });
