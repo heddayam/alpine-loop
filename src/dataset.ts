@@ -110,7 +110,12 @@ export async function readDataset(directory: string) {
       : bounds && !contained(bounds, manifest.info.bounds)
         ? 'This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.'
         : undefined;
-    function describe(candidate: RouteCandidate): StoredRoute | null {
+    // Roads and sidewalks can connect a hike. Check this before diversity so
+    // connector-only walks cannot suppress a later qualifying trail hike.
+    function isHike(candidate: RouteCandidate): boolean {
+      return candidate.edges.some(index => sections.get(graph.edges[index]!.trail)!.kind === 'trail');
+    }
+    function describe(candidate: RouteCandidate): StoredRoute {
       const start = graph.starts[candidate.start];
       if (!start) throw new Error('Route has an unknown start');
       const steps = candidate.edges.map(index => {
@@ -119,9 +124,6 @@ export async function readDataset(directory: string) {
         if (!edge || !section) throw new Error('Route has an unknown trail');
         return { edge, section };
       });
-      // Roads and sidewalks can connect a hike; entirely connector-only walks
-      // do not enter the hiking shortlist. No arbitrary percentage is imposed.
-      if (!steps.some(step => step.section.kind === 'trail')) return null;
       let first = 0, last = steps.length - 1;
       while (first < last && steps[first]!.section.id === steps[last]!.section.id) { first++; last--; }
       const names = new Map<string, number>();
@@ -135,7 +137,7 @@ export async function readDataset(directory: string) {
         sections: steps.map(({ edge, section }) => ({ cell: owner(section.bounds), id: section.id, reverse: edge.reverse })),
       };
     }
-    return { graph, coverageNote, describe };
+    return { graph, coverageNote, isHike, describe };
   }
   async function route(stored: StoredRoute): Promise<HikeRoute> {
     const shapes = new Map<number, NetworkGeometry[number][1]>();

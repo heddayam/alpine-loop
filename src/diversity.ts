@@ -3,8 +3,8 @@ import type { RouteCandidate, TrailGraph } from './model.js';
 type Footprint = { trails: Set<number>; length: number };
 type Choice = { full: Footprint; cycle: Footprint };
 
-/** Select what is useful to compare; never decides whether exploration continues. */
-export function createShortlist(graph: TrailGraph, perStart = 10) {
+/** Omit similar routes without limiting distinct choices or search exploration. */
+export function createDiversityFilter(graph: TrailGraph) {
   const choices = new Map<number, Choice[]>();
   const physicalLengths = new Map(graph.edges.map(edge => [edge.trail, edge.distance]));
   function footprint(edges: number[]): Footprint {
@@ -18,7 +18,6 @@ export function createShortlist(graph: TrailGraph, perStart = 10) {
   }
   return (route: RouteCandidate): boolean => {
     const siblings = choices.get(route.start) ?? [];
-    if (siblings.length >= perStart) return false;
     // Valid lollipops have matching outbound/return stem corridors at both ends.
     let first = 0;
     let last = route.edges.length - 1;
