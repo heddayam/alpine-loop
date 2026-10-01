@@ -80,6 +80,7 @@ export type SearchSnapshot = {
   routeCount: number;
   offset: number;
   selectionNote?: string;
+  coverageNote?: string;
   reason?: string;
 };
 export type SearchEvent =
