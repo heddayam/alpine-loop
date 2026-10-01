@@ -44,7 +44,7 @@ function observe(snapshot) {
 async function reconnect() {
   const at = elapsed(), current = await api('GET', '/api/search');
   result.reconnect = { atMs: at, latencyMs: elapsed() - at, sameSearch: current?.id === id,
-    sameQuery: JSON.stringify(current?.query) === JSON.stringify(definition.query), status: current?.status, routeCount: current?.routeCount };
+    sameQuery: JSON.stringify(current?.query) === JSON.stringify(result.effectiveQuery), status: current?.status, routeCount: current?.routeCount };
   assert(result.reconnect.sameSearch && result.reconnect.sameQuery, 'Current-search reconnect differs from the original query');
 }
 function stop(trigger) {
@@ -83,6 +83,10 @@ try {
   assert(!memoryGuard, 'Harness RSS guard exceeded before search');
   began = performance.now();
   const started = await api('POST', '/api/search', definition.query);
+  result.effectiveQuery = started.query;
+  for (const [key, value] of Object.entries(definition.query)) {
+    assert.deepEqual(started.query[key], value, `App changed the requested ${key} constraint`);
+  }
   id = started.id; result.searchId = id; observe(started);
   while (last.status === 'running' && elapsed() < observationMs && !memoryGuard) {
     await delay(Math.min(result.apiPollIntervalMs, Math.max(0, observationMs - elapsed())));

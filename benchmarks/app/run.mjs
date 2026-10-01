@@ -51,6 +51,7 @@ const report = {
     'Route timing is first API observation with 100ms polls, not exact discovery time. Reconnect checks the current-search API, not browser rendering.',
     'The observation window and sampled RSS guard only stop this measurement through the app Stop API. An outer deadline kills a hung child after the window plus 15 seconds.',
     'Query criteria are frozen; historical pilot dataset IDs/start counts do not describe the supplied snapshot. Counts are retained app choices, not independent existence certificates.',
+    'Each result records the effective query, including app defaults for newer settings absent from the frozen request. Explicit requested constraints must remain unchanged.',
     'Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Failed or interrupted observations do not prove no matches.',
   ],
   plannedQueries: definitions.map(query => query.id), results: [],

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { search } from '../../dist/server/engine/search.js';
+import { DEFAULT_ROAD_LIMITS } from '../../dist/server/model.js';
 
 const [dataset, sourceReport] = process.argv.slice(2);
 if (!dataset || !sourceReport) throw new Error('Usage: node recover.mjs DATASET SOURCE_REPLAY_JSON');
@@ -19,11 +20,17 @@ const graphHash = createHash('sha256').update(await readFile(join(directory, 'gr
 assert.equal(graphHash, witness.graphSha256, 'Replay the independent source witness on this exact dataset first');
 const index = JSON.parse(gunzipSync(await readFile(join(directory, 'source-index.json.gz'))));
 const graph = JSON.parse(gunzipSync(await readFile(join(directory, 'graph.json.gz'))));
+for (const edge of graph.edges) {
+  const role = index.trails[edge.trail]?.kind;
+  assert(['trail', 'connector'].includes(role), 'Replay requires explicit section classifications');
+  edge.connector = role === 'connector';
+}
+const query = { ...fixed.query, roads: { ...DEFAULT_ROAD_LIMITS } };
 const expected = witness.orderedEdges.join('|');
 const observationMs = 30_000;
 let recovery = null, final = null, candidates = 0;
 const started = performance.now();
-for await (const event of search(graph, fixed.query, { signal: AbortSignal.timeout(observationMs) })) {
+for await (const event of search(graph, query, { signal: AbortSignal.timeout(observationMs) })) {
   if (event.type === 'route') {
     candidates++;
     if (!recovery && graph.starts[event.route.start].id === witness.startId
@@ -33,6 +40,6 @@ for await (const event of search(graph, fixed.query, { signal: AbortSignal.timeo
   }
   if (event.type === 'done') final = event;
 }
-console.log(JSON.stringify({ query: fixed.query, graphSha256: graphHash, node: process.version,
+console.log(JSON.stringify({ query, graphSha256: graphHash, node: process.version,
   observationMs, candidates, recovered: !!recovery, recovery, final }, null, 2));
 assert.ok(recovery, 'The fixed witness was not observed within this measurement window; this is not an emptiness proof');
