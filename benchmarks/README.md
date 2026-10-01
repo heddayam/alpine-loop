@@ -41,6 +41,16 @@ exclude the browser and do not bound memory during arbitrarily long searches.
 The report separately records old witnesses whose starts or road share no longer
 qualify; labels such as `known` are frozen case names, not current proof.
 
+The separate `results/discovery-review.json` captures longer retained-witness
+checks on the same snapshot. Pass Lakes produced a directly similar choice with
+a different start, verified through HTTP and GPX. Stevens-long and Paradise-short
+did not retain their fixed qualifying walks or direct 85% representatives within
+five minutes. Both searches remained unfinished. A dead-tree pruning experiment
+and a smaller trail-first ordering experiment preserved tiny-graph correctness
+but did not recover their tested witnesses either; neither is integrated. More
+output alone was not accepted as a quality improvement. Compiled-code hashes,
+query/source identities, observation limits and measurement scope are recorded.
+
 ## Historical pilot evidence
 
 Everything below describes the earlier inherited pilot and earlier engine

@@ -1,0 +1,408 @@
+{
+  "createdAt": "2026-10-01T02:01:28.735711+00:00",
+  "scope": "Bounded sequential retained-witness recovery observations using fresh HTTP app and worker per case. Data and frozen request plus explicit road defaults are identical within each query comparison. Different algorithms can publish different valid representatives. No current user app was contacted.",
+  "limitations": [
+    "not_observed means no exact original-start walk or direct85%-full-and-cycle representative was observed among retained app choices before stopping; not absence, completed enumeration, or proof that no merely similar raw engine candidate was emitted.",
+    "A similar representative can have a different start and is never labeled exact witness recovery. Its HTTP geometry and GPX match independently reconstructed snapshot profiles; raw sources for its extra sections were not separately reaudited.",
+    "Progress is the last throttled published snapshot. The very fast PassLakes recovery ended before a progress update, so zero attempted/expansion counters are stale rather than no work.",
+    "RSS covers server, worker threads, HTTP measurement client and independent verifier. Browser and other processes are excluded. Guards are sampled cooperative measurement bounds.",
+    "Timing, throughput and RSS are descriptive; cache state and concurrent machine activity were uncontrolled. Root final offline verification ran concurrently with part of trail-first Paradise-short. A code difference and changed counts alone are not a general performance claim.",
+    "The unused original baseline Paradise-day, Sunrise-day and Sunrise-long observations were paused by the integrator."
+  ],
+  "sharedProvenance": {
+    "snapshotManifestSha256": "32b3914bc0fbef15e21b7be6c29753fee482dc58eda5da681da2a6a8fa7df36f",
+    "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "frozenWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+    "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "sourceIndexSha256": "c6766247bda901b7cdc058499a75507e094520703251983af96230c22fec6e4c",
+    "compilerHashes": {
+      "build.py": "919f50c20b8a55bfc1625b179d7d8af452d23b4be7661332d359cf7684c88616",
+      "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+      "graph.py": "c0369ab590d7a19bddf15eebdc7f8308cdb5926278ccf59c8ada9f45c55e6df1",
+      "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+      "tiles.py": "4b7bb2bba707663be0cd835da24d3783ec89bef16da0b3357f1c623ce9e94059"
+    },
+    "independentReplayReportSha256": "a66fdf9edc2b407723c0e7c150cf6890744972718a5af8171f2e13f045d9a16f",
+    "snapshotId": "network-1b04494a15eb6e72754debbda8f5972a7a91f6a5771b7c89d0ce58ace6edc44a"
+  },
+  "implementations": {
+    "baseline": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "de10db0adff4d4aaaf80cf00fc4b9779c76a03cf262a95e9670c3de308770b39",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [],
+      "sourceCommit": "435d733",
+      "integrated": true
+    },
+    "tree-pruning": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "4084f622c08281b2db6273be2dd5cd3258c83e499fc6e44dd7a2d3ae755b3da7",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [
+        "engine/search.js"
+      ],
+      "sourceCommit": "c00daaa98fcf5493c749f9fa1f3bb95a08662bf8",
+      "integrated": false
+    },
+    "trail-first": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "69694ad12bdd05e4785f2037636bb53e10be1de0063df17ddd5447f5a8374397",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [
+        "engine/search.js"
+      ],
+      "sourceCommit": "a5314c42dd8c976b15ea23750ce2e8e7d2e9a394",
+      "integrated": false
+    }
+  },
+  "queries": {
+    "pass-lakes": {
+      "effectiveQuery": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          9656.064,
+          22530.816
+        ],
+        "gain": [
+          457.20000000000005,
+          1524
+        ],
+        "repetition": 0.4,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "fixedWalkSha256": "bfd848206b00bc43dcbd33290d5940e4c69b9587f5359dd20fbacbe4e8448544",
+      "fixedGeometrySha256": "37831e0c34da2ecd78ff378f52edddfb0bddaf971bf9fce6a183fb1026b9a877",
+      "sourceEvidenceSha256": "d4a48a6bf6f01b2285364aa60703805a98813c0e2d32250cf1f7c8398d3d2a7e"
+    },
+    "stevens-long": {
+      "effectiveQuery": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          80467.2,
+          120700.8
+        ],
+        "gain": [
+          2133.6,
+          6705.6
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "fixedWalkSha256": "d8452fe3cbf4e218194635bf3390d1d666f3db02f8568d4ed62b3ef7c6b19a40",
+      "fixedGeometrySha256": "689581274c2c02167597a0e64617f8e7c2d59240571a143b55caea18062e3e3d",
+      "sourceEvidenceSha256": "b2cd79bc0ba7e2893761e0b796a8c27e474aabf8a510f1e735a757e3cea5d433"
+    },
+    "paradise-short": {
+      "effectiveQuery": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          3218.688,
+          8046.72
+        ],
+        "gain": [
+          0,
+          548.64
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "fixedWalkSha256": "35ac2ff80a7093afe511eb5dde112a5042b99b78211f58ce4b6475b986fcc28e",
+      "fixedGeometrySha256": "f321d2ec72e17d3017f64cbeb4add1b9673128f9054771eaf861ef1260525b28",
+      "sourceEvidenceSha256": "a1b6eb63717a7ec31bce7e8522024b000e34b1661a6707073eae76b75a4d8b63"
+    }
+  },
+  "observations": [
+    {
+      "implementation": "baseline",
+      "queryId": "pass-lakes",
+      "outcome": "similar_retained_representative",
+      "retainedRecovery": {
+        "type": "similar_retained_representative",
+        "direction": null,
+        "observedMs": 81.765875,
+        "verifiedMs": 128.046833,
+        "apiRouteId": "e084ba596e98f4d4154ae30fd61304be",
+        "originalStartId": "osm-entrance:1004976342",
+        "retainedStartId": "osm-entrance:1771982386",
+        "summaryPagePresent": true,
+        "geometryPoints": 1106,
+        "geometryMatchesIndependentSnapshotProfile": true,
+        "geometryMatchesExactFixedWitness": false,
+        "gpxMatchesIndependentSnapshotProfile": true,
+        "gpxSha256": "06a9ea5be322b307a6101c3fefd078131e4471ab1d73846288786d463bedcd89",
+        "representativeExtraSectionsRawSourceReaudited": false,
+        "overlap": {
+          "full": {
+            "sharedMeters": 8631.61203280731,
+            "witnessMeters": 8631.61203280731,
+            "candidateMeters": 9031.979544630913,
+            "jaccard": 0.9556722300083593
+          },
+          "cycle": {
+            "sharedMeters": 5795.295833196498,
+            "witnessMeters": 5795.295833196498,
+            "candidateMeters": 5795.295833189764,
+            "jaccard": 1.000000000001162
+          }
+        },
+        "metrics": {
+          "distance": 12268.663256072065,
+          "gain": 1091.497940567573,
+          "roadDistance": 800.7350236614072,
+          "repetition": 0.263817144857997
+        }
+      },
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 146.208375,
+      "firstRetainedChoiceMs": 78.88275000000004,
+      "firstOriginalStartRetainedChoiceMs": 78.88633300000004,
+      "retainedChoices": 19,
+      "lastPublishedProgress": {
+        "totalStarts": 145,
+        "attemptedStarts": 0,
+        "completedStarts": 0,
+        "expansions": 0,
+        "elapsedMs": 0
+      },
+      "coverageNote": null,
+      "stopTrigger": "verified_recovery",
+      "stop": {
+        "latencyMs": 15.819209,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "workerEvents": [
+        {
+          "createdMs": 5.376875000000041,
+          "exitMs": 144.50487500000003,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 168804352,
+      "osPeakProcessRssBytes": 170229760,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/pass-lakes.json",
+      "reportSha256": "01f3d4c3a19761784112443625fbcbabb20ceeb94b55f4e77f4913dced4e169b",
+      "harnessSha256": "3311e23cf71c8e8a61a8c74e1342e1b50807663e7a6ec45f91d0ab32dbae3710"
+    },
+    {
+      "implementation": "baseline",
+      "queryId": "stevens-long",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300055.223167,
+      "firstRetainedChoiceMs": 636.5565419999999,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 40,
+      "lastPublishedProgress": {
+        "totalStarts": 73,
+        "attemptedStarts": 73,
+        "completedStarts": 42,
+        "expansions": 1797316635,
+        "elapsedMs": 299542
+      },
+      "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 6.309874999977183,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "workerEvents": [
+        {
+          "createdMs": 6.451332999999977,
+          "exitMs": 300053.154917,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 373932032,
+      "osPeakProcessRssBytes": 373932032,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/stevens-long.json",
+      "reportSha256": "5a575859ca3964187dea9806b6eb837bff9de5041d74d9725b141d070dd153b3",
+      "harnessSha256": "3311e23cf71c8e8a61a8c74e1342e1b50807663e7a6ec45f91d0ab32dbae3710"
+    },
+    {
+      "implementation": "baseline",
+      "queryId": "paradise-short",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300091.754916,
+      "firstRetainedChoiceMs": 39.47891600000001,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 763,
+      "lastPublishedProgress": {
+        "totalStarts": 195,
+        "attemptedStarts": 195,
+        "completedStarts": 47,
+        "expansions": 2031846735,
+        "elapsedMs": 299963
+      },
+      "coverageNote": null,
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 6.01420799997868,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "workerEvents": [
+        {
+          "createdMs": 4.1755409999999955,
+          "exitMs": 300089.753291,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 309723136,
+      "osPeakProcessRssBytes": 309723136,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/paradise-short.json",
+      "reportSha256": "cc3d46bff2aebe5c8f10b70e7735aff0ccdf146d6f9542f73396060b54c99c42",
+      "harnessSha256": "3311e23cf71c8e8a61a8c74e1342e1b50807663e7a6ec45f91d0ab32dbae3710"
+    },
+    {
+      "implementation": "tree-pruning",
+      "queryId": "stevens-long",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300037.20550000004,
+      "firstRetainedChoiceMs": 625.035,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 40,
+      "lastPublishedProgress": {
+        "totalStarts": 73,
+        "attemptedStarts": 73,
+        "completedStarts": 42,
+        "expansions": 1861395510,
+        "elapsedMs": 299583
+      },
+      "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 5.577166999981273,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "workerEvents": [
+        {
+          "createdMs": 4.492249999999984,
+          "exitMs": 300035.173542,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 455819264,
+      "osPeakProcessRssBytes": 455819264,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/pruned/stevens-long.json",
+      "reportSha256": "045b0c7f83749c87ab2456fe838084716655ad72666d17224f999521438746a4",
+      "harnessSha256": "6b6d0e3898127491e445660833488b59e382e681c65d9b934ea5bc560264b1de"
+    },
+    {
+      "implementation": "trail-first",
+      "queryId": "paradise-short",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300107.304542,
+      "firstRetainedChoiceMs": 44.945167000000026,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 1146,
+      "lastPublishedProgress": {
+        "totalStarts": 195,
+        "attemptedStarts": 195,
+        "completedStarts": 47,
+        "expansions": 1909517391,
+        "elapsedMs": 299981
+      },
+      "coverageNote": null,
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 3.8140419999836013,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "workerEvents": [
+        {
+          "createdMs": 4.861874999999998,
+          "exitMs": 300105.86375,
+          "exitCode": 1
+        }
+      ],
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 325713920,
+      "osPeakProcessRssBytes": 325713920,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/trail-first/paradise-short.json",
+      "reportSha256": "dad92e6b18dedafe02db520d5723bb459e49eeee534d89ff572365c5ff829613",
+      "harnessSha256": "37626c5c65311c1fe0ab2a87e49d30ef1fcdd20b6f1af419a5c3aa91f8a9e50f"
+    }
+  ],
+  "notStarted": [
+    {
+      "implementation": "trail-first",
+      "queryId": "stevens-long",
+      "reason": "Observation not started; integrator bounded this wave."
+    }
+  ],
+  "allProcessesExited": true,
+  "decision": "Neither experiment is integrated. Leaf pruning left the measured Stevens discovery outcome unchanged; trail-first ordering increased Paradise output without recovering the fixed qualifying route or a directly similar retained choice. Both preserve exhaustive engine route sets in the independent small-graph oracle, but these observations do not justify adding them as a demonstrated solution. Current route-recovery acceptance remains incomplete."
+}

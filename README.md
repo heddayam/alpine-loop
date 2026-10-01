@@ -100,6 +100,14 @@ defaults. The fixed Middle Fork witness remains in the network, but its 1.88 mil
 of roads/tracks exceed both defaults. That is a constraint exclusion, not missing
 topology. `benchmarks/network-review.json` records the source and storage evidence.
 
+Longer independent recovery checks exposed a remaining discovery gap: the current
+app did not retain either the fixed Stevens-long or Paradise-short witness, or a
+directly similar representative, within five minutes. Both walks are present and
+qualify in the prepared data. Those searches remained unfinished. Other matching
+results and passing correctness tests do not establish recovery of these routes.
+Two small solver experiments also failed their measured recovery checks and were
+left out; see `benchmarks/results/discovery-review.json`.
+
 A five-second installed-area observation attempted all 11,647 starts and fully
 explored 2,059. It peaked at about 758 MB of RSS including the server, worker and
 HTTP measurement client; browser memory was excluded. Stop returned in 11 ms.
