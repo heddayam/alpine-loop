@@ -31,25 +31,61 @@ constraints or producing many results does not establish useful hiking choices.
 The real result audit is in `route-quality-review.json`; geographic storage and
 source evidence are in `network-review.json` and `fresh-north-bend/`.
 
-The pinned `results/trail-hikes-network-30s.json` run at `1871032` measured all
-24 requests on snapshot `1b044…`: 7 completed, 16 were still searching at the
-30-second observation cutoff, and 1 exhausted the available graph with a
-coverage limitation. There were no app/measurement failures. Peak process RSS
-was 569,344,000 bytes; every Stop returned within 5.7 ms with its worker exited.
-API reconnects preserved the search and resolved query. These measurements
-exclude the browser and do not bound memory during arbitrarily long searches.
-The report separately records old witnesses whose starts or road share no longer
-qualify; labels such as `known` are frozen case names, not current proof.
+The current `results/depth-traversal-network-30s.json` run at `f9003a5` measured
+all 24 requests on corrected snapshot `f349…`: four completed, nineteen were
+still searching at thirty seconds, and one exhausted available coverage with
+a warning. The harness labels both searching and coverage-limited cases
+`unfinished`; their terminal statuses distinguish them. There were no app or
+measurement failures. Peak process RSS was 580,009,984 bytes; every Stop returned
+within 3.6 ms after its worker exited. All reconnects preserved the search/query,
+and all children exited with zero workers left. These measurements exclude the
+browser and do not bound memory during arbitrarily long searches. The earlier
+`results/trail-hikes-network-30s.json` remains pinned to its prior traversal/data.
 
-The separate `results/discovery-review.json` captures longer retained-witness
-checks on the same snapshot. Pass Lakes produced a directly similar choice with
-a different start, verified through HTTP and GPX. Stevens-long and Paradise-short
-did not retain their fixed qualifying walks or direct 85% representatives within
-five minutes. Both searches remained unfinished. A dead-tree pruning experiment
-and a smaller trail-first ordering experiment preserved tiny-graph correctness
-but did not recover their tested witnesses either; neither is integrated. More
-output alone was not accepted as a quality improvement. Compiled-code hashes,
-query/source identities, observation limits and measurement scope are recorded.
+The separate `results/discovery-review.json` records independent discovery checks.
+Earlier depth-first search missed the fixed Stevens-long and Paradise-short
+walks or direct 85% representatives within five minutes. The integrated `f9003a5`
+traversal explores outward section counts in increasing order at every start,
+retaining exhaustive search without auxiliary return-distance machinery. Four
+pruning/ordering experiments failed their measured recovery checks and were removed.
+
+With this traversal on the corrected `f349…` snapshot, all seven qualifying
+original walks were recovered exactly from their original starts: six within
+sixty seconds and Sunrise-long in 214.244 seconds during a separate five-minute
+observation. Sunrise's original sixty-second unfinished observation is preserved.
+These are engine checks before app filtering, not HTTP recovery or complete
+enumeration. Separate HTTP/GPX checks on `1b044…` verified similar
+Paradise and Stevens choices from different starts. Their exact original-start
+walks were also recovered in isolated engine checks. The app still suppresses
+alternate starts through its global similarity filter. Timing is descriptive;
+concurrent work and cache state were uncontrolled.
+
+## Current exact-witness measurements
+
+After building, verify the original starts and complete physical walks against
+the committed independent source replay in `prepared-witnesses.json`:
+
+```sh
+node benchmarks/run-engine.mjs --dataset .local-data/rewrite/network-cascades-retained-starts --output /tmp/alpine-witness-results.json --observation-ms 300000
+```
+
+Without `--observation-ms`, the observation window is sixty seconds; the command
+above allows five minutes. Use `--query sunrise-long` for one case. The runner
+selects the seven qualifying witnesses, checks the pinned snapshot and frozen
+queries, and runs each in a separate process. Original and reversed walks are
+reported separately, always requiring the original start. Discovery time includes
+data loading; setup time is recorded separately. Route outputs are discarded
+immediately after comparison, so memory excludes app retention and the browser.
+Each case continues until exploration finishes or a measurement guard intervenes.
+A recovered witness does not imply completed exploration. The default sampled
+RSS guard is 1 GB. Data/code changes and measurement errors fail visibly.
+
+The recorded seven-witness evidence used a frozen scratch verifier that stopped
+after each first exact recovery. Its source/compiled/input hashes and observation
+scope are preserved in `results/discovery-review.json`. The maintained runner
+checks the same committed physical walks, while measuring the whole observation
+window. The previous pilot adapter was replaced rather than kept as a second
+active engine measurement path.
 
 ## Historical pilot evidence
 
@@ -131,24 +167,11 @@ Git. Do not publish these pilot data as general prepared coverage.
 
 ## Descriptive engine measurements
 
-Run after installing the app's dependencies, with the three exported datasets
-under the same pilot directory. This runner uses no network or SQLite database:
-
-```sh
-node --test benchmarks/runner.test.mjs
-node --import tsx benchmarks/run-engine.mjs --data-root .local-data/rewrite/pilot --output /tmp/alpine-engine-results.json
-```
-
-Optional `--engine /absolute/path/to/search.ts` selects another implementation;
-`--budget-ms 10000` sets the observation window and `--query sunrise-long`
-selects one frozen request. The default ten seconds is a measurement choice,
-not an application timeout or acceptance target. Longer searches are legitimate.
-Use a quiet reference machine and run engine variants sequentially. Each query
-runs in a fresh child process, with no warmup and an uncontrolled filesystem
-cache. The report pins the machine, runner, engine directory sources, original
-source artifact, frozen queries/witnesses, graph and source-index hashes. Source
-files beside the engine must remain unchanged during a run.
-
+These captures used the retired pilot-specific runner at `f9003a5`. Reproduce
+that historical protocol in a separate checkout of that commit, with the three
+exported pilot datasets. The active runner above accepts only the corrected
+prepared-network snapshot. Historical ten-second budgets were measurement
+windows, never application timeouts or present acceptance targets.
 Graph read, decompression, JSON parse, audit setup and engine import are measured
 separately from search. Search records first exact output, first observation of
 all starts attempted, completed exploration, expansions and terminal status.

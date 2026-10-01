@@ -49,12 +49,11 @@ results never changes the submitted query.
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
 The server keeps one current search. It continues until exploration finishes or
-you stop it; there is no application time or result-count cutoff. Similar routes
-are grouped across all starting places: both the overall physical path and the
-loop must overlap by at least 85%. One stable representative stays available;
-substantially different loops and approaches remain separate. Results are paged,
-and geometry loads when needed. This similarity rule is a product heuristic,
-not a universal definition of a distinct hike.
+you stop it; there is no application time or result-count cutoff. The current
+presentation keeps one stable representative when both the overall physical path
+and the loop overlap by at least 85%. It compares routes across starting places.
+Results are paged, and geometry loads when needed. This approximate filter can
+hide useful alternate starts; exposing those choices remains unfinished.
 
 Road connections have adjustable limits on both total miles and percentage of
 the hike. The initial defaults are 1 mile and 10%. Both count every road section
@@ -91,28 +90,46 @@ That new snapshot has not replaced the running app's data, preserving its search
 
 `benchmarks/queries.json` freezes 24 requests across three Washington areas.
 The current [HTTP measurement harness](benchmarks/README.md) records resolved
-road settings, incomplete exploration, memory and cancellation. The current 24-case
-run had no failures: 7 completed, 16 were still searching after 30 seconds, and
-1 was limited by prepared coverage. Peak measured process RSS was 569 MB,
-excluding the browser; all Stops returned within 5.7 ms. Independent
-source replay keeps the Little Si and Paradise witnesses eligible under the road
-defaults. The fixed Middle Fork witness remains in the network, but its 1.88 miles
-of roads/tracks exceed both defaults. That is a constraint exclusion, not missing
-topology. `benchmarks/network-review.json` records the source and storage evidence.
+road settings, incomplete exploration, memory and cancellation. The latest run
+on the corrected snapshot had no failures: four completed, nineteen were still
+searching after thirty seconds, and one exhausted the available graph with a
+coverage warning. Peak measured process RSS was 580 MB, excluding the browser;
+all Stops returned within 3.6 ms. Every reconnect preserved the query and search.
+See `benchmarks/results/depth-traversal-network-30s.json`. These observations do
+not establish complete discovery or memory use during arbitrarily long searches.
 
-Longer independent recovery checks exposed a remaining discovery gap: the current
-app did not retain either the fixed Stevens-long or Paradise-short witness, or a
-directly similar representative, within five minutes. Both walks are present and
-qualify in the prepared data. Those searches remained unfinished. Other matching
-results and passing correctness tests do not establish recovery of these routes.
-Two small solver experiments also failed their measured recovery checks and were
-left out; see `benchmarks/results/discovery-review.json`.
+Independent source replay checks each historical witness against current data
+and constraints. Seven qualify; seven fail current road, elevation or access
+requirements. For example, the fixed Middle Fork witness remains in the network,
+but its 1.88 miles of roads/tracks exceed both road defaults. That is a constraint
+exclusion, not missing topology. `benchmarks/network-review.json` and
+`benchmarks/prepared-witnesses.json` record the source and storage evidence.
 
-A five-second installed-area observation attempted all 11,647 starts and fully
+The earlier depth-first traversal missed the fixed Stevens-long and Paradise-short
+witnesses, and directly similar representatives, during five-minute observations.
+The replacement now explores progressively longer outward paths at each start,
+so a deep branch does not monopolize that start. This changes traversal order,
+not accepted routes or completion rules, and adds eight production lines.
+Independent exhaustive tiny-graph checks still pass. Larger pruning experiments
+were removed after failing their measured recovery checks.
+
+On the corrected snapshot, all seven independently qualifying original walks
+were recovered exactly from their original starts: six within sixty seconds,
+and the long Sunrise example in a separate 214-second observation. These
+engine checks stopped after recovery; they do not prove complete enumeration.
+Engine recovery happens before the app's similarity filter. Separate HTTP/GPX
+checks recovered similar Paradise and Stevens routes
+from alternate starts, not those exact original walks. The current filter can
+hide alternate starts and needs further product work. See
+`benchmarks/results/discovery-review.json` for limits and pinned evidence.
+
+An earlier five-second installed-area observation, using the previous traversal,
+attempted all 11,647 starts and fully
 explored 2,059. It peaked at about 758 MB of RSS including the server, worker and
 HTTP measurement client; browser memory was excluded. Stop returned in 11 ms.
-The window included loading and 3.5 seconds of solver time, not completion. Statewide preparation, broader fresh
-source validation, and automatic first-run data acquisition remain unfinished.
+The window included loading and 3.5 seconds of solver time, not completion.
+Statewide preparation, broader fresh source validation, and automatic first-run
+data acquisition remain unfinished.
 Timing measurements are descriptive. Longer searches are acceptable.
 
 ```sh

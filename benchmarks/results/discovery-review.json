@@ -1,13 +1,15 @@
 {
   "createdAt": "2026-10-01T02:01:28.735711+00:00",
-  "scope": "Bounded sequential retained-witness recovery observations using fresh HTTP app and worker per case. Data and frozen request plus explicit road defaults are identical within each query comparison. Different algorithms can publish different valid representatives. No current user app was contacted.",
+  "scope": "Independent discovery checks: retained choices verified through HTTP/GPX on snapshot1b044, and exact original-start engine walks on corrected snapshotf349. Same frozen requests and explicit road defaults. Timing is descriptive; search may remain unfinished after successful recovery.",
   "limitations": [
     "not_observed means no exact original-start walk or direct85%-full-and-cycle representative was observed among retained app choices before stopping; not absence, completed enumeration, or proof that no merely similar raw engine candidate was emitted.",
     "A similar representative can have a different start and is never labeled exact witness recovery. Its HTTP geometry and GPX match independently reconstructed snapshot profiles; raw sources for its extra sections were not separately reaudited.",
     "Progress is the last throttled published snapshot. The very fast PassLakes recovery ended before a progress update, so zero attempted/expansion counters are stale rather than no work.",
     "RSS covers server, worker threads, HTTP measurement client and independent verifier. Browser and other processes are excluded. Guards are sampled cooperative measurement bounds.",
     "Timing, throughput and RSS are descriptive; cache state and concurrent machine activity were uncontrolled. Root final offline verification ran concurrently with part of trail-first Paradise-short. A code difference and changed counts alone are not a general performance claim.",
-    "The unused original baseline Paradise-day, Sunrise-day and Sunrise-long observations were paused by the integrator."
+    "Depth-layer HTTP checks found similar representatives at different starts, not exact original-start walks. Exact recovery is separately measured before app similarity filtering by the engine checks below.",
+    "Current-data engine observations use snapshotf349, whose only start changes are two independently verified restored parking contacts. All eligible starts for each original query are searched; the runner does not direct search toward its witness.",
+    "Engine RSS excludes the HTTP server, retained app choices and browser. Witness recovery does not prove complete enumeration, recreational usefulness of every output, or availability of alternate starts in the app."
   ],
   "sharedProvenance": {
     "snapshotManifestSha256": "32b3914bc0fbef15e21b7be6c29753fee482dc58eda5da681da2a6a8fa7df36f",
@@ -74,6 +76,59 @@
       ],
       "sourceCommit": "a5314c42dd8c976b15ea23750ce2e8e7d2e9a394",
       "integrated": false
+    },
+    "road-share": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "167478b25044091147f5eda5604c87b3a92d3047360bec79adca03715ccd2684",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [
+        "engine/search.js"
+      ],
+      "sourceCommit": null,
+      "integrated": false
+    },
+    "necessary-bounds": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/return-bound.js": "0cdc642f1df59efb2f5440126d54a6d69083a9da3fc0dbbba58581fe6831e00e",
+        "engine/search.js": "4c499d3954d1557c706ff2fa9c6c732b04fa70a3577dc467f727f5027584d663",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [
+        "engine/return-bound.js",
+        "engine/search.js"
+      ],
+      "sourceCommit": null,
+      "integrated": false
+    },
+    "depth-layers": {
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "changedFilesFromBaseline": [
+        "engine/search.js"
+      ],
+      "sourceCommit": "f9003a5",
+      "integrated": true
     }
   },
   "queries": {
@@ -394,6 +449,229 @@
       "reportPath": "/private/tmp/alpine-current-recovery/trail-first/paradise-short.json",
       "reportSha256": "dad92e6b18dedafe02db520d5723bb459e49eeee534d89ff572365c5ff829613",
       "harnessSha256": "37626c5c65311c1fe0ab2a87e49d30ef1fcdd20b6f1af419a5c3aa91f8a9e50f"
+    },
+    {
+      "implementation": "road-share",
+      "queryId": "paradise-short",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300055.794917,
+      "firstRetainedChoiceMs": 46.40895900000001,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 2174,
+      "lastPublishedProgress": {
+        "totalStarts": 195,
+        "attemptedStarts": 195,
+        "completedStarts": 73,
+        "expansions": 1016174096,
+        "elapsedMs": 299932
+      },
+      "coverageNote": null,
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 2.872583000047598,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 362020864,
+      "osPeakProcessRssBytes": 362020864,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/road-share/paradise-short.json",
+      "reportSha256": "90e52fc4eca1c1212de182bc41760986385f2c04fa7fa0c4408bd12db4061853",
+      "harnessSha256": "b3fa40af3479658fe69801bc1f07e0e1c61ea41ad3739ccda819dfc00f265407"
+    },
+    {
+      "implementation": "necessary-bounds",
+      "queryId": "stevens-long",
+      "outcome": "not_observed",
+      "retainedRecovery": null,
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 300042.18795899994,
+      "firstRetainedChoiceMs": 635.338167,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 158,
+      "lastPublishedProgress": {
+        "totalStarts": 73,
+        "attemptedStarts": 73,
+        "completedStarts": 42,
+        "expansions": 1645090075,
+        "elapsedMs": 299504
+      },
+      "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+      "stopTrigger": "observation_window",
+      "stop": {
+        "latencyMs": 4.38862500002142,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 433618944,
+      "osPeakProcessRssBytes": 433618944,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/necessary-bounds/stevens-long.json",
+      "reportSha256": "a9529ad1ccb51891afcf963fb09c6dad16de8aa6aa4ef174f022229dc3ea747a",
+      "harnessSha256": "863aab3aeadb55aeddb3cda3048581da0f2052c023a6a93055cffa8e7a820a41"
+    },
+    {
+      "implementation": "depth-layers",
+      "queryId": "paradise-short",
+      "outcome": "similar_retained_representative",
+      "retainedRecovery": {
+        "type": "similar_retained_representative",
+        "direction": null,
+        "observedMs": 68.118042,
+        "verifiedMs": 121.700917,
+        "apiRouteId": "c1664d21e20b3ffda0d417d9d72cb060",
+        "originalStartId": "osm-entrance:11028822550",
+        "retainedStartId": "osm-entrance:2016153640",
+        "summaryPagePresent": true,
+        "geometryPoints": 447,
+        "geometryMatchesIndependentSnapshotProfile": true,
+        "geometryMatchesExactFixedWitness": false,
+        "gpxMatchesIndependentSnapshotProfile": true,
+        "gpxSha256": "ba8315e41621ec9f24bcfad70291143242dd26af09f125c7be262c5ac3633e11",
+        "overlap": {
+          "full": {
+            "sharedMeters": 5393.650070471995,
+            "witnessMeters": 5420.698681785511,
+            "candidateMeters": 5634.078738738955,
+            "jaccard": 0.9527519409048452
+          },
+          "cycle": {
+            "sharedMeters": 4455.823026874182,
+            "witnessMeters": 4455.823026874182,
+            "candidateMeters": 4455.823026874352,
+            "jaccard": 0.999999999999962
+          }
+        },
+        "representativeExtraSectionsRawSourceReaudited": false,
+        "metrics": {
+          "distance": 6812.334450602093,
+          "gain": 318.05433502827736,
+          "roadDistance": 0,
+          "repetition": 0.17295916993033392
+        }
+      },
+      "observationBudgetMs": 60000,
+      "observedElapsedMs": 125.52337499999999,
+      "firstRetainedChoiceMs": 38.802291999999994,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 4,
+      "lastPublishedProgress": {
+        "totalStarts": 195,
+        "attemptedStarts": 0,
+        "completedStarts": 0,
+        "expansions": 0,
+        "elapsedMs": 0
+      },
+      "coverageNote": null,
+      "stopTrigger": "verified_recovery",
+      "stop": {
+        "latencyMs": 2.0960829999999646,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 154370048,
+      "osPeakProcessRssBytes": 157024256,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/depth-layers/paradise-short.json",
+      "reportSha256": "cb4d79614ce4e1cc3484d74f724aebcf39f3d1adf939914417be490581ee8b16",
+      "harnessSha256": "9213296fcb4f88e1041f93270c7f2cbff7e508f485c3c1866210df1b2697eccb"
+    },
+    {
+      "implementation": "depth-layers",
+      "queryId": "stevens-long",
+      "outcome": "similar_retained_representative",
+      "retainedRecovery": {
+        "type": "similar_retained_representative",
+        "direction": null,
+        "observedMs": 3050.698125,
+        "verifiedMs": 3121.943667,
+        "apiRouteId": "f77e0f1ed6907023cfa1028ca1af939d",
+        "originalStartId": "osm-entrance:1013210510",
+        "retainedStartId": "osm-entrance:1013209805",
+        "summaryPagePresent": true,
+        "geometryPoints": 7008,
+        "geometryMatchesIndependentSnapshotProfile": true,
+        "geometryMatchesExactFixedWitness": false,
+        "gpxMatchesIndependentSnapshotProfile": true,
+        "gpxSha256": "73d83429be986ee32ee531be90fed2d67a94cefd96493c6cc76d2b34d4d4d9c6",
+        "overlap": {
+          "full": {
+            "sharedMeters": 61356.03059035872,
+            "witnessMeters": 66314.06077199503,
+            "candidateMeters": 61356.03059035908,
+            "jaccard": 0.9252341038398532
+          },
+          "cycle": {
+            "sharedMeters": 16356.861605227168,
+            "witnessMeters": 16356.861605227168,
+            "candidateMeters": 16356.861605232778,
+            "jaccard": 0.999999999999657
+          }
+        },
+        "representativeExtraSectionsRawSourceReaudited": false,
+        "metrics": {
+          "distance": 106355.1995754903,
+          "gain": 5299.225545409449,
+          "roadDistance": 0,
+          "repetition": 0.42310267071795965
+        },
+        "sourceSubwalkProof": {
+          "fixedWitnessStart": "osm-entrance:1013210510",
+          "retainedStart": "osm-entrance:1013209805",
+          "allRetainedSectionsAlreadySourceVerified": true,
+          "exactOriginalSubwalkMatches": [
+            {
+              "removedApproachSectionsEachEnd": 3,
+              "direction": "reversed"
+            }
+          ],
+          "claim": "Different start, not exact original witness. The retained directed walk can be checked as an exact suffix of the original outward stem plus original cycle and return suffix, so its section lineage is entirely contained in the independently verified source walk.",
+          "reportSha256": "7efd5eadc4309b6cba19c3ccbc04ee18267d783c4d5bdbee7310369ef22fe26d",
+          "engineSha256": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+          "proofSha256": "9384288e960c33acf38365ec314fdda184dd211d30cee5502c6218339e01a8cb"
+        }
+      },
+      "observationBudgetMs": 300000,
+      "observedElapsedMs": 13153.136292000001,
+      "firstRetainedChoiceMs": 649.565875,
+      "firstOriginalStartRetainedChoiceMs": null,
+      "retainedChoices": 92,
+      "lastPublishedProgress": {
+        "totalStarts": 73,
+        "attemptedStarts": 73,
+        "completedStarts": 41,
+        "expansions": 93168694,
+        "elapsedMs": 12591
+      },
+      "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.",
+      "stopTrigger": "verified_recovery",
+      "stop": {
+        "latencyMs": 3.4946249999993597,
+        "status": "stopped",
+        "activeWorkersAfterResponse": 0
+      },
+      "activeWorkersAtEnd": 0,
+      "sampledPeakProcessRssBytes": 396525568,
+      "osPeakProcessRssBytes": 396525568,
+      "rssGuard": null,
+      "measurementError": null,
+      "reportPath": "/private/tmp/alpine-current-recovery/depth-layers-stevens/stevens-long.json",
+      "reportSha256": "7efd5eadc4309b6cba19c3ccbc04ee18267d783c4d5bdbee7310369ef22fe26d",
+      "harnessSha256": "0775d16a1f8d36c973bed6ff288b934b51580aea9b0b2551126a7b4972780dfb",
+      "originalWitnessRetainedProbe": {
+        "startedMs": 3122.472375,
+        "endedMs": 13147.563167,
+        "scope": "Only retained worker events are visible; absence cannot distinguish unvisited from diversity-rejected candidates.",
+        "observed": false
+      }
     }
   ],
   "notStarted": [
@@ -404,5 +682,922 @@
     }
   ],
   "allProcessesExited": true,
-  "decision": "Neither experiment is integrated. Leaf pruning left the measured Stevens discovery outcome unchanged; trail-first ordering increased Paradise output without recovering the fixed qualifying route or a directly similar retained choice. Both preserve exhaustive engine route sets in the independent small-graph oracle, but these observations do not justify adding them as a demonstrated solution. Current route-recovery acceptance remains incomplete."
+  "decision": {
+    "integrated": "Depth-layer enumeration at f9003a5. Eight additional production lines; no route/time cap or auxiliary return-distance data structure. Independent finite-graph oracle remains exact; a dense-detour regression verifies discovery of simpler loops before exhausting deep branches.",
+    "rejected": "Dead-tree pruning, trail-first ordering, road-share prefix bound and shared conservative return-distance pruning did not recover their measured fixed witnesses within five minutes. Their additional machinery was removed despite increased result counts in some cases.",
+    "remaining": "All seven qualifying source witnesses have now been recovered exactly by the engine (six within60seconds, Sunrise-long in214.244seconds in a separate300second observation). This proves discovery of these fixed routes, not complete enumeration. App similarity filtering can suppress meaningful alternate starts even when the engine recovers them. Coverage limits, route-family presentation, broader fresh-source validation and automatic delivery remain unfinished."
+  },
+  "updatedAt": "2026-10-01T02:25:56.963492+00:00",
+  "currentDataExactEngine": {
+    "createdAt": "2026-10-01T02:22:09.310Z",
+    "finishedAt": "2026-10-01T02:23:59.416Z",
+    "sourceCommit": "f9003a503af10d51e1ad4c28365d59051409b8cb",
+    "scope": "Seven source-audited eligible witnesses in the corrected f349 snapshot. Fresh sequential engine process per unchanged query, including all original eligible starts. Exact original-start ordered/reversed physical section walk only. No app, worker, HTTP, browser or GPX claim.",
+    "caveats": [
+      "Concurrent independent HTTP benchmark and cache state uncontrolled; timing is descriptive.",
+      "Only the fixed independently source-backed witnesses are checked, not all Washington data or all possible routes.",
+      "Stopped after first exact recovery; starts attempted are distinct from starts exhaustively completed.",
+      "Memory includes data reader, engine and witness verifier; excludes coordinator and other processes."
+    ],
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "observationMs": 60000,
+    "rssGuardBytes": 1000000000,
+    "sharedProvenance": {
+      "auditReportSha256": "c1712389d51eaecc07c5d5472c8f29f3c11e9696d580cf3b7c316f4d7b7ba024",
+      "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+      "sourceIndexSha256": "54f9385d0cf76d5f8ca2e3f227181aaba7f278f4857a9e7569b94a05bc7b8f39",
+      "frozenWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+      "compilerHashes": {
+        "build.py": "7ae94ee3db8acea367fb5b441546d80bfe2860236cebcf9f722877f702c8307d",
+        "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+        "graph.py": "9ded0c3beaa0b1407b8b9354293a690ffdc176c3fbf75fea768591eba2d2a66d",
+        "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+        "tiles.py": "9897b6988494a425cf952cde26c19eda2e4365fd475616fa974ef784758ebef3"
+      },
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "compiledHashes": {
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a"
+      },
+      "runnerSha256": "5a854fd6b3ab23db8ce0814383e1a54a306d4b99b8448b5b83279e1922f2393b"
+    },
+    "allChildrenExited": true,
+    "exactRecoveries": 6,
+    "totalWitnesses": 7,
+    "maxPeakRssBytes": 403357696,
+    "hardware": {
+      "node": "v24.11.0",
+      "architecture": "arm64",
+      "platform": "darwin",
+      "cpu": "Apple M3",
+      "totalMemory": 17179869184
+    },
+    "cases": [
+      {
+        "queryId": "north-bend-known",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.82,
+            47.43,
+            -121.68,
+            47.54
+          ],
+          "distance": [
+            6437.376,
+            16093.44
+          ],
+          "gain": [
+            0,
+            1066.8
+          ],
+          "repetition": 0.3,
+          "includeUnknown": false,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 813,
+          "edges": 1557,
+          "starts": 7,
+          "coverageNote": null
+        },
+        "match": {
+          "direction": "reversed",
+          "originalStartId": "osm-entrance:12761651948",
+          "engineMs": 4.660584,
+          "elapsedMs": 51.739333,
+          "sectionCount": 22,
+          "distance": 9524.474384424517,
+          "gain": 679.8037607038207,
+          "roadDistance": 0,
+          "repetition": 0.2762331119713007
+        },
+        "progress": {
+          "totalStarts": 7,
+          "attemptedStarts": 7,
+          "completedStarts": 2,
+          "expansions": 5830,
+          "elapsedMs": 4
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 1,
+        "originalStartRouteEvents": 1,
+        "sampledPeakRssBytes": 103251968,
+        "osPeakRssBytes": 103251968,
+        "witnessSha256": "c5885f1b5daa57da12b83cfab4a220e222b75ff6ef0ad209d4cd2388bd1cdbcd",
+        "sourceEvidenceSha256": "ce5d9aa63e04c77a010888467c6ac04f15f0a3f9bc355b71d3d76bd4e4208e9d",
+        "reportFile": "north-bend-known.json",
+        "reportSha256": "3544482b56a19b9053c040a3ab076eb3e1b5f4c2eb3125e98ab4fb6c9325c7b8",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "pass-lakes",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.54,
+            47.35,
+            -121.35,
+            47.47
+          ],
+          "distance": [
+            9656.064,
+            22530.816
+          ],
+          "gain": [
+            457.20000000000005,
+            1524
+          ],
+          "repetition": 0.4,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 3134,
+          "edges": 7136,
+          "starts": 145,
+          "coverageNote": null
+        },
+        "match": {
+          "direction": "ordered",
+          "originalStartId": "osm-entrance:1004976342",
+          "engineMs": 29.411208000000002,
+          "elapsedMs": 59.038083,
+          "sectionCount": 9,
+          "distance": 11467.928232418124,
+          "gain": 1056.9621029171162,
+          "roadDistance": 0,
+          "repetition": 0.24732594607568
+        },
+        "progress": {
+          "totalStarts": 145,
+          "attemptedStarts": 145,
+          "completedStarts": 14,
+          "expansions": 69044,
+          "elapsedMs": 30
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 1,
+        "originalStartRouteEvents": 1,
+        "sampledPeakRssBytes": 86835200,
+        "osPeakRssBytes": 86835200,
+        "witnessSha256": "253c618685904b12ff2b4efdd4af4bb84886802de271be2dded3e58f88dbacf9",
+        "sourceEvidenceSha256": "d4a48a6bf6f01b2285364aa60703805a98813c0e2d32250cf1f7c8398d3d2a7e",
+        "reportFile": "pass-lakes.json",
+        "reportSha256": "3eb8f504f459099179cdb5f8c648024b526a149c832b01381dd8a4330ab3f849",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "stevens-long",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.15,
+            47.7,
+            -120.94,
+            47.84
+          ],
+          "distance": [
+            80467.2,
+            120700.8
+          ],
+          "gain": [
+            2133.6,
+            6705.6
+          ],
+          "repetition": 0.45,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 55475,
+          "edges": 132218,
+          "starts": 73,
+          "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out."
+        },
+        "match": {
+          "direction": "reversed",
+          "originalStartId": "osm-entrance:1013210510",
+          "engineMs": 11831.914417,
+          "elapsedMs": 12280.319042000001,
+          "sectionCount": 45,
+          "distance": 116271.25993876293,
+          "gain": 5830.484774879909,
+          "roadDistance": 0,
+          "repetition": 0.42966077079648946
+        },
+        "progress": {
+          "totalStarts": 73,
+          "attemptedStarts": 73,
+          "completedStarts": 41,
+          "expansions": 83793103,
+          "elapsedMs": 11832
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 3940,
+        "originalStartRouteEvents": 34,
+        "sampledPeakRssBytes": 361381888,
+        "osPeakRssBytes": 361381888,
+        "witnessSha256": "8ba4292a8c586569e1151083f0edee74f2dc73c9f94135a1681ba8d4cf351368",
+        "sourceEvidenceSha256": "b2cd79bc0ba7e2893761e0b796a8c27e474aabf8a510f1e735a757e3cea5d433",
+        "reportFile": "stevens-long.json",
+        "reportSha256": "2cc7828657dcfb4488fef71d8685e5ef27b65cfeff927b4d8ed8fc3c3a6d72b1",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "paradise-short",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.8,
+            46.76,
+            -121.67,
+            46.82
+          ],
+          "distance": [
+            3218.688,
+            8046.72
+          ],
+          "gain": [
+            0,
+            548.64
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 526,
+          "edges": 1302,
+          "starts": 195,
+          "coverageNote": null
+        },
+        "match": {
+          "direction": "reversed",
+          "originalStartId": "osm-entrance:11028822550",
+          "engineMs": 41.26049999999999,
+          "elapsedMs": 52.421417,
+          "sectionCount": 12,
+          "distance": 6385.57433669684,
+          "gain": 303.76605080497416,
+          "roadDistance": 0,
+          "repetition": 0.15110240740074835
+        },
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 8,
+          "expansions": 145403,
+          "elapsedMs": 42
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 22,
+        "originalStartRouteEvents": 1,
+        "sampledPeakRssBytes": 74694656,
+        "osPeakRssBytes": 74711040,
+        "witnessSha256": "88c0397571b3458c04c3207f20685ef7ca40be700f80dd14df4946645d2c8b0f",
+        "sourceEvidenceSha256": "a1b6eb63717a7ec31bce7e8522024b000e34b1661a6707073eae76b75a4d8b63",
+        "reportFile": "paradise-short.json",
+        "reportSha256": "2575ed63cbd0fa31c7cbd45905d4a67e5d31f5a460ef9bcdb571d13fd0e374db",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "paradise-day",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.8,
+            46.76,
+            -121.67,
+            46.82
+          ],
+          "distance": [
+            9656.064,
+            19312.128
+          ],
+          "gain": [
+            457.20000000000005,
+            1371.6000000000001
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 871,
+          "edges": 2036,
+          "starts": 195,
+          "coverageNote": null
+        },
+        "match": {
+          "direction": "reversed",
+          "originalStartId": "osm-entrance:11028822550",
+          "engineMs": 37288.252459,
+          "elapsedMs": 37305.157917,
+          "sectionCount": 30,
+          "distance": 17046.35791450528,
+          "gain": 994.4277555699314,
+          "roadDistance": 0,
+          "repetition": 0.22965471729859296
+        },
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 285408306,
+          "elapsedMs": 37289
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 12463,
+        "originalStartRouteEvents": 549,
+        "sampledPeakRssBytes": 231833600,
+        "osPeakRssBytes": 231849984,
+        "witnessSha256": "10eb98d556a983995dbe91fb1a1092073e589c1384eaccbbc43c4810a73e4112",
+        "sourceEvidenceSha256": "79eeb1b8a17d7d3856f6a1de5fc1cf24a8b69e3513b9d92c16d4f4d2930e2857",
+        "reportFile": "paradise-day.json",
+        "reportSha256": "d57524f3bf53fb8181c4952fe88240c171d9393dfd75c2ee510ede316ca5b5e2",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "sunrise-day",
+        "outcome": "exact_original_start_witness",
+        "query": {
+          "area": [
+            -121.7,
+            46.87,
+            -121.57,
+            46.95
+          ],
+          "distance": [
+            12874.752,
+            25749.504
+          ],
+          "gain": [
+            609.6,
+            1676.4
+          ],
+          "repetition": 0.35,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 1302,
+          "edges": 3166,
+          "starts": 23,
+          "coverageNote": null
+        },
+        "match": {
+          "direction": "reversed",
+          "originalStartId": "osm-entrance:5305234174",
+          "engineMs": 38.666666000000006,
+          "elapsedMs": 67.302541,
+          "sectionCount": 17,
+          "distance": 14837.228111601788,
+          "gain": 961.6395080983104,
+          "roadDistance": 0,
+          "repetition": 0.33789139499916854
+        },
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 0,
+          "expansions": 211951,
+          "elapsedMs": 38
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "exact_recovery",
+        "rawRouteEvents": 6,
+        "originalStartRouteEvents": 6,
+        "sampledPeakRssBytes": 75038720,
+        "osPeakRssBytes": 75038720,
+        "witnessSha256": "58e4bb522f44bc9ea6948ffa5497187ed4705ad618b3a3941e7f834d48bf062d",
+        "sourceEvidenceSha256": "1c89961e14b6fe2b1e42d4a406c8c09e4980c40d6d4dbd9a1e5176915cbbdbd9",
+        "reportFile": "sunrise-day.json",
+        "reportSha256": "3bf4457b6aac819c6c2f6dee9197fecbce275b3f99efa0d2838c1ec2d07a67df",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "queryId": "sunrise-long",
+        "outcome": "not_observed",
+        "query": {
+          "area": [
+            -121.7,
+            46.87,
+            -121.57,
+            46.95
+          ],
+          "distance": [
+            88513.92,
+            136794.24
+          ],
+          "gain": [
+            2438.4,
+            7620
+          ],
+          "repetition": 0.45,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "graph": {
+          "nodes": 64053,
+          "edges": 156482,
+          "starts": 23,
+          "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out."
+        },
+        "match": null,
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 0,
+          "expansions": 506104599,
+          "elapsedMs": 59503
+        },
+        "terminalStatus": "stopped",
+        "stopReason": "observation_window",
+        "rawRouteEvents": 808,
+        "originalStartRouteEvents": 42,
+        "sampledPeakRssBytes": 403357696,
+        "osPeakRssBytes": 403357696,
+        "witnessSha256": "f9a2e5971db088e2e1b706d0611596bbe7270611e5ca0eb8b3e36fca6588a4d8",
+        "sourceEvidenceSha256": "e098bc8170ed6b9addcd90d2c81c91601ea398b0a698cd6b54d60392145e238c",
+        "reportFile": "sunrise-long.json",
+        "reportSha256": "c99092675d12542fd70dc1a29f13ec74aa42d8c92cac7eb67210098fe97239f9",
+        "exitCode": 0,
+        "error": null
+      }
+    ],
+    "summarySha256": "7a54d87e92d520f6457c0f2f7efaa92e4c99ac777fde70483567df2df3918d88",
+    "batchReportSha256": "aff7142465e7e5a304c11e068104472da9801e2d47d9c0051c71a2086c9076ce",
+    "extendedObservation": {
+      "queryId": "sunrise-long",
+      "budgetMs": 300000,
+      "rssGuardBytes": 1000000000,
+      "outcome": "exact_original_start_witness",
+      "query": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          88513.92,
+          136794.24
+        ],
+        "gain": [
+          2438.4,
+          7620
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "provenance": {
+        "witnessSha256": "f9a2e5971db088e2e1b706d0611596bbe7270611e5ca0eb8b3e36fca6588a4d8",
+        "auditReportSha256": "c1712389d51eaecc07c5d5472c8f29f3c11e9696d580cf3b7c316f4d7b7ba024",
+        "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+        "sourceIndexSha256": "54f9385d0cf76d5f8ca2e3f227181aaba7f278f4857a9e7569b94a05bc7b8f39",
+        "frozenWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+        "compilerHashes": {
+          "build.py": "7ae94ee3db8acea367fb5b441546d80bfe2860236cebcf9f722877f702c8307d",
+          "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+          "graph.py": "9ded0c3beaa0b1407b8b9354293a690ffdc176c3fbf75fea768591eba2d2a66d",
+          "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+          "tiles.py": "9897b6988494a425cf952cde26c19eda2e4365fd475616fa974ef784758ebef3"
+        },
+        "sourceEvidenceSha256": "e098bc8170ed6b9addcd90d2c81c91601ea398b0a698cd6b54d60392145e238c",
+        "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+        "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+        "compiledHashes": {
+          "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+          "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+          "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a"
+        },
+        "runnerSha256": "1cc9a259775ecdfb6e9e0a5edf1b038588976149448c5b74a25e20bcbfe8e5b9"
+      },
+      "hardware": {
+        "node": "v24.11.0",
+        "architecture": "arm64",
+        "platform": "darwin",
+        "cpu": "Apple M3",
+        "totalMemory": 17179869184
+      },
+      "graph": {
+        "nodes": 64053,
+        "edges": 156482,
+        "starts": 23,
+        "coverageNote": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out."
+      },
+      "rawRouteEvents": 2177,
+      "originalStartRouteEvents": 141,
+      "terminal": {
+        "type": "done",
+        "status": "stopped",
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 0,
+          "expansions": 1702168316,
+          "elapsedMs": 214246
+        },
+        "reason": "Search stopped"
+      },
+      "guard": null,
+      "elapsedMs": 214764.15375,
+      "sampledPeakRssBytes": 445251584,
+      "osPeakRssBytes": 445251584,
+      "reportSha256": "8a2848cca4b0cb0aefc382853676f2e8eab3806c50881e0f5966b2eb6f0f020e",
+      "match": {
+        "direction": "reversed",
+        "engineMs": 214243.747458,
+        "elapsedMs": 214763.598375,
+        "startId": "osm-entrance:110921039",
+        "sectionCount": 58,
+        "metrics": {
+          "distance": 112758.09029764449,
+          "gain": 6512.648671448338,
+          "roadDistance": 0,
+          "repetition": 0.44766270900443716
+        }
+      }
+    },
+    "exactRecoveriesIncludingExtension": 7
+  },
+  "maintainedRunnerVerification": {
+    "commit": "4b60f31",
+    "reportSha256": "aaf831e3556a8dae9b8cb65ff982877964db22ca348a8a8556c947d91135a592",
+    "inputs": {
+      "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "originalWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+      "preparedWitnessesSha256": "9f5dca9f48bdcc013e09b6f711faa72b8f6d93a327a4c8a3a47ca36ee0679349",
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "runnerSha256": "2da21316fda57fd007df7be85b410ed10090d662bdbea96a1a8a3aa5abc45b73"
+    },
+    "case": {
+      "id": "north-bend-known",
+      "outcome": "complete_within_snapshot",
+      "outputs": 752,
+      "witness": {
+        "directedRecoveredMs": 61.579249999999995,
+        "reversedRecoveredMs": 61.155750000000005,
+        "recovered": true
+      },
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 7,
+        "expansions": 6501488,
+        "elapsedMs": 726
+      },
+      "guard": null,
+      "measurementError": null,
+      "sampledPeakRssBytes": 127369216,
+      "osProcessPeakRssBytes": 127369216,
+      "processOutcome": {
+        "exitCode": 0,
+        "signal": null,
+        "error": null,
+        "stderr": ""
+      }
+    },
+    "offlineIdentityTest": "passed: original start plus complete physical section order; whole reverse recognized separately; wrong start/order/length and absent section rejected"
+  },
+  "currentHttpObservation": {
+    "report": "benchmarks/results/depth-traversal-network-30s.json",
+    "sha256": "6f2734e2b99c8a99d56f5e2fe6c7ea7baf6658ff8ed906bcbb28d5815c2ee02b",
+    "startedAt": "2026-10-01T02:21:30.281Z",
+    "finishedAt": "2026-10-01T02:31:11.545Z",
+    "cases": 24,
+    "hasFailures": false,
+    "measurementError": null,
+    "outcomes": {
+      "unfinished": 20,
+      "complete_within_snapshot": 4
+    },
+    "terminalObservationStatuses": {
+      "running": 19,
+      "complete": 4,
+      "limited": 1
+    },
+    "queriesWithRetainedRoutes": 12,
+    "completeWithinSnapshot": [
+      {
+        "id": "north-bend-known",
+        "routes": 112
+      },
+      {
+        "id": "middle-fork-flat",
+        "routes": 0
+      },
+      {
+        "id": "stevens-known",
+        "routes": 0
+      },
+      {
+        "id": "paradise-known",
+        "routes": 0
+      }
+    ],
+    "limited": [
+      {
+        "id": "carbon-easy",
+        "reason": "This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out."
+      }
+    ],
+    "maxOsRss": {
+      "id": "pass-long",
+      "bytes": 580009984
+    },
+    "maxSampledRss": {
+      "id": "pass-long",
+      "bytes": 579633152
+    },
+    "stoppedQueries": 19,
+    "maxStopMs": 3.5287499999976717,
+    "maxWorkerExitAfterStopMs": 3.061166999999841,
+    "allStopsWorkersExitedBeforeResponse": true,
+    "allActiveWorkersAtEndZero": true,
+    "allWorkerExitEventsPresent": true,
+    "allChildProcessesExitZero": true,
+    "allReconnectSameSearchQuery": true,
+    "allStartsAttemptedAtObservation": true,
+    "errorCases": [],
+    "allDefaultRoads": true,
+    "sourceCommit": "f9003a5",
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "interpretation": "Four completed within the snapshot; nineteen still searching at30seconds; one exhausted available coverage with a warning. The harness calls both searching and coverage-limited cases unfinished. Exact-witness recovery is separately measured. Prefix revisits improve discovery order, not guaranteed time to exhaustive completion."
+  },
+  "presentationAudit": {
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "query": {
+      "area": [
+        -121.82,
+        47.43,
+        -121.68,
+        47.54
+      ],
+      "distance": [
+        6437.376,
+        16093.44
+      ],
+      "gain": [
+        0,
+        1066.8
+      ],
+      "repetition": 0.3,
+      "includeUnknown": false,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "scope": "Finite unchanged north-bend-known engine enumeration plus the current unmodified diversity filter; independent collection of exact walks, footprints and first direct retained suppressors. No app, browser, geometry or GPX claim. Counts characterize this query only.",
+    "provenance": {
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+      "sourceIndexSha256": "54f9385d0cf76d5f8ca2e3f227181aaba7f278f4857a9e7569b94a05bc7b8f39",
+      "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "witnessSha256": "c5885f1b5daa57da12b83cfab4a220e222b75ff6ef0ad209d4cd2388bd1cdbcd",
+      "auditReportSha256": "c1712389d51eaecc07c5d5472c8f29f3c11e9696d580cf3b7c316f4d7b7ba024",
+      "compiledHashes": {
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "a3cddad59d864bf8cfdf9d3c07e64b43ba75e435c7cb9526d44eda4bf60f690a"
+      },
+      "runnerSha256": "f131322682ba264eb40d46de0d935a620a2b34883eeeceeb657421d93574de26"
+    },
+    "terminal": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 7,
+        "expansions": 6501488,
+        "elapsedMs": 914
+      }
+    },
+    "counts": {
+      "rawWalks": 752,
+      "hikeWalks": 752,
+      "exactReversalPairsCollapsedPerStart": 376,
+      "distinctFullFootprints": 376,
+      "distinctCycleFootprints": 134,
+      "retained": 112,
+      "omitted": 640,
+      "rawStartsRepresented": 3,
+      "retainedStartsRepresented": 2,
+      "retainedFullFootprints": 112,
+      "retainedCycleFootprints": 63
+    },
+    "byStart": [
+      {
+        "id": "osm-entrance:11345558331",
+        "name": "Mapped parking access",
+        "raw": 0,
+        "retained": 0,
+        "reversalCollapsed": 0
+      },
+      {
+        "id": "osm-entrance:12052073426",
+        "name": "Little Si Trailhead Parking",
+        "raw": 0,
+        "retained": 0,
+        "reversalCollapsed": 0
+      },
+      {
+        "id": "osm-entrance:12761651894",
+        "name": "Mapped parking access",
+        "raw": 0,
+        "retained": 0,
+        "reversalCollapsed": 0
+      },
+      {
+        "id": "osm-entrance:12761651948",
+        "name": "Little Si Trailhead Parking",
+        "raw": 14,
+        "retained": 7,
+        "reversalCollapsed": 7
+      },
+      {
+        "id": "osm-entrance:1982064677",
+        "name": "Cedar Falls Trailhead",
+        "raw": 724,
+        "retained": 105,
+        "reversalCollapsed": 362
+      },
+      {
+        "id": "osm-entrance:4729927256",
+        "name": "Little Si Trailhead",
+        "raw": 14,
+        "retained": 0,
+        "reversalCollapsed": 7
+      },
+      {
+        "id": "osm-entrance:480344018",
+        "name": "Little Si Trailhead Parking",
+        "raw": 0,
+        "retained": 0,
+        "reversalCollapsed": 0
+      }
+    ],
+    "outcome": "completed_enumeration",
+    "elapsedMs": 966.932375,
+    "sampledPeakRssBytes": 124649472,
+    "osPeakRssBytes": 124649472,
+    "originalWitnessRetained": true,
+    "sourceReportSha256": "026e94e73b04b9547b22b9db38737009f2458decaf16670e86298affdb9407b4",
+    "examplesSha256": "0ac9f2cbeaa66f83de1f915bfb329567083b192f76fca725a26995f45b1a457a",
+    "examples": [
+      {
+        "representative": {
+          "ordinal": 323,
+          "startId": "osm-entrance:1982064677",
+          "startName": "Cedar Falls Trailhead",
+          "distanceMeters": 13806.31216986255,
+          "distanceMiles": 8.578844653388305,
+          "gainMeters": 447.8155757719214,
+          "repetitionPercent": 26.286500848951693,
+          "roadDistanceMeters": 527.6687099496181,
+          "kind": "lollipop",
+          "physicalSections": 27,
+          "cycleSections": 8,
+          "startPosition": [
+            -121.7659303,
+            47.4326525,
+            293.82928030804055
+          ],
+          "gainFeet": 1469.211206600792
+        },
+        "omitted": {
+          "ordinal": 433,
+          "startId": "osm-entrance:1982064677",
+          "startName": "Cedar Falls Trailhead",
+          "distanceMeters": 15477.262355871015,
+          "distanceMiles": 9.61712496263758,
+          "gainMeters": 536.9030480125774,
+          "repetitionPercent": 28.846648432308076,
+          "roadDistanceMeters": 527.6687099496181,
+          "kind": "lollipop",
+          "physicalSections": 31,
+          "cycleSections": 8,
+          "startPosition": [
+            -121.7659303,
+            47.4326525,
+            293.82928030804055
+          ],
+          "gainFeet": 1761.4929396738103
+        },
+        "overlap": {
+          "ordinal": 323,
+          "fullOverlap": 0.8656215195899686,
+          "cycleOverlap": 1
+        },
+        "distanceDeltaMeters": 1670.9501860084656,
+        "repetitionDeltaPercentagePoints": 2.5601475833563816,
+        "identicalFullFootprint": false,
+        "identicalCycleFootprint": true
+      },
+      {
+        "representative": {
+          "ordinal": 1,
+          "startId": "osm-entrance:12761651948",
+          "startName": "Little Si Trailhead Parking",
+          "distanceMeters": 9524.474384424517,
+          "distanceMiles": 5.91823400368381,
+          "gainMeters": 679.8037607038207,
+          "repetitionPercent": 27.623311197130068,
+          "roadDistanceMeters": 0,
+          "kind": "lollipop",
+          "physicalSections": 14,
+          "cycleSections": 6,
+          "startPosition": [
+            -121.7534164,
+            47.4867878,
+            154.8194683343898
+          ],
+          "gainFeet": 2230.3272988970493
+        },
+        "omitted": {
+          "ordinal": 2,
+          "startId": "osm-entrance:4729927256",
+          "startName": "Little Si Trailhead",
+          "distanceMeters": 9527.115782264873,
+          "distanceMiles": 5.919875292209045,
+          "gainMeters": 679.8482805175613,
+          "repetitionPercent": 27.629515145820204,
+          "roadDistanceMeters": 0,
+          "kind": "lollipop",
+          "physicalSections": 15,
+          "cycleSections": 6,
+          "startPosition": [
+            -121.7534319,
+            47.4867934,
+            154.77494852064936
+          ],
+          "gainFeet": 2230.4733612780883
+        },
+        "overlap": {
+          "ordinal": 1,
+          "fullOverlap": 0.9998084505552937,
+          "cycleOverlap": 1
+        },
+        "distanceDeltaMeters": 2.6413978403561487,
+        "repetitionDeltaPercentagePoints": 0.006203948690136629,
+        "identicalFullFootprint": false,
+        "identicalCycleFootprint": true
+      }
+    ],
+    "implication": "One raw count conflates directions and near-identical starts. Current similarity filtering removes some trivial duplication but also hides alternative approaches differing by overone mile. Preserve meaningful variants when improving presentation; do not accept output counts as route-quality proof."
+  }
 }
