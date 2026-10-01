@@ -34,6 +34,63 @@ function allowance(value: number | undefined): number {
   return value;
 }
 
+/** Whole-meter labels are conservative under the final route-order IEEE sums:
+ * floor(fl(a+b)) >= floor(a)+floor(b) while that integer is safely representable.
+ * Zero-weight arcs are allowed; labels never decrease below zero. */
+async function returnBounds(graph: TrailGraph, incoming: number[][], starts: number[], limits: number[], signal?: AbortSignal) {
+  const tables: (Float64Array | undefined)[] = [];
+  for (let metric = 0; metric < limits.length; metric++) {
+    const budget = Math.floor(limits[metric]!);
+    if (!Number.isSafeInteger(budget)) { tables.push(undefined); continue; }
+    const labels = new Float64Array(graph.nodes.length).fill(Infinity);
+    const heap: [number, number][] = [];
+    const push = (distance: number, node: number) => {
+      let index = heap.length;
+      const entry: [number, number] = [distance, node];
+      heap.push(entry);
+      while (index) {
+        const parent = (index - 1) >>> 1;
+        if (heap[parent]![0] <= distance) break;
+        heap[index] = heap[parent]!;
+        index = parent;
+      }
+      heap[index] = entry;
+    };
+    for (const start of starts) { const node = graph.starts[start]!.node; labels[node] = 0; push(0, node); }
+    let work = 0;
+    while (heap.length) {
+      const [distance, node] = heap[0]!;
+      const last = heap.pop()!;
+      if (heap.length) {
+        let index = 0;
+        while (index * 2 + 1 < heap.length) {
+          let child = index * 2 + 1;
+          if (child + 1 < heap.length && heap[child + 1]![0] < heap[child]![0]) child++;
+          if (heap[child]![0] >= last[0]) break;
+          heap[index] = heap[child]!;
+          index = child;
+        }
+        heap[index] = last;
+      }
+      if (distance !== labels[node]) continue;
+      for (const index of incoming[node]!) {
+        if (++work % 8192 === 0) {
+          await new Promise<void>(resolve => setTimeout(resolve, 0));
+          if (signal?.aborted) return undefined;
+        }
+        const edge = graph.edges[index]!;
+        const weight = Math.floor(metric === 0 ? edge.distance : metric === 1 ? edge.gain : edge.connector ? edge.distance : 0);
+        // Compare before adding so neither overflow nor unsafe integer sums enter a label.
+        if (weight > budget - distance) continue;
+        const next = distance + weight;
+        if (next < labels[edge.from]!) { labels[edge.from] = next; push(next, edge.from); }
+      }
+    }
+    tables.push(labels);
+  }
+  return tables;
+}
+
 /** Each cursor keeps its current depth and path between scheduler turns. */
 function* routesFromStart(
   graph: TrailGraph,
@@ -41,9 +98,14 @@ function* routesFromStart(
   start: number,
   outgoing: readonly number[][],
   reverse: Int32Array,
+  lowerReturn: readonly (Float64Array | undefined)[],
 ): Generator<RouteCandidate | undefined> {
   const origin = graph.starts[start]!;
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
+  const [returnDistance, returnGain, returnRoad] = lowerReturn;
+  const distanceBudget = Math.floor(query.distance[1]);
+  const gainBudget = Math.floor(query.gain[1]);
+  const roadBudget = Math.floor(roads.distance);
   // Enumerate each outbound section count once. Revisit prefixes, never routes,
   // so one complicated branch cannot postpone every simpler cycle indefinitely.
   for (let depth = 1; ; depth++) {
@@ -72,7 +134,10 @@ function* routesFromStart(
       // Nonnegative metrics make these necessary prefix conditions. Summation
       // follows original route order, including the return stem below.
       // Check road share only on a closed route: later trail can dilute a road prefix.
-      if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1] && roadDistance <= roads.distance) {
+      if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1] && roadDistance <= roads.distance
+        && (!returnDistance || returnDistance[edge.to]! <= distanceBudget - Math.floor(distance))
+        && (!returnGain || returnGain[edge.to]! <= gainBudget - Math.floor(gain))
+        && (!returnRoad || returnRoad[edge.to]! <= roadBudget - Math.floor(roadDistance))) {
         const attachment = positions.get(edge.to);
         if (attachment === undefined && path.length + 1 === depth) {
           deeper = true;
@@ -154,7 +219,15 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   if (options.signal?.aborted) { yield stopped(); return; }
   if (!eligible.length) { yield { type: 'done', status: 'complete', progress: snapshot() }; return; }
 
+  if (maxExpansions === 0 || maxResults === 0) {
+    yield { type: 'done', status: 'limited', progress: snapshot(), reason: maxResults === 0
+      ? 'Result allowance reached; exploration is unfinished' : 'Expansion allowance reached; exploration is unfinished' };
+    return;
+  }
+  const labelBudget = 32 * 1024 * 1024;
+  const labelBytesPerStart = graph.nodes.length * 3 * Float64Array.BYTES_PER_ELEMENT;
   const outgoing = Array.from({ length: graph.nodes.length }, () => [] as number[]);
+  const incoming = labelBytesPerStart <= labelBudget ? Array.from({ length: graph.nodes.length }, () => [] as number[]) : undefined;
   const directed = new Map<string, number>();
   const reverse = new Int32Array(graph.edges.length).fill(-1);
   for (const [index, edge] of graph.edges.entries()) {
@@ -166,7 +239,7 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
     const key = `${edge.trail}:${edge.reverse}`;
     if (directed.has(key)) throw new Error(`Duplicate trail direction ${key}`);
     directed.set(key, index);
-    if (includeUnknown || edge.access === 'public') outgoing[edge.from]!.push(index);
+    if (includeUnknown || edge.access === 'public') { outgoing[edge.from]!.push(index); incoming?.[edge.to]!.push(index); }
     if (index % 8192 === 8191) {
       await pause();
       if (options.signal?.aborted) { yield stopped(); return; }
@@ -184,7 +257,23 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
     if (includeUnknown || other.access === 'public') reverse[index] = back;
   }
 
-  const active = eligible.map(start => ({ cursor: routesFromStart(graph, query, start, outgoing, reverse), attempted: false }));
+  const limits = [query.distance[1], query.gain[1], query.roads!.distance];
+  // Bound only the optional label allocation, never route exploration. A
+  // broad query shares weaker bounds to any eligible start instead of keeping
+  // a full graph-sized table for every start. Both bounds underestimate the
+  // mandatory return to the original start, including a lollipop's stem.
+  // If even shared labels exceed the budget, explore without this optimization.
+  const separate = labelBytesPerStart * eligible.length <= labelBudget;
+  const tables: (Float64Array | undefined)[][] = [];
+  const targets = !incoming ? [] : separate ? eligible.map(start => [start]) : [eligible];
+  for (const starts of targets) {
+    const bounds = await returnBounds(graph, incoming!, starts, limits, options.signal);
+    if (!bounds || options.signal?.aborted) { yield stopped(); return; }
+    tables.push(bounds);
+    await pause();
+    if (options.signal?.aborted) { yield stopped(); return; }
+  }
+  const active = eligible.map((start, index) => ({ cursor: routesFromStart(graph, query, start, outgoing, reverse, tables[separate ? index : 0] ?? []), attempted: false }));
   let results = 0;
   let yieldedAt = performance.now();
   let firstPass = true;

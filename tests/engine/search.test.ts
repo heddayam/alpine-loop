@@ -122,6 +122,21 @@ describe('independent route oracle', () => {
     expect(await compare(decimal, { ...query, distance: [total, total] })).toHaveLength(1);
   });
 
+  it('keeps decimal boundaries and all starts when return bounds must share a bounded allocation', async () => {
+    // The many isolated eligible starts make per-start full-network labels too
+    // expensive, while the independently enumerable route component stays tiny.
+    const graph = fixture([[0, 1, 0.4, { connector: true, gain: 0.4, backGain: 0.2 }],
+      [1, 2, 0.6, { gain: 0.6, backGain: 0.8 }], [2, 0, 1.0000000000000002, { gain: 1 }],
+      [3_498, 3_499, 0.1, { oneWay: true }]], Array.from({ length: 420 }, (_, index) => index));
+    graph.nodes.fill([0, 0]);
+    const distance = [0, 2, 4].reduce((sum, index) => sum + graph.edges[index]!.distance, 0);
+    const routes = await compare(graph, { ...query, distance: [distance, distance], roads: { distance: 0.4, fraction: 1 } });
+    expect(routes.length).toBeGreaterThan(0);
+    // Huge finite query limits disable an unsafe integer bound; they are not a
+    // mileage cap and must still leave the exact route set unchanged.
+    await compare(graph, { ...query, distance: [0, 1e100], gain: [0, 1e100], roads: { distance: 1e100, fraction: 1 } });
+  });
+
   it('matches exhaustive enumeration on 64 weighted directed multigraphs and all their starts', async () => {
     let state = 0x9e3779b9;
     const random = () => { state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0; return state / 2 ** 32; };
