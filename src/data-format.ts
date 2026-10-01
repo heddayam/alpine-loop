@@ -34,5 +34,5 @@ export type StoredRoute = {
 };
 
 export type WorkerEvent = Exclude<SearchEvent, { type: 'route' }>
-  | { type: 'route'; route: StoredRoute; groupId: string; optionId: string }
+  | { type: 'route'; route: StoredRoute; groupId: string; optionId: string; walkId: string }
   | { type: 'coverage'; note?: string };

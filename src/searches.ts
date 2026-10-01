@@ -72,7 +72,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     const store = createRouteStore();
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.info.id, query, status: 'running', routes: [], routeCount: 0, groupCount: 0, pageTotal: 0, offset: 0,
-      selectionNote: 'Groups organize routes using approximate overlap of their paths and loops. Open a group to compare every starting point and path. Opposite directions share one route option; you can switch direction in its details when both qualify. Grouping does not stop exploration or limit the number of routes.',
+      selectionNote: 'Small trail variations are combined when the overall trail path and loop each overlap by at least 95%, with no connected path difference longer than 500 meters. Road connections do not create separate hikes. For each starting point, shown routes prefer mapped access, then less road walking and shorter distance. Every shown route meets your limits. Different starting points and qualifying reverse directions are available in the details. Search continues through all eligible starts; these are representative choices, not every graph-path permutation.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
     let worker: Worker;

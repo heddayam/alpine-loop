@@ -48,7 +48,7 @@ describe('real application integration', () => {
     expect(snapshot.groupCount).toBe(count);
     expect(snapshot.pageTotal).toBe(count);
     expect(snapshot.groupId).toBeUndefined();
-    expect(snapshot.selectionNote).toContain('every starting point and path');
+    expect(snapshot.selectionNote).toContain('representative choices');
     expect(snapshot.progress).toMatchObject({ totalStarts: count, attemptedStarts: count, completedStarts: count });
     const lastPage = (await app.inject(`/api/search/${id}?offset=${ROUTES_PER_PAGE}`)).json() as SearchSnapshot;
     expect(lastPage.routes).toHaveLength(1);

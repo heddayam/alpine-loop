@@ -129,7 +129,7 @@ export async function readDataset(directory: string) {
       while (first < last && steps[first]!.section.id === steps[last]!.section.id) { first++; last--; }
       const names = new Map<string, number>();
       for (const [index, { edge, section }] of steps.entries()) {
-        if (section.name) names.set(section.name, (names.get(section.name) ?? 0) + (index >= first && index <= last ? edge.distance : 0));
+        if (section.kind === 'trail' && section.name) names.set(section.name, (names.get(section.name) ?? 0) + (index >= first && index <= last ? edge.distance : 0));
       }
       const { id, distance, gain, roadDistance, repetition, kind, uncertain } = candidate;
       return {

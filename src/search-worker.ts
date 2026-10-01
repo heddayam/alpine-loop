@@ -17,7 +17,8 @@ let lastProgress = 0;
 for await (const event of search(graph, query)) {
   if (event.type === 'route') {
     if (selection.isHike(event.route)) {
-      parentPort!.postMessage({ type: 'route', route: selection.describe(event.route), ...group(event.route) });
+      const choice = group(event.route);
+      if (choice) parentPort!.postMessage({ type: 'route', route: selection.describe(event.route), ...choice });
     }
     continue;
   }

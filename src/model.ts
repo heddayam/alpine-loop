@@ -68,7 +68,7 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   trailNames: string[];
 };
 export type HikeRoute = RouteSummary & { geometry: Position[] };
-/** One physical walk from one start; an observed opposite direction is inspectable. */
+/** One qualifying connection from a start to a distinct hike; reverse facts remain independent. */
 export type RouteChoice = RouteSummary & { groupId: string; groupSize: number; reverseId?: string };
 export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;

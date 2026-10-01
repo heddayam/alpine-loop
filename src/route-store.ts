@@ -18,32 +18,33 @@ export function createRouteStore() {
       PRAGMA mmap_size=0;
       CREATE TABLE groups (
         position INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
-        first_id TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0
+        first_option TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE options (
         position INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
-        group_id TEXT NOT NULL, first_id TEXT NOT NULL
+        group_id TEXT NOT NULL, first_id TEXT NOT NULL, walk_id TEXT NOT NULL
       );
       CREATE INDEX members ON options(group_id, position);
       CREATE TABLE routes (
-        id TEXT PRIMARY KEY NOT NULL, option_id TEXT NOT NULL,
+        id TEXT PRIMARY KEY NOT NULL, option_id TEXT NOT NULL, walk_id TEXT NOT NULL,
         summary TEXT NOT NULL, sections TEXT NOT NULL
       );
       CREATE INDEX directions ON routes(option_id);
     `);
     const existingRoute = db.prepare('SELECT 1 FROM routes WHERE id = ?');
-    const existingOption = db.prepare('SELECT 1 FROM options WHERE id = ?');
-    const addGroup = db.prepare('INSERT OR IGNORE INTO groups(id, first_id) VALUES (?, ?)');
-    const addOption = db.prepare('INSERT INTO options(id, group_id, first_id) VALUES (?, ?, ?)');
+    const existingOption = db.prepare('SELECT walk_id FROM options WHERE id = ?');
+    const addGroup = db.prepare('INSERT OR IGNORE INTO groups(id, first_option) VALUES (?, ?)');
+    const addOption = db.prepare('INSERT INTO options(id, group_id, first_id, walk_id) VALUES (?, ?, ?, ?)');
+    const replaceOption = db.prepare('UPDATE options SET first_id = ?, walk_id = ? WHERE id = ?');
     const growGroup = db.prepare('UPDATE groups SET size = size + 1 WHERE id = ?');
-    const addRoute = db.prepare('INSERT INTO routes(id, option_id, summary, sections) VALUES (?, ?, ?, ?)');
+    const addRoute = db.prepare('INSERT INTO routes(id, option_id, walk_id, summary, sections) VALUES (?, ?, ?, ?, ?)');
     const totals = db.prepare('SELECT (SELECT COUNT(*) FROM options) AS routeCount, (SELECT COUNT(*) FROM groups) AS groupCount');
     const groupSize = db.prepare('SELECT size FROM groups WHERE id = ?');
     const columns = `r.summary, o.group_id AS groupId, g.size AS groupSize,
-      (SELECT id FROM routes WHERE option_id = o.id AND id <> r.id ORDER BY rowid LIMIT 1) AS reverseId`;
+      (SELECT id FROM routes WHERE option_id = o.id AND walk_id = r.walk_id AND id <> r.id ORDER BY rowid LIMIT 1) AS reverseId`;
     // Page queries deliberately never select sections, including for group representatives.
     const overview = db.prepare(`SELECT ${columns} FROM groups g
-      JOIN routes r ON r.id = g.first_id JOIN options o ON o.id = r.option_id
+      JOIN options o ON o.id = g.first_option JOIN routes r ON r.id = o.first_id
       ORDER BY g.position LIMIT ? OFFSET ?`);
     const members = db.prepare(`SELECT ${columns} FROM options o
       JOIN groups g ON g.id = o.group_id JOIN routes r ON r.id = o.first_id
@@ -59,13 +60,18 @@ export function createRouteStore() {
         const sections = JSON.stringify(event.route.sections);
         db.exec('BEGIN');
         try {
-          if (!existingOption.get(event.optionId)) {
+          const previous = existingOption.get(event.optionId);
+          if (!previous) {
             const groupId = hash(event.groupId);
-            addGroup.run(groupId, id);
-            addOption.run(event.optionId, groupId, id);
+            addGroup.run(groupId, event.optionId);
+            addOption.run(event.optionId, groupId, id, event.walkId);
             growGroup.run(groupId);
+          } else if (previous.walk_id !== event.walkId) {
+            replaceOption.run(id, event.walkId, event.optionId);
           }
-          addRoute.run(id, event.optionId, summary, sections);
+          // Previously inspected representatives stay addressable; only the current
+          // best connection appears in the list. Reverse lookup never crosses walks.
+          addRoute.run(id, event.optionId, event.walkId, summary, sections);
           db.exec('COMMIT');
         } catch (error) {
           // Some SQLite errors roll back automatically; otherwise discard this add only.
