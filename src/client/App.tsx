@@ -7,13 +7,15 @@ import type {
   SearchQuery,
   SearchSnapshot,
 } from "../model.js";
-import { ROUTES_PER_PAGE } from "../model.js";
+import { DEFAULT_ROAD_LIMITS, ROUTES_PER_PAGE } from "../model.js";
 import { HikeMap } from "./Map.js";
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
 const miles = (meters: number) => (meters / MILE).toFixed(1);
 const feet = (meters: number) => Math.round(meters / FOOT).toLocaleString();
+const roadExplanation =
+  "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
 async function request<T>(
@@ -155,6 +157,15 @@ function RouteDetails({
           </dd>
         </div>
       </dl>
+      <div className="road-detail">
+        <p>
+          <strong>Road connections: </strong>
+          {Number.isFinite(route.roadDistance)
+            ? `${(route.roadDistance / MILE).toFixed(2)} mi (${(100 * route.roadDistance / route.distance).toFixed(1)}%)`
+            : "Not recorded for this earlier search."}
+        </p>
+        <p className="field-hint">{roadExplanation}</p>
+      </div>
       {route.uncertain && (
         <p className="access-note">
           Some access is uncertain. Check before heading out.
@@ -207,6 +218,12 @@ export function App() {
   const [distance, setDistance] = useState<[string, string]>(["5", "12"]);
   const [gain, setGain] = useState<[string, string]>(["0", "4000"]);
   const [repetition, setRepetition] = useState("20");
+  const [roadMiles, setRoadMiles] = useState(
+    String(DEFAULT_ROAD_LIMITS.distance / MILE),
+  );
+  const [roadPercent, setRoadPercent] = useState(
+    String(DEFAULT_ROAD_LIMITS.fraction * 100),
+  );
   const [includeUnknown, setIncludeUnknown] = useState(true);
   const [search, setSearch] = useState<SearchSnapshot>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -387,12 +404,29 @@ export function App() {
       );
       return;
     }
+    const roadDistance = Number(roadMiles),
+      roadFraction = Number(roadPercent);
+    if (
+      !roadMiles ||
+      !roadPercent ||
+      !Number.isFinite(roadDistance) ||
+      roadDistance < 0 ||
+      !Number.isFinite(roadFraction) ||
+      roadFraction < 0 ||
+      roadFraction > 100
+    ) {
+      setError(
+        "Road mileage must be zero or greater, and its percentage must be 0–100%.",
+      );
+      return;
+    }
     const query: SearchQuery = {
       area,
       distance: [distances[0]! * MILE, distances[1]! * MILE],
       gain: [gains[0]! * FOOT, gains[1]! * FOOT],
       repetition: repeated / 100,
       includeUnknown,
+      roads: { distance: roadDistance * MILE, fraction: roadFraction / 100 },
     };
     operation.current?.abort();
     const controller = new AbortController();
@@ -484,6 +518,9 @@ export function App() {
       ],
     );
     setRepetition(String(snapshot.query.repetition * 100));
+    const roads = snapshot.query.roads ?? DEFAULT_ROAD_LIMITS;
+    setRoadMiles(String(roads.distance / MILE));
+    setRoadPercent(String(roads.fraction * 100));
     setIncludeUnknown(snapshot.query.includeUnknown);
     setSelectedId(null);
     setHoveredId(null);
@@ -642,6 +679,47 @@ export function App() {
                   <p className="field-hint">
                     20% = 2 miles walked again in a 10-mile hike.
                   </p>
+                  <details
+                    className="road-controls"
+                    onInvalidCapture={(event) => {
+                      event.currentTarget.open = true;
+                    }}
+                  >
+                    <summary>
+                      Road connections
+                      <span>
+                        At most {roadMiles || "—"} mi and {roadPercent || "—"}%
+                      </span>
+                    </summary>
+                    <div className="road-inputs">
+                      <label htmlFor="road-miles">
+                        Maximum miles
+                        <input
+                          id="road-miles"
+                          type="number"
+                          min="0"
+                          step="any"
+                          required
+                          value={roadMiles}
+                          onChange={(event) => setRoadMiles(event.target.value)}
+                        />
+                      </label>
+                      <label htmlFor="road-percent">
+                        Maximum percentage
+                        <input
+                          id="road-percent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          required
+                          value={roadPercent}
+                          onChange={(event) => setRoadPercent(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <p className="field-hint">Both limits apply. {roadExplanation}</p>
+                  </details>
                   <label className="checkbox-field">
                     <input
                       type="checkbox"
@@ -702,6 +780,10 @@ export function App() {
                         <br />
                         At most {Math.round(search.query.repetition * 100)}%
                         walked again
+                        <br />
+                        {search.query.roads
+                          ? `Roads: at most ${(search.query.roads.distance / MILE).toLocaleString()} mi and ${(search.query.roads.fraction * 100).toLocaleString()}%`
+                          : "Road limits not recorded for this earlier search"}
                       </p>
                       <p className="access-summary">
                         {search.query.includeUnknown
@@ -730,9 +812,6 @@ export function App() {
                           </button>
                         )}
                       </div>
-                      <p className="search-progress">
-                        Alternate starts and path variations count separately.
-                      </p>
                       <div className="search-progress" role="status">
                         <span className={running ? "status-running" : ""}>
                           {progressLabel(search)}

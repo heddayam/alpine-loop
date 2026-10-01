@@ -224,6 +224,35 @@ select {
   line-height: 1.5;
   margin-top: 7px;
 }
+.road-controls {
+  margin-top: 18px;
+  font-size: 12px;
+}
+.road-controls summary {
+  font-weight: 600;
+}
+.road-controls summary span {
+  display: block;
+  margin: 4px 0 0 14px;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+.road-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+.road-inputs input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.road-detail {
+  font-size: 12px;
+  line-height: 1.5;
+}
 .checkbox-field {
   display: flex;
   align-items: center;
