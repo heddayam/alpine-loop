@@ -58,7 +58,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     }
     const snapshot: SearchSnapshot = {
       id: randomUUID(), datasetId: dataset.info.id, query, status: 'running', routes: [], routeCount: 0, offset: 0,
-      selectionNote: 'Up to 10 different choices are kept per start. Similar variations are omitted; this selection does not stop exploration of any start.',
+      selectionNote: 'All distinct choices found so far are available across these pages. Routes sharing at least 85% of both their overall path and their loop are grouped; this does not stop exploration.',
       progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0 },
     };
     const worker = new Worker(new URL('./search-worker.js', import.meta.url), {
