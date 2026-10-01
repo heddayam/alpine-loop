@@ -1,0 +1,22 @@
+{
+  "launchCommand": "npm start",
+  "directory": "/private/tmp/alpine-local-launch-check",
+  "noDependenciesBeforeLaunch": true,
+  "dependencyInstallUsedOfflineNpmCache": false,
+  "priorOfflineAttempt": "Failed because one pinned package was not cached; retry uses the normal npm registry",
+  "buildProduced": true,
+  "catalogSnapshot": "network-1b04494a15eb6e72754debbda8f5972a7a91f6a5771b7c89d0ce58ace6edc44a",
+  "httpPageServed": true,
+  "elapsedSeconds": 4.883327333955094,
+  "scope": "Fresh temporary checkout with pre-existing immutable dataset provided through ALPINE_DATA. This verifies dependency installation, build and server launch; it does not prove automatic published-data delivery.",
+  "preparedDataInstaller": {
+    "files": [
+      "scripts/install-data.mjs",
+      "tests/data/install-data.test.mjs"
+    ],
+    "verification": "Two offline integration checks passed: interrupted/corrupt transfers resume verified files, completed installs verify offline, mixed or unsafe manifests never activate.",
+    "concurrency": 4,
+    "publicationApproved": false,
+    "releaseDescriptor": "scripts/data-release.json is intentionally null until an approved immutable release exists."
+  }
+}

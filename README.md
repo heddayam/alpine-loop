@@ -6,19 +6,20 @@ unfinished real-data slice; the acceptance requirements are in `docs/goal.json`.
 The old application is preserved at `archive/before-product-rewrite-2026-09-30`.
 It is not an active build or a compatibility target.
 
-Development currently uses Node.js 24:
+With Node.js 24 or newer, launch the local app with:
 
 ```sh
-npm ci
-npm run build
 npm start
 ```
 
-The app reads its installed snapshot from the ignored `.local-data/network` directory;
+The launcher installs locked dependencies when needed and builds the app. This
+development checkout currently uses the ignored `.local-data/network` directory;
 `ALPINE_DATA` can point a development instance at another snapshot. Open
 http://127.0.0.1:3000; set `PORT=3011` if another app uses that port. This development
-slice currently requires the prepared files on this machine. Automatic first-run
-data acquisition remains unfinished. Hosting is deferred at the user's request.
+slice currently requires the prepared files on this machine. The download installer
+is implemented and tested, but its internal release descriptor remains unset
+until prepared data is approved for publication. A fresh checkout without data
+fails clearly; automatic first-run delivery is not yet complete. Hosting is deferred.
 
 The working flow is map area → distance/gain/repetition → progressive exact routes
 → route inspection → GPX. Reopening the browser restores the latest search while
@@ -82,7 +83,11 @@ An audit of the earlier 2,056-option Rainier search exposed three product defect
 an expanded map selection, duplicate hikes from different starts, and road-heavy
 walks passing the trail requirement. See `benchmarks/route-quality-review.json`.
 The implemented corrections must still be judged against useful real hiking
-choices; large result counts are not a quality certificate.
+choices; large result counts are not a quality certificate. A separate corrected
+snapshot also restores two distinct parking contacts that preparation had
+suppressed. Every prior start is unchanged, and the original Little Si witness
+now passes exact HTTP/GPX recovery; see `benchmarks/prepared-witnesses.json`.
+That new snapshot has not replaced the running app's data, preserving its search.
 
 `benchmarks/queries.json` freezes 24 requests across three Washington areas.
 The current [HTTP measurement harness](benchmarks/README.md) records resolved
