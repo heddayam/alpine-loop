@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import { ROUTES_PER_PAGE, type SearchQuery, type SearchSnapshot } from './model.js';
+import { DEFAULT_ROAD_LIMITS, ROUTES_PER_PAGE, type SearchQuery, type SearchSnapshot } from './model.js';
 import type { StoredRoute, WorkerEvent } from './data-format.js';
 import type { readDataset } from './dataset.js';
 
@@ -22,7 +22,13 @@ export function parseQuery(value: unknown): SearchQuery {
     || typeof query.includeUnknown !== 'boolean') {
     throw new RequestError('Use ordered, nonnegative distance and gain ranges and a repeated-trail limit from 0% to 100%.', 400);
   }
-  return { area: [...query.area], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition, includeUnknown: query.includeUnknown };
+  const roads = query.roads === undefined ? DEFAULT_ROAD_LIMITS : query.roads;
+  if (!roads || typeof roads.distance !== 'number' || !Number.isFinite(roads.distance) || roads.distance < 0
+    || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
+    throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
+  }
+  return { area: [...query.area], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
+    includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 
 type Entry = { snapshot: SearchSnapshot; candidates: Map<string, StoredRoute>; worker?: Worker };

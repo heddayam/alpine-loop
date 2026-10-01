@@ -94,7 +94,7 @@ export async function readDataset(directory: string) {
           if (edge.trail !== section.id || edges.has(id)) throw new Error('Conflicting trail direction identity');
           if (!query.includeUnknown && edge.access !== 'public') continue;
           position(edge.from, endpoints.get(edge.from)); position(edge.to, endpoints.get(edge.to));
-          edges.set(id, edge);
+          edges.set(id, { ...edge, connector: section.kind === 'connector' });
         }
       }
     }
@@ -130,9 +130,9 @@ export async function readDataset(directory: string) {
       for (const [index, { edge, section }] of steps.entries()) {
         if (section.name) names.set(section.name, (names.get(section.name) ?? 0) + (index >= first && index <= last ? edge.distance : 0));
       }
-      const { id, distance, gain, repetition, kind, uncertain } = candidate;
+      const { id, distance, gain, roadDistance, repetition, kind, uncertain } = candidate;
       return {
-        summary: { id, distance, gain, repetition, kind, uncertain, startId: start.id, startName: start.name,
+        summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name,
           startPosition: graph.nodes[start.node]!, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
         sections: steps.map(({ edge, section }) => ({ cell: owner(section.bounds), id: section.id, reverse: edge.reverse })),
       };

@@ -21,7 +21,7 @@ export type NetworkSection = {
   bounds: Bounds;
   name: string | null;
   kind: 'trail' | 'connector';
-  edges: [id: number, edge: TrailEdge][];
+  edges: [id: number, edge: Omit<TrailEdge, 'connector'>][];
 };
 export type NetworkCell = { nodes: [id: number, position: Position][]; sections: NetworkSection[] };
 export type NetworkStarts = [index: number, start: TrailStart, position: Position][];

@@ -11,6 +11,8 @@ export type TrailEdge = {
   distance: number;
   gain: number;
   access: Access;
+  /** Derived from the section's physical classification when loading topology. */
+  connector: boolean;
 };
 export type TrailStart = { id: string; node: number; name: string; access: Access };
 export type Place = { name: string; bounds: Bounds };
@@ -43,18 +45,23 @@ export type SearchQuery = {
   gain: [minimum: number, maximum: number];
   repetition: number;
   includeUnknown: boolean;
+  /** Omission uses the adjustable defaults; search snapshots record resolved limits. */
+  roads?: RoadLimits;
 };
+export type RoadLimits = { distance: number; fraction: number };
+export const DEFAULT_ROAD_LIMITS: RoadLimits = { distance: 1609.344, fraction: 0.1 };
 export type RouteCandidate = {
   id: string;
   start: number;
   edges: number[];
   distance: number;
   gain: number;
+  roadDistance: number;
   repetition: number;
   kind: 'loop' | 'lollipop';
   uncertain: boolean;
 };
-export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'repetition' | 'kind' | 'uncertain'> & {
+export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'roadDistance' | 'repetition' | 'kind' | 'uncertain'> & {
   startId: string;
   startName: string;
   startPosition: Position;
