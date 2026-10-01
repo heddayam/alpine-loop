@@ -1,0 +1,501 @@
+{
+  "date": "2026-09-30",
+  "status": "Research only; not integrated into the application. Branched-road generation and canonical full-hike realization remain unfinished.",
+  "archives": {
+    "solver": "archive/research-local-choices-2026-09-30",
+    "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
+    "roadPrimitive": "archive/research-road-connections-2026-09-30"
+  },
+  "inputs": {
+    "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+    "querySha256": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+    "savedWalksSha256": "3a38a623065da7aee6854b03ecd34a02c3dd1ff67573e2269af2447d9db21b9b",
+    "query": {
+      "area": [
+        -121.53110504150392,
+        47.38742554067244,
+        -121.42673492431642,
+        47.43621583921408
+      ],
+      "distance": [
+        22530.816,
+        28968.192000000003
+      ],
+      "gain": [
+        1066.8,
+        1524
+      ],
+      "repetition": 0.05,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 8046.72,
+        "fraction": 0.4
+      }
+    }
+  },
+  "measurementScope": "Sequential fresh Node24.11/arm64 selected-graph solver observations on the reference Apple M3. No HTTP/worker/store/browser. Timings descriptive: cache and concurrent light work uncontrolled. Original-edge examinations and macro/local assignments are different work units. Equal time does not mean equal completed class sets.",
+  "prattObservations": [
+    {
+      "variant": "baseline",
+      "sourceSha256": "71c94dc7d019281fa6b3690d7b712ed567055877de09c1c40b6961918c6f5749",
+      "firstHikeMs": 14599.948334,
+      "rawEmissions": 194,
+      "groups": 1,
+      "elapsedMs": 45000.317041999995,
+      "peakRssBytes": 242499584,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 2,
+        "expansions": 293553146,
+        "elapsedMs": 44999
+      }
+    },
+    {
+      "variant": "peel-only",
+      "sourceSha256": "6129086a09dc73b203ff73ab02e1d72ce352ecae0c20cd847439753d4d327012",
+      "firstHikeMs": 12510.765667,
+      "rawEmissions": 204,
+      "groups": 1,
+      "elapsedMs": 45002.36975,
+      "peakRssBytes": 248201216,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 2,
+        "expansions": 281301282,
+        "elapsedMs": 44998
+      }
+    },
+    {
+      "variant": "bundled",
+      "sourceSha256": "545c54ab401f2594f6e346cbd77719f9c14bccba267a1008a26eb349475be1d2",
+      "firstHikeMs": 85.05683299999998,
+      "rawEmissions": 286,
+      "groups": 5,
+      "elapsedMs": 45008.945625,
+      "peakRssBytes": 237338624,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 0,
+        "expansions": 10526990,
+        "elapsedMs": 45008
+      }
+    },
+    {
+      "variant": "no-bundling",
+      "sourceSha256": "00752e1d7d2db3c4ee18ceef83840959d674323d96ef019877afc39bcd2a414f",
+      "firstHikeMs": 78.22270799999998,
+      "rawEmissions": 799,
+      "groups": 4,
+      "elapsedMs": 45007.3645,
+      "peakRssBytes": 259227648,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 0,
+        "expansions": 12871949,
+        "elapsedMs": 45007
+      }
+    },
+    {
+      "variant": "bundled-depth",
+      "sourceSha256": "6e01429162bcd9b2e1d253c4a1fe1172807077528c588419370a06cadc3db05c",
+      "firstHikeMs": 8833.705917000001,
+      "rawEmissions": 163,
+      "groups": 2,
+      "elapsedMs": 45010.586375000006,
+      "peakRssBytes": 261750784,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 0,
+        "expansions": 56814729,
+        "elapsedMs": 45009
+      }
+    },
+    {
+      "variant": "upgraded-pratt",
+      "sourceSha256": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "firstHikeMs": 5820.385582999999,
+      "rawEmissions": 240,
+      "groups": 2,
+      "elapsedMs": 45004.00333299999,
+      "peakRssBytes": 316309504,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 0,
+        "expansions": 80759612,
+        "elapsedMs": 45003
+      }
+    },
+    {
+      "variant": "directed-pratt",
+      "sourceSha256": "71541cd1f2862c7f492fbf139341baeeae91ab28a89664d1b40b2f80999d4428",
+      "firstHikeMs": 5799.124375,
+      "rawEmissions": 600,
+      "groups": 2,
+      "elapsedMs": 45004.653625,
+      "peakRssBytes": 299614208,
+      "terminal": "stopped",
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 0,
+        "expansions": 90972372,
+        "elapsedMs": 45004
+      }
+    }
+  ],
+  "classContract": "One directed macro itinerary and original start; independent two-port alternatives share a class only with the same physical role and pairwise total corridor length at most500m. Internal two-port cycles retain their corridor pair. A representative is an exact valid original walk, not independent metric minima. This contract is not a proof of product/scenic equivalence.",
+  "independentAudit": {
+    "focusedCases": 21,
+    "weightedCorpusRuns": 256,
+    "originalOracleWalks": 982,
+    "declaredClasses": 834,
+    "emittedRepresentatives": 834,
+    "qualifyingExactReverses": "present",
+    "supplementaryRealizations": "only exact reverse of an earlier emitted walk",
+    "cancellation": [
+      "after first route",
+      "during preparation before final input read"
+    ],
+    "sourceSha256": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+    "checkerSha256": "c798795264163eaa1bb93d2abcb74c715168ad2cb42a77ba9ff9f2e84d54dc5c",
+    "oracleSha256": "27b79ef95cd1b89b1ebf379b600b87c77a4c3b3d8bca3febe69309710dad64eb",
+    "regressionCaughtAndFixed": {
+      "failedSource": "e2fccc7d2b7e05f57706e0d24438b3a7d70be132efcf9d440c8425fdf6c7d816",
+      "failedCorpusVariants": 5,
+      "samples": [
+        9,
+        12
+      ],
+      "cause": "Canonical orientation could be pruned by directional bounds while a qualifying opposite was skipped by ownership ordering.",
+      "correction": "Outer lower bound takes optimistic minimum across both macro directions; directed realization and exact original-order acceptance remain unchanged."
+    }
+  },
+  "completedNorthBend": {
+    "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "query": {
+      "area": [
+        -121.82,
+        47.43,
+        -121.68,
+        47.54
+      ],
+      "distance": [
+        6437.376,
+        16093.44
+      ],
+      "gain": [
+        0,
+        1066.8
+      ],
+      "repetition": 0.3,
+      "includeUnknown": false,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "scope": "Completed real North Bend comparison to existing raw engine; independent original-walk validation and corridor/class projection. This is not an independent exhaustive real-graph enumeration or a broader coverage proof.",
+    "sourceSha256": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+    "rawEngineSha256": "71c94dc7d019281fa6b3690d7b712ed567055877de09c1c40b6961918c6f5749",
+    "independentVerifierSourceSha256": "c798795264163eaa1bb93d2abcb74c715168ad2cb42a77ba9ff9f2e84d54dc5c",
+    "rawWalks": 752,
+    "expectedClasses": 532,
+    "emittedWalks": 532,
+    "recoveredClasses": 532,
+    "rawDone": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 7,
+        "expansions": 2262658,
+        "elapsedMs": 339
+      }
+    },
+    "bundledDone": {
+      "type": "done",
+      "status": "complete",
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 7,
+        "expansions": 375492,
+        "elapsedMs": 154
+      },
+      "reason": "All macro itineraries explored; local alternatives represented by exact qualifying walks"
+    }
+  },
+  "witnessObservations": [
+    {
+      "queryId": "north-bend-known",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 33.50399999999996,
+        "exactForward": false,
+        "exactReverse": true
+      },
+      "firstCandidateMs": 23.794249999999977,
+      "raw": 9,
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 4,
+        "expansions": 4147,
+        "elapsedMs": 33
+      },
+      "peakRssBytes": 154386432
+    },
+    {
+      "queryId": "pass-lakes",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 172.7785,
+        "exactForward": true,
+        "exactReverse": false
+      },
+      "firstCandidateMs": 118.9255,
+      "raw": 23,
+      "progress": {
+        "totalStarts": 145,
+        "attemptedStarts": 145,
+        "completedStarts": 14,
+        "expansions": 67803,
+        "elapsedMs": 173
+      },
+      "peakRssBytes": 178929664
+    },
+    {
+      "queryId": "stevens-long",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 8449.444708,
+        "exactForward": false,
+        "exactReverse": true
+      },
+      "firstCandidateMs": 664.778667,
+      "raw": 2427,
+      "progress": {
+        "totalStarts": 73,
+        "attemptedStarts": 73,
+        "completedStarts": 41,
+        "expansions": 10276825,
+        "elapsedMs": 8450
+      },
+      "peakRssBytes": 532463616
+    },
+    {
+      "queryId": "paradise-short",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 51.814417000000006,
+        "exactForward": false,
+        "exactReverse": true
+      },
+      "firstCandidateMs": 13.515167000000005,
+      "raw": 21,
+      "progress": {
+        "totalStarts": 195,
+        "attemptedStarts": 195,
+        "completedStarts": 8,
+        "expansions": 97604,
+        "elapsedMs": 52
+      },
+      "peakRssBytes": 121126912
+    },
+    {
+      "queryId": "paradise-day",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "firstCandidateMs": 35.921042000000014,
+      "raw": 3916,
+      "progress": {
+        "totalStarts": 195,
+        "attemptedStarts": 195,
+        "completedStarts": 37,
+        "expansions": 53131757,
+        "elapsedMs": 30004
+      },
+      "peakRssBytes": 303366144
+    },
+    {
+      "queryId": "sunrise-day",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 92.73729199999998,
+        "exactForward": false,
+        "exactReverse": false
+      },
+      "firstCandidateMs": 59.521833,
+      "raw": 43,
+      "progress": {
+        "totalStarts": 23,
+        "attemptedStarts": 23,
+        "completedStarts": 0,
+        "expansions": 182276,
+        "elapsedMs": 92
+      },
+      "peakRssBytes": 139214848
+    },
+    {
+      "queryId": "sunrise-long",
+      "source": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+      "match": {
+        "atMs": 18278.6335,
+        "exactForward": false,
+        "exactReverse": true
+      },
+      "firstCandidateMs": 665.7487920000001,
+      "raw": 585,
+      "progress": {
+        "totalStarts": 23,
+        "attemptedStarts": 23,
+        "completedStarts": 0,
+        "expansions": 17081011,
+        "elapsedMs": 18278
+      },
+      "peakRssBytes": 610107392
+    }
+  ],
+  "witnessInterpretation": "Within30s, five exact original/reversed witnesses recovered and one source-confirmed minor Sunrise variation. Paradise-day unseen at30s and60s. No completed search or universal speed/memory claim follows.",
+  "paradiseMinute": {
+    "engineSha256": "11023187b98fa6ab22e2cf8982b422d94963f95db134067c53a86167e4e6d793",
+    "elapsedMs": 60009.116333,
+    "raw": 7206,
+    "progress": {
+      "totalStarts": 195,
+      "attemptedStarts": 195,
+      "completedStarts": 37,
+      "expansions": 90084115,
+      "elapsedMs": 60009
+    },
+    "peakRssBytes": 288473088
+  },
+  "paradiseDiagnostic": {
+    "scope": "Diagnostic only: unchanged selected graph and protected anchors, but only the witness origin is eligible. Not the frozen benchmark query; isolates scheduling from representation.",
+    "query": {
+      "area": [
+        -121.7145613,
+        46.7697862,
+        -121.7145613,
+        46.7697862
+      ],
+      "distance": [
+        9656.064,
+        19312.128
+      ],
+      "gain": [
+        457.20000000000005,
+        1371.6000000000001
+      ],
+      "repetition": 0.3,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "match": {
+      "atMs": 383.421209,
+      "exactForward": false,
+      "exactReverse": true
+    },
+    "raw": 513,
+    "progress": {
+      "totalStarts": 1,
+      "attemptedStarts": 1,
+      "completedStarts": 0,
+      "expansions": 983182,
+      "elapsedMs": 383
+    },
+    "peakRssBytes": 125943808
+  },
+  "sunriseSourceAudit": {
+    "report": "/private/tmp/alpine-sunrise-representative-check/report.json",
+    "reportSha256": "30e91ec6c34239cfec0ac84630bda1d762f9917a8eefb1cae65f24e21dc32ed0",
+    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance−13.808m, climb−0.115m. Both qualify. Minor variation, not exact witness recovery."
+  },
+  "connectorEvidence": {
+    "savedWalks": 1137,
+    "changedWalks": 958,
+    "allShortenedWalksLegalAndQualifying": true,
+    "fixedTrailItineraryStartClasses": 211,
+    "shortenedRoadRangeMeters": [
+      4959.860953369143,
+      7295.865085968689
+    ],
+    "interpretation": "This saved set contains avoidable connector variation, but no route needs its longer connector choices to reach the minimum distance or gain. Replacing all runs yields exactly one selected shortest realization for each of the 211 ordered trail-itinerary/start classes. This is a measured property of these saved routes, not a general proof that unconstrained shortest connector paths are compatible with every hike.",
+    "twoPortThresholdExperiment": {
+      "savedRoutes": 1137,
+      "baselineMacroClasses": 441,
+      "allConnectorTwoPortMacroClasses": 441,
+      "furtherClassesRemoved": 0,
+      "allConnectorOnlyParallelGroups": 51,
+      "connectorGroupsSplitBy500mThreshold": 14,
+      "newThresholdFreeGroupsUsedBySavedWalks": 0,
+      "distinctOrderedTrailItineraryStarts": 211,
+      "roadItinerariesSplitAcrossMultipleMacroClasses": 76,
+      "macroClassesMergingDifferentTrailItineraries": 2
+    }
+  },
+  "roadComponents": {
+    "components": 97,
+    "componentsWithTwoOrMorePorts": 16,
+    "portNodesOnRoads": 302,
+    "counts": {
+      "pushes": 52389,
+      "pops": 52389,
+      "settledNodes": 49496,
+      "relaxationAttempts": 113752,
+      "stalePops": 2893,
+      "beyondRoadBudget": 4014,
+      "labelEntries": 49496,
+      "reachableOrderedPairs": 6884,
+      "candidateOriginalEdgeIds": 119278,
+      "candidateOriginalNodeIds": 126162,
+      "pairsPassingOtherPorts": 5722,
+      "pairsPassingOtherEligibleStarts": 1904,
+      "publicOnlyChosenPaths": 114,
+      "trees": 302,
+      "possibleOrderedPairs": 24990
+    },
+    "memoryEstimates": {
+      "definition": "Raw dense arrays: Float64 distance plus Int32 predecessor edge =12 bytes per node per cached source. Excludes graph, object headers, Maps, heap, allocator overhead, and candidate metadata. Sparse-entry figure is only payload equivalent, not Python or JS dictionary memory.",
+      "oneGlobalIndexedTreeBytes": 39804,
+      "allPortsGlobalIndexedTreesBytes": 12020808,
+      "allPortsComponentIndexedTreesBytes": 2463276,
+      "boundedVisitedEntryPayloadEquivalentBytes": 593952,
+      "allReachablePairDistancePayloadBytes": 55072,
+      "allMaterializedShortestPathEdgeIdsBytes": 477112
+    }
+  },
+  "roadPrimitive": {
+    "sourceSha256": "dbe58a219dabcd3b046c714df350ca1bf0119d568095f970ebd0ca740c4e3757",
+    "independentTinyPathChecks": 70,
+    "distinctSavedFixedContexts": 853,
+    "result": "All contexts find a blocked-compatible connection no longer than their original. Public-only longer local alternative retained. Caller must preserve original start, replace paired stems together, and validate complete hike; shortest alone does not solve gain/repetition or interacting connections. Adjacency rebuilt per request in this bounded prototype; not a production scaling claim."
+  },
+  "nextAction": "Replace raw branched-road permutations with lazy connection choices in the context of a substantial trail itinerary. Resolve interfering connections and whole-hike gain/repetition before applying minimum hike mileage; retain longer roads that enable valid loops. Do not widen a two-port threshold, add SPQR/ZDD machinery, or replace the production solver based on first-result timing alone.",
+  "reproduction": "Recover each archive tag in a temporary detached checkout. The solver archive contains research/proof/README.md and portable explicit-dataset witness/query runners. The verifier archive contains research/local-choice-check.ts; run it against solver source with the committed independent tiny oracle. The road archive contains research/road-connections-check.mjs. Prepared/raw datasets and local proof reports are ignored, with hashes above. Completed experimental worktrees and branches were removed.",
+  "machine": {
+    "node": "v24.11.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "release": "27.0.0",
+    "cpu": "Apple M3",
+    "logicalCpus": 8,
+    "memoryBytes": 17179869184
+  }
+}
