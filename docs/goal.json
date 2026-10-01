@@ -9,13 +9,45 @@
     "method": "Physical lines in first-party tracked .ts/.tsx/.js/.mjs/.py/.sh/.css files; exclude public vendored assets, .agents, .test/.spec files, tests/, testing/, __fixtures__/, and test-helpers.ts. Include application, preparation, research, scripts, and root code configuration. Normal readable formatting required."
   },
   "acceptance": {
-    "experience": ["area selection", "distance/gain/repetition", "loops and lollipops", "progressive comparison", "route inspection", "GPX", "browser reconnect while server lives"],
-    "setup": ["one local command after prerequisites", "automatic usable data", "no user source processing or API keys"],
-    "quality": ["20 frozen real queries across 3 contrasting Washington areas", "independently verified qualifying routes", "independent exhaustive small-graph oracle", "honest constraints and completion"],
-    "performance": {"firstExactP90Ms": null, "allStartsAttemptedP90Ms": null, "cancelMs": 1000, "runtimeBytes": 1000000000, "priority": "User clarified 2026-09-30: longer searches are acceptable. Timing is descriptive; do not complicate architecture or cut exploration to chase sub-10-second results."},
-    "delivery": ["working replacement", "reproducible measurements", "brief architecture rationale", "concise setup", "one active application", "temporary scaffolding removed"],
+    "experience": [
+      "area selection",
+      "distance/gain/repetition",
+      "loops and lollipops",
+      "progressive comparison",
+      "route inspection",
+      "GPX",
+      "browser reconnect while server lives"
+    ],
+    "setup": [
+      "one local command after prerequisites",
+      "automatic usable data",
+      "no user source processing or API keys"
+    ],
+    "quality": [
+      "20 frozen real queries across 3 contrasting Washington areas",
+      "independently verified qualifying routes",
+      "independent exhaustive small-graph oracle",
+      "honest constraints and completion"
+    ],
+    "performance": {
+      "firstExactP90Ms": null,
+      "allStartsAttemptedP90Ms": null,
+      "cancelMs": 1000,
+      "runtimeBytes": 1000000000,
+      "priority": "User clarified 2026-09-30: longer searches are acceptable. Timing is descriptive; do not complicate architecture or cut exploration to chase sub-10-second results."
+    },
+    "delivery": [
+      "working replacement",
+      "reproducible measurements",
+      "brief architecture rationale",
+      "concise setup",
+      "one active application",
+      "temporary scaffolding removed"
+    ],
     "engineering": "Challenge raw sources, processing and storage from first principles. Prioritize robust code over patchwork tests; use targeted independent checks with restraint.",
-    "deferred": ["Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."]
+    "deferred": [
+      "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
+    ]
   },
-  "state": "Prove a complete small North Bend slice before expanding coverage or optimizing. Fresh OSM/DEM preparation and the desktop flow are implemented; independent source-access review is finding and correcting real defects. Paging, reconnect and GPX have been checked in the browser. Historical 24-query measurements predate the current engine and fresh sources. Independent fresh-source witness recovery, automatic setup, long-hike validation and full-app resource measurements remain in progress. Hosting is deferred."
+  "state": "Data and solver architecture take priority over further UI and release work. The small North Bend slice has an independent source witness and whole-app GPX proof. A statewide source inventory and two scratch storage prototypes now expose the eager-loading and regional-identity defects; all 24 spatial selections agree but this is not route-search or statewide acceptance. Recommend one snapshot network in geographic files, with separate starts/topology/geometry and explicit coverage. The source builder and production format still require proof. Road and sidewalk sections may connect trail hikes; entirely urban sidewalk walks are outside the intended experience. Proposed public data release remains held without approval. Hosting remains deferred. See benchmarks/storage-review.json."
 }

@@ -1,0 +1,185 @@
+{
+  "date": "2026-09-30",
+  "status": "Architecture review and scratch storage experiments; not a production migration or statewide acceptance result",
+  "reason": "User challenged premature publication of a tiny standalone slice and directed work toward the data model and solver foundation.",
+  "confirmedProduct": [
+    "Generate trail hikes. Roads and sidewalks may reach trails or connect trails. Entirely urban sidewalk walks are outside the intended experience.",
+    "Map and named areas select starting places; storage divisions must not clip routes.",
+    "Local first, automatic prepared-data acquisition, browser reconnect while the server runs; hosting remains deferred.",
+    "Long searches are acceptable. Preserve useful coverage and disclose unfinished exploration."
+  ],
+  "recommendedDirection": {
+    "model": "One versioned physical network, partitioned for delivery and selective reading. Independently clipped regional graphs are not composable by current IDs.",
+    "storage": "Prefer immutable geographic files, with starts, compact topology, and geometry separate. Physical encoding and the source builder remain provisional until source, seam, coverage and whole-app checks pass.",
+    "identity": "Junctions and physical trail sections share identity across every file in one snapshot. No requirement for permanent compiled identities across releases. Retain source lineage for audit.",
+    "routeFacts": "Preserve trail/road/sidewalk classification, physical section identity, direction-specific foot permission and gain, and real junction connectivity. Handle passage restrictions separately from trail existence.",
+    "starts": "Keep the network attachment, naming, walking permission and evidence of trailhead/parking/road contact distinct. A road contact is not a parking guarantee.",
+    "coverage": "Pin source and processing versions. Distinguish covered empty cells, missing files and unprepared geography. A finished traversal is not evidence of complete geography.",
+    "query": "Select starts, then read a conservative geographic superset for their maximum closed-route length. Keep whole intersecting sections and endpoints. The current prototype uses a D/2 + 1m geographic enclosure, relying on the production distance metric invariant.",
+    "geometry": "Retain measured elevation/drawing profiles separately and read them on route inspection; never eagerly load all geometry for every search.",
+    "serving": "Static prepared files can be acquired and cached by a small local server. The CPU worker searches a compact working network. No hosted database or remote trail query is required for the confirmed local experience."
+  },
+  "verifiedCurrentProblems": [
+    "Current eager graph plus geometry loading peaks at 616284160 bytes on the broad Cascades artifact before any solver runs.",
+    "Current corridor IDs depend on local compaction anchors and footprint clipping: 79 original North Bend corridor IDs are absent from the broader build.",
+    "Removing one redundant access point replaced two corridor IDs with one without changing underlying source segments.",
+    "Generated clipped frontier IDs omit cut coordinates and are unsafe as shared identities across independently prepared regions.",
+    "The compiled runtime representation discards the source distinction between hiking paths and sidewalks/roads.",
+    "The broader compiler currently holds large source, sampled-profile and output structures simultaneously; its measured 2358902784-byte peak is not a statewide feasibility result."
+  ],
+  "sourceInventory": {
+    "sourceSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "eligibleWaysBeforeNodeRestrictionsAndCompaction": 501673,
+    "referencedShapeNodes": 5404417,
+    "explicitSidewalkWays": 171674,
+    "explicitCrossingWays": 106184,
+    "scope": "Frozen Washington OSM extract, including complete source ways outside its nominal boundary. These are source counts, not routing graph counts or a statewide build.",
+    "evidenceDirectory": "/private/tmp/alpine-wa-volume-xz3unutt"
+  },
+  "experiment": {
+    "inputs": {
+      "graphGzipBytes": 5056942,
+      "graphGzipSha256": "fcadce2a36dc0ce7f5a8050f0cdbcc3dd97638b6ac94efbea551ce985ab6b5e5",
+      "geometryGzipBytes": 27325728,
+      "geometryGzipSha256": "63fdac6f0c6ba696f41fc0b542bcfad1f1a9fe336360ccea01767d9d9ddea8ce",
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4"
+    },
+    "counts": {
+      "nodes": 73001,
+      "directedEdges": 154410,
+      "corridors": 77205,
+      "starts": 21256
+    },
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "architecture": "arm64",
+      "cpu": "Apple M3",
+      "logicalCpus": 8,
+      "totalMachineMemoryBytes": 17179869184
+    },
+    "fullCurrentEagerLoader": {
+      "mode": "dataset",
+      "input": "/Users/mouradheddaya/Documents/alpine-loop/.local-data/rewrite/fresh-cascades",
+      "node": "v24.11.0",
+      "architecture": "arm64",
+      "platform": "darwin",
+      "elapsedMs": 669.2504170000001,
+      "nodes": 73001,
+      "arcs": 154410,
+      "starts": 21256,
+      "before": {
+        "rss": 47480832,
+        "heapTotal": 6127616,
+        "heapUsed": 5155400,
+        "external": 1789776,
+        "arrayBuffers": 12531
+      },
+      "after": {
+        "rss": 616284160,
+        "heapTotal": 434405376,
+        "heapUsed": 315512416,
+        "external": 179511624,
+        "arrayBuffers": 177734339
+      },
+      "peakRssBytes": 616284160,
+      "caveat": "Fresh process; OS file cache not controlled. Eager-loading only, no solver or HTTP/browser."
+    },
+    "sqlite": {
+      "installedBytes": 106188800,
+      "gzipDeliveryBytes": 39494643,
+      "medianQueryPeakRssBytes": 58482688.0,
+      "maximumQueryPeakRssBytes": 307658752.0,
+      "evidence": "/private/tmp/alpine-storage-sqlite/results.json",
+      "reproduction": "/private/tmp/alpine-storage-sqlite/report.md"
+    },
+    "geographicFiles": {
+      "cellDegrees": 0.1,
+      "installedAndPayloadBytes": 36566376,
+      "fileCount": 771,
+      "medianQueryPeakRssBytes": 56320000.0,
+      "maximumQueryPeakRssBytes": 230588416,
+      "replication": {
+        "topologyCopies": 79665,
+        "topologyRatio": 1.0318632212939576,
+        "endpointCopies": 77334,
+        "endpointRatio": 1.0593553512965577,
+        "geometryCopies": 77205,
+        "startsCopies": 21256
+      },
+      "geometryExample": {
+        "corridor": 16065,
+        "owner": "-1218_474",
+        "name": "Little Si Trail",
+        "points": 11,
+        "storedCorridorsRead": 2064,
+        "compressedBytesRead": 321235,
+        "uncompressedBytesRead": 973836,
+        "filesRead": 1,
+        "geometrySha256": "1be815a8e8ebb0aaa591c63ad9fc6467c29e8d5d779b3eb7434bab20e8957ef2",
+        "loadMs": 6.537166999999998,
+        "peakRssBytes": 55148544,
+        "validation": "Whole object hash equals original frozen geometry entry"
+      },
+      "evidence": "/private/tmp/alpine-storage-grid/report.json",
+      "reproduction": "/private/tmp/alpine-storage-grid/README.md"
+    },
+    "all24SelectionsMatchIndependentScansAndEachOther": true,
+    "largestSelection": {
+      "query": "pass-long",
+      "physicalSections": 63073,
+      "availableSections": 77205
+    },
+    "queryEnclosuresOutsideSourceCoverage": [
+      "pass-long",
+      "stevens-long",
+      "sunrise-long"
+    ],
+    "limitations": [
+      "Fresh Node processes, uncontrolled OS filesystem cache. Individual observations, not statistical performance conclusions.",
+      "Partial readers materialize compact topology and local node indices; they do not build adjacency, run search or include browser/server memory.",
+      "The eager-loader baseline includes all geometry; partial readers intentionally do not. This is an architecture comparison, not equal-payload timing.",
+      "Both prototype importers first materialize the existing whole snapshot; neither proves bounded preparation at statewide scale.",
+      "File chunking does not make very broad or long exhaustive searches cheap.",
+      "Geographic files require integrity checks, coherent snapshots, explicit missing coverage and bounded cache behavior before production use.",
+      "Scratch code and full reports remain local; this record does not claim a maintained or portable benchmark harness."
+    ]
+  },
+  "alternatives": [
+    {
+      "choice": "Single indexed SQLite file",
+      "assessment": "Valid local store with spatial indexes and per-section geometry reads. Rejected as the current delivery preference because partial acquisition would need an additional scheme; not rejected for scale limits."
+    },
+    {
+      "choice": "Independent named-region graphs",
+      "assessment": "Reject as the logical data model: regional overlap and clipping change identity and can sever cross-region hikes."
+    },
+    {
+      "choice": "Whole graph and geometry JSON",
+      "assessment": "Retain only as the current slice baseline; eager loading does not meet the intended scale model."
+    },
+    {
+      "choice": "Valhalla preparation and tiles",
+      "assessment": "Serious source-builder alternative. Official graph access and elevation profiles exist. Lossless base-network export, explicit access evidence, barrier semantics and cumulative elevation measurements require a small proof before choosing it or continuing custom preparation."
+    },
+    {
+      "choice": "Remote spatial/graph database",
+      "assessment": "No confirmed local-product need justifies a mandatory service."
+    }
+  ],
+  "nextEvidenceRequired": [
+    "A real hike crossing storage divisions retains identical connectivity, measurements and physical repetition; missing pieces cannot look like no route.",
+    "Source preparation preserves agreed hiking versus connector semantics and explicit restrictions, with independently checked access points and routes.",
+    "Measure statewide preparation and installed data rather than extrapolating the tiny slice. Stream or batch expensive source/elevation processing; expose unavailable coverage.",
+    "Run the frozen real-query acceptance cases through the actual worker/server with partial loading, including long hikes, cancellation, memory and honest completion."
+  ],
+  "references": [
+    "https://www.sqlite.org/rtree.html",
+    "https://www.sqlite.org/whentouse.html",
+    "https://valhalla.github.io/valhalla/concepts/why-tiles/",
+    "https://valhalla.github.io/valhalla/bindings/python/api/graph_utils/",
+    "https://valhalla.github.io/valhalla/contributing/architecture/mjolnir/",
+    "https://www.usgs.gov/3d-elevation-program/about-3dep-products-services"
+  ],
+  "publication": "Held. The user did not approve the proposed GitHub data prerelease. No files published."
+}
