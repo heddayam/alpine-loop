@@ -1,10 +1,11 @@
 {
   "date": "2026-09-30",
-  "status": "Research only; not integrated into the application. Branched-road generation and canonical full-hike realization remain unfinished.",
+  "status": "Research only; not integrated. Known-plan joint road realization passes. Whole-search discovery still fails on Pratt; the microedge outer generator is rejected pending structural correction.",
   "archives": {
     "solver": "archive/research-local-choices-2026-09-30",
     "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
-    "roadPrimitive": "archive/research-road-connections-2026-09-30"
+    "roadPrimitive": "archive/research-road-connections-2026-09-30",
+    "jointRoads": "archive/research-joint-roads-2026-09-30"
   },
   "inputs": {
     "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
@@ -425,7 +426,7 @@
   "sunriseSourceAudit": {
     "report": "/private/tmp/alpine-sunrise-representative-check/report.json",
     "reportSha256": "30e91ec6c34239cfec0ac84630bda1d762f9917a8eefb1cae65f24e21dc32ed0",
-    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance−13.808m, climb−0.115m. Both qualify. Minor variation, not exact witness recovery."
+    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance\u221213.808m, climb\u22120.115m. Both qualify. Minor variation, not exact witness recovery."
   },
   "connectorEvidence": {
     "savedWalks": 1137,
@@ -497,5 +498,377 @@
     "cpu": "Apple M3",
     "logicalCpus": 8,
     "memoryBytes": 17179869184
+  },
+  "jointRoadResearch": {
+    "archiveCommit": "885b3a5",
+    "representation": "Same original start, ordered fixed trail runs, road-gap endpoints, and exact loop/lollipop attachment. Road internal path permutations are omitted; directions remain distinct.",
+    "savedProjection": {
+      "scope": "Saved Pratt physical walks projected onto fixed ordered trail runs, original start, and exact cycle attachment. Road internal edge choices are omitted. These are structural plans, not counts of meaningfully different hikes.",
+      "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+      "rowsSha256": "3a38a623065da7aee6854b03ecd34a02c3dd1ff67573e2269af2447d9db21b9b",
+      "sourceRoutes": 1137,
+      "sourceStarts": 16,
+      "directedPlans": 211,
+      "undirectedPlans": 211,
+      "attachmentInsideRoadPlans": 71
+    },
+    "knownPlanRealization": {
+      "scope": "One joint road realization per saved Pratt fixed-trail/start/attachment plan, independently validated on original directed edges. This is realization proof for known plans, not discovery, a full solver benchmark, or a count of distinct hikes.",
+      "moduleSha256": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+      "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+      "querySha256": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+      "plansSha256": "42b7b2ab899f3ee256d2ca2b4c0c84f474cc511b824ac8d8a61774dba7f20126",
+      "inputPlans": 211,
+      "processedPlans": 211,
+      "found": 211,
+      "none": 0,
+      "stopped": 0,
+      "preparationMs": 11.940083000000001,
+      "elapsedMs": 57.295917,
+      "maximumCursorStepMs": 0.7615420000000199,
+      "peakRSS": 131301376,
+      "workYields": 65161,
+      "phaseWork": {
+        "validate": 12228,
+        "shortest": 52933
+      }
+    },
+    "independentVerifier": {
+      "moduleSha256": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+      "checkerSha256": "0754c0f526e06b35a7026881e49dc7db43aa68ff7ea0b33cd84ad89efee8712c",
+      "oracleSha256": "27b79ef95cd1b89b1ebf379b600b87c77a4c3b3d8bca3febe69309710dad64eb",
+      "node": "v24.11.0",
+      "checks": 54,
+      "failures": 0,
+      "lifecycle": {
+        "resolverAfterFirstWork": true,
+        "preparationBeforeFinalNodeRead": true
+      },
+      "independentMethod": "Enumerate original simple stem-plus-cycle walks with minimum distance removed; match full walks to fixed plan, then check whether any original admissible assignment can reach minimum. Never use the new capacity inequality to determine expected feasibility.",
+      "arithmeticReview": [
+        "An accepted simple outward walk plus its physical reverse stem contains fewer than 2*N edge additions; nonnegative prefix totals are bounded by accepted maximum distance and road budget.",
+        "Separate full-distance and road-distance IEEE accumulation error is bounded conservatively by 2*N*EPS*(Dmax+Rmax). The implementation rounds a larger 8*N envelope upward, also covering rounded quotient error.",
+        "The threshold deduction covers rounding of minimumDistance*(1-roadFraction). Safe-integer/finite guards disable the optional bound when its integer envelope cannot be represented safely.",
+        "Fixed stem costs count actual reverse edge distances. A connector stem with a nonconnector inverse disables the fixed-trail bound because its variable return can add trail distance.",
+        "The bound applies only to a COMPLETE fixed-trail plan, never a growing trail prefix. It does not justify altering road ranking or returning a longer connection to satisfy minimum mileage."
+      ],
+      "newChecks": [
+        {
+          "name": "road-cap-and-share-exact-equality",
+          "order": "original",
+          "compatibleAssignments": 1,
+          "work": 7,
+          "status": "found"
+        },
+        {
+          "name": "road-cap-and-share-exact-equality",
+          "order": "reversed",
+          "compatibleAssignments": 1,
+          "work": 7,
+          "status": "found"
+        },
+        {
+          "name": "interleaved-total-exceeds-trail-plus-road-rounded-sum",
+          "order": "original",
+          "compatibleAssignments": 1,
+          "work": 34,
+          "status": "found"
+        },
+        {
+          "name": "interleaved-total-exceeds-trail-plus-road-rounded-sum",
+          "order": "reversed",
+          "compatibleAssignments": 1,
+          "work": 34,
+          "status": "found"
+        },
+        {
+          "name": "fixed-stem-must-count-actual-asymmetric-return",
+          "order": "original",
+          "compatibleAssignments": 1,
+          "work": 10,
+          "status": "found"
+        },
+        {
+          "name": "fixed-stem-must-count-actual-asymmetric-return",
+          "order": "reversed",
+          "compatibleAssignments": 1,
+          "work": 10,
+          "status": "found"
+        },
+        {
+          "name": "connector-stem-can-have-variable-nonroad-return",
+          "order": "original",
+          "compatibleAssignments": 1,
+          "work": 10,
+          "status": "found"
+        },
+        {
+          "name": "connector-stem-can-have-variable-nonroad-return",
+          "order": "reversed",
+          "compatibleAssignments": 1,
+          "work": 10,
+          "status": "found"
+        },
+        {
+          "name": "unsafe-huge-query-envelope-disables-only-the-bound",
+          "order": "original",
+          "compatibleAssignments": 1,
+          "work": 14,
+          "status": "found"
+        },
+        {
+          "name": "unsafe-huge-query-envelope-disables-only-the-bound",
+          "order": "reversed",
+          "compatibleAssignments": 1,
+          "work": 14,
+          "status": "found"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-cap",
+          "order": "original",
+          "compatibleAssignments": 0,
+          "work": 1,
+          "status": "none"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-cap",
+          "order": "reversed",
+          "compatibleAssignments": 0,
+          "work": 1,
+          "status": "none"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-share",
+          "order": "original",
+          "compatibleAssignments": 0,
+          "work": 1,
+          "status": "none"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-share",
+          "order": "reversed",
+          "compatibleAssignments": 0,
+          "work": 1,
+          "status": "none"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-cap-with-otherwise-admissible-walks",
+          "order": "original",
+          "compatibleAssignments": 1023,
+          "work": 1,
+          "status": "none"
+        },
+        {
+          "name": "short-trail-binary-frontier-impossible-by-road-cap-with-otherwise-admissible-walks",
+          "order": "reversed",
+          "compatibleAssignments": 1023,
+          "work": 1,
+          "status": "none"
+        }
+      ],
+      "limits": "Bounded tiny-graph correctness evidence; does not establish large-frontier memory safety or real-data composition performance."
+    },
+    "outerCoverage": {
+      "checks": [
+        {
+          "name": "trail triangle / multiple starts",
+          "rawWalks": 4,
+          "expectedClasses": 4,
+          "generatedCandidates": 4,
+          "work": 124
+        },
+        {
+          "name": "road junction attachment",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 10,
+          "work": 293
+        },
+        {
+          "name": "road cycle after trail stem",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 33
+        },
+        {
+          "name": "original start splits wrapping road run",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 6,
+          "work": 117
+        },
+        {
+          "name": "road junction also a trail port",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 10,
+          "work": 523
+        },
+        {
+          "name": "directed roads and public-only",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 35
+        },
+        {
+          "name": "physical road self loop",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 23
+        },
+        {
+          "name": "two parallel roads form attachment cycle",
+          "rawWalks": 2,
+          "expectedClasses": 1,
+          "generatedCandidates": 2,
+          "work": 62
+        },
+        {
+          "name": "one-way fixed stem",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 91
+        },
+        {
+          "name": "overlapping possible road connections",
+          "rawWalks": 8,
+          "expectedClasses": 8,
+          "generatedCandidates": 37,
+          "work": 717
+        },
+        {
+          "name": "exact decimal boundary",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 61
+        },
+        {
+          "name": "road budget cannot reach minimum",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 103
+        },
+        {
+          "name": "road share cannot reach minimum",
+          "rawWalks": 0,
+          "expectedClasses": 0,
+          "generatedCandidates": 0,
+          "work": 103
+        },
+        {
+          "name": "equality with full road allowance",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 4,
+          "work": 107
+        },
+        {
+          "name": "exact asymmetric fixed-stem return",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 3,
+          "work": 66
+        },
+        {
+          "name": "road stem returns as variable trail",
+          "rawWalks": 2,
+          "expectedClasses": 2,
+          "generatedCandidates": 2,
+          "work": 92
+        },
+        {
+          "name": "unsafe capacity arithmetic skips rejection",
+          "rawWalks": 1,
+          "expectedClasses": 1,
+          "generatedCandidates": 1,
+          "work": 34
+        }
+      ],
+      "allRawWalkClassesCovered": true,
+      "duplicatePlans": 0,
+      "cancellationPassed": true,
+      "scope": "Tiny source-walk projection coverage only; emitted plans may be infeasible until joint road realization."
+    },
+    "compositionObservations": [
+      {
+        "scope": "Prototype composition: bounded pending joint realizations plus an outer trail-plan cursor. Timing describes this scheduler only; no app transport, result store, reverse pairing, or claim of comprehensive discovery.",
+        "outerSha256": "5946233957b9a881c21021dac1e05695475506a2696cfe7dddc2a8cdf0fc4d2a",
+        "roadsSha256": "4941b2a784196951d9961643b312eccb3908765704ad668cd4450047cfa31768",
+        "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+        "querySha256": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+        "preparationMs": 23.204499999999996,
+        "elapsedMs": 45014.781417,
+        "maximumStepMs": 114.31729199999972,
+        "peakRSS": 1386496000,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.5239999999976135,
+        "progress": {
+          "work": 353792,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "plans": 26,
+        "found": 0,
+        "none": 10,
+        "belowMinimum": 0,
+        "pendingAtStop": 16,
+        "roadYields": 26917134,
+        "phaseWork": {
+          "validate": 505,
+          "joint": 26889994,
+          "bounds": 26402,
+          "shortest": 233
+        }
+      },
+      {
+        "scope": "Prototype composition: bounded pending joint realizations plus an outer trail-plan cursor. Timing describes this scheduler only; no app transport, result store, reverse pairing, or claim of comprehensive discovery.",
+        "outerSha256": "91d643295371202733a44a0e9733110801b4747f036fca713f415643ee2e7b99",
+        "roadsSha256": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+        "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+        "querySha256": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+        "preparationMs": 12.188083000000006,
+        "elapsedMs": 45005.388625,
+        "maximumStepMs": 40.97420899999997,
+        "peakRSS": 298188800,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.049375000002328306,
+        "progress": {
+          "work": 126686976,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "plans": 91,
+        "found": 0,
+        "none": 91,
+        "belowMinimum": 0,
+        "pendingAtStop": 0,
+        "roadYields": 74598,
+        "phaseWork": {
+          "validate": 3547,
+          "bounds": 29559,
+          "joint": 23404,
+          "shortest": 18088
+        }
+      }
+    ],
+    "minimumDistancePolicy": "Minimum distance cannot steer road ranking or choose padding. A COMPLETE fixed-trail plan may be rejected when a conservative upper-capacity bound proves no permitted road realization could meet that minimum. Growing trail prefixes do not receive this upper-capacity rejection.",
+    "decision": "Do not integrate either measured composition. Known-plan realization is cheap on the saved corpus, but discovering useful plans remains the failure. The corrected bound reduced frontier memory and road work; it did not recover a hike within45seconds. Next isolate trail-only degree-two corridors with all original starts and road exits protected.",
+    "limitations": [
+      "211saved structural plans are not211meaningfully different hikes; remaining small trail differences require separate treatment.",
+      "Tiny oracle coverage and known-plan replay do not prove broad source quality, statewide scalability, real discovery coverage, or app behavior.",
+      "The two observations use a research scheduler and different work units from the existing solver; no speedup factor is claimed.",
+      "Current factory copies the immutable graph; frontiers remain uncapped. These choices are not protected requirements."
+    ],
+    "replay": "git checkout archive/research-joint-roads-2026-09-30 in a separate checkout; follow research/proof/README.md. Generated inputs stay outside Git."
   }
 }
