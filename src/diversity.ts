@@ -10,7 +10,8 @@ export function createRouteGroups(graph: TrailGraph) {
   const choices: Choice[] = [];
   const physicalLengths = new Map(graph.edges.map(edge => [edge.trail, edge.distance]));
   function footprint(edges: number[]): Footprint {
-    const trails = new Set(edges.map(index => graph.edges[index]!.trail));
+    // Reversals must accumulate identical floating-point sums at the grouping boundary.
+    const trails = new Set(edges.map(index => graph.edges[index]!.trail).sort((a, b) => a - b));
     return { trails, length: [...trails].reduce((sum, trail) => sum + physicalLengths.get(trail)!, 0) };
   }
   function similar(a: Footprint, b: Footprint): boolean {

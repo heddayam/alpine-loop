@@ -14,8 +14,8 @@ it('keeps every route option within stable groups and gives emitted reversals on
   graph.starts.push({ ...graph.starts[1]!, id: 'another-source-at-the-same-node' });
   const query: SearchQuery = { area: [-1, -1, 1, 1], distance: [1, 10000], gain: [0, 0], repetition: 0.45, includeUnknown: true };
   const valid = enumerate(graph, query);
-  function route(start: number, edges: number[]): RouteCandidate {
-    const found = valid.find(candidate => candidate.start === start && candidate.edges.join(',') === edges.join(','));
+  function route(start: number, edges: number[], candidates = valid): RouteCandidate {
+    const found = candidates.find(candidate => candidate.start === start && candidate.edges.join(',') === edges.join(','));
     if (!found) throw new Error(`Fixture route must independently satisfy constraints: ${start}/${edges}`);
     return { ...found, id: `${start}/${edges}`, kind: found.repetition ? 'lollipop' : 'loop', uncertain: false };
   }
@@ -75,4 +75,15 @@ it('keeps every route option within stable groups and gives emitted reversals on
   expect(group(route(3, [39, 35]))).toEqual(nearOtherIdentity);
   expect(group(first)).toEqual(firstIdentity); // Later options never replace the representative.
   expect(group(otherEntrance)).toEqual(entranceIdentity);
+
+  // This stem puts the square/lollipop overlap at the floating-point 85% boundary.
+  // Summing trails in walk order assigned the two lollipop directions to different groups.
+  const boundaryGraph = fixture([
+    [0, 1, 100.1], [1, 2, 200.2], [2, 3, 300.3], [3, 0, 400.4], [4, 0, 176.64705882352962],
+  ], [0, 4]);
+  const boundaryRoutes = enumerate(boundaryGraph, query);
+  const boundaryGroup = createRouteGroups(boundaryGraph);
+  boundaryGroup(route(0, [0, 2, 4, 6], boundaryRoutes));
+  const boundaryIdentity = boundaryGroup(route(1, [8, 0, 2, 4, 6, 9], boundaryRoutes));
+  expect(boundaryGroup(route(1, [8, 7, 5, 3, 1, 9], boundaryRoutes))).toEqual(boundaryIdentity);
 });
