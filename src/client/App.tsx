@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type {
   Bounds,
   DatasetInfo,
@@ -20,6 +20,8 @@ const roadExplanation =
   "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
+const startName = (route: RouteSummary) => route.startName ||
+  `${route.startPosition[1].toFixed(5)}, ${route.startPosition[0].toFixed(5)}`;
 const pageQuery = (offset: number, groupId?: string) =>
   `?offset=${offset}${groupId ? `&group=${encodeURIComponent(groupId)}` : ""}`;
 async function request<T>(
@@ -121,7 +123,8 @@ function RouteDetails({
   route,
   searchId,
   onBack,
-  backLabel,
+  backDisabled,
+  children,
   onReverse,
   reversing,
   reversed,
@@ -131,7 +134,8 @@ function RouteDetails({
   route: RouteChoice;
   searchId: string;
   onBack: () => void;
-  backLabel: string;
+  backDisabled: boolean;
+  children: ReactNode;
   onReverse: () => void;
   reversing: boolean;
   reversed: boolean;
@@ -140,8 +144,8 @@ function RouteDetails({
 }) {
   return (
     <section className="route-detail" aria-label="Route details">
-      <button type="button" className="text-button" onClick={onBack}>
-        ← {backLabel}
+      <button type="button" className="text-button" onClick={onBack} disabled={backDisabled}>
+        ← All hikes
       </button>
       <h2 id="route-detail-heading" tabIndex={-1}>
         {routeName(route)}
@@ -152,7 +156,11 @@ function RouteDetails({
           {directionError && <button type="button" onClick={onRetry}>Retry reverse direction</button>}
         </div>
       ) : <>
-      <p className="quiet">From {route.startName || "an unnamed starting point"}</p>
+      <div className="starting-point">
+        <h3>Starting point</h3>
+        <p>{startName(route)}</p>
+        {children}
+      </div>
       <p className="route-kind">
         {route.kind === "lollipop"
           ? "Lollipop · an out-and-back approach to a loop"
@@ -258,7 +266,8 @@ export function App() {
   const [selected, setSelected] = useState<RouteChoice | null>(null);
   const [reverseTarget, setReverseTarget] = useState<string | null>(null);
   const overviewOffset = useRef(0);
-  const detailEntryId = useRef<string | null>(null);
+  const originalDirectionId = useRef<string | null>(null);
+  const [showStarts, setShowStarts] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
@@ -292,9 +301,10 @@ export function App() {
     setSelected((current) => {
       if (!current) return null;
       const entry = snapshot.routes.find(route => route.id === current.id || route.reverseId === current.id);
-      if (!entry) return current;
-      const reverseId = current.reverseId ?? (entry.id === current.id ? entry.reverseId : entry.id);
-      const groupSize = Math.max(current.groupSize, entry.groupSize);
+      const reverseId = current.reverseId ?? (entry?.id === current.id ? entry.reverseId : entry?.id);
+      const groupSize = Math.max(current.groupSize,
+        snapshot.groupId === current.groupId ? snapshot.pageTotal
+          : snapshot.routes.find(route => route.groupId === current.groupId)?.groupSize ?? 0);
       return current.groupSize === groupSize && current.reverseId === reverseId
         ? current : { ...current, groupSize, reverseId };
     });
@@ -420,8 +430,7 @@ export function App() {
       );
       if (!controller.signal.aborted) {
         acceptSnapshot(snapshot);
-        setSelected(null);
-        setReverseTarget(null);
+        if (!groupId) setSelected(null);
         setConnectionError("");
         requestAnimationFrame(() =>
           document.getElementById(focusId)?.focus(),
@@ -489,7 +498,7 @@ export function App() {
     operation.current = controller;
     setBusy(true);
     setError("");
-    setSelected(null);
+    setShowStarts(false);
     setReverseTarget(null);
     setHoveredId(null);
     try {
@@ -508,6 +517,7 @@ export function App() {
       );
       if (!controller.signal.aborted) {
         setSearch(snapshot);
+        setSelected(null);
         overviewOffset.current = 0;
         setEditing(false);
         setConnectionError("");
@@ -580,7 +590,7 @@ export function App() {
     setRoadMiles(String(roads.distance / MILE));
     setRoadPercent(String(roads.fraction * 100));
     setIncludeUnknown(snapshot.query.includeUnknown);
-    setSelected(null);
+    setShowStarts(false);
     setReverseTarget(null);
     setHoveredId(null);
     moveTo(snapshot.query.area, false, 0);
@@ -588,44 +598,58 @@ export function App() {
   const pickRoute = (id: string) => {
     const route = search?.routes.find((route) => route.id === id);
     if (!route || editing) return;
-    if (!search?.groupId && route.groupSize > 1) {
-      openGroup(route);
-      return;
-    }
     pageOperation.current?.abort();
     setLoadingPage(false);
-    detailEntryId.current = search?.groupId ? `route-${route.id}` : `group-${route.groupId}`;
+    if (!search?.groupId) overviewOffset.current = search?.offset ?? 0;
+    originalDirectionId.current = route.id;
     setSelected(route);
+    setShowStarts(false);
     setReverseTarget(null);
     setHoveredId(null);
-    requestAnimationFrame(() =>
-      document.getElementById("route-detail-heading")?.focus(),
-    );
+    requestAnimationFrame(() => document.getElementById("route-detail-heading")?.focus());
   };
-  const openGroup = (route: RouteChoice) => {
+  const toggleStarts = () => {
+    if (!selected || busy || loadingPage) return;
+    setShowStarts(!showStarts);
+    if (!showStarts && search?.groupId !== selected.groupId)
+      void changePage(0, selected.groupId, "starting-point-heading");
+  };
+  const backToHikes = () => {
     if (!search || busy || loadingPage) return;
-    if (!search.groupId) overviewOffset.current = search.offset;
-    void changePage(0, route.groupId, "group-heading");
-  };
-  const backToGroups = () => {
-    if (!search) return;
-    const groupId = search.groupId ?? selected?.groupId;
-    void changePage(overviewOffset.current, undefined, `group-${groupId}`).then(changed => {
-      if (changed) moveTo(search.query.area, false, 0);
+    const focusId = `group-${selected?.groupId}`;
+    const finish = () => {
+      setSelected(null);
+      setShowStarts(false);
+      setReverseTarget(null);
+      setHoveredId(null);
+      moveTo(search.query.area, false, 0);
+      requestAnimationFrame(() => document.getElementById(focusId)?.focus());
+    };
+    if (search.groupId) void changePage(overviewOffset.current, undefined, focusId).then(changed => {
+      if (changed) finish();
     });
-  };
-  const backToRoutes = () => {
-    setSelected(null);
-    setReverseTarget(null);
-    setHoveredId(null);
-    if (search && !search.groupId) moveTo(search.query.area, false, 0);
-    requestAnimationFrame(() =>
-      document.getElementById(detailEntryId.current ?? "page-summary")?.focus(),
-    );
+    else finish();
   };
   const currentRoutes = search?.routes ?? [];
-  const mapActiveId = currentRoutes.find(route => route.id === activeId || route.reverseId === activeId)?.id ?? activeId;
+  const mapRoutes = selected && (!showStarts || search?.groupId !== selected.groupId) ? [selected] : currentRoutes;
+  const mapActiveId = mapRoutes.find(route => route.id === activeId || route.reverseId === activeId)?.id ?? activeId;
   const selectionNote = search?.selectionNote;
+  const pages = search && search.pageTotal > ROUTES_PER_PAGE ? (
+    <nav className="result-pages" aria-label={search.groupId ? "Starting point pages" : "Hike pages"} aria-busy={loadingPage}>
+      <button type="button" disabled={busy || loadingPage || search.offset === 0}
+        onClick={() => void changePage(Math.max(0, search.offset - ROUTES_PER_PAGE), search.groupId)}>
+        Previous
+      </button>
+      <span id="page-summary" tabIndex={-1} aria-live="polite">
+        {loadingPage ? "Loading…"
+          : `${search.offset + 1}–${search.offset + currentRoutes.length} of ${search.pageTotal.toLocaleString()} ${search.groupId ? "starting points" : "hikes"}`}
+      </span>
+      <button type="button" disabled={busy || loadingPage || search.offset + ROUTES_PER_PAGE >= search.pageTotal}
+        onClick={() => void changePage(search.offset + ROUTES_PER_PAGE, search.groupId)}>
+        Next
+      </button>
+    </nav>
+  ) : null;
   return (
     <main className="workspace">
       <aside className="sidebar" aria-label="Route planner">
@@ -669,6 +693,7 @@ export function App() {
                       <button
                         className="text-button"
                         type="button"
+                        disabled={busy}
                         onClick={() => {
                           restoreDraft();
                           setError("");
@@ -876,8 +901,7 @@ export function App() {
                     >
                       <div className="section-heading results-heading">
                         <h2>
-                          {search.groupCount.toLocaleString()} route{" "}
-                          {search.groupCount === 1 ? "group" : "groups"}
+                          {search.groupCount.toLocaleString()} {search.groupCount === 1 ? "hike" : "hikes"} found
                         </h2>
                         {running && (
                           <button
@@ -891,8 +915,7 @@ export function App() {
                         )}
                       </div>
                       <p className="route-count">
-                        {search.routeCount.toLocaleString()} matching route {search.routeCount === 1 ? "option" : "options"}.
-                        {" "}Opposite directions count once.
+                        Small path variations are combined; each shown route meets your limits.
                       </p>
                       <div className="search-progress" role="status">
                         <span className={running ? "status-running" : ""}>
@@ -916,81 +939,61 @@ export function App() {
                         )}
                       {selectionNote && (
                         <details className="selection-note">
-                          <summary>How routes are grouped</summary>
+                          <summary>How hikes are selected</summary>
                           <p>{selectionNote}</p>
                         </details>
                       )}
-                      {!selected && search.groupId && (
-                        <div className="group-heading">
-                          <button type="button" className="text-button" disabled={busy || loadingPage} onClick={backToGroups}>
-                            ← All groups
-                          </button>
-                          <h3 id="group-heading" tabIndex={-1}>
-                            {search.pageTotal.toLocaleString()} route {search.pageTotal === 1 ? "option" : "options"} in this group
-                          </h3>
-                        </div>
-                      )}
-                      {!selected && search.pageTotal > ROUTES_PER_PAGE && (
-                        <nav
-                          className="result-pages"
-                          aria-label="Results pages"
-                          aria-busy={loadingPage}
-                        >
-                          <button
-                            type="button"
-                            disabled={busy || loadingPage || search.offset === 0}
-                            onClick={() => void changePage(
-                              Math.max(0, search.offset - ROUTES_PER_PAGE),
-                              search.groupId,
-                            )}
-                          >
-                            Previous
-                          </button>
-                          <span id="page-summary" tabIndex={-1} aria-live="polite">
-                            {loadingPage
-                              ? "Loading…"
-                              : `${search.offset + 1}–${search.offset + currentRoutes.length} of ${search.pageTotal.toLocaleString()} ${search.groupId ? "options" : "groups"}`}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={busy || loadingPage ||
-                              search.offset + ROUTES_PER_PAGE >= search.pageTotal}
-                            onClick={() => void changePage(search.offset + ROUTES_PER_PAGE, search.groupId)}
-                          >
-                            Next
-                          </button>
-                        </nav>
-                      )}
+                      {!selected && pages}
                       {selected ? (
-                        <>
                           <RouteDetails
                             route={selected}
                             searchId={search.id}
-                            onBack={backToRoutes}
-                            backLabel={search.groupId ? "Routes in this group" : "All groups"}
+                            onBack={backToHikes}
+                            backDisabled={busy || loadingPage}
                             onReverse={() => {
                               if (!selected.reverseId) return;
                               setReverseTarget(selected.reverseId);
                               requestAnimationFrame(() => document.getElementById("route-detail-heading")?.focus());
                             }}
                             reversing={reverseTarget !== null}
-                            reversed={currentRoutes.some(route => route.reverseId === selected.id)}
+                            reversed={selected.id !== originalDirectionId.current}
                             directionError={routeError}
                             onRetry={() => setRouteRetry(value => value + 1)}
-                          />
-                          {!search.groupId && selected.groupSize > 1 && (
-                            <button type="button" className="text-button group-link" disabled={busy || loadingPage}
-                              onClick={() => openGroup(selected)}>
-                              View all {selected.groupSize.toLocaleString()} route options in this group
-                            </button>
-                          )}
-                        </>
+                          >
+                            {(selected.groupSize > 1 || showStarts) && <>
+                              <button id="starting-point-toggle" type="button" className="text-button"
+                                disabled={busy || loadingPage} aria-expanded={showStarts} aria-controls="starting-point-choices"
+                                onClick={toggleStarts}>
+                                {showStarts ? "Close starting points" : `Choose from ${selected.groupSize.toLocaleString()} starting points`}
+                              </button>
+                              {showStarts && <div id="starting-point-choices" className="starting-point-choices" aria-busy={loadingPage}>
+                                <h3 id="starting-point-heading" tabIndex={-1}>Starting points for this hike</h3>
+                                {search.groupId === selected.groupId ? <>
+                                  {pages}
+                                  <ul className="start-list">
+                                    {currentRoutes.map(route => <li key={route.startId}>
+                                      <button type="button" disabled={busy || loadingPage}
+                                        aria-current={route.startId === selected.startId ? "true" : undefined}
+                                        onClick={() => pickRoute(route.id)}>
+                                        <span>{startName(route)}</span>
+                                        <small>{miles(route.distance)} mi · ↑ {feet(route.gain)} ft</small>
+                                      </button>
+                                    </li>)}
+                                  </ul>
+                                </> : loadingPage ? <p role="status">Loading starting points…</p>
+                                  : <button type="button" disabled={busy}
+                                      onClick={() => void changePage(0, selected.groupId, "starting-point-heading")}>
+                                      Retry starting points
+                                    </button>}
+                              </div>}
+                            </>}
+                          </RouteDetails>
                       ) : currentRoutes.length ? (
                         <ol className="route-list">
                           {currentRoutes.map((route) => (
-                            <li key={route.id}>
+                            <li key={route.groupId}>
                               <button
-                                id={search.groupId ? `route-${route.id}` : `group-${route.groupId}`}
+                                id={`group-${route.groupId}`}
                                 className="route-card"
                                 type="button"
                                 onClick={() => pickRoute(route.id)}
@@ -1004,8 +1007,11 @@ export function App() {
                                     {routeName(route)}
                                   </span>
                                 </span>
+                                {route.trailNames.length > 2 && <span className="route-trails">
+                                  Also: {route.trailNames.slice(2).join(" · ")}
+                                </span>}
                                 <span className="route-start">
-                                  {search.groupId ? "From" : "Shown from"} {route.startName || "an unnamed start"}
+                                  From {startName(route)}
                                 </span>
                                 <span className="route-metrics">
                                   <strong>
@@ -1022,22 +1028,16 @@ export function App() {
                                   {route.kind === "lollipop"
                                     ? "Lollipop"
                                     : "Loop"}
+                                  {route.roadDistance > 0 ? ` · ${(route.roadDistance / MILE).toFixed(2)} mi road connections` : ""}
                                   {route.uncertain ? " · Access uncertain" : ""}
                                 </span>
-                                {!search.groupId && (
-                                  <span className="group-options">
-                                    {route.groupSize.toLocaleString()} route {route.groupSize === 1 ? "option" : "options"} →
-                                  </span>
-                                )}
                               </button>
                             </li>
                           ))}
                         </ol>
                       ) : (
                         <p className="empty-state">
-                          {search.groupId
-                            ? "No route options on this page."
-                            : running
+                          {running
                             ? "Exploring trails. Matching routes appear here as they are found."
                             : search.status === "complete"
                               ? "No routes meet these limits. Edit the search to change your area or limits."
@@ -1085,7 +1085,7 @@ export function App() {
           }
           editing={editing}
           drawn={areaMode === "drawn"}
-          routes={editing ? [] : currentRoutes}
+          routes={editing ? [] : mapRoutes}
           activeRoute={activeRoute}
           selectedId={mapActiveId}
           routeNotice={reverseTarget

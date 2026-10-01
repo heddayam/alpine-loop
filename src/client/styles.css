@@ -305,13 +305,6 @@ select {
   font-size: 11px;
   line-height: 1.5;
 }
-.group-heading {
-  margin: 16px 0 4px;
-}
-.group-heading h3 {
-  margin-top: 12px;
-  font-size: 13px;
-}
 .route-start {
   display: block;
   margin: -2px 0 8px;
@@ -319,16 +312,66 @@ select {
   font-size: 11px;
   line-height: 1.5;
 }
-.group-options {
+.route-trails {
   display: block;
-  margin-top: 9px;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
-.group-link,
 .reverse-direction {
   margin-top: 12px;
+}
+.starting-point {
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.starting-point h3 {
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.starting-point > .text-button {
+  margin-top: 5px;
+}
+.starting-point-choices {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f5f7f1;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.starting-point-choices .result-pages {
+  position: static;
+  background: transparent;
+}
+.start-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.start-list button {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+.start-list small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.start-list button:hover,
+.start-list [aria-current="true"] {
+  background: #e5ecdf;
 }
 .direction-status {
   margin-top: 18px;
