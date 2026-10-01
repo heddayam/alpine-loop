@@ -33,7 +33,7 @@ class FreshCompiler(unittest.TestCase):
                       50: (.003, .005), 51: (.004, .005), 52: (.005, .005), 53: (.0055, .005),
                       60: (.005, .0005), 61: (.005, .0015), 62: (.005, .0025), 63: (.005, .0035),
                       64: (.005, .0045), 65: (.0045, .0055), 66: (.0035, .0055), 67: (.0025, .0055),
-                      68: (.0055, .0045)}
+                      68: (.0055, .0045), 70: (.0005, .0055), 71: (.001, .0055), 72: (.0015, .0055)}
             for identity, (lon, lat) in points.items():
                 node = XML.SubElement(osm, "node", id=str(identity), version="1", lon=str(lon), lat=str(lat))
                 tags = {1: {"highway": "trailhead", "name": "Loop, 100% — ridge"},
@@ -73,6 +73,9 @@ class FreshCompiler(unittest.TestCase):
             way(122, [3, 66], {"highway": "trunk"})
             way(123, [3, 67], {"highway": "motorway_link", "access": "private", "foot": "yes"})
             way(124, [53, 68], {"highway": "residential"})
+            way(125, [50, 70, 71], {"highway": "track", "name": "Naches-like Trail", "surface": "unpaved",
+                                   "foot": "designated", "motor_vehicle": "yes", "oneway": "yes"})
+            way(126, [71, 72], {"highway": "track", "foot": "yes", "motor_vehicle": "private", "oneway:foot": "yes"})
             # A relation is neither required for way 105 nor permission for 117.
             relation = XML.SubElement(osm, "relation", id="200", version="1")
             XML.SubElement(relation, "member", type="way", ref="117", role="")
@@ -106,8 +109,10 @@ class FreshCompiler(unittest.TestCase):
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
             starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
-            self.assertEqual(set(starts), {"n1", "n3", "n4", "n5"}, "Distinct parking exits remain; only the redundant boundary contact disappears")
+            self.assertEqual(set(starts), {"n1", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts remain")
             self.assertNotIn("n53", starts, "An explicit sidewalk/crossing-to-road contact is not a trail entrance")
+            self.assertEqual(starts["n50"]["access"], "unknown", "Track-to-trail contact is not proof of legal arrival or parking")
+            self.assertNotIn("n71", starts, "Two connected tracks do not establish a trail entrance")
             self.assertEqual(starts["n1"]["access"], "public", "Missing trailhead permission must not erase its parking's public evidence")
             self.assertEqual(starts["n4"]["access"], "unknown", "Public parking does not erase a node's conditional restriction")
             self.assertEqual(audit["redundantContacts"], [{"node": "n2", "retained": "n1", "parking": "w110", "ways": ["100"]}])
@@ -122,6 +127,15 @@ class FreshCompiler(unittest.TestCase):
                             "Foot prohibition and motor-only defaults remain closed despite generic access or relation membership")
             self.assertEqual({edge["access"] for edge in source_edges["105"]}, {"public"},
                              "Explicit foot permission overrides motor-vehicle restrictions without a hiking relation")
+            for source_way in ("102", "125", "126"):
+                self.assertTrue(all(geometry[edge["trail"]]["kind"] == "connector" for edge in source_edges[source_way]),
+                                "A track remains a connector despite its trail name, unpaved surface, foot designation or vehicle restrictions")
+                self.assertEqual({edge["access"] for edge in source_edges[source_way]}, {"public"})
+            self.assertEqual(len(source_edges["125"]), 2, "A vehicle-oneway track retains walking connectivity in both directions")
+            self.assertEqual([(lineage["nodeIds"][edge["from"]], lineage["nodeIds"][edge["to"]]) for edge in source_edges["126"]],
+                             [("n71", "n72")], "Pedestrian-specific track direction still applies")
+            self.assertTrue({"n70", "n71", "n72"} <= all_nodes, "Track geometry remains in the walking graph")
+            self.assertTrue(all(geometry[edge["trail"]]["kind"] == "trail" for edge in source_edges["112"]))
             for source_way in ("101", "122", "124"):
                 self.assertEqual({edge["access"] for edge in source_edges[source_way]}, {"unknown"},
                                  "Ordinary roads, including trunk without motorroad, retain unresolved walking access")
@@ -148,8 +162,6 @@ class FreshCompiler(unittest.TestCase):
                 if "n16" in item["nodes"]:
                     self.assertEqual(len(directed), 2, "Vehicle oneway does not forbid walking back")
                     self.assertEqual(geometry[trail]["kind"], "connector")
-                if "n50" in item["nodes"]:
-                    self.assertEqual(geometry[trail]["kind"], "trail")
                 if "n52" in item["nodes"]:
                     self.assertEqual(geometry[trail]["kind"], "connector", "Explicit sidewalk/crossing wins over a duplicate generic path")
                     self.assertEqual({source["kind"] for segment in item["segments"] for source in segment["source"]}, {"trail", "connector"})

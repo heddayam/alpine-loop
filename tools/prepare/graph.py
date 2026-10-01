@@ -3,8 +3,9 @@ import hashlib
 import math
 from collections import defaultdict
 
-PATHS = {"path", "footway", "bridleway", "steps", "track", "pedestrian", "cycleway"}
-ROADS = {"service", "residential", "living_street", "unclassified", "road", "tertiary", "secondary",
+PATHS = {"path", "footway", "bridleway", "steps", "pedestrian", "cycleway"}
+# Tracks are land-access roads; pedestrian permission does not change their role.
+ROADS = {"track", "service", "residential", "living_street", "unclassified", "road", "tertiary", "secondary",
          "primary", "trunk", "motorway", "tertiary_link", "secondary_link", "primary_link", "trunk_link", "motorway_link"}
 DENIED = {"no", "private", "closed", "agricultural", "forestry", "customers", "destination", "delivery"}
 PUBLIC = {"yes", "designated", "permissive", "public"}
