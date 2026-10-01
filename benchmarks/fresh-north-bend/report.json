@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-09-30T23:57:04.844Z",
+  "node": "v24.11.0",
+  "dataset": ".local-data/rewrite/fresh-north-bend-v2",
+  "hashes": {
+    "graph": "e35aaf73c61fe6df4c067b65d44d8eae7d4063f7649fbd2c53cca1c26c0ab373",
+    "geometry": "1951ac1ac5d94e7a11096b77db1905319e0632e205dde94f984a60591ab1e254"
+  },
+  "query": {
+    "area": [
+      -121.82,
+      47.43,
+      -121.68,
+      47.54
+    ],
+    "distance": [
+      6437.376,
+      16093.44
+    ],
+    "gain": [
+      0,
+      1066.8
+    ],
+    "repetition": 0.3,
+    "includeUnknown": false
+  },
+  "firstExactMs": 53.78687499999998,
+  "allAttemptedMs": 74.91045799999998,
+  "cancelMs": null,
+  "status": "complete",
+  "progress": {
+    "totalStarts": 4,
+    "attemptedStarts": 4,
+    "completedStarts": 4,
+    "expansions": 108172,
+    "elapsedMs": 30
+  },
+  "routeCount": 17,
+  "independentWitnessRetained": true,
+  "peakObservedServerWorkerRssBytes": 165855232,
+  "reconnectsToSameSearch": true,
+  "inspected": {
+    "start": "Little Si Trailhead",
+    "distance": 9527.115782264873,
+    "gain": 679.8482805175613,
+    "profileGain": 679.8482805175613,
+    "repetition": 0.27629515145820205,
+    "kind": "lollipop",
+    "uncertain": false,
+    "points": 1049,
+    "closed": true,
+    "gpxStatus": 200,
+    "gpxPoints": 1049
+  },
+  "limitation": "Single real-data app-server observation using actual compiled worker/API/GPX. No browser memory or broad benchmark claim. 30-second observation window; unfinished work is stopped and labeled.",
+  "machine": {
+    "cpu": "Apple M3",
+    "memoryGiB": 16
+  }
+}
