@@ -24,22 +24,22 @@ it('combines minor variations while preserving different hiking paths, starts an
   expect(first).toMatchObject({ distance: 8000, repetition: 0.4375 });
   const firstIdentity = group(first)!;
   expect(firstIdentity.groupId).toBe(first.id);
-  expect(group(route(0, [0, 5, 3, 1]))).toEqual(firstIdentity); // Full reversed walk, same original start.
-  expect(group({ ...first, id: 'repeated-emission' })).toEqual(firstIdentity);
+  expect(group(route(0, [0, 5, 3, 1]))).toEqual({ ...firstIdentity, preferred: false }); // Full reversed walk, same original start.
+  expect(group({ ...first, id: 'repeated-emission' })).toEqual({ ...firstIdentity, preferred: false });
 
   const otherCycle = route(0, [0, 2, 6, 1]);
   const otherCycleIdentity = group(otherCycle)!;
   expect(otherCycleIdentity.groupId).toBe(otherCycle.id); // Shared long approach must not hide another cycle.
-  expect(group(route(0, [0, 7, 3, 1]))).toEqual(otherCycleIdentity);
+  expect(group(route(0, [0, 7, 3, 1]))).toEqual({ ...otherCycleIdentity, preferred: false });
   const otherApproach = route(0, [8, 10, 2, 4, 11, 9]);
   const otherApproachIdentity = group(otherApproach)!;
   expect(otherApproachIdentity.groupId).toBe(otherApproach.id);
-  expect(group(route(0, [8, 10, 5, 3, 11, 9]))).toEqual(otherApproachIdentity);
+  expect(group(route(0, [8, 10, 5, 3, 11, 9]))).toEqual({ ...otherApproachIdentity, preferred: false });
 
   const pureCycle = route(1, [2, 4]);
   const cycleIdentity = group(pureCycle)!;
   expect(cycleIdentity.groupId).toBe(pureCycle.id); // No approach to peel off.
-  expect(group(route(1, [5, 3]))).toEqual(cycleIdentity);
+  expect(group(route(1, [5, 3]))).toEqual({ ...cycleIdentity, preferred: false });
   const otherEntrance = route(4, [4, 2]);
   const entranceIdentity = group(otherEntrance)!;
   expect(entranceIdentity.groupId).toBe(pureCycle.id);
@@ -53,13 +53,13 @@ it('combines minor variations while preserving different hiking paths, starts an
   const reverseRing = route(2, [13]);
   const ringIdentity = group(reverseRing)!;
   expect(ringIdentity.groupId).toBe(reverseRing.id);
-  expect(group(route(2, [12]))).toEqual(ringIdentity);
+  expect(group(route(2, [12]))).toEqual({ ...ringIdentity, preferred: false });
   const rings = [ringIdentity.optionId];
   for (let ring = 1; ring < 11; ring++) {
     const next = route(2, [12 + ring * 2]);
     const identity = group(next)!;
     expect(identity.groupId).toBe(next.id);
-    expect(group(route(2, [13 + ring * 2]))).toEqual(identity);
+    expect(group(route(2, [13 + ring * 2]))).toEqual({ ...identity, preferred: false });
     rings.push(identity.optionId);
   }
   expect(new Set(rings).size).toBe(11);
@@ -71,9 +71,9 @@ it('combines minor variations while preserving different hiking paths, starts an
   // The 25m substitution does not become a second choice. Exact reverse remains available.
   expect(group(nearOther)).toBeUndefined();
   expect(group(route(3, [39, 35]))).toBeUndefined();
-  expect(group(route(3, [37, 35]))).toEqual(nearIdentity);
-  expect(group(first)).toEqual(firstIdentity); // Later options never replace the representative.
-  expect(group(otherEntrance)).toEqual(entranceIdentity);
+  expect(group(route(3, [37, 35]))).toEqual({ ...nearIdentity, preferred: false });
+  expect(group(first)).toEqual({ ...firstIdentity, preferred: false }); // Later options never replace the representative.
+  expect(group(otherEntrance)).toEqual({ ...entranceIdentity, preferred: false });
 
   // This stem puts the square/lollipop overlap at the floating-point 95% boundary.
   // Summing trails in walk order assigned the two lollipop directions to different groups.
@@ -84,7 +84,7 @@ it('combines minor variations while preserving different hiking paths, starts an
   const boundaryGroup = createRouteGroups(boundaryGraph);
   boundaryGroup(route(0, [0, 2, 4, 6], boundaryRoutes));
   const boundaryIdentity = boundaryGroup(route(1, [8, 0, 2, 4, 6, 9], boundaryRoutes));
-  expect(boundaryGroup(route(1, [8, 7, 5, 3, 1, 9], boundaryRoutes))).toEqual(boundaryIdentity);
+  expect(boundaryGroup(route(1, [8, 7, 5, 3, 1, 9], boundaryRoutes))).toEqual({ ...boundaryIdentity, preferred: false });
 });
 
 it('combines independent small detours and safely improves a starting point without mixing reverse walks', async () => {
@@ -97,7 +97,7 @@ it('combines independent small detours and safely improves a starting point with
   function candidate(network: typeof graph, edges: number[]): RouteCandidate {
     const valid = enumerate(network, query).find(route => route.start === 0 && route.edges.join(',') === edges.join(','));
     if (!valid) throw Error(`Route must independently qualify: ${edges}`);
-    return { ...valid, id: edges.join('-'), kind: 'loop', uncertain: false };
+    return { ...valid, id: edges.join('-'), kind: 'loop', uncertain: edges.some(index => network.edges[index]!.access === 'unknown') };
   }
   const group = createRouteGroups(graph);
   const first = group(candidate(graph, [0, 2, 8, 10, 16]))!;
@@ -105,9 +105,9 @@ it('combines independent small detours and safely improves a starting point with
   expect(group(candidate(graph, [0, 18, 20, 8, 10, 16]))!.groupId).not.toBe(first.groupId); // One 800m alternative.
 
   const roads = fixture([[0, 1, 1000], [1, 2, 1000], [2, 0, 100, { connector: true }], [2, 0, 200, { connector: true }]]);
-  const choose = createRouteGroups(roads);
+  let choose = createRouteGroups(roads);
   const { createRouteStore } = await import('../../src/route-store.js');
-  const store = createRouteStore();
+  let store = createRouteStore();
   function add(edges: number[]) {
     const route = candidate(roads, edges);
     const identity = choose(route);
@@ -133,5 +133,15 @@ it('combines independent small detours and safely improves a starting point with
     const final = store.page(0)!.routes[0]!;
     expect(final.reverseId).toBeTruthy();
     expect(store.route(final.reverseId!)!.stored.sections.map(section => section.id)).toEqual([2, 1, 0]);
+  } finally { store.close(); }
+  roads.edges[0]!.access = 'unknown';
+  choose = createRouteGroups(roads);
+  store = createRouteStore();
+  try {
+    add([0, 2, 4]);
+    const uncertain = store.page(0)!.routes[0]!;
+    expect(uncertain.uncertain).toBe(true);
+    add([5, 3, 1]);
+    expect(store.page(0)!.routes[0]).toMatchObject({ uncertain: false, reverseId: uncertain.id });
   } finally { store.close(); }
 });

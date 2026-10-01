@@ -66,7 +66,7 @@ export function createRouteStore() {
             addGroup.run(groupId, event.optionId);
             addOption.run(event.optionId, groupId, id, event.walkId);
             growGroup.run(groupId);
-          } else if (previous.walk_id !== event.walkId) {
+          } else if (event.preferred) {
             replaceOption.run(id, event.walkId, event.optionId);
           }
           // Previously inspected representatives stay addressable; only the current

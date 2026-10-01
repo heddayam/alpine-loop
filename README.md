@@ -51,15 +51,20 @@ results never changes the submitted query.
   build it reduced main JavaScript from 306 kB gzip with MapLibre to 109 kB and
   removed the separate map worker. No vector-style or WebGL requirement earned that cost.
 
-The server keeps one current search. It continues until exploration finishes or
-you stop it; there is no application time or result-count cutoff. Related routes
-are grouped when both the overall physical path and the loop overlap by at least
-85% with the group's first representative. Grouping organizes the list without
-discarding alternatives. Open a group to compare every walk and starting place.
-Both levels are paged, and geometry loads when needed. A route and its exact
-reverse from the same original start count as one option. Direction switching
-uses only separately discovered qualifying directions, with their own metrics,
-access and GPX. Counts describe generated options, not a catalog of named hikes.
+The server keeps one current search and continues until exploration finishes or
+you stop it. There is no application time or result-count cutoff. Results are
+hiking choices, not every permutation through parking paths and roads. Small
+trail variations are combined when both the full trail path and the loop overlap
+by at least 95%, and each connected difference is at most 500 meters. Fixed
+representatives prevent a chain of gradually changing routes from merging distinct
+hikes. This is a disclosed similarity heuristic, not a scenic-equivalence claim.
+
+Open a hike directly to inspect its route or choose another qualifying starting
+point. Each start retains a qualifying connection, preferring mapped access,
+less road walking, then shorter distance. Connector permutations do not create
+separate hikes. Different trail approaches and substantial branches remain choices.
+Only independently qualifying directions can be switched or exported. Previously
+opened routes remain stable when search discovers a better connection.
 
 Road connections have adjustable limits on both total miles and percentage of
 the hike. The initial defaults are 1 mile and 10%. Both count every road section
@@ -130,7 +135,19 @@ checks recovered similar Paradise and Stevens routes
 from alternate starts, not those exact original walks. See
 `benchmarks/results/discovery-review.json` for limits and pinned evidence.
 
-The grouped app's completed North Bend check preserves all 376 reversal-paired
+The earlier implementation retained every graph-path option. A user's actual
+Pratt–Denny search exposed why that was wrong: 1,137 options shared 11.8 miles of
+trail, with small detours and road permutations multiplying the count. Independent
+reconstruction of every saved route reduces those results to four hike choices
+and twenty hike/starting-point combinations. The Franklin Falls, Annette-area and
+Talapus alternatives remain distinct. Replaying different observed reverse-arrival
+orders preserves the same choices; all 36 final directional geometry/GPX checks
+match the independently reconstructed routes. This is a stopped-search replay,
+not proof of complete enumeration. See `benchmarks/route-quality-review.json`.
+
+The following retention observations predate that correction and demonstrate
+storage behavior, not acceptable result quality. The grouped app's completed
+North Bend check preserves all 376 reversal-paired
 options in 112 groups, matching all 752 directed walks in the separate enumeration audit.
 The original Little Si start and both Cedar Falls approaches are available;
 their six directional detail/GPX exports match independently reconstructed data.

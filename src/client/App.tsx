@@ -20,8 +20,11 @@ const roadExplanation =
   "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
-const startName = (route: RouteSummary) => route.startName ||
-  `${route.startPosition[1].toFixed(5)}, ${route.startPosition[0].toFixed(5)}`;
+const startName = (route: RouteSummary) => {
+  const position = `${route.startPosition[1].toFixed(5)}, ${route.startPosition[0].toFixed(5)}`;
+  return !route.startName ? position
+    : /^(Trail entrance|Mapped parking access)$/.test(route.startName) ? `${route.startName} · ${position}` : route.startName;
+};
 const pageQuery = (offset: number, groupId?: string) =>
   `?offset=${offset}${groupId ? `&group=${encodeURIComponent(groupId)}` : ""}`;
 async function request<T>(

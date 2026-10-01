@@ -5,7 +5,7 @@ type Footprint = { trails: Set<number>; length: number };
 type Quality = Pick<RouteCandidate, 'uncertain' | 'roadDistance' | 'distance' | 'gain'>;
 type Selection = { walkId: string; quality: Quality };
 type Choice = { groupId: string; full: Footprint; cycle: Footprint; starts: Map<number, Selection> };
-type Identity = { groupId: string; optionId: string; walkId: string };
+type Identity = { groupId: string; optionId: string; walkId: string; preferred: boolean };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 
 /** Compare hiking itineraries, then retain a qualifying connection from each start. */
@@ -77,9 +77,10 @@ export function createRouteGroups(graph: TrailGraph) {
     const walkId = hash(JSON.stringify([graph.starts[route.start]!.id, forward < backward ? forward : backward]));
     const previous = group.starts.get(route.start);
     if (previous?.walkId !== walkId && previous && !better(route, previous.quality)) return;
-    if (!previous || better(route, previous.quality)) group.starts.set(route.start, { walkId, quality: {
+    const preferred = !previous || better(route, previous.quality);
+    if (preferred) group.starts.set(route.start, { walkId, quality: {
       uncertain: route.uncertain, roadDistance: route.roadDistance, distance: route.distance, gain: route.gain,
     } });
-    return { groupId: group.groupId, optionId: hash(JSON.stringify([group.groupId, graph.starts[route.start]!.id])), walkId };
+    return { groupId: group.groupId, optionId: hash(JSON.stringify([group.groupId, graph.starts[route.start]!.id])), walkId, preferred };
   };
 }

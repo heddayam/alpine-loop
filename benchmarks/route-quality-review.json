@@ -794,5 +794,250 @@
       "Edit search restores the road settings.",
       "Selected route shows 0.59 mi (8.9%) road connections; browser GPX matches API bytes."
     ]
+  },
+  "prattDuplicateCorrection": {
+    "trigger": "User encountered more than 1,000 essentially identical Pratt\u2013Denny route options; preserving every graph-path permutation was a product failure.",
+    "query": {
+      "area": [
+        -121.53110504150392,
+        47.38742554067244,
+        -121.42673492431642,
+        47.43621583921408
+      ],
+      "distance": [
+        22530.816,
+        28968.192000000003
+      ],
+      "gain": [
+        1066.8,
+        1524
+      ],
+      "repetition": 0.05,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 8046.72,
+        "fraction": 0.4
+      }
+    },
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "inputSnapshotSha256": "f3cfcd9da4bf533a5dbb0918215162edd8db3026a7ccd9e5c018a8d2d42abf07",
+    "stoppedSearch": {
+      "options": 1137,
+      "groups": 1,
+      "eligibleStarts": 44,
+      "completedStarts": 0,
+      "elapsedMs": 445083,
+      "expansions": 2831032876
+    },
+    "independentGeometryAudit": {
+      "count": 1137,
+      "startCount": 16,
+      "fullFootprints": 670,
+      "trailFootprints": 72,
+      "connectorFootprints": 212,
+      "commonTrailLength": 18993.558511811912,
+      "distanceRange": [
+        25290.791226291985,
+        28212.65020401813
+      ],
+      "roadRange": [
+        4959.860953369143,
+        7457.723173346317
+      ],
+      "gainRange": [
+        1283.3869331514904,
+        1382.435030697552
+      ]
+    },
+    "policy": {
+      "trailOverlapMinimum": 0.95,
+      "maximumConnectedTrailDifferenceMeters": 500,
+      "compareBothFullWalkAndCycle": true,
+      "ignoreConnectorPermutations": true,
+      "fixedAnchors": true,
+      "perStartPreference": [
+        "mapped access",
+        "less road distance",
+        "shorter distance",
+        "less gain"
+      ],
+      "qualifyBeforeComparing": true,
+      "noResultCountCap": true
+    },
+    "savedResultReplay": {
+      "counts": {
+        "routeCount": 20,
+        "groupCount": 4
+      },
+      "families": [
+        {
+          "name": "Main Pratt\u2013Denny\u2013Melakwa",
+          "starts": 16
+        },
+        {
+          "name": "Franklin Falls / Wagon Road",
+          "starts": 2
+        },
+        {
+          "name": "Additional Annette-area trail approach",
+          "starts": 1
+        },
+        {
+          "name": "Talapus alternative",
+          "starts": 1
+        }
+      ],
+      "scenarios": [
+        {
+          "name": "primary-only",
+          "inputs": 1137,
+          "accepted": 59,
+          "counts": {
+            "routeCount": 20,
+            "groupCount": 4
+          },
+          "families": [
+            {
+              "label": 1,
+              "size": 16
+            },
+            {
+              "label": 2,
+              "size": 2
+            },
+            {
+              "label": 3,
+              "size": 1
+            },
+            {
+              "label": 4,
+              "size": 1
+            }
+          ],
+          "reverseLinks": 0,
+          "archivedAddressable": 39,
+          "geometryChecks": 0,
+          "gpxChecks": 0
+        },
+        {
+          "name": "reverse-immediately-after",
+          "inputs": 2125,
+          "accepted": 112,
+          "counts": {
+            "routeCount": 20,
+            "groupCount": 4
+          },
+          "families": [
+            {
+              "label": 1,
+              "size": 16
+            },
+            {
+              "label": 2,
+              "size": 2
+            },
+            {
+              "label": 3,
+              "size": 1
+            },
+            {
+              "label": 4,
+              "size": 1
+            }
+          ],
+          "reverseLinks": 16,
+          "archivedAddressable": 92,
+          "geometryChecks": 36,
+          "gpxChecks": 36
+        },
+        {
+          "name": "reverse-immediately-before",
+          "inputs": 2125,
+          "accepted": 112,
+          "counts": {
+            "routeCount": 20,
+            "groupCount": 4
+          },
+          "families": [
+            {
+              "label": 1,
+              "size": 16
+            },
+            {
+              "label": 2,
+              "size": 2
+            },
+            {
+              "label": 3,
+              "size": 1
+            },
+            {
+              "label": 4,
+              "size": 1
+            }
+          ],
+          "reverseLinks": 16,
+          "archivedAddressable": 92,
+          "geometryChecks": 0,
+          "gpxChecks": 0
+        },
+        {
+          "name": "all-reverses-after-primaries",
+          "inputs": 2125,
+          "accepted": 75,
+          "counts": {
+            "routeCount": 20,
+            "groupCount": 4
+          },
+          "families": [
+            {
+              "label": 1,
+              "size": 16
+            },
+            {
+              "label": 2,
+              "size": 2
+            },
+            {
+              "label": 3,
+              "size": 1
+            },
+            {
+              "label": 4,
+              "size": 1
+            }
+          ],
+          "reverseLinks": 16,
+          "archivedAddressable": 55,
+          "geometryChecks": 0,
+          "gpxChecks": 0
+        }
+      ],
+      "files": {
+        "src/diversity.ts": "3afca087cb352f909fc333d6ef23e58f23907eb4783c52005b3a9c3e7c413329",
+        "src/route-store.ts": "0c4e6d8693c8bf3ead13f69d0c3023adcd1471ae5853ce0476908543f15c466e",
+        "src/search-worker.ts": "7306e3f9cc58fcd3349dc7cb676c4ac693007ccd58048bf685e18b8a9993814f",
+        "src/dataset.ts": "66ef68b77faf395d99376373b83184753696f09ed4acdbb7e7e76743fb27886e",
+        "dist/diversity.js": "7a1d5b97dcc735428c77b8e61ac99a4c75c30e1248172add29dd2e284d8dc6e9",
+        "dist/route-store.js": "29869ff38022451ad314ad93329c294b828be0adfbfffd1fde522b13bc681757",
+        "dist/dataset.js": "320ed119aa39228ae10fcc4b41e0bd2475b874cb57f734b910ce3ce0c43a2875",
+        "replay.mjs": "5f252aa1fdcb5c295038992cfda494b0a4c4befac0c4b53065e3ec6cb1d8c3fd"
+      },
+      "manifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "inputOptionsSha256": "b9b7c9639ddea93f326b27b6ee7274b5689af4347de5f15a23f08302dca1907a",
+      "directionPreferenceCheck": "An independently qualifying mapped-access reverse now becomes the displayed primary; the unknown direction stays accessible with its own metrics."
+    },
+    "limitations": [
+      "Stopped-search replay is not complete enumeration or a new solver timing measurement.",
+      "Similarity is a disclosed geometric heuristic, not proof that every short detour is uninteresting.",
+      "Starting points remain separate choices in details; alternative connector paths for the same trail itinerary do not become separate hikes."
+    ],
+    "localEvidence": ".local-data/desktop-review/pratt-variant-failure; /private/tmp/alpine-pratt-forensics",
+    "desktopChecks": [
+      "51 hikes page correctly; choosing the final hike opens details directly.",
+      "51 starting points page correctly; final start selection changes the actual route and GPX link.",
+      "Reverse direction changes the exported route identity.",
+      "Edit/cancel retains selected details; Back returns to the remembered overview page."
+    ]
   }
 }
