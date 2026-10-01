@@ -37,7 +37,7 @@ export async function createApp(directory: string, clientDirectory?: string) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const directory = resolve(process.env.ALPINE_DATA ?? '.local-data/rewrite/network-north-bend');
+  const directory = resolve(process.env.ALPINE_DATA ?? '.local-data/network');
   const app = await createApp(directory, fileURLToPath(new URL('../client', import.meta.url)));
   const address = await app.listen({ host: process.env.HOST ?? '127.0.0.1', port: Number(process.env.PORT ?? 3000) });
   console.log(`Alpine Loop: ${address}`);
