@@ -796,7 +796,7 @@
     ]
   },
   "prattDuplicateCorrection": {
-    "trigger": "User encountered more than 1,000 essentially identical Pratt\u2013Denny route options; preserving every graph-path permutation was a product failure.",
+    "trigger": "User encountered more than 1,000 essentially identical Pratt–Denny route options; preserving every graph-path permutation was a product failure.",
     "query": {
       "area": [
         -121.53110504150392,
@@ -871,7 +871,7 @@
       },
       "families": [
         {
-          "name": "Main Pratt\u2013Denny\u2013Melakwa",
+          "name": "Main Pratt–Denny–Melakwa",
           "starts": 16
         },
         {
@@ -1038,6 +1038,250 @@
       "51 starting points page correctly; final start selection changes the actual route and GPX link.",
       "Reverse direction changes the exported route identity.",
       "Edit/cancel retains selected details; Back returns to the remembered overview page."
-    ]
+    ],
+    "solverAudit": {
+      "commit": "aa3dd61c10ba60c64f8bf8d72534032a35246495",
+      "selectedNodes": 3317,
+      "selectedDirectedEdges": 7514,
+      "selectedStarts": 44,
+      "uniqueStartNodes": 44,
+      "observations": [
+        {
+          "experiment": "baseline-45s",
+          "report": "/private/tmp/alpine-pratt-solver-proof/baseline-45s.json",
+          "reportSha256": "855c9cc3a29d5dbdd39538e7b55d5fc99557559229d668cfdcaa724b9a68e796",
+          "engineSha256": "0f4a09dc6f0b0fd925286061f57009c1a98fef4674d95ce6ab0e8518b38f30ac",
+          "firstExactHikeMs": 16151.217499999999,
+          "directedCandidates": 106,
+          "old85PercentGroups": 1,
+          "completedStarts": 0,
+          "attemptedStarts": 44,
+          "expansions": 326389292,
+          "elapsedMs": 45001.575833,
+          "peakProcessRssBytes": 274890752,
+          "status": "stopped",
+          "featuresObserved": []
+        },
+        {
+          "experiment": "return-bounds-45s",
+          "report": "/private/tmp/alpine-pratt-solver-proof/return-bounds-45s.json",
+          "reportSha256": "af0392c41dfdc29f230767600d04ebe960e97215b07fcc87bb96247884fa6104",
+          "engineSha256": "9ae4340a32720521c9785277780c7e82f80a19f136b5637463ed4efb40accdf6",
+          "firstExactHikeMs": 14689.352167000001,
+          "directedCandidates": 194,
+          "old85PercentGroups": 1,
+          "completedStarts": 2,
+          "attemptedStarts": 44,
+          "expansions": 280420090,
+          "elapsedMs": 45009.468792,
+          "peakProcessRssBytes": 307167232,
+          "status": "stopped",
+          "featuresObserved": []
+        },
+        {
+          "experiment": "branch-depth-45s",
+          "report": "/private/tmp/alpine-pratt-solver-proof/branch-depth-45s.json",
+          "reportSha256": "db87d660c1771c075d823370aabb5791c74ba7a8d3282b3655a01e6a22f130b1",
+          "engineSha256": "52b2aa955115e3ad58a25937e413044030d7998ee04b1a9fb4ae95b13a5a3181",
+          "firstExactHikeMs": 21158.237125,
+          "directedCandidates": 64,
+          "old85PercentGroups": 1,
+          "completedStarts": 0,
+          "attemptedStarts": 44,
+          "expansions": 337859628,
+          "elapsedMs": 45008.450207999995,
+          "peakProcessRssBytes": 265895936,
+          "status": "stopped",
+          "featuresObserved": []
+        },
+        {
+          "experiment": "ordered-45s",
+          "report": "/private/tmp/alpine-pratt-solver-proof/ordered-45s.json",
+          "reportSha256": "7a5aa6170ff7d996b62cabc0d42ffdcc788add27f2f394fe1d13d1797c5d9c93",
+          "engineSha256": "d478e20e7671e3922fa1a8dd8e488e4ce2e7051fde3a9f0502003d740820bfaa",
+          "firstExactHikeMs": 16385.695667,
+          "directedCandidates": 114,
+          "old85PercentGroups": 1,
+          "completedStarts": 0,
+          "attemptedStarts": 44,
+          "expansions": 329716780,
+          "elapsedMs": 45001.821917,
+          "peakProcessRssBytes": 286654464,
+          "status": "stopped",
+          "featuresObserved": []
+        },
+        {
+          "experiment": "return-bounds-ordered-45s",
+          "report": "/private/tmp/alpine-pratt-solver-proof/return-bounds-ordered-45s.json",
+          "reportSha256": "9fc7a76f2aeca0c0f09fc6108fcf21ced7fe99e0fc6c47ec3869b625b18d2f3b",
+          "engineSha256": "bcf096c06de00bddb24271470ebd0310b0ca7d011f28d9111cdf1a4ad5654769",
+          "firstExactHikeMs": 15385.103333000001,
+          "directedCandidates": 196,
+          "old85PercentGroups": 1,
+          "completedStarts": 2,
+          "attemptedStarts": 44,
+          "expansions": 276767226,
+          "elapsedMs": 45004.376124999995,
+          "peakProcessRssBytes": 312000512,
+          "status": "stopped",
+          "featuresObserved": []
+        }
+      ],
+      "quickChecks": [
+        {
+          "report": "/private/tmp/alpine-pratt-solver-proof/quick-north-bend-known-baseline.json",
+          "reportSha256": "a4cec48c3e16a159cbc6e417fb4eccaae80e5491f50b1a6ecb4e9305bcef3e6b",
+          "query": "north-bend-known",
+          "engine": "baseline",
+          "engineSha256": "0f4a09dc6f0b0fd925286061f57009c1a98fef4674d95ce6ab0e8518b38f30ac",
+          "directedCandidates": 752,
+          "routeSetSha256": "a11c8c8e766dc111fc0f9ca486ae18d8213bfc827bf1e6d2dd07e1668129c843",
+          "firstHikeMs": 4.478874999999988,
+          "exactWitness": {
+            "orientation": "reversed",
+            "atMs": 4.4982499999999845
+          },
+          "terminal": {
+            "type": "done",
+            "status": "complete",
+            "progress": {
+              "totalStarts": 7,
+              "attemptedStarts": 7,
+              "completedStarts": 7,
+              "expansions": 6501488,
+              "elapsedMs": 1147
+            }
+          },
+          "elapsedMs": 1147.4427500000002,
+          "peakProcessRssBytes": 152731648
+        },
+        {
+          "report": "/private/tmp/alpine-pratt-solver-proof/quick-north-bend-known-candidate.json",
+          "reportSha256": "6385c61dc6557dfa89cd21889a9dbb776bd777cd43f0560cce4d48d338e87981",
+          "query": "north-bend-known",
+          "engine": "candidate",
+          "engineSha256": "ed47060d0b86899734496ff7a5bfd9697763bfd3d5f4b5d8e87c21fbc278f20b",
+          "directedCandidates": 752,
+          "routeSetSha256": "a11c8c8e766dc111fc0f9ca486ae18d8213bfc827bf1e6d2dd07e1668129c843",
+          "firstHikeMs": 13.535334000000006,
+          "exactWitness": {
+            "orientation": "reversed",
+            "atMs": 13.570750000000004
+          },
+          "terminal": {
+            "type": "done",
+            "status": "complete",
+            "progress": {
+              "totalStarts": 7,
+              "attemptedStarts": 7,
+              "completedStarts": 7,
+              "expansions": 2262658,
+              "elapsedMs": 303
+            }
+          },
+          "elapsedMs": 302.658292,
+          "peakProcessRssBytes": 151961600
+        },
+        {
+          "report": "/private/tmp/alpine-pratt-solver-proof/quick-paradise-short-candidate.json",
+          "reportSha256": "28cf2d74571b748895a283d4672544628707929cb51f490d8180be4da7aabf80",
+          "query": "paradise-short",
+          "engine": "candidate",
+          "engineSha256": "ed47060d0b86899734496ff7a5bfd9697763bfd3d5f4b5d8e87c21fbc278f20b",
+          "directedCandidates": 3,
+          "routeSetSha256": "7e47ac6bf63776c63bba83deda85c7eac9576cc0ca391bb802ce9873b096e98c",
+          "firstHikeMs": 256.91112499999997,
+          "exactWitness": {
+            "orientation": "reversed",
+            "atMs": 276.714667
+          },
+          "terminal": {
+            "type": "done",
+            "status": "stopped",
+            "progress": {
+              "totalStarts": 195,
+              "attemptedStarts": 195,
+              "completedStarts": 8,
+              "expansions": 49457,
+              "elapsedMs": 276
+            },
+            "reason": "Search stopped"
+          },
+          "elapsedMs": 276.921333,
+          "peakProcessRssBytes": 109346816
+        }
+      ],
+      "retained": "Necessary reverse distance/gain/road bounds only.32MiB label cap: per-start when affordable, otherwise shared multi-source labels; disable optional bounds when even shared labels exceed the cap. This is a label cap, not total process memory or a search/resource cutoff. Integer floors are pruning-only; exact route-order final metric sums remain unchanged.",
+      "rejected": [
+        "Decision-count depth: worsened observed first hike.",
+        "Trail-first/longer-edge order: no useful observed benefit."
+      ],
+      "validation": [
+        "17 independent engine/oracle/lifecycle cases passed, including64multigraphs.",
+        "One added oracle scenario covers shared fallback, submeter/decimal boundaries, and enormous finite query limits.",
+        "Isolated server compilation and full TypeScript typecheck passed.",
+        "NorthBend completed route identity+metric set exactly equals unmodified baseline; two fixed-source witnesses independently matched."
+      ]
+    },
+    "verification": {
+      "commit": "3f1ebb8",
+      "applicationEngineChecks": 24,
+      "nodeChecks": 5,
+      "command": "npm run verify",
+      "status": "passed",
+      "sourceLines": 5187
+    },
+    "liveObservation": {
+      "report": ".local-data/desktop-review/pratt-variant-failure/live-proof.json",
+      "reportSha256": "e745816ba68e0c65edc667f373df6ff004fb3af638b441f80e87689e5da83935",
+      "commit": "3f1ebb8",
+      "searchId": "8330691a-9806-4d85-b579-34b372aaefef",
+      "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "query": {
+        "area": [
+          -121.53110504150392,
+          47.38742554067244,
+          -121.42673492431642,
+          47.43621583921408
+        ],
+        "distance": [
+          22530.816,
+          28968.192000000003
+        ],
+        "gain": [
+          1066.8,
+          1524
+        ],
+        "repetition": 0.05,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 8046.72,
+          "fraction": 0.4
+        }
+      },
+      "firstHikeMs": 17119.840208,
+      "sampledPeakRssBytes": 194756608,
+      "stopMs": 49.78858399996534,
+      "activeWorkersAfterStop": 0,
+      "reconnect": true,
+      "status": "stopped",
+      "hikeGroups": 8,
+      "hikeStartChoices": 22,
+      "progress": {
+        "totalStarts": 44,
+        "attemptedStarts": 44,
+        "completedStarts": 2,
+        "expansions": 1769300474,
+        "elapsedMs": 300140
+      },
+      "errors": [],
+      "limitations": [
+        "Five-minute observation is unfinished: 2 of 44 starts fully explored. It is not an exhaustive route census.",
+        "The eight groups in the new live search are distinct from the four groups reconstructed from the earlier saved 1,137 options.",
+        "Grouping occurs after raw candidate generation. 1.769 billion examined edges show that combinatorial variant exploration remains unresolved.",
+        "Two live PCT groups share 95.391% of their trail footprint; one replaces 747.165m of PCT with 809.394m of roads and adds no trail. The 500m divergence rule retains both. Physical difference alone does not establish a meaningful additional hike."
+      ],
+      "pctDifferenceEvidence": "/private/tmp/alpine-pratt-forensics/live-pct/difference.json"
+    }
   }
 }

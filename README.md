@@ -21,8 +21,8 @@ is implemented and tested, but its internal release descriptor remains unset
 until prepared data is approved for publication. A fresh checkout without data
 fails clearly; automatic first-run delivery is not yet complete. Hosting is deferred.
 
-The working flow is map area → distance/gain/repetition → progressive route groups
-→ compare alternatives → route inspection → GPX. Reopening the browser restores the latest search while
+The working flow is map area → distance/gain/repetition → distinct hike choices
+→ route inspection and optional starting-point choice → GPX. Reopening the browser restores the latest search while
 the server lives. Restarting the server intentionally expires it.
 
 On desktop, the search form gives way to route choices beside the map. Hovering
@@ -120,11 +120,17 @@ exclusion, not missing topology. `benchmarks/network-review.json` and
 
 The earlier depth-first traversal missed the fixed Stevens-long and Paradise-short
 witnesses, and directly similar representatives, during five-minute observations.
-The replacement now explores progressively longer outward paths at each start,
+The replacement explores progressively longer outward paths at each start,
 so a deep branch does not monopolize that start. This changes traversal order,
 not accepted routes or completion rules, and adds eight production lines.
-Independent exhaustive tiny-graph checks still pass. Larger pruning experiments
-were removed after failing their measured recovery checks.
+Independent exhaustive tiny-graph checks still pass. The current engine also
+prunes a prefix when even a conservative return trip would exceed its distance,
+climb or road allowance. Optional bound arrays stay within 32 MiB; broader
+queries use weaker shared bounds or skip the optimization, preserving exploration.
+The complete North Bend comparison keeps the identical 752 directed routes while
+reducing examined edges from 6.50 million to 2.26 million. First-route improvements
+on the Pratt example were modest. Ordering and depth-count experiments were
+rejected because they did not improve that observation.
 
 On the corrected snapshot, all seven independently qualifying original walks
 were recovered exactly from their original starts: six within sixty seconds,

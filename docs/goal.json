@@ -18,7 +18,8 @@
       "GPX",
       "browser reconnect while server lives",
       "all meaningfully different routes available through paging; no per-start result cap",
-      "adjustable maximum road distance and share; trails remain the main experience"
+      "adjustable maximum road distance and share; trails remain the main experience",
+      "combine small path and road permutations before result storage; choose alternative starts in hike details"
     ],
     "setup": [
       "one local command after prerequisites",
@@ -51,5 +52,54 @@
       "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
     ]
   },
-  "state": "The local desktop app supports exact map-area selection, adjustable road miles/share, progressive grouped choices, direction-specific inspection/GPX and browser reconnect. No route option is discarded by similarity grouping; full reversed walks share an option only when both directions qualify independently. Maintained app plus preparation/tooling is 5,007 lines versus 24,063 at baseline. Current search options now use a disposable SQLite file via Node builtin; the worker keeps representative footprints instead of an all-option identity map. No added dependency, job history or restart recovery. Final npm run verify passed at ef54869: 22 existing application/engine checks and 5 Node checks. A floating-point reverse-group boundary extends an existing independent-oracle fixture. Actual-worker lifecycle smoke confirms Stop/replacement expires cleanly and shutdown leaves no workers. Final complete North Bend HTTP check preserves 112 groups / 376 options / 752 directions exactly across 115 pages; all 6 selected directional GPX/geometry reconstructions match. A frozen pre-lifecycle/canonicalization storage build retained 133,411 Paradise-day options after 10 minutes at 277 MB peak RSS, with Stop 19 ms, reconnect intact and no guard/error. At 5 minutes it had 62,085 options versus baseline 67,195 / 914 MB; timing/machine pressure uncontrolled. One disk sample 608 MB at 412 seconds is not peak disk use. This does not bound arbitrary-duration RAM/disk or prove completion. Final integrated server is live on 3011; the stopped Rainier search's full pages were preserved locally, its unchanged query replayed and stopped after 30 seconds for review: 292 groups / 4,112 options, 476 starts attempted / 162 fully explored, with incomplete coverage disclosed. Browser reload and road-setting restoration passed. Corrected f349 snapshot remains installed: 222,175 sections / 11,649 starts / 73.86 MB runtime files. All 7 independently source-verified qualifying original walks were recovered exactly by the unchanged engine in prior observations; 6 within 60 seconds and Sunrise-long in 214 seconds, without complete-enumeration claims. Compiler stage attribution locates a ~3.10 GB topology high-water before elevation; a del-segments experiment was not adopted. A topology-only 128-record working-set sample estimates 1.027 GB segment-routing containers and 0.906 GB lineage containers, supporting a compact internal segment/origin representation as the next bounded investigation. Estimates are not an RSS decomposition or statewide extrapolation. Statewide preparation, broader fresh-source quality validation and approved automatic fresh-machine data acquisition remain unfinished. Hosting is deferred. No public data release is approved."
+  "state": "Local desktop flow works with exact area/constraint handling, progressive hike choices, starting-point selection, separately qualifying directions, GPX and browser reconnect. User testing exposed a product failure: 1,137 Pratt–Denny path options were essentially repetitions of one hike. Independent geometry reconstruction and final grouping/store replay reduce that saved search to four substantial trail itineraries and twenty hike/start choices, preserving Franklin Falls, Annette-area and Talapus alternatives. Minor independent detours and connector permutations are combined using disclosed 95% trail overlap / 500m connected-difference rules; per-start shown routes prefer mapped access and less road walking. There is no first-N result cap. All 36 replayed geometry/GPX checks and four reverse-emission-order scenarios pass. Optional safe integer return bounds prune impossible distance/gain/road prefixes without changing exact route sums; a complete North Bend run preserves all 752 raw directed engine routes with 2.26M examined edges instead of 6.50M. First-route improvement on Pratt prototypes was modest, and broader discovery is not claimed solved. Final npm run verify at3f1ebb8 passes24 application/engine checks and5 Node checks. Desktop 51-hike/51-start paging, direct inspection, direction selection and edit/cancel checks passed. Maintained code is5,187lines versus24,063baseline. Corrected f349 Cascades snapshot remains installed:222,175sections/11,649starts/73.86MB. The final five-minute exact-query live observation on port 3011 found eight groups and twenty-two hike/start choices, first result at 17.12 seconds, sampled peak RSS 194.76 MB, Stop 49.79 ms, zero workers after Stop, and successful reconnect. Only 2 of 44 starts completed; 1.769 billion examined edges show the solver still spends substantial work enumerating trivial variants. A newly audited PCT road bypass also remains a separate group despite adding no trail. The current display correction and safe feasibility bounds do not solve generation-level diversity. The user explicitly requested primary-literature research into avoiding exploration of trivial variants; a bounded structural prototype is the next priority. Previous compiler-memory and single-archive delivery work is parked while this urgent product failure is verified; candidates remain isolated. Statewide preparation, broader fresh-source quality validation and approved automatic fresh-machine data acquisition remain unfinished. Hosting deferred; no public data release approved.",
+  "solverResearch": {
+    "date": "2026-09-30",
+    "status": "Primary-source review completed; structural approach proposed, not implemented or proven for this solver.",
+    "recommendation": "Prototype small two-boundary local-choice bundles: search substantial trail itineraries once, retain directed internal alternatives, and resolve an exact qualifying walk lazily. Compare with the unchanged raw solver on small independent oracles and the preserved Pratt query before any production replacement.",
+    "correctnessBoundary": "Preserve a qualifying realization for each explicitly defined hike class and eligible start. Shortest-only or ordinary Pareto-minimal local replacement is unsafe with minimum distance and climb. Resource intervals can reject impossibility but cannot establish a feasible combination. Preserve internal starts, complete internal loops, legal reversible stems, direction, access and simplicity; leave ambiguous regions uncollapsed.",
+    "experiments": [
+      "Independent small networks with 10 and 20 local binary alternatives: measure search states and fully realized combinations, including a longer-only qualifying realization.",
+      "Recover the independently reconstructed Pratt, Franklin Falls, Annette-area and Talapus witnesses; retain eligible starts and qualifying directions.",
+      "Check internal starts, asymmetric access, longer-only qualifying lollipop stems, overlapping alternatives and road bypasses.",
+      "Measure real-query search work and discovery coverage, not merely reduced stored results. No first-N cap and no completeness claim based on heuristic failure to find more routes."
+    ],
+    "sources": [
+      {
+        "title": "Modeling the Variety of Trip Opportunities in Recreational Route Networks",
+        "url": "https://eprints.sztaki.hu/10192/1/Molnar_75_32541461_ny.pdf",
+        "lesson": "Raw trip counts suffer combinatorial explosion and overstate recreational variety. Useful product framing and coverage metrics, not a complete solver for our directed gain-constrained problem."
+      },
+      {
+        "title": "A Linear Time Implementation of SPQR-Trees",
+        "url": "https://doi.org/10.1007/3-540-44541-2_8",
+        "lesson": "Separation pairs and virtual-edge skeletons give a structural basis for two-boundary bundles. Decomposition does not decide hike equivalence or justify discarding metric alternatives."
+      },
+      {
+        "title": "Improved Alternative Route Planning",
+        "url": "https://drops.dagstuhl.de/storage/01oasics/oasics-vol033-atmos2013/OASIcs.ATMOS.2013.108/OASIcs.ATMOS.2013.108.pdf",
+        "lesson": "Alternative graphs and rejoin penalties address repeated tiny detours during generation. Road A-to-B and near-shortest assumptions do not transfer as exhaustive constrained-loop guarantees."
+      },
+      {
+        "title": "Finding k-shortest paths with limited overlap",
+        "url": "https://link.springer.com/article/10.1007/s00778-020-00604-x",
+        "lesson": "Monotone overlap permits early subtree pruning. Its similarity definition and shortest-prefix dominance differ from our present grouping and minimum resource requirements."
+      },
+      {
+        "title": "Generating Constrained Length Personalized Bicycle Tours",
+        "url": "https://backoffice.biblio.ugent.be/download/8587717/8587719",
+        "lesson": "Reusable outbound trees and alternate returns generate closed tours within length intervals. The practical method is heuristic and does not certify all meaningful hike classes."
+      },
+      {
+        "title": "Graphillion: Software Library Designed for Very Large Sets of Graphs in Python",
+        "url": "https://www-alg.ist.hokudai.ac.jp/~thomas/TCSTR/tcstr_13_65/tcstr_13_65.pdf",
+        "lesson": "Frontier search and zero-suppressed decision diagrams represent path families without expanding every combination. Worth a separate bounded experiment only if simpler bundling fails; compression and directed lollipop encoding need validation."
+      },
+      {
+        "title": "Finding All the Elementary Circuits of a Directed Graph",
+        "url": "https://www.cs.tufts.edu/comp/150GA/homeworks/hw1/Johnson%2075.PDF",
+        "lesson": "Output-sensitive cycle enumeration still pays for every minor-variant cycle. Shared cycle discovery can reduce repeated work across starts but does not alone address this failure."
+      }
+    ]
+  }
 }
