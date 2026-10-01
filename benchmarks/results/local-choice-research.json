@@ -1,13 +1,14 @@
 {
   "date": "2026-09-30",
-  "status": "Research candidate only. Combined physical peeling, committed-stem bounds, persistent DFS and necessary road-prefix checking find three independently valid walks on the Pratt query. No saved Pratt witness recovery or comprehensive discovery demonstrated; do not integrate yet.",
+  "status": "Research candidate only. Context-sensitive road discovery completes all7NorthBend starts and recovers all752known directed itineraries. Pratt finds6valid walks forming3current product groups/4start choices; one matches a saved hike family at44.833s from a different entrance and opposite direction, but0exact forward/reversed source itineraries and0completedstarts. Broader frozen/app validation remains required; production unchanged.",
   "archives": {
     "solver": "archive/research-local-choices-2026-09-30",
     "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
     "roadPrimitive": "archive/research-road-connections-2026-09-30",
     "jointRoads": "archive/research-joint-roads-2026-09-30",
     "trailCorridors": "archive/research-trail-corridors-2026-09-30",
-    "searchOrder": "archive/research-search-order-2026-09-30"
+    "searchOrder": "archive/research-search-order-2026-09-30",
+    "contextRoads": "archive/research-context-roads-2026-09-30"
   },
   "inputs": {
     "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
@@ -490,7 +491,7 @@
     "distinctSavedFixedContexts": 853,
     "result": "All contexts find a blocked-compatible connection no longer than their original. Public-only longer local alternative retained. Caller must preserve original start, replace paired stems together, and validate complete hike; shortest alone does not solve gain/repetition or interacting connections. Adjacency rebuilt per request in this bounded prototype; not a production scaling claim."
   },
-  "nextAction": "Validate recovery of the actual saved Pratt itinerary and completed real North Bend classes, then broader frozen witnesses, before replacing the app engine. Keep necessary road-assisted loops, canonical road realization and all meaningful choices. Profile context-sensitive road proposal generation if the expensive repeated reachability remains necessary; do not add another blanket per-choice optimization or arbitrary cap.",
+  "nextAction": "Validate broader frozen qualifying witnesses, exact original starts/access and useful product-family coverage before app integration. Treat real exact-itinerary coverage and useful family/start arrival separately; do not require all211minor Pratt itineraries in a45second window. If discovery coverage needs improvement, isolate road-choice ordering using existing optimistic distance labels with stable ties; retain every choice and all current constraints, and repeat independent complete tiny-class checks. No speed-target-driven caps or added pruning.",
   "reproduction": "Recover each archive tag in a temporary detached checkout. The solver archive contains research/proof/README.md and portable explicit-dataset witness/query runners. The verifier archive contains research/local-choice-check.ts; run it against solver source with the committed independent tiny oracle. The road archive contains research/road-connections-check.mjs. Prepared/raw datasets and local proof reports are ignored, with hashes above. Completed experimental worktrees and branches were removed.",
   "machine": {
     "node": "v24.11.0",
@@ -1445,5 +1446,452 @@
       ],
       "interpretation": "One new qualifying hike family with two start choices; not recovery of the saved Pratt loop. Product grouping is not an exhaustive oracle."
     }
+  },
+  "contextSensitiveRoadDiscovery": {
+    "archive": "archive/research-context-roads-2026-09-30",
+    "scope": "Isolated prototype composition on frozen prepared graphs. Found original directed walks are independently validated. No app-store/HTTP/UI measurement, new source build, statewide claim or product hike-count inference.",
+    "change": "One reserved-vertex-aware endpoint traversal per outer frame; release temporary whole-graph destination masks before descendants; recheck older gaps after a new trail piece, skip a newly certified gap only. Directed original indexes, access, fixed-trail itinerary and canonical-road policy remain unchanged.",
+    "sources": {
+      "outer": "68c32305a64c32fb2ef6ca1df978db5054e628532f43d828e04a9fc361b0f0e2",
+      "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+      "inspector": "67409aeb6081e95431f16d42f45217b03d4502704d695bbde5eea5e8f770e893",
+      "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+      "contextFactory": "abbe4fb37330f8caa79dc90d3ec9a67871d8a202190ab33e31d935e39dc8fd38",
+      "graph": "493b14cca745c3a6446f3959492c1305fd3856252272c6aa8513603cd4a5acdd",
+      "query": "2efa00286b3d9ddf5cfaab716d96808224bfc49c28034b93628acd3b4f25c490",
+      "witnessPlans": "ca4e49f18bd78276dd200f139334c12dfd91100fc91cb753b12005fea75d4b43"
+    },
+    "independentGate": {
+      "evidence": {
+        "path": "/private/tmp/alpine-context-composition-check/report.json",
+        "sha256": "4ef579b3b45b8d14fe70375f3c0db61646ffcad027efb91144c4497e1e539a0c"
+      },
+      "summary": {
+        "sourceHashes": {
+          "file:///private/tmp/alpine-context-road-generation/research/road-context.ts": "abbe4fb37330f8caa79dc90d3ec9a67871d8a202190ab33e31d935e39dc8fd38",
+          "file:///private/tmp/alpine-context-road-generation/research/trail-plans-context.ts": "fd0f73255f1562fc3cd9f395fa2dd968278de851edb4bd58289329d3beee1470",
+          "file:///private/tmp/alpine-context-proof/frozen/research/context-mask.ts": "68c32305a64c32fb2ef6ca1df978db5054e628532f43d828e04a9fc361b0f0e2",
+          "file:///private/tmp/alpine-prefix-proof/frozen/research/dfs-both.ts": "5042d75f0a26de041e832a0b5c29e58dacd026e09bfc9728fe4b53bc705880fe",
+          "file:///private/tmp/alpine-context-road-oracle/research/prefix-composition-check.ts": "6e2e49671640d25500b54b47ef58800e987f77e89ec0cbfa5ec3a9a4a4c1bfe8",
+          "file:///private/tmp/alpine-context-road-oracle/research/road-prefix.ts": "15c8138a361ea38af669aa561ffeb3762db29d56e78cf168a90c0cffc619f43f",
+          "file:///private/tmp/alpine-context-road-oracle/research/retained-sections.ts": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a"
+        },
+        "cases": 162,
+        "originalWalkObservations": 168,
+        "qualifyingClassObservations": 146,
+        "variants": [
+          {
+            "masked": false,
+            "oldCandidates": 301,
+            "newCandidates": 301,
+            "realizableClasses": 146,
+            "unprovedCandidates": 155,
+            "droppedUnproved": 0,
+            "addedUnproved": 0,
+            "duplicates": 0
+          },
+          {
+            "masked": true,
+            "oldCandidates": 258,
+            "newCandidates": 258,
+            "realizableClasses": 146,
+            "unprovedCandidates": 112,
+            "droppedUnproved": 0,
+            "addedUnproved": 0,
+            "duplicates": 0
+          }
+        ],
+        "cancellation": [
+          {
+            "variant": 0,
+            "stage": "first-work",
+            "status": "stopped",
+            "plans": 0
+          },
+          {
+            "variant": 0,
+            "stage": "first-plan",
+            "status": "stopped",
+            "plans": 1
+          },
+          {
+            "variant": 1,
+            "stage": "first-work",
+            "status": "stopped",
+            "plans": 0
+          },
+          {
+            "variant": 1,
+            "stage": "first-plan",
+            "status": "stopped",
+            "plans": 1
+          },
+          {
+            "variant": 2,
+            "stage": "first-work",
+            "status": "stopped",
+            "plans": 0
+          },
+          {
+            "variant": 2,
+            "stage": "first-plan",
+            "status": "stopped",
+            "plans": 1
+          },
+          {
+            "variant": 2,
+            "stage": "inside-context",
+            "status": "stopped",
+            "plans": 0
+          }
+        ],
+        "failures": [],
+        "scope": "Independent original directed walks certify metric-qualified classes; emitted infeasible plans earn no coverage. No actual canonical-road realization or real-data timing claim."
+      },
+      "limits": "Tiny qualifying class preservation and necessary-condition checks, not complete real-data search proof."
+    },
+    "knownSources": {
+      "pratt": {
+        "path": "/private/tmp/alpine-context-witness-proof/pratt.json",
+        "sha256": "578d354a9b3b4b2630d6515d6b8fa7104cc7f721bd2c37d504070442e5342244"
+      },
+      "northBend": {
+        "path": "/private/tmp/alpine-context-witness-proof/north-bend.json",
+        "sha256": "d0e9967c9632ae711fea1f7924b5088709cb93d29c2ecdfaeb60152ebad50edc"
+      },
+      "scope": "No valid source prefix omitted in tested access modes, including qualifying full physical reversals. Prefix reachability is not joint compatibility or discovery."
+    },
+    "northBendInputs": {
+      "provenance": {
+        "path": "/private/tmp/alpine-context-north-bend/provenance.json",
+        "sha256": "27335dc3fe4559965f90c79ed9697c691c644a992c636e6a15a9f45a9f0af875"
+      },
+      "projection": {
+        "path": "/private/tmp/alpine-context-north-bend/projection-report.json",
+        "sha256": "29c86fca72f574e88310fda33a7df868cda708e911e540e65c18497d2d7ad2a6"
+      },
+      "sourceCounts": "All752 original public qualifying walks from the earlier completed7-start query;752 exact directed fixed-trail/start/attachment plans. A prior532count used a different two-port trail-bundle contract and cannot be compared directly."
+    },
+    "knownNorthBendRealization": {
+      "evidence": {
+        "path": "/private/tmp/alpine-context-proof/north-bend-realization.json",
+        "sha256": "4442ea80f93888e67ca5ca3bc7128ba7565248d5c0a264dc7cd493c56482c54e"
+      },
+      "scope": "One joint road realization per known North Bend fixed-trail/start/attachment plan, independently validated on original directed edges. This proves realization of known plans, not discovery, a full solver benchmark, or distinct hike count.",
+      "processed": 752,
+      "found": 752,
+      "none": 0,
+      "stopped": 0,
+      "elapsedMs": 49.067583,
+      "peakRSS": 130793472,
+      "scopeCorrection": "Input graph/query/plan hashes identify North Bend; the generic harness carried an obsolete Pratt scope string. All numerical observations and route edges are unchanged.",
+      "originalReportSha256": "34ca45509b3898d33d7e2264328436cc6b7690dd92aa0aac83374f6ec4a82485"
+    },
+    "observations": [
+      {
+        "name": "North Bend",
+        "evidence": {
+          "path": "/private/tmp/alpine-context-proof/north-bend-discovery.json",
+          "sha256": "8cdefb01f2e530aad2e2f4ea369d79f0defc8f63a8b063f49ffbeb8d42efd709"
+        },
+        "scope": "Instrumented prototype composition only. Every found walk independently validated. No app-store or comprehensive-discovery claim.",
+        "hashes": {
+          "outer": "68c32305a64c32fb2ef6ca1df978db5054e628532f43d828e04a9fc361b0f0e2",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "67409aeb6081e95431f16d42f45217b03d4502704d695bbde5eea5e8f770e893",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "contextFactory": "abbe4fb37330f8caa79dc90d3ec9a67871d8a202190ab33e31d935e39dc8fd38",
+          "graph": "493b14cca745c3a6446f3959492c1305fd3856252272c6aa8513603cd4a5acdd",
+          "query": "2efa00286b3d9ddf5cfaab716d96808224bfc49c28034b93628acd3b4f25c490",
+          "witnessPlans": "ca4e49f18bd78276dd200f139334c12dfd91100fc91cb753b12005fea75d4b43"
+        },
+        "harnessSha256": "f1dcf6507e54311c544782887dba61e31aef19aa014f2c87ebce764cf9bd0218",
+        "depthMeaning": "maximum reached macro path pieces; persistent DFS, not iterative-depth layer",
+        "preparationMs": 85.16216700000001,
+        "elapsedMs": 1339.8329999999999,
+        "firstFoundMs": 97.62562500000001,
+        "firstWitnessMs": 97.641917,
+        "expectedWitnessClasses": 752,
+        "recoveredWitnessClasses": 752,
+        "status": "complete",
+        "cancelMs": 0.11041699999987031,
+        "maximumStepMs": 5.19966700000009,
+        "peakRSS": 274432000,
+        "retainedArcs": 582,
+        "originalArcs": 1557,
+        "progress": {
+          "work": 4783756,
+          "attemptedStarts": 7,
+          "completedStarts": 7,
+          "totalStarts": 7
+        },
+        "plans": 4264,
+        "found": 752,
+        "none": 3512,
+        "belowMinimum": 200,
+        "pendingAtStop": 0,
+        "contextStats": {
+          "destinations": 5886,
+          "destinationWork": 449197,
+          "checks": 45532,
+          "checkWork": 2965971,
+          "rejected": 1179
+        },
+        "roadYields": 694764,
+        "phaseWork": {
+          "validate": 450746,
+          "joint": 200241,
+          "bounds": 26948,
+          "shortest": 16829
+        }
+      },
+      {
+        "name": "Pratt",
+        "evidence": {
+          "path": "/private/tmp/alpine-context-proof/pratt-discovery.json",
+          "sha256": "12db2a156c9c5b8c9841473fbbd9a0433273290b73ccb47050f416b6c21000d8"
+        },
+        "scope": "Instrumented prototype composition only. Every found walk independently validated. No app-store or comprehensive-discovery claim.",
+        "hashes": {
+          "outer": "68c32305a64c32fb2ef6ca1df978db5054e628532f43d828e04a9fc361b0f0e2",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "67409aeb6081e95431f16d42f45217b03d4502704d695bbde5eea5e8f770e893",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "contextFactory": "abbe4fb37330f8caa79dc90d3ec9a67871d8a202190ab33e31d935e39dc8fd38",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+          "witnessPlans": "42b7b2ab899f3ee256d2ca2b4c0c84f474cc511b824ac8d8a61774dba7f20126"
+        },
+        "harnessSha256": "f1dcf6507e54311c544782887dba61e31aef19aa014f2c87ebce764cf9bd0218",
+        "depthMeaning": "maximum reached macro path pieces; persistent DFS, not iterative-depth layer",
+        "preparationMs": 30.386916,
+        "elapsedMs": 45009.446583,
+        "firstFoundMs": 778.148708,
+        "firstWitnessMs": null,
+        "expectedWitnessClasses": 211,
+        "recoveredWitnessClasses": 0,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.07187500000145519,
+        "maximumStepMs": 8.897917000002053,
+        "peakRSS": 321912832,
+        "retainedArcs": 4362,
+        "originalArcs": 7514,
+        "progress": {
+          "work": 143499008,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "plans": 199,
+        "found": 6,
+        "none": 184,
+        "belowMinimum": 0,
+        "pendingAtStop": 9,
+        "contextStats": {
+          "destinations": 13768,
+          "destinationWork": 35693536,
+          "checks": 152672,
+          "checkWork": 90569220,
+          "rejected": 11613
+        },
+        "roadYields": 2357831,
+        "phaseWork": {
+          "validate": 11762,
+          "shortest": 45521,
+          "bounds": 149618,
+          "joint": 2150930
+        }
+      }
+    ],
+    "diagnosis": {
+      "helperCountedWork": 126262756,
+      "outerCountedWork": 143499008,
+      "helperWorkShare": 0.8798859153089058,
+      "interpretation": "About88% of counted outer cursor work is necessary road-context traversal. This is not CPU-time attribution and does not imply road-assisted loops should be removed. Known-plan realization is separately fast; discovering the useful itinerary remains unfinished."
+    },
+    "productionDecision": "Keep the active solver unchanged until broader frozen qualifying witness/family/start checks and app integration validation. NorthBend complete recovery and one useful saved Pratt family are encouraging; neither proves full Pratt coverage.",
+    "independentRecovery": {
+      "northBend": {
+        "evidence": {
+          "path": "/private/tmp/alpine-context-recovery-check/north-bend-discovery-audit.json",
+          "sha256": "d3f86e140a5baf41ef5367e7fac1b8b1d94f2bb5ca73e23e880c6800a5b47518"
+        },
+        "summary": {
+          "status": "complete",
+          "completedStarts": 7,
+          "returnedWalks": 752,
+          "distinctDirectedPlans": 752,
+          "duplicateDirectedPlanEmissions": 0,
+          "distinctDirectedPhysicalWalks": 752,
+          "reverseCollapsedPhysicalWalksByStart": 376,
+          "exactSavedPhysicalWalks": 752,
+          "exactSavedTrailFootprints": 752,
+          "exactDirectedClasses": 752,
+          "sourceWitnessesRecoveredInReverse": 752,
+          "sourceWitnessesRecoveredEitherDirection": 752,
+          "limitation": "A missing directed class needs a terminal exhaustive comparison or separately proved canonical-road-policy exclusion. It is not waived because a different qualifying route was found."
+        }
+      },
+      "pratt": {
+        "evidence": {
+          "path": "/private/tmp/alpine-context-recovery-check/pratt-discovery-audit.json",
+          "sha256": "621afc08611031be8adc6df60dd8b6fbea75aaf65c3802615b894655d96d93b9"
+        },
+        "summary": {
+          "status": "stopped",
+          "completedStarts": 0,
+          "returnedWalks": 6,
+          "distinctDirectedPlans": 6,
+          "duplicateDirectedPlanEmissions": 0,
+          "distinctDirectedPhysicalWalks": 6,
+          "reverseCollapsedPhysicalWalksByStart": 6,
+          "exactSavedPhysicalWalks": 0,
+          "exactSavedTrailFootprints": 0,
+          "exactDirectedClasses": 0,
+          "sourceWitnessesRecoveredInReverse": 0,
+          "sourceWitnessesRecoveredEitherDirection": 0,
+          "limitation": "A missing directed class needs a terminal exhaustive comparison or separately proved canonical-road-policy exclusion. It is not waived because a different qualifying route was found."
+        },
+        "productPolicy": {
+          "meaning": "Current production similarity/quality policy in recorded discovery order; not a witness oracle.",
+          "firstSourceFamilySimilarityMs": 44832.949708,
+          "sourceFamilySimilarRoutes": [
+            5
+          ],
+          "groups": 3,
+          "startChoices": 4
+        },
+        "savedFamilyMatch": {
+          "index": 5,
+          "elapsedMs": 44832.949708,
+          "start": {
+            "index": 30,
+            "access": "unknown",
+            "id": "osm-entrance:53004792",
+            "name": "Trail entrance",
+            "node": 2396
+          },
+          "exactDirectedSourceClass": null,
+          "exactReversedSourceWitness": null,
+          "exactSavedPhysicalWalk": false,
+          "exactSavedTrailFootprint": false,
+          "metrics": {
+            "distance": 27150.420399687027,
+            "gain": 1347.242794718636,
+            "roadDistance": 5615.16703353453,
+            "repetition": 0,
+            "kind": "loop",
+            "uncertain": true
+          },
+          "sourceProductComparison": {
+            "sameFamilySources": [
+              {
+                "sourceIndex": 147,
+                "sourceStart": {
+                  "index": 42,
+                  "access": "unknown",
+                  "id": "osm-entrance:8011351184",
+                  "name": "Pratt Lake Trailhead",
+                  "node": 3125
+                },
+                "sameOriginalStart": false,
+                "sourceMetrics": {
+                  "distance": 26890.194680721906,
+                  "gain": 1337.1386821299122,
+                  "roadDistance": 5398.256928785691,
+                  "repetition": 0,
+                  "kind": "loop",
+                  "uncertain": true
+                },
+                "sharedTrailDirections": {
+                  "sameSourceDirection": 0,
+                  "oppositeSourceDirection": 20,
+                  "bothSourceDirections": 0
+                },
+                "sameProductFamily": true,
+                "full": {
+                  "overlap": 0.9742389194837757,
+                  "unsharedLength": 561.4451846942029,
+                  "maximumConnectedDivergence": 212.82228517611327
+                },
+                "cycle": {
+                  "overlap": 0.9742389194837757,
+                  "unsharedLength": 561.4451846942029,
+                  "maximumConnectedDivergence": 212.82228517611327
+                }
+              }
+            ],
+            "closestByMinimumFullAndCycleOverlap": {
+              "sourceIndex": 147,
+              "sourceStart": {
+                "index": 42,
+                "access": "unknown",
+                "id": "osm-entrance:8011351184",
+                "name": "Pratt Lake Trailhead",
+                "node": 3125
+              },
+              "sameOriginalStart": false,
+              "sourceMetrics": {
+                "distance": 26890.194680721906,
+                "gain": 1337.1386821299122,
+                "roadDistance": 5398.256928785691,
+                "repetition": 0,
+                "kind": "loop",
+                "uncertain": true
+              },
+              "sharedTrailDirections": {
+                "sameSourceDirection": 0,
+                "oppositeSourceDirection": 20,
+                "bothSourceDirections": 0
+              },
+              "sameProductFamily": true,
+              "full": {
+                "overlap": 0.9742389194837757,
+                "unsharedLength": 561.4451846942029,
+                "maximumConnectedDivergence": 212.82228517611327
+              },
+              "cycle": {
+                "overlap": 0.9742389194837757,
+                "unsharedLength": 561.4451846942029,
+                "maximumConnectedDivergence": 212.82228517611327
+              }
+            }
+          },
+          "productSelection": {
+            "group": 2,
+            "preferred": true
+          }
+        },
+        "scope": "Exact directed source recovery is distinct from pairwise current production family similarity. The latter is an order-dependent grouping policy, not an exhaustive or transitive hike-class proof."
+      }
+    },
+    "orderDiagnosis": {
+      "evidence": {
+        "path": "/private/tmp/alpine-context-order-audit/report.json",
+        "sha256": "b2b8be4a21989c5493da0279d36adac4ffe8b23ce9b3b9f95578eb93500da55b"
+      },
+      "scope": "First-road-choice proposal order only. Applies current prefix floors/used physical trails; does not exhaust earlier subtrees, prove their joint feasibility, or measure search timing.",
+      "outerSha256": "68c32305a64c32fb2ef6ca1df978db5054e628532f43d828e04a9fc361b0f0e2",
+      "exposedSha256": "7976d7ae9639afcabbceae816d78bb377a6829ac1dd63806b5e8b138b8620269",
+      "graphSha256": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+      "plans": 211,
+      "uniqueChoiceFrames": 31,
+      "workYields": 169752,
+      "firstChoiceCount": 0,
+      "rank": {
+        "minimum": 15,
+        "median": 38,
+        "maximum": 69
+      },
+      "hypotheticalDistanceOrderRank": {
+        "minimum": 3,
+        "median": 9,
+        "maximum": 101
+      },
+      "interpretation": "Every known first road choice exists. Numeric port order places them15–69th, median38; this supports within-start ordering as a remaining discovery issue, not a representation-loss proof. Hypothetical distance ordering has median9but worst101, and no discovery-gain claim. Equal work across44starts did not prevent deep subtree exploration."
+    },
+    "archiveCommit": "e963e01",
+    "archiveReplay": "research/proof/search-context.md"
   }
 }
