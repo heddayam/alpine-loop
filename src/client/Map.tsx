@@ -259,7 +259,7 @@ export function HikeMap({
   useEffect(() => {
     const map = instance.current;
     if (!map) return;
-    if (camera.selectArea) changeDrawing(false);
+    changeDrawing(false);
     programmatic.current = true;
     map.fitBounds(leafletBounds(camera.bounds), {
       padding: [camera.padding ?? 40, camera.padding ?? 40],

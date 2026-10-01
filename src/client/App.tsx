@@ -578,7 +578,7 @@ export function App() {
                   ) : (
                     <>
                       <label className="visually-hidden" htmlFor="place">
-                        Go to a region
+                        Choose an area around a region
                       </label>
                       <select
                         id="place"
@@ -586,13 +586,14 @@ export function App() {
                         onChange={(event) => {
                           const place = dataset.places[Number(event.target.value)];
                           if (place) {
-                            setAreaMode("view");
-                            moveTo(place.bounds, true);
+                            setArea(place.bounds);
+                            setAreaMode("drawn");
+                            moveTo(place.bounds);
                           }
                         }}
                       >
                         <option value="" disabled>
-                          Go to a region…
+                          Choose an area around…
                         </option>
                         {dataset.places.map((place, index) => (
                           <option key={place.name} value={index}>
@@ -604,7 +605,7 @@ export function App() {
                   )}
                   <p className="area-description">
                     {areaMode === "drawn"
-                      ? "Starts inside your rectangle."
+                      ? "Starts inside the outlined rectangle."
                       : areaMode === "retained"
                         ? "Previous search area. Pan the map to change it."
                         : "Starts in the visible map area. Pan or zoom to choose."}
@@ -715,8 +716,8 @@ export function App() {
                     >
                       <div className="section-heading results-heading">
                         <h2>
-                          {search.routeCount.toLocaleString()} matching{" "}
-                          {search.routeCount === 1 ? "route" : "routes"}
+                          {search.routeCount.toLocaleString()} route{" "}
+                          {search.routeCount === 1 ? "option" : "options"}
                         </h2>
                         {running && (
                           <button
@@ -729,6 +730,9 @@ export function App() {
                           </button>
                         )}
                       </div>
+                      <p className="search-progress">
+                        Alternate starts and path variations count separately.
+                      </p>
                       <div className="search-progress" role="status">
                         <span className={running ? "status-running" : ""}>
                           {progressLabel(search)}
