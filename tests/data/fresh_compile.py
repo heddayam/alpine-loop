@@ -1,5 +1,8 @@
 """One offline source fixture exercises the whole compiler, not its own oracle."""
-import math
+import gzip
+import hashlib
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,6 +16,8 @@ from rasterio.transform import from_origin
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/prepare"))
 from build import build
 from elevation import Elevation
+from graph import topology
+from tiles import write_network
 
 
 class FreshCompiler(unittest.TestCase):
@@ -24,7 +29,8 @@ class FreshCompiler(unittest.TestCase):
                       9: (-.002, 0), 10: (0, -.002), 11: (.007, 0), 12: (0, .005), 13: (0, .0055),
                       14: (.005, .001), 15: (.005, .002), 16: (.001, -.0005), 17: (.002, -.0005),
                       18: (.001, .005), 19: (.002, .005), 20: (.003, .003),
-                      30: (.001, .001), 31: (.002, .001), 32: (.002, .002), 40: (-.002, .0025), 41: (.007, .0025)}
+                      30: (.001, .001), 31: (.002, .001), 32: (.002, .002), 40: (-.002, .0025), 41: (.007, .0025),
+                      50: (.003, .005), 51: (.004, .005), 52: (.005, .005), 53: (.0055, .005)}
             for identity, (lon, lat) in points.items():
                 node = XML.SubElement(osm, "node", id=str(identity), version="1", lon=str(lon), lat=str(lat))
                 tags = {1: {"highway": "trailhead", "name": "Loop, 100% — ridge"},
@@ -50,6 +56,10 @@ class FreshCompiler(unittest.TestCase):
             way(109, [40, 41], {"highway": "path", "foot": "yes"})
             way(110, [1, 2, 3, 4, 5, 1], {"amenity": "parking", "access": "yes", "name": "Loop parking"})
             way(111, [12, 13, 20, 12], {"amenity": "parking", "access": "yes"})
+            way(112, [50, 51], {"highway": "path", "foot": "yes"})
+            way(113, [51, 52], {"highway": "footway", "footway": "sidewalk", "foot": "yes"})
+            way(114, [52, 53], {"highway": "footway", "footway": "crossing", "foot": "yes"})
+            way(115, [52, 53], {"highway": "path", "foot": "yes"})
             relation = XML.SubElement(osm, "relation", id="200", version="1")
             XML.SubElement(relation, "member", type="way", ref="105", role="")
             XML.SubElement(relation, "tag", k="route", v="hiking")
@@ -69,6 +79,8 @@ class FreshCompiler(unittest.TestCase):
             graph, geometry, lineage, audit = build(source, [{"path": dem, "bounds": [-.01, -.01, .01, .01]}], bounds, info)
             self.assertEqual(graph["starts"][0]["name"], "Loop, 100% — ridge")
             self.assertNotIn("n2", lineage["nodeIds"], "A source shape vertex must not become a routing junction")
+            self.assertIn("n51", lineage["nodeIds"], "A degree-two trail/sidewalk transition remains a routing node")
+            self.assertNotIn("n52", lineage["nodeIds"], "Sidewalk and crossing retain the same connector role and can compact")
             all_nodes = {node for trail in lineage["trails"] for node in trail["nodes"]}
             self.assertTrue({"n2", "n16", "n17"} <= all_nodes)
             self.assertTrue({"n9", "n10", "n11", "n12", "n13", "n30", "n31", "n32"}.isdisjoint(all_nodes))
@@ -96,6 +108,12 @@ class FreshCompiler(unittest.TestCase):
                     self.assertEqual(lineage["nodeIds"][directed[0]["from"]], "n5")
                 if "n16" in item["nodes"]:
                     self.assertEqual(len(directed), 2, "Vehicle oneway does not forbid walking back")
+                    self.assertEqual(geometry[trail]["kind"], "connector")
+                if "n50" in item["nodes"]:
+                    self.assertEqual(geometry[trail]["kind"], "trail")
+                if "n52" in item["nodes"]:
+                    self.assertEqual(geometry[trail]["kind"], "connector", "Explicit sidewalk/crossing wins over a duplicate generic path")
+                    self.assertEqual({source["kind"] for segment in item["segments"] for source in segment["source"]}, {"trail", "connector"})
                 for edge in directed:
                     elevations = [point[2] for point in geometry[trail]["coordinates"]]
                     if edge["reverse"]:
@@ -106,6 +124,72 @@ class FreshCompiler(unittest.TestCase):
                     self.assertTrue(bounds[0] - 1e-12 <= lon <= bounds[2] + 1e-12)
                     self.assertTrue(bounds[1] - 1e-12 <= lat <= bounds[3] + 1e-12)
                     self.assertAlmostEqual(elevation, 100 + 1000 * lon + 1000 * lat, places=4)
+            # Same OSM segment clipped at a different location must not reuse a frontier identity.
+            sparse = {"109": {"id": "109", "nodes": ["40", "41"], "tags": {"highway": "path", "foot": "yes"}}}
+            source_points = {str(node): point for node, point in points.items()}
+            _, original_points, _, _ = topology(sparse, set(), [], {}, source_points, bounds)
+            shifted_bounds = [-.0005, *bounds[1:]]
+            _, shifted_points, _, _ = topology(sparse, set(), [], {}, source_points, shifted_bounds)
+            original_frontier = min(original_points, key=lambda node: original_points[node][0])
+            shifted_frontier = min(shifted_points, key=lambda node: shifted_points[node][0])
+            self.assertNotEqual(original_frontier, shifted_frontier)
+
+            evidence = {"osm": hashlib.sha256(source.read_bytes()).hexdigest(), "dem": hashlib.sha256(dem.read_bytes()).hexdigest()}
+            network = root / "network"
+            manifest = write_network(network, graph, geometry, identity_evidence=evidence)
+            repeat = write_network(root / "repeat", graph, geometry, identity_evidence=evidence)
+            self.assertEqual(manifest, repeat, "Identical verified input and compiler produce identical gzip hashes and snapshot identity")
+            self.assertEqual((network / "manifest.json").read_bytes(), (root / "repeat/manifest.json").read_bytes())
+            self.assertEqual(graph["info"]["id"], "fixture", "Writer copies its parent's dataset metadata")
+            self.assertNotEqual(manifest["info"]["id"], "fixture")
+            self.assertEqual({path.relative_to(network).as_posix() for path in network.rglob("*.gz")}, set(manifest["files"]))
+            self.assertFalse((network / "graph.json.gz").exists(), "No legacy whole runtime graph")
+            cells, stored_geometry, stored_starts = {}, {}, {}
+            for filename, record in manifest["files"].items():
+                compressed = (network / filename).read_bytes()
+                raw = gzip.decompress(compressed)
+                self.assertEqual(record, {"bytes": len(compressed), "jsonBytes": len(raw), "sha256": hashlib.sha256(compressed).hexdigest()})
+                value = json.loads(raw)
+                if filename.startswith("graph/"):
+                    cells[filename] = value
+                    nodes = dict(value["nodes"])
+                    for section in value["sections"]:
+                        self.assertEqual(section["kind"], geometry[section["id"]]["kind"])
+                        self.assertEqual(section["edges"], [[index, edge] for index, edge in enumerate(graph["edges"]) if edge["trail"] == section["id"]])
+                        for _, edge in section["edges"]:
+                            for node in (edge["from"], edge["to"]):
+                                self.assertEqual(nodes[node], graph["nodes"][node], "Every copy retains both complete endpoints")
+                elif filename.startswith("geometry/"):
+                    for index, shape in value:
+                        self.assertNotIn(index, stored_geometry, "Geometry has one owner")
+                        stored_geometry[index] = shape
+                else:
+                    for index, start, position in value:
+                        self.assertNotIn(index, stored_starts, "Starts have one owner")
+                        self.assertEqual(position, graph["nodes"][start["node"]])
+                        stored_starts[index] = start
+            self.assertEqual([stored_geometry[index] for index in range(len(geometry))], geometry)
+            self.assertEqual([stored_starts[index] for index in range(len(graph["starts"]))], graph["starts"])
+            crossing_section = next(index for index, trail in enumerate(lineage["trails"]) if any(source["way"] == "109" for segment in trail["segments"] for source in segment["source"]))
+            copies = [filename for filename, value in cells.items() if any(section["id"] == crossing_section for section in value["sections"])]
+            self.assertEqual(copies, ["graph/-1_0.json.gz", "graph/0_0.json.gz"], "Negative floor cell and positive cell both discover the full crossing corridor")
+            self.assertIn(crossing_section, dict(json.loads(gzip.decompress((network / "geometry/0_0.json.gz").read_bytes()))), "Crossing geometry belongs to its midpoint cell, not its first endpoint cell")
+            self.assertEqual([filename for filename in manifest["files"] if filename.startswith("starts/")], ["starts/0_0.json.gz"])
+            changed = [dict(shape, name="Changed name") if index == 0 else shape for index, shape in enumerate(geometry)]
+            self.assertNotEqual(write_network(root / "changed", graph, changed, identity_evidence=evidence)["info"]["id"], manifest["info"]["id"], "Actual output facts determine the snapshot identity")
+            inputs = dict(info, osm={"file": source.name, "sha256": evidence["osm"]},
+                          elevation=[{"file": dem.name, "sha256": evidence["dem"], "bounds": [-.01, -.01, .01, .01]}])
+            (root / "inputs.json").write_text(json.dumps(inputs))
+            subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] / "tools/prepare/build.py"),
+                            "--source-root", str(root), "--manifest", str(root / "inputs.json"), "--output", str(root / "published")],
+                           check=True, capture_output=True, text=True)
+            published = root / "published"
+            runtime = json.loads((published / "manifest.json").read_text())
+            provenance = json.loads((published / "audit/provenance.json").read_text())
+            self.assertEqual(provenance["snapshotId"], runtime["info"]["id"])
+            self.assertEqual({path.name for path in published.iterdir()}, {"manifest.json", "graph", "geometry", "starts", "audit"})
+            self.assertFalse(any(filename.startswith("audit/") for filename in runtime["files"]), "Runtime manifest excludes source replay artifacts")
+            self.assertEqual(json.loads(gzip.decompress((published / "audit/graph.json.gz").read_bytes()))["info"], runtime["info"])
             with rasterio.open(dem, "r+") as dataset:
                 values[99:101, 99:101] = -9999
                 dataset.write(values, 1)

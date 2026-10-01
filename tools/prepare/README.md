@@ -27,13 +27,18 @@ The output directory must be new. Osmium filters source-wide ways and embeds
 their node coordinates. Python streams those ways, retaining only geometries
 intersecting the footprint and their access context. This catches sparse
 segments crossing the rectangle even when every original node lies outside;
-a conventional node-in-box extract would miss those. No statewide Python
-node dictionary or statewide runtime graph is constructed.
+a conventional node-in-box extract would miss those. Retained ways, nodes,
+corridors and elevation sample coordinates are materialized for the whole
+footprint. Memory grows with that footprint: partitioning the result does not
+make this a bounded-memory statewide compiler.
 
 Temporary Osmium intermediate files are removed, and
 the final directory appears only after all elevations and outputs are ready.
 The fixture runs the actual Osmium → OPL → topology → bilinear DEM → graph
 pipeline on a tiny offline source and a synthetic planar raster.
+It also exercises the CLI publication, role transitions, boundary identities,
+cross-cell discovery, complete endpoint/direction copies and deterministic file
+hashes. It makes no network requests.
 
 ## Source decisions
 
@@ -43,6 +48,11 @@ pipeline on a tiny offline source and a synthetic planar raster.
 - Other roads provide entrance context. Only roads belonging to a mapped
   hiking/foot route relation become hiking connectors. Road membership alone
   never overrides a foot-access prohibition.
+- Admitted explicit roads and `footway=sidewalk/crossing` carry the `connector`
+  role. Other admitted paths carry `trail`. This is a candidate classification,
+  not proof of a recreational hike. An explicit connector wins if duplicate
+  source ways classify the same physical segment differently; the audit retains
+  each source classification. Admission and access permissions remain separate.
 - More-specific pedestrian and directional permissions override generic access.
   Explicit prohibitions and purpose/private access are excluded. Missing or
   unresolved conditional permission remains unknown; a default prohibition
@@ -70,9 +80,11 @@ Source node identities join paths. Duplicate consecutive source-node segments
 are one physical segment, with conservative permission combination and all
 source references retained. Ways are clipped only at the declared source
 rectangle, preserving interior vertices; generated boundary endpoints are
-frontiers and never starts. Degree-two corridors are collapsed, retaining
-junctions, starts, barriers, permission transitions and an anchor on isolated
-rings. No source geometry is simplified.
+frontiers and never starts. Generated frontier identities include the exact
+clipping fraction, so changing the source rectangle does not reuse an identity
+for a different endpoint. Degree-two corridors are collapsed, retaining
+junctions, starts, barriers, permission and role transitions, and an anchor on
+isolated rings. No source geometry is simplified.
 
 ## Elevation and output
 
@@ -85,54 +97,41 @@ estimates: noise can inflate gain, and accuracy/current conditions are not
 certified. All sampled elevations stay in the drawing/GPX geometry, so it
 represents the same profile used for gain.
 
-`graph.json.gz` is the existing `TrailGraph` contract. `geometry.json.gz` stores
-each physical corridor once; reverse edges reference it in reverse order.
-`source-index.json.gz`, `audit.json.gz` and `provenance.json` retain original OSM
-lineage, frontiers, unmatched POIs, source hashes/URLs, source decisions and
-compiler identity. They are preparation evidence, not runtime dependencies.
-Graph topology and geometry remain separate because search needs only the
-small node/edge facts, while inspection requests geometry on demand. No runtime
-storage subsystem or compatibility adapter is required.
+One snapshot is compiled and compacted **before** storage partitioning. Numeric
+node, edge, section and start IDs are indexes in that snapshot's original arrays;
+they must never join records from different snapshots. Geographic cells are
+storage addresses, not independently compiled hiking regions.
 
-## Measured North Bend build
+`manifest.json` follows `src/data-format.ts`: version 2, cell size 0.1 degrees,
+`haversine-6371008.8` distance metric, copied dataset metadata, and each runtime
+file's compressed bytes, decoded JSON bytes and SHA-256. Dataset identity hashes
+the verified source manifest, Osmium version, actual compiler/policy files,
+metadata and emitted file evidence. The old input label is not reused as an ID.
+JSON keys/files are sorted; gzip omits filenames, timestamps and platform headers.
 
-The access-evidence rebuild (`fresh-north-bend-v2`) removes one redundant start:
-parking contact `n12761651948` directly adjoins named Little Si Trailhead
-`n4729927256` along both parking boundary `w39979446` and trail `w40413381`.
-The named trailhead now retains that parking's explicit public permission.
-Every other start is unchanged. Comparing source lineage before and after
-confirms the same 56,433 physical source-segment records and original geometry
-vertex set; only corridor compaction changes after the redundant start is gone.
+- `graph/<floor(lon*10)>_<floor(lat*10)>.json.gz` holds complete physical sections,
+  their names/roles/directed facts and endpoint coordinates. Each section appears
+  in every cell intersected by its complete geometry's bounding box. Readers
+  deduplicate IDs and exact-filter bounds; no section is clipped at a cell edge.
+- `starts/<cell>.json.gz` holds start facts and coordinates once, in their point's
+  cell. Starting-area selection does not require loading graph or geometry.
+- `geometry/<cell>.json.gz` holds each complete sampled corridor once, owned by
+  the cell containing its bounding-box midpoint. Reverse traversal uses the same
+  geometry in reverse. Role is also retained here for preparation inspection.
 
-The pinned sources produced 6,202 routing nodes, 6,771 physical corridors,
-13,542 directed edges and 1,825 starts. Eleven starts have explicit public
-permission; 1,814 remain uncertain. The audit records 85 boundary frontiers and
-225 unresolved mapped access POIs. All 81,604 distinct DEM samples were valid;
-the geometry contains 88,944 points including shared corridor endpoints.
+An absent file inside the advertised processed footprint is empty for this
+snapshot. A declared but missing or corrupted file is an error. Outside the
+footprint, coverage is unknown. The CLI builds a fresh staging directory and
+renames it only after all runtime and audit files are complete.
 
-| File | Compressed bytes | JSON bytes |
-| --- | ---: | ---: |
-| `graph.json.gz` | 436,799 | 2,084,635 |
-| `geometry.json.gz` | 1,638,642 | 4,617,841 |
-| `source-index.json.gz` (audit only) | 991,694 | 9,723,683 |
-| `audit.json.gz` (audit only) | 32,393 | 272,120 |
+`audit/graph.json.gz` and `audit/geometry.json.gz` preserve complete arrays for
+source replay. `audit/source-index.json.gz`, `audit/audit.json.gz` and
+`audit/provenance.json` retain source lineage/classification, frontiers, unmatched
+POIs, verified source hashes/URLs, compiler identity and build observations.
+These files are excluded from the runtime manifest. There is no old runtime
+format compatibility layer.
 
-An independent check recomputed haversine distances and positive/negative
-profile changes for every exported edge, checked geometry endpoints against
-routing nodes, unique physical corridor/direction pairs, finite coordinates,
-coverage bounds, non-frontier starts and output hashes. The offline fixture
-also checks a gradual climb that would disappear under per-delta suppression.
-The maintainer build took 32.85 seconds with 260,849,664 bytes peak compiler RSS
-on the reference Mac; these are descriptive preparation measurements, not app
-resource or search-completion claims.
-
-For example, corridor `osm-corridor:715ba6e78c7e270c0a620fed` on Rattlesnake Ledge
-Trail measures 2,816.58 m, with 328.48 m gain and 15.43 m reverse-direction gain
-from 182 samples. Discarding rises below 1 m would report only 309.50 m gain.
-Corridor `osm-corridor:bafe1802e20f38f0f72add1e` on Snoqualmie Valley Trail
-measures 1,477.36 m and gains 3.92 m in its stored direction; every individual
-rise is below 1 m. These are individual corridors, not complete named hikes,
-and illustrate the measurement definition rather than certify DEM accuracy.
-
-The earlier, broader Cascades experiment remains an ignored research artifact
-with its own source manifest in provenance. It is not the delivered footprint.
+The independent Little Si proof in `benchmarks/fresh-north-bend` describes the
+earlier whole-file `fresh-north-bend-v2` build. Its counts, file sizes, identities
+and timing are historical evidence, not measurements of this network writer.
+The broader ignored Cascades experiment likewise is not delivered coverage.

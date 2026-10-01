@@ -1,6 +1,5 @@
 """Offline maintainer compiler; the application consumes only its gzip files."""
 import argparse
-import gzip
 import hashlib
 import json
 import os
@@ -13,6 +12,7 @@ from pathlib import Path
 from elevation import Elevation
 from graph import assemble, measure, topology
 from osm import extract, read_source
+from tiles import write_json, write_network
 
 HERE = Path(__file__).resolve().parent
 
@@ -51,13 +51,6 @@ def build(source, products, bounds, info):
         return graph, geometry, source_index, audit
 
 
-def write_json(file, value, compressed=False):
-    raw = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode() + b"\n"
-    data = gzip.compress(raw, mtime=0) if compressed else raw
-    file.write_bytes(data)
-    return {"bytes": len(data), "jsonBytes": len(raw), "sha256": hashlib.sha256(data).hexdigest()}
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
@@ -84,17 +77,23 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".fresh-", dir=args.output.parent) as temporary:
         staging = Path(temporary)
-        files = {}
+        compiler = {file.name: sha(file) for file in sorted(HERE.glob("*.py"))}
+        osmium = subprocess.check_output(["osmium", "--version"], text=True).splitlines()[0]
+        evidence = {"manifest": {key: value for key, value in manifest.items() if key != "id"}, "osmium": osmium}
+        network = write_network(staging, graph, geometry, identity_evidence=evidence)
+        (staging / "audit").mkdir()
+        graph = dict(graph, info=network["info"])
+        files = {"manifest.json": {"bytes": (staging / "manifest.json").stat().st_size, "sha256": sha(staging / "manifest.json")}}
         for name, value in (("graph", graph), ("geometry", geometry), ("source-index", source_index), ("audit", audit)):
-            files[name] = write_json(staging / f"{name}.json.gz", value, True)
+            filename = f"audit/{name}.json.gz"
+            files[filename] = write_json(staging / filename, value, True)
         provenance = {"version": 1, "manifest": manifest, "files": files, "counts": audit["counts"],
-                      "compiler": {file.name: sha(file) for file in sorted(HERE.glob("*.py"))},
-                      "osmium": subprocess.check_output(["osmium", "--version"], text=True).splitlines()[0],
+                      "snapshotId": network["info"]["id"], "compiler": compiler, "osmium": osmium,
                       "elapsedSeconds": time.perf_counter() - started,
                       "peakRssBytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if os.uname().sysname == "Darwin" else 1024)}
-        write_json(staging / "provenance.json", provenance)
+        write_json(staging / "audit/provenance.json", provenance)
         os.rename(staging, args.output)
-    print(json.dumps({"output": str(args.output), "counts": audit["counts"], "files": files,
+    print(json.dumps({"output": str(args.output), "snapshotId": network["info"]["id"], "counts": audit["counts"], "runtimeFiles": len(network["files"]),
                       "elapsedSeconds": provenance["elapsedSeconds"], "peakRssBytes": provenance["peakRssBytes"]}, indent=2), flush=True)
 
 

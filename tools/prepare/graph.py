@@ -64,6 +64,11 @@ def routable(way, hiking):
     return not non_current and tags.get("area") != "yes" and (highway in PATHS or (highway in ROADS and way["id"] in hiking))
 
 
+def role(tags):
+    # Candidate classification only, not proof that a mapped path is a hike.
+    return "connector" if tags.get("highway") in ROADS or tags.get("footway") in ("sidewalk", "crossing") else "trail"
+
+
 def distance(a, b):
     lon1, lat1, lon2, lat2 = map(math.radians, (*a[:2], *b[:2]))
     h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
@@ -95,6 +100,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             continue
         counts["selectedWays"] += 1
         access = directions(way["tags"])
+        kind = role(way["tags"])
         for ordinal, (left, right) in enumerate(zip(way["nodes"], way["nodes"][1:])):
             a, b = positions[left], positions[right]
             interval = clip(a, b, bounds)
@@ -104,7 +110,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             endpoints = []
             for part, fraction in enumerate(interval):
                 original = (part == 0 and fraction == 0) or (part == 1 and fraction == 1)
-                key = "n" + (left if part == 0 else right) if original else f"frontier:w{way['id']}:{ordinal}:{part}"
+                key = "n" + (left if part == 0 else right) if original else f"frontier:w{way['id']}:{ordinal}:{part}:{fraction.hex()}"
                 point = (a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction)
                 points[key] = point
                 if not original or any(abs(point[axis] - bounds[side]) < 1e-12 for axis, side in ((0, 0), (1, 1), (0, 2), (1, 3))):
@@ -119,7 +125,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             key = tuple(sorted(endpoints))
             if endpoints[0] != key[0]:
                 states.reverse()
-            lineage = {"way": way["id"], "segment": ordinal, "nodes": [left, right], "fraction": list(interval),
+            lineage = {"way": way["id"], "segment": ordinal, "nodes": [left, right], "fraction": list(interval), "kind": kind,
                        "reversed": endpoints[0] != key[0]}
             if key in segments:
                 counts["duplicateSegments"] += 1
@@ -127,9 +133,11 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
                 existing["access"] = [combine(a, b) for a, b in zip(existing["access"], states)]
                 existing["source"].append(lineage)
                 existing["names"].update(filter(None, [way["tags"].get("name")]))
+                if kind == "connector":
+                    existing["kind"] = kind
             else:
                 segments[key] = {"ends": key, "access": states, "source": [lineage],
-                                 "names": set(filter(None, [way["tags"].get("name")]))}
+                                 "kind": kind, "names": set(filter(None, [way["tags"].get("name")]))}
     usable = []
     adjacent = defaultdict(list)
     for segment in segments.values():
@@ -200,7 +208,8 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
         segment = usable[index]
         return segment["access"] if segment["ends"][0] == start else list(reversed(segment["access"]))
     for node, edges in adjacent.items():
-        if len(edges) == 2 and oriented(edges[0], node) != list(reversed(oriented(edges[1], node))):
+        if len(edges) == 2 and (oriented(edges[0], node) != list(reversed(oriented(edges[1], node)))
+                               or usable[edges[0]]["kind"] != usable[edges[1]]["kind"]):
             anchors.add(node)
     corridors, visited = [], set()
     # Components consisting solely of a ring still require an anchor.
@@ -216,6 +225,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
             path_nodes, members, names = [start], [], set()
             node, index = start, first
             state = oriented(index, node)
+            kind = usable[index]["kind"]
             while True:
                 visited.add(index)
                 segment = usable[index]
@@ -229,7 +239,7 @@ def topology(ways, hiking, pois, tags_by_node, positions, bounds):
                 index = next(edge for edge in adjacent[node] if edge not in visited)
             identity = hashlib.sha256("|".join(path_nodes).encode()).hexdigest()[:24]
             corridors.append({"id": "osm-corridor:" + identity, "nodes": path_nodes, "coordinates": [points[node] for node in path_nodes],
-                              "access": state, "name": " / ".join(sorted(names)) or None, "source": members})
+                              "access": state, "kind": kind, "name": " / ".join(sorted(names)) or None, "source": members})
     return corridors, points, entrances, {"counts": counts, "frontiers": sorted(frontiers & adjacent.keys()),
                                          "unresolvedPois": unresolved, "redundantContacts": redundant_contacts, "entrances": entrances}
 
@@ -263,7 +273,7 @@ def assemble(corridors, entrances, info):
     for trail, corridor in enumerate(corridors):
         for node, point in ((corridor["nodes"][0], corridor["geometry"][0]), (corridor["nodes"][-1], corridor["geometry"][-1])):
             nodes[indexes[node]] = point
-        geometry.append({"id": corridor["id"], "name": corridor["name"], "coordinates": corridor["geometry"]})
+        geometry.append({"id": corridor["id"], "name": corridor["name"], "kind": corridor["kind"], "coordinates": corridor["geometry"]})
         for direction, access in enumerate(corridor["access"]):
             if access is None:
                 continue
@@ -278,4 +288,4 @@ def assemble(corridors, entrances, info):
     info = dict(info, startCount=len(starts))
     return {"version": 1, "info": info, "nodes": nodes, "edges": edges, "starts": starts}, geometry, {
         "nodeIds": node_ids, "edgeIds": edge_ids,
-        "trails": [{"id": corridor["id"], "nodes": corridor["nodes"], "segments": corridor["source"]} for corridor in corridors]}
+        "trails": [{"id": corridor["id"], "kind": corridor["kind"], "nodes": corridor["nodes"], "segments": corridor["source"]} for corridor in corridors]}
