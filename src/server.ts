@@ -25,8 +25,8 @@ export async function createApp(directory: string, clientDirectory?: string) {
   app.get('/api/catalog', async () => dataset.info);
   app.get('/api/search', async () => searches.latest());
   app.post('/api/search', async (request, reply) => reply.code(202).send(searches.start(parseQuery(request.body))));
-  app.get<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id', async request => searches.get(request.params.id, Number(request.query.offset ?? 0)));
-  app.post<{ Params: { id: string }; Querystring: { offset?: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id, Number(request.query.offset ?? 0)));
+  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string } }>('/api/search/:id', async request => searches.get(request.params.id, Number(request.query.offset ?? 0), request.query.group));
+  app.post<{ Params: { id: string }; Querystring: { offset?: string; group?: string } }>('/api/search/:id/stop', async request => searches.stop(request.params.id, Number(request.query.offset ?? 0), request.query.group));
   app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId', async request => searches.route(request.params.id, request.params.routeId));
   app.get<{ Params: { id: string; routeId: string } }>('/api/search/:id/routes/:routeId.gpx', async (request, reply) => {
     const route = await searches.route(request.params.id, request.params.routeId);

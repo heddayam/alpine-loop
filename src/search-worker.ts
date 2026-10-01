@@ -1,7 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { readDataset } from './dataset.js';
 import { search } from './engine/search.js';
-import { createDiversityFilter } from './diversity.js';
+import { createRouteGroups } from './diversity.js';
 import type { SearchQuery } from './model.js';
 
 const { directory, query, snapshotId } = workerData as {
@@ -12,12 +12,12 @@ if (dataset.info.id !== snapshotId) throw new Error('Trail data changed before t
 const selection = await dataset.select(query);
 const { graph } = selection;
 parentPort!.postMessage({ type: 'coverage', note: selection.coverageNote });
-const diverse = createDiversityFilter(graph);
+const group = createRouteGroups(graph);
 let lastProgress = 0;
 for await (const event of search(graph, query)) {
   if (event.type === 'route') {
-    if (selection.isHike(event.route) && diverse(event.route)) {
-      parentPort!.postMessage({ type: 'route', route: selection.describe(event.route) });
+    if (selection.isHike(event.route)) {
+      parentPort!.postMessage({ type: 'route', route: selection.describe(event.route), ...group(event.route) });
     }
     continue;
   }

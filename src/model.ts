@@ -68,6 +68,9 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   trailNames: string[];
 };
 export type HikeRoute = RouteSummary & { geometry: Position[] };
+/** One physical walk from one start; an observed opposite direction is inspectable. */
+export type RouteChoice = RouteSummary & { groupId: string; groupSize: number; reverseId?: string };
+export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;
 export type SearchStatus = 'running' | 'complete' | 'stopped' | 'limited' | 'failed';
 export type SearchProgress = {
@@ -83,8 +86,12 @@ export type SearchSnapshot = {
   query: SearchQuery;
   status: SearchStatus;
   progress: SearchProgress;
-  routes: RouteSummary[];
+  routes: RouteChoice[];
   routeCount: number;
+  groupCount: number;
+  /** Omitted for the group overview; set when browsing the routes in one group. */
+  groupId?: string;
+  pageTotal: number;
   offset: number;
   selectionNote?: string;
   coverageNote?: string;
