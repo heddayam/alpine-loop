@@ -12,7 +12,9 @@ export const query: SearchQuery = {
 };
 
 /** Two manually assigned cells, independent of production partition/load helpers. */
-export async function createNetworkFixture(dense = false, startCount = 1, routeCount = 1, connectorSections: number[] = []) {
+export async function createNetworkFixture({ dense = false, startCount = 1, routeCount = 1, connectorSections = [], directional = false }: {
+  dense?: boolean; startCount?: number; routeCount?: number; connectorSections?: number[]; directional?: boolean;
+} = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'alpine-network-test-'));
   const west = '-1221_470', east = '-1220_470';
   const positions: Position[] = [[-122.0005, 47.05, 100], [-121.999, 47.0505, 120], [-121.999, 47.0495, 100]];
@@ -35,7 +37,9 @@ export async function createNetworkFixture(dense = false, startCount = 1, routeC
     const facts = { trail: id, distance: 200, gain: 20, access: 'public' as const };
     sections.push({ id, bounds, name: 'Creek & Ridge', kind: connectorSections.includes(id) ? 'connector' : 'trail', edges: [
       [id * 2, { ...facts, from, to, reverse: false }],
-      [id * 2 + 1, { ...facts, from: to, to: from, reverse: true }],
+      // Deliberately independent directed facts: reversing geometry must not copy metrics/access.
+      [id * 2 + 1, { ...facts, from: to, to: from, reverse: true,
+        ...(directional && id === 0 ? { gain: 40, access: 'unknown' as const } : {}) }],
     ] });
     const owner = (bounds[0] + bounds[2]) / 2 < -122 ? west : east;
     const entries = drawings.get(owner) ?? [];
@@ -62,11 +66,12 @@ export async function createNetworkFixture(dense = false, startCount = 1, routeC
     const nodes = [...new Set(selected.flatMap(section => section.edges.flatMap(([, edge]) => [edge.from, edge.to])))].sort((a, b) => a - b);
     await file(`graph/${cell}.json.gz`, { nodes: nodes.map(id => [id, positions[id]!]), sections: selected } satisfies NetworkCell);
   }
-  // Aliases at one entrance must not multiply the independently drawn circuits.
+  // Co-located access identities still belong to distinct original starting points.
   const starts: NetworkStarts = Array.from({ length: startCount }, (_, index) => [index,
-    { id: `start-${index}`, node: 0, name: 'Creek & Ridge <loop>', access: 'public' }, positions[0]!]);
+    { id: `start-${index}`, node: 0, name: `Creek & Ridge <loop> ${index}`, access: 'public' }, positions[0]!]);
   await file(`starts/${west}.json.gz`, starts);
   for (const [cell, geometry] of drawings) await file(`geometry/${cell}.json.gz`, geometry);
   await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest));
-  return { directory, geometryDirectory: join(directory, 'geometry'), missingTopology: join(directory, `graph/${east}.json.gz`) };
+  return { directory, geometryDirectory: join(directory, 'geometry'), missingTopology: join(directory, `graph/${east}.json.gz`),
+    firstLoop: [positions[0]!, positions[1]!, positions[2]!, positions[0]!] };
 }
