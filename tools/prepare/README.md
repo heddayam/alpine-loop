@@ -78,13 +78,10 @@ hashes. It makes no network requests.
 - Naming priority does not choose access evidence. An untagged named trailhead
   retains applicable public permission from its mapped parking; restrictions
   on the node still apply.
-- A parking-only boundary contact directly attached to the same named trailhead
-  can be a redundant start. Suppress it only when both are consecutive vertices
-  on that parking polygon and an uninterrupted, bidirectionally public source
-  trail. The contact must have degree two, no barrier, no other access source,
-  and the same start permission. Distinct exits and named trailheads remain.
-  All trail geometry stays intact; the audit records each suppressed contact.
-  There are no proximity thresholds, inferred connectors or routing shortcuts.
+- Every distinct mapped parking contact remains selectable, including one
+  beside a named trailhead. Selecting an area or enforcing exact route limits
+  must not silently move the starting point. Similar resulting routes are
+  handled during result selection; source preparation does not merge starts.
 
 Tag semantics follow the OSM documentation for
 [access precedence](https://wiki.openstreetmap.org/wiki/Key:access#Transport_mode_restrictions),

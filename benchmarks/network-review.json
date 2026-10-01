@@ -1030,5 +1030,78 @@
     "allNewRuntimeHashesAndSizesVerified": true,
     "sampledProcessTreePeakRssBytes": 3197321216,
     "measurementNote": "Peak compiler memory fell by about 3.3% in this pair of uncontrolled runs; elapsed preparation increased from 198 to 225 seconds. This is not a demonstrated statewide-memory solution. Streaming removes whole serialized copies without changing any of the 766 runtime files."
+  },
+  "retainedStartsBuild": {
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "bounds": [
+      -122.1,
+      46.5,
+      -120.5,
+      48.1
+    ],
+    "sourceManifestSha256": "8700eb96dd6c79dbcc83487be15aa7dbd26acfff13c240e5efdc79dfe5c321bf",
+    "compiler": {
+      "pid": 20425,
+      "elapsedSeconds": 221.99906487506814,
+      "peakRssBytes": 3059367936
+    },
+    "runtime": {
+      "manifestBytes": 106646,
+      "files": 766,
+      "fileBytes": 73749780,
+      "totalBytesIncludingManifest": 73856426,
+      "families": {
+        "graph": {
+          "files": 284,
+          "bytes": 20848054,
+          "jsonBytes": 98170764
+        },
+        "geometry": {
+          "files": 256,
+          "bytes": 52491058,
+          "jsonBytes": 152602337
+        },
+        "starts": {
+          "files": 226,
+          "bytes": 410668,
+          "jsonBytes": 1656518
+        }
+      }
+    },
+    "counts": {
+      "directedEdges": 444350,
+      "duplicateSegments": 18,
+      "elevationSamples": 2498731,
+      "frontierNodes": 989,
+      "nodes": 177670,
+      "outsideSegments": 29914,
+      "physicalTrails": 222175,
+      "prohibitedSegments": 251515,
+      "selectedWays": 142442,
+      "starts": 11649,
+      "unresolvedPois": 2781,
+      "zeroLengthSegments": 0,
+      "geometryPoints": 2765411,
+      "sectionCopies": 227017,
+      "sectionRoles": {
+        "connector": 191706,
+        "trail": 30469
+      }
+    },
+    "validation": {
+      "everyRuntimeFileHashAndSize": true,
+      "allDuplicateSectionsAndNodesIdentical": true,
+      "completeDirectedEndpointsInEachCopy": true,
+      "geometryOwnersUniqueAndExact": true,
+      "geometryBboxesAndEndpointsMatchTopology": true,
+      "everyIntersectedCellContainsWholeSection": true,
+      "startsUniqueAndLocatedCorrectly": true,
+      "countsMatchPreparationAudit": true
+    },
+    "verificationSeconds": 8.025316499988548,
+    "scope": "Same broader Cascades footprint and pinned local sources as the earlier experiment. No downloads, solver runs, app restart, statewide completeness or bounded-preparation-memory claim.",
+    "change": "Delete preparation-time suppression of distinct parking contacts. Exact original Little Si start restored. Existing 11647 starts preserve stable source IDs, position, access and names; two new starts.",
+    "witnessEvidence": "prepared-witnesses.json",
+    "installedInLiveApp": false
   }
 }

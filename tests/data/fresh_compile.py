@@ -99,7 +99,7 @@ class FreshCompiler(unittest.TestCase):
                     "places": [], "limitations": [], "attribution": [], "startCount": 0}
             graph, geometry, lineage, audit = build(source, [{"path": dem, "bounds": [-.01, -.01, .01, .01]}], bounds, info)
             self.assertEqual(graph["starts"][0]["name"], "Loop, 100% — ridge")
-            self.assertNotIn("n2", lineage["nodeIds"], "A source shape vertex must not become a routing junction")
+            self.assertIn("n2", lineage["nodeIds"], "Every distinct parking contact stays selectable, even next to a named trailhead")
             self.assertIn("n51", lineage["nodeIds"], "A degree-two trail/sidewalk transition remains a routing node")
             self.assertNotIn("n52", lineage["nodeIds"], "Sidewalk and crossing retain the same connector role and can compact")
             all_nodes = {node for trail in lineage["trails"] for node in trail["nodes"]}
@@ -109,13 +109,13 @@ class FreshCompiler(unittest.TestCase):
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
             starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
-            self.assertEqual(set(starts), {"n1", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts remain")
+            self.assertEqual(set(starts), {"n1", "n2", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts remain")
             self.assertNotIn("n53", starts, "An explicit sidewalk/crossing-to-road contact is not a trail entrance")
             self.assertEqual(starts["n50"]["access"], "unknown", "Track-to-trail contact is not proof of legal arrival or parking")
             self.assertNotIn("n71", starts, "Two connected tracks do not establish a trail entrance")
             self.assertEqual(starts["n1"]["access"], "public", "Missing trailhead permission must not erase its parking's public evidence")
             self.assertEqual(starts["n4"]["access"], "unknown", "Public parking does not erase a node's conditional restriction")
-            self.assertEqual(audit["redundantContacts"], [{"node": "n2", "retained": "n1", "parking": "w110", "ways": ["100"]}])
+            self.assertEqual(starts["n2"]["access"], "public", "A parking contact keeps its own public access evidence")
             self.assertTrue(any(poi["id"] == "r201" and poi["nodes"] == ["12", "13", "20", "12"] for poi in audit["unresolvedPois"]),
                             "Parking multipolygon members are retained, but public parking cannot restore an explicitly blocked gate")
             source_edges = {}
@@ -146,14 +146,15 @@ class FreshCompiler(unittest.TestCase):
             self.assertEqual(len(source_edges["123"]), 2)
             self.assertEqual({edge["access"] for edge in source_edges["123"]}, {"public"},
                              "An explicit bidirectional foot exception overrides generic private access on a motorway link")
+            approach = {trail for trail, item in enumerate(lineage["trails"]) if "n2" in item["nodes"]}
+            directed_approach = [edge for edge in graph["edges"] if edge["trail"] in approach]
+            self.assertEqual({edge["access"] for edge in directed_approach}, {"public"})
+            self.assertAlmostEqual(sum(edge["gain"] for edge in directed_approach), 4, places=4)
+            approach_points = {tuple(point[:2]) for trail in approach for point in geometry[trail]["coordinates"]}
+            self.assertTrue({(0, 0), (.002, 0), (.004, 0)} <= approach_points)
+            self.assertGreater(len(approach_points), 3, "Elevation profiles retain interpolated samples across the split")
             for trail, item in enumerate(lineage["trails"]):
                 directed = [edge for edge in graph["edges"] if edge["trail"] == trail]
-                if "n2" in item["nodes"]:
-                    self.assertEqual({edge["access"] for edge in directed}, {"public"})
-                    self.assertAlmostEqual(sum(edge["gain"] for edge in directed), 4, places=4)
-                    profile = geometry[trail]["coordinates"]
-                    self.assertGreater(len(profile), 3)
-                    self.assertTrue({(0, 0), (.002, 0), (.004, 0)} <= {tuple(point[:2]) for point in profile})
                 if "n14" in item["nodes"]:
                     self.assertTrue(all(edge["access"] == "unknown" for edge in directed))
                 if "n18" in item["nodes"]:

@@ -1,0 +1,2934 @@
+{
+  "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+  "snapshotManifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+  "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+  "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+  "frozenWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+  "sourceIndexSha256": "54f9385d0cf76d5f8ca2e3f227181aaba7f278f4857a9e7569b94a05bc7b8f39",
+  "resolvedRoadLimits": {
+    "distance": 1609.344,
+    "fraction": 0.1
+  },
+  "compilerHashes": {
+    "build.py": "7ae94ee3db8acea367fb5b441546d80bfe2860236cebcf9f722877f702c8307d",
+    "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+    "graph.py": "9ded0c3beaa0b1407b8b9354293a690ffdc176c3fbf75fea768591eba2d2a66d",
+    "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+    "tiles.py": "9897b6988494a425cf952cde26c19eda2e4365fd475616fa974ef784758ebef3"
+  },
+  "elapsedSeconds": 9.515053709037602,
+  "scope": "All fourteen originally proven frozen pilot witnesses only. Exact original starts, source walks and query constraints are preserved; no named-start substitution or solver invocation. Source nodes/segments reconstructed uniquely from pinned OSM extracts; source shapes checked against current complete compiled profiles. Numerical, access, road and start eligibility are separate. A witness excluded here does not certify no other real or compiled route exists.",
+  "reusedSourceAudit": "/private/tmp/alpine-current-witness-audit",
+  "reusedSourceReportSha256": "a66fdf9edc2b407723c0e7c150cf6890744972718a5af8171f2e13f045d9a16f",
+  "fullReportSha256": "c1712389d51eaecc07c5d5472c8f29f3c11e9696d580cf3b7c316f4d7b7ba024",
+  "fullReport": "/private/tmp/alpine-retained-starts-witness-audit/report.json",
+  "results": [
+    {
+      "queryId": "north-bend-short",
+      "originalQuery": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          4828.032,
+          9656.064
+        ],
+        "gain": [
+          0.0,
+          457.20000000000005
+        ],
+        "repetition": 0.15,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-9020935557",
+      "status": "ineligible",
+      "reasons": [
+        "startRetained",
+        "startAccess",
+        "hasTrail",
+        "roadDistance",
+        "roadFraction"
+      ],
+      "sourceSegments": 158,
+      "currentStart": null,
+      "startPosition": [
+        -121.7599539,
+        47.5341418
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 158,
+      "metrics": {
+        "distance": 5783.623336758137,
+        "gain": 210.54918566193325,
+        "repetition": 0.13897277913356945,
+        "roadDistance": 5783.623336758137,
+        "roadFraction": 1.0
+      },
+      "constraints": {
+        "startRetained": false,
+        "startInsideQuery": true,
+        "startAccess": false,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": false,
+        "roadDistance": false,
+        "roadFraction": false,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 314,
+      "geometryOwnerCells": [
+        "-1218_475"
+      ],
+      "currentSectionWalk": [
+        [
+          23229,
+          true
+        ],
+        [
+          23230,
+          false
+        ],
+        [
+          23236,
+          false
+        ],
+        [
+          23239,
+          false
+        ],
+        [
+          29616,
+          true
+        ],
+        [
+          23235,
+          true
+        ],
+        [
+          23230,
+          true
+        ],
+        [
+          23229,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "north-bend-known",
+      "originalQuery": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          6437.376,
+          16093.44
+        ],
+        "gain": [
+          0.0,
+          1066.8
+        ],
+        "repetition": 0.3,
+        "includeUnknown": false
+      },
+      "originalStartId": "portal:osm-node-12761651948",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 950,
+      "currentStart": {
+        "access": "public",
+        "id": "osm-entrance:12761651948",
+        "name": "Little Si Trailhead Parking",
+        "node": 29183
+      },
+      "startPosition": [
+        -121.7534164,
+        47.4867878,
+        154.8194683343898
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 950,
+      "metrics": {
+        "distance": 9524.4743844245,
+        "gain": 679.8037607038204,
+        "repetition": 0.27623311197130135,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 1047,
+      "geometryOwnerCells": [
+        "-1218_474"
+      ],
+      "currentSectionWalk": [
+        [
+          197865,
+          true
+        ],
+        [
+          133520,
+          true
+        ],
+        [
+          133518,
+          true
+        ],
+        [
+          133517,
+          false
+        ],
+        [
+          181370,
+          true
+        ],
+        [
+          181372,
+          false
+        ],
+        [
+          140364,
+          true
+        ],
+        [
+          101334,
+          true
+        ],
+        [
+          101333,
+          true
+        ],
+        [
+          101332,
+          false
+        ],
+        [
+          171674,
+          false
+        ],
+        [
+          171673,
+          true
+        ],
+        [
+          101329,
+          true
+        ],
+        [
+          101331,
+          false
+        ],
+        [
+          101334,
+          false
+        ],
+        [
+          140364,
+          false
+        ],
+        [
+          181372,
+          true
+        ],
+        [
+          181370,
+          false
+        ],
+        [
+          133517,
+          true
+        ],
+        [
+          133518,
+          false
+        ],
+        [
+          133520,
+          false
+        ],
+        [
+          197865,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "middle-fork-day",
+      "originalQuery": {
+        "area": [
+          -121.62,
+          47.5,
+          -121.43,
+          47.61
+        ],
+        "distance": [
+          12874.752,
+          24140.16
+        ],
+        "gain": [
+          304.8,
+          1524.0
+        ],
+        "repetition": 0.35,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-10836543117",
+      "status": "ineligible",
+      "reasons": [
+        "roadDistance",
+        "roadFraction"
+      ],
+      "sourceSegments": 644,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:10836543117",
+        "name": "CCC trailhead parking",
+        "node": 9581
+      },
+      "startPosition": [
+        -121.5776266,
+        47.537375,
+        298.45778662651514
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 644,
+      "metrics": {
+        "distance": 14714.796181000831,
+        "gain": 690.4618287279471,
+        "repetition": 0.29500979711775777,
+        "roadDistance": 3021.2809366547494,
+        "roadFraction": 0.20532264935858976
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": false,
+        "roadFraction": false,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 908,
+      "geometryOwnerCells": [
+        "-1216_475",
+        "-1217_475"
+      ],
+      "currentSectionWalk": [
+        [
+          19373,
+          true
+        ],
+        [
+          19372,
+          false
+        ],
+        [
+          115297,
+          true
+        ],
+        [
+          115299,
+          false
+        ],
+        [
+          133149,
+          false
+        ],
+        [
+          179673,
+          false
+        ],
+        [
+          179672,
+          true
+        ],
+        [
+          133256,
+          true
+        ],
+        [
+          19372,
+          true
+        ],
+        [
+          19373,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "pass-lakes",
+      "originalQuery": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          9656.064,
+          22530.816
+        ],
+        "gain": [
+          457.20000000000005,
+          1524.0
+        ],
+        "repetition": 0.4,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-1004976342",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 991,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:1004976342",
+        "name": "Trail entrance",
+        "node": 1393
+      },
+      "startPosition": [
+        -121.4468723,
+        47.3731589,
+        1168.7332168519854
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 991,
+      "metrics": {
+        "distance": 11467.92823241812,
+        "gain": 1056.9621029171162,
+        "repetition": 0.24732594607568004,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 1060,
+      "geometryOwnerCells": [
+        "-1215_473"
+      ],
+      "currentSectionWalk": [
+        [
+          165480,
+          true
+        ],
+        [
+          157,
+          true
+        ],
+        [
+          156,
+          false
+        ],
+        [
+          165948,
+          false
+        ],
+        [
+          176234,
+          true
+        ],
+        [
+          149846,
+          true
+        ],
+        [
+          149847,
+          false
+        ],
+        [
+          155903,
+          false
+        ],
+        [
+          165480,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "pass-long",
+      "originalQuery": {
+        "area": [
+          -121.54,
+          47.35,
+          -121.35,
+          47.47
+        ],
+        "distance": [
+          72420.48,
+          104607.36
+        ],
+        "gain": [
+          1524.0,
+          5486.400000000001
+        ],
+        "repetition": 0.4,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-1004976342",
+      "status": "ineligible",
+      "reasons": [
+        "roadDistance",
+        "roadFraction"
+      ],
+      "sourceSegments": 5139,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:1004976342",
+        "name": "Trail entrance",
+        "node": 1393
+      },
+      "startPosition": [
+        -121.4468723,
+        47.3731589,
+        1168.7332168519854
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 5139,
+      "metrics": {
+        "distance": 83488.34832469837,
+        "gain": 4495.136513261999,
+        "repetition": 0.34921688930572575,
+        "roadDistance": 32788.14578385886,
+        "roadFraction": 0.3927272061526595
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": false,
+        "roadFraction": false,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 6205,
+      "geometryOwnerCells": [
+        "-1214_472",
+        "-1215_472",
+        "-1215_473"
+      ],
+      "currentSectionWalk": [
+        [
+          165480,
+          true
+        ],
+        [
+          155903,
+          true
+        ],
+        [
+          149847,
+          true
+        ],
+        [
+          149846,
+          false
+        ],
+        [
+          176234,
+          false
+        ],
+        [
+          211417,
+          true
+        ],
+        [
+          155,
+          true
+        ],
+        [
+          154,
+          false
+        ],
+        [
+          176237,
+          true
+        ],
+        [
+          176236,
+          false
+        ],
+        [
+          210838,
+          false
+        ],
+        [
+          221816,
+          false
+        ],
+        [
+          1125,
+          true
+        ],
+        [
+          1124,
+          false
+        ],
+        [
+          1120,
+          true
+        ],
+        [
+          1121,
+          false
+        ],
+        [
+          93421,
+          true
+        ],
+        [
+          19870,
+          true
+        ],
+        [
+          19871,
+          false
+        ],
+        [
+          93417,
+          false
+        ],
+        [
+          221824,
+          false
+        ],
+        [
+          173550,
+          true
+        ],
+        [
+          173549,
+          false
+        ],
+        [
+          200026,
+          true
+        ],
+        [
+          200025,
+          false
+        ],
+        [
+          116243,
+          true
+        ],
+        [
+          115350,
+          true
+        ],
+        [
+          115349,
+          false
+        ],
+        [
+          221825,
+          true
+        ],
+        [
+          149308,
+          true
+        ],
+        [
+          149307,
+          false
+        ],
+        [
+          221819,
+          false
+        ],
+        [
+          221820,
+          false
+        ],
+        [
+          221821,
+          false
+        ],
+        [
+          113904,
+          true
+        ],
+        [
+          113902,
+          false
+        ],
+        [
+          113907,
+          false
+        ],
+        [
+          113909,
+          false
+        ],
+        [
+          113915,
+          false
+        ],
+        [
+          113914,
+          true
+        ],
+        [
+          110541,
+          true
+        ],
+        [
+          110540,
+          false
+        ],
+        [
+          20552,
+          true
+        ],
+        [
+          20550,
+          false
+        ],
+        [
+          114107,
+          false
+        ],
+        [
+          114229,
+          true
+        ],
+        [
+          114144,
+          true
+        ],
+        [
+          114017,
+          true
+        ],
+        [
+          113895,
+          true
+        ],
+        [
+          113894,
+          false
+        ],
+        [
+          113758,
+          true
+        ],
+        [
+          101728,
+          true
+        ],
+        [
+          101729,
+          false
+        ],
+        [
+          112858,
+          false
+        ],
+        [
+          113565,
+          false
+        ],
+        [
+          149325,
+          true
+        ],
+        [
+          100385,
+          true
+        ],
+        [
+          100387,
+          false
+        ],
+        [
+          149319,
+          true
+        ],
+        [
+          149318,
+          false
+        ],
+        [
+          221823,
+          true
+        ],
+        [
+          113906,
+          true
+        ],
+        [
+          113902,
+          true
+        ],
+        [
+          113904,
+          false
+        ],
+        [
+          221821,
+          true
+        ],
+        [
+          221820,
+          true
+        ],
+        [
+          221819,
+          true
+        ],
+        [
+          149307,
+          true
+        ],
+        [
+          149308,
+          false
+        ],
+        [
+          221825,
+          false
+        ],
+        [
+          115349,
+          true
+        ],
+        [
+          115350,
+          false
+        ],
+        [
+          116243,
+          false
+        ],
+        [
+          200025,
+          true
+        ],
+        [
+          200026,
+          false
+        ],
+        [
+          173549,
+          true
+        ],
+        [
+          173550,
+          false
+        ],
+        [
+          221824,
+          true
+        ],
+        [
+          93417,
+          true
+        ],
+        [
+          19871,
+          true
+        ],
+        [
+          19870,
+          false
+        ],
+        [
+          93421,
+          false
+        ],
+        [
+          1121,
+          true
+        ],
+        [
+          1120,
+          false
+        ],
+        [
+          1124,
+          true
+        ],
+        [
+          1125,
+          false
+        ],
+        [
+          221816,
+          true
+        ],
+        [
+          210838,
+          true
+        ],
+        [
+          176236,
+          true
+        ],
+        [
+          176237,
+          false
+        ],
+        [
+          154,
+          true
+        ],
+        [
+          155,
+          false
+        ],
+        [
+          211417,
+          false
+        ],
+        [
+          176234,
+          true
+        ],
+        [
+          149846,
+          true
+        ],
+        [
+          149847,
+          false
+        ],
+        [
+          155903,
+          false
+        ],
+        [
+          165480,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "stevens-day",
+      "originalQuery": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          12874.752,
+          25749.504
+        ],
+        "gain": [
+          609.6,
+          1828.8000000000002
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-2457522689",
+      "status": "ineligible",
+      "reasons": [
+        "gain"
+      ],
+      "sourceSegments": 679,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:2457522689",
+        "name": "Trail entrance",
+        "node": 53009
+      },
+      "startPosition": [
+        -121.127433,
+        47.7475322,
+        953.0621942421192
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 679,
+      "metrics": {
+        "distance": 17967.01370919616,
+        "gain": 499.9044948818795,
+        "repetition": 0.26603178925539717,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": false,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 1065,
+      "geometryOwnerCells": [
+        "-1212_477",
+        "-1213_477"
+      ],
+      "currentSectionWalk": [
+        [
+          116219,
+          true
+        ],
+        [
+          116220,
+          false
+        ],
+        [
+          171865,
+          true
+        ],
+        [
+          171866,
+          false
+        ],
+        [
+          119262,
+          true
+        ],
+        [
+          119261,
+          false
+        ],
+        [
+          119267,
+          true
+        ],
+        [
+          119266,
+          false
+        ],
+        [
+          119252,
+          true
+        ],
+        [
+          119253,
+          false
+        ],
+        [
+          119264,
+          false
+        ],
+        [
+          166714,
+          false
+        ],
+        [
+          171870,
+          true
+        ],
+        [
+          171866,
+          true
+        ],
+        [
+          171865,
+          false
+        ],
+        [
+          116220,
+          true
+        ],
+        [
+          116219,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "wenatchee-easy",
+      "originalQuery": {
+        "area": [
+          -120.94,
+          47.75,
+          -120.7,
+          47.91
+        ],
+        "distance": [
+          3218.688,
+          8046.72
+        ],
+        "gain": [
+          0.0,
+          243.84
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-10768080126",
+      "status": "ineligible",
+      "reasons": [
+        "roadDistance",
+        "roadFraction"
+      ],
+      "sourceSegments": 162,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:10768080126",
+        "name": "Trail entrance",
+        "node": 9140
+      },
+      "startPosition": [
+        -120.7010138,
+        47.8283423,
+        612.6558514368496
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 162,
+      "metrics": {
+        "distance": 3487.2921179110967,
+        "gain": 76.18553970793232,
+        "repetition": 0.19798601478672997,
+        "roadDistance": 1820.8904621133738,
+        "roadFraction": 0.5221502531322484
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": false,
+        "roadFraction": false,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 210,
+      "geometryOwnerCells": [
+        "-1207_478",
+        "-1208_478"
+      ],
+      "currentSectionWalk": [
+        [
+          215386,
+          false
+        ],
+        [
+          215388,
+          false
+        ],
+        [
+          218583,
+          true
+        ],
+        [
+          215451,
+          true
+        ],
+        [
+          215383,
+          true
+        ],
+        [
+          215384,
+          false
+        ],
+        [
+          215416,
+          false
+        ],
+        [
+          141825,
+          true
+        ],
+        [
+          141824,
+          false
+        ],
+        [
+          215447,
+          false
+        ],
+        [
+          215448,
+          false
+        ],
+        [
+          218583,
+          false
+        ],
+        [
+          215388,
+          true
+        ],
+        [
+          215386,
+          true
+        ]
+      ]
+    },
+    {
+      "queryId": "wenatchee-day",
+      "originalQuery": {
+        "area": [
+          -120.94,
+          47.75,
+          -120.7,
+          47.91
+        ],
+        "distance": [
+          9656.064,
+          19312.128
+        ],
+        "gain": [
+          304.8,
+          1219.2
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-10768080126",
+      "status": "ineligible",
+      "reasons": [
+        "roadDistance",
+        "roadFraction"
+      ],
+      "sourceSegments": 411,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:10768080126",
+        "name": "Trail entrance",
+        "node": 9140
+      },
+      "startPosition": [
+        -120.7010138,
+        47.8283423,
+        612.6558514368496
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 411,
+      "metrics": {
+        "distance": 9755.62855816317,
+        "gain": 348.4230814234279,
+        "repetition": 0.1707241186152187,
+        "roadDistance": 4168.761809825412,
+        "roadFraction": 0.42731862790503
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": false,
+        "roadFraction": false,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 581,
+      "geometryOwnerCells": [
+        "-1207_478",
+        "-1208_478"
+      ],
+      "currentSectionWalk": [
+        [
+          215386,
+          false
+        ],
+        [
+          215388,
+          false
+        ],
+        [
+          218583,
+          true
+        ],
+        [
+          215451,
+          true
+        ],
+        [
+          215383,
+          true
+        ],
+        [
+          215384,
+          false
+        ],
+        [
+          215412,
+          true
+        ],
+        [
+          142170,
+          true
+        ],
+        [
+          141792,
+          true
+        ],
+        [
+          141794,
+          false
+        ],
+        [
+          215365,
+          false
+        ],
+        [
+          215368,
+          true
+        ],
+        [
+          215360,
+          true
+        ],
+        [
+          215359,
+          true
+        ],
+        [
+          215357,
+          false
+        ],
+        [
+          215377,
+          false
+        ],
+        [
+          215379,
+          false
+        ],
+        [
+          215384,
+          true
+        ],
+        [
+          215383,
+          false
+        ],
+        [
+          215451,
+          false
+        ],
+        [
+          218583,
+          false
+        ],
+        [
+          215388,
+          true
+        ],
+        [
+          215386,
+          true
+        ]
+      ]
+    },
+    {
+      "queryId": "stevens-long",
+      "originalQuery": {
+        "area": [
+          -121.15,
+          47.7,
+          -120.94,
+          47.84
+        ],
+        "distance": [
+          80467.2,
+          120700.8
+        ],
+        "gain": [
+          2133.6,
+          6705.6
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-1013210510",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 5846,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:1013210510",
+        "name": "Trailhead",
+        "node": 3873
+      },
+      "startPosition": [
+        -121.0867645,
+        47.7464343,
+        1244.7296004401378
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 5846,
+      "metrics": {
+        "distance": 116271.25993876334,
+        "gain": 5830.484774879915,
+        "repetition": 0.4296607707964889,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 7934,
+      "geometryOwnerCells": [
+        "-1210_475",
+        "-1210_476",
+        "-1211_475",
+        "-1211_476",
+        "-1211_477"
+      ],
+      "currentSectionWalk": [
+        [
+          201614,
+          true
+        ],
+        [
+          201613,
+          false
+        ],
+        [
+          219757,
+          false
+        ],
+        [
+          172893,
+          true
+        ],
+        [
+          155897,
+          true
+        ],
+        [
+          155898,
+          false
+        ],
+        [
+          62784,
+          true
+        ],
+        [
+          51418,
+          true
+        ],
+        [
+          51419,
+          false
+        ],
+        [
+          98262,
+          false
+        ],
+        [
+          155896,
+          true
+        ],
+        [
+          51415,
+          true
+        ],
+        [
+          51416,
+          false
+        ],
+        [
+          51429,
+          false
+        ],
+        [
+          155870,
+          true
+        ],
+        [
+          5032,
+          true
+        ],
+        [
+          5033,
+          false
+        ],
+        [
+          155866,
+          true
+        ],
+        [
+          153209,
+          true
+        ],
+        [
+          51334,
+          true
+        ],
+        [
+          51336,
+          false
+        ],
+        [
+          95424,
+          false
+        ],
+        [
+          95426,
+          false
+        ],
+        [
+          95428,
+          false
+        ],
+        [
+          51335,
+          true
+        ],
+        [
+          51334,
+          false
+        ],
+        [
+          153209,
+          false
+        ],
+        [
+          155866,
+          false
+        ],
+        [
+          5033,
+          true
+        ],
+        [
+          5032,
+          false
+        ],
+        [
+          155870,
+          false
+        ],
+        [
+          51429,
+          true
+        ],
+        [
+          51416,
+          true
+        ],
+        [
+          51415,
+          false
+        ],
+        [
+          155896,
+          false
+        ],
+        [
+          98262,
+          true
+        ],
+        [
+          51419,
+          true
+        ],
+        [
+          51418,
+          false
+        ],
+        [
+          62784,
+          false
+        ],
+        [
+          155898,
+          true
+        ],
+        [
+          155897,
+          false
+        ],
+        [
+          172893,
+          false
+        ],
+        [
+          219757,
+          true
+        ],
+        [
+          201613,
+          true
+        ],
+        [
+          201614,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "paradise-short",
+      "originalQuery": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          3218.688,
+          8046.72
+        ],
+        "gain": [
+          0.0,
+          548.64
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-11028822550",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 313,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:11028822550",
+        "name": "Trail entrance",
+        "node": 11378
+      },
+      "startPosition": [
+        -121.7145613,
+        46.7697862,
+        1428.5480605737434
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 313,
+      "metrics": {
+        "distance": 6385.574336696835,
+        "gain": 303.76605080497416,
+        "repetition": 0.15110240740074846,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 417,
+      "geometryOwnerCells": [
+        "-1218_467"
+      ],
+      "currentSectionWalk": [
+        [
+          213781,
+          false
+        ],
+        [
+          210172,
+          true
+        ],
+        [
+          179460,
+          true
+        ],
+        [
+          151306,
+          true
+        ],
+        [
+          151305,
+          false
+        ],
+        [
+          178745,
+          true
+        ],
+        [
+          178744,
+          false
+        ],
+        [
+          179457,
+          true
+        ],
+        [
+          179392,
+          true
+        ],
+        [
+          179391,
+          false
+        ],
+        [
+          210172,
+          false
+        ],
+        [
+          213781,
+          true
+        ]
+      ]
+    },
+    {
+      "queryId": "paradise-day",
+      "originalQuery": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          9656.064,
+          19312.128
+        ],
+        "gain": [
+          457.20000000000005,
+          1371.6000000000001
+        ],
+        "repetition": 0.3,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-11028822550",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 1082,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:11028822550",
+        "name": "Trail entrance",
+        "node": 11378
+      },
+      "startPosition": [
+        -121.7145613,
+        46.7697862,
+        1428.5480605737434
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 1082,
+      "metrics": {
+        "distance": 17046.35791450529,
+        "gain": 994.4277555699314,
+        "repetition": 0.2296547172985928,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 1287,
+      "geometryOwnerCells": [
+        "-1218_467",
+        "-1218_468"
+      ],
+      "currentSectionWalk": [
+        [
+          213781,
+          false
+        ],
+        [
+          210172,
+          true
+        ],
+        [
+          179391,
+          true
+        ],
+        [
+          179390,
+          true
+        ],
+        [
+          162296,
+          true
+        ],
+        [
+          162297,
+          false
+        ],
+        [
+          160015,
+          true
+        ],
+        [
+          148030,
+          true
+        ],
+        [
+          148032,
+          false
+        ],
+        [
+          154227,
+          false
+        ],
+        [
+          154228,
+          false
+        ],
+        [
+          154232,
+          true
+        ],
+        [
+          154233,
+          false
+        ],
+        [
+          179402,
+          true
+        ],
+        [
+          179400,
+          true
+        ],
+        [
+          147954,
+          true
+        ],
+        [
+          147953,
+          false
+        ],
+        [
+          164001,
+          true
+        ],
+        [
+          164002,
+          false
+        ],
+        [
+          162303,
+          true
+        ],
+        [
+          162302,
+          true
+        ],
+        [
+          162301,
+          false
+        ],
+        [
+          131157,
+          true
+        ],
+        [
+          131156,
+          false
+        ],
+        [
+          157360,
+          true
+        ],
+        [
+          157361,
+          false
+        ],
+        [
+          179390,
+          false
+        ],
+        [
+          179391,
+          false
+        ],
+        [
+          210172,
+          false
+        ],
+        [
+          213781,
+          true
+        ]
+      ]
+    },
+    {
+      "queryId": "paradise-known",
+      "originalQuery": {
+        "area": [
+          -121.8,
+          46.76,
+          -121.67,
+          46.82
+        ],
+        "distance": [
+          4828.032,
+          12874.752
+        ],
+        "gain": [
+          0.0,
+          1066.8
+        ],
+        "repetition": 0.25,
+        "includeUnknown": false
+      },
+      "originalStartId": "portal:osm-node-110378030",
+      "status": "ineligible",
+      "reasons": [
+        "startAccess"
+      ],
+      "sourceSegments": 584,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:110378030",
+        "name": "Trail entrance",
+        "node": 11809
+      },
+      "startPosition": [
+        -121.7417541,
+        46.7849501,
+        1638.4997828973894
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 584,
+      "metrics": {
+        "distance": 8084.10959517293,
+        "gain": 483.0318544956772,
+        "repetition": 0.21250167230144104,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": false,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 650,
+      "geometryOwnerCells": [
+        "-1218_467"
+      ],
+      "currentSectionWalk": [
+        [
+          194520,
+          true
+        ],
+        [
+          179419,
+          true
+        ],
+        [
+          179401,
+          true
+        ],
+        [
+          179400,
+          true
+        ],
+        [
+          154230,
+          true
+        ],
+        [
+          154227,
+          true
+        ],
+        [
+          148032,
+          true
+        ],
+        [
+          148030,
+          false
+        ],
+        [
+          160015,
+          false
+        ],
+        [
+          162297,
+          true
+        ],
+        [
+          162296,
+          false
+        ],
+        [
+          157361,
+          true
+        ],
+        [
+          157360,
+          false
+        ],
+        [
+          179393,
+          false
+        ],
+        [
+          160015,
+          true
+        ],
+        [
+          148030,
+          true
+        ],
+        [
+          148032,
+          false
+        ],
+        [
+          154227,
+          false
+        ],
+        [
+          154230,
+          false
+        ],
+        [
+          179400,
+          false
+        ],
+        [
+          179401,
+          false
+        ],
+        [
+          179419,
+          false
+        ],
+        [
+          194520,
+          false
+        ]
+      ]
+    },
+    {
+      "queryId": "sunrise-day",
+      "originalQuery": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          12874.752,
+          25749.504
+        ],
+        "gain": [
+          609.6,
+          1676.4
+        ],
+        "repetition": 0.35,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-5305234174",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 653,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:5305234174",
+        "name": "Wonderland Trailhead",
+        "node": 102458
+      },
+      "startPosition": [
+        -121.643782,
+        46.9024156,
+        1310.170698438767
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 653,
+      "metrics": {
+        "distance": 14837.228111601782,
+        "gain": 961.6395080983104,
+        "repetition": 0.33789139499916887,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 915,
+      "geometryOwnerCells": [
+        "-1217_469"
+      ],
+      "currentSectionWalk": [
+        [
+          113812,
+          false
+        ],
+        [
+          162310,
+          false
+        ],
+        [
+          149840,
+          true
+        ],
+        [
+          149841,
+          false
+        ],
+        [
+          162311,
+          false
+        ],
+        [
+          162312,
+          false
+        ],
+        [
+          162313,
+          false
+        ],
+        [
+          162316,
+          false
+        ],
+        [
+          179580,
+          false
+        ],
+        [
+          82360,
+          true
+        ],
+        [
+          82361,
+          false
+        ],
+        [
+          82362,
+          false
+        ],
+        [
+          162311,
+          true
+        ],
+        [
+          149841,
+          true
+        ],
+        [
+          149840,
+          false
+        ],
+        [
+          162310,
+          true
+        ],
+        [
+          113812,
+          true
+        ]
+      ]
+    },
+    {
+      "queryId": "sunrise-long",
+      "originalQuery": {
+        "area": [
+          -121.7,
+          46.87,
+          -121.57,
+          46.95
+        ],
+        "distance": [
+          88513.92,
+          136794.24
+        ],
+        "gain": [
+          2438.4,
+          7620.0
+        ],
+        "repetition": 0.45,
+        "includeUnknown": true
+      },
+      "originalStartId": "portal:osm-node-110921039",
+      "status": "eligible",
+      "reasons": [],
+      "sourceSegments": 5060,
+      "currentStart": {
+        "access": "unknown",
+        "id": "osm-entrance:110921039",
+        "name": "Trailhead",
+        "node": 13480
+      },
+      "startPosition": [
+        -121.617061,
+        46.8964112,
+        1201.525439075193
+      ],
+      "completePhysicalWalk": true,
+      "matchedSourceSegments": 5060,
+      "metrics": {
+        "distance": 112758.09029764416,
+        "gain": 6512.64867144834,
+        "repetition": 0.44766270900443833,
+        "roadDistance": 0,
+        "roadFraction": 0.0
+      },
+      "constraints": {
+        "startRetained": true,
+        "startInsideQuery": true,
+        "startAccess": true,
+        "traversalAccess": true,
+        "distance": true,
+        "gain": true,
+        "repetition": true,
+        "hasTrail": true,
+        "roadDistance": true,
+        "roadFraction": true,
+        "wholeCurrentSections": true
+      },
+      "traversalAccessValues": [
+        "public",
+        "unknown"
+      ],
+      "partialSectionTraversals": [],
+      "geometryPoints": 7036,
+      "geometryOwnerCells": [
+        "-1215_467",
+        "-1216_467",
+        "-1217_468"
+      ],
+      "currentSectionWalk": [
+        [
+          178773,
+          true
+        ],
+        [
+          178774,
+          false
+        ],
+        [
+          162328,
+          true
+        ],
+        [
+          162325,
+          true
+        ],
+        [
+          162323,
+          true
+        ],
+        [
+          162322,
+          false
+        ],
+        [
+          195999,
+          false
+        ],
+        [
+          113798,
+          true
+        ],
+        [
+          113797,
+          false
+        ],
+        [
+          151368,
+          true
+        ],
+        [
+          151367,
+          false
+        ],
+        [
+          151369,
+          false
+        ],
+        [
+          27863,
+          true
+        ],
+        [
+          27862,
+          false
+        ],
+        [
+          27864,
+          false
+        ],
+        [
+          179057,
+          true
+        ],
+        [
+          132039,
+          true
+        ],
+        [
+          132038,
+          false
+        ],
+        [
+          157382,
+          true
+        ],
+        [
+          157383,
+          false
+        ],
+        [
+          114666,
+          true
+        ],
+        [
+          114661,
+          true
+        ],
+        [
+          114662,
+          false
+        ],
+        [
+          222025,
+          true
+        ],
+        [
+          182434,
+          true
+        ],
+        [
+          114664,
+          true
+        ],
+        [
+          114665,
+          false
+        ],
+        [
+          95541,
+          true
+        ],
+        [
+          95542,
+          false
+        ],
+        [
+          95544,
+          false
+        ],
+        [
+          34025,
+          true
+        ],
+        [
+          34024,
+          false
+        ],
+        [
+          92722,
+          false
+        ],
+        [
+          182434,
+          false
+        ],
+        [
+          222025,
+          false
+        ],
+        [
+          114662,
+          true
+        ],
+        [
+          114661,
+          false
+        ],
+        [
+          114666,
+          false
+        ],
+        [
+          157383,
+          true
+        ],
+        [
+          157382,
+          false
+        ],
+        [
+          132038,
+          true
+        ],
+        [
+          132039,
+          false
+        ],
+        [
+          179057,
+          false
+        ],
+        [
+          27864,
+          true
+        ],
+        [
+          27862,
+          true
+        ],
+        [
+          27863,
+          false
+        ],
+        [
+          151369,
+          true
+        ],
+        [
+          151367,
+          true
+        ],
+        [
+          151368,
+          false
+        ],
+        [
+          113797,
+          true
+        ],
+        [
+          113798,
+          false
+        ],
+        [
+          195999,
+          true
+        ],
+        [
+          162322,
+          true
+        ],
+        [
+          162323,
+          false
+        ],
+        [
+          162325,
+          false
+        ],
+        [
+          162328,
+          false
+        ],
+        [
+          178774,
+          true
+        ],
+        [
+          178773,
+          false
+        ]
+      ]
+    }
+  ],
+  "startComparison": {
+    "beforeSnapshot": "network-1b04494a15eb6e72754debbda8f5972a7a91f6a5771b7c89d0ce58ace6edc44a",
+    "afterSnapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "beforeCount": 11647,
+    "afterCount": 11649,
+    "added": [
+      {
+        "index": 1828,
+        "start": {
+          "access": "public",
+          "id": "osm-entrance:12761651948",
+          "name": "Little Si Trailhead Parking",
+          "node": 29183
+        },
+        "position": [
+          -121.7534164,
+          47.4867878,
+          154.8194683343898
+        ],
+        "file": "starts/-1218_474.json.gz"
+      },
+      {
+        "index": 6128,
+        "start": {
+          "access": "unknown",
+          "id": "osm-entrance:3907094794",
+          "name": "Middle Tommy Trailhead",
+          "node": 71443
+        },
+        "position": [
+          -120.5335886,
+          47.9304609,
+          948.8671740694363
+        ],
+        "file": "starts/-1206_479.json.gz"
+      }
+    ],
+    "removed": [],
+    "retainedSemanticChanges": [],
+    "retainedSemanticallyIdentical": 11647,
+    "retainedGlobalNodeIndexChanges": 9819,
+    "retainedGlobalStartIndexChanges": 9819,
+    "comparison": "Stable source ID, every start field except snapshot-local node index, full 3D coordinate, and owner cell. All read gzip byte sizes, JSON byte sizes and SHA-256 verified against each immutable manifest. Snapshot-local numeric indices may legitimately renumber."
+  },
+  "littleSiHttpRecovery": {
+    "queryId": "north-bend-known",
+    "createdAt": "2026-10-01T01:44:40.594Z",
+    "snapshotId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+    "query": {
+      "area": [
+        -121.82,
+        47.43,
+        -121.68,
+        47.54
+      ],
+      "distance": [
+        6437.376,
+        16093.44
+      ],
+      "gain": [
+        0,
+        1066.8
+      ],
+      "repetition": 0.3,
+      "includeUnknown": false,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "budgetMs": 120000,
+    "rssLimitBytes": 1000000000,
+    "provenance": {
+      "snapshotManifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+      "frozenQueriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "frozenWitnessesSha256": "ba0bb3e8926ef5b2bd7b5e6baa9f3c875748f90f514a58c4a324037d7eb77804",
+      "sourceOsmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+      "sourceIndexSha256": "54f9385d0cf76d5f8ca2e3f227181aaba7f278f4857a9e7569b94a05bc7b8f39",
+      "compilerHashes": {
+        "build.py": "7ae94ee3db8acea367fb5b441546d80bfe2860236cebcf9f722877f702c8307d",
+        "elevation.py": "558e652e486e85eb83074bb3e20fa4f9705041935c91d3bf791a499275406966",
+        "graph.py": "9ded0c3beaa0b1407b8b9354293a690ffdc176c3fbf75fea768591eba2d2a66d",
+        "osm.py": "e5848d882303d8c929144b6ed3431863a15f189c0058dd3ef336bb3e064b63b7",
+        "tiles.py": "9897b6988494a425cf952cde26c19eda2e4365fd475616fa974ef784758ebef3"
+      },
+      "walkSha256": "c5885f1b5daa57da12b83cfab4a220e222b75ff6ef0ad209d4cd2388bd1cdbcd",
+      "fixedGeometrySha256": "ca36fe780ccea0627800d20e5388c09cd5f4b0ff9ad84fe4d7788c06a724e518",
+      "sourceEvidenceSha256": "ce5d9aa63e04c77a010888467c6ac04f15f0a3f9bc355b71d3d76bd4e4208e9d",
+      "sourceEvidencePath": "/private/tmp/alpine-current-witness-audit/north-bend-known-source.json",
+      "independentReplayReportSha256": "c1712389d51eaecc07c5d5472c8f29f3c11e9696d580cf3b7c316f4d7b7ba024",
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "f276614d76467678fc93620a064719b8b542914920f5903fca911e72a1ffa921",
+        "diversity.js": "376d24d1a178bb4af6c7beddd34fccd18de6b472f4627e0abbd33c5c3ecacea5",
+        "engine/search.js": "de10db0adff4d4aaaf80cf00fc4b9779c76a03cf262a95e9670c3de308770b39",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "search-worker.js": "1a35369df20907d8c50a3a38cc90171571c74e2a84d1919d8819d01ae0722831",
+        "searches.js": "c710d7fb990adc589f54f6974ab729187a074af00402eee21202d3f4436ee119",
+        "server.js": "1bede9ea049498c75e9f2f33aae67c53d60965c544e741e562ebe878d4a0cf18"
+      },
+      "harnessSha256": "74b88c14933a7832c8fad30245142534f3a60ba279f1b515b5d3d164b6159428"
+    },
+    "objective": "Seek original start and exact ordered or reversed fixed walk for up to120s. Similar representatives are recorded only after search ends or the observation window expires, never used to stop exact recovery early.",
+    "scope": "Fresh actual HTTP app and worker; no live application contacted. Original frozen query plus explicit1mi/10%roads. Observes retained WorkerEvent sections, independently compares against source-proven fixed walk, then confirms HTTP page, independently reconstructed snapshot geometry and GPX. A similar representative is not exact witness recovery. RSS includes app, worker, HTTP client and independent verifier; browser excluded. Concurrent work/caches uncontrolled; descriptive timing only.",
+    "retainedEvents": 108,
+    "workers": [
+      {
+        "createdMs": 4.692000000000007,
+        "exitMs": 145.485083,
+        "exitCode": 0
+      }
+    ],
+    "runtimeReads": {
+      "graph/-1218_474.json.gz": {
+        "bytes": 530839,
+        "jsonBytes": 2585147,
+        "sha256": "ed6602cfd691e8373818e30f582dcacdc7768267689c43324178089cb6f2215c"
+      },
+      "geometry/-1218_474.json.gz": {
+        "bytes": 751674,
+        "jsonBytes": 2411231,
+        "sha256": "1708e38dcc6bde819d565d560d38878782b8550237dded13897064f38b69bb06"
+      }
+    },
+    "firstRetainedMs": 83.94783299999997,
+    "firstOriginalStartRetainedMs": 83.94995800000001,
+    "matched": {
+      "type": "exact_fixed_witness",
+      "direction": "reversed",
+      "observedMs": 84.123167,
+      "verifiedMs": 160.90683299999998,
+      "apiRouteId": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+      "originalStartId": "osm-entrance:12761651948",
+      "retainedStartId": "osm-entrance:12761651948",
+      "summaryPagePresent": true,
+      "summary": {
+        "id": "1fb666a4d1fa7a86cec6df407c3ebe6d",
+        "distance": 9524.474384424517,
+        "gain": 679.8037607038207,
+        "roadDistance": 0,
+        "repetition": 0.2762331119713007,
+        "kind": "lollipop",
+        "uncertain": false,
+        "startId": "osm-entrance:12761651948",
+        "startName": "Little Si Trailhead Parking",
+        "startPosition": [
+          -121.7534164,
+          47.4867878,
+          154.8194683343898
+        ],
+        "trailNames": [
+          "Mount Si Trail",
+          "Roaring Creek Trail",
+          "Talus Loop Trail",
+          "Mount Teneriffe Trail",
+          "Spring Trail",
+          "Little Si Trail",
+          "Boulder Garden Loop Trail",
+          "Douglas Fir Trail"
+        ]
+      },
+      "sectionWalk": [
+        {
+          "cell": "-1218_474",
+          "id": 197865,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133520,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133518,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133517,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 181370,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 181372,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 140364,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101334,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101331,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101329,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 171673,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 171674,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101332,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101333,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 101334,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 140364,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 181372,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 181370,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133517,
+          "reverse": true
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133518,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 133520,
+          "reverse": false
+        },
+        {
+          "cell": "-1218_474",
+          "id": 197865,
+          "reverse": false
+        }
+      ],
+      "overlap": {
+        "full": {
+          "sharedMeters": 6893.499185323994,
+          "witnessMeters": 6893.499185323995,
+          "candidateMeters": 6893.499185331523,
+          "jaccard": 0.9999999999989079
+        },
+        "cycle": {
+          "sharedMeters": 4262.523986223473,
+          "witnessMeters": 4262.523986223473,
+          "candidateMeters": 4262.523986228821,
+          "jaccard": 0.9999999999987453
+        }
+      },
+      "geometryPoints": 1047,
+      "geometryMatchesIndependentSnapshotProfile": true,
+      "geometryMatchesExactFixedWitness": true,
+      "gpxMatchesIndependentSnapshotProfile": true,
+      "gpxSha256": "130d38e1801deb9405f51826831f4dcdaefb75aade3bb984a32f34d0819e3b58",
+      "snapshotMetricChecks": {
+        "distance": 9524.474384434225,
+        "gain": 679.8037607038207,
+        "roadDistance": 0,
+        "repetition": 0.27623311197124806
+      },
+      "representativeExtraSectionsRawSourceReaudited": false
+    },
+    "error": null,
+    "url": "http://127.0.0.1:64728",
+    "searchId": "6bf43739-57c0-4bf0-9958-4648ed105baa",
+    "lastObserved": {
+      "atMs": 105.81745800000002,
+      "status": "running",
+      "routeCount": 60,
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 0,
+        "completedStarts": 0,
+        "expansions": 0,
+        "elapsedMs": 0
+      },
+      "coverageNote": null
+    },
+    "stopTrigger": "verified_exact_recovery",
+    "beforeStop": {
+      "id": "6bf43739-57c0-4bf0-9958-4648ed105baa",
+      "datasetId": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
+      "query": {
+        "area": [
+          -121.82,
+          47.43,
+          -121.68,
+          47.54
+        ],
+        "distance": [
+          6437.376,
+          16093.44
+        ],
+        "gain": [
+          0,
+          1066.8
+        ],
+        "repetition": 0.3,
+        "includeUnknown": false,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "status": "complete",
+      "routeCount": 108,
+      "offset": 0,
+      "selectionNote": "Similar routes are grouped across all starting places. Routes sharing at least 85% of both their overall path and their loop share one representative; this does not stop exploration. Substantially different loops or approaches remain separate, without a result-count limit.",
+      "progress": {
+        "totalStarts": 7,
+        "attemptedStarts": 7,
+        "completedStarts": 7,
+        "expansions": 230536,
+        "elapsedMs": 58
+      }
+    },
+    "progress": {
+      "totalStarts": 7,
+      "attemptedStarts": 7,
+      "completedStarts": 7,
+      "expansions": 230536,
+      "elapsedMs": 58
+    },
+    "coverageNote": null,
+    "retainedCount": 108,
+    "reconnectsToSameQuery": true,
+    "outcome": "exact_fixed_witness",
+    "elapsedMs": 162.60995799999998,
+    "peakSampledRssBytes": 198361088,
+    "osProcessPeakRssBytes": 198737920,
+    "rssGuard": null,
+    "activeWorkersAtEnd": 0
+  }
+}

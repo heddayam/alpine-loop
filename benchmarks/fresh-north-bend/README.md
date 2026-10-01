@@ -20,7 +20,7 @@ returning along its approach. All 17 path ways have `foot=designated`.
 OSM evidence is © OpenStreetMap contributors, ODbL 1.0; the USGS 3DEP elevation
 source is public domain. Source URLs and hashes remain in the recorded evidence.
 
-Corrected preparation removed redundant parking-boundary start `12761651948`.
+The earlier preparation experiment removed parking-boundary start `12761651948`.
 The witness now starts at named Little Si Trailhead `4729927256`, whose public
 permission is supported by the same mapped parking polygon. This explicitly
 adds the existing 1.320699 m segment of way `40413381` to both ends of the walk;
@@ -43,6 +43,12 @@ geometry SHA-256 is
 The original and corrected directories advertised the same dataset ID, so
 file hashes distinguish this evidence. Generated data and raw inputs remain
 outside Git. Source preparation is described in `../../tools/prepare/README.md`.
+
+The current compiler has deleted that start-suppression rule. The separately
+verified `f349…` snapshot restores the exact original start `12761651948`;
+`../prepared-witnesses.json` records exact original-walk recovery through the
+HTTP app and GPX. The named-start observations below remain historical evidence
+for a slightly different approach, not exact recovery of the original start.
 
 ## Recorded observations
 
