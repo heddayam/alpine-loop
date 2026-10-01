@@ -1,12 +1,13 @@
 {
   "date": "2026-09-30",
-  "status": "Research only; not integrated. Known-plan joint road realization passes. Whole-search discovery still fails on Pratt; the microedge outer generator is rejected pending structural correction.",
+  "status": "Research candidate only. Combined physical peeling, committed-stem bounds, persistent DFS and necessary road-prefix checking find three independently valid walks on the Pratt query. No saved Pratt witness recovery or comprehensive discovery demonstrated; do not integrate yet.",
   "archives": {
     "solver": "archive/research-local-choices-2026-09-30",
     "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
     "roadPrimitive": "archive/research-road-connections-2026-09-30",
     "jointRoads": "archive/research-joint-roads-2026-09-30",
-    "trailCorridors": "archive/research-trail-corridors-2026-09-30"
+    "trailCorridors": "archive/research-trail-corridors-2026-09-30",
+    "searchOrder": "archive/research-search-order-2026-09-30"
   },
   "inputs": {
     "snapshot": "network-f3490c1cfbc14daf2e214222c6e31ffc49eae386bc28eb9933852205e1802eff",
@@ -427,7 +428,7 @@
   "sunriseSourceAudit": {
     "report": "/private/tmp/alpine-sunrise-representative-check/report.json",
     "reportSha256": "30e91ec6c34239cfec0ac84630bda1d762f9917a8eefb1cae65f24e21dc32ed0",
-    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance\u221213.808m, climb\u22120.115m. Both qualify. Minor variation, not exact witness recovery."
+    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance−13.808m, climb−0.115m. Both qualify. Minor variation, not exact witness recovery."
   },
   "connectorEvidence": {
     "savedWalks": 1137,
@@ -489,7 +490,7 @@
     "distinctSavedFixedContexts": 853,
     "result": "All contexts find a blocked-compatible connection no longer than their original. Public-only longer local alternative retained. Caller must preserve original start, replace paired stems together, and validate complete hike; shortest alone does not solve gain/repetition or interacting connections. Adjacency rebuilt per request in this bounded prototype; not a production scaling claim."
   },
-  "nextAction": "Replace raw branched-road permutations with lazy connection choices in the context of a substantial trail itinerary. Resolve interfering connections and whole-hike gain/repetition before applying minimum hike mileage; retain longer roads that enable valid loops. Do not widen a two-port threshold, add SPQR/ZDD machinery, or replace the production solver based on first-result timing alone.",
+  "nextAction": "Validate recovery of the actual saved Pratt itinerary and completed real North Bend classes, then broader frozen witnesses, before replacing the app engine. Keep necessary road-assisted loops, canonical road realization and all meaningful choices. Profile context-sensitive road proposal generation if the expensive repeated reachability remains necessary; do not add another blanket per-choice optimization or arbitrary cap.",
   "reproduction": "Recover each archive tag in a temporary detached checkout. The solver archive contains research/proof/README.md and portable explicit-dataset witness/query runners. The verifier archive contains research/local-choice-check.ts; run it against solver source with the committed independent tiny oracle. The road archive contains research/road-connections-check.mjs. Prepared/raw datasets and local proof reports are ignored, with hashes above. Completed experimental worktrees and branches were removed.",
   "machine": {
     "node": "v24.11.0",
@@ -895,7 +896,7 @@
       }
     ],
     "minimumDistancePolicy": "Minimum distance cannot steer road ranking or choose padding. A COMPLETE fixed-trail plan may be rejected when a conservative upper-capacity bound proves no permitted road realization could meet that minimum. Growing trail prefixes do not receive this upper-capacity rejection.",
-    "decision": "Reject all three measured whole-search compositions: each finds zero hikes in45seconds. Fixed-plan road realization is independently valid and cheap on the saved corpus. Complete-plan capacity bounds remove the memory explosion; safe trail-only degree-two corridors preserve47tiny classes but do not fix discovery. The road-port abstraction overgenerates potential trail connections whose original road realizations conflict. Diagnose this before more optimization or production replacement; next measure necessary blocked-road reachability on growing fixed-trail prefixes, without steering minimum mileage or discarding valid alternatives.",
+    "decision": "The three earlier whole-search compositions remain rejected. New diagnostics prove their emitted plans already fail mandatory-stem repetition; the earlier road-overlap explanation was a hypothesis, not established causality. See searchOrderDiagnostic for the corrected mixed-junction coverage, six measured ablations, and the promising combined candidate. Known-plan realization alone still does not prove discovery.",
     "limitations": [
       "211saved structural plans are not211meaningfully different hikes; remaining small trail differences require separate treatment.",
       "Tiny oracle coverage and known-plan replay do not prove broad source quality, statewide scalability, real discovery coverage, or app behavior.",
@@ -1071,6 +1072,378 @@
       "duplicatePlans": 0,
       "cancellationPassed": true,
       "scope": "Tiny source-walk projection coverage only; emitted plans may be infeasible until joint road realization."
+    }
+  },
+  "searchOrderDiagnostic": {
+    "archive": "archive/research-search-order-2026-09-30",
+    "archiveCommit": "afd1d50",
+    "scope": "Offline necessary-condition and complete small-class coverage checks, plus sequential instrumented 45-second Pratt observations. No active app engine change.",
+    "inputIdentity": {
+      "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+      "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644",
+      "plans": "42b7b2ab899f3ee256d2ca2b4c0c84f474cc511b824ac8d8a61774dba7f20126",
+      "rows": "3a38a623065da7aee6854b03ecd34a02c3dd1ff67573e2269af2447d9db21b9b",
+      "retention": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+      "inspector": "a3f8ad4ebf7f5a8ba8a62bd0bf25e61146a270061beb84d4a1e3017951c9df5e"
+    },
+    "staticRetention": {
+      "originalSections": 3757,
+      "retainedSections": 2181,
+      "removedSections": 1576,
+      "originalArcs": 7514,
+      "retainedArcs": 4362,
+      "sourceWalksPreserved": 1137,
+      "sourcePlansPreserved": 211,
+      "originalIndexesPreserved": true,
+      "knownDepthBefore": [
+        17,
+        29
+      ],
+      "knownDepthAfter": [
+        12,
+        23
+      ],
+      "medianBefore": 22,
+      "medianAfter": 17,
+      "evidence": "/private/tmp/alpine-prefix-static/report.json"
+    },
+    "independentComposition": {
+      "fixtureAccessCases": 162,
+      "qualifyingClassObservations": 146,
+      "completeDFSClassesEqualCorrectedLayeredClasses": true,
+      "duplicatePlans": 0,
+      "cancellationStages": 7,
+      "failures": 0,
+      "sourceHashes": {
+        "/private/tmp/alpine-prefix-proof/frozen/research/dfs-base.ts": "ef502ccaf6dcf148d3c9ffa2ca7c6673ec49d1d0d5db3858de325ca6fa5707ab",
+        "/private/tmp/alpine-prefix-proof/frozen/research/dfs-mask.ts": "c461044517c396da5edb2b9d3ab453bb2ec1564bf6f5868e66787f5c52479deb",
+        "/private/tmp/alpine-prefix-proof/frozen/research/dfs-both.ts": "5042d75f0a26de041e832a0b5c29e58dacd026e09bfc9728fe4b53bc705880fe",
+        "/private/tmp/alpine-prefix-road-feasibility/research/retained-sections.ts": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+        "/private/tmp/alpine-prefix-road-feasibility/research/road-prefix.ts": "15c8138a361ea38af669aa561ffeb3762db29d56e78cf168a90c0cffc619f43f",
+        "/private/tmp/alpine-prefix-proof/frozen/research/corrected-base.ts": "127df81b6e8472fb6f2aa48f7ab814a6c0c893879806e9cda269b43674992aca"
+      },
+      "evidence": "/private/tmp/alpine-prefix-composition-check/dfs-report.json",
+      "scope": "Necessary outer-stage coverage only. Realizable means an independently enumerated original full walk qualifies; unproved emitted plans do not earn coverage. No joint canonical-road choice or real-data performance claim."
+    },
+    "correctnessRepair": "The old outer omits a valid lollipop attachment with two road incidences plus a trail. Corrected source preserves it. Mandatory return-stem lower bounds apply only after an attachment is committed or a closure occurs. Safe integer floors and monotone repeatedLower / Dmax division avoid unnecessary floating-point slack machinery; ambiguous connector-role returns stay optimistic.",
+    "experiments": [
+      {
+        "variant": "base",
+        "evidence": "/private/tmp/alpine-prefix-proof/base.json",
+        "evidenceSha256": "3851b793b9603ae62742766f7bc3581965e78dad3b1b375381b9c5f59713125f",
+        "hashes": {
+          "outer": "908e94346cf0268d0ef5c4ab1d8b7a05e61f81641fc0bd209fa4fdfdf8a8729b",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "a3f8ad4ebf7f5a8ba8a62bd0bf25e61146a270061beb84d4a1e3017951c9df5e",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "current iterative-deepening layer",
+        "preparationMs": 14.589124999999996,
+        "elapsedMs": 45010.185249999995,
+        "firstFoundMs": null,
+        "maximumStepMs": 69.71349999999802,
+        "peakRSS": 308035584,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.07920899999589892,
+        "progress": {
+          "work": 121672448,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 468,
+        "foundWalks": 0,
+        "resolvedNone": 468,
+        "canonicalBelowMinimum": 0,
+        "pendingAtStop": 0,
+        "roadYields": 526342,
+        "phaseWork": {
+          "validate": 18847,
+          "bounds": 173051,
+          "joint": 142802,
+          "shortest": 191642
+        },
+        "prefixStats": {
+          "checks": 0,
+          "rejected": 0,
+          "work": 0
+        },
+        "necessarilyRepetitionInvalidPlans": 468,
+        "completeExploration": false
+      },
+      {
+        "variant": "mask",
+        "evidence": "/private/tmp/alpine-prefix-proof/mask.json",
+        "evidenceSha256": "2eda59222e31e00bc06a29907da4fb3ffee508259d546233bdda6f9c8ededf8e",
+        "hashes": {
+          "outer": "1531c1308a34109ef2dbb5bdb2443ca56b74edb104f182b5bd57a1256b0bdbc7",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "a3f8ad4ebf7f5a8ba8a62bd0bf25e61146a270061beb84d4a1e3017951c9df5e",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "current iterative-deepening layer",
+        "preparationMs": 20.542084000000003,
+        "elapsedMs": 45010.952999999994,
+        "firstFoundMs": null,
+        "maximumStepMs": 85.2589999999982,
+        "peakRSS": 319307776,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.061792000000423286,
+        "progress": {
+          "work": 139334144,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 826,
+        "foundWalks": 0,
+        "resolvedNone": 825,
+        "canonicalBelowMinimum": 0,
+        "pendingAtStop": 1,
+        "roadYields": 1392881,
+        "phaseWork": {
+          "validate": 38828,
+          "bounds": 218540,
+          "joint": 566799,
+          "shortest": 568714
+        },
+        "prefixStats": {
+          "checks": 0,
+          "rejected": 0,
+          "work": 0
+        },
+        "necessarilyRepetitionInvalidPlans": 826,
+        "completeExploration": false
+      },
+      {
+        "variant": "both",
+        "evidence": "/private/tmp/alpine-prefix-proof/both.json",
+        "evidenceSha256": "f8a38d182dd9c74f1f57d2400c090701e96c62925c3538fb71d05040aa2af320",
+        "hashes": {
+          "outer": "2fa68088d0623995cfcfaceb395eb5f651671d27b6d2b121957ae8392f17081b",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "a3f8ad4ebf7f5a8ba8a62bd0bf25e61146a270061beb84d4a1e3017951c9df5e",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "prefix": "15c8138a361ea38af669aa561ffeb3762db29d56e78cf168a90c0cffc619f43f",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "current iterative-deepening layer",
+        "preparationMs": 23.665334,
+        "elapsedMs": 45005.51375,
+        "firstFoundMs": null,
+        "maximumStepMs": 15.628666000000521,
+        "peakRSS": 260784128,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.03295799999614246,
+        "progress": {
+          "work": 226727424,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 102,
+        "foundWalks": 0,
+        "resolvedNone": 102,
+        "canonicalBelowMinimum": 0,
+        "pendingAtStop": 0,
+        "roadYields": 69356,
+        "phaseWork": {
+          "validate": 5022,
+          "bounds": 32166,
+          "joint": 30694,
+          "shortest": 1474
+        },
+        "prefixStats": {
+          "checks": 284767,
+          "rejected": 35684,
+          "work": 223066278
+        },
+        "necessarilyRepetitionInvalidPlans": 102,
+        "completeExploration": false
+      },
+      {
+        "variant": "corrected-mask",
+        "evidence": "/private/tmp/alpine-prefix-proof/corrected-mask.json",
+        "evidenceSha256": "860366a3147233169c11a6e2612df621d9f66d1efd2471fe5f05eb2d942b4d64",
+        "hashes": {
+          "outer": "265b0821cf9d59dca59ed023b9202524f903ca4633035df8fb7505729f0d7cc5",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "a3f8ad4ebf7f5a8ba8a62bd0bf25e61146a270061beb84d4a1e3017951c9df5e",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "current iterative-deepening layer",
+        "preparationMs": 24.174583,
+        "elapsedMs": 45008.900541999996,
+        "firstFoundMs": null,
+        "maximumStepMs": 140.74533399999927,
+        "peakRSS": 297484288,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.05324999999720603,
+        "progress": {
+          "work": 130276096,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 0,
+        "foundWalks": 0,
+        "resolvedNone": 0,
+        "canonicalBelowMinimum": 0,
+        "pendingAtStop": 0,
+        "roadYields": 0,
+        "phaseWork": {},
+        "prefixStats": {
+          "checks": 0,
+          "rejected": 0,
+          "work": 0
+        },
+        "necessarilyRepetitionInvalidPlans": 0,
+        "completeExploration": false
+      },
+      {
+        "variant": "dfs-mask",
+        "evidence": "/private/tmp/alpine-prefix-proof/dfs-mask.json",
+        "evidenceSha256": "94e12ca328bed8db625c7a38d12859e1b10d2ebb0197b9d88862699e1abd9b76",
+        "hashes": {
+          "outer": "c461044517c396da5edb2b9d3ab453bb2ec1564bf6f5868e66787f5c52479deb",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "67409aeb6081e95431f16d42f45217b03d4502704d695bbde5eea5e8f770e893",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "maximum reached macro path pieces, not an IDDFS layer",
+        "preparationMs": 24.152291000000005,
+        "elapsedMs": 45009.685125,
+        "firstFoundMs": null,
+        "maximumStepMs": 77.81008299999667,
+        "peakRSS": 701153280,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.2531249999956344,
+        "progress": {
+          "work": 101430272,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 510,
+        "foundWalks": 0,
+        "resolvedNone": 494,
+        "canonicalBelowMinimum": 1,
+        "pendingAtStop": 16,
+        "roadYields": 5448163,
+        "phaseWork": {
+          "validate": 16011,
+          "shortest": 175961,
+          "bounds": 65871,
+          "joint": 5190320
+        },
+        "prefixStats": {
+          "checks": 0,
+          "rejected": 0,
+          "work": 0
+        },
+        "necessarilyRepetitionInvalidPlans": 0,
+        "completeExploration": false
+      },
+      {
+        "variant": "dfs-both",
+        "evidence": "/private/tmp/alpine-prefix-proof/dfs-both.json",
+        "evidenceSha256": "7b134546fa458b414921e5c7b5907b87b530c33cd8b59cb440de41c2c8ec44dc",
+        "hashes": {
+          "outer": "5042d75f0a26de041e832a0b5c29e58dacd026e09bfc9728fe4b53bc705880fe",
+          "roads": "aea06ab5e885615d04ddee2f4299179a4b0443408852ffa1f5c8c827212ebd0b",
+          "inspector": "67409aeb6081e95431f16d42f45217b03d4502704d695bbde5eea5e8f770e893",
+          "mask": "d7de28a96dda608828a171945dc37155faa5d40ef76a1eae869def1db7e4f89a",
+          "prefix": "15c8138a361ea38af669aa561ffeb3762db29d56e78cf168a90c0cffc619f43f",
+          "graph": "497b9c595bf8f31e34112944d89f1d9f30ba0d02b266cf5db7e33051f7195827",
+          "query": "f2aa9c59c143b13b5abc8275717ac5c2a494d1fe5fe3fb4c0114932b8f1a6644"
+        },
+        "depthMeaning": "maximum reached macro path pieces, not an IDDFS layer",
+        "preparationMs": 36.31341600000002,
+        "elapsedMs": 45014.026708000005,
+        "firstFoundMs": 581.0134579999999,
+        "maximumStepMs": 19.401499999999942,
+        "peakRSS": 427720704,
+        "status": "stopped",
+        "cancelStatus": "stopped",
+        "cancelMs": 0.05795899999793619,
+        "progress": {
+          "work": 170683136,
+          "attemptedStarts": 44,
+          "completedStarts": 0,
+          "totalStarts": 44
+        },
+        "emittedPlans": 197,
+        "foundWalks": 3,
+        "resolvedNone": 185,
+        "canonicalBelowMinimum": 1,
+        "pendingAtStop": 9,
+        "roadYields": 3131280,
+        "phaseWork": {
+          "validate": 11554,
+          "shortest": 44737,
+          "bounds": 149618,
+          "joint": 2925371
+        },
+        "prefixStats": {
+          "checks": 208890,
+          "rejected": 36619,
+          "work": 151032225
+        },
+        "necessarilyRepetitionInvalidPlans": 0,
+        "completeExploration": false
+      }
+    ],
+    "findings": [
+      "Every emitted plan in base/mask/layered-prefix already violates repetition through fixed trail returns; road incompatibility is not needed to reject them.",
+      "Leaf removal preserves all saved routes but alone does not establish useful discovery.",
+      "The layered per-choice prefix check accounts for98.385% of counted outer work; this is not a CPU-time share. It preserves coverage but worsens the known-origin depth backlog.",
+      "Committed-stem rejection removes doomed proposals but layered traversal still generates zero plans in45seconds.",
+      "Persistent DFS alone reaches deeper branches but yields510plans,494none and16pending, with zero found walks. It is also rejected alone.",
+      "Of the first100 stored DFS-none samples,99 fail necessary reserved-vertex road reachability; the sample covers just3starts and is not representative of all494none outcomes. All16pending plans pass this necessary check, which does not establish joint compatibility.",
+      "Combining persistent DFS and the prefix check finds3 original-edge-validated loops, first at581ms, in45seconds with428MB sampled peak process RSS. These are route realizations, not a count of distinct hikes. All44starts attempted; none completed.",
+      "Independent found-only replay groups the3walks into1newhike/2starts. None recovers a saved Pratt witness; the closest saved footprint differs by934.5m added/204.5m removed trail. Recovery remains a required gate.",
+      "Process RSS is sampled for45seconds; longer searches and whole-app memory remain unverified. The joint-realization frontier is still uncapped."
+    ],
+    "productionDecision": "Candidate for broader validation only. Six bounded observations are not a full app or statewide scalability proof. The active solver remains unchanged.",
+    "discoveryAudit": {
+      "evidence": "/private/tmp/alpine-prefix-discovery-audit.json",
+      "scope": "Found-only classification and independent comparison with all211saved witnesses",
+      "foundWalks": 3,
+      "productGroups": 1,
+      "startChoices": 2,
+      "firstTwoAreExactRotations": true,
+      "savedWitnessesRecovered": 0,
+      "closestTrailJaccard": 0.94867,
+      "additionalTrailMeters": 934.475,
+      "missingTrailMeters": 204.51,
+      "qualifyingMetrics": [
+        {
+          "distance": 28955.61023221965,
+          "gain": 1404.7599710602544,
+          "roads": 6970.818795555447,
+          "repetition": 0
+        },
+        {
+          "distance": 28869.4120211818,
+          "gain": 1403.2005659174774,
+          "roads": 6970.818795555447,
+          "repetition": 0
+        }
+      ],
+      "interpretation": "One new qualifying hike family with two start choices; not recovery of the saved Pratt loop. Product grouping is not an exhaustive oracle."
     }
   }
 }
