@@ -299,6 +299,45 @@ select {
 .results-heading {
   margin-bottom: 9px;
 }
+.route-count {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.group-heading {
+  margin: 16px 0 4px;
+}
+.group-heading h3 {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.route-start {
+  display: block;
+  margin: -2px 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.group-options {
+  display: block;
+  margin-top: 9px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+.group-link,
+.reverse-direction {
+  margin-top: 12px;
+}
+.direction-status {
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.direction-status button {
+  margin-top: 12px;
+}
 .search-progress {
   font-size: 11px;
   line-height: 1.6;

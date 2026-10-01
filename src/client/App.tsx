@@ -3,7 +3,9 @@ import type {
   Bounds,
   DatasetInfo,
   HikeRoute,
+  RouteChoice,
   RouteSummary,
+  RouteView,
   SearchQuery,
   SearchSnapshot,
 } from "../model.js";
@@ -18,6 +20,8 @@ const roadExplanation =
   "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails";
+const pageQuery = (offset: number, groupId?: string) =>
+  `?offset=${offset}${groupId ? `&group=${encodeURIComponent(groupId)}` : ""}`;
 async function request<T>(
   url: string,
   signal: AbortSignal,
@@ -117,25 +121,46 @@ function RouteDetails({
   route,
   searchId,
   onBack,
+  backLabel,
+  onReverse,
+  reversing,
+  directionError,
+  onRetry,
 }: {
-  route: RouteSummary;
+  route: RouteChoice;
   searchId: string;
   onBack: () => void;
+  backLabel: string;
+  onReverse: () => void;
+  reversing: boolean;
+  directionError: string;
+  onRetry: () => void;
 }) {
   return (
     <section className="route-detail" aria-label="Route details">
       <button type="button" className="text-button" onClick={onBack}>
-        ← All routes
+        ← {backLabel}
       </button>
       <h2 id="route-detail-heading" tabIndex={-1}>
         {routeName(route)}
       </h2>
+      {reversing ? (
+        <div className="direction-status" role={directionError ? "alert" : "status"}>
+          <p>{directionError || "Loading reverse direction…"}</p>
+          {directionError && <button type="button" onClick={onRetry}>Retry reverse direction</button>}
+        </div>
+      ) : <>
       <p className="quiet">From {route.startName || "an unnamed starting point"}</p>
       <p className="route-kind">
         {route.kind === "lollipop"
           ? "Lollipop · an out-and-back approach to a loop"
           : "Loop · returns without retracing trail"}
       </p>
+      {route.reverseId && (
+        <button type="button" className="text-button reverse-direction" onClick={onReverse}>
+          Reverse direction
+        </button>
+      )}
       <dl className="detail-metrics">
         <div>
           <dt>Distance</dt>
@@ -188,6 +213,7 @@ function RouteDetails({
         Start: {route.startPosition[1].toFixed(5)},{" "}
         {route.startPosition[0].toFixed(5)}
       </p>
+      </>}
     </section>
   );
 }
@@ -226,7 +252,10 @@ export function App() {
   );
   const [includeUnknown, setIncludeUnknown] = useState(true);
   const [search, setSearch] = useState<SearchSnapshot>();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<RouteChoice | null>(null);
+  const [reverseTarget, setReverseTarget] = useState<string | null>(null);
+  const overviewOffset = useRef(0);
+  const detailEntryId = useRef<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
@@ -235,25 +264,36 @@ export function App() {
   const [retry, setRetry] = useState(0);
   const operation = useRef<AbortController | null>(null);
   const pageOperation = useRef<AbortController | null>(null);
-  const [geometry, setGeometry] = useState<HikeRoute | null>(null);
+  const [geometry, setGeometry] = useState<RouteView | null>(null);
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
-  const selected = search?.routes.find((route) => route.id === selectedId);
+  const selectedId = selected?.id ?? null;
   const running = search?.status === "running";
-  const activeId = editing ? null : (selectedId ?? hoveredId);
+  const activeId = editing ? null : (reverseTarget ?? selectedId ?? hoveredId);
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const acceptSnapshot = (snapshot: SearchSnapshot) => {
     // Progress-only polls must not rebuild the map's start markers.
     setSearch((current) =>
       current?.id === snapshot.id &&
       current.offset === snapshot.offset &&
+      current.groupId === snapshot.groupId &&
       current.routes.length === snapshot.routes.length &&
       current.routes.every(
-        (route, index) => route.id === snapshot.routes[index]?.id,
+        (route, index) => route.id === snapshot.routes[index]?.id &&
+          route.groupSize === snapshot.routes[index]?.groupSize &&
+          route.reverseId === snapshot.routes[index]?.reverseId,
       )
         ? { ...snapshot, routes: current.routes }
         : snapshot,
     );
+    setSelected((current) => {
+      if (!current) return null;
+      const entry = snapshot.routes.find(route => route.id === current.id || route.reverseId === current.id);
+      if (!entry) return current;
+      const reverseId = entry.id === current.id ? entry.reverseId : entry.id;
+      return current.groupSize === entry.groupSize && current.reverseId === reverseId
+        ? current : { ...current, groupSize: entry.groupSize, reverseId };
+    });
   };
 
   useEffect(() => {
@@ -290,7 +330,7 @@ export function App() {
     const poll = async () => {
       try {
         const snapshot = await request<SearchSnapshot>(
-          `/api/search/${encodeURIComponent(search.id)}?offset=${search.offset}`,
+          `/api/search/${encodeURIComponent(search.id)}${pageQuery(search.offset, search.groupId)}`,
           controller.signal,
         );
         if (!controller.signal.aborted) {
@@ -309,7 +349,8 @@ export function App() {
           setError((failure as Error).message);
           setConnectionError("");
           setSearch(undefined);
-          setSelectedId(null);
+          setSelected(null);
+          setReverseTarget(null);
           setEditing(true);
           return;
         }
@@ -322,20 +363,23 @@ export function App() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [search?.id, search?.status, search?.offset, retry, busy, loadingPage]);
+  }, [search?.id, search?.status, search?.offset, search?.groupId, retry, busy, loadingPage]);
 
   useEffect(() => {
     setRouteError("");
     setGeometry(null);
     if (!search || !activeId) return;
     const controller = new AbortController();
-    void request<HikeRoute>(
+    void request<RouteView>(
       `/api/search/${encodeURIComponent(search.id)}/routes/${encodeURIComponent(activeId)}`,
       controller.signal,
     )
       .then((route) => {
         if (controller.signal.aborted) return;
         setGeometry(route);
+        const { geometry: _coordinates, ...choice } = route;
+        setSelected(current => current && (current.id === route.id || current.reverseId === route.id) ? choice : current);
+        setReverseTarget(null);
       })
       .catch((failure) => {
         if (!controller.signal.aborted)
@@ -346,14 +390,14 @@ export function App() {
           );
       });
     return () => controller.abort();
-  }, [search?.id, search?.offset, activeId, routeRetry]);
+  }, [search?.id, activeId, routeRetry]);
 
   useEffect(() => {
     if (selectedId && activeRoute?.id === selectedId)
       moveTo(routeBounds(activeRoute));
   }, [selectedId, activeRoute]);
 
-  const changePage = async (offset: number) => {
+  const changePage = async (offset: number, groupId?: string, focusId = "page-summary") => {
     if (!search || busy || loadingPage) return;
     const controller = new AbortController();
     pageOperation.current = controller;
@@ -362,15 +406,18 @@ export function App() {
     setError("");
     try {
       const snapshot = await request<SearchSnapshot>(
-        `/api/search/${encodeURIComponent(search.id)}?offset=${offset}`,
+        `/api/search/${encodeURIComponent(search.id)}${pageQuery(offset, groupId)}`,
         controller.signal,
       );
       if (!controller.signal.aborted) {
         acceptSnapshot(snapshot);
+        setSelected(null);
+        setReverseTarget(null);
         setConnectionError("");
         requestAnimationFrame(() =>
-          document.getElementById("page-summary")?.focus(),
+          document.getElementById(focusId)?.focus(),
         );
+        return true;
       }
     } catch (failure) {
       if (!controller.signal.aborted)
@@ -433,12 +480,13 @@ export function App() {
     operation.current = controller;
     setBusy(true);
     setError("");
-    setSelectedId(null);
+    setSelected(null);
+    setReverseTarget(null);
     setHoveredId(null);
     try {
       if (search?.status === "running") {
         const stopped = await request<SearchSnapshot>(
-          `/api/search/${encodeURIComponent(search.id)}/stop?offset=${search.offset}`,
+          `/api/search/${encodeURIComponent(search.id)}/stop${pageQuery(search.offset, search.groupId)}`,
           controller.signal,
           {},
         );
@@ -451,6 +499,7 @@ export function App() {
       );
       if (!controller.signal.aborted) {
         setSearch(snapshot);
+        overviewOffset.current = 0;
         setEditing(false);
         setConnectionError("");
       }
@@ -474,7 +523,7 @@ export function App() {
     setBusy(true);
     try {
       const snapshot = await request<SearchSnapshot>(
-        `/api/search/${encodeURIComponent(search.id)}/stop?offset=${search.offset}`,
+        `/api/search/${encodeURIComponent(search.id)}/stop${pageQuery(search.offset, search.groupId)}`,
         controller.signal,
         {},
       );
@@ -522,31 +571,51 @@ export function App() {
     setRoadMiles(String(roads.distance / MILE));
     setRoadPercent(String(roads.fraction * 100));
     setIncludeUnknown(snapshot.query.includeUnknown);
-    setSelectedId(null);
+    setSelected(null);
+    setReverseTarget(null);
     setHoveredId(null);
     moveTo(snapshot.query.area, false, 0);
   };
   const pickRoute = (id: string) => {
     const route = search?.routes.find((route) => route.id === id);
     if (!route || editing) return;
+    if (!search?.groupId && route.groupSize > 1) {
+      openGroup(route);
+      return;
+    }
     pageOperation.current?.abort();
     setLoadingPage(false);
-    setSelectedId(id);
+    detailEntryId.current = search?.groupId ? `route-${route.id}` : `group-${route.groupId}`;
+    setSelected(route);
+    setReverseTarget(null);
     setHoveredId(null);
     requestAnimationFrame(() =>
       document.getElementById("route-detail-heading")?.focus(),
     );
   };
+  const openGroup = (route: RouteChoice) => {
+    if (!search || busy || loadingPage) return;
+    if (!search.groupId) overviewOffset.current = search.offset;
+    void changePage(0, route.groupId, "group-heading");
+  };
+  const backToGroups = () => {
+    if (!search) return;
+    const groupId = search.groupId ?? selected?.groupId;
+    void changePage(overviewOffset.current, undefined, `group-${groupId}`).then(changed => {
+      if (changed) moveTo(search.query.area, false, 0);
+    });
+  };
   const backToRoutes = () => {
-    const id = selectedId;
-    setSelectedId(null);
+    setSelected(null);
+    setReverseTarget(null);
     setHoveredId(null);
-    if (search) moveTo(search.query.area, false, 0);
+    if (search && !search.groupId) moveTo(search.query.area, false, 0);
     requestAnimationFrame(() =>
-      document.getElementById(`route-${id}`)?.focus(),
+      document.getElementById(detailEntryId.current ?? "page-summary")?.focus(),
     );
   };
   const currentRoutes = search?.routes ?? [];
+  const mapActiveId = currentRoutes.find(route => route.id === activeId || route.reverseId === activeId)?.id ?? activeId;
   const selectionNote = search?.selectionNote;
   return (
     <main className="workspace">
@@ -798,8 +867,8 @@ export function App() {
                     >
                       <div className="section-heading results-heading">
                         <h2>
-                          {search.routeCount.toLocaleString()} route{" "}
-                          {search.routeCount === 1 ? "option" : "options"}
+                          {search.groupCount.toLocaleString()} route{" "}
+                          {search.groupCount === 1 ? "group" : "groups"}
                         </h2>
                         {running && (
                           <button
@@ -812,6 +881,10 @@ export function App() {
                           </button>
                         )}
                       </div>
+                      <p className="route-count">
+                        {search.routeCount.toLocaleString()} matching route {search.routeCount === 1 ? "option" : "options"}.
+                        {" "}Opposite directions count once.
+                      </p>
                       <div className="search-progress" role="status">
                         <span className={running ? "status-running" : ""}>
                           {progressLabel(search)}
@@ -834,11 +907,21 @@ export function App() {
                         )}
                       {selectionNote && (
                         <details className="selection-note">
-                          <summary>How routes are selected</summary>
+                          <summary>How routes are grouped</summary>
                           <p>{selectionNote}</p>
                         </details>
                       )}
-                      {!selected && search.routeCount > ROUTES_PER_PAGE && (
+                      {!selected && search.groupId && (
+                        <div className="group-heading">
+                          <button type="button" className="text-button" disabled={busy || loadingPage} onClick={backToGroups}>
+                            ← All groups
+                          </button>
+                          <h3 id="group-heading" tabIndex={-1}>
+                            {search.pageTotal.toLocaleString()} route {search.pageTotal === 1 ? "option" : "options"} in this group
+                          </h3>
+                        </div>
+                      )}
+                      {!selected && search.pageTotal > ROUTES_PER_PAGE && (
                         <nav
                           className="result-pages"
                           aria-label="Results pages"
@@ -849,6 +932,7 @@ export function App() {
                             disabled={busy || loadingPage || search.offset === 0}
                             onClick={() => void changePage(
                               Math.max(0, search.offset - ROUTES_PER_PAGE),
+                              search.groupId,
                             )}
                           >
                             Previous
@@ -856,30 +940,47 @@ export function App() {
                           <span id="page-summary" tabIndex={-1} aria-live="polite">
                             {loadingPage
                               ? "Loading…"
-                              : `${search.offset + 1}–${search.offset + currentRoutes.length} of ${search.routeCount.toLocaleString()}`}
+                              : `${search.offset + 1}–${search.offset + currentRoutes.length} of ${search.pageTotal.toLocaleString()} ${search.groupId ? "options" : "groups"}`}
                           </span>
                           <button
                             type="button"
                             disabled={busy || loadingPage ||
-                              search.offset + ROUTES_PER_PAGE >= search.routeCount}
-                            onClick={() => void changePage(search.offset + ROUTES_PER_PAGE)}
+                              search.offset + ROUTES_PER_PAGE >= search.pageTotal}
+                            onClick={() => void changePage(search.offset + ROUTES_PER_PAGE, search.groupId)}
                           >
                             Next
                           </button>
                         </nav>
                       )}
                       {selected ? (
-                        <RouteDetails
-                          route={selected}
-                          searchId={search.id}
-                          onBack={backToRoutes}
-                        />
+                        <>
+                          <RouteDetails
+                            route={selected}
+                            searchId={search.id}
+                            onBack={backToRoutes}
+                            backLabel={search.groupId ? "Routes in this group" : "All groups"}
+                            onReverse={() => {
+                              if (!selected.reverseId) return;
+                              setReverseTarget(selected.reverseId);
+                              requestAnimationFrame(() => document.getElementById("route-detail-heading")?.focus());
+                            }}
+                            reversing={reverseTarget !== null}
+                            directionError={routeError}
+                            onRetry={() => setRouteRetry(value => value + 1)}
+                          />
+                          {!search.groupId && selected.groupSize > 1 && (
+                            <button type="button" className="text-button group-link" disabled={busy || loadingPage}
+                              onClick={() => openGroup(selected)}>
+                              View all {selected.groupSize.toLocaleString()} route options in this group
+                            </button>
+                          )}
+                        </>
                       ) : currentRoutes.length ? (
                         <ol className="route-list">
                           {currentRoutes.map((route) => (
                             <li key={route.id}>
                               <button
-                                id={`route-${route.id}`}
+                                id={search.groupId ? `route-${route.id}` : `group-${route.groupId}`}
                                 className="route-card"
                                 type="button"
                                 onClick={() => pickRoute(route.id)}
@@ -892,6 +993,9 @@ export function App() {
                                   <span className="route-name">
                                     {routeName(route)}
                                   </span>
+                                </span>
+                                <span className="route-start">
+                                  {search.groupId ? "From" : "Shown from"} {route.startName || "an unnamed start"}
                                 </span>
                                 <span className="route-metrics">
                                   <strong>
@@ -910,13 +1014,20 @@ export function App() {
                                     : "Loop"}
                                   {route.uncertain ? " · Access uncertain" : ""}
                                 </span>
+                                {!search.groupId && (
+                                  <span className="group-options">
+                                    {route.groupSize.toLocaleString()} route {route.groupSize === 1 ? "option" : "options"} →
+                                  </span>
+                                )}
                               </button>
                             </li>
                           ))}
                         </ol>
                       ) : (
                         <p className="empty-state">
-                          {running
+                          {search.groupId
+                            ? "No route options on this page."
+                            : running
                             ? "Exploring trails. Matching routes appear here as they are found."
                             : search.status === "complete"
                               ? "No routes meet these limits. Edit the search to change your area or limits."
@@ -966,11 +1077,13 @@ export function App() {
           drawn={areaMode === "drawn"}
           routes={editing ? [] : currentRoutes}
           activeRoute={activeRoute}
-          selectedId={activeId}
-          routeNotice={activeId
+          selectedId={mapActiveId}
+          routeNotice={reverseTarget
+            ? routeError ? "" : "Loading reverse direction…"
+            : activeId
             ? routeError || (!activeRoute ? "Loading route drawing…" : "")
             : ""}
-          onRetryRoute={routeError
+          onRetryRoute={routeError && !reverseTarget
             ? () => setRouteRetry((value) => value + 1)
             : undefined}
           camera={camera}
