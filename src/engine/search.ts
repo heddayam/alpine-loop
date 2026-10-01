@@ -34,7 +34,7 @@ function allowance(value: number | undefined): number {
   return value;
 }
 
-/** Each cursor keeps its frontier between turns; a larger allowance never replays it. */
+/** Each cursor keeps its current depth and path between scheduler turns. */
 function* routesFromStart(
   graph: TrailGraph,
   query: SearchQuery,
@@ -43,73 +43,81 @@ function* routesFromStart(
   reverse: Int32Array,
 ): Generator<RouteCandidate | undefined> {
   const origin = graph.starts[start]!;
-  const path: number[] = [];
-  const positions = new Map([[origin.node, 0]]);
-  const usedTrails = new Set<number>();
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
-  const frames = [{ node: origin.node, next: 0, distance: 0, gain: 0, roadDistance: 0 }];
-  while (frames.length) {
-    const frame = frames[frames.length - 1]!;
-    const choices = outgoing[frame.node]!;
-    if (frame.next === choices.length) {
-      frames.pop();
-      if (path.length) {
-        positions.delete(frame.node);
-        usedTrails.delete(graph.edges[path.pop()!]!.trail);
-      }
-      continue;
-    }
-    const index = choices[frame.next++]!;
-    const edge = graph.edges[index]!;
-    const distance = frame.distance + edge.distance;
-    const gain = frame.gain + edge.gain;
-    const roadDistance = frame.roadDistance + (edge.connector ? edge.distance : 0);
-    let route: RouteCandidate | undefined;
-    // Nonnegative metrics make these necessary prefix conditions. Summation
-    // follows original route order, including the return stem below.
-    // Check road share only on a closed route: later trail can dilute a road prefix.
-    if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1] && roadDistance <= roads.distance) {
-      const attachment = positions.get(edge.to);
-      if (attachment === undefined) {
-        path.push(index);
-        usedTrails.add(edge.trail);
-        positions.set(edge.to, path.length);
-        frames.push({ node: edge.to, next: 0, distance, gain, roadDistance });
-      } else {
-        let returnCount = 0;
-        let totalDistance = distance;
-        let totalGain = gain;
-        let totalRoadDistance = roadDistance;
-        let repeatedDistance = 0;
-        for (let part = attachment - 1; part >= 0; part--) {
-          const back = reverse[path[part]!]!;
-          if (back < 0) break;
-          returnCount++;
-          totalDistance += graph.edges[back]!.distance;
-          totalGain += graph.edges[back]!.gain;
-          if (graph.edges[back]!.connector) totalRoadDistance += graph.edges[back]!.distance;
-          repeatedDistance += graph.edges[back]!.distance;
+  // Enumerate each outbound section count once. Revisit prefixes, never routes,
+  // so one complicated branch cannot postpone every simpler cycle indefinitely.
+  for (let depth = 1; ; depth++) {
+    let deeper = false;
+    const path: number[] = [];
+    const positions = new Map([[origin.node, 0]]);
+    const usedTrails = new Set<number>();
+    const frames = [{ node: origin.node, next: 0, distance: 0, gain: 0, roadDistance: 0 }];
+    while (frames.length) {
+      const frame = frames[frames.length - 1]!;
+      const choices = outgoing[frame.node]!;
+      if (frame.next === choices.length) {
+        frames.pop();
+        if (path.length) {
+          positions.delete(frame.node);
+          usedTrails.delete(graph.edges[path.pop()!]!.trail);
         }
-        const repetition = repeatedDistance / totalDistance;
-        if (returnCount === attachment
-          && totalDistance >= query.distance[0] && totalDistance <= query.distance[1]
-          && totalGain >= query.gain[0] && totalGain <= query.gain[1]
-          && totalRoadDistance <= roads.distance && totalRoadDistance / totalDistance <= roads.fraction
-          && repetition <= query.repetition) {
-          const edges = [...path, index];
-          for (let part = attachment - 1; part >= 0; part--) edges.push(reverse[path[part]!]!);
-          route = {
-            id: `route-${start}-${edges.join('-')}`,
-            start, edges, distance: totalDistance, gain: totalGain, roadDistance: totalRoadDistance, repetition,
-            kind: attachment === 0 ? 'loop' : 'lollipop',
-            uncertain: origin.access === 'unknown' || edges.some(id => graph.edges[id]!.access === 'unknown'),
-          };
+        continue;
+      }
+      const index = choices[frame.next++]!;
+      const edge = graph.edges[index]!;
+      const distance = frame.distance + edge.distance;
+      const gain = frame.gain + edge.gain;
+      const roadDistance = frame.roadDistance + (edge.connector ? edge.distance : 0);
+      let route: RouteCandidate | undefined;
+      // Nonnegative metrics make these necessary prefix conditions. Summation
+      // follows original route order, including the return stem below.
+      // Check road share only on a closed route: later trail can dilute a road prefix.
+      if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1] && roadDistance <= roads.distance) {
+        const attachment = positions.get(edge.to);
+        if (attachment === undefined && path.length + 1 === depth) {
+          deeper = true;
+        } else if (attachment === undefined) {
+          path.push(index);
+          usedTrails.add(edge.trail);
+          positions.set(edge.to, path.length);
+          frames.push({ node: edge.to, next: 0, distance, gain, roadDistance });
+        } else if (path.length + 1 === depth) {
+          let returnCount = 0;
+          let totalDistance = distance;
+          let totalGain = gain;
+          let totalRoadDistance = roadDistance;
+          let repeatedDistance = 0;
+          for (let part = attachment - 1; part >= 0; part--) {
+            const back = reverse[path[part]!]!;
+            if (back < 0) break;
+            returnCount++;
+            totalDistance += graph.edges[back]!.distance;
+            totalGain += graph.edges[back]!.gain;
+            if (graph.edges[back]!.connector) totalRoadDistance += graph.edges[back]!.distance;
+            repeatedDistance += graph.edges[back]!.distance;
+          }
+          const repetition = repeatedDistance / totalDistance;
+          if (returnCount === attachment
+            && totalDistance >= query.distance[0] && totalDistance <= query.distance[1]
+            && totalGain >= query.gain[0] && totalGain <= query.gain[1]
+            && totalRoadDistance <= roads.distance && totalRoadDistance / totalDistance <= roads.fraction
+            && repetition <= query.repetition) {
+            const edges = [...path, index];
+            for (let part = attachment - 1; part >= 0; part--) edges.push(reverse[path[part]!]!);
+            route = {
+              id: `route-${start}-${edges.join('-')}`,
+              start, edges, distance: totalDistance, gain: totalGain, roadDistance: totalRoadDistance, repetition,
+              kind: attachment === 0 ? 'loop' : 'lollipop',
+              uncertain: origin.access === 'unknown' || edges.some(id => graph.edges[id]!.access === 'unknown'),
+            };
+          }
         }
       }
+      // Count every examined edge, including rejected choices. The scheduler
+      // therefore also controls work in branches that produce no routes.
+      yield route;
     }
-    // Count every examined edge, including rejected choices. The scheduler
-    // therefore also controls work in branches that produce no routes.
-    yield route;
+    if (!deeper) return;
   }
 }
 

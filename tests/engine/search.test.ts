@@ -171,6 +171,21 @@ describe('incremental search lifecycle', () => {
     expect((await collect(graph, { ...query, area: [10, 10, 11, 11] })).done.status).toBe('complete');
   });
 
+  it('finds a simple matching loop before exhausting an earlier dense detour', async () => {
+    const trails: Parameters<typeof fixture>[0] = [[0, 1, 1]];
+    for (let from = 1; from <= 6; from++) {
+      for (let to = from + 1; to <= 6; to++) trails.push([from, to, 1]);
+    }
+    trails.push([0, 7, 100], [7, 8, 100], [8, 0, 100]);
+    const network = fixture(trails);
+    const criteria = { ...query, distance: [300, 300] as SearchQuery['distance'] };
+    const expected = enumerate(network, criteria);
+    expect(expected).toHaveLength(2);
+    const { routes, done } = await collect(network, criteria, { maxExpansions: 256 });
+    expect(routes.map(key).sort()).toEqual(expected.map(key).sort());
+    expect(done.status).toBe('limited');
+  });
+
   it('yields to the event loop so a timer can stop a search even without matches', async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 0);
