@@ -1,4 +1,5 @@
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
+import { DEFAULT_ROAD_LIMITS } from '../model.js';
 
 type Options = {
   signal?: AbortSignal;
@@ -20,6 +21,11 @@ function validateQuery(query: SearchQuery): void {
   if (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1) {
     throw new Error('Repeated trail must be a fraction between zero and one');
   }
+  const roads = query.roads === undefined ? DEFAULT_ROAD_LIMITS : query.roads;
+  if (!roads || !Number.isFinite(roads.distance) || roads.distance < 0
+    || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
+    throw new Error('Road limits need a finite nonnegative distance and a fraction between zero and one');
+  }
 }
 
 function allowance(value: number | undefined): number {
@@ -40,7 +46,8 @@ function* routesFromStart(
   const path: number[] = [];
   const positions = new Map([[origin.node, 0]]);
   const usedTrails = new Set<number>();
-  const frames = [{ node: origin.node, next: 0, distance: 0, gain: 0 }];
+  const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
+  const frames = [{ node: origin.node, next: 0, distance: 0, gain: 0, roadDistance: 0 }];
   while (frames.length) {
     const frame = frames[frames.length - 1]!;
     const choices = outgoing[frame.node]!;
@@ -56,20 +63,23 @@ function* routesFromStart(
     const edge = graph.edges[index]!;
     const distance = frame.distance + edge.distance;
     const gain = frame.gain + edge.gain;
+    const roadDistance = frame.roadDistance + (edge.connector ? edge.distance : 0);
     let route: RouteCandidate | undefined;
     // Nonnegative metrics make these necessary prefix conditions. Summation
     // follows original route order, including the return stem below.
-    if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1]) {
+    // Check road share only on a closed route: later trail can dilute a road prefix.
+    if (!usedTrails.has(edge.trail) && distance <= query.distance[1] && gain <= query.gain[1] && roadDistance <= roads.distance) {
       const attachment = positions.get(edge.to);
       if (attachment === undefined) {
         path.push(index);
         usedTrails.add(edge.trail);
         positions.set(edge.to, path.length);
-        frames.push({ node: edge.to, next: 0, distance, gain });
+        frames.push({ node: edge.to, next: 0, distance, gain, roadDistance });
       } else {
         let returnCount = 0;
         let totalDistance = distance;
         let totalGain = gain;
+        let totalRoadDistance = roadDistance;
         let repeatedDistance = 0;
         for (let part = attachment - 1; part >= 0; part--) {
           const back = reverse[path[part]!]!;
@@ -77,18 +87,20 @@ function* routesFromStart(
           returnCount++;
           totalDistance += graph.edges[back]!.distance;
           totalGain += graph.edges[back]!.gain;
+          if (graph.edges[back]!.connector) totalRoadDistance += graph.edges[back]!.distance;
           repeatedDistance += graph.edges[back]!.distance;
         }
         const repetition = repeatedDistance / totalDistance;
         if (returnCount === attachment
           && totalDistance >= query.distance[0] && totalDistance <= query.distance[1]
           && totalGain >= query.gain[0] && totalGain <= query.gain[1]
+          && totalRoadDistance <= roads.distance && totalRoadDistance / totalDistance <= roads.fraction
           && repetition <= query.repetition) {
           const edges = [...path, index];
           for (let part = attachment - 1; part >= 0; part--) edges.push(reverse[path[part]!]!);
           route = {
             id: `route-${start}-${edges.join('-')}`,
-            start, edges, distance: totalDistance, gain: totalGain, repetition,
+            start, edges, distance: totalDistance, gain: totalGain, roadDistance: totalRoadDistance, repetition,
             kind: attachment === 0 ? 'loop' : 'lollipop',
             uncertain: origin.access === 'unknown' || edges.some(id => graph.edges[id]!.access === 'unknown'),
           };
@@ -108,7 +120,8 @@ function* routesFromStart(
  */
 export async function* search(graph: TrailGraph, query: SearchQuery, options: Options = {}): AsyncGenerator<SearchEvent> {
   validateQuery(query);
-  query = { ...query, area: [...query.area], distance: [...query.distance], gain: [...query.gain] };
+  query = { ...query, area: [...query.area], distance: [...query.distance], gain: [...query.gain],
+    roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
   const maxExpansions = allowance(options.maxExpansions);
   const maxResults = allowance(options.maxResults);
   const slice = options.sliceExpansions ?? 256;
@@ -140,7 +153,8 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
     if (!Number.isInteger(edge.from) || !Number.isInteger(edge.to) || !graph.nodes[edge.from] || !graph.nodes[edge.to]
       || !Number.isSafeInteger(edge.trail) || edge.trail < 0
       || !Number.isFinite(edge.distance) || edge.distance <= 0 || !Number.isFinite(edge.gain) || edge.gain < 0
-      || typeof edge.reverse !== 'boolean' || !['public', 'unknown'].includes(edge.access)) throw new Error(`Invalid trail edge ${index}`);
+      || typeof edge.reverse !== 'boolean' || typeof edge.connector !== 'boolean'
+      || !['public', 'unknown'].includes(edge.access)) throw new Error(`Invalid trail edge ${index}`);
     const key = `${edge.trail}:${edge.reverse}`;
     if (directed.has(key)) throw new Error(`Duplicate trail direction ${key}`);
     directed.set(key, index);

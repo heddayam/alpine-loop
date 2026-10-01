@@ -25,7 +25,8 @@ async function compare(graph: TrailGraph, criteria = query) {
   const byId = new Map(expected.map(route => [key(route), route]));
   for (const route of routes) {
     const reference = byId.get(key(route))!;
-    expect([route.distance, route.gain, route.repetition]).toEqual([reference.distance, reference.gain, reference.repetition]);
+    expect([route.distance, route.gain, route.roadDistance, route.repetition])
+      .toEqual([reference.distance, reference.gain, reference.roadDistance, reference.repetition]);
   }
   return routes;
 }
@@ -48,6 +49,34 @@ describe('independent route oracle', () => {
     expect(routes).toHaveLength(2);
     expect(routes.every(route => route.repetition === 0.2 && route.kind === 'lollipop')).toBe(true);
     expect(await compare(graph, { ...query, repetition: 0.199 })).toHaveLength(0);
+  });
+
+  it('counts both road stem traversals while allowing a road prefix to be diluted by trails', async () => {
+    const graph = fixture([[0, 1, 100, { connector: true, backDistance: 200 }],
+      [1, 2, 900], [2, 3, 900], [3, 1, 900]]);
+    const criteria = { ...query, distance: [3_000, 3_000] as SearchQuery['distance'], roads: { distance: 300, fraction: 0.1 } };
+    const routes = await compare(graph, criteria);
+    expect(routes).toHaveLength(2);
+    expect(routes.every(route => route.roadDistance === 300 && route.kind === 'lollipop')).toBe(true);
+    expect(await compare(graph, { ...criteria, roads: { distance: 299, fraction: 1 } })).toHaveLength(0);
+    expect(await compare(graph, { ...criteria, roads: { distance: 300, fraction: 0.099 } })).toHaveLength(0);
+  });
+
+  it('applies both road defaults, zero limits and relaxation to the distance walked in each direction', async () => {
+    const graph = fixture([
+      [0, 1, 2_000, { connector: true, backDistance: 1_000 }], [1, 2, 9_000], [2, 0, 9_000],
+      [0, 3, 200, { connector: true }], [3, 4, 400], [4, 0, 400], [0, 0, 3_000, { oneWay: true }],
+    ]);
+    const criteria = { ...query, distance: [0, 30_000] as SearchQuery['distance'] };
+    // The long forward loop exceeds the default road distance; the short loop
+    // exceeds its fraction. The long reverse loop and pure trail ring qualify.
+    expect((await compare(graph, criteria)).map(route => route.roadDistance).sort((a, b) => a - b)).toEqual([0, 1_000]);
+    for (const roads of [{ distance: 0, fraction: 1 }, { distance: 30_000, fraction: 0 }]) {
+      expect((await compare(graph, { ...criteria, roads })).map(route => route.roadDistance)).toEqual([0]);
+    }
+    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.1 } })).toHaveLength(3);
+    expect(await compare(graph, { ...criteria, roads: { distance: 1_000, fraction: 0.2 } })).toHaveLength(4);
+    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.2 } })).toHaveLength(5);
   });
 
   it('retains longer alternative stems required by the minimum distance', async () => {
@@ -98,17 +127,35 @@ describe('independent route oracle', () => {
     const random = () => { state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0; return state / 2 ** 32; };
     for (let sample = 0; sample < 64; sample++) {
       const graph = fixture(Array.from({ length: 7 }, () => [Math.floor(random() * 4), Math.floor(random() * 4),
-        20 + Math.floor(random() * 80), { oneWay: random() < 0.3, unknown: random() < 0.2,
+        20 + Math.floor(random() * 80), { oneWay: random() < 0.3, unknown: random() < 0.2, connector: random() < 0.25,
           backDistance: 20 + Math.floor(random() * 80), gain: Math.floor(random() * 20), backGain: Math.floor(random() * 20) }]), [0, 1, 2, 3]);
       await compare(graph, { ...query, distance: [Math.floor(random() * 100), 100 + Math.floor(random() * 500)],
         gain: [Math.floor(random() * 30), 30 + Math.floor(random() * 70)],
-        repetition: random(), includeUnknown: random() < 0.5 });
+        repetition: random(), includeUnknown: random() < 0.5,
+        roads: random() < 0.5 ? undefined : { distance: random() * 300, fraction: random() } });
     }
   });
 });
 
 describe('incremental search lifecycle', () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100]], [0, 1, 2]);
+  it('validates road limits and snapshots them before yielding progress', async () => {
+    for (const roads of [{ distance: -1, fraction: 0.1 }, { distance: Infinity, fraction: 0.1 },
+      { distance: NaN, fraction: 0.1 }, { distance: 100, fraction: -0.1 },
+      { distance: 100, fraction: 1.1 }, { distance: 100, fraction: NaN }]) {
+      await expect(collect(graph, { ...query, roads })).rejects.toThrow(/road limits/i);
+    }
+    const roadsGraph = fixture([[0, 1, 100, { connector: true }], [1, 2, 100], [2, 0, 100]]);
+    const criteria = { ...query, roads: { distance: 100, fraction: 1 } };
+    const expected = enumerate(roadsGraph, criteria).map(key).sort();
+    const iterator = search(roadsGraph, criteria);
+    expect((await iterator.next()).value).toMatchObject({ type: 'progress' });
+    criteria.roads.distance = 0; criteria.roads.fraction = 0;
+    const routes: RouteCandidate[] = [];
+    for await (const event of iterator) if (event.type === 'route') routes.push(event.route);
+    expect(routes.map(key).sort()).toEqual(expected);
+  });
+
   it('gives each start a first step before deeper work and reports an expansion limit honestly', async () => {
     const { done, events } = await collect(graph, query, { maxExpansions: 3, sliceExpansions: 10_000 });
     expect(done).toMatchObject({ status: 'limited', progress: { totalStarts: 3, attemptedStarts: 3, completedStarts: 0, expansions: 3 } });

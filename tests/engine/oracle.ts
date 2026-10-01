@@ -1,11 +1,12 @@
 import type { SearchQuery, TrailEdge, TrailGraph } from '../../src/model.js';
 
-export type OracleRoute = { start: number; edges: number[]; distance: number; gain: number; repetition: number };
+export type OracleRoute = { start: number; edges: number[]; distance: number; gain: number; roadDistance: number; repetition: number };
 
 /** Tiny-graph reference: choose every simple reversible stem, then every
  * disjoint simple cycle. No production traversal, pruning or metric helpers. */
 export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] {
   const results: OracleRoute[] = [];
+  const roads = query.roads ?? { distance: 1609.344, fraction: 0.1 };
   const allowed = (edge: TrailEdge) => edge.access === 'public' || query.includeUnknown !== false;
   const outward = (node: number) => graph.edges.flatMap((edge, index) => edge.from === node && allowed(edge) ? [index] : []);
   for (const [start, entrance] of graph.starts.entries()) {
@@ -21,10 +22,12 @@ export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] 
             const edges = [...stem, ...cycle, index, ...back];
             const distance = edges.reduce((total, id) => total + graph.edges[id]!.distance, 0);
             const gain = edges.reduce((total, id) => total + graph.edges[id]!.gain, 0);
+            const roadDistance = edges.filter(id => graph.edges[id]!.connector).reduce((total, id) => total + graph.edges[id]!.distance, 0);
             const repetition = back.reduce((total, id) => total + graph.edges[id]!.distance, 0) / distance;
             if (distance >= query.distance[0] && distance <= query.distance[1]
-              && gain >= query.gain[0] && gain <= query.gain[1] && repetition <= query.repetition) {
-              results.push({ start, edges, distance, gain, repetition });
+              && gain >= query.gain[0] && gain <= query.gain[1] && repetition <= query.repetition
+              && roadDistance <= roads.distance && roadDistance / distance <= roads.fraction) {
+              results.push({ start, edges, distance, gain, roadDistance, repetition });
             }
           } else if (!stemNodes.includes(edge.to) && !cycleNodes.includes(edge.to)) {
             cycles(edge.to, [...cycle, index], [...cycleNodes, edge.to], [...trails, edge.trail]);
@@ -48,7 +51,7 @@ export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] 
 }
 
 type Trail = [from: number, to: number, distance: number, options?: {
-  oneWay?: boolean; gain?: number; backGain?: number; backDistance?: number; unknown?: boolean;
+  oneWay?: boolean; gain?: number; backGain?: number; backDistance?: number; unknown?: boolean; connector?: boolean;
 }];
 
 export function fixture(trails: Trail[], starts = [0]): TrailGraph {
@@ -61,10 +64,11 @@ export function fixture(trails: Trail[], starts = [0]): TrailGraph {
     starts: starts.map(node => ({ id: `start-${node}`, node, name: `Start ${node}`, access: 'public' })),
     edges: trails.flatMap(([from, to, distance, options = {}], trail): TrailEdge[] => {
       const access = options.unknown ? 'unknown' : 'public';
-      const forward: TrailEdge = { from, to, distance, trail, reverse: false, gain: options.gain ?? 0, access };
+      const connector = options.connector ?? false;
+      const forward: TrailEdge = { from, to, distance, trail, reverse: false, gain: options.gain ?? 0, access, connector };
       return options.oneWay ? [forward] : [forward, {
         from: to, to: from, distance: options.backDistance ?? distance, trail, reverse: true,
-        gain: options.backGain ?? 0, access,
+        gain: options.backGain ?? 0, access, connector,
       }];
     }),
   };
