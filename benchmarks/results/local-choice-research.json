@@ -1,6 +1,6 @@
 {
   "date": "2026-09-30",
-  "status": "Research candidate only. Context-sensitive road discovery completes all7NorthBend starts and recovers all752known directed itineraries. Pratt finds6valid walks forming3current product groups/4start choices; one matches a saved hike family at44.833s from a different entrance and opposite direction, but0exact forward/reversed source itineraries and0completedstarts. Broader frozen/app validation remains required; production unchanged.",
+  "status": "Research candidates remain outside production. Road alternatives dominate the saved Pratt duplication, but sustained all-trail observations also miss their benchmark source families. A new per-block compressed cycle-core feasibility probe preserves three known cores with low observed memory; complete hike construction remains unproven.",
   "archives": {
     "solver": "archive/research-local-choices-2026-09-30",
     "independentVerifier": "archive/research-local-choice-oracle-2026-09-30",
@@ -429,7 +429,7 @@
   "sunriseSourceAudit": {
     "report": "/private/tmp/alpine-sunrise-representative-check/report.json",
     "reportSha256": "30e91ec6c34239cfec0ac84630bda1d762f9917a8eefb1cae65f24e21dc32ed0",
-    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance−13.808m, climb−0.115m. Both qualify. Minor variation, not exact witness recovery."
+    "interpretation": "Same original start and stem;16/17ordered sections unchanged. Public named WonderlandTrail82359 replaces unknown footway82361 between the same endpoints. Distance\u221213.808m, climb\u22120.115m. Both qualify. Minor variation, not exact witness recovery."
   },
   "connectorEvidence": {
     "savedWalks": 1137,
@@ -491,7 +491,7 @@
     "distinctSavedFixedContexts": 853,
     "result": "All contexts find a blocked-compatible connection no longer than their original. Public-only longer local alternative retained. Caller must preserve original start, replace paired stems together, and validate complete hike; shortest alone does not solve gain/repetition or interacting connections. Adjacency rebuilt per request in this bounded prototype; not a production scaling claim."
   },
-  "nextAction": "Keep this candidate out of the active app. Necessary road-assisted loops remain. Resolve generation of minor trail alternatives and useful itinerary discovery; validate sustained original-start/family recovery and runtime memory before replacing the solver.",
+  "nextAction": "Prove complete cycle-plus-approach discovery and exact whole-hike validation on the small real slice before broader trials. Preserve compatible stems, eligible starts, access/direction, distance/gain/repetition and canonical necessary roads. Do not enumerate every tiny combination merely to group it afterward.",
   "reproduction": "Recover each archive tag in a temporary detached checkout. The solver archive contains research/proof/README.md and portable explicit-dataset witness/query runners. The verifier archive contains research/local-choice-check.ts; run it against solver source with the committed independent tiny oracle. The road archive contains research/road-connections-check.mjs. Prepared/raw datasets and local proof reports are ignored, with hashes above. Completed experimental worktrees and branches were removed.",
   "machine": {
     "node": "v24.11.0",
@@ -1889,7 +1889,7 @@
         "median": 9,
         "maximum": 101
       },
-      "interpretation": "Every known first road choice exists. Numeric port order places them15–69th, median38; this supports within-start ordering as a remaining discovery issue, not a representation-loss proof. Hypothetical distance ordering has median9but worst101, and no discovery-gain claim. Equal work across44starts did not prevent deep subtree exploration."
+      "interpretation": "Every known first road choice exists. Numeric port order places them15\u201369th, median38; this supports within-start ordering as a remaining discovery issue, not a representation-loss proof. Hypothetical distance ordering has median9but worst101, and no discovery-gain claim. Equal work across44starts did not prevent deep subtree exploration."
     },
     "archiveCommit": "e963e01",
     "archiveReplay": "research/proof/search-context.md"
@@ -2620,5 +2620,12 @@
     "decision": "Keep this candidate out of the active app. Necessary road-assisted loops remain. Resolve generation of minor trail alternatives and useful itinerary discovery; validate sustained original-start/family recovery and runtime memory before replacing the solver.",
     "reproduction": "Archived research/context-benchmark-inputs.mjs, research/context-benchmark-summary.mjs, research/context-bounded-check.mjs and research/proof/measure-context.mjs; guide research/proof/context-benchmark.md.",
     "observationReportDirectory": "/private/tmp/alpine-context-benchmark-proof/reports"
+  },
+  "cycleCoreResearch": {
+    "date": "2026-10-01",
+    "archive": "archive/research-cycle-cores-2026-10-01",
+    "evidence": "benchmarks/results/cycle-core-research.json",
+    "productionUnchanged": true,
+    "archiveCommit": "b63ebc045db522f8ed91e45612369a4ad2a22a7a"
   }
 }

@@ -53,17 +53,17 @@
       "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
     ]
   },
-  "state": "The local desktop area/constraints, progressive comparison, hike/start/direction details, GPX and browser reconnect work. Maintained app and preparation code is 5,187 lines versus the 24,063-line baseline. Cascades data remains installed. The isolated replacement solver is not ready: all 24 frozen queries were measured in guarded up-to-30-second observations, but only one of seven independently eligible source hikes was recovered at its original start. All seven source hikes use trails only. Two baseline observations exceeded the 1 GB sampled-memory guard. A conservative road-distance reachability bound passes existing independent preservation checks and lowers memory in one controlled pair, but still finds no Stevens route within that observation. Minor trail alternatives remain separate search branches, with grouping afterward. Production remains unchanged. Statewide preparation, fresh-source validation and automatic fresh-machine data acquisition remain unfinished. Hosting is deferred and public data publication is not approved.",
+  "state": "The local desktop area selection, constraints, progressive comparison, hike/start/direction details, GPX and browser reconnect work. Maintained app plus preparation is 5,187 lines versus the 24,063-line baseline; Cascades data remains installed. Solver replacement remains unfinished: the guarded 24-query baseline recovers only one of seven eligible source hikes at its original start; three sustained observations, including two all-trail partitions, find no corresponding source family. Roads dominate saved Pratt duplication but removing them does not resolve discovery. An isolated per-block compressed cycle-core probe preserves three known all-trail cores and both directions, with 31\u201341 MB observed process peaks; this is not complete hike recovery. Production unchanged. Statewide preparation, fresh-source validation and automatic fresh-machine data acquisition remain unfinished. Hosting is deferred; public data publication is not approved.",
   "solverResearch": {
-    "date": "2026-09-30",
+    "date": "2026-10-01",
     "roadConnectionPolicy": {
       "userDecision": "A longer road connection stays when it enables a valid loop, including the Pratt example. Reject extra road walking chosen solely to pad minimum hike mileage.",
       "comparison": "Compare connections in the context of the same start and substantial trail itinerary. Preserve legal direction, allowed access, loop/lollipop structure, repetition and the user's road limits. A globally shortest endpoint path can conflict with the rest of the hike; it is not a safe unconditional replacement.",
-      "savedPrattEvidence": "All 1,137 saved walks remain valid and satisfy the original constraints after replacing their connector runs with shortest directed paths while preserving the start and checking the complete walk. This yields 211 ordered trail-itinerary/start choices. Roads remain necessary: the replacements still contain 4.960–7.296 km of road. This is a property of this saved set, not a completeness proof or a count of meaningfully different hikes.",
+      "savedPrattEvidence": "All 1,137 saved walks remain valid and satisfy the original constraints after replacing their connector runs with shortest directed paths while preserving the start and checking the complete walk. This yields 211 ordered trail-itinerary/start choices. Roads remain necessary: the replacements still contain 4.960\u20137.296 km of road. This is a property of this saved set, not a completeness proof or a count of meaningfully different hikes.",
       "evidence": "/private/tmp/alpine-local-choice-data/road-padding/report.json"
     },
-    "status": "Unintegrated research candidate. Broad guarded baseline exposes insufficient original-start/family recovery, variable memory consumption and generation of minor trail alternatives. A road-bound correction preserves the existing tiny/source gates but does not resolve discovery.",
-    "recommendation": "Keep this candidate out of the active app. Necessary road-assisted loops remain. Resolve generation of minor trail alternatives and useful itinerary discovery; validate sustained original-start/family recovery and runtime memory before replacing the solver.",
+    "status": "Isolated research only; production unchanged. Road removal does not resolve source-family discovery. Per-block compressed all-trail cycle families preserve the three known cores and both source directions with low observed memory, but do not construct qualifying complete hikes.",
+    "recommendation": "Prove complete cycle-plus-approach discovery and exact whole-hike validation on the small real slice before broader trials. Preserve compatible stems, eligible starts, access/direction, distance/gain/repetition and canonical necessary roads. Do not enumerate every tiny combination merely to group it afterward.",
     "correctnessBoundary": "Preserve a qualifying realization for each explicitly defined hike class and eligible start. Shortest-only or ordinary Pareto-minimal local replacement is unsafe with minimum distance and climb. Resource intervals can reject impossibility but cannot establish a feasible combination. Preserve internal starts, complete internal loops, legal reversible stems, direction, access and simplicity; leave ambiguous regions uncollapsed.",
     "experiments": [
       "Independent small networks with 10 and 20 local binary alternatives: measure search states and fully realized combinations, including a longer-only qualifying realization.",
@@ -118,6 +118,16 @@
       "allVerifiedSourceHikesUseTrailsOnly": true,
       "measurementOnlyDurationMs": 30000,
       "productionUnchanged": true
+    },
+    "cycleCoreProbe": {
+      "archive": "archive/research-cycle-cores-2026-10-01",
+      "evidence": "benchmarks/results/cycle-core-research.json",
+      "queries": 3,
+      "originalCoreWitnessesPresent": 3,
+      "reversedCoreWitnessesPresent": 3,
+      "fullHikeRecovery": "unassessed",
+      "productionUnchanged": true,
+      "archiveCommit": "b63ebc045db522f8ed91e45612369a4ad2a22a7a"
     }
   }
 }
