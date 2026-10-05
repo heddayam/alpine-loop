@@ -29,11 +29,11 @@ const job = (status: JobSnapshot["status"]): JobSnapshot => ({
   },
   ...(status === "completed" ? { groupCount: 0, routeCount: 0 } : {}),
 });
-const renderJob = (status: JobSnapshot["status"]) =>
+const renderJob = (status: JobSnapshot["status"], progress: Partial<JobSnapshot['progress']> = {}) =>
   renderToStaticMarkup(
     createElement(JobsDialog, {
       open: true,
-      jobs: [job(status)],
+      jobs: [{...job(status), progress: {...job(status).progress, ...progress}}],
       regionName: () => "Cascades",
       highlightedId: null,
       error: "",
@@ -70,6 +70,11 @@ describe("completed-job interface boundaries", () => {
     expect(renderJob("completed")).toContain("View results");
     expect(renderJob("completed")).toContain("0 hikes");
     expect(renderJob("queued")).toContain("Queue position 2");
+    const measured = renderJob("running", {totalSearchPoints: 100, completedSearchPoints: 25});
+    expect(measured).toContain('value="25"');
+    expect(measured).toContain('max="100"');
+    expect(measured).toContain('25%');
+    expect(renderJob("running")).toContain('aria-label="Within-region search progress"');
   });
   it("clusters the entire location set deterministically and preserves all choices at a shared start", () => {
     const locations = Array.from({ length: 75 }, (_, i) =>

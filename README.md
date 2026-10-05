@@ -4,7 +4,7 @@ A local desktop app for finding loops and lollipops from mapped trails. Choose
 one or more prepared mountain regions, set distance, climb, repeated-trail and road limits,
 and submit a search job. Browse stable results after exploration finishes.
 Every shown route meets the requested constraints; unfinished jobs show their
-stage and fully explored regions.
+stage, within-region progress and fully explored regions.
 
 ## Run
 
@@ -54,7 +54,8 @@ do not certify legal parking or current road conditions.
 ## Search jobs and results
 
 The Jobs dialog shows saved requests, FIFO queue positions, stages, current region,
-fully explored regions and elapsed time. Closing it leaves jobs running. Jobs
+a progress bar for fully explored loop search points, fully explored regions and
+elapsed time. Closing it leaves jobs running. Jobs
 search without a time or result cap; several minutes is normal for broad searches.
 Completed jobs become ready in the app without changing your screen.
 

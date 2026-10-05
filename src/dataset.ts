@@ -1,5 +1,5 @@
 import type { SectionGeometry, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
-import type { HikeRoute, JobInputs, Position, RouteCandidate, SearchQuery } from './model.js';
+import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -56,24 +56,6 @@ export async function readDataset(directory: string) {
     }
     return { graph, isHike, describe };
   }
-  async function route(stored: StoredRoute): Promise<HikeRoute> {
-    const shapes = new Map<string, SectionGeometry>();
-    for (const id of new Set(stored.sections.map(step => step.section))) {
-      const section = catalog.sections.find(section => section.id === id);
-      if (!section) throw new Error('Route belongs to unavailable trail data');
-      shapes.set(id, await sections.read<SectionGeometry>(section, 'geometry'));
-    }
-    const coordinates: Position[] = [];
-    for (const step of stored.sections) {
-      const shape = shapes.get(step.section)?.[step.id];
-      if (!shape?.coordinates.length) throw new Error('Route drawing is missing');
-      const points = step.reverse ? shape.coordinates.toReversed() : shape.coordinates;
-      const previous = coordinates.at(-1);
-      if (previous && (previous[0] !== points[0]![0] || previous[1] !== points[0]![1])) throw new Error('Route drawing has a broken connection');
-      for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[index]!);
-    }
-    return { ...stored.summary, geometry: coordinates };
-  }
   async function verifyInputs(inputs: JobInputs): Promise<void> {
     const file = join(directory, 'catalog.json');
     if ((await stat(file)).size > 16 * 1024 * 1024) throw new Error('Prepared catalog changed during this job.');
@@ -86,7 +68,7 @@ export async function readDataset(directory: string) {
       if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
     }
   }
-  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, route, verifyInputs,
+  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
     readGeometry: (id: string) => sections.read<SectionGeometry>(id, 'geometry'),
     view: sections.view, downloads: sections.downloads };
 }

@@ -27,6 +27,7 @@ let lastProgress = 0, lastVerified = Date.now();
 try {
   for (const chosen of selections) {
     await verify();
+    delete progress.totalSearchPoints; delete progress.completedSearchPoints;
     progress.stage = 'preparing'; progress.currentRegion = { id: chosen.section.id, name: chosen.section.name }; send();
     const selection = await dataset.select(query, chosen);
     const previousExpansions = progress.expansions;
@@ -34,6 +35,9 @@ try {
     const solved = await solveSection(selection.graph, query, async measured => {
       if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
       progress.expansions = previousExpansions + measured.expansions;
+      progress.totalSearchPoints = measured.totalSearchPoints;
+      progress.completedSearchPoints = measured.completedSearchPoints;
+      if (measured.totalSearchPoints !== undefined && measured.completedSearchPoints === measured.totalSearchPoints) progress.stage = 'saving';
       if (Date.now() - lastProgress >= 100) { send(); lastProgress = Date.now(); }
     });
     await verify();

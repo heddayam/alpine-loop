@@ -182,6 +182,24 @@ export function JobsDialog({
                   {elapsed(job.progress.elapsedMs)} elapsed
                 </p>
               )}
+              {job.status === "running" && (
+                <div className="job-search-progress">
+                  <div>
+                    <span>Within-region search</span>
+                    {!!job.progress.totalSearchPoints && (
+                      <strong>{Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)}%</strong>
+                    )}
+                  </div>
+                  <progress
+                    aria-label="Within-region search progress"
+                    max={job.progress.totalSearchPoints || undefined}
+                    value={job.progress.totalSearchPoints ? job.progress.completedSearchPoints ?? 0 : undefined}
+                  />
+                  {!!job.progress.totalSearchPoints && (
+                    <p>{(job.progress.completedSearchPoints ?? 0).toLocaleString()} of {job.progress.totalSearchPoints.toLocaleString()} loop search points fully explored</p>
+                  )}
+                </div>
+              )}
               {job.status !== "queued" && (
                 <p className="job-regions">
                   {job.progress.completedRegions.length} of{" "}

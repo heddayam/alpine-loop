@@ -25,7 +25,7 @@
       "main circuits grouped with 85% common/combined core, matching cyclic order and connected differences at most 1 km; minor witnesses remain internal",
       "retain qualifying minor shortcuts or longer trail variations; reject avoidable road mileage and climb padding before applying minimums",
       "explicit trailhead/parking/road-contact default-start ranking and qualifying alternative starts/directions",
-      "accessible Jobs dialog, truthful region/stage/elapsed progress and stable completed-job URLs"
+      "accessible Jobs dialog, within-region completed-loop-search-point progress, region/stage/elapsed progress and stable completed-job URLs"
     ],
     "setup": [
       "one local command after prerequisites",
@@ -265,7 +265,7 @@
     "data": "Resolve region IDs and prepared files at execution start, pin exact footprints/hashes throughout, fail on missing/changed data.",
     "grouping": "Canonical circuit order; aggregate common and combined physical core-trail sets, 85% shared fraction, common cyclic order, each connected combined-minus-common component at most 1000 m. Approaches/direction do not define main hike identity.",
     "history": "Keep until confirmed manual terminal-job deletion. Cancel/failure/interruption discard partial output; queued jobs continue after restart.",
-    "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region and fully explored regions. No live result stream or speculative ETA.",
+    "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region, fully explored loop search points within the current region and fully explored regions. The user approved the within-region bar without an explanatory note. No live result stream or speculative ETA.",
     "validation": "Pending integration and real-data measurement; old bounded observations below describe prior solver/data only."
   }
 }

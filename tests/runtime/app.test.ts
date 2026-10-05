@@ -56,6 +56,8 @@ describe('completed jobs through the actual app and worker', () => {
     expect(snapshot.query).toEqual(criteria);
     expect(snapshot).not.toHaveProperty('routes');
     expect(snapshot.progress).toMatchObject({ completedRegions: ['fixture-0'], totalRegions: 1, totalStarts: count, completedStarts: count });
+    expect(snapshot.progress.totalSearchPoints).toBeGreaterThan(0);
+    expect(snapshot.progress.completedSearchPoints).toBe(snapshot.progress.totalSearchPoints);
     expect(snapshot.storageBytes).toBeGreaterThan(0);
     const results = (await app.inject(`/api/jobs/${snapshot.id}/results`)).json() as JobResults;
     expect(results).toMatchObject({ routeCount: count * count * 2, groupCount: count, pageTotal: count, offset: 0, sort: 'distance', order: 'asc' });
