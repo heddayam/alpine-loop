@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { solveSection } from '../../src/diversity.js';
 import type { SearchQuery } from '../../src/model.js';
-import { fixture } from '../engine/oracle.js';
+import { fixture, normalized } from '../engine/oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain: [0, 10_000], repetition: 1,
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
@@ -103,4 +103,27 @@ it('keeps both road-circuit directions reached through a trail approach', async 
   const routes = await solveSection(graph, query);
   expect(routes).toHaveLength(2);
   expect(routes.every(route => route.reverseId && route.route.kind === 'lollipop')).toBe(true);
+});
+
+it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
+  let state = 123456789;
+  const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
+  for (let sample = 0; sample < 32; sample++) {
+    const graph = fixture(Array.from({ length: 6 }, () => [Math.floor(random() * 3), Math.floor(random() * 3),
+      20 + Math.floor(random() * 80), { oneWay: random() < 0.2, unknown: random() < 0.2,
+        connector: random() < 0.4, backDistance: 20 + Math.floor(random() * 80), gain: random() * 20, backGain: random() * 20 }]), [0, 1, 2]);
+    const criteria: SearchQuery = { ...query, distance: [random() * 100, 200 + random() * 300],
+      gain: [random() * 20, 30 + random() * 60], repetition: random(), includeUnknown: random() < 0.5,
+      roads: { distance: random() * 400, fraction: random() } };
+    const expected = normalized(graph, criteria);
+    const routes = await solveSection(graph, criteria);
+    if (!expected.length) expect(routes).toHaveLength(0);
+    else expect(routes.length).toBeGreaterThan(0);
+    for (const { route } of routes) {
+      const reference = expected.find(other => other.start === route.start && other.edges.join(',') === route.edges.join(','));
+      expect(reference).toBeDefined();
+      expect([route.distance, route.gain, route.roadDistance, route.repetition])
+        .toEqual([reference!.distance, reference!.gain, reference!.roadDistance, reference!.repetition]);
+    }
+  }
 });

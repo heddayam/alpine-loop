@@ -71,3 +71,17 @@ export function fixture(trails: Trail[], starts = [0]): TrailGraph {
     }),
   };
 }
+
+/** Deliberately quadratic reference for road normalization on tiny graphs. The
+ * shorter witness is checked before lower limits, independently of the solver. */
+export function normalized(graph: TrailGraph, query: SearchQuery): OracleRoute[] {
+  const upperFeasible = enumerate(graph, { ...query, distance: [0, query.distance[1]], gain: [0, query.gain[1]] })
+    .filter(route => route.edges.some(id => !graph.edges[id]!.connector));
+  const itinerary = (route: OracleRoute) => JSON.stringify([route.start, route.edges.filter(id => !graph.edges[id]!.connector)
+    .map(id => [graph.edges[id]!.trail, graph.edges[id]!.reverse])]);
+  const uncertain = (route: OracleRoute) => graph.starts[route.start]!.access === 'unknown'
+    || route.edges.some(id => graph.edges[id]!.access === 'unknown');
+  return upperFeasible.filter(route => route.distance >= query.distance[0] && route.gain >= query.gain[0]
+    && !upperFeasible.some(other => itinerary(other) === itinerary(route) && other.roadDistance < route.roadDistance
+      && (!uncertain(other) || uncertain(route))));
+}

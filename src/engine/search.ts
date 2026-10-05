@@ -3,7 +3,7 @@ import { DEFAULT_ROAD_LIMITS } from '../model.js';
 
 type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number };
 type Physical = { trail: number; from: number; to: number; directions: number[]; distance: number; gain: number; road: number };
-type Index = { physical: Physical[]; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[] };
+type Index = { physical: Physical[]; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; approachCost: number[][]; startBounds?: (Float64Array | undefined)[] };
 
 export function validateQuery(query: SearchQuery): void {
   for (const range of [query.distance, query.gain]) {
@@ -63,7 +63,13 @@ function indexGraph(graph: TrailGraph, query: SearchQuery): Index {
     incident[item.from]!.push(index);
     if (item.to !== item.from) incident[item.to]!.push(index);
   }
-  return { physical, incident, reverse, starts, eligible };
+  const approachCost = physical.map(edge => {
+    const parts = edge.directions.map(id => graph.edges[id]!);
+    return [parts.reduce((sum, edge) => sum + Math.floor(edge.distance), 0),
+      parts.reduce((sum, edge) => sum + Math.floor(edge.gain), 0),
+      parts.reduce((sum, edge) => sum + (edge.connector ? Math.floor(edge.distance) : 0), 0)];
+  });
+  return { physical, incident, reverse, starts, eligible, approachCost };
 }
 
 /** Iterative Tarjan decomposition keeps parallel corridors as different edges.
@@ -112,6 +118,52 @@ function blocks(index: Index): number[][] {
   return result.sort((a, b) => a[0]! - b[0]!);
 }
 
+/** Whole-meter path labels underestimate every final route-order sum. A
+ * query beyond safe integer labels simply runs without this optimization. */
+function lowerBounds(index: Index, sources: number[], limit: number, metric: 0 | 1 | 2,
+  choices: (node: number) => number[], reversible = false, reuse?: Float64Array): Float64Array | undefined {
+  const budget = Math.floor(limit);
+  if (!Number.isSafeInteger(budget)) return;
+  const labels = (reuse ?? new Float64Array(index.incident.length)).fill(Infinity);
+  const heap: [number, number][] = [];
+  const push = (distance: number, node: number) => {
+    let at = heap.length;
+    heap.push([distance, node]);
+    while (at) {
+      const parent = (at - 1) >>> 1;
+      if (heap[parent]![0] <= distance) break;
+      heap[at] = heap[parent]!; at = parent;
+    }
+    heap[at] = [distance, node];
+  };
+  for (const node of sources) if (labels[node] !== 0) { labels[node] = 0; push(0, node); }
+  while (heap.length) {
+    const [distance, node] = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length) {
+      let at = 0;
+      while (at * 2 + 1 < heap.length) {
+        let child = at * 2 + 1;
+        if (child + 1 < heap.length && heap[child + 1]![0] < heap[child]![0]) child++;
+        if (heap[child]![0] >= last[0]) break;
+        heap[at] = heap[child]!; at = child;
+      }
+      heap[at] = last;
+    }
+    if (distance !== labels[node]) continue;
+    for (const id of choices(node)) {
+      const edge = index.physical[id]!;
+      if (reversible && edge.directions.length !== 2) continue;
+      const next = edge.from === node ? edge.to : edge.from;
+      const weight = reversible ? index.approachCost[id]![metric]! : [edge.distance, edge.gain, edge.road][metric]!;
+      if (weight > budget - distance) continue;
+      const candidate = distance + weight;
+      if (candidate < labels[next]!) { labels[next] = candidate; push(candidate, next); }
+    }
+  }
+  return labels;
+}
+
 type Circuit = { physical: number[]; nodes: number[]; orientations: number[][]; distance: number; gain: number; road: number };
 /** A simple circuit is rooted at its least node. First/last physical edge order
  * removes reversal; direction legality is evaluated separately, never assumed. */
@@ -140,6 +192,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
     return orientations.length ? { physical: [...path], nodes: [...nodes], orientations,
       distance: sums[0]!, gain: sums[1]!, road: sums[2]! } : undefined;
   };
+  const scratch = [0, 1, 2].map(() => new Float64Array(index.incident.length));
   for (const block of blocks(index)) {
     const adjacency = new Map<number, number[]>();
     for (const id of block) {
@@ -149,6 +202,12 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
     }
     for (const choices of adjacency.values()) choices.sort((a, b) => a - b);
     for (const root of [...adjacency.keys()].sort((a, b) => a - b)) {
+      const lowerReturn = ([0, 1, 2] as const).map(metric => lowerBounds(index, [root], budget[metric]!, metric,
+        node => (adjacency.get(node) ?? []).filter(id => {
+          const edge = index.physical[id]!;
+          return (edge.from === node ? edge.to : edge.from) >= root;
+        }), false, scratch[metric]));
+      yield undefined;
       const path: number[] = [];
       const nodes = [root];
       const visited = new Set(nodes);
@@ -166,7 +225,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
         const next = edge.from === frame.node ? edge.to : edge.from;
         const sums = [frame.sums[0]! + edge.distance, frame.sums[1]! + edge.gain, frame.sums[2]! + edge.road];
         let found: Circuit | undefined;
-        if (id !== path.at(-1) && sums.every((sum, metric) => sum <= budget[metric]!)) {
+        if (id !== path.at(-1) && sums.every((sum, metric) => sum <= budget[metric]! && (!lowerReturn[metric] || lowerReturn[metric]![next]! <= budget[metric]! - sum))) {
           if (next === root && (!path.length || path[0]! < id)) found = make([...path, id], nodes, sums);
           else if (next > root && !visited.has(next)) {
             path.push(id); nodes.push(next); visited.add(next);
@@ -204,13 +263,14 @@ function* approaches(graph: TrailGraph, index: Index, query: SearchQuery, circui
   const budgets = [query.distance[1], query.gain[1], (query.roads ?? DEFAULT_ROAD_LIMITS).distance]
     .map(value => Number.isSafeInteger(Math.floor(value)) ? Math.floor(value) : Infinity);
   for (const attachment of circuit.nodes) {
+    if (index.startBounds?.some((labels, metric) => labels && labels[attachment]! > budgets[metric]! - [circuit.distance, circuit.gain, circuit.road][metric]!)) continue;
     const rings = circuit.orientations.map(edges => {
       const first = edges.findIndex(id => graph.edges[id]!.from === attachment);
       return [...edges.slice(first), ...edges.slice(0, first)];
     });
     const path: number[] = [];
     const visited = new Set([attachment]);
-    const frames = [{ node: attachment, next: -1, sums: [0, 0, 0] }];
+    const frames = [{ node: attachment, next: -1, sums: [0, 0, 0], repeated: 0 }];
     while (frames.length) {
       const frame = frames[frames.length - 1]!;
       if (frame.next === -1) {
@@ -238,8 +298,11 @@ function* approaches(graph: TrailGraph, index: Index, query: SearchQuery, circui
           const sums = [frame.sums[0]! + Math.floor(edge.distance) + Math.floor(reverse.distance),
             frame.sums[1]! + Math.floor(edge.gain) + Math.floor(reverse.gain),
             frame.sums[2]! + (edge.connector ? Math.floor(edge.distance) + Math.floor(reverse.distance) : 0)];
-          if (sums.every((sum, metric) => sum + [circuit.distance, circuit.gain, circuit.road][metric]! <= budgets[metric]!)) {
-            path.push(id); visited.add(next); frames.push({ node: next, next: -1, sums });
+          const repeated = frame.repeated + Math.floor(edge.distance);
+          if (repeated / query.distance[1] <= query.repetition && sums.every((sum, metric) =>
+            sum + [circuit.distance, circuit.gain, circuit.road][metric]! <= budgets[metric]!
+            && (!index.startBounds?.[metric] || index.startBounds[metric]![next]! <= budgets[metric]! - sum - [circuit.distance, circuit.gain, circuit.road][metric]!))) {
+            path.push(id); visited.add(next); frames.push({ node: next, next: -1, sums, repeated });
           }
         }
       }
@@ -267,6 +330,8 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   if (options.signal?.aborted) { yield stopped(); return; }
   const index = indexGraph(graph, query);
   progress.totalStarts = progress.attemptedStarts = index.eligible.length;
+  index.startBounds = ([0, 1, 2] as const).map(metric => lowerBounds(index, index.eligible.map(start => graph.starts[start]!.node),
+    [query.distance[1], query.gain[1], query.roads!.distance][metric]!, metric, node => index.incident[node]!, true));
   yield { type: 'progress', progress: snapshot() };
   let results = 0, yieldedAt = performance.now();
   const limited = (): SearchEvent => ({ type: 'done', status: 'limited', progress: snapshot(),
