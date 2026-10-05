@@ -104,6 +104,16 @@ road connectors, independently of their names or foot permissions. Mapped
 parking and trailhead contacts use shared source nodes; no nearest-trail
 connection is invented.
 
+Road-contact starts resolve car access in the order `motorcar`, `motor_vehicle`,
+`vehicle`, `access`, including directional restrictions. An explicit vehicle
+prohibition cannot be overridden by `foot=yes`. Non-current roads cannot supply
+arrival evidence. Parking POIs must admit both walking and car arrival; unknown
+arrival remains unknown. Independent eligible roads or parking at the same node
+can still establish a start. Named trailheads retain their mapped source evidence.
+Vehicle-closed roads remain in the walking graph when foot access allows them;
+any approach walked along them counts against the route's road/distance limits.
+This is mapped arrival evidence, without a driving reachability or parking service.
+
 DEMs are sampled bilinearly at every retained vertex and at intervals of at most
 25 m. All positive/negative changes contribute to gain/loss without suppression.
 The same complete sampled profile is retained in drawing/GPX geometry. Missing

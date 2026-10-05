@@ -45,7 +45,10 @@ eligible start in those regions is explored; panning and zooming only change the
 view. There are no separate named rectangles or custom drawing scopes. Unknown
 pedestrian access is included and labeled by default, and can be excluded.
 Explicit prohibitions are respected.
-Mapped road contacts do not certify legal parking or current conditions.
+Road and parking starts respect mapped car-access restrictions separately from
+walking permission. A vehicle-closed track can remain walkable without creating
+a start at its trail junction. Unknown access is labeled; mapped road contacts
+do not certify legal parking or current road conditions.
 
 ## Routes and progress
 

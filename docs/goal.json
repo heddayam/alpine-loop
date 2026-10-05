@@ -54,7 +54,7 @@
       "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
     ]
   },
-  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is now 5,001 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending. Search and download regions now share exact prepared-section identities, replacing named rectangles, drawing and viewport start filters. Exact section selection, all eligible supplied starts, overlapping-bound isolation, downloads, GPX and reconnect pass offline checks; native preparation fixtures pass. A separate two-second real whole-region observation preserves query/reconnect and stops in 2.2 ms, with exploration honestly unfinished. Browser region selection, polygon toggling, pan/zoom stability and reconnect to the existing live search are verified. Previous 24-query timings describe the historical rectangle scope; new region measurements disclose expanded start scope.",
+  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is now 5,001 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending. Search and download regions now share exact prepared-section identities, replacing named rectangles, drawing and viewport start filters. Exact section selection, all eligible supplied starts, overlapping-bound isolation, downloads, GPX and reconnect pass offline checks; native preparation fixtures pass. A separate two-second real whole-region observation preserves query/reconnect and stops in 2.2 ms, with exploration honestly unfinished. Browser region selection, polygon toggling, pan/zoom stability and reconnect to the existing live search are verified. Previous 24-query timings describe the historical rectangle scope; new region measurements disclose expanded start scope. A reported invalid vehicle-arrival start is fixed: car access is resolved separately from walking for roads and mapped parking. All five Cascades sections are rebuilt and installed with 10,187 starts; 973 prior vehicle-restricted starts are removed and 11 independently eligible road contacts are added. The reported GPX start is absent, its full walking profile and the closed track remain walkable, and all seven reference walks retain their original starts/profiles/constraints. A focused two-second HTTP observation preserves query/reconnect with no failures and stops in 3.7 ms; exploration is honestly unfinished. Maintained source is 5,010 lines in 30 files. Prior 11,149-start measurements above describe the previous data snapshot.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -137,5 +137,119 @@
     "status": "Historical solver research is archived, not an active preparation requirement. The current solver is retained; a bounded observation does not establish complete route-family recovery. The preparation acceptance is source correctness, whole-walk retention, independent section identities and honest whole-app behavior.",
     "archive": "archive/before-mountain-preparation-2026-10-05",
     "preservedProductDecision": "Road connections may enable a valid loop but must not add avoidable road distance solely to reach minimum hike length. Constraints and original starts must remain exact."
+  },
+  "vehicleArrivalFix": {
+    "date": "2026-10-05",
+    "reportedProblem": "A GPX began on Sheep Canyon Trail at source node n47643463, where its only road-contact evidence was w5877288, an old forest track explicitly tagged motor_vehicle=no. Walking eligibility was incorrectly reused as car-arrival eligibility.",
+    "behavior": "Resolve car arrival separately using motorcar, motor_vehicle, vehicle, access and directional restrictions. Vehicle-prohibited or non-current roads cannot establish generic starts; mapped parking must admit both arrival and walking. More-specific car permissions and independent alternate sources remain valid. Unknown arrival remains labeled. Vehicle-closed tracks retain admitted walking connections and any walking approach still counts toward route limits.",
+    "limits": "This checks mapped arrival evidence. It does not certify legal parking, current road conditions or driving reachability. Named trailhead POIs remain independent source evidence.",
+    "sourceBefore": 5001,
+    "sourceAfter": 5010,
+    "sourceFiles": 30,
+    "validation": {
+      "offline": "Two native fresh-compilation fixtures and six native partition checks pass. The arrival regression fails on the previous compiler. App build passes.",
+      "data": {
+        "snapshotId": "mountains-9945983146f58b01a859aa02e6e696a94f4b9b9c8a41b8a22cc6f985496f624e",
+        "catalogSha256": "37c1176a8052187ec983b5fd9505c2bfd4bd4f8d283bca00479f45c868bd898b",
+        "provenanceSha256": "2ad0118521b0cb4eb13975e6a027c5d970dd7e1d951dcba60efd0743f662c91c",
+        "compilerMatchesCurrentSource": true,
+        "sections": [
+          {
+            "name": "Washington Cascades \u2014 south of I90, south of US12",
+            "id": "mountain-43069d2bc1ec7e5c1adadc37",
+            "before": 1847,
+            "after": 1609,
+            "removed": 239,
+            "added": 1,
+            "oldUnsupportedRemaining": []
+          },
+          {
+            "name": "Washington Cascades \u2014 south of I90, north of US12",
+            "id": "mountain-5eb288f06c4d713a80317882",
+            "before": 2241,
+            "after": 2098,
+            "removed": 152,
+            "added": 9,
+            "oldUnsupportedRemaining": []
+          },
+          {
+            "name": "Washington Cascades \u2014 north of I90, south of US2",
+            "id": "mountain-bdc595cbf8bd73d977872e38",
+            "before": 2920,
+            "after": 2669,
+            "removed": 252,
+            "added": 1,
+            "oldUnsupportedRemaining": []
+          },
+          {
+            "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20",
+            "id": "mountain-67fc323ad847dfc7fc74d474",
+            "before": 2323,
+            "after": 2156,
+            "removed": 167,
+            "added": 0,
+            "oldUnsupportedRemaining": []
+          },
+          {
+            "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20",
+            "id": "mountain-36500543cf317add4204f998",
+            "before": 1818,
+            "after": 1655,
+            "removed": 163,
+            "added": 0,
+            "oldUnsupportedRemaining": []
+          }
+        ],
+        "before": 11149,
+        "after": 10187,
+        "downloadBytes": 94142695,
+        "preparation": {
+          "elapsedSeconds": 465.3477645839739,
+          "peakRssBytes": 1714782208
+        }
+      },
+      "reportedWalk": {
+        "reportedSourceNode": "47643463",
+        "section": "mountain-43069d2bc1ec7e5c1adadc37",
+        "invalidStartRemoved": true,
+        "identicalWalkingProfileRetained": true,
+        "vehicleClosedTrackStillWalkable": true,
+        "originalGpxPoints": 1637,
+        "directedCorridors": 17,
+        "distanceMeters": 24887.620199438574,
+        "gainMeters": 1366.9265144094086,
+        "roadMeters": 0
+      },
+      "referenceWalks": {
+        "count": 7,
+        "originalStartsAndExactProfilesRetained": true,
+        "originalConstraintsSatisfied": true,
+        "checkerSha256": "da72bd85ea5a97bc06b101042d5270e117fc022dd13dd0219c023a131a3786c2",
+        "catalogSha256": "37c1176a8052187ec983b5fd9505c2bfd4bd4f8d283bca00479f45c868bd898b"
+      },
+      "wholeApp": {
+        "query": "north-bend-known",
+        "scope": "Whole prepared regions containing the original eligible starts; frozen distance/gain/repetition/access preserved.",
+        "observationMs": 2000,
+        "outcome": "unfinished",
+        "sameSearchAndQueryOnReconnect": true,
+        "stopMs": 3.6700419999997393,
+        "peakRssBytes": 306380800,
+        "hasFailures": false
+      },
+      "localEvidence": ".local-data/vehicle-start-review/",
+      "browser": "Corrected preview at http://127.0.0.1:3181/ restores the original 13\u201317 mile, 3000\u20136000 foot, 10% repetition, 1 mile/10% roads and uncertain-access constraints. All 1609 eligible starts are attempted, exploration continues, reload reconnects, and route detail/map/GPX work. Prior stopped results and route inspection remain available on port 3180 with preserved immutable files.",
+      "liveSearch": {
+        "searchId": "f9465f06-cc2b-4744-af2d-84a5e039d7d3",
+        "snapshotId": "mountains-9945983146f58b01a859aa02e6e696a94f4b9b9c8a41b8a22cc6f985496f624e",
+        "constraintsIdenticalToPriorSearch": true,
+        "routeInspectionAndGpx": true,
+        "exportStartIsFreshEligibleStart": true,
+        "reportedInvalidStartAbsent": true,
+        "distanceMeters": 26963.43194626125,
+        "gainMeters": 1827.6404459379844
+      },
+      "screenshot": ".local-data/vehicle-start-review/corrected-preview.jpg"
+    }
   }
 }
