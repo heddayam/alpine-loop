@@ -113,7 +113,7 @@ it('combines independent small detours and safely improves a starting point with
     const identity = choose(route);
     if (identity) store.add({ type: 'route', ...identity, route: {
       summary: { ...route, startId: roads.starts[0]!.id, startName: 'Test start', startPosition: roads.nodes[0]!, trailNames: ['Trail'] },
-      sections: edges.map(index => ({ cell: '0_0', id: roads.edges[index]!.trail, reverse: roads.edges[index]!.reverse })),
+      sections: edges.map(index => ({ section: 'fixture', id: roads.edges[index]!.trail, reverse: roads.edges[index]!.reverse })),
     } });
     return identity;
   }

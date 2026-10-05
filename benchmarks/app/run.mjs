@@ -32,10 +32,10 @@ function codeHashes(directory) {
     return entry.isDirectory() ? Object.entries(codeHashes(file)) : entry.name.endsWith('.js') ? [[path.relative(server, file), hash(file)]] : [];
   }).sort(([a], [b]) => a.localeCompare(b)));
 }
-const queryFile = path.join(root, 'benchmarks/queries.json'), manifestFile = path.join(dataset, 'manifest.json');
+const queryFile = path.join(root, 'benchmarks/queries.json'), manifestFile = path.join(dataset, 'catalog.json');
 const definitions = read(queryFile).queries.filter(query => !args.has('--query') || query.id === args.get('--query'));
 assert(definitions.length, `Unknown frozen query: ${args.get('--query')}`);
-const provenanceFile = path.join(dataset, 'audit/provenance.json');
+const provenanceFile = path.join(dataset, 'provenance.json');
 const provenance = fs.existsSync(provenanceFile) ? read(provenanceFile) : null;
 const report = {
   version: 1, startedAt: new Date().toISOString(), dataset, observationMs, rssGuardBytes: rssBytes,
@@ -43,8 +43,8 @@ const report = {
   inputs: { queriesSha256: hash(queryFile), manifestSha256: hash(manifestFile), snapshotId: read(manifestFile).info.id,
     compiledHashes: codeHashes(server), packageLockSha256: hash(path.join(root, 'package-lock.json')),
     harnessHashes: Object.fromEntries(['run.mjs', 'query.mjs'].map(name => [name, hash(path.join(here, name))])) },
-  sourceCompilation: provenance ? { provenanceSha256: hash(provenanceFile), snapshotId: provenance.snapshotId,
-    compilerHashes: provenance.compiler, osmium: provenance.osmium, sourceManifest: provenance.manifest } : null,
+  sourceCompilation: provenance ? { provenanceSha256: hash(provenanceFile), evidence: provenance.plan.evidence,
+    policy: provenance.plan.policy, observations: provenance.observations } : null,
   methodology: [
     'Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.',
     'RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.',

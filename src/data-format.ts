@@ -1,38 +1,26 @@
-import type { Bounds, DatasetInfo, Position, RouteSummary, SearchEvent, TrailEdge, TrailGeometry, TrailStart } from './model.js';
+import type { Bounds, DatasetInfo, Position, RouteSummary, SearchEvent, TrailGraph, TrailGeometry, TrailStart } from './model.js';
 
-/** A snapshot is partitioned after its topology is compiled. Numeric identities
- * are shared by all files in that snapshot, never joined across snapshots. */
-export type NetworkManifest = {
-  version: 2;
-  cellDegrees: 0.1;
-  distanceMetric: 'haversine-6371008.8';
-  info: DatasetInfo;
-  files: Record<string, { bytes: number; jsonBytes: number; sha256: string }>;
+export type Boundary = { type: 'MultiPolygon'; coordinates: number[][][][] };
+export type DataFile = { path: string; bytes: number; jsonBytes: number; sha256: string };
+/** Complete, independently compiled mountain sections. IDs never join across sections. */
+export type PreparedSection = {
+  id: string; regionId: string; name: string; bounds: Bounds; boundary: Boundary;
+  sourceSegments: number; startCount: number;
+  files: { graph: DataFile; starts: DataFile; geometry: DataFile };
 };
-
-/** Full sections are repeated in every cell touched by their bounding box.
- * Geometry has one owner: the cell containing the bounding-box midpoint.
- * Cell names are floor(longitude*10)_floor(latitude*10), including negatives.
- * Files are graph/<cell>.json.gz, starts/<cell>.json.gz, geometry/<cell>.json.gz.
- * An absent entry inside info.bounds means processed and empty. A declared
- * but absent/bad file is an error; outside bounds coverage is unknown. */
-export type NetworkSection = {
-  id: number;
-  bounds: Bounds;
-  name: string | null;
-  kind: 'trail' | 'connector';
-  edges: [id: number, edge: Omit<TrailEdge, 'connector'>][];
+export type UnavailableSection = { name: string; bounds: Bounds; boundary: Boundary; reason: string };
+export type SectionCatalog = { version: 1; info: DatasetInfo; baseUrl?: string; sections: PreparedSection[]; unavailable?: UnavailableSection[] };
+export type SectionView = PreparedSection & { installed: boolean; bytes: number; needsRepair?: boolean };
+export type CatalogView = DatasetInfo & { sections: SectionView[]; unavailable?: UnavailableSection[] };
+export type Coverage = { sections: string[]; missing: string[]; bytes: number; coverageNote?: string };
+export type DownloadSnapshot = {
+  status: 'running' | 'complete' | 'stopped' | 'failed'; sections: string[];
+  completedBytes: number; totalBytes: number; reason?: string;
 };
-export type NetworkCell = { nodes: [id: number, position: Position][]; sections: NetworkSection[] };
-export type NetworkStarts = [index: number, start: TrailStart, position: Position][];
-export type NetworkGeometry = [id: number, geometry: TrailGeometry][];
-
-/** A retained route needs no copy of the search graph or all its drawings. */
-export type StoredRoute = {
-  summary: RouteSummary;
-  sections: { cell: string; id: number; reverse: boolean }[];
-};
-
+export type SectionGraph = { graph: TrailGraph; trails: { name: string | null; kind: 'trail' | 'connector' }[] };
+export type SectionStarts = [start: TrailStart, position: Position][];
+export type SectionGeometry = TrailGeometry[];
+export type StoredRoute = { summary: RouteSummary; sections: { section: string; id: number; reverse: boolean }[] };
 export type WorkerEvent = Exclude<SearchEvent, { type: 'route' }>
   | { type: 'route'; route: StoredRoute; groupId: string; optionId: string; walkId: string; preferred: boolean }
   | { type: 'coverage'; note?: string };

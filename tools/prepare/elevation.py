@@ -9,27 +9,42 @@ from rasterio.windows import Window
 
 
 class Elevation:
-    def __init__(self, products):
+    def __init__(self, products, supplement=()):
         self.products = products
+        self.supplement = supplement
+        self.supplement_samples = 0
 
     def sample(self, points):
+        values = self._sample(points, self.products)
+        gaps = [index for index, value in enumerate(values) if value is None]
+        if gaps and self.supplement:
+            additional = self._sample([points[index] for index in gaps], self.supplement)
+            for index, value in zip(gaps, additional):
+                if value is not None:
+                    values[index] = value
+                    self.supplement_samples += 1
+        missing = [points[index] for index, value in enumerate(values) if value is None]
+        if missing:
+            raise ValueError(f"Missing DEM at {len(missing):,} samples; first coordinates: {missing[:20]}")
+        return values
+
+    def _sample(self, points, products):
         values = [None] * len(points)
-        missing = []
         with ExitStack() as stack:
             stack.enter_context(rasterio.Env(GDAL_CACHEMAX=64 * 1024 * 1024, PROJ_NETWORK="OFF"))
-            rasters = [stack.enter_context(rasterio.open(product["path"])) for product in self.products]
+            rasters = [stack.enter_context(rasterio.open(product["path"])) for product in products]
             groups = defaultdict(list)
             for index, point in enumerate(points):
-                matches = [tile for tile, product in enumerate(self.products)
+                matches = [tile for tile, product in enumerate(products)
                            if product["bounds"][0] <= point[0] < product["bounds"][2]
                            and product["bounds"][1] < point[1] <= product["bounds"][3]]
-                if len(matches) != 1:
-                    missing.append(point)
-                else:
+                if len(matches) > 1:
+                    raise ValueError(f"Ambiguous overlapping DEM products at {point}")
+                if matches:
                     groups[matches[0]].append(index)
             for tile, indexes in sorted(groups.items()):
                 raster = rasters[tile]
-                print(f"DEM {self.products[tile]['path'].name}: {len(indexes):,} samples", flush=True)
+                print(f"DEM {products[tile]['path'].name}: {len(indexes):,} samples", flush=True)
                 x, y = transform("EPSG:4326", raster.crs, [points[index][0] for index in indexes], [points[index][1] for index in indexes])
                 inverse = ~raster.transform
                 pixels = []
@@ -41,7 +56,6 @@ class Elevation:
                     left, top = math.floor(col), math.floor(row)
                     dx, dy = col - left, row - top
                     if left < 0 or top < 0 or left + 1 >= raster.width or top + 1 >= raster.height:
-                        missing.append(points[index])
                         continue
                     grid = raster.read(1, window=Window(left, top, 2, 2), masked=True)
                     weights = ((1 - dy) * (1 - dx), (1 - dy) * dx, dy * (1 - dx), dy * dx)
@@ -56,8 +70,4 @@ class Elevation:
                         value += float(cell) * weight
                     if valid:
                         values[index] = value
-                    else:
-                        missing.append(points[index])
-        if missing:
-            raise ValueError(f"Missing DEM at {len(missing):,} samples; first coordinates: {missing[:20]}")
         return values

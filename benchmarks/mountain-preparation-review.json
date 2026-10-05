@@ -1,0 +1,1174 @@
+{
+  "scope": "Replacement mountain preparation: exact GMBA footprint and highway partition retention, fresh source compilation, and whole-app capacity/download behavior. Known-walk retention and bounded search observations do not establish discovery completeness.",
+  "gmbaZipSha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874",
+  "witnessFileSha256": "9f5dca9f48bdcc013e09b6f711faa72b8f6d93a327a4c8a3a47ca36ee0679349",
+  "records": [
+    {
+      "queryId": "north-bend-known",
+      "points": 1047,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.755518,
+        47.4867878,
+        -121.7169472,
+        47.499474
+      ]
+    },
+    {
+      "queryId": "pass-lakes",
+      "points": 1060,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.4593408,
+        47.3426951,
+        -121.4385474,
+        47.3731589
+      ]
+    },
+    {
+      "queryId": "stevens-long",
+      "points": 7934,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.0908701,
+        47.5472047,
+        -120.9017891,
+        47.7464343
+      ]
+    },
+    {
+      "queryId": "paradise-short",
+      "points": 417,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.737243,
+        46.767581,
+        -121.7145613,
+        46.778038
+      ]
+    },
+    {
+      "queryId": "paradise-day",
+      "points": 1287,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.7405762,
+        46.767581,
+        -121.7145613,
+        46.8062212
+      ]
+    },
+    {
+      "queryId": "sunrise-day",
+      "points": 915,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.6798909,
+        46.9024156,
+        -121.640993,
+        46.9175646
+      ]
+    },
+    {
+      "queryId": "sunrise-long",
+      "points": 7036,
+      "fullWalkInsideGmba": true,
+      "outsideDegrees": 0.0,
+      "bounds": [
+        -121.6610444,
+        46.7119248,
+        -121.4034702,
+        46.8964112
+      ]
+    }
+  ],
+  "highwayFootprintCheck": {
+    "scope": "Complete existing independent eligible source walks against the exact700k plan. This assesses policy exclusions, not new graph or solver recovery.",
+    "sourceSegments": 2640060,
+    "cap": 700000,
+    "cuts": [
+      "I90",
+      "US12",
+      "US2",
+      "WA20"
+    ],
+    "records": [
+      {
+        "queryId": "north-bend-known",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 north of I90, south of US2"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 north of I90, south of US2"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "pass-lakes",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "stevens-long",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 north of I90, south of US2"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 north of I90, south of US2"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "paradise-short",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "paradise-day",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "sunrise-day",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "intersectedDividers": []
+      },
+      {
+        "queryId": "sunrise-long",
+        "wholeWalkSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "startSections": [
+          "Washington Cascades \u2014 south of I90, north of US12"
+        ],
+        "intersectedDividers": []
+      }
+    ]
+  },
+  "borderElevationGap": {
+    "firstFullBuildFailedClosed": true,
+    "missingSamples": 10,
+    "failedBuildMeasurement": {
+      "command": [
+        "/private/tmp/alpine-preparation-venv/bin/python",
+        "tools/prepare/build.py",
+        "build",
+        "--source-root",
+        ".cache",
+        "--plan",
+        ".local-data/cascades-plan.json",
+        "--output",
+        ".local-data/mountains",
+        "--audit"
+      ],
+      "elapsedSeconds": 801.1546496249794,
+      "exitCode": 1,
+      "sampledTreePeakRssBytes": 1663680512,
+      "samples": 2705,
+      "maxSampleGapSeconds": 5.322170542000094,
+      "scope": "Compiler plus all native descendant processes; supervisor excluded. Sampled every250ms; can miss brief peaks. Filesystem cache/concurrent workloads uncontrolled."
+    },
+    "resolution": {
+      "points": [
+        [
+          -121.77355212100282,
+          48.99770397594215
+        ],
+        [
+          -121.7735538,
+          48.9977002
+        ],
+        [
+          -121.7736023,
+          48.9976701
+        ],
+        [
+          -121.7736891,
+          48.99766
+        ],
+        [
+          -122.08813674657772,
+          49.002006228049176
+        ],
+        [
+          -122.0881434,
+          49.0020003
+        ],
+        [
+          -121.33460439843478,
+          49.00075165525699
+        ],
+        [
+          -121.06369401256562,
+          49.000665494944315
+        ],
+        [
+          -121.0637003,
+          49.0006618
+        ],
+        [
+          -121.06261683237936,
+          49.00065263847681
+        ]
+      ],
+      "measuredElevations": [
+        1022.3199603739648,
+        1022.3580702207895,
+        1023.933551511425,
+        1026.6745155442661,
+        173.42594553024048,
+        173.40334224353577,
+        835.6362203417533,
+        497.93009872625396,
+        497.8830316942077,
+        513.0448010745736
+      ],
+      "supplementSamples": 10,
+      "method": "Pinned native primary DEM unchanged when valid; explicit verified GLO-30 supplies only otherwise missing bilinear samples. No nearest-pixel extrapolation or zero heights."
+    },
+    "primarySourceUnchangedWhenValid": true,
+    "supplementPins": [
+      {
+        "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N48_00_W122_00_DEM.tif",
+        "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N48_00_W122_00_DEM/Copernicus_DSM_COG_10_N48_00_W122_00_DEM.tif",
+        "sha256": "f6dd0c9f661ae843c300683909ccbe9fbdcc8282acb378ce4f9e65c94d040b10",
+        "bounds": [
+          -122,
+          48,
+          -121,
+          49
+        ]
+      },
+      {
+        "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N49_00_W123_00_DEM.tif",
+        "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N49_00_W123_00_DEM/Copernicus_DSM_COG_10_N49_00_W123_00_DEM.tif",
+        "sha256": "bf958587e4ea18408e64e4b5eab00c55557666d6a6d3842d61c0dc4d9752b410",
+        "bounds": [
+          -123,
+          49,
+          -122,
+          50
+        ]
+      },
+      {
+        "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N49_00_W122_00_DEM.tif",
+        "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N49_00_W122_00_DEM/Copernicus_DSM_COG_10_N49_00_W122_00_DEM.tif",
+        "sha256": "b3db7418945ec29aa790c6acf1758f5b9a781b1f3647af3307221fd2df8a4f06",
+        "bounds": [
+          -122,
+          49,
+          -121,
+          50
+        ]
+      }
+    ],
+    "documentation": "https://copernicus-dem-30m.s3.amazonaws.com/readme.html",
+    "limitation": "GLO-30 is a coarser surface-height model. Vegetation and vertical-datum differences can affect estimated gain at transitions; app attribution/limitations and provenance disclose its use."
+  },
+  "realDownloadBrowserCheck": {
+    "source": ".local-data/mountain-proof",
+    "sourceCatalogId": "download-review-180f0ce4fc2cfbef0c28d7334cec4bd92262d0893b5aa963a4d5bff90c9835f0",
+    "actualDownloadBytes": 20339778,
+    "cancelledBeforeSearch": true,
+    "automaticSearchPreservedQuery": {
+      "area": [
+        -122,
+        46.6,
+        -121.4,
+        47
+      ],
+      "distance": [
+        11265.408,
+        22530.816
+      ],
+      "gain": [
+        0,
+        1219.2
+      ],
+      "repetition": 0.2,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "installedSections": [
+      "mountain-61e13a07670d412a9be0b7d9"
+    ],
+    "requests": [
+      {
+        "file": "sections/mountain-61e13a07670d412a9be0b7d9/graph.json.gz",
+        "at": "2026-10-05T20:35:44.335Z"
+      },
+      {
+        "file": "sections/mountain-61e13a07670d412a9be0b7d9/starts.json.gz",
+        "at": "2026-10-05T20:35:45.560Z"
+      },
+      {
+        "file": "sections/mountain-61e13a07670d412a9be0b7d9/geometry.json.gz",
+        "at": "2026-10-05T20:35:45.618Z"
+      },
+      {
+        "file": "sections/mountain-61e13a07670d412a9be0b7d9/geometry.json.gz",
+        "at": "2026-10-05T20:36:39.095Z"
+      }
+    ],
+    "browserChecks": [
+      "Displayed actual 20.3 MB and section name before download",
+      "Cancelled mid-geometry transfer; server search remained null",
+      "Retried and reused verified graph and starts; only geometry fetched again",
+      "Automatically started captured 7\u201314 mi, 0\u20134000 ft, 20% repeat query with unchanged road/access settings",
+      "Reload reconnected to same current search and original query",
+      "Stop retained results with tried versus fully explored counts and unfinished notice",
+      "No browser console errors"
+    ],
+    "downloadFinished": true
+  },
+  "capacityPolicy": {
+    "maxSourceSegments": 700000,
+    "sourceSegments": 2640060,
+    "appliedCuts": [
+      "I90",
+      "US12",
+      "US2",
+      "WA20"
+    ],
+    "unusedApprovedCandidates": [
+      "WA410"
+    ],
+    "sections": [
+      {
+        "id": "mountain-5ddbe56851a3ef10b5dd1c9b",
+        "name": "Washington Cascades \u2014 south of I90, south of US12",
+        "sourceSegments": 579293,
+        "status": "ready"
+      },
+      {
+        "id": "mountain-2a4d447aacf40ec36c994372",
+        "name": "Washington Cascades \u2014 south of I90, north of US12",
+        "sourceSegments": 549064,
+        "status": "ready"
+      },
+      {
+        "id": "mountain-660c46a64b2d2c4b3708b50b",
+        "name": "Washington Cascades \u2014 north of I90, south of US2",
+        "sourceSegments": 491863,
+        "status": "ready"
+      },
+      {
+        "id": "mountain-e0d9e823de86d06a5d818d07",
+        "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20",
+        "sourceSegments": 654645,
+        "status": "ready"
+      },
+      {
+        "id": "mountain-c316cb292a3a21bbf2e5ccac",
+        "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20",
+        "sourceSegments": 375305,
+        "status": "ready"
+      }
+    ],
+    "planSha256": "0d12a5aec888060db4f1e5e0b7eb47822fd6b2e4b48a395666f63db1e272cb5c",
+    "sourceManifestSha256": "8033241b25f4e3071f5d56f9b1e99921579012c615b1569732b5522e4a0c8754",
+    "planningMeasurement": {
+      "command": [
+        "/private/tmp/alpine-preparation-venv/bin/python",
+        "tools/prepare/build.py",
+        "plan",
+        "--source-root",
+        ".cache",
+        "--output",
+        ".local-data/cascades-plan.json"
+      ],
+      "elapsedSeconds": 199.09092725001392,
+      "exitCode": 0,
+      "sampledTreePeakRssBytes": 1650294784,
+      "samples": 692,
+      "maxSampleGapSeconds": 1.1392795419960748,
+      "scope": "Compiler plus all native descendant processes; supervisor excluded. Sampled every250ms; can miss brief peaks. Filesystem cache/concurrent workloads uncontrolled."
+    },
+    "method": "Conservative candidate source-node-pair count, one per way regardless of walking direction, before corridor compression. A cut requires a currently oversized piece and a real source-connected polygon divider. Freeways first; exact minimum additional lower-tier subsets. No invented endpoints."
+  },
+  "completeBuild": {
+    "snapshotId": "mountains-5b37c2656a4644128de5a22ff4a3283a61f4f3bfe6a39393fb1ffd80e160be91",
+    "catalogSha256": "ad35f48a12dea2e9708089b40c4d861592664754dd044aac6087ee01eec579fd",
+    "provenanceSha256": "c8715791cdf5afdbbe87014bfaf31a7d5f52a70d3177ea4ae416f68aaf1497f6",
+    "evidence": {
+      "compiler": {
+        "build.py": "995fd24f855ad6dcd1af2d60ca1fec787015f21da757a5fa153f445260d6927f",
+        "elevation.py": "6a930be17585bddc06822ec0f556ef1dcfa24e449a5a99651379f546d43e2ad3",
+        "footprint.py": "00b62d553acabb1779ea8bfe8029a0cbe7425feaf3ac5a515761d4e946a316d8",
+        "graph.py": "d18382ed9d3b05204e2e2d82df6f7a1e522f05a09f72d13b9f43aa97c580930f",
+        "osm.py": "a62422ded3fc482748b27594bb535ebbc3bdf46d7431b83c53eda38be4e5e58e",
+        "output.py": "562cf2d7d5eea3c4b638aa9e3c40c62a4a01d1f31d5008c5fa6ebfab02214f29",
+        "partition.py": "a9f71d68dba65da19c7f2c243036c0525f214abbed489455d773dd6cb506fd2a",
+        "pyproject.toml": "da6d527136c2d96c0bd278ef288ee9f68d3c13797dfed055b7c5f6a3c8dde717"
+      },
+      "environment": {
+        "gdal": "3.9.3",
+        "geos": "3.13.1",
+        "numpy": "2.5.3",
+        "pyshp": "2.3.1",
+        "python": "3.13.13",
+        "rasterio": "1.4.3",
+        "shapely": "2.1.2"
+      },
+      "osmium": "osmium version 1.19.1",
+      "sourceManifest": "tools/prepare/sources.json",
+      "sourceManifestSha256": "8033241b25f4e3071f5d56f9b1e99921579012c615b1569732b5522e4a0c8754"
+    },
+    "sections": [
+      {
+        "id": "mountain-5ddbe56851a3ef10b5dd1c9b",
+        "name": "Washington Cascades \u2014 south of I90, south of US12",
+        "sourceSegments": 579293,
+        "startCount": 1847,
+        "downloadBytes": 23753184
+      },
+      {
+        "id": "mountain-2a4d447aacf40ec36c994372",
+        "name": "Washington Cascades \u2014 south of I90, north of US12",
+        "sourceSegments": 549064,
+        "startCount": 2241,
+        "downloadBytes": 20340097
+      },
+      {
+        "id": "mountain-660c46a64b2d2c4b3708b50b",
+        "name": "Washington Cascades \u2014 north of I90, south of US2",
+        "sourceSegments": 491863,
+        "startCount": 2920,
+        "downloadBytes": 16070928
+      },
+      {
+        "id": "mountain-e0d9e823de86d06a5d818d07",
+        "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20",
+        "sourceSegments": 654645,
+        "startCount": 2323,
+        "downloadBytes": 20700589
+      },
+      {
+        "id": "mountain-c316cb292a3a21bbf2e5ccac",
+        "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20",
+        "sourceSegments": 375305,
+        "startCount": 1818,
+        "downloadBytes": 13314987
+      }
+    ],
+    "unavailableSections": 0,
+    "starts": 11149,
+    "totalDownloadBytes": 94179785,
+    "observations": [
+      {
+        "counts": {
+          "directedEdges": 78388,
+          "duplicateSegments": 0,
+          "elevationSamples": 1093910,
+          "elevationSupplementSamples": 0,
+          "frontierNodes": 1118,
+          "nodes": 34748,
+          "outsideSegments": 25820,
+          "physicalTrails": 39194,
+          "prohibitedSegments": 45372,
+          "selectedWays": 25584,
+          "starts": 1847,
+          "zeroLengthSegments": 0
+        },
+        "elapsedSeconds": 160.08151124999858,
+        "peakRssBytes": 1474297856,
+        "section": "mountain-5ddbe56851a3ef10b5dd1c9b"
+      },
+      {
+        "counts": {
+          "directedEdges": 79516,
+          "duplicateSegments": 2,
+          "elevationSamples": 912543,
+          "elevationSupplementSamples": 0,
+          "frontierNodes": 892,
+          "nodes": 33746,
+          "outsideSegments": 20795,
+          "physicalTrails": 39758,
+          "prohibitedSegments": 137696,
+          "selectedWays": 28526,
+          "starts": 2241,
+          "zeroLengthSegments": 0
+        },
+        "elapsedSeconds": 148.38699091697345,
+        "peakRssBytes": 1514848256,
+        "section": "mountain-2a4d447aacf40ec36c994372"
+      },
+      {
+        "counts": {
+          "directedEdges": 80800,
+          "duplicateSegments": 13,
+          "elevationSamples": 680392,
+          "elevationSupplementSamples": 0,
+          "frontierNodes": 974,
+          "nodes": 32956,
+          "outsideSegments": 19584,
+          "physicalTrails": 40400,
+          "prohibitedSegments": 73523,
+          "selectedWays": 26417,
+          "starts": 2920,
+          "zeroLengthSegments": 0
+        },
+        "elapsedSeconds": 100.607389916986,
+        "peakRssBytes": 1514848256,
+        "section": "mountain-660c46a64b2d2c4b3708b50b"
+      },
+      {
+        "counts": {
+          "directedEdges": 68088,
+          "duplicateSegments": 3,
+          "elevationSamples": 964693,
+          "elevationSupplementSamples": 0,
+          "frontierNodes": 539,
+          "nodes": 29414,
+          "outsideSegments": 22761,
+          "physicalTrails": 34044,
+          "prohibitedSegments": 53777,
+          "selectedWays": 24655,
+          "starts": 2323,
+          "zeroLengthSegments": 0
+        },
+        "elapsedSeconds": 89.98309437499847,
+        "peakRssBytes": 1647411200,
+        "section": "mountain-e0d9e823de86d06a5d818d07"
+      },
+      {
+        "counts": {
+          "directedEdges": 46222,
+          "duplicateSegments": 30,
+          "elevationSamples": 607323,
+          "elevationSupplementSamples": 10,
+          "frontierNodes": 485,
+          "nodes": 19959,
+          "outsideSegments": 13287,
+          "physicalTrails": 23111,
+          "prohibitedSegments": 33480,
+          "selectedWays": 15820,
+          "starts": 1818,
+          "zeroLengthSegments": 0
+        },
+        "elapsedSeconds": 60.389362957997946,
+        "peakRssBytes": 1647411200,
+        "section": "mountain-c316cb292a3a21bbf2e5ccac"
+      }
+    ],
+    "compilerPeakRssBytes": 1647411200,
+    "processTreeMeasurement": {
+      "command": [
+        "/private/tmp/alpine-preparation-venv/bin/python",
+        "tools/prepare/build.py",
+        "build",
+        "--source-root",
+        ".cache",
+        "--plan",
+        ".local-data/cascades-plan.json",
+        "--output",
+        ".local-data/mountains",
+        "--audit"
+      ],
+      "elapsedSeconds": 631.6469774169964,
+      "exitCode": 0,
+      "sampledTreePeakRssBytes": 1676427264,
+      "samples": 2190,
+      "maxSampleGapSeconds": 2.573290625005029,
+      "scope": "Compiler plus all native descendant processes; supervisor excluded. Sampled every250ms; can miss brief peaks. Filesystem cache/concurrent workloads uncontrolled."
+    }
+  },
+  "compiledKnownWalks": {
+    "method": "Independently verify SHA/byte counts of all read files, match each entire prior eligible sampled 3D walk to a unique directed continuation from its identical original source start in one complete new section graph. Verify access, original area/distance/gain/repetition/road criteria, simple loop or lollipop structure, and remeasure haversine distance and complete elevation profile. No preparation helpers or solver imports. This demonstrates known-walk retention, not search discovery completeness.",
+    "checkerSha256": "da72bd85ea5a97bc06b101042d5270e117fc022dd13dd0219c023a131a3786c2",
+    "catalogSha256": "ad35f48a12dea2e9708089b40c4d861592664754dd044aac6087ee01eec579fd",
+    "snapshotId": "mountains-5b37c2656a4644128de5a22ff4a3283a61f4f3bfe6a39393fb1ffd80e160be91",
+    "priorManifestSha256": "bae29ba98ee1abdc0a7a8fb6b24356d475dd73e93c7bab4a2dc13ff7d6f08dec",
+    "priorWitnessSha256": "9f5dca9f48bdcc013e09b6f711faa72b8f6d93a327a4c8a3a47ca36ee0679349",
+    "records": [
+      {
+        "queryId": "pass-lakes",
+        "section": "mountain-2a4d447aacf40ec36c994372",
+        "startId": "osm-entrance:1004976342",
+        "exactPriorSampledProfile": true,
+        "points": 1060,
+        "physicalCorridors": 8,
+        "distance": 11467.928232418124,
+        "gain": 1056.9621029171162,
+        "repetition": 0.24732594607568,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "paradise-short",
+        "section": "mountain-2a4d447aacf40ec36c994372",
+        "startId": "osm-entrance:11028822550",
+        "exactPriorSampledProfile": true,
+        "points": 417,
+        "physicalCorridors": 10,
+        "distance": 6385.574336696841,
+        "gain": 303.76605080497416,
+        "repetition": 0.15110240740074832,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "paradise-day",
+        "section": "mountain-2a4d447aacf40ec36c994372",
+        "startId": "osm-entrance:11028822550",
+        "exactPriorSampledProfile": true,
+        "points": 1287,
+        "physicalCorridors": 26,
+        "distance": 17046.357914505286,
+        "gain": 994.4277555699314,
+        "repetition": 0.22965471729859285,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "sunrise-day",
+        "section": "mountain-2a4d447aacf40ec36c994372",
+        "startId": "osm-entrance:5305234174",
+        "exactPriorSampledProfile": true,
+        "points": 915,
+        "physicalCorridors": 12,
+        "distance": 14837.228111601786,
+        "gain": 961.6395080983104,
+        "repetition": 0.3378913949991686,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "sunrise-long",
+        "section": "mountain-2a4d447aacf40ec36c994372",
+        "startId": "osm-entrance:110921039",
+        "exactPriorSampledProfile": true,
+        "points": 7036,
+        "physicalCorridors": 33,
+        "distance": 112758.09029764449,
+        "gain": 6512.648671448338,
+        "repetition": 0.44766270900443716,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "north-bend-known",
+        "section": "mountain-660c46a64b2d2c4b3708b50b",
+        "startId": "osm-entrance:12761651948",
+        "exactPriorSampledProfile": true,
+        "points": 1047,
+        "physicalCorridors": 14,
+        "distance": 9524.474384424519,
+        "gain": 679.8037607038207,
+        "repetition": 0.2762331119713006,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      },
+      {
+        "queryId": "stevens-long",
+        "section": "mountain-660c46a64b2d2c4b3708b50b",
+        "startId": "osm-entrance:1013210510",
+        "exactPriorSampledProfile": true,
+        "points": 7934,
+        "physicalCorridors": 25,
+        "distance": 116271.25993876293,
+        "gain": 5830.484774879909,
+        "repetition": 0.42966077079648946,
+        "roadDistance": 0,
+        "kind": "lollipop",
+        "originalConstraintsSatisfied": true
+      }
+    ]
+  },
+  "wholeApp": {
+    "methodology": [
+      "Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.",
+      "RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.",
+      "Route timing is first API observation with 100ms polls, not exact discovery time. Reconnect checks the current-search API, not browser rendering.",
+      "The observation window and sampled RSS guard only stop this measurement through the app Stop API. An outer deadline kills a hung child after the window plus 15 seconds.",
+      "Query criteria are frozen; historical pilot dataset IDs/start counts do not describe the supplied snapshot. Counts are retained app choices, not independent existence certificates.",
+      "Each result records the effective query, including app defaults for newer settings absent from the frozen request. Explicit requested constraints must remain unchanged.",
+      "Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Failed or interrupted observations do not prove no matches."
+    ],
+    "inputs": {
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "manifestSha256": "ad35f48a12dea2e9708089b40c4d861592664754dd044aac6087ee01eec579fd",
+      "snapshotId": "mountains-5b37c2656a4644128de5a22ff4a3283a61f4f3bfe6a39393fb1ffd80e160be91",
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "3e18c4cd85612af8f74875e6f3b10f116e5a8212e397fc20c1c658748dc17d34",
+        "diversity.js": "7a1d5b97dcc735428c77b8e61ac99a4c75c30e1248172add29dd2e284d8dc6e9",
+        "engine/search.js": "ed47060d0b86899734496ff7a5bfd9697763bfd3d5f4b5d8e87c21fbc278f20b",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "route-store.js": "29869ff38022451ad314ad93329c294b828be0adfbfffd1fde522b13bc681757",
+        "search-worker.js": "bdfadf602aa6cbb68fc36765a62c193ba9f467bebb253f643d9340b681b179af",
+        "searches.js": "c736382d3a7b4ee0b99fc468f9ca9b7ae83ce1c1f2028d904fd5721402e6ffe3",
+        "sections.js": "c7e63bdda9aa6ad8c504aff5f4d538d4a64b999f91364ba002397ec30285275a",
+        "server.js": "af674de7fe26c0aaa24180cbe472f7797fec5b200e8a14dfd102fb0cd464a7e5"
+      },
+      "packageLockSha256": "ee64f85cd5a3fc29208f5038ec8d3b5b6f9f251a953b73b1dce5e79e2c0d5a36",
+      "harnessHashes": {
+        "run.mjs": "1950b9dfb87b09bc30f9caf3c8b07f600ad0352369b3a711975c7db6ec34eb18",
+        "query.mjs": "973ed3dc542d4b64f9672ad9fec0b35771ef53b2e0d977f253387f6ea25f2ced"
+      }
+    },
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M3",
+      "memoryBytes": 17179869184
+    },
+    "observationMs": 10000,
+    "queries": 24,
+    "hasFailures": false,
+    "maxOsProcessPeakRssBytes": 441073664,
+    "maxStopLatencyMs": 14.082334000000628,
+    "completeWithinObservation": 5,
+    "unfinished": 19,
+    "originalConstraintsPreserved": true,
+    "reconnectPreservedEverySearchAndQuery": true,
+    "results": [
+      {
+        "id": "north-bend-short",
+        "outcome": "unfinished",
+        "routes": 23,
+        "progress": {
+          "totalStarts": 127,
+          "attemptedStarts": 69,
+          "completedStarts": 18,
+          "expansions": 54900119,
+          "elapsedMs": 9882.850958
+        },
+        "peakRssBytes": 353992704,
+        "stopMs": 2.709333000000697
+      },
+      {
+        "id": "north-bend-pure",
+        "outcome": "unfinished",
+        "routes": 109,
+        "progress": {
+          "totalStarts": 127,
+          "attemptedStarts": 69,
+          "completedStarts": 6,
+          "expansions": 56189398,
+          "elapsedMs": 9825.516958999999
+        },
+        "peakRssBytes": 397656064,
+        "stopMs": 2.5742079999999987
+      },
+      {
+        "id": "north-bend-known",
+        "outcome": "complete_within_snapshot",
+        "routes": 266,
+        "progress": {
+          "totalStarts": 5,
+          "attemptedStarts": 5,
+          "completedStarts": 5,
+          "expansions": 2236528,
+          "elapsedMs": 565.1384999999999
+        },
+        "peakRssBytes": 367214592,
+        "stopMs": null
+      },
+      {
+        "id": "middle-fork-day",
+        "outcome": "unfinished",
+        "routes": 2,
+        "progress": {
+          "totalStarts": 60,
+          "attemptedStarts": 60,
+          "completedStarts": 15,
+          "expansions": 65372210,
+          "elapsedMs": 9872.411084
+        },
+        "peakRssBytes": 388218880,
+        "stopMs": 2.2507079999995767
+      },
+      {
+        "id": "middle-fork-flat",
+        "outcome": "complete_within_snapshot",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 60,
+          "attemptedStarts": 60,
+          "completedStarts": 60,
+          "expansions": 40708549,
+          "elapsedMs": 6900.62775
+        },
+        "peakRssBytes": 357580800,
+        "stopMs": null
+      },
+      {
+        "id": "pass-lakes",
+        "outcome": "unfinished",
+        "routes": 207,
+        "progress": {
+          "totalStarts": 145,
+          "attemptedStarts": 145,
+          "completedStarts": 97,
+          "expansions": 64309917,
+          "elapsedMs": 9912.028541
+        },
+        "peakRssBytes": 392101888,
+        "stopMs": 2.252375000000029
+      },
+      {
+        "id": "pass-long",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 145,
+          "attemptedStarts": 86,
+          "completedStarts": 38,
+          "expansions": 68242602,
+          "elapsedMs": 9887.14775
+        },
+        "peakRssBytes": 388022272,
+        "stopMs": 1.5406669999993028
+      },
+      {
+        "id": "pass-demanding",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 145,
+          "attemptedStarts": 145,
+          "completedStarts": 119,
+          "expansions": 68006135,
+          "elapsedMs": 9892.337791
+        },
+        "peakRssBytes": 441073664,
+        "stopMs": 1.6895839999997406
+      },
+      {
+        "id": "stevens-short",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 73,
+          "attemptedStarts": 43,
+          "completedStarts": 40,
+          "expansions": 66183361,
+          "elapsedMs": 9850.099791999999
+        },
+        "peakRssBytes": 377765888,
+        "stopMs": 1.6761249999999563
+      },
+      {
+        "id": "stevens-day",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 73,
+          "attemptedStarts": 43,
+          "completedStarts": 28,
+          "expansions": 73164509,
+          "elapsedMs": 9847.57825
+        },
+        "peakRssBytes": 383713280,
+        "stopMs": 1.5701669999998558
+      },
+      {
+        "id": "stevens-pure",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 73,
+          "attemptedStarts": 43,
+          "completedStarts": 27,
+          "expansions": 70539201,
+          "elapsedMs": 9895.220792
+        },
+        "peakRssBytes": 382681088,
+        "stopMs": 1.715874999999869
+      },
+      {
+        "id": "stevens-known",
+        "outcome": "complete_within_snapshot",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 0,
+          "attemptedStarts": 0,
+          "completedStarts": 0,
+          "expansions": 0,
+          "elapsedMs": 0.01141699999999446
+        },
+        "peakRssBytes": 191021056,
+        "stopMs": null
+      },
+      {
+        "id": "wenatchee-easy",
+        "outcome": "unfinished",
+        "routes": 88,
+        "progress": {
+          "totalStarts": 126,
+          "attemptedStarts": 126,
+          "completedStarts": 40,
+          "expansions": 67583235,
+          "elapsedMs": 9874.515792
+        },
+        "peakRssBytes": 402046976,
+        "stopMs": 2.4907919999986916
+      },
+      {
+        "id": "wenatchee-day",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 126,
+          "attemptedStarts": 126,
+          "completedStarts": 32,
+          "expansions": 68360126,
+          "elapsedMs": 9846.923541
+        },
+        "peakRssBytes": 388595712,
+        "stopMs": 1.6454999999987194
+      },
+      {
+        "id": "stevens-long",
+        "outcome": "unfinished",
+        "routes": 818,
+        "progress": {
+          "totalStarts": 73,
+          "attemptedStarts": 43,
+          "completedStarts": 23,
+          "expansions": 67634148,
+          "elapsedMs": 9890.427792
+        },
+        "peakRssBytes": 399261696,
+        "stopMs": 2.6715000000003783
+      },
+      {
+        "id": "wenatchee-demanding",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 126,
+          "attemptedStarts": 126,
+          "completedStarts": 51,
+          "expansions": 55571456,
+          "elapsedMs": 9913.454166
+        },
+        "peakRssBytes": 381714432,
+        "stopMs": 1.4202920000006998
+      },
+      {
+        "id": "paradise-short",
+        "outcome": "unfinished",
+        "routes": 1914,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 47,
+          "expansions": 55824318,
+          "elapsedMs": 9886.586874999999
+        },
+        "peakRssBytes": 372948992,
+        "stopMs": 2.1934170000004087
+      },
+      {
+        "id": "paradise-day",
+        "outcome": "unfinished",
+        "routes": 526,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 37,
+          "expansions": 63814648,
+          "elapsedMs": 9890.206834
+        },
+        "peakRssBytes": 381272064,
+        "stopMs": 2.2754169999989244
+      },
+      {
+        "id": "paradise-known",
+        "outcome": "complete_within_snapshot",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 24,
+          "attemptedStarts": 24,
+          "completedStarts": 24,
+          "expansions": 2600,
+          "elapsedMs": 112.41054200000002
+        },
+        "peakRssBytes": 289554432,
+        "stopMs": null
+      },
+      {
+        "id": "sunrise-pure",
+        "outcome": "unfinished",
+        "routes": 54,
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 2,
+          "expansions": 67002226,
+          "elapsedMs": 9943.013417
+        },
+        "peakRssBytes": 377487360,
+        "stopMs": 2.3057499999995343
+      },
+      {
+        "id": "sunrise-day",
+        "outcome": "unfinished",
+        "routes": 327,
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 0,
+          "expansions": 48294935,
+          "elapsedMs": 9911.337083999999
+        },
+        "peakRssBytes": 334413824,
+        "stopMs": 14.082334000000628
+      },
+      {
+        "id": "carbon-easy",
+        "outcome": "complete_within_snapshot",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 8,
+          "attemptedStarts": 8,
+          "completedStarts": 8,
+          "expansions": 887,
+          "elapsedMs": 309.97583299999997
+        },
+        "peakRssBytes": 303431680,
+        "stopMs": null
+      },
+      {
+        "id": "sunrise-long",
+        "outcome": "unfinished",
+        "routes": 27,
+        "progress": {
+          "totalStarts": 23,
+          "attemptedStarts": 23,
+          "completedStarts": 0,
+          "expansions": 59346455,
+          "elapsedMs": 9917.599709
+        },
+        "peakRssBytes": 318832640,
+        "stopMs": 3.7799580000009882
+      },
+      {
+        "id": "paradise-demanding",
+        "outcome": "unfinished",
+        "routes": 0,
+        "progress": {
+          "totalStarts": 195,
+          "attemptedStarts": 195,
+          "completedStarts": 84,
+          "expansions": 64485590,
+          "elapsedMs": 9922.2265
+        },
+        "peakRssBytes": 379109376,
+        "stopMs": 1.9730839999992895
+      }
+    ]
+  },
+  "largestSectionWithActiveSearchAndDrawing": {
+    "scope": "Additional capacity smoke selecting an original mapped trailhead and nearby mapped starts solely in the largest planned section. Real HTTP search worker plus route detail and GPX geometry loading. Ten-second observation belongs only to this measurement, not app search or constraint relaxation. No discovery/completion claim. Browser excluded.",
+    "sectionId": "mountain-e0d9e823de86d06a5d818d07",
+    "sourceSegments": 654645,
+    "query": {
+      "area": [
+        -122.2,
+        47.99,
+        -120.6,
+        48.37
+      ],
+      "distance": [
+        500,
+        50000
+      ],
+      "gain": [
+        0,
+        10000
+      ],
+      "repetition": 0.9,
+      "includeUnknown": true
+    },
+    "originalStartId": "osm-entrance:3759808804",
+    "coverage": {
+      "sections": [
+        "mountain-e0d9e823de86d06a5d818d07"
+      ],
+      "missing": [],
+      "bytes": 0
+    },
+    "snapshotStatus": "running",
+    "progress": {
+      "totalStarts": 450,
+      "attemptedStarts": 450,
+      "completedStarts": 190,
+      "expansions": 4797761,
+      "elapsedMs": 9873.786458
+    },
+    "routeCount": 6909,
+    "statusAtDetail": "running",
+    "detailPoints": 3961,
+    "gpxBytes": 334620,
+    "stopStatus": "stopped",
+    "stopMs": 5.59979199999907,
+    "sampledPeakRssBytes": 700923904,
+    "osProcessPeakRssBytes": 700940288
+  },
+  "localEvidence": {
+    ".local-data/mountains/audit/review/whole-app.json": "2ee48c3e9accbef89f5c327e621c6d10daed44538c276b36bc38de3eed956a93",
+    ".local-data/mountains/audit/review/known-walks.json": "6edcd28a9816e4a171084f2ccf3cda5762978acfb66fe346eb3558beaabf7f33",
+    ".local-data/mountains/audit/review/largest-section.json": "c7990a44fd31189df3e076aabd16bbb3a081e0af94778be17643ed1f1c7b4234",
+    ".local-data/mountains/audit/review/planning-memory.json": "f6b4851c021203f669d93937f09245a38dc1ce444b0b0c621711890aef856432",
+    ".local-data/mountains/audit/review/build-memory.json": "b5ca7cfd48ee64bbcf6f7b9d97a6417b86dbb3efa3e736d4fc0a32f1b8dac875",
+    ".local-data/mountains/audit/review/download-browser.json": "39e5bd3cc38c9108ad304c03cc5455e62ecc76bc25825db39c49072a4aa046cb",
+    ".local-data/mountains/audit/review/known-walk-checker.py": "da72bd85ea5a97bc06b101042d5270e117fc022dd13dd0219c023a131a3786c2",
+    ".local-data/mountains/audit/review/largest-section-checker.mjs": "7ee3546a49bd470fe3f32e5c5a3ca32311f2812c3aff46c720c75e0780a10284",
+    ".local-data/mountains/audit/review/preparation-memory-supervisor.py": "3a68b9fbc47b0c7a8efe21530983f91507dd96794d430b7cd8b01bd89d180820"
+  },
+  "verification": [
+    "npm run verify: production build, typecheck, 30 Vitest checks and 4 Node checks passed with clean dependencies",
+    "Native offline fresh_compile.py and partitions.py: complete source/DEM/compiler fixture and six independent partition checks passed",
+    "npm start: automatically installed dependencies and built/served the complete local catalog",
+    "Browser: final five exact section polygons and actual download sizes, actual-file transfer/cancellation/reuse, unchanged search resume and reconnect verified; no console errors"
+  ],
+  "cleanup": {
+    "archive": "archive/before-mountain-preparation-2026-10-05",
+    "retiredTrackedFiles": 30,
+    "dependencyLockEntriesBefore": 223,
+    "dependencyLockEntriesAfter": 151,
+    "maintainedSourceFiles": 30,
+    "maintainedSourceLines": 5256,
+    "userOwnedUntrackedDocsPreserved": "docs/rebuild/",
+    "publicPreparedDataPublication": "Pending; scripts/data-release.json remains unset. Local checkout and real loopback download flows are complete."
+  }
+}

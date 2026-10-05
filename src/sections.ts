@@ -269,8 +269,12 @@ export async function openSections(directory: string) {
     },
     async view(): Promise<CatalogView> {
       const sections = [];
-      for (const section of catalog.sections) sections.push({ ...section, installed: await installed(section),
-        bytes: families.reduce((sum, family) => sum + section.files[family].bytes, 0) });
+      for (const section of catalog.sections) {
+        let usable = false, needsRepair = false;
+        try { usable = await installed(section); } catch { needsRepair = true; }
+        sections.push({ ...section, installed: usable, needsRepair,
+          bytes: families.reduce((sum, family) => sum + section.files[family].bytes, 0) });
+      }
       return { ...catalog.info, sections, ...(catalog.unavailable ? { unavailable: catalog.unavailable } : {}) };
     },
     downloads,

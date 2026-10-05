@@ -56,7 +56,7 @@ async function request<T>(
               data?.error?.message ??
               "The server could not complete this request."),
       ),
-      { status: response.status, sections: data?.sections, bytes: data?.bytes },
+      { status: response.status, sections: data?.missing ?? data?.sections, bytes: data?.bytes },
     );
   return data as T;
 }
@@ -200,9 +200,7 @@ function RouteDetails({
       <div className="road-detail">
         <p>
           <strong>Road connections: </strong>
-          {Number.isFinite(route.roadDistance)
-            ? `${(route.roadDistance / MILE).toFixed(2)} mi (${(100 * route.roadDistance / route.distance).toFixed(1)}%)`
-            : "Not recorded for this earlier search."}
+          {(route.roadDistance / MILE).toFixed(2)} mi ({(100 * route.roadDistance / route.distance).toFixed(1)}%)
         </p>
         <p className="field-hint">{roadExplanation}</p>
       </div>
@@ -928,7 +926,7 @@ export function App() {
                             setAreaMode("drawn");
                             moveTo(section.bounds);
                           }}>{section.name}</button>
-                          <span>{section.installed ? "Downloaded · " : ""}{megabytes(section.bytes)}</span>
+                          <span>{section.installed ? "Downloaded · " : section.needsRepair ? "Needs repair · " : ""}{megabytes(section.bytes)}</span>
                         </div>
                         {!section.installed && <button type="button" aria-label={`Download ${section.name}`}
                           onClick={() => void beginDownload([section.id])}>Download</button>}
@@ -1076,9 +1074,7 @@ export function App() {
                         At most {Math.round(search.query.repetition * 100)}%
                         walked again
                         <br />
-                        {search.query.roads
-                          ? `Roads: at most ${(search.query.roads.distance / MILE).toLocaleString()} mi and ${(search.query.roads.fraction * 100).toLocaleString()}%`
-                          : "Road limits not recorded for this earlier search"}
+                        Roads: at most {((search.query.roads ?? DEFAULT_ROAD_LIMITS).distance / MILE).toLocaleString()} mi and {((search.query.roads ?? DEFAULT_ROAD_LIMITS).fraction * 100).toLocaleString()}%
                       </p>
                       <p className="access-summary">
                         {search.query.includeUnknown

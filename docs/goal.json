@@ -20,7 +20,8 @@
       "all meaningfully different routes available through paging; no per-start result cap",
       "adjustable maximum road distance and share; trails remain the main experience",
       "retain road connections needed to make a valid loop; do not choose unnecessary road detours solely to reach the minimum hike length",
-      "combine small path and road permutations before result storage; choose alternative starts in hike details"
+      "combine small path and road permutations before result storage; choose alternative starts in hike details",
+      "hikes remain within reviewed hard highway partitions; disclose that crossings of selected dividers, including bridges and underpasses, are excluded"
     ],
     "setup": [
       "one local command after prerequisites",
@@ -53,81 +54,65 @@
       "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
     ]
   },
-  "state": "The local desktop area selection, constraints, progressive comparison, hike/start/direction details, GPX and browser reconnect work. Maintained app plus preparation is 5,187 lines versus the 24,063-line baseline; Cascades data remains installed. Solver replacement remains unfinished: the guarded 24-query baseline recovers only one of seven eligible source hikes at its original start; three sustained observations, including two all-trail partitions, find no corresponding source family. Roads dominate saved Pratt duplication but removing them does not resolve discovery. An isolated per-block compressed cycle-core probe preserves three known all-trail cores and both directions, with 31\u201341 MB observed process peaks; this is not complete hike recovery. Production unchanged. Statewide preparation, fresh-source validation and automatic fresh-machine data acquisition remain unfinished. Hosting is deferred; public data publication is not approved.",
-  "solverResearch": {
-    "date": "2026-10-01",
-    "roadConnectionPolicy": {
-      "userDecision": "A longer road connection stays when it enables a valid loop, including the Pratt example. Reject extra road walking chosen solely to pad minimum hike mileage.",
-      "comparison": "Compare connections in the context of the same start and substantial trail itinerary. Preserve legal direction, allowed access, loop/lollipop structure, repetition and the user's road limits. A globally shortest endpoint path can conflict with the rest of the hike; it is not a safe unconditional replacement.",
-      "savedPrattEvidence": "All 1,137 saved walks remain valid and satisfy the original constraints after replacing their connector runs with shortest directed paths while preserving the start and checking the complete walk. This yields 211 ordered trail-itinerary/start choices. Roads remain necessary: the replacements still contain 4.960\u20137.296 km of road. This is a property of this saved set, not a completeness proof or a count of meaningfully different hikes.",
-      "evidence": "/private/tmp/alpine-local-choice-data/road-padding/report.json"
-    },
-    "status": "Isolated research only; production unchanged. Road removal does not resolve source-family discovery. Per-block compressed all-trail cycle families preserve the three known cores and both source directions with low observed memory, but do not construct qualifying complete hikes.",
-    "recommendation": "Prove complete cycle-plus-approach discovery and exact whole-hike validation on the small real slice before broader trials. Preserve compatible stems, eligible starts, access/direction, distance/gain/repetition and canonical necessary roads. Do not enumerate every tiny combination merely to group it afterward.",
-    "correctnessBoundary": "Preserve a qualifying realization for each explicitly defined hike class and eligible start. Shortest-only or ordinary Pareto-minimal local replacement is unsafe with minimum distance and climb. Resource intervals can reject impossibility but cannot establish a feasible combination. Preserve internal starts, complete internal loops, legal reversible stems, direction, access and simplicity; leave ambiguous regions uncollapsed.",
-    "experiments": [
-      "Independent small networks with 10 and 20 local binary alternatives: measure search states and fully realized combinations, including a longer-only qualifying realization.",
-      "Recover the independently reconstructed Pratt, Franklin Falls, Annette-area and Talapus witnesses; retain eligible starts and qualifying directions.",
-      "Check internal starts, asymmetric access, longer-only qualifying lollipop stems, overlapping alternatives and road bypasses.",
-      "Measure real-query search work and discovery coverage, not merely reduced stored results. No first-N cap and no completeness claim based on heuristic failure to find more routes."
+  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is 5,256 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending.",
+  "dataPartitionPolicy": {
+    "date": "2026-10-05",
+    "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
+    "status": "Implemented and measured. Exact Washington GMBA Cascades compilation has five complete sections and no unavailable sections. At the 700,000-segment gate it uses I-90, US 12, US 2 and SR 20; SR 410 remains available but unused. Complete compiled known-walk retention and whole-app/download verification are recorded in benchmarks/mountain-preparation-review.json.",
+    "partitionTrigger": "Keep a GMBA region whole up to 700,000 relevant consecutive OSM source-node pairs, before corridor compression. Count once per source segment regardless of walking direction; include admitted trails and road connectors. Duplicate source ways and unresolved barriers conservatively overcount. A cut requires both a currently oversized piece and a genuine available highway divider. The default is calibrated with real preparation and loaded-graph/search observations; it is a capacity proxy, not a guarantee for arbitrary future sources or query durations.",
+    "cutSelection": "Engineering default under the user's delegated choice: apply the size gate first. For an oversized GMBA region, retain all suitable through-freeway dividers, then choose the fewest additional approved lower-tier highway cuts needed to bring the pieces under the size threshold. Prefer more significant corridors and lower largest-piece workload when equally small selections are feasible. Do not cut a small region merely because a highway exists. Never introduce an artificial divider when an oversized piece has no suitable highway; report that unresolved preparation capacity instead.",
+    "proposedWorkflow": [
+      "Identify a named GMBA region to add within supported coverage.",
+      "For an oversized region, identify highway corridors that actually divide it. Prioritize through-freeways and minimize the additional lower-tier cuts needed.",
+      "Prepare the resulting sections independently.",
+      "Expose the prepared sections in the UI. When starting a search needs missing sections, show one prompt with the section names and actual total download bytes; Download and search installs them with progress/cancellation, then continues the unchanged request. Reuse installed sections and support manual section downloads."
     ],
-    "sources": [
-      {
-        "title": "Modeling the Variety of Trip Opportunities in Recreational Route Networks",
-        "url": "https://eprints.sztaki.hu/10192/1/Molnar_75_32541461_ny.pdf",
-        "lesson": "Raw trip counts suffer combinatorial explosion and overstate recreational variety. Useful product framing and coverage metrics, not a complete solver for our directed gain-constrained problem."
+    "remainingValidation": [
+      "Measure new regions or source/compiler versions before public publication; the source-segment capacity is a conservative proxy, not a universal memory guarantee",
+      "Public catalog and prepared-section publication remains pending"
+    ],
+    "candidateRule": "Follow continuous mainline highway corridors, using numbered route identity and road-network significance to generate candidates. A selected corridor must form a closed region together with the preparation footprint or other selected dividers; do not invent continuations from road endpoints. Review actual mainline geometry, divided carriageways, junctions and route-reference changes before selection.",
+    "selectionEvidence": "Compare the largest resulting preparation workload, retained trail networks and starts, and excluded independently known hike families. Prefer a small reviewed set of substantial dividers; neither geographic area nor OSM highway class alone is sufficient.",
+    "washingtonCascadesDividers": {
+      "availableCorridors": [
+        "SR 20",
+        "US 2",
+        "I-90",
+        "SR 410",
+        "US 12"
+      ],
+      "additionalDividers": "User excluded connecting candidates for now, including SR 123 and US 97 / SR 970.",
+      "scope": "Reviewed source-connected mainline geometry. At 700,000 segments the exact unsimplified Washington GMBA Cascades footprint requires I-90, US 12, US 2 and SR 20; SR 410 remains unused. No connecting candidates or invented continuations are applied."
+    },
+    "preparationRequirements": [
+      "Partition source work before materializing each region's topology; splitting final output alone does not bound preparation memory.",
+      "Use highway geometry to establish partitions. Removing highway traversal alone leaves bridges, tunnels and other crossing paths connected.",
+      "Select starts by the user's visible or drawn area and search every intersecting partition with eligible starts. Region selection never follows the browser viewport as a route clip.",
+      "Preserve distinct starts and same-side access connections; a shared start or highway junction must not reconnect hard partitions."
+    ],
+    "sourceAssessment": {
+      "osmDate": "2026-08-01",
+      "osmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+      "finding": "Mainline ways in the pinned source vary in classification along a numbered route. Follow complete selected corridors across classification changes.",
+      "mountainFootprintReference": {
+        "dataset": "GMBA Mountain Inventory v2.0 standard, 300 selection",
+        "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_300.zip",
+        "sha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874",
+        "cascadeRangeId": "11202",
+        "license": "CC BY 4.0",
+        "role": "Exact outer preparation footprint intersected with the supported state outline; no per-start or per-hike mountain-core qualification.",
+        "initialCheck": "All seven qualifying independent complete walks lie within one new section each, avoid the applied highways, and retain their identical sampled 3D profiles, original source starts and original query constraints in the freshly compiled graphs. This is known-walk retention, not a search discovery-completeness claim."
       },
-      {
-        "title": "A Linear Time Implementation of SPQR-Trees",
-        "url": "https://doi.org/10.1007/3-540-44541-2_8",
-        "lesson": "Separation pairs and virtual-edge skeletons give a structural basis for two-boundary bundles. Decomposition does not decide hike equivalence or justify discarding metric alternatives."
-      },
-      {
-        "title": "Improved Alternative Route Planning",
-        "url": "https://drops.dagstuhl.de/storage/01oasics/oasics-vol033-atmos2013/OASIcs.ATMOS.2013.108/OASIcs.ATMOS.2013.108.pdf",
-        "lesson": "Alternative graphs and rejoin penalties address repeated tiny detours during generation. Road A-to-B and near-shortest assumptions do not transfer as exhaustive constrained-loop guarantees."
-      },
-      {
-        "title": "Finding k-shortest paths with limited overlap",
-        "url": "https://link.springer.com/article/10.1007/s00778-020-00604-x",
-        "lesson": "Monotone overlap permits early subtree pruning. Its similarity definition and shortest-prefix dominance differ from our present grouping and minimum resource requirements."
-      },
-      {
-        "title": "Generating Constrained Length Personalized Bicycle Tours",
-        "url": "https://backoffice.biblio.ugent.be/download/8587717/8587719",
-        "lesson": "Reusable outbound trees and alternate returns generate closed tours within length intervals. The practical method is heuristic and does not certify all meaningful hike classes."
-      },
-      {
-        "title": "Graphillion: Software Library Designed for Very Large Sets of Graphs in Python",
-        "url": "https://www-alg.ist.hokudai.ac.jp/~thomas/TCSTR/tcstr_13_65/tcstr_13_65.pdf",
-        "lesson": "Frontier search and zero-suppressed decision diagrams represent path families without expanding every combination. Worth a separate bounded experiment only if simpler bundling fails; compression and directed lollipop encoding need validation."
-      },
-      {
-        "title": "Finding All the Elementary Circuits of a Directed Graph",
-        "url": "https://www.cs.tufts.edu/comp/150GA/homeworks/hw1/Johnson%2075.PDF",
-        "lesson": "Output-sensitive cycle enumeration still pays for every minor-variant cycle. Shared cycle discovery can reduce repeated work across starts but does not alone address this failure."
+      "elevationSupplement": {
+        "finding": "The first complete build failed closed on ten masked bilinear samples near the Canadian border.",
+        "resolution": "Explicit SHA-pinned Copernicus GLO-30 tiles fill only otherwise missing primary samples. Valid 3DEP samples are unchanged; unresolved samples still fail publication. Each section records supplement use and the app discloses coarser surface-height and vertical-datum limitations.",
+        "evidence": "benchmarks/mountain-preparation-review.json#borderElevationGap"
       }
-    ],
-    "evidence": "benchmarks/results/local-choice-research.json",
-    "benchmarkAudit": {
-      "archive": "archive/research-context-benchmark-2026-09-30",
-      "evidence": "benchmarks/results/local-choice-research.json#frozenBenchmarkAudit",
-      "queries": 24,
-      "eligibleOriginalWitnesses": 7,
-      "sourceStartFamilyRecovered": 1,
-      "allVerifiedSourceHikesUseTrailsOnly": true,
-      "measurementOnlyDurationMs": 30000,
-      "productionUnchanged": true
-    },
-    "cycleCoreProbe": {
-      "archive": "archive/research-cycle-cores-2026-10-01",
-      "evidence": "benchmarks/results/cycle-core-research.json",
-      "queries": 3,
-      "originalCoreWitnessesPresent": 3,
-      "reversedCoreWitnessesPresent": 3,
-      "fullHikeRecovery": "unassessed",
-      "productionUnchanged": true,
-      "archiveCommit": "b63ebc045db522f8ed91e45612369a4ad2a22a7a"
     }
+  },
+  "solverResearch": {
+    "status": "Historical solver research is archived, not an active preparation requirement. The current solver is retained; a bounded observation does not establish complete route-family recovery. The preparation acceptance is source correctness, whole-walk retention, independent section identities and honest whole-app behavior.",
+    "archive": "archive/before-mountain-preparation-2026-10-05",
+    "preservedProductDecision": "Road connections may enable a valid loop but must not add avoidable road distance solely to reach minimum hike length. Constraints and original starts must remain exact."
   }
 }

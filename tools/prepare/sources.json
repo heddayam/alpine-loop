@@ -56,6 +56,28 @@
   },
   "elevation": [
     {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-69e6dcc0b66b01f903b6a342/7d759eb0fb49907748ab5305430bfd6d04a58902db5f869cc1d7a2fe5b707e9e/USGS_13_n46w123_20260406.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n46w123/USGS_13_n46w123_20260406.tif",
+      "sha256": "7d759eb0fb49907748ab5305430bfd6d04a58902db5f869cc1d7a2fe5b707e9e",
+      "bounds": [
+        -123,
+        45,
+        -122,
+        46
+      ]
+    },
+    {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6981bb9ab66b0193caec85a4/a05756ba7ee345873528a9229d3df235239f6de245573425c72e5b6d127b9448/USGS_13_n46w122_20260202.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n46w122/USGS_13_n46w122_20260202.tif",
+      "sha256": "a05756ba7ee345873528a9229d3df235239f6de245573425c72e5b6d127b9448",
+      "bounds": [
+        -122,
+        45,
+        -121,
+        46
+      ]
+    },
+    {
       "bounds": [
         -123,
         46,
@@ -87,6 +109,17 @@
       "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4592d4be027ac1589948/617fda4ef940046a86c2cb56310fc88b8d8872942981ac6028aafd1e47dcd3f3/USGS_13_n47w121_20250813.tif",
       "sha256": "617fda4ef940046a86c2cb56310fc88b8d8872942981ac6028aafd1e47dcd3f3",
       "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n47w121/USGS_13_n47w121_20250813.tif"
+    },
+    {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4593d4be027ac158994a/330117cc8e4000444e0c46047fca7fa7ae7f46e102e6e1e6aa4e413df2953cce/USGS_13_n47w120_20250813.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n47w120/USGS_13_n47w120_20250813.tif",
+      "sha256": "330117cc8e4000444e0c46047fca7fa7ae7f46e102e6e1e6aa4e413df2953cce",
+      "bounds": [
+        -120,
+        46,
+        -119,
+        47
+      ]
     },
     {
       "bounds": [
@@ -122,6 +155,17 @@
       "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w121/USGS_13_n48w121_20250813.tif"
     },
     {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4592d4be027ac1589942/2c2c5b120a3e6fbfeb14fb062bdde790cc389952f536a52ab8ee135dc38933fe/USGS_13_n48w120_20250813.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w120/USGS_13_n48w120_20250813.tif",
+      "sha256": "2c2c5b120a3e6fbfeb14fb062bdde790cc389952f536a52ab8ee135dc38933fe",
+      "bounds": [
+        -120,
+        47,
+        -119,
+        48
+      ]
+    },
+    {
       "bounds": [
         -123,
         48,
@@ -153,6 +197,96 @@
       "file": "sources/usgs-3dep-689d4591d4be027ac158993a/0641c47ed684ffa5cd50d25f80aff2b9fad91cc0e84b65ee3c7e900369e9eee7/USGS_13_n49w121_20250813.tif",
       "sha256": "0641c47ed684ffa5cd50d25f80aff2b9fad91cc0e84b65ee3c7e900369e9eee7",
       "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w121/USGS_13_n49w121_20250813.tif"
+    },
+    {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4591d4be027ac158993c/71e36877bb877bc74e129e7d6565f11006403ef8afacddbee93e88b16520dd23/USGS_13_n49w120_20250813.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w120/USGS_13_n49w120_20250813.tif",
+      "sha256": "71e36877bb877bc74e129e7d6565f11006403ef8afacddbee93e88b16520dd23",
+      "bounds": [
+        -120,
+        48,
+        -119,
+        49
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-5f77856182ce1d74e7d6ce2a/3dac4a51deabbc6cf5ba4de8b74eb293e8b1ab4d2705cad1a680ebb59fec394c/USGS_13_n50w123_20180202.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n50w123/USGS_13_n50w123_20180202.tif",
+      "sha256": "3dac4a51deabbc6cf5ba4de8b74eb293e8b1ab4d2705cad1a680ebb59fec394c",
+      "bounds": [
+        -123,
+        49,
+        -122,
+        50
+      ]
+    },
+    {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-5f77856182ce1d74e7d6ce28/f5c6ecad15b9ce4541ab1c186e0e5d95d7809db28cef484f080e1e6db3bd41cb/USGS_13_n50w122_20180202.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n50w122/USGS_13_n50w122_20180202.tif",
+      "sha256": "f5c6ecad15b9ce4541ab1c186e0e5d95d7809db28cef484f080e1e6db3bd41cb",
+      "bounds": [
+        -122,
+        49,
+        -121,
+        50
+      ]
+    },
+    {
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6672666cd34e84915adbaedd/2f684a3631b461a8e81d3121e3a7661c866e09de4ff3006858710a91c3469754/USGS_13_n50w121_20240617.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n50w121/USGS_13_n50w121_20240617.tif",
+      "sha256": "2f684a3631b461a8e81d3121e3a7661c866e09de4ff3006858710a91c3469754",
+      "bounds": [
+        -121,
+        49,
+        -120,
+        50
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-689d4590d4be027ac1589936/ad8b1d8cad3213f61e6811410df9b54ba9f1dead077b917d4f35da121b06ebca/USGS_13_n50w120_20250813.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n50w120/USGS_13_n50w120_20250813.tif",
+      "sha256": "ad8b1d8cad3213f61e6811410df9b54ba9f1dead077b917d4f35da121b06ebca",
+      "bounds": [
+        -120,
+        49,
+        -119,
+        50
+      ]
+    }
+  ],
+  "elevationSupplement": [
+    {
+      "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N48_00_W122_00_DEM.tif",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N48_00_W122_00_DEM/Copernicus_DSM_COG_10_N48_00_W122_00_DEM.tif",
+      "sha256": "f6dd0c9f661ae843c300683909ccbe9fbdcc8282acb378ce4f9e65c94d040b10",
+      "bounds": [
+        -122,
+        48,
+        -121,
+        49
+      ]
+    },
+    {
+      "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N49_00_W123_00_DEM.tif",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N49_00_W123_00_DEM/Copernicus_DSM_COG_10_N49_00_W123_00_DEM.tif",
+      "sha256": "bf958587e4ea18408e64e4b5eab00c55557666d6a6d3842d61c0dc4d9752b410",
+      "bounds": [
+        -123,
+        49,
+        -122,
+        50
+      ]
+    },
+    {
+      "file": "sources/copernicus-glo30/Copernicus_DSM_COG_10_N49_00_W122_00_DEM.tif",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N49_00_W122_00_DEM/Copernicus_DSM_COG_10_N49_00_W122_00_DEM.tif",
+      "sha256": "b3db7418945ec29aa790c6acf1758f5b9a781b1f3647af3307221fd2df8a4f06",
+      "bounds": [
+        -122,
+        49,
+        -121,
+        50
+      ]
     }
   ]
 }

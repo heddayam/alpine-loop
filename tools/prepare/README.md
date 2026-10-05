@@ -19,23 +19,33 @@ uv run --project tools/prepare python tools/prepare/build.py plan \
 
 uv run --project tools/prepare python tools/prepare/build.py build \
   --source-root .cache --plan .local-data/cascades-plan.json \
-  --section mountain-ID-FROM-PLAN --output .local-data/mountains
+  --output .local-data/mountains
 ```
 
+The default builds every ready section. Use `--section mountain-ID-FROM-PLAN`
+to compile a small real slice first; other sections remain visibly unprepared.
+
 `sources.json` pins the GMBA inventory, Washington OSM snapshot, Census state
-outline, and known USGS 3DEP products by HTTPS URL and full SHA-256. Missing
+outline, USGS 3DEP products, and explicit border elevation supplements by HTTPS
+URL and full SHA-256. Missing
 sources download into the cache atomically; changed or incomplete downloads fail
 verification. Planning needs only the first three sources. Building verifies and
 loads the pinned elevation products intersecting each requested section.
-Uncovered or masked DEM samples fail the entire build; no zero elevations or
-silent partial graphs are emitted.
+Uncovered or masked samples in both primary and supplemental products fail the
+entire build; no zero elevations or silent partial graphs are emitted.
 
 To add a range, select its `regionId`, supported `state`, source pins, and name in
 a source manifest and pass `--manifest`. Omit `candidateRefs` to discover numbered
 major road corridors automatically. For the Cascades it restricts discovery to
 the five reviewed candidates: I-90, US-2, SR-20, SR-410 and US-12. The committed
-DEM pins cover 46–49°N and 123–120°W; sections outside those tiles require
-additional verified products. The current source manifest is not a promise of
+DEM pins cover the Washington Cascades footprint, including the southern,
+eastern and international-border tiles. Ten border samples lack valid 3DEP
+pixels; three explicitly pinned Copernicus GLO-30 tiles supply these gaps only.
+Valid primary pixels are never replaced. Copernicus is a coarser surface model;
+vegetation and vertical-datum differences can affect climb at source transitions.
+The app discloses this, and every section audit counts supplemental samples.
+Other ranges require their own verified
+intersecting products. The current source manifest is not a promise of
 complete statewide prepared coverage.
 
 ## Size and highway policy
@@ -48,9 +58,10 @@ walking direction; duplicate source ways and unresolved node barriers make the
 count conservative. Road connectors are included, and compression into
 degree-two corridors has not occurred.
 
-The default limit is **250,000 candidate source segments**, adjustable with
-`--max-segments`. This is provisional until calibrated against measured
-preparation peaks and loaded graph memory. It is not a guarantee of search time.
+The default limit is **700,000 candidate source segments**, adjustable with
+`--max-segments`. This conservative capacity policy is measured against real Cascades compilation
+and whole-app memory. It is a proxy, not a guarantee of search duration or memory
+for arbitrary future data; new sources should be measured before publication.
 
 - A region under the limit remains whole, even when major highways are present.
 - Only actual, source-connected numbered mainlines of motorway/trunk/primary
@@ -95,7 +106,8 @@ connection is invented.
 
 DEMs are sampled bilinearly at every retained vertex and at intervals of at most
 25 m. All positive/negative changes contribute to gain/loss without suppression.
-The same complete sampled profile is retained in drawing/GPX geometry.
+The same complete sampled profile is retained in drawing/GPX geometry. Missing
+pixels are never replaced by nearest-pixel extrapolation or flat terrain.
 
 ## Output and evidence
 
@@ -118,7 +130,7 @@ The final directory is published only after every requested section succeeds.
 The catalog includes truthful unavailable polygons/reasons for unbuilt or
 unresolved sections; these have no fictional download files.
 `provenance.json` records the plan, counts, elapsed time, and process RSS high-water
-marks. `--audit` additionally retains compressed source lineage and unmatched POIs.
+marks, plus Python/geospatial library versions. `--audit` additionally retains compressed source lineage and unmatched POIs.
 
 Offline checks use small generated source inventories, native Osmium, and a
 synthetic planar DEM; they make no network requests:
@@ -127,3 +139,9 @@ synthetic planar DEM; they make no network requests:
 uv run --project tools/prepare python tests/data/fresh_compile.py
 uv run --project tools/prepare python tests/data/partitions.py
 ```
+
+To produce a downloadable release, pass `--base-url https://your-data-host/release/`
+to `build`, then publish its catalog and `sections/` directory together. Pin the
+catalog URL and SHA-256 in `scripts/data-release.json`; launch fetches that small
+catalog and the app downloads complete sections on request. Local builds omit
+the URL and use their complete files directly. Public publication is pending.

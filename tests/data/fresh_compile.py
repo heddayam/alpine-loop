@@ -259,6 +259,24 @@ class FreshCompiler(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing DEM"):
                 Elevation([{"path": dem, "bounds": [-.01, -.01, .01, .01]}]).sample([(0, 0)])
 
+            supplement = root / "supplement.tif"
+            with rasterio.open(supplement, "w", driver="GTiff", width=200, height=200, count=1,
+                               dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999) as dataset:
+                dataset.write(np.full((200, 200), 500, dtype="float32"), 1)
+            products = [{"path": dem, "bounds": [-.01, -.01, .01, .01]}]
+            additional = [{"path": supplement, "bounds": [-.01, -.01, .01, .01]}]
+            sampler = Elevation(products, additional)
+            measured = sampler.sample([(0, 0), (.003, .003)])
+            self.assertEqual(measured[0], 500, "An explicitly pinned supplement supplies masked primary samples")
+            self.assertAlmostEqual(measured[1], 106, places=4, msg="Valid primary terrain is never replaced")
+            self.assertEqual(sampler.supplement_samples, 1, "Supplement use remains auditable")
+            with rasterio.open(supplement, "r+") as dataset:
+                dataset.write(np.full((200, 200), -9999, dtype="float32"), 1)
+            with self.assertRaisesRegex(ValueError, "Missing DEM"):
+                Elevation(products, additional).sample([(0, 0)])
+            with self.assertRaisesRegex(ValueError, "Ambiguous overlapping"):
+                Elevation(products + products, additional).sample([(0, 0)])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,163 +1,117 @@
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { gunzipSync } from 'node:zlib';
-import type { NetworkCell, NetworkGeometry, NetworkManifest, NetworkSection, NetworkStarts, StoredRoute } from './data-format.js';
-import type { Bounds, HikeRoute, Position, RouteCandidate, SearchQuery, TrailEdge, TrailGraph } from './model.js';
+import type { Boundary, PreparedSection, SectionGeometry, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
+import type { Bounds, HikeRoute, Position, RouteCandidate, SearchQuery } from './model.js';
+import { openSections } from './sections.js';
 
-const inside = ([x, y]: Position, [w, s, e, n]: Bounds) => x >= w && x <= e && y >= s && y <= n;
+const inside = ([x, y]: readonly (number | undefined)[], [w, s, e, n]: Bounds) => x! >= w && x! <= e && y! >= s && y! <= n;
 const overlaps = (a: Bounds, b: Bounds) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
-const contained = (a: Bounds, b: Bounds) => inside([a[0], a[1]], b) && inside([a[2], a[3]], b);
-const owner = (b: Bounds) => `${Math.floor((b[0] + b[2]) * 5)}_${Math.floor((b[1] + b[3]) * 5)}`;
-
-/** Every point on a closed route of length D is geographically at most D/2
- * from its start. This belongs to the measured data reader, not the abstract
- * weighted-graph engine. Full intersecting sections are retained, never cut. */
-function envelope(points: Position[], maximumDistance: number): Bounds | null {
-  if (!points.length) return null;
-  const degrees = 180 / Math.PI;
-  const angle = (maximumDistance / 2 + 1) / 6371008.8;
-  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
-  for (const [lon, lat] of points) {
-    west = Math.min(west, lon); east = Math.max(east, lon);
-    south = Math.min(south, lat); north = Math.max(north, lat);
+function onSegment(p: number[], a: number[], b: number[]) {
+  return Math.abs((p[0]! - a[0]!) * (b[1]! - a[1]!) - (p[1]! - a[1]!) * (b[0]! - a[0]!)) < 1e-12
+    && p[0]! >= Math.min(a[0]!, b[0]!) && p[0]! <= Math.max(a[0]!, b[0]!)
+    && p[1]! >= Math.min(a[1]!, b[1]!) && p[1]! <= Math.max(a[1]!, b[1]!);
+}
+function inRing(p: number[], ring: number[][]): boolean {
+  let result = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[j]!, b = ring[i]!;
+    if (onSegment(p, a, b)) return true;
+    if ((a[1]! > p[1]!) !== (b[1]! > p[1]!) && p[0]! < (b[0]! - a[0]!) * (p[1]! - a[1]!) / (b[1]! - a[1]!) + a[0]!) result = !result;
   }
-  south -= angle * degrees; north += angle * degrees;
-  if (south <= -90 || north >= 90) return [-180, Math.max(-90, south), 180, Math.min(90, north)];
-  const longitude = angle * degrees / Math.cos(Math.max(Math.abs(south), Math.abs(north)) / degrees);
-  west -= longitude; east += longitude;
-  // An enclosing rectangle crossing the dateline safely overfetches longitude.
-  return west <= -180 || east >= 180 ? [-180, south, 180, north] : [west, south, east, north];
+  return result;
+}
+function contains(p: number[], boundary: Boundary) {
+  return boundary.coordinates.some(rings => inRing(p, rings[0]!) && !rings.slice(1).some(ring => inRing(p, ring)));
+}
+/** Exact rectangle/footprint overlap, including sparse crossings and polygon holes. */
+export function intersects(area: Bounds, section: Pick<PreparedSection, 'bounds' | 'boundary'>): boolean {
+  if (!overlaps(area, section.bounds)) return false;
+  const corners = [[area[0], area[1]], [area[2], area[1]], [area[2], area[3]], [area[0], area[3]]];
+  if (corners.some(p => contains(p, section.boundary))) return true;
+  for (const rings of section.boundary.coordinates) for (const ring of rings) {
+    if (ring.some(p => inside(p, area))) return true;
+    for (let i = 1; i < ring.length; i++) {
+      const a = ring[i - 1]!, b = ring[i]!;
+      let low = 0, high = 1;
+      for (const [start, delta, min, max] of [[a[0]!, b[0]! - a[0]!, area[0], area[2]], [a[1]!, b[1]! - a[1]!, area[1], area[3]]]) {
+        if (delta === 0) { if (start! < min! || start! > max!) { low = 1; high = 0; } }
+        else { const x = (min! - start!) / delta!, y = (max! - start!) / delta!; low = Math.max(low, Math.min(x, y)); high = Math.min(high, Math.max(x, y)); }
+      }
+      if (low <= high) return true;
+    }
+  }
+  return false;
 }
 
-/** Opening the app reads only this small manifest. Search and drawings have
- * separate lifetimes; neither keeps the entire installed network in memory. */
+/** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
 export async function readDataset(directory: string) {
-  const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8')) as NetworkManifest;
-  if (manifest.version !== 2 || manifest.cellDegrees !== 0.1 || manifest.distanceMetric !== 'haversine-6371008.8'
-    || !manifest.info?.id || !manifest.files || !Array.isArray(manifest.info.bounds)) throw new Error('Unsupported trail network');
-  const files = Object.entries(manifest.files).map(([path, facts]) => {
-    const match = /^(graph|starts|geometry)\/(-?\d+)_(-?\d+)\.json\.gz$/.exec(path);
-    if (!match || !Number.isSafeInteger(facts.bytes) || facts.bytes <= 0 || !Number.isSafeInteger(facts.jsonBytes)
-      || facts.jsonBytes <= 0 || !/^[a-f0-9]{64}$/.test(facts.sha256)) throw new Error('Invalid network file manifest');
-    return { path, family: match[1]!, x: Number(match[2]), y: Number(match[3]) };
-  });
-  function selectedFiles(family: string, bounds: Bounds) {
-    const [w, s, e, n] = bounds.map(value => Math.floor(value * 10));
-    return files.filter(file => file.family === family && file.x >= w! && file.x <= e! && file.y >= s! && file.y <= n!);
+  const sections = await openSections(directory);
+  const { catalog } = sections;
+  const selected = (query: SearchQuery) => catalog.sections.filter(section => intersects(query.area, section));
+  async function coverage(query: SearchQuery) {
+    const required = selected(query), missing: string[] = [];
+    let bytes = 0;
+    for (const section of required) if (!await sections.installed(section).catch(() => false)) {
+      missing.push(section.id); bytes += Object.values(section.files).reduce((sum, file) => sum + file.bytes, 0);
+    }
+    const bounds = catalog.info.bounds;
+    const unavailable = catalog.unavailable?.filter(section => intersects(query.area, section));
+    const coverageNote = unavailable?.length ? `Some selected mountain coverage is unavailable: ${unavailable.map(section => `${section.name} (${section.reason})`).join('; ')}. Only prepared sections can be explored.`
+      : query.area[0] < bounds[0] || query.area[1] < bounds[1] || query.area[2] > bounds[2] || query.area[3] > bounds[3]
+      ? 'Part of the selected start area lies beyond this catalog’s mountain coverage. Exploration there is unavailable.'
+      : required.length === 0 ? 'No prepared mountain section overlaps the selected start area.' : undefined;
+    return { sections: required.map(section => section.id), missing, bytes, coverageNote };
   }
-  async function load<T>(path: string): Promise<T> {
-    const expected = manifest.files[path];
-    if (!expected) throw new Error(`Network data is unavailable: ${path}`);
-    const bytes = await readFile(join(directory, path));
-    if (bytes.length !== expected.bytes || createHash('sha256').update(bytes).digest('hex') !== expected.sha256) {
-      throw new Error(`Network file is incomplete or belongs to another snapshot: ${path}`);
+  async function starts(query: SearchQuery) {
+    const result = [];
+    for (const section of selected(query)) {
+      const records = await sections.read<SectionStarts>(section, 'starts');
+      const eligible = records.filter(([start, point]) => inside(point, query.area) && (query.includeUnknown || start.access === 'public')).map(([start]) => start);
+      if (eligible.length) result.push({ section, eligible });
     }
-    const raw = gunzipSync(bytes, { maxOutputLength: expected.jsonBytes });
-    if (raw.length !== expected.jsonBytes) throw new Error(`Incomplete network file: ${path}`);
-    return JSON.parse(raw.toString()) as T;
+    return result;
   }
-  async function select(query: SearchQuery) {
-    const starts = new Map<number, NetworkStarts[number]>();
-    const positions = new Map<number, Position>();
-    function position(id: number, point: Position | undefined) {
-      if (!point || point.length < 2 || point.some(value => !Number.isFinite(value))) throw new Error('Missing network junction');
-      const previous = positions.get(id);
-      if (previous && JSON.stringify(previous) !== JSON.stringify(point)) throw new Error('Conflicting network junction identity');
-      positions.set(id, point);
-    }
-    for (const { path } of selectedFiles('starts', query.area)) {
-      for (const record of await load<NetworkStarts>(path)) {
-        const [index, start, point] = record;
-        if (inside(point, query.area) && (query.includeUnknown || start.access === 'public')) {
-          if (starts.has(index)) throw new Error('Duplicate network start');
-          starts.set(index, record); position(start.node, point);
-        }
-      }
-    }
-    const bounds = envelope([...starts.values()].map(record => record[2]), query.distance[1]);
-    const sections = new Map<number, NetworkSection>();
-    const edges = new Map<number, Omit<TrailEdge, 'connector'>>();
-    if (bounds) for (const { path } of selectedFiles('graph', bounds)) {
-      const tile = await load<NetworkCell>(path);
-      const endpoints = new Map(tile.nodes);
-      for (const section of tile.sections) {
-        if (!overlaps(section.bounds, bounds)) continue;
-        const previous = sections.get(section.id);
-        if (previous) {
-          if (JSON.stringify(previous) !== JSON.stringify(section)) throw new Error('Conflicting physical trail identity');
-          continue;
-        }
-        if (!['trail', 'connector'].includes(section.kind)) throw new Error('Missing trail classification');
-        sections.set(section.id, section);
-        for (const [id, edge] of section.edges) {
-          if (edge.trail !== section.id || edges.has(id)) throw new Error('Conflicting trail direction identity');
-          if (!query.includeUnknown && edge.access !== 'public') continue;
-          position(edge.from, endpoints.get(edge.from)); position(edge.to, endpoints.get(edge.to));
-          edges.set(id, edge);
-        }
-      }
-    }
-    const nodes = [...positions].sort((a, b) => a[0] - b[0]);
-    const local = new Map(nodes.map(([id], index) => [id, index]));
-    const graph: TrailGraph = {
-      version: 1, info: manifest.info, nodes: nodes.map(([, point]) => point),
-      edges: [...edges].sort((a, b) => a[0] - b[0]).map(([, edge]) => ({ ...edge, from: local.get(edge.from)!, to: local.get(edge.to)!,
-        connector: sections.get(edge.trail)!.kind === 'connector' })),
-      starts: [...starts].sort((a, b) => a[0] - b[0]).map(([, [, start]]) => ({ ...start, node: local.get(start.node)! })),
-    };
-    const coverageNote = !contained(query.area, manifest.info.bounds)
-      ? 'Part of the selected start area has no prepared data. Only available mapped starts can be searched.'
-      : bounds && !contained(bounds, manifest.info.bounds)
-        ? 'This hike length may reach beyond prepared trail data. Found routes are valid within the data, but missing alternatives cannot be ruled out.'
-        : undefined;
-    // Roads and sidewalks can connect a hike. Check this before diversity so
-    // connector-only walks cannot suppress a later qualifying trail hike.
-    function isHike(candidate: RouteCandidate): boolean {
-      return candidate.edges.some(index => sections.get(graph.edges[index]!.trail)!.kind === 'trail');
-    }
+  async function select(query: SearchQuery, chosen: Awaited<ReturnType<typeof starts>>[number]) {
+    const { graph, trails } = await sections.read<SectionGraph>(chosen.section, 'graph');
+    graph.starts = chosen.eligible.map(start => ({ ...start, id: `${chosen.section.id}/${start.id}` }));
+    if (!query.includeUnknown) graph.edges = graph.edges.filter(edge => edge.access === 'public');
+    function isHike(candidate: RouteCandidate) { return candidate.edges.some(index => !graph.edges[index]!.connector); }
     function describe(candidate: RouteCandidate): StoredRoute {
-      const start = graph.starts[candidate.start];
-      if (!start) throw new Error('Route has an unknown start');
-      const steps = candidate.edges.map(index => {
-        const edge = graph.edges[index];
-        const section = edge && sections.get(edge.trail);
-        if (!edge || !section) throw new Error('Route has an unknown trail');
-        return { edge, section };
-      });
+      const start = graph.starts[candidate.start]!;
+      const steps = candidate.edges.map(index => graph.edges[index]!);
       let first = 0, last = steps.length - 1;
-      while (first < last && steps[first]!.section.id === steps[last]!.section.id) { first++; last--; }
+      while (first < last && steps[first]!.trail === steps[last]!.trail) { first++; last--; }
       const names = new Map<string, number>();
-      for (const [index, { edge, section }] of steps.entries()) {
-        if (section.kind === 'trail' && section.name) names.set(section.name, (names.get(section.name) ?? 0) + (index >= first && index <= last ? edge.distance : 0));
+      for (const [index, edge] of steps.entries()) {
+        const trail = trails[edge.trail]!;
+        if (!edge.connector && trail.name) names.set(trail.name, (names.get(trail.name) ?? 0) + (index >= first && index <= last ? edge.distance : 0));
       }
       const { id, distance, gain, roadDistance, repetition, kind, uncertain } = candidate;
       return {
         summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name,
           startPosition: graph.nodes[start.node]!, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
-        sections: steps.map(({ edge, section }) => ({ cell: owner(section.bounds), id: section.id, reverse: edge.reverse })),
+        sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse })),
       };
     }
-    return { graph, coverageNote, isHike, describe };
+    return { graph, isHike, describe };
   }
   async function route(stored: StoredRoute): Promise<HikeRoute> {
-    const shapes = new Map<number, NetworkGeometry[number][1]>();
-    for (const cell of new Set(stored.sections.map(section => section.cell))) {
-      const needed = new Set(stored.sections.filter(section => section.cell === cell).map(section => section.id));
-      for (const [id, shape] of await load<NetworkGeometry>(`geometry/${cell}.json.gz`)) if (needed.has(id)) shapes.set(id, shape);
+    const shapes = new Map<string, SectionGeometry>();
+    for (const id of new Set(stored.sections.map(step => step.section))) {
+      const section = catalog.sections.find(section => section.id === id);
+      if (!section) throw new Error('Route belongs to unavailable trail data');
+      shapes.set(id, await sections.read<SectionGeometry>(section, 'geometry'));
     }
     const coordinates: Position[] = [];
-    for (const section of stored.sections) {
-      const shape = shapes.get(section.id);
+    for (const step of stored.sections) {
+      const shape = shapes.get(step.section)?.[step.id];
       if (!shape?.coordinates.length) throw new Error('Route drawing is missing');
-      const points = section.reverse ? shape.coordinates.toReversed() : shape.coordinates;
+      const points = step.reverse ? shape.coordinates.toReversed() : shape.coordinates;
       const previous = coordinates.at(-1);
       if (previous && (previous[0] !== points[0]![0] || previous[1] !== points[0]![1])) throw new Error('Route drawing has a broken connection');
       for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[index]!);
     }
     return { ...stored.summary, geometry: coordinates };
   }
-  return { info: manifest.info, select, route };
+  return { info: catalog.info, coverage, starts, select, route, view: sections.view, downloads: sections.downloads };
 }
 
 export function gpx(route: HikeRoute): string {

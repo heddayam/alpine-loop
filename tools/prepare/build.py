@@ -5,13 +5,19 @@ import json
 import os
 import resource
 import subprocess
+import platform
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 
 from shapely import box
 from shapely.geometry import shape
+import numpy
+import rasterio
+import shapely
+import shapefile
 
 from elevation import Elevation
 from footprint import Footprint, boundary, inventory, multipolygon
@@ -59,11 +65,14 @@ def compiler_identity():
 
 def evidence(manifest):
     return {"manifest": manifest, "compiler": compiler_identity(),
+            "environment": {"python": platform.python_version(), "numpy": numpy.__version__, "rasterio": rasterio.__version__,
+                            "gdal": rasterio.__gdal_version__, "shapely": shapely.__version__, "geos": shapely.geos_version_string,
+                            "pyshp": shapefile.__version__},
             "osmium": subprocess.check_output(["osmium", "--version"], text=True).splitlines()[0]}
 
 
 def dataset_info(manifest, geometry):
-    return {"id": "pending", "name": manifest["name"], "bounds": list(geometry.bounds),
+    info = {"id": "pending", "name": manifest["name"], "bounds": list(geometry.bounds),
             "sourceDate": manifest["sourceDate"], "places": manifest.get("places", []), "startCount": 0,
             "attribution": [{"name": "OpenStreetMap contributors", "url": "https://www.openstreetmap.org/copyright", "license": "ODbL 1.0"},
                             {"name": "GMBA Mountain Inventory v2.0", "url": "https://www.earthenv.org/mountains", "license": "CC BY 4.0"},
@@ -75,6 +84,11 @@ def dataset_info(manifest, geometry):
                             "Mapped road contact is not proof of legal parking or current conditions. Conditional access is not evaluated for a trip date.",
                             "Elevation gain is estimated from bilinear 3DEP samples at source vertices and at most 25 m intervals; DEM noise is not suppressed.",
                             "No connections are invented across mapping gaps. The map selection chooses starts, independently of these prepared boundaries."]}
+    if manifest.get("elevationSupplement"):
+        info["attribution"].append({"name": "Copernicus DEM GLO-30", "url": "https://registry.opendata.aws/copernicus-dem/",
+                                    "license": "Copernicus DEM licence; © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018"})
+        info["limitations"].append("Small elevation gaps near the Canadian border use pinned Copernicus 30 m surface heights. Resolution, vegetation and vertical-datum differences can affect estimated climb.")
+    return info
 
 
 def make_plan(manifest, root, temporary, max_segments):
@@ -111,16 +125,18 @@ def make_plan(manifest, root, temporary, max_segments):
         counts.close()
 
 
-def compile_section(opl, products, footprint, info):
+def compile_section(opl, products, footprint, info, supplement=()):
     ways, pois, tags, positions = read_source(opl, footprint)
     print(f"Retained {len(ways):,} context ways; {len(positions):,} source nodes", flush=True)
     corridors, points, entrances, audit = topology(ways, pois, tags, positions, footprint)
     del ways, pois, tags, positions, points
     print(f"Compile {len(corridors):,} corridors; {len(entrances):,} starts", flush=True)
-    samples = measure(corridors, Elevation(products).sample)
+    elevation = Elevation(products, supplement)
+    samples = measure(corridors, elevation.sample)
     graph, geometry, source_index = assemble(corridors, entrances, info)
     audit["counts"].update(elevationSamples=samples, nodes=len(graph["nodes"]), directedEdges=len(graph["edges"]),
-                           physicalTrails=len(geometry), starts=len(entrances), frontierNodes=len(audit["frontiers"]))
+                           physicalTrails=len(geometry), starts=len(entrances), frontierNodes=len(audit["frontiers"]),
+                           elevationSupplementSamples=elevation.supplement_samples)
     return graph, geometry, source_index, audit
 
 
@@ -130,7 +146,7 @@ def build(source, products, footprint, info):
         return compile_section(extract(source, Path(temporary)), products, footprint, info)
 
 
-def build_catalog(manifest, plan, root, output, selected, audit_enabled):
+def build_catalog(manifest, plan, root, output, selected, audit_enabled, base_url=None):
     proof = evidence(manifest)
     if plan["evidence"] != proof:
         raise ValueError("Plan sources/compiler differ from this build; run plan again")
@@ -150,6 +166,11 @@ def build_catalog(manifest, plan, root, output, selected, audit_enabled):
         staging = Path(directory)
         opl = extract(source, Path(temporary))
         catalog = {"version": 1, "info": dict(plan["info"]), "sections": [], "unavailable": []}
+        if base_url:
+            url = urlparse(base_url)
+            if url.scheme not in ("http", "https") or not url.netloc or url.username or url.password or url.query or url.fragment or not url.path.endswith("/"):
+                raise ValueError("Download base URL must be an absolute HTTP(S) URL ending in a slash")
+            catalog["baseUrl"] = base_url
         observations = []
         cut_lines = [shape(cut["geometry"]) for cut in plan["cuts"]]
         for section in plan["sections"]:
@@ -160,12 +181,14 @@ def build_catalog(manifest, plan, root, output, selected, audit_enabled):
             geometry = shape(section["boundary"])
             products = [dict(product, path=acquire(product, root)) for product in manifest["elevation"]
                         if geometry.intersects(box(*product["bounds"]))]
+            supplement = [dict(product, path=acquire(product, root)) for product in manifest.get("elevationSupplement", [])
+                          if geometry.intersects(box(*product["bounds"]))]
             relevant = {decision["ref"] for decision in section["cuts"]}
             dividers = [line for cut, line in zip(plan["cuts"], cut_lines) if cut["ref"] in relevant]
             print(f"Prepare {section['name']} ({section['sourceSegments']:,} source segments)", flush=True)
             section_started = time.perf_counter()
             info = dict(plan["info"], id=section["id"], name=section["name"], bounds=section["bounds"])
-            graph, geometry, source_index, audit = compile_section(opl, products, Footprint(geometry, dividers), info)
+            graph, geometry, source_index, audit = compile_section(opl, products, Footprint(geometry, dividers), info, supplement)
             catalog["sections"].append(write_section(staging, section, graph, geometry))
             observations.append({"section": section["id"], "counts": audit["counts"],
                                  "peakRssBytes": peak_rss(), "elapsedSeconds": time.perf_counter() - section_started})
@@ -196,10 +219,11 @@ def main():
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=HERE / "sources.json")
-    parser.add_argument("--max-segments", type=int, default=250_000)
+    parser.add_argument("--max-segments", type=int, default=700_000)
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--section", action="append")
     parser.add_argument("--audit", action="store_true")
+    parser.add_argument("--base-url", help="Published directory URL for downloading the prepared sections")
     args = parser.parse_args()
     if args.max_segments < 1:
         parser.error("--max-segments must be positive")
@@ -214,7 +238,7 @@ def main():
     else:
         if not args.plan:
             parser.error("build requires --plan")
-        catalog = build_catalog(manifest, json.loads(args.plan.read_text()), args.source_root.resolve(), args.output.resolve(), args.section, args.audit)
+        catalog = build_catalog(manifest, json.loads(args.plan.read_text()), args.source_root.resolve(), args.output.resolve(), args.section, args.audit, args.base_url)
         print(json.dumps({"output": str(args.output), "id": catalog["info"]["id"], "prepared": len(catalog["sections"]),
                           "unavailable": len(catalog["unavailable"]), "peakRssBytes": peak_rss()}, indent=2))
 
