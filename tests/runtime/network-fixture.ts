@@ -7,7 +7,7 @@ import type { SectionCatalog, SectionGeometry, SectionGraph } from '../../src/da
 import type { Position, SearchQuery } from '../../src/model.js';
 
 export const query: SearchQuery = {
-  area: [-122.0006, 47.0499, -122.0004, 47.0501],
+  sections: ['fixture-0'],
   distance: [600, 600], gain: [0, 100], repetition: 0, includeUnknown: true,
 };
 
@@ -17,7 +17,7 @@ export async function createNetworkFixture({ dense = false, startCount = 1, rout
 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'alpine-sections-test-'));
   const catalog: SectionCatalog = { version: 1, info: { id: 'fixture', name: 'Offline trails', bounds: [-122.01, 47.04, -121.98, 47.06],
-    sourceDate: '2026-01-01', attribution: [], limitations: [], places: [], startCount: startCount * sectionCount }, sections: [] };
+    sourceDate: '2026-01-01', attribution: [], limitations: [], startCount: startCount * sectionCount }, sections: [] };
   let firstLoop: Position[] = [];
   for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
     const id = `fixture-${sectionIndex}`;

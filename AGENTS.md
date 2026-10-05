@@ -8,9 +8,10 @@ do not resume their gates or carry their architecture into the replacement.
 
 - Generate loops and lollipops from trail data, with distance, elevation-gain,
   and repeated-trail constraints. Never silently relax a constraint.
-- The visible or drawn area selects starts; it does not clip routes. Familiar
-  hiking-region names are navigation shortcuts. Include uncertain access by
-  default, label it, and allow its exclusion. Respect explicit prohibitions.
+- Search regions are exactly the prepared GMBA/highway sections. Search every
+  eligible start in the selected regions; panning and zooming do not change scope.
+  Include uncertain access by default, label it, and allow its exclusion.
+  Respect explicit prohibitions.
 - Search every eligible start, show diverse results progressively, distinguish
   attempted starts from completed exploration, and disclose unfinished work.
 - Keep the current search alive while the server runs. Reopening the browser

@@ -9,7 +9,6 @@ const dataset = await readDataset(directory);
 if (dataset.info.id !== snapshotId) throw new Error('Trail data changed before this search could start. Start a new search.');
 const coverage = await dataset.coverage(query);
 if (coverage.missing.length) throw new Error('Download the selected trail sections before searching.');
-parentPort!.postMessage({ type: 'coverage', note: coverage.coverageNote });
 const selections = await dataset.starts(query);
 const totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);
 const started = performance.now();

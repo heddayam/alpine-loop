@@ -42,8 +42,7 @@ function catalogFrom(value: unknown): SectionCatalog {
   const info = value.info;
   if (typeof info.id !== 'string' || !identifier.test(info.id) || typeof info.name !== 'string' || !info.name.trim()
     || !bounds(info.bounds) || typeof info.sourceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(info.sourceDate)
-    || !count(info.startCount) || !strings(info.limitations) || !Array.isArray(info.places)
-    || !info.places.every(place => object(place) && typeof place.name === 'string' && bounds(place.bounds))
+    || !count(info.startCount) || !strings(info.limitations)
     || !Array.isArray(info.attribution) || !info.attribution.every(item => object(item)
       && typeof item.name === 'string' && typeof item.url === 'string' && typeof item.license === 'string')) {
     throw new Error('Invalid mountain-section catalog metadata');

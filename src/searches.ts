@@ -10,13 +10,13 @@ export class RequestError extends Error {
 }
 
 export function parseQuery(value: unknown): SearchQuery {
-  if (!value || typeof value !== 'object') throw new RequestError('Choose an area and hike constraints.', 400);
+  if (!value || typeof value !== 'object') throw new RequestError('Choose regions and hike constraints.', 400);
   const query = value as SearchQuery;
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
-  if (!range(query.area, 4) || query.area[0] < -180 || query.area[2] > 180
-    || query.area[1] < -90 || query.area[3] > 90 || query.area[0] >= query.area[2] || query.area[1] >= query.area[3]) {
-    throw new RequestError('Choose a valid rectangular area on the map.', 400);
+  if (!Array.isArray(query.sections) || !query.sections.length || new Set(query.sections).size !== query.sections.length
+    || query.sections.some(id => typeof id !== 'string' || !id.trim())) {
+    throw new RequestError('Choose at least one distinct search region.', 400);
   }
   if ([query.distance, query.gain].some(values => !range(values, 2) || values[0]! < 0 || values[0]! > values[1]!)
     || query.distance[1] <= 0 || !Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1
@@ -28,7 +28,7 @@ export function parseQuery(value: unknown): SearchQuery {
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
-  return { area: [...query.area], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
+  return { sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 
@@ -46,8 +46,8 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     return current;
   }
   function finish(entry: Entry, status: SearchSnapshot['status'], reason?: string) {
-    entry.snapshot.status = status === 'complete' && entry.snapshot.coverageNote ? 'limited' : status;
-    entry.snapshot.reason = reason ?? (status === 'complete' ? entry.snapshot.coverageNote : undefined);
+    entry.snapshot.status = status;
+    entry.snapshot.reason = reason;
   }
   function page(entry: Entry, offset = 0, groupId?: string): SearchSnapshot {
     if (!Number.isSafeInteger(offset) || offset < 0) throw new RequestError('Choose a valid results page.', 400);
@@ -88,8 +88,7 @@ export function createSearches(directory: string, dataset: Awaited<ReturnType<ty
     worker.on('message', (event: WorkerEvent) => {
       if (snapshot.status !== 'running') return;
       try {
-        if (event.type === 'coverage') snapshot.coverageNote = event.note;
-        else if (event.type === 'route') entry.store.add(event);
+        if (event.type === 'route') entry.store.add(event);
         else {
           snapshot.progress = event.progress;
           if (event.type === 'done') finish(entry, event.status, event.reason);

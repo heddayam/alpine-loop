@@ -12,7 +12,7 @@ export type UnavailableSection = { name: string; bounds: Bounds; boundary: Bound
 export type SectionCatalog = { version: 1; info: DatasetInfo; baseUrl?: string; sections: PreparedSection[]; unavailable?: UnavailableSection[] };
 export type SectionView = PreparedSection & { installed: boolean; bytes: number; needsRepair?: boolean };
 export type CatalogView = DatasetInfo & { sections: SectionView[]; unavailable?: UnavailableSection[] };
-export type Coverage = { sections: string[]; missing: string[]; bytes: number; coverageNote?: string };
+export type Coverage = { sections: string[]; missing: string[]; bytes: number };
 export type DownloadSnapshot = {
   status: 'running' | 'complete' | 'stopped' | 'failed'; sections: string[];
   completedBytes: number; totalBytes: number; reason?: string;
@@ -22,5 +22,4 @@ export type SectionStarts = [start: TrailStart, position: Position][];
 export type SectionGeometry = TrailGeometry[];
 export type StoredRoute = { summary: RouteSummary; sections: { section: string; id: number; reverse: boolean }[] };
 export type WorkerEvent = Exclude<SearchEvent, { type: 'route' }>
-  | { type: 'route'; route: StoredRoute; groupId: string; optionId: string; walkId: string; preferred: boolean }
-  | { type: 'coverage'; note?: string };
+  | { type: 'route'; route: StoredRoute; groupId: string; optionId: string; walkId: string; preferred: boolean };

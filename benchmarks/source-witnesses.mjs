@@ -1,11 +1,10 @@
 /** Independent verification of a directed source walk; no solver imports. */
 import assert from 'node:assert/strict';
 const acceptable = (access, query) => access === 'public' || (query.includeUnknown && access === 'unknown');
-const inside = ([x, y], [w, s, e, n]) => x >= w && x <= e && y >= s && y <= n;
 
 export function verifyWitness(source, test, witness) {
   const start = source.starts.find(start => start.id === witness.startId);
-  assert(start && inside(source.positions.get(start.node), test.query.area), 'Start must be in the requested area');
+  assert(start, 'Start must belong to the supplied source section');
   assert(acceptable(start.access, test.query), 'Starting access');
   const walk = witness.edgeIds.map(id => {
     const edge = source.edgeById.get(id);

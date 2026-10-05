@@ -73,7 +73,7 @@ def evidence(manifest):
 
 def dataset_info(manifest, geometry):
     info = {"id": "pending", "name": manifest["name"], "bounds": list(geometry.bounds),
-            "sourceDate": manifest["sourceDate"], "places": manifest.get("places", []), "startCount": 0,
+            "sourceDate": manifest["sourceDate"], "startCount": 0,
             "attribution": [{"name": "OpenStreetMap contributors", "url": "https://www.openstreetmap.org/copyright", "license": "ODbL 1.0"},
                             {"name": "GMBA Mountain Inventory v2.0", "url": "https://www.earthenv.org/mountains", "license": "CC BY 4.0"},
                             {"name": "U.S. Census Bureau state boundaries", "url": "https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html", "license": "U.S. public domain"},
@@ -83,7 +83,7 @@ def dataset_info(manifest, geometry):
                             "Includes mapped walking paths and road connectors; unknown access remains included and labeled. Explicit prohibitions are respected.",
                             "Mapped road contact is not proof of legal parking or current conditions. Conditional access is not evaluated for a trip date.",
                             "Elevation gain is estimated from bilinear 3DEP samples at source vertices and at most 25 m intervals; DEM noise is not suppressed.",
-                            "No connections are invented across mapping gaps. The map selection chooses starts, independently of these prepared boundaries."]}
+                            "No connections are invented across mapping gaps. Each prepared section is a complete search region."]}
     if manifest.get("elevationSupplement"):
         info["attribution"].append({"name": "Copernicus DEM GLO-30", "url": "https://registry.opendata.aws/copernicus-dem/",
                                     "license": "Copernicus DEM licence; © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018"})

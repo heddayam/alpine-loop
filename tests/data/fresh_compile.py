@@ -101,7 +101,7 @@ class FreshCompiler(unittest.TestCase):
                 dataset.write(values, 1)
             bounds = [-.001, -.001, .006, .006]
             info = {"id": "fixture", "name": "Fixture", "bounds": bounds, "sourceDate": "2026-08-01",
-                    "places": [], "limitations": [], "attribution": [], "startCount": 0}
+                    "limitations": [], "attribution": [], "startCount": 0}
             graph, geometry, lineage, audit = build(source, [{"path": dem, "bounds": [-.01, -.01, .01, .01]}], bounds, info)
             self.assertEqual(graph["starts"][0]["name"], "Loop, 100% — ridge")
             self.assertIn("n2", lineage["nodeIds"], "Every distinct parking contact stays selectable, even next to a named trailhead")
@@ -227,7 +227,7 @@ class FreshCompiler(unittest.TestCase):
                         zipped.write(stem.with_suffix(suffix), name + suffix)
                 return {"file": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
             inputs = {"name": "Fixture", "regionId": "11202", "state": "WA", "sourceDate": "2026-08-01",
-                      "places": [], "gmba": archive("mountains", "GMBA_V2_ID", "11202"),
+                      "gmba": archive("mountains", "GMBA_V2_ID", "11202"),
                       "coverage": archive("states", "STUSPS", "WA"),
                       "osm": {"file": source.name, "sha256": evidence["osm"]},
                       "elevation": [{"file": dem.name, "sha256": evidence["dem"], "bounds": [-.01, -.01, .01, .01]}]}

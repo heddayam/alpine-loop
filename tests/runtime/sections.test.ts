@@ -13,7 +13,7 @@ afterEach(async () => { for (const remove of cleanup.splice(0).reverse()) await 
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 const families = ['graph', 'starts', 'geometry'] as const;
 const info = { id: 'fixture', name: 'Fixture mountains', bounds: [-122, 47, -121, 48] as [number, number, number, number],
-  sourceDate: '2026-08-01', attribution: [], limitations: [], places: [], startCount: 1 };
+  sourceDate: '2026-08-01', attribution: [], limitations: [], startCount: 1 };
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'alpine-sections-test-'));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));

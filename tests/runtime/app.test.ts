@@ -86,7 +86,6 @@ describe('real application integration', () => {
       expect(uncertainDirection.geometry).toEqual(firstLoop.toReversed());
       for (const direction of [route, reverse]) {
         expect(direction).toMatchObject({ startId: summary.startId, groupId, groupSize: count, distance: 600, roadDistance: 200 });
-        expect(direction.geometry.some(point => point[0] > query.area[2]!)).toBe(true);
         const exported = await app.inject(`/api/search/${id}/routes/${direction.id}.gpx`);
         expect(exported.statusCode).toBe(200);
         expect(exported.headers['content-type']).toContain('application/gpx+xml');
@@ -125,7 +124,11 @@ describe('real application integration', () => {
     const app = await createApp((await fixture()).directory);
     cleanup.push(() => app.close());
     expect((await app.inject({ method: 'POST', url: '/api/search', payload: { ...query, distance: [100, 10] } })).statusCode).toBe(400);
-    expect((await app.inject({ method: 'POST', url: '/api/search', payload: { ...query, area: null } })).statusCode).toBe(400);
+    for (const sections of [null, [], ['fixture-0', 'fixture-0'], [42], ['unknown'], ['fixture-0', 'unknown']]) {
+      const response = await app.inject({ method: 'POST', url: '/api/search', payload: { ...query, sections } });
+      expect(response.statusCode).toBe(400);
+      expect((await app.inject('/api/search')).json()).toBeNull();
+    }
     expect((await app.inject('/api/search/expired')).statusCode).toBe(404);
   });
 
@@ -172,18 +175,24 @@ describe('real application integration', () => {
     expect((await app.inject({ method: 'POST', url: '/api/search', payload: query })).statusCode).toBe(409);
   });
 
-  it('keeps source-boundary incompleteness visible after exhausting the available graph', async () => {
-    const { directory } = await fixture();
+  it('selects exact region identities despite overlapping bounds and unavailable neighboring data', async () => {
+    const { directory, catalog } = await fixture({ sectionCount: 2, startCount: 2 });
+    // Their bounding rectangles overlap. The missing neighbor must neither enlarge scope nor require a download.
+    await rm(join(directory, catalog.sections[1]!.files.graph.path));
     const { createApp: builtApp } = await import('../../dist/server/server.js');
     const app = await builtApp(directory);
     cleanup.push(() => app.close());
-    const response = await app.inject({ method: 'POST', url: '/api/search', payload: { ...query, area: [-122.02,47.0499,-122.0004,47.0501] } });
+    const coverage = (await app.inject({ method: 'POST', url: '/api/coverage', payload: query })).json();
+    expect(coverage).toEqual({ sections: ['fixture-0'], missing: [], bytes: 0 });
+    const response = await app.inject({ method: 'POST', url: '/api/search', payload: query });
     expect(response.statusCode).toBe(202);
     const snapshot = await finished(app, response.json());
-    expect(snapshot.status).toBe('limited');
-    expect(snapshot.coverageNote).toBeTruthy();
-    expect(snapshot.progress).toMatchObject({ totalStarts: 1, attemptedStarts: 1, completedStarts: 1 });
-    expect(snapshot.routeCount).toBe(1);
+    expect(snapshot.status).toBe('complete');
+    expect(snapshot.query.sections).toEqual(['fixture-0']);
+    expect(snapshot.progress).toMatchObject({ totalStarts: 2, attemptedStarts: 2, completedStarts: 2 });
+    expect(snapshot.routes.every(route => route.startId.startsWith('fixture-0/'))).toBe(true);
+    const neighbor = (await app.inject({ method: 'POST', url: '/api/coverage', payload: { ...query, sections: ['fixture-1'] } })).json();
+    expect(neighbor).toMatchObject({ sections: ['fixture-1'], missing: ['fixture-1'] });
   });
 });
 
@@ -191,7 +200,7 @@ it('explores independent section graphs without joining their local identities',
   const { directory } = await fixture({ sectionCount: 2 });
   const { createApp: builtApp } = await import('../../dist/server/server.js');
   const app = await builtApp(directory); cleanup.push(() => app.close());
-  const criteria = { ...query, area: [-122.0006,47.0499,-121.9904,47.0501] };
+  const criteria = { ...query, sections: ['fixture-0', 'fixture-1'] };
   const coverage = (await app.inject({ method: 'POST', url: '/api/coverage', payload: criteria })).json();
   expect(coverage).toMatchObject({ sections: ['fixture-0','fixture-1'], missing: [], bytes: 0 });
   const response = await app.inject({ method: 'POST', url: '/api/search', payload: criteria });

@@ -10,7 +10,7 @@
   },
   "acceptance": {
     "experience": [
-      "area selection",
+      "exact prepared-region selection, shared by search, map and downloads",
       "distance/gain/repetition",
       "loops and lollipops",
       "progressive comparison",
@@ -87,7 +87,7 @@
     "preparationRequirements": [
       "Partition source work before materializing each region's topology; splitting final output alone does not bound preparation memory.",
       "Use highway geometry to establish partitions. Removing highway traversal alone leaves bridges, tunnels and other crossing paths connected.",
-      "Select starts by the user's visible or drawn area and search every intersecting partition with eligible starts. Region selection never follows the browser viewport as a route clip.",
+      "Search regions and prepared data sections are identical. Select exact section IDs and explore every eligible start in them; map panning and zooming never change scope. No separate named rectangles or custom drawing scopes.",
       "Preserve distinct starts and same-side access connections; a shared start or highway junction must not reconnect hard partitions."
     ],
     "sourceAssessment": {
@@ -108,6 +108,11 @@
         "resolution": "Explicit SHA-pinned Copernicus GLO-30 tiles fill only otherwise missing primary samples. Valid 3DEP samples are unchanged; unresolved samples still fail publication. Each section records supplement use and the app discloses coarser surface-height and vertical-datum limitations.",
         "evidence": "benchmarks/mountain-preparation-review.json#borderElevationGap"
       }
+    },
+    "searchScopeDecision": {
+      "date": "2026-10-05",
+      "userDecision": "Unify search areas with prepared data regions to remove the separate selection model. Exact prepared sections are the selectable search/download regions; every eligible start in the selected sections is explored.",
+      "benchmarkImpact": "Frozen rectangular requests remain historical inputs. New HTTP measurements explicitly adapt them to whole prepared sections containing their original eligible starts; distance, gain, repetition, access and road constraints remain unchanged. Timings and start counts are not directly comparable to old rectangle observations."
     }
   },
   "solverResearch": {

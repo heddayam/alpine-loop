@@ -1,4 +1,4 @@
-/** Geographic selection chooses starting points, never clips a route. */
+/** Map bounds describe prepared footprints and camera views; search selects section IDs. */
 export type Bounds = [west: number, south: number, east: number, north: number];
 export type Position = [longitude: number, latitude: number, elevationMeters?: number];
 export type Access = 'public' | 'unknown';
@@ -15,7 +15,6 @@ export type TrailEdge = {
   connector: boolean;
 };
 export type TrailStart = { id: string; node: number; name: string; access: Access };
-export type Place = { name: string; bounds: Bounds };
 export type Attribution = { name: string; url: string; license: string };
 export type DatasetInfo = {
   id: string;
@@ -24,7 +23,6 @@ export type DatasetInfo = {
   sourceDate: string;
   attribution: Attribution[];
   limitations: string[];
-  places: Place[];
   startCount: number;
 };
 
@@ -40,7 +38,8 @@ export type TrailGeometry = { id: string; name: string | null; coordinates: Posi
 
 /** Engine/transport measurements use meters and fractions; UI converts units. */
 export type SearchQuery = {
-  area: Bounds;
+  /** Exactly the prepared sections to explore, including every eligible start. */
+  sections: string[];
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
   repetition: number;
@@ -94,7 +93,6 @@ export type SearchSnapshot = {
   pageTotal: number;
   offset: number;
   selectionNote?: string;
-  coverageNote?: string;
   reason?: string;
 };
 export type SearchEvent =

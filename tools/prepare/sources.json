@@ -10,35 +10,6 @@
     "WA410",
     "US12"
   ],
-  "places": [
-    {
-      "bounds": [
-        -121.8,
-        47.25,
-        -121.2,
-        47.6
-      ],
-      "name": "Snoqualmie Pass"
-    },
-    {
-      "bounds": [
-        -121.2,
-        47.65,
-        -120.7,
-        47.95
-      ],
-      "name": "Stevens Pass"
-    },
-    {
-      "bounds": [
-        -122.0,
-        46.6,
-        -121.4,
-        47.0
-      ],
-      "name": "Mount Rainier"
-    }
-  ],
   "gmba": {
     "file": "sources/gmba-standard-300/265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874/GMBA_Inventory_v2.0_standard_300.zip",
     "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_300.zip",

@@ -1,7 +1,7 @@
 # Alpine Loop
 
 A local desktop app for finding loops and lollipops from mapped trails. Choose
-starting places on the map, set distance, climb, repeated-trail and road limits,
+one or more prepared mountain regions, set distance, climb, repeated-trail and road limits,
 and compare results as exploration continues. Every shown route meets the
 requested constraints; unfinished work stays visible.
 
@@ -16,7 +16,7 @@ npm start
 Open the printed local URL. Launch installs dependencies and builds the app.
 It obtains the published mountain catalog automatically; missing trail sections
 are downloaded when you choose **Download and search**. Panning never downloads
-anything. You can also install a section from **Trail sections**. Downloads show
+anything. The same region list selects searches and offers individual downloads. Downloads show
 actual size and progress, support cancellation, and reuse verified files.
 
 This development checkout uses `.local-data/mountains`. Public prepared-data
@@ -39,9 +39,12 @@ There are no replicated geographic cells or cross-section graph joins. Search
 loads one section at a time, while searching every eligible start across the
 selected sections. Missing or unprepared coverage is disclosed.
 
-The map rectangle selects starts; it never clips routes. Named areas and section
-names are navigation shortcuts. Unknown pedestrian access is included and
-labeled by default, and can be excluded. Explicit prohibitions are respected.
+Search regions and prepared data sections share the same identity and exact
+footprint. Select regions from the list or click their map polygons. Every
+eligible start in those regions is explored; panning and zooming only change the
+view. There are no separate named rectangles or custom drawing scopes. Unknown
+pedestrian access is included and labeled by default, and can be excluded.
+Explicit prohibitions are respected.
 Mapped road contacts do not certify legal parking or current conditions.
 
 ## Routes and progress
