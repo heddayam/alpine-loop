@@ -11,6 +11,7 @@ ROADS = {"track", "service", "residential", "living_street", "unclassified", "ro
          "primary", "trunk", "motorway", "tertiary_link", "secondary_link", "primary_link", "trunk_link", "motorway_link"}
 DENIED = {"no", "private", "closed", "agricultural", "forestry", "customers", "destination", "delivery"}
 PUBLIC = {"yes", "designated", "permissive", "public"}
+VEHICLE_MODES = ("motorcar", "motor_vehicle", "vehicle", "access")
 
 
 def permission(tags, direction=None, modes=("foot", "access")):
@@ -158,7 +159,7 @@ def topology(ways, pois, tags_by_node, positions, footprint):
             continue
         # Walking a closed road is different from arriving by car. Foot tags
         # cannot restore vehicle access; more-specific vehicle tags can.
-        if all(permission(way["tags"], side, ("motorcar", "motor_vehicle", "vehicle", "access")) is None
+        if all(permission(way["tags"], side, VEHICLE_MODES) is None
                for side in ("forward", "backward")):
             continue
         for node in way["nodes"]:
@@ -168,11 +169,14 @@ def topology(ways, pois, tags_by_node, positions, footprint):
                 entrances[key]["sources"].append("w" + way["id"])
     unresolved = []
     for poi in pois:
-        access = permission(poi["tags"])
+        walking = permission(poi["tags"])
+        arrival = permission(poi["tags"], modes=VEHICLE_MODES) if poi["kind"] == "parking" else "public"
+        access = combine(walking, arrival)
         connections = ["n" + node for node in poi["nodes"] if "n" + node in adjacent and "n" + node not in frontiers]
         if access is None or not connections:
             unresolved.append({"id": poi["id"], "kind": poi["kind"], "name": poi["tags"].get("name"),
-                               "reason": "restricted access" if access is None else "no shared routable OSM node", "nodes": poi["nodes"]})
+                               "reason": "restricted vehicle access" if arrival is None else "restricted walking access" if walking is None
+                               else "no shared routable OSM node", "nodes": poi["nodes"]})
             continue
         for node in connections:
             entry = entrances.setdefault(node, {"id": "osm-entrance:" + node[1:], "sources": []})

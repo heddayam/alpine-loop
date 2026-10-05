@@ -67,16 +67,36 @@ class FreshCompiler(unittest.TestCase):
             trail_nodes.append(node)
             ways[name] = {"id": name, "nodes": [road_end, node],
                           "tags": dict(tags, highway="track", foot="yes")}
+        parking = {
+            "parking_vehicle_no": ({"vehicle": "no", "foot": "yes"}, None, "restricted vehicle access"),
+            "parking_private": ({"access": "private", "foot": "yes"}, None, "restricted vehicle access"),
+            "parking_override": ({"access": "private", "foot": "yes", "motorcar": "yes"}, "public", None),
+            "parking_unknown": ({"foot": "yes"}, "unknown", None),
+            "parking_foot_no": ({"access": "yes", "foot": "no"}, None, "restricted walking access"),
+        }
+        pois, node_tags = [], {}
+        for index, (name, (tags, _, _)) in enumerate(parking.items()):
+            points[name] = (-122.263 + index * .0002, 46.203)
+            trail_nodes.append(name)
+            node_tags[name] = dict(tags, amenity="parking")
+            pois.append({"id": "n" + name, "kind": "parking", "nodes": [name], "tags": node_tags[name]})
         ways["continuation"] = {"id": "continuation", "nodes": trail_nodes, "tags": {"highway": "path", "foot": "yes"}}
         points["alternate_road"] = (points["alternative"][0] + .0001, 46.202)
         ways["alternate_arrival"] = {"id": "alternate_arrival", "nodes": ["alternate_road", "alternative"],
                                      "tags": {"highway": "service", "motorcar": "yes", "foot": "no"}}
         footprint = [-122.271, 46.201, -122.26, 46.204]
-        corridors, _, entrances, _ = topology(ways, [], {}, points, footprint)
+        corridors, _, entrances, audit = topology(ways, pois, node_tags, points, footprint)
         self.assertNotIn("n" + sheep, entrances, "A car-forbidden track cannot establish this mid-trail start")
         self.assertEqual(entrances["n2"]["access"], "unknown", "A road contact alone does not prove parking")
         for name, (_, eligible) in cases.items():
             self.assertEqual("n" + name in entrances, eligible, name)
+        unresolved = {poi["id"]: poi["reason"] for poi in audit["unresolvedPois"]}
+        for name, (_, access, reason) in parking.items():
+            if access is None:
+                self.assertNotIn("n" + name, entrances, name)
+                self.assertEqual(unresolved["n" + name], reason)
+            else:
+                self.assertEqual(entrances["n" + name]["access"], access, name)
         self.assertEqual(entrances["nalternative"]["sources"], ["walternate_arrival"],
                          "A vehicle-closed way cannot erase independent permitted arrival, even where walking on that road is prohibited")
         measure(corridors, lambda positions: [100] * len(positions))
