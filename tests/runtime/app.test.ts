@@ -100,7 +100,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx`)).body).toBe(exported.body);
     expect((await app.inject({ method: 'DELETE', url: `/api/jobs/${snapshot.id}` })).statusCode).toBe(204);
     expect((await app.inject('/api/jobs')).json()).toEqual([]);
-    expect((await readdir(jobDirectory)).filter(file => !['metadata.sqlite', 'owner.sqlite'].includes(file))).toEqual([]);
+    expect((await readdir(jobDirectory)).filter(file => !['metadata.sqlite', 'owner.sqlite', 'owner.sqlite-journal'].includes(file))).toEqual([]);
   });
 
   it('queues immutable requests in FIFO order and completes empty results honestly', async () => {
