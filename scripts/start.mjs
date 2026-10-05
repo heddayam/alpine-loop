@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
-import { installData } from './install-data.mjs';
+import { installCatalog } from './install-data.mjs';
 import release from './data-release.json' with { type: 'json' };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -24,19 +24,12 @@ async function npm(args) {
 
 try {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Alpine Loop needs Node.js 24 or newer.');
-  let directory = process.env.ALPINE_DATA ? resolve(process.env.ALPINE_DATA) : join(local, 'network');
+  let directory = process.env.ALPINE_DATA ? resolve(process.env.ALPINE_DATA) : join(local, 'mountains');
   if (!process.env.ALPINE_DATA && release) {
-    let last = -1;
-    directory = await installData(join(local, 'snapshots'), release, { onProgress(progress) {
-      const percent = progress.totalBytes ? Math.floor(progress.completedBytes / progress.totalBytes * 100) : 100;
-      if (Math.floor(percent / 10) !== last) {
-        last = Math.floor(percent / 10);
-        console.log(`Preparing trail data: ${percent}%`);
-      }
-    } });
-  } else if (!await exists(join(directory, 'manifest.json'))) {
+    directory = await installCatalog(directory, release);
+  } else if (!await exists(join(directory, 'catalog.json'))) {
     if (process.env.ALPINE_DATA) throw new Error(`Configured trail data is unavailable: ${directory}`);
-    throw new Error('Prepared trail data has not been published for this development build yet. This checkout needs its existing local snapshot.');
+    throw new Error('Prepared mountain sections have not been published for this development build yet. This checkout needs its local mountain catalog.');
   }
   await mkdir(local, { recursive: true });
   const lockHash = createHash('sha256').update(await readFile(join(root, 'package-lock.json'))).digest('hex');
