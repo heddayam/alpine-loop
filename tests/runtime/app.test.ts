@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -170,6 +172,42 @@ describe('completed jobs through the actual app and worker', () => {
     await app.close();
     const reopened = await openApp(directory, jobDirectory);
     expect((await reopened.inject('/api/jobs')).json()).toEqual([]);
+  });
+
+  it('recovers an actually killed app process, discards its active work and continues its saved queue', async () => {
+    const { directory, jobDirectory } = await fixture({ dense: true });
+    const child = spawn(process.execPath, ['--input-type=module', '-e', `
+      const { createApp } = await import(process.env.ALPINE_TEST_SERVER);
+      const app = await createApp(process.env.ALPINE_TEST_DATA, undefined, process.env.ALPINE_TEST_JOBS);
+      const query = JSON.parse(process.env.ALPINE_TEST_QUERY);
+      const first = (await app.inject({ method: 'POST', url: '/api/jobs', payload: { ...query, distance: [600, 2600], gain: [0, 1000] } })).json();
+      const queued = (await app.inject({ method: 'POST', url: '/api/jobs', payload: query })).json();
+      console.log(JSON.stringify({ first, queued }));
+      setInterval(() => {}, 1000);
+    `], { env: { ...process.env, ALPINE_TEST_SERVER: new URL('../../dist/server/server.js', import.meta.url).href,
+      ALPINE_TEST_DATA: directory, ALPINE_TEST_JOBS: jobDirectory, ALPINE_TEST_QUERY: JSON.stringify(query) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    cleanup.push(async () => {
+      if (child.exitCode === null && child.signalCode === null) { const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited; }
+    });
+    const admitted = await new Promise<{ first: JobSnapshot; queued: JobSnapshot }>((resolve, reject) => {
+      let output = '', errors = '';
+      child.stdout.on('data', chunk => {
+        output += chunk.toString();
+        const line = output.split('\n').find(line => line.startsWith('{'));
+        if (line) { try { resolve(JSON.parse(line)); } catch { /* Await the remainder of a split line. */ } }
+      });
+      child.stderr.on('data', chunk => { errors += chunk.toString(); });
+      child.on('error', reject);
+      child.on('exit', () => reject(new Error(`Fixture app exited before admitting its jobs: ${errors}`)));
+    });
+    expect(admitted.first.status).toBe('running');
+    expect(admitted.queued.status).toBe('queued');
+    const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited;
+    const app = await openApp(directory, jobDirectory);
+    expect((await app.inject(`/api/jobs/${admitted.first.id}`)).json().status).toBe('interrupted');
+    expect((await app.inject(`/api/jobs/${admitted.first.id}/results`)).statusCode).toBe(409);
+    expect((await readdir(jobDirectory)).some(file => file.startsWith(admitted.first.id))).toBe(false);
+    expect((await finished(app, admitted.queued)).status).toBe('completed');
   });
 
   it('does not publish an orphan result file after a crash before the metadata completion transaction', async () => {
