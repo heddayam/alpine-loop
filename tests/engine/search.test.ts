@@ -3,7 +3,7 @@ import type { RouteCandidate, SearchEvent, SearchQuery, TrailGraph } from '../..
 import { search } from '../../src/engine/search.js';
 import { enumerate, fixture } from './oracle.js';
 
-const query: SearchQuery = { area: [-1, -1, 1, 1], distance: [0, 10_000], gain: [0, 10_000], repetition: 1, includeUnknown: true };
+const query: SearchQuery = { sections: ['fixture'], distance: [0, 10_000], gain: [0, 10_000], repetition: 1, includeUnknown: true };
 const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
 async function collect(graph: TrailGraph, criteria = query, options: Parameters<typeof search>[2] = {}) {
   const events: SearchEvent[] = [];
@@ -94,16 +94,23 @@ describe('independent route oracle', () => {
     expect(routes.every(route => route.kind === 'loop' && route.edges.length === 3)).toBe(true);
   });
 
-  it('selects starts by area without clipping the hike and applies unknown access to starts and edges', async () => {
+  it('explores every supplied start regardless of location and applies unknown access to starts and edges', async () => {
     const graph = fixture([[0, 1, 100, { unknown: true }], [1, 2, 100], [2, 0, 100]], [0, 1]);
     graph.starts[1]!.access = 'unknown';
-    const local = { ...query, area: [-0.001, -0.001, 0.001, 0.001] as SearchQuery['area'] };
-    const routes = await compare(graph, local);
-    expect(routes).toHaveLength(2);
-    expect(routes.every(route => route.start === 0 && route.uncertain)).toBe(true);
+    graph.nodes[1] = [100, 80];
+    const routes = await compare(graph);
+    expect(routes).toHaveLength(4);
+    expect(new Set(routes.map(route => route.start))).toEqual(new Set([0, 1]));
+    expect(routes.every(route => route.uncertain)).toBe(true);
+    const { done } = await collect(graph);
+    expect(done.progress).toMatchObject({ totalStarts: 2, attemptedStarts: 2, completedStarts: 2 });
     expect(await compare(graph, { ...query, includeUnknown: false })).toHaveLength(0);
     graph.edges.forEach(edge => { edge.access = 'public'; });
-    expect((await compare(graph, { ...query, includeUnknown: false })).every(route => route.start === 0)).toBe(true);
+    const publicRoutes = await compare(graph, { ...query, includeUnknown: false });
+    expect(publicRoutes).toHaveLength(2);
+    expect(publicRoutes.every(route => route.start === 0)).toBe(true);
+    expect((await collect(graph, { ...query, includeUnknown: false })).done.progress)
+      .toMatchObject({ totalStarts: 1, attemptedStarts: 1, completedStarts: 1 });
   });
 
   it('has no universal mileage cap and keeps strict decimal metric boundaries', async () => {
@@ -183,7 +190,8 @@ describe('incremental search lifecycle', () => {
     expect(done.status).toBe('limited');
     expect(done.reason).toContain('Result allowance');
     expect((await collect(graph, query, { maxExpansions: 0 })).done.status).toBe('limited');
-    expect((await collect(graph, { ...query, area: [10, 10, 11, 11] })).done.status).toBe('complete');
+    expect((await collect({ ...graph, starts: [] })).done)
+      .toMatchObject({ status: 'complete', progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0 } });
   });
 
   it('finds a simple matching loop before exhausting an earlier dense detour', async () => {

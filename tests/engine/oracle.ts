@@ -10,9 +10,7 @@ export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] 
   const allowed = (edge: TrailEdge) => edge.access === 'public' || query.includeUnknown !== false;
   const outward = (node: number) => graph.edges.flatMap((edge, index) => edge.from === node && allowed(edge) ? [index] : []);
   for (const [start, entrance] of graph.starts.entries()) {
-    const [x, y] = graph.nodes[entrance.node]!;
-    if ((!query.includeUnknown && entrance.access === 'unknown')
-      || x < query.area[0] || y < query.area[1] || x > query.area[2] || y > query.area[3]) continue;
+    if (!query.includeUnknown && entrance.access === 'unknown') continue;
     const stems = (node: number, stem: number[], back: number[], stemNodes: number[], stemTrails: number[]) => {
       const cycles = (current: number, cycle: number[], cycleNodes: number[], trails: number[]) => {
         for (const index of outward(current)) {
@@ -59,7 +57,7 @@ export function fixture(trails: Trail[], starts = [0]): TrailGraph {
   return {
     version: 1,
     info: { id: 'oracle', name: 'Oracle', bounds: [-1, -1, 1, 1], sourceDate: '2026-01-01',
-      attribution: [], limitations: [], places: [], startCount: starts.length },
+      attribution: [], limitations: [], startCount: starts.length },
     nodes: Array.from({ length: count }, (_, index) => [index / 100, 0]),
     starts: starts.map(node => ({ id: `start-${node}`, node, name: `Start ${node}`, access: 'public' })),
     edges: trails.flatMap(([from, to, distance, options = {}], trail): TrailEdge[] => {

@@ -14,10 +14,6 @@ function validateQuery(query: SearchQuery): void {
       throw new Error('Search distance and gain need ordered, finite, nonnegative ranges');
     }
   }
-  const [west, south, east, north] = query.area;
-  if (query.area.length !== 4 || query.area.some(value => !Number.isFinite(value)) || west > east || south > north) {
-    throw new Error('Search area needs ordered, finite bounds');
-  }
   if (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1) {
     throw new Error('Repeated trail must be a fraction between zero and one');
   }
@@ -187,13 +183,13 @@ function* routesFromStart(
 }
 
 /**
- * Exhaustive within the supplied graph if allowed to finish. Geographic bounds
- * select starts only. Directions and alternative qualifying stems remain visible;
- * no ranking, diversity heuristic or hidden result cap discards valid routes.
+ * Exhaustive from every eligible start in the supplied prepared section. Directions
+ * and alternative qualifying stems remain visible; no ranking, diversity heuristic
+ * or hidden result cap discards valid routes.
  */
 export async function* search(graph: TrailGraph, query: SearchQuery, options: Options = {}): AsyncGenerator<SearchEvent> {
   validateQuery(query);
-  query = { ...query, area: [...query.area], distance: [...query.distance], gain: [...query.gain],
+  query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain],
     roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
   const maxExpansions = allowance(options.maxExpansions);
   const maxResults = allowance(options.maxResults);
@@ -206,12 +202,9 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   const includeUnknown = query.includeUnknown !== false;
   const eligible: number[] = [];
   for (const [index, start] of graph.starts.entries()) {
-    const position = graph.nodes[start.node];
-    if (!position) throw new Error(`Missing node for start ${start.id}`);
+    if (!graph.nodes[start.node]) throw new Error(`Missing node for start ${start.id}`);
     if (!['public', 'unknown'].includes(start.access)) throw new Error(`Invalid access for start ${start.id}`);
-    if ((includeUnknown || start.access === 'public')
-      && position[0] >= query.area[0] && position[0] <= query.area[2]
-      && position[1] >= query.area[1] && position[1] <= query.area[3]) eligible.push(index);
+    if (includeUnknown || start.access === 'public') eligible.push(index);
   }
   progress.totalStarts = eligible.length;
   yield { type: 'progress', progress: snapshot() };

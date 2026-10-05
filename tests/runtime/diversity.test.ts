@@ -12,7 +12,7 @@ it('combines minor variations while preserving different hiking paths, starts an
     [5, 6, 975], [6, 5, 25], [6, 5, 25], // A small substitution within the same cycle.
   ], [0, 1, 4, 5, 2]);
   graph.starts.push({ ...graph.starts[1]!, id: 'another-source-at-the-same-node' });
-  const query: SearchQuery = { area: [-1, -1, 1, 1], distance: [1, 10000], gain: [0, 0], repetition: 0.45, includeUnknown: true };
+  const query: SearchQuery = { sections: ['fixture'], distance: [1, 10000], gain: [0, 0], repetition: 0.45, includeUnknown: true };
   const valid = enumerate(graph, query);
   function route(start: number, edges: number[], candidates = valid): RouteCandidate {
     const found = candidates.find(candidate => candidate.start === start && candidate.edges.join(',') === edges.join(','));
@@ -93,7 +93,7 @@ it('combines independent small detours and safely improves a starting point with
     [2, 4, 7000], [4, 5, 100], [4, 6, 150], [6, 5, 150], [5, 0, 7000],
     [1, 7, 350], [7, 2, 350],
   ]);
-  const query: SearchQuery = { area: [-1, -1, 1, 1], distance: [1, 30000], gain: [0, 0], repetition: 0, includeUnknown: true };
+  const query: SearchQuery = { sections: ['fixture'], distance: [1, 30000], gain: [0, 0], repetition: 0, includeUnknown: true };
   function candidate(network: typeof graph, edges: number[]): RouteCandidate {
     const valid = enumerate(network, query).find(route => route.start === 0 && route.edges.join(',') === edges.join(','));
     if (!valid) throw Error(`Route must independently qualify: ${edges}`);
