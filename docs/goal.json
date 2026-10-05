@@ -54,7 +54,7 @@
       "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later."
     ]
   },
-  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is 5,256 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending.",
+  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is now 5,001 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending. Search and download regions now share exact prepared-section identities, replacing named rectangles, drawing and viewport start filters. Exact section selection, all eligible supplied starts, overlapping-bound isolation, downloads, GPX and reconnect pass offline checks; native preparation fixtures pass. A separate two-second real whole-region observation preserves query/reconnect and stops in 2.2 ms, with exploration honestly unfinished. Browser region selection, polygon toggling, pan/zoom stability and reconnect to the existing live search are verified. Previous 24-query timings describe the historical rectangle scope; new region measurements disclose expanded start scope.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -112,7 +112,25 @@
     "searchScopeDecision": {
       "date": "2026-10-05",
       "userDecision": "Unify search areas with prepared data regions to remove the separate selection model. Exact prepared sections are the selectable search/download regions; every eligible start in the selected sections is explored.",
-      "benchmarkImpact": "Frozen rectangular requests remain historical inputs. New HTTP measurements explicitly adapt them to whole prepared sections containing their original eligible starts; distance, gain, repetition, access and road constraints remain unchanged. Timings and start counts are not directly comparable to old rectangle observations."
+      "benchmarkImpact": "Frozen rectangular requests remain historical inputs. New HTTP measurements explicitly adapt them to whole prepared sections containing their original eligible starts; distance, gain, repetition, access and road constraints remain unchanged. Timings and start counts are not directly comparable to old rectangle observations.",
+      "validation": {
+        "baselineCommit": "6601ad2",
+        "maintainedSourceBefore": 5256,
+        "maintainedSourceAfter": 5001,
+        "sourceFiles": 30,
+        "offline": "30 Vitest tests, 4 Node tests and 7 native preparation checks pass; build and TypeScript checks pass.",
+        "realObservation": {
+          "file": ".local-data/region-search-review.json",
+          "query": "north-bend-known",
+          "scope": "Whole prepared sections containing original eligible starts; original distance/gain/repetition/access constraints preserved.",
+          "observationMs": 2000,
+          "outcome": "unfinished",
+          "sameSearchAndQueryOnReconnect": true,
+          "stopMs": 2.174958,
+          "peakRssBytes": 307019776
+        },
+        "browser": "Region list and exact polygons select identical sections; pan/zoom preserve scope; reconnect restores existing live search with all 1,847 eligible starts in its selected section. The existing search was left running."
+      }
     }
   },
   "solverResearch": {
