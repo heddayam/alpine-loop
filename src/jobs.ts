@@ -57,9 +57,12 @@ export async function createJobs(dataDirectory: string, directory: string) {
   catch (error) { await release(); throw error; }
   try {
   db.exec(`PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
-    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);`);
   const insert = db.prepare('INSERT INTO jobs(id, snapshot) VALUES (?, ?)');
   const update = db.prepare('UPDATE jobs SET snapshot = ? WHERE id = ?');
+  const saveInputs = db.prepare('INSERT OR REPLACE INTO job_inputs VALUES (?, ?)');
+  const loadInputs = db.prepare('SELECT facts FROM job_inputs WHERE id = ?');
   const rows = () => db.prepare('SELECT snapshot FROM jobs ORDER BY position').all()
     .map(row => JSON.parse(row.snapshot as string) as JobSnapshot);
   const find = (id: string): JobSnapshot => {
@@ -74,6 +77,12 @@ export async function createJobs(dataDirectory: string, directory: string) {
       await rm(resultPath(id, staging) + suffix, { force: true });
     }
   };
+  // Inputs are separate from frequently polled compact status/history metadata.
+  for (const job of rows()) if (job.inputs) {
+    saveInputs.run(job.id, JSON.stringify(job.inputs));
+    job.regions = job.inputs.sections.map(({ id, name }) => ({ id, name }));
+    delete job.inputs; save(job);
+  }
   for (const job of rows()) if (job.status === 'running') {
     job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
     job.reason = 'The app restarted before this job finished. Copy its settings to submit it again.';
@@ -88,10 +97,14 @@ export async function createJobs(dataDirectory: string, directory: string) {
   let closed = false;
   let active: { id: string; worker: Worker; finished: Promise<void> } | undefined;
   let pumping = false;
-  function snapshot(id: string): JobSnapshot {
+  function snapshot(id: string, includeInputs = true): JobSnapshot {
     const job = find(id);
     if (job.status === 'queued') job.queuePosition = rows().filter(entry => entry.status === 'queued').findIndex(entry => entry.id === id) + 1;
     if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
+    if (includeInputs) {
+      const inputs = loadInputs.get(id);
+      if (inputs) job.inputs = JSON.parse(inputs.facts as string);
+    }
     return job;
   }
   async function run(job: JobSnapshot) {
@@ -113,7 +126,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
         if (current.status !== 'running' || closed) return;
         if (event.type === 'done') { done = event; return; }
         current.progress = event.progress;
-        if (event.inputs) current.inputs = event.inputs;
+        if (event.inputs) {
+          saveInputs.run(job.id, JSON.stringify(event.inputs));
+          current.regions = event.inputs.sections.map(({ id, name }) => ({ id, name }));
+        }
         save(current);
       });
       worker.on('error', error => { failure = error instanceof Error ? error.message : 'The search worker failed.'; });
@@ -180,9 +196,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
     start(query: SearchQuery): JobSnapshot {
       const job: JobSnapshot = { id: randomUUID(), query: structuredClone(query), status: 'queued', createdAt: new Date().toISOString(),
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
-      insert.run(job.id, JSON.stringify(job)); startPump(); return snapshot(job.id);
+      insert.run(job.id, JSON.stringify(job)); startPump(); return snapshot(job.id, false);
     },
-    list: () => rows().toReversed().map(job => snapshot(job.id)),
+    list: () => rows().toReversed().map(job => snapshot(job.id, false)),
     get: snapshot,
     page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc') {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
@@ -201,7 +217,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
       return route;
     }),
     async cancel(id: string) {
-      const job = snapshot(id);
+      const job = snapshot(id, false);
       if (terminal(job)) {
         const pending = active?.id === id ? active.finished : undefined;
         if (pending) await pending;
@@ -218,14 +234,17 @@ export async function createJobs(dataDirectory: string, directory: string) {
       if (!terminal(job)) throw new RequestError('Cancel this job before deleting it.', 409);
       const pending = active?.id === id ? active.finished : undefined;
       if (pending) await pending;
-      await discard(id); db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
+      await discard(id);
+      db.exec('BEGIN');
+      try { db.prepare('DELETE FROM job_inputs WHERE id = ?').run(id); db.prepare('DELETE FROM jobs WHERE id = ?').run(id); db.exec('COMMIT'); }
+      catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
     },
     async close() {
       if (closed) return;
       closed = true;
       const current = active;
       if (current) {
-        const job = snapshot(current.id); job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
+        const job = snapshot(current.id, false); job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
         job.reason = 'The app closed before this job finished. Copy its settings to submit it again.'; save(job);
         await current.worker.terminate(); await current.finished; await discard(current.id);
       }

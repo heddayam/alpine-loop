@@ -13,9 +13,9 @@ const inputs: JobInputs = { version: dataset.catalog.info.id,
   sections: selected.map(({ id, name, bounds, boundary, files }) => ({ id, name, bounds, boundary, files })) };
 let progress: JobProgress = { stage: 'preparing', completedRegions: [], totalRegions: selected.length,
   elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 };
-const send = () => parentPort!.postMessage({ type: 'progress', inputs,
+const send = (includeInputs = false) => parentPort!.postMessage({ type: 'progress', ...(includeInputs ? { inputs } : {}),
   progress: { ...progress, elapsedMs: performance.now() - started } });
-send();
+send(true);
 await dataset.verifyInputs(inputs);
 const selections = await dataset.starts(query);
 progress.totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);

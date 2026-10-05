@@ -122,7 +122,9 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(`/api/jobs/${second.id}/locations`)).json()).toEqual([]);
     const history = (await app.inject('/api/jobs')).json() as JobSnapshot[];
     expect(history.map(job => job.id)).toEqual([second.id, first.id]);
-    expect(history.every(job => !('routes' in job))).toBe(true);
+    expect(history.every(job => !('routes' in job) && !('inputs' in job))).toBe(true);
+    expect(history.every(job => job.regions?.length === 2)).toBe(true);
+    expect((await app.inject(`/api/jobs/${first.id}`)).json().inputs.sections).toHaveLength(2);
     expect(history.find(job => job.id === first.id)!.query).toEqual({ ...criteria, roads: { distance: 1609.344, fraction: .1 } });
   });
 
