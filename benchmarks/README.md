@@ -6,6 +6,19 @@ physical-trail traversal divided by total route distance. Its SHA-256 remains
 `bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4`.
 Do not change these requests to make an implementation pass.
 
+The app now searches exact prepared sections. The harness uses each frozen
+rectangle only to identify sections containing at least one eligible start in
+the installed dataset, then searches every eligible start in those sections.
+Distance, gain, repetition and access constraints stay frozen. Reports retain
+the complete original definition, adapted `effectiveRequest` with exact section
+IDs, and the app's resolved query. The harness requires installed data and checks
+prepared-start checksums; missing sections or no eligible original starts fail
+clearly.
+
+Whole-section searches expand the original start scope. Their timings, start
+counts and results are **not directly comparable** to the earlier rectangular
+observations. Rectangles are retained solely in these frozen benchmark inputs.
+
 After building the app and preparing mountain sections:
 
 ```sh
@@ -15,22 +28,24 @@ node benchmarks/app/run.mjs --dataset .local-data/mountains --output /tmp/alpine
 Use `--query north-bend-known` for one request. Each runs through a fresh HTTP
 server and actual search worker. The observation window and RSS guard belong
 to the harness; they do not relax constraints or impose app timeouts. Reports
-include effective queries, progressive results, completion/unfinished status,
-reconnect, Stop latency, memory, and input/code hashes. A failure or stopped
+include frozen definitions, adapted requests, progressive results,
+completion/unfinished status, reconnect, Stop latency, memory, and input/code hashes. A failure or stopped
 search never proves no matches. Memory excludes the browser; timing is descriptive.
 
 `mountain-preparation-review.json` records the replacement footprint, partitions,
 real compilation and runtime observations. A source-size proxy is a conservative
 capacity policy, not a guarantee about search duration or arbitrary future data.
 
-The complete Cascades review retains all seven qualifying known walks with
-identical sampled 3D profiles and original starts. All 24 HTTP observations
-preserve their requests and reconnect without failures: five complete within
+The historical complete Cascades review retains all seven qualifying known walks
+with identical sampled 3D profiles and original starts. All 24 HTTP observations
+preserve their original rectangular requests and reconnect without failures:
+five complete within
 the ten-second measurement window, nineteen unfinished. Peak server/worker RSS
 is 441 MB; largest-section exploration with route/GPX inspection reaches 701 MB.
 Worst observed Stop latency is 14.1 ms. Preparation is measured separately at
 1.65 GB compiler RSS. These are observations, not future source guarantees.
-Full reports and the one-off measurement/checker artifacts are retained locally
+These pre-section-search measurements are retained unchanged. Full reports and
+the one-off measurement/checker artifacts are retained locally
 under `.local-data/mountains/audit/review/`; hashes are in the committed review.
 
 The independent `verifyWitness` function in `source-witnesses.mjs` checks directed

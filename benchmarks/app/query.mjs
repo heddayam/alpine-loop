@@ -6,8 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const options = JSON.parse(process.argv[2]);
-const { definition, observationMs, rssBytes, checkpoint } = options;
-const result = { id: definition.id, query: definition.query, originalPilotDatasetId: definition.datasetId,
+const { definition, effectiveRequest, observationMs, rssBytes, checkpoint } = options;
+const result = { id: definition.id, frozenDefinition: definition, effectiveRequest, originalPilotDatasetId: definition.datasetId,
   observationMs, rssGuardBytes: rssBytes, sampleIntervalMs: 20, apiPollIntervalMs: 100,
   firstRetainedRouteObservedMs: null, previousEmptyObservationMs: null, firstAttemptObservedMs: null,
   allStartsAttemptedObservedMs: null, timeline: [], workers: [], reconnect: null, stop: null, measurementError: null };
@@ -28,7 +28,7 @@ async function api(method, route, body) {
   if (!response.ok) throw Error(`${method} ${route}: ${response.status}: ${JSON.stringify(data)}`);
   return data;
 }
-const compact = snapshot => ({ status: snapshot.status, reason: snapshot.reason ?? null, coverageNote: snapshot.coverageNote ?? null,
+const compact = snapshot => ({ status: snapshot.status, reason: snapshot.reason ?? null,
   routeCount: snapshot.routeCount, groupCount: snapshot.groupCount, progress: snapshot.progress });
 function observe(snapshot) {
   const at = elapsed(); last = snapshot;
@@ -47,6 +47,7 @@ async function reconnect() {
     sameQuery: JSON.stringify(current?.query) === JSON.stringify(result.effectiveQuery), status: current?.status,
     routeCount: current?.routeCount, groupCount: current?.groupCount };
   assert(result.reconnect.sameSearch && result.reconnect.sameQuery, 'Current-search reconnect differs from the original query');
+  for (const [key, value] of Object.entries(effectiveRequest)) assert.deepEqual(current.query[key], value, `Reconnect changed the sent ${key}`);
 }
 function stop(trigger) {
   return stopPromise ??= (async () => {
@@ -83,9 +84,9 @@ try {
   result.startupRssBytes = process.memoryUsage.rss();
   assert(!memoryGuard, 'Harness RSS guard exceeded before search');
   began = performance.now();
-  const started = await api('POST', '/api/search', definition.query);
+  const started = await api('POST', '/api/search', effectiveRequest);
   result.effectiveQuery = started.query;
-  for (const [key, value] of Object.entries(definition.query)) {
+  for (const [key, value] of Object.entries(effectiveRequest)) {
     assert.deepEqual(started.query[key], value, `App changed the requested ${key} constraint`);
   }
   id = started.id; result.searchId = id; observe(started);

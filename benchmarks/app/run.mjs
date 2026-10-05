@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -35,23 +36,44 @@ function codeHashes(directory) {
 const queryFile = path.join(root, 'benchmarks/queries.json'), manifestFile = path.join(dataset, 'catalog.json');
 const definitions = read(queryFile).queries.filter(query => !args.has('--query') || query.id === args.get('--query'));
 assert(definitions.length, `Unknown frozen query: ${args.get('--query')}`);
+const catalog = read(manifestFile);
+const startsFiles = catalog.sections.map(section => {
+  const file = path.join(dataset, section.files.starts.path);
+  assert(fs.existsSync(file), `Prepared starts missing for ${section.name}: ${file}; install the complete dataset before measuring`);
+  assert.equal(hash(file), section.files.starts.sha256, `Prepared starts checksum differs for ${section.name}`);
+  return { section, file, records: JSON.parse(gunzipSync(fs.readFileSync(file))) };
+});
+const startHashes = Object.fromEntries(startsFiles.map(({ section, file }) => [section.id, hash(file)]));
+function sectionRequest(definition) {
+  const { area: [west, south, east, north], ...constraints } = definition.query;
+  const selected = startsFiles.filter(({ records }) => records.some(([start, [lon, lat]]) =>
+    lon >= west && lon <= east && lat >= south && lat <= north && (constraints.includeUnknown || start.access === 'public')));
+  assert(selected.length, `No prepared section contains an eligible start in frozen query ${definition.id}`);
+  for (const { section } of selected) for (const file of Object.values(section.files)) {
+    assert(fs.existsSync(path.join(dataset, file.path)), `Prepared ${section.name} is incomplete: missing ${file.path}`);
+  }
+  return { sections: selected.map(({ section }) => section.id).sort(), ...constraints };
+}
+const requests = new Map(definitions.map(definition => [definition.id, sectionRequest(definition)]));
 const provenanceFile = path.join(dataset, 'provenance.json');
 const provenance = fs.existsSync(provenanceFile) ? read(provenanceFile) : null;
 const report = {
-  version: 1, startedAt: new Date().toISOString(), dataset, observationMs, rssGuardBytes: rssBytes,
+  version: 2, startedAt: new Date().toISOString(), dataset, observationMs, rssGuardBytes: rssBytes,
   machine: { node: process.version, platform: process.platform, arch: process.arch, cpu: os.cpus()[0]?.model, memoryBytes: os.totalmem() },
-  inputs: { queriesSha256: hash(queryFile), manifestSha256: hash(manifestFile), snapshotId: read(manifestFile).info.id,
+  inputs: { queriesSha256: hash(queryFile), manifestSha256: hash(manifestFile), snapshotId: catalog.info.id, preparedStartsSha256: startHashes,
     compiledHashes: codeHashes(server), packageLockSha256: hash(path.join(root, 'package-lock.json')),
     harnessHashes: Object.fromEntries(['run.mjs', 'query.mjs'].map(name => [name, hash(path.join(here, name))])) },
   sourceCompilation: provenance ? { provenanceSha256: hash(provenanceFile), evidence: provenance.plan.evidence,
     policy: provenance.plan.policy, observations: provenance.observations } : null,
   methodology: [
+    'Frozen rectangles identify prepared sections containing at least one originally eligible start. Searches then explore all eligible starts in those exact sections, with the frozen distance, gain, repetition and access constraints.',
+    'Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.',
     'Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.',
     'RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.',
     'Route timing is first API observation with 100ms polls, not exact discovery time. Reconnect checks the current-search API, not browser rendering.',
     'The observation window and sampled RSS guard only stop this measurement through the app Stop API. An outer deadline kills a hung child after the window plus 15 seconds.',
-    'Query criteria are frozen; historical pilot dataset IDs/start counts do not describe the supplied snapshot. Counts are retained app choices, not independent existence certificates.',
-    'Each result records the effective query, including app defaults for newer settings absent from the frozen request. Explicit requested constraints must remain unchanged.',
+    'Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are retained app choices, not independent existence certificates.',
+    'Each result records the adapted sent request and effective query, including app defaults for newer settings. Explicit constraints and exact selected section IDs must remain unchanged.',
     'Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Failed or interrupted observations do not prove no matches.',
   ],
   plannedQueries: definitions.map(query => query.id), results: [],
@@ -66,10 +88,11 @@ try {
     assert.deepEqual(codeHashes(server), report.inputs.compiledHashes, 'Compiled app changed during measurement');
     assert.equal(hash(queryFile), report.inputs.queriesSha256, 'Frozen query file changed');
     assert.equal(hash(manifestFile), report.inputs.manifestSha256, 'Dataset manifest changed');
+    for (const { section, file } of startsFiles) assert.equal(hash(file), startHashes[section.id], `Prepared starts changed for ${section.name}`);
     fs.rmSync(checkpoint, { force: true });
     report.currentQuery = definition.id; save();
     const child = spawnSync(process.execPath, [path.join(here, 'query.mjs'), JSON.stringify({
-      dataset, server, definition, observationMs, rssBytes, checkpoint, snapshotId: report.inputs.snapshotId,
+      dataset, server, definition, effectiveRequest: requests.get(definition.id), observationMs, rssBytes, checkpoint, snapshotId: report.inputs.snapshotId,
     })], { encoding: 'utf8', timeout: observationMs + 15_000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 });
     const result = fs.existsSync(checkpoint) ? read(checkpoint) : { id: definition.id, measurementError: 'No observation was saved; no route conclusion is possible.' };
     result.processOutcome = { exitCode: child.status, signal: child.signal, error: child.error?.message ?? null, stderr: child.stderr };
@@ -80,6 +103,7 @@ try {
   }
   assert.deepEqual(codeHashes(server), report.inputs.compiledHashes, 'Compiled app changed during measurement');
   assert.equal(hash(manifestFile), report.inputs.manifestSha256, 'Dataset manifest changed during measurement');
+  for (const { section, file } of startsFiles) assert.equal(hash(file), startHashes[section.id], `Prepared starts changed for ${section.name}`);
   report.finishedAt = new Date().toISOString();
 } catch (error) {
   report.measurementError = String(error.stack ?? error);
