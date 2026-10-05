@@ -31,7 +31,7 @@ export async function createNetworkFixture({ dense = false, startCount = 1, rout
     const pairs: [number, number][] = dense
       ? positions.flatMap((_, from) => positions.flatMap((_, to): [number, number][] => from < to ? [[from, to]] : []))
       : Array.from({ length: routeCount }, (_, index): [number, number][] => [[0, index * 2 + 1], [index * 2 + 1, index * 2 + 2], [index * 2 + 2, 0]]).flat();
-    const starts = Array.from({ length: startCount }, (_, index) => ({ id: `start-${index}`, node: 0, name: `Creek & Ridge <loop> ${index}`, access: 'public' as const }));
+    const starts = Array.from({ length: startCount }, (_, index) => ({ id: `start-${index}`, node: 0, name: `Creek & Ridge <loop> ${index}`, access: 'public' as const, kind: 'trailhead' as const }));
     const data: SectionGraph = { graph: { version: 1, info: catalog.info, nodes: positions, edges: [], starts }, trails: [] };
     const geometry: SectionGeometry = [];
     for (const [trail, [from, to]] of pairs.entries()) {

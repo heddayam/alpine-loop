@@ -270,7 +270,8 @@ def assemble(corridors, entrances, info):
                           "distance": corridor["distance"], "gain": corridor["gains"][direction], "access": access,
                           "connector": corridor["kind"] == "connector"})
             edge_ids.append(corridor["id"] + (":reverse" if direction else ":forward"))
-    starts = [{"id": entrances[node]["id"], "node": indexes[node], "name": entrances[node]["name"], "access": entrances[node]["access"]}
+    starts = [{"id": entrances[node]["id"], "node": indexes[node], "name": entrances[node]["name"], "access": entrances[node]["access"],
+               "kind": {2: "trailhead", 1: "parking"}.get(entrances[node].get("rank", 0), "road-contact")}
               for node in sorted(entrances)]
     info = dict(info, startCount=len(starts))
     return {"version": 1, "info": info, "nodes": nodes, "edges": edges, "starts": starts}, geometry, {

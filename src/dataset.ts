@@ -1,5 +1,8 @@
 import type { SectionGeometry, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
-import type { HikeRoute, Position, RouteCandidate, SearchQuery } from './model.js';
+import type { HikeRoute, JobInputs, Position, RouteCandidate, SearchQuery } from './model.js';
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { openSections } from './sections.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
@@ -25,7 +28,7 @@ export async function readDataset(directory: string) {
     for (const section of selected(query)) {
       const records = await sections.read<SectionStarts>(section, 'starts');
       const eligible = records.filter(([start]) => query.includeUnknown || start.access === 'public').map(([start]) => start);
-      if (eligible.length) result.push({ section, eligible });
+      result.push({ section, eligible });
     }
     return result;
   }
@@ -46,7 +49,7 @@ export async function readDataset(directory: string) {
       }
       const { id, distance, gain, roadDistance, repetition, kind, uncertain } = candidate;
       return {
-        summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name,
+        summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name, startKind: start.kind,
           startPosition: graph.nodes[start.node]!, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
         sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse })),
       };
@@ -71,7 +74,21 @@ export async function readDataset(directory: string) {
     }
     return { ...stored.summary, geometry: coordinates };
   }
-  return { info: catalog.info, coverage, starts, select, route, view: sections.view, downloads: sections.downloads };
+  async function verifyInputs(inputs: JobInputs): Promise<void> {
+    const file = join(directory, 'catalog.json');
+    if ((await stat(file)).size > 16 * 1024 * 1024) throw new Error('Prepared catalog changed during this job.');
+    const current = JSON.parse(await readFile(file, 'utf8')) as typeof catalog;
+    if (current.info?.id !== inputs.version) throw new Error('Prepared data changed during this job. Submit a new job.');
+    for (const pinned of inputs.sections) {
+      const entry = current.sections?.find(section => section.id === pinned.id);
+      const facts = entry && { id: entry.id, name: entry.name, bounds: entry.bounds, boundary: entry.boundary, files: entry.files };
+      if (!isDeepStrictEqual(facts, pinned)) throw new Error(`Prepared region changed during this job: ${pinned.name}`);
+      if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
+    }
+  }
+  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, route, verifyInputs,
+    readGeometry: (id: string) => sections.read<SectionGeometry>(id, 'geometry'),
+    view: sections.view, downloads: sections.downloads };
 }
 
 export function gpx(route: HikeRoute): string {
