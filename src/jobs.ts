@@ -198,7 +198,15 @@ export async function createJobs(dataDirectory: string, directory: string) {
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
       insert.run(job.id, JSON.stringify(job)); startPump(); return snapshot(job.id, false);
     },
-    list: () => rows().toReversed().map(job => snapshot(job.id, false)),
+    list: () => {
+      const entries = rows();
+      let queuedPosition = 0;
+      for (const job of entries) {
+        if (job.status === 'queued') job.queuePosition = ++queuedPosition;
+        if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
+      }
+      return entries.toReversed();
+    },
     get: snapshot,
     page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc') {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
@@ -244,8 +252,11 @@ export async function createJobs(dataDirectory: string, directory: string) {
       closed = true;
       const current = active;
       if (current) {
-        const job = snapshot(current.id, false); job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
-        job.reason = 'The app closed before this job finished. Copy its settings to submit it again.'; save(job);
+        const job = snapshot(current.id, false);
+        if (job.status === 'running') {
+          job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
+          job.reason = 'The app closed before this job finished. Copy its settings to submit it again.'; save(job);
+        }
         await current.worker.terminate(); await current.finished; await discard(current.id);
       }
       while (pumping) await new Promise(resolve => setTimeout(resolve, 1));
