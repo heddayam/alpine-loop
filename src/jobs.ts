@@ -28,7 +28,7 @@ export function parseQuery(value: unknown): SearchQuery {
 }
 
 import { randomUUID } from 'node:crypto';
-import { link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
@@ -42,33 +42,16 @@ const terminal = (job: JobSnapshot) => job.status !== 'running' && job.status !=
 /** Metadata has one owner. A result file is published only after its worker exits successfully. */
 export async function createJobs(dataDirectory: string, directory: string) {
   await mkdir(directory, { recursive: true });
-  const ownerPath = join(directory, 'owner.lock'), token = randomUUID();
-  const temporaryOwner = join(directory, `.owner-${token}.tmp`);
-  await writeFile(temporaryOwner, JSON.stringify({ pid: process.pid, token }), { flag: 'wx' });
-  try {
-    for (;;) {
-      try { await link(temporaryOwner, ownerPath); break; }
-      catch (error) {
-        if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') throw error;
-        let owner: { pid: number };
-        try { owner = JSON.parse(await readFile(ownerPath, 'utf8')); }
-        catch (failure) {
-          if (failure instanceof Error && 'code' in failure && failure.code === 'ENOENT') continue;
-          throw new Error('The job storage owner could not be verified.');
-        }
-        if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0) throw new Error('The job storage owner is invalid.');
-        try { process.kill(owner.pid, 0); }
-        catch (failure) {
-          if (failure instanceof Error && 'code' in failure && failure.code === 'ESRCH') { await rm(ownerPath, { force: true }); continue; }
-        }
-        throw new Error('Another Alpine Loop app is already using this job storage. Close it before starting another.');
-      }
+  const owner = new DatabaseSync(join(directory, 'owner.sqlite'));
+  try { owner.exec('BEGIN EXCLUSIVE'); }
+  catch (error) {
+    owner.close();
+    if (error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR') {
+      throw new Error('Another Alpine Loop app is already using this job storage. Close it before starting another.');
     }
-  } finally { await rm(temporaryOwner, { force: true }); }
-  const release = async () => {
-    const owner = JSON.parse(await readFile(ownerPath, 'utf8')) as { token: string };
-    if (owner.token === token) await rm(ownerPath, { force: true });
-  };
+    throw error;
+  }
+  const release = async () => { if (owner.isOpen) owner.close(); };
   let db: DatabaseSync;
   try { db = new DatabaseSync(join(directory, 'metadata.sqlite')); }
   catch (error) { await release(); throw error; }
@@ -141,32 +124,35 @@ export async function createJobs(dataDirectory: string, directory: string) {
     });
     active = { id: job.id, worker, finished };
     await finished;
-    const current = find(job.id);
-    if (current.status === 'running') {
-      current.finishedAt = new Date().toISOString();
-      if (done && !failure && !closed) {
-        try {
-          const store = createRouteStore(resultPath(job.id, true));
-          try { Object.assign(current, store.counts); } finally { store.close(); }
-          await rename(resultPath(job.id, true), resultPath(job.id));
-          const folder = await open(directory, 'r');
-          try { await folder.sync(); } finally { await folder.close(); }
-          current.storageBytes = (await stat(resultPath(job.id))).size;
-          current.status = 'completed'; current.progress = done.progress;
+    let current = find(job.id);
+    if (current.status === 'running' && done && !failure && !closed) {
+      try {
+        const store = createRouteStore(resultPath(job.id, true));
+        let counts: { routeCount: number; groupCount: number };
+        try { counts = store.counts; } finally { store.close(); }
+        await rename(resultPath(job.id, true), resultPath(job.id));
+        const folder = await open(directory, 'r');
+        try { await folder.sync(); } finally { await folder.close(); }
+        const storageBytes = (await stat(resultPath(job.id))).size;
+        // Cancellation/close can arrive during filesystem awaits. Publication itself
+        // is synchronous, so the final state check and metadata commit are indivisible.
+        current = find(job.id);
+        if (current.status === 'running' && !closed) {
+          const completed = { ...current, ...counts, storageBytes, status: 'completed' as const,
+            progress: done.progress, finishedAt: new Date().toISOString() };
           db.exec('BEGIN');
-          try { save(current); db.exec('COMMIT'); }
+          try { save(completed); db.exec('COMMIT'); }
           catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
-        } catch (error) {
-          current.status = 'running'; current.storageBytes = 0; delete current.groupCount; delete current.routeCount;
-          failure = error instanceof Error ? error.message : 'Could not save this job.';
         }
-      }
-      if (current.status !== 'completed') {
-        current.status = closed ? 'interrupted' : 'failed';
-        current.reason = failure ?? 'The worker ended before all results were saved.';
-        save(current); await discard(job.id);
-      }
-    } else await discard(job.id);
+      } catch (error) { failure = error instanceof Error ? error.message : 'Could not save this job.'; }
+    }
+    current = find(job.id);
+    if (current.status === 'running') {
+      current.status = closed ? 'interrupted' : 'failed'; current.finishedAt = new Date().toISOString();
+      current.reason = failure ?? 'The worker ended before all results were saved.';
+      save(current);
+    }
+    if (current.status !== 'completed') await discard(job.id);
     if (active?.id === job.id) active = undefined;
   }
   async function pump() {

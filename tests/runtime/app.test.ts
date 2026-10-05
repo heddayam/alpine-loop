@@ -100,7 +100,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx`)).body).toBe(exported.body);
     expect((await app.inject({ method: 'DELETE', url: `/api/jobs/${snapshot.id}` })).statusCode).toBe(204);
     expect((await app.inject('/api/jobs')).json()).toEqual([]);
-    expect((await readdir(jobDirectory)).filter(file => !['metadata.sqlite', 'owner.lock'].includes(file))).toEqual([]);
+    expect((await readdir(jobDirectory)).filter(file => !['metadata.sqlite', 'owner.sqlite'].includes(file))).toEqual([]);
   });
 
   it('queues immutable requests in FIFO order and completes empty results honestly', async () => {
@@ -160,13 +160,12 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await finished(app, queued)).status).toBe('completed');
   });
 
-  it('allows one app to own a job directory and recovers an expired process owner', async () => {
+  it('allows one app to own a job directory and releases ownership when it closes', async () => {
     const { directory, jobDirectory } = await fixture();
     const app = await openApp(directory, jobDirectory);
     const { createApp } = await import('../../dist/server/server.js');
     await expect(createApp(directory, undefined, jobDirectory)).rejects.toThrow('already using this job storage');
     await app.close();
-    await writeFile(join(jobDirectory, 'owner.lock'), JSON.stringify({ pid: 2147483647, token: 'expired' }));
     const reopened = await openApp(directory, jobDirectory);
     expect((await reopened.inject('/api/jobs')).json()).toEqual([]);
   });
