@@ -20,12 +20,86 @@ from rasterio.transform import from_origin
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/prepare"))
 from build import build
 from elevation import Elevation
-from graph import topology
+from graph import assemble, measure, topology
 from footprint import boundary
 from output import write_section
 
 
 class FreshCompiler(unittest.TestCase):
+    def test_vehicle_arrival_is_independent_of_walking_access(self):
+        # The reported GPX starts at this path/track junction in Sheep Canyon.
+        # Its only road evidence is an unpaved track explicitly closed to cars.
+        sheep = "47643463"
+        points = {sheep: (-122.2685985, 46.2026631)}
+        ways = {"5877288": {"id": "5877288", "nodes": ["1", sheep], "tags": {
+            "highway": "track", "motor_vehicle": "no", "old_ref": "FS 8123177",
+            "surface": "unpaved", "tracktype": "grade5"}}}
+        points["1"] = (-122.269, 46.202)
+        points["2"] = (-122.269, 46.203)
+        points["3"] = (-122.267, 46.203)
+        points["4"] = (-122.270, 46.203)
+        ways["trail"] = {"id": "trail", "nodes": ["2", sheep, "3", "2"],
+                         "tags": {"highway": "path", "foot": "yes"}}
+        ways["arrival"] = {"id": "arrival", "nodes": ["4", "2"], "tags": {"highway": "service"}}
+        # Each additional contact touches the same walking trail. Missing or
+        # conditional arrival remains uncertain; car-specific tags take priority.
+        cases = {
+            "motorcar_no": ({"motorcar": "no", "motor_vehicle": "yes"}, False),
+            "motor_vehicle_no": ({"motor_vehicle": "no", "access": "yes"}, False),
+            "vehicle_no": ({"vehicle": "no", "access": "yes"}, False),
+            "access_private": ({"access": "private"}, False),
+            "access_no": ({"access": "no"}, False),
+            "motorcar_override": ({"motorcar": "yes", "motor_vehicle": "no"}, True),
+            "motor_vehicle_override": ({"motor_vehicle": "yes", "vehicle": "no"}, True),
+            "vehicle_override": ({"vehicle": "yes", "access": "no"}, True),
+            "unknown": ({}, True),
+            "conditional": ({"motor_vehicle:conditional": "yes @ (May-Sep)"}, True),
+            "directions_closed": ({"motorcar:forward": "no", "motorcar:backward": "no"}, False),
+            "construction": ({"construction": "yes"}, False),
+            "disused": ({"disused": "yes"}, False),
+            "alternative": ({"motor_vehicle": "no"}, True),
+        }
+        trail_nodes = ["3"]
+        for index, (name, (tags, _)) in enumerate(cases.items()):
+            node, road_end = name, name + "_road"
+            points[node] = (-122.266 + index * .0002, 46.203)
+            points[road_end] = (points[node][0], 46.202)
+            trail_nodes.append(node)
+            ways[name] = {"id": name, "nodes": [road_end, node],
+                          "tags": dict(tags, highway="track", foot="yes")}
+        ways["continuation"] = {"id": "continuation", "nodes": trail_nodes, "tags": {"highway": "path", "foot": "yes"}}
+        points["alternate_road"] = (points["alternative"][0] + .0001, 46.202)
+        ways["alternate_arrival"] = {"id": "alternate_arrival", "nodes": ["alternate_road", "alternative"],
+                                     "tags": {"highway": "service", "motorcar": "yes", "foot": "no"}}
+        footprint = [-122.271, 46.201, -122.26, 46.204]
+        corridors, _, entrances, _ = topology(ways, [], {}, points, footprint)
+        self.assertNotIn("n" + sheep, entrances, "A car-forbidden track cannot establish this mid-trail start")
+        self.assertEqual(entrances["n2"]["access"], "unknown", "A road contact alone does not prove parking")
+        for name, (_, eligible) in cases.items():
+            self.assertEqual("n" + name in entrances, eligible, name)
+        self.assertEqual(entrances["nalternative"]["sources"], ["walternate_arrival"],
+                         "A vehicle-closed way cannot erase independent permitted arrival, even where walking on that road is prohibited")
+        measure(corridors, lambda positions: [100] * len(positions))
+        graph, geometry, lineage = assemble(corridors, entrances, {"id": "fixture"})
+        self.assertNotIn("osm-entrance:" + sheep, {start["id"] for start in graph["starts"]})
+        by_node = {node: index for index, node in enumerate(lineage["nodeIds"])}
+        # Independent graph traversal protects the walking route through the
+        # rejected contact; restricting car arrival must not cut the hiking graph.
+        reached, pending = set(), [by_node["n2"]]
+        while pending:
+            node = pending.pop()
+            if node in reached:
+                continue
+            reached.add(node)
+            pending.extend(edge["to"] for edge in graph["edges"] if edge["from"] == node)
+        self.assertIn(by_node["n" + sheep], reached)
+        self.assertIn(by_node["n1"], reached, "The vehicle-closed Sheep Canyon track stays walkable with uncertain foot access")
+        closed_track = [index for index, trail in enumerate(lineage["trails"])
+                        if any(source["way"] == "5877288" for segment in trail["segments"] for source in segment["source"])]
+        self.assertTrue(closed_track)
+        self.assertTrue(all(geometry[index]["kind"] == "connector" for index in closed_track))
+        self.assertEqual({edge["access"] for edge in graph["edges"] if edge["trail"] in closed_track}, {"unknown"})
+
     def test_source_topology_access_boundary_and_measured_climb(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -13,8 +13,8 @@ DENIED = {"no", "private", "closed", "agricultural", "forestry", "customers", "d
 PUBLIC = {"yes", "designated", "permissive", "public"}
 
 
-def permission(tags, direction=None):
-    keys = [key for mode in ("foot", "access")
+def permission(tags, direction=None, modes=("foot", "access")):
+    keys = [key for mode in modes
             for key in ([f"{mode}:{direction}", mode] if direction else [mode])]
     found = next((index for index, key in enumerate(keys) if key in tags), len(keys))
     value = tags.get(keys[found]) if found < len(keys) else None
@@ -154,7 +154,12 @@ def topology(ways, pois, tags_by_node, positions, footprint):
     # generic path, and a prohibited segment cannot establish a trail contact.
     trail_nodes = {node for segment in usable if segment["kind"] == "trail" for node in segment["ends"]}
     for way in ways.values():
-        if way["tags"].get("highway") not in ROADS or all(value is None for value in directions(way["tags"])):
+        if way["tags"].get("highway") not in ROADS or not routable(way):
+            continue
+        # Walking a closed road is different from arriving by car. Foot tags
+        # cannot restore vehicle access; more-specific vehicle tags can.
+        if all(permission(way["tags"], side, ("motorcar", "motor_vehicle", "vehicle", "access")) is None
+               for side in ("forward", "backward")):
             continue
         for node in way["nodes"]:
             key = "n" + node
