@@ -49,8 +49,8 @@ function sectionRequest(definition) {
   if (!definition.query.area) return { sections: catalog.sections.map(section => section.id).sort(), ...definition.query };
   const { area: [west, south, east, north], ...constraints } = definition.query;
   const selected = startsFiles.filter(({ records }) => records.some(([start, [lon, lat]]) =>
-    lon >= west && lon <= east && lat >= south && lat <= north && (constraints.includeUnknown || start.access === 'public')));
-  assert(selected.length, `No prepared section contains an eligible start in frozen query ${definition.id}`);
+    lon >= west && lon <= east && lat >= south && lat <= north));
+  assert(selected.length, `No prepared section contains a start in frozen query ${definition.id}`);
   for (const { section } of selected) for (const file of Object.values(section.files)) {
     assert(fs.existsSync(path.join(dataset, file.path)), `Prepared ${section.name} is incomplete: missing ${file.path}`);
   }
@@ -68,7 +68,7 @@ const report = {
   sourceCompilation: provenance ? { provenanceSha256: hash(provenanceFile), evidence: provenance.plan.evidence,
     policy: provenance.plan.policy, observations: provenance.observations } : null,
   methodology: [
-    'Frozen rectangles identify prepared sections containing at least one originally eligible start. Searches then explore all eligible starts in those exact sections, with the frozen distance, gain, repetition and access constraints.',
+    'Frozen rectangles identify prepared sections containing at least one prepared start. Region selection is independent of access filters; eligibility is applied by the unchanged submitted query. Searches explore all eligible starts in those exact sections.',
     'Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.',
     'Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.',
     'RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.',

@@ -7,8 +7,11 @@ physical-trail traversal divided by total route distance. Its SHA-256 remains
 Do not change these requests to make an implementation pass.
 
 The app now searches exact prepared sections. The harness uses each frozen
-rectangle only to identify sections containing at least one eligible start in
+rectangle only to identify sections containing at least one prepared start in
 the installed dataset, then searches every eligible start in those sections.
+Region selection is independent of the access filter, matching the app. The
+unchanged request applies access eligibility during exploration, including for
+`stevens-known`, whose original rectangle contains only uncertain starts.
 Distance, gain, repetition and access constraints stay frozen. Reports retain
 the complete original definition, adapted `effectiveRequest` with exact section
 IDs, and the app's resolved query. The harness requires installed data and checks
