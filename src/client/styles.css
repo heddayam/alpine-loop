@@ -117,6 +117,114 @@ h2 {
 .planner {
   padding: 22px;
 }
+.planner-fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.sections-panel {
+  margin-top: 15px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sections-panel summary {
+  font-weight: 600;
+}
+.sections-panel summary span {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 5px;
+}
+.sections-panel > p {
+  color: var(--muted);
+  margin-top: 9px;
+}
+.sections-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sections-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sections-list li > div {
+  min-width: 0;
+}
+.sections-list li > div > span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.sections-list button {
+  font-size: 11px;
+  padding: 6px 8px;
+}
+.sections-list .section-name {
+  padding: 0;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  line-height: 1.5;
+}
+.unavailable-sections {
+  color: var(--muted);
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.unavailable-sections li + li {
+  margin-top: 8px;
+}
+.unavailable-sections span {
+  display: block;
+  font-size: 10px;
+  margin-top: 2px;
+}
+.download-panel {
+  margin: 16px 22px 0;
+  padding: 13px;
+  background: #f1f5ed;
+  border: 1px solid #d6e0cf;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.download-panel p {
+  margin-top: 8px;
+}
+.download-panel ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.download-panel progress {
+  display: block;
+  width: 100%;
+  height: 7px;
+  margin-top: 12px;
+  accent-color: var(--green);
+}
+.download-names {
+  color: var(--muted);
+  font-size: 11px;
+}
+.download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.download-actions button {
+  font-size: 11px;
+}
 .section-heading {
   display: flex;
   align-items: center;

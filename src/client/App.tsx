@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type {
   Bounds,
-  DatasetInfo,
   HikeRoute,
   RouteChoice,
   RouteSummary,
@@ -10,12 +9,14 @@ import type {
   SearchSnapshot,
 } from "../model.js";
 import { DEFAULT_ROAD_LIMITS, ROUTES_PER_PAGE } from "../model.js";
+import type { CatalogView, Coverage, DownloadSnapshot } from "../data-format.js";
 import { HikeMap } from "./Map.js";
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
 const miles = (meters: number) => (meters / MILE).toFixed(1);
 const feet = (meters: number) => Math.round(meters / FOOT).toLocaleString();
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
 const roadExplanation =
   "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
@@ -55,7 +56,7 @@ async function request<T>(
               data?.error?.message ??
               "The server could not complete this request."),
       ),
-      { status: response.status },
+      { status: response.status, sections: data?.sections, bytes: data?.bytes },
     );
   return data as T;
 }
@@ -241,7 +242,12 @@ function progressLabel(search: SearchSnapshot) {
 }
 
 export function App() {
-  const [dataset, setDataset] = useState<DatasetInfo>();
+  const [dataset, setDataset] = useState<CatalogView>();
+  const [pendingDownload, setPendingDownload] = useState<{ query: SearchQuery; coverage: Coverage } | null>(null);
+  const [download, setDownload] = useState<DownloadSnapshot | null>(null);
+  const [downloadError, setDownloadError] = useState("");
+  const [downloadRetry, setDownloadRetry] = useState(0);
+  const downloadQuery = useRef<SearchQuery | null>(null);
   const [startupError, setStartupError] = useState("");
   const [area, setArea] = useState<Bounds | null>(null);
   const [areaMode, setAreaMode] = useState<"view" | "drawn" | "retained">(
@@ -284,6 +290,8 @@ export function App() {
   const [routeRetry, setRouteRetry] = useState(0);
   const selectedId = selected?.id ?? null;
   const running = search?.status === "running";
+  const downloading = download?.status === "running";
+  const choosingDownload = !!pendingDownload;
   const activeId = editing ? null : (reverseTarget ?? selectedId ?? hoveredId);
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const acceptSnapshot = (snapshot: SearchSnapshot) => {
@@ -315,20 +323,22 @@ export function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void request<DatasetInfo>("/api/catalog", controller.signal)
-      .then(async (info) => {
+    void Promise.all([
+      request<CatalogView>("/api/catalog", controller.signal),
+      request<SearchSnapshot | null>("/api/search", controller.signal),
+      request<DownloadSnapshot | null>("/api/downloads", controller.signal),
+    ])
+      .then(([info, snapshot, transfer]) => {
+        if (controller.signal.aborted) return;
         setArea(info.bounds);
         setCamera({ bounds: info.bounds, revision: 0, selectArea: true });
-        const snapshot = await request<SearchSnapshot | null>(
-          "/api/search",
-          controller.signal,
-        );
-        if (!controller.signal.aborted && snapshot) {
+        if (snapshot) {
           setSearch(snapshot);
           restoreDraft(snapshot);
           setEditing(false);
         }
-        if (!controller.signal.aborted) setDataset(info);
+        setDownload(transfer);
+        setDataset(info);
       })
       .catch((failure) => {
         if (!controller.signal.aborted) setStartupError(failure.message);
@@ -339,6 +349,43 @@ export function App() {
       pageOperation.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (download?.status !== "running") return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const snapshot = await request<DownloadSnapshot | null>("/api/downloads", controller.signal);
+        if (controller.signal.aborted) return;
+        setDownloadError("");
+        if (!snapshot) {
+          downloadQuery.current = null;
+          setDownload(null);
+          setError("The download is no longer available. The server may have restarted. Try your search again.");
+          return;
+        }
+        if (snapshot.status !== "running") {
+          await finishDownload(snapshot, controller.signal);
+          return;
+        }
+        setDownload(snapshot);
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        setDownloadError(failure instanceof Error ? failure.message : "Connection lost. Reconnecting…");
+      }
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 750);
+    };
+    timer = setTimeout(() => void poll(), 250);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [download?.status, downloadRetry]);
+
+  useEffect(() => {
+    if (pendingDownload) document.getElementById("confirm-download")?.focus();
+  }, [pendingDownload]);
 
   useEffect(() => {
     if (!search || search.status !== "running" || busy || loadingPage) return;
@@ -454,7 +501,7 @@ export function App() {
 
   const launch = async (event: FormEvent) => {
     event.preventDefault();
-    if (!area || busy || drawing) return;
+    if (!area || busy || drawing || downloading || pendingDownload) return;
     const distances = distance.map(Number),
       gains = gain.map(Number),
       repeated = Number(repetition);
@@ -489,13 +536,35 @@ export function App() {
       return;
     }
     const query: SearchQuery = {
-      area,
+      area: [...area],
       distance: [distances[0]! * MILE, distances[1]! * MILE],
       gain: [gains[0]! * FOOT, gains[1]! * FOOT],
       repetition: repeated / 100,
       includeUnknown,
       roads: { distance: roadDistance * MILE, fraction: roadFraction / 100 },
     };
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true);
+    setError("");
+    try {
+      const coverage = await request<Coverage>("/api/coverage", controller.signal, query);
+      if (controller.signal.aborted) return;
+      if (coverage.missing.length) {
+        setDownload(null);
+        setPendingDownload({ query, coverage });
+      }
+      else await beginSearch(query);
+    } catch (failure) {
+      if (!controller.signal.aborted)
+        setError(failure instanceof Error ? failure.message : "Could not check trail coverage. Try again.");
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  };
+
+  const beginSearch = async (query: SearchQuery) => {
     operation.current?.abort();
     const controller = new AbortController();
     operation.current = controller;
@@ -526,12 +595,65 @@ export function App() {
         setConnectionError("");
       }
     } catch (failure) {
+      if (!controller.signal.aborted) {
+        const rejection = failure as Error & { status?: number; sections?: string[]; bytes?: number };
+        if (rejection.status === 409 && Array.isArray(rejection.sections)) {
+          setPendingDownload({ query, coverage: {
+            sections: rejection.sections, missing: rejection.sections, bytes: rejection.bytes ?? 0,
+          } });
+          setEditing(true);
+        } else setError(failure instanceof Error ? failure.message : "Search could not start.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  };
+  const finishDownload = async (snapshot: DownloadSnapshot, signal: AbortSignal) => {
+    const info = await request<CatalogView>("/api/catalog", signal);
+    if (signal.aborted) return;
+    setDataset(info);
+    setDownload(snapshot);
+    const query = snapshot.status === "complete" ? downloadQuery.current : null;
+    downloadQuery.current = null;
+    if (query) await beginSearch(query);
+  };
+  const beginDownload = async (sections: string[], query: SearchQuery | null = null) => {
+    if (busy || downloading) return;
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    downloadQuery.current = query;
+    setBusy(true);
+    setError("");
+    setDownloadError("");
+    try {
+      const snapshot = await request<DownloadSnapshot>("/api/downloads", controller.signal, { sections });
+      if (controller.signal.aborted) return;
+      setPendingDownload(null);
+      if (snapshot.status === "running") setDownload(snapshot);
+      else await finishDownload(snapshot, controller.signal);
+    } catch (failure) {
+      if (!controller.signal.aborted) {
+        downloadQuery.current = null;
+        setError(failure instanceof Error ? failure.message : "Download could not start. Try again.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  };
+  const stopDownload = async () => {
+    if (!downloading || busy) return;
+    downloadQuery.current = null;
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true);
+    setDownloadError("");
+    try {
+      const snapshot = await request<DownloadSnapshot>("/api/downloads/stop", controller.signal, {});
+      await finishDownload(snapshot, controller.signal);
+    } catch (failure) {
       if (!controller.signal.aborted)
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "Search could not start.",
-        );
+        setDownloadError(failure instanceof Error ? failure.message : "Could not stop the download. Try again.");
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
@@ -685,11 +807,53 @@ export function App() {
                   )}
                 </div>
               )}
+              {pendingDownload && (
+                <section className="download-panel" aria-labelledby="download-heading">
+                  <h2 id="download-heading">Download trails for this search</h2>
+                  <p>{megabytes(pendingDownload.coverage.bytes)} total. Downloaded sections stay on this computer for later searches.</p>
+                  <ul>
+                    {pendingDownload.coverage.missing.map(id => (
+                      <li key={id}>{dataset.sections.find(section => section.id === id)?.name ?? id}</li>
+                    ))}
+                  </ul>
+                  {pendingDownload.coverage.coverageNote && <p>{pendingDownload.coverage.coverageNote}</p>}
+                  <div className="download-actions">
+                    <button id="confirm-download" className="primary" type="button" disabled={busy}
+                      onClick={() => void beginDownload(pendingDownload.coverage.missing, pendingDownload.query)}>
+                      Download and search
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => setPendingDownload(null)}>Cancel</button>
+                  </div>
+                </section>
+              )}
+              {download && (
+                <section className="download-panel" aria-label="Trail download">
+                  <h2>{downloading ? "Downloading trail sections"
+                    : download.status === "complete" ? "Trail sections ready"
+                    : download.status === "stopped" ? "Download stopped" : "Download failed"}</h2>
+                  <p className="download-names">{download.sections.map(id =>
+                    dataset.sections.find(section => section.id === id)?.name ?? id).join(" · ")}</p>
+                  {downloading && <progress aria-label="Trail download progress"
+                    value={Math.min(download.completedBytes, download.totalBytes)} max={Math.max(1, download.totalBytes)} />}
+                  <p role="status">{megabytes(download.completedBytes)} of {megabytes(download.totalBytes)}
+                    {downloading && downloadQuery.current ? ". Your search starts when the download finishes." : ""}</p>
+                  {download.reason && <p role={download.status === "failed" ? "alert" : undefined}>{download.reason}</p>}
+                  {downloadError && <p role="alert">{downloadError}</p>}
+                  <div className="download-actions">
+                    {downloading ? <>
+                      <button type="button" disabled={busy} onClick={() => void stopDownload()}>Cancel download</button>
+                      {downloadError && <button type="button" disabled={busy}
+                        onClick={() => setDownloadRetry(value => value + 1)}>Reconnect</button>}
+                    </> : <button type="button" onClick={() => setDownload(null)}>Dismiss</button>}
+                  </div>
+                </section>
+              )}
               {editing ? (
                 <form
                   className="planner"
                   onSubmit={(event) => void launch(event)}
                 >
+                  <fieldset className="planner-fields" disabled={busy || downloading || choosingDownload}>
                   <div className="section-heading">
                     <h2>Where</h2>
                     {search && (
@@ -753,6 +917,30 @@ export function App() {
                         ? "Previous search area. Pan the map to change it."
                         : "Starts in the visible map area. Pan or zoom to choose."}
                   </p>
+                  <details className="sections-panel">
+                    <summary>Trail sections <span>{dataset.sections.filter(section => section.installed).length} of {dataset.sections.length} downloaded</span></summary>
+                    <p>Choose a section to see its area, or download it for later. Searching an area prompts for any missing sections.</p>
+                    <ul className="sections-list">
+                      {dataset.sections.map(section => <li key={section.id}>
+                        <div>
+                          <button className="section-name" type="button" onClick={() => {
+                            setArea(section.bounds);
+                            setAreaMode("drawn");
+                            moveTo(section.bounds);
+                          }}>{section.name}</button>
+                          <span>{section.installed ? "Downloaded · " : ""}{megabytes(section.bytes)}</span>
+                        </div>
+                        {!section.installed && <button type="button" aria-label={`Download ${section.name}`}
+                          onClick={() => void beginDownload([section.id])}>Download</button>}
+                      </li>)}
+                    </ul>
+                    {!dataset.sections.length && <p>No prepared sections are available yet.</p>}
+                    {!!dataset.unavailable?.length && <ul className="unavailable-sections">
+                      {dataset.unavailable.map(region => <li key={region.name}>
+                        <strong>{region.name}</strong><span>{region.reason}</span>
+                      </li>)}
+                    </ul>}
+                  </details>
                   <h2 className="limits-heading">Limits</h2>
                   <Range
                     name="Distance"
@@ -856,6 +1044,7 @@ export function App() {
                       Replaces the running search and its results.
                     </p>
                   ) : null}
+                  </fieldset>
                 </form>
               ) : (
                 search && (
@@ -1087,6 +1276,7 @@ export function App() {
               : (search?.query.area ?? area)
           }
           editing={editing}
+          locked={busy || downloading || choosingDownload}
           drawn={areaMode === "drawn"}
           routes={editing ? [] : mapRoutes}
           activeRoute={activeRoute}

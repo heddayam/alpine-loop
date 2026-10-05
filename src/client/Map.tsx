@@ -6,6 +6,7 @@ import {
   polyline,
   layerGroup,
   circleMarker,
+  geoJSON,
   DomEvent,
   type Map as LeafletMap,
   type Rectangle,
@@ -13,7 +14,8 @@ import {
   type LayerGroup,
   type LatLngBoundsExpression,
 } from "leaflet";
-import type { Bounds, DatasetInfo, HikeRoute, RouteSummary } from "../model.js";
+import type { Bounds, HikeRoute, RouteSummary } from "../model.js";
+import type { CatalogView } from "../data-format.js";
 
 const leafletBounds = (bounds: Bounds): LatLngBoundsExpression => [
   [bounds[1], bounds[0]],
@@ -33,6 +35,7 @@ export function HikeMap({
   dataset,
   area,
   editing,
+  locked,
   drawn,
   routes,
   activeRoute,
@@ -46,9 +49,10 @@ export function HikeMap({
   onSelect,
   onPreview,
 }: {
-  dataset: DatasetInfo;
+  dataset: CatalogView;
   area: Bounds | null;
   editing: boolean;
+  locked: boolean;
   drawn: boolean;
   routes: RouteSummary[];
   activeRoute: HikeRoute | null;
@@ -67,6 +71,7 @@ export function HikeMap({
   const outline = useRef<Rectangle | null>(null);
   const routeGroup = useRef<LayerGroup | null>(null);
   const startGroup = useRef<LayerGroup | null>(null);
+  const sectionGroup = useRef<LayerGroup | null>(null);
   const renderedStarts = useRef(
     new Map<string, { marker: CircleMarker; routes: RouteSummary[] }>(),
   );
@@ -78,6 +83,7 @@ export function HikeMap({
     onPreview,
     selectedId,
     editing,
+    locked,
     drawn,
   });
   callbacks.current = {
@@ -88,9 +94,11 @@ export function HikeMap({
     onPreview,
     selectedId,
     editing,
+    locked,
     drawn,
   };
   const programmatic = useRef(false);
+  const movedWhileLocked = useRef(false);
   const [ready, setReady] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const drawingRef = useRef(false);
@@ -103,7 +111,7 @@ export function HikeMap({
   };
 
   useEffect(() => {
-    const map = createMap(container.current!, { preferCanvas: true });
+    const map = createMap(container.current!);
     instance.current = map;
     map.zoomControl.setPosition("bottomright");
     map.fitBounds(leafletBounds(dataset.bounds), { padding: [30, 30] });
@@ -112,13 +120,8 @@ export function HikeMap({
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
-    rectangle(leafletBounds(dataset.bounds), {
-      color: "#315e49",
-      weight: 2,
-      opacity: 0.65,
-      fillOpacity: 0.025,
-      interactive: false,
-    }).addTo(map);
+    map.createPane("sections").style.zIndex = "350";
+    sectionGroup.current = layerGroup().addTo(map);
     outline.current = rectangle(leafletBounds(dataset.bounds), {
       color: "#536553",
       weight: 1.5,
@@ -134,11 +137,13 @@ export function HikeMap({
         callbacks.current.editing &&
         !callbacks.current.drawn &&
         !programmatic.current
-      )
-        callbacks.current.onViewport(visibleBounds(map));
+      ) {
+        if (callbacks.current.locked) movedWhileLocked.current = true;
+        else callbacks.current.onViewport(visibleBounds(map));
+      }
     });
     map.on("click", (event) => {
-      if (!drawingRef.current) return;
+      if (!drawingRef.current || callbacks.current.locked) return;
       const point: [number, number] = [event.latlng.lng, event.latlng.lat];
       if (!firstCorner.current) {
         firstCorner.current = point;
@@ -179,8 +184,27 @@ export function HikeMap({
       outline.current = null;
       routeGroup.current = null;
       startGroup.current = null;
+      sectionGroup.current = null;
     };
-  }, [dataset]);
+  }, [dataset.id]);
+
+  useEffect(() => {
+    if (!ready || !sectionGroup.current) return;
+    sectionGroup.current.clearLayers();
+    for (const section of dataset.sections) {
+      geoJSON(section.boundary, {
+        pane: "sections",
+        interactive: false,
+        style: {
+          color: section.installed ? "#315e49" : "#7f8d7f",
+          weight: section.installed ? 2 : 1.5,
+          opacity: 0.65,
+          fillOpacity: section.installed ? 0.025 : 0.01,
+          dashArray: section.installed ? undefined : "3 5",
+        },
+      }).addTo(sectionGroup.current);
+    }
+  }, [ready, dataset.sections]);
 
   useEffect(() => {
     if (!ready || !routeGroup.current) return;
@@ -272,6 +296,12 @@ export function HikeMap({
     if (!editing) changeDrawing(false);
   }, [editing]);
   useEffect(() => {
+    if (locked || !movedWhileLocked.current) return;
+    movedWhileLocked.current = false;
+    if (editing && !drawn && instance.current)
+      callbacks.current.onViewport(visibleBounds(instance.current));
+  }, [locked]);
+  useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
       if (event.key === "Escape") changeDrawing(false);
     };
@@ -297,7 +327,7 @@ export function HikeMap({
         <div className="map-tools">
           <button
             type="button"
-            disabled={!ready}
+            disabled={!ready || locked}
             aria-pressed={drawing}
             onClick={() => changeDrawing(!drawing)}
           >
@@ -310,6 +340,7 @@ export function HikeMap({
           {drawn && !drawing && (
             <button
               type="button"
+              disabled={locked}
               onClick={() => {
                 if (instance.current)
                   onViewport(visibleBounds(instance.current));
@@ -339,8 +370,8 @@ export function HikeMap({
       {!drawing && (
         <span className="map-caption">
           {!editing && !!routes.length && "Dots mark starts on this page. "}
-          Trail data is available inside the solid border.
-          {area && " The dashed border selects starts; routes may extend beyond it."}
+          Solid borders: downloaded trails. Dotted borders: available sections.
+          {area && " The dashed rectangle selects starts; routes may extend beyond it."}
         </span>
       )}
     </section>
