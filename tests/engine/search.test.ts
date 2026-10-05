@@ -216,3 +216,23 @@ describe('private candidate lifecycle', () => {
     expect(terminal).toMatchObject({ type: 'done', status: 'stopped' });
   });
 });
+
+
+it('counts a search point complete only after its circuits and reversible approaches finish', async () => {
+  const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [3, 0, 100]], [0, 3]);
+  const { events, done } = await collect(graph);
+  expect(done.progress).toMatchObject({ totalSearchPoints: 3, completedSearchPoints: 3 });
+  const readings = events.filter(event => event.type === 'progress').map(event => event.progress);
+  expect(readings.some(progress => progress.totalSearchPoints === 3 && progress.completedSearchPoints === 0)).toBe(true);
+  for (const [index, progress] of readings.entries()) {
+    expect(progress.completedSearchPoints ?? 0).toBeLessThanOrEqual(progress.totalSearchPoints ?? 0);
+    expect(progress.completedSearchPoints ?? 0).toBeGreaterThanOrEqual(readings[index - 1]?.completedSearchPoints ?? 0);
+  }
+  const controller = new AbortController();
+  let terminal: SearchEvent | undefined;
+  for await (const event of search(graph, query, { signal: controller.signal })) {
+    if (event.type === 'route') controller.abort();
+    if (event.type === 'done') terminal = event;
+  }
+  expect(terminal).toMatchObject({ type: 'done', status: 'stopped', progress: { totalSearchPoints: 3, completedSearchPoints: 0 } });
+});

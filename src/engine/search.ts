@@ -167,7 +167,7 @@ function lowerBounds(index: Index, sources: number[], limit: number, metric: 0 |
 type Circuit = { physical: number[]; nodes: number[]; orientations: number[][]; distance: number; gain: number; road: number };
 /** A simple circuit is rooted at its least node. First/last physical edge order
  * removes reversal; direction legality is evaluated separately, never assumed. */
-function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generator<Circuit | undefined> {
+function* circuits(graph: TrailGraph, index: Index, query: SearchQuery, cyclicBlocks: number[][], completedRoot: () => void): Generator<Circuit | undefined> {
   const budget = [query.distance[1], query.gain[1], (query.roads ?? DEFAULT_ROAD_LIMITS).distance]
     .map(value => Number.isSafeInteger(Math.floor(value)) ? Math.floor(value) : Infinity);
   const make = (path: number[], nodes: number[], sums: number[]): Circuit | undefined => {
@@ -193,7 +193,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
       distance: sums[0]!, gain: sums[1]!, road: sums[2]! } : undefined;
   };
   const scratch = [0, 1, 2].map(() => new Float64Array(index.incident.length));
-  for (const block of blocks(index)) {
+  for (const block of cyclicBlocks) {
     const adjacency = new Map<number, number[]>();
     for (const id of block) {
       const edge = index.physical[id]!;
@@ -242,6 +242,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
         }
         yield found;
       }
+      completedRoot();
     }
   }
 }
@@ -341,12 +342,19 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   index.startBounds = ([0, 1, 2] as const).map(metric => lowerBounds(index, index.eligible.map(start => graph.starts[start]!.node),
     [query.distance[1], query.gain[1], query.roads!.distance][metric]!, metric, node => index.incident[node]!, true));
   yield { type: 'progress', progress: snapshot() };
+  const cyclicBlocks = index.eligible.length ? blocks(index) : [];
+  progress.totalSearchPoints = cyclicBlocks.reduce((total, block) => total + new Set(block.flatMap(id => {
+    const edge = index.physical[id]!;
+    return [edge.from, edge.to];
+  })).size, 0);
+  progress.completedSearchPoints = 0;
+  yield { type: 'progress', progress: snapshot() };
   let results = 0, yieldedAt = performance.now();
   const limited = (): SearchEvent => ({ type: 'done', status: 'limited', progress: snapshot(),
     reason: results >= maxResults ? 'Result allowance reached; exploration is unfinished' : 'Expansion allowance reached; exploration is unfinished' });
   const visit = function* () {
     if (!index.eligible.length) return;
-    for (const circuit of circuits(graph, index, query)) {
+    for (const circuit of circuits(graph, index, query, cyclicBlocks, () => { progress.completedSearchPoints!++; })) {
       yield undefined;
       if (circuit) yield* approaches(graph, index, query, circuit);
     }
