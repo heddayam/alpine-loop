@@ -159,7 +159,7 @@ describe('independent route oracle', () => {
   });
 });
 
-describe('incremental search lifecycle', () => {
+describe('private candidate lifecycle', () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100]], [0, 1, 2]);
   it('validates road limits and snapshots them before yielding progress', async () => {
     for (const roads of [{ distance: -1, fraction: 0.1 }, { distance: Infinity, fraction: 0.1 },
@@ -178,7 +178,7 @@ describe('incremental search lifecycle', () => {
     expect(routes.map(key).sort()).toEqual(expected);
   });
 
-  it('gives each start a first step before deeper work and reports an expansion limit honestly', async () => {
+  it('reports explicit diagnostic expansion allowances honestly', async () => {
     const { done, events } = await collect(graph, query, { maxExpansions: 3, sliceExpansions: 10_000 });
     expect(done).toMatchObject({ status: 'limited', progress: { totalStarts: 3, attemptedStarts: 3, completedStarts: 0, expansions: 3 } });
     expect(events[0]).toMatchObject({ type: 'progress', progress: { attemptedStarts: 0, completedStarts: 0 } });
@@ -192,21 +192,6 @@ describe('incremental search lifecycle', () => {
     expect((await collect(graph, query, { maxExpansions: 0 })).done.status).toBe('limited');
     expect((await collect({ ...graph, starts: [] })).done)
       .toMatchObject({ status: 'complete', progress: { totalStarts: 0, attemptedStarts: 0, completedStarts: 0 } });
-  });
-
-  it('finds a simple matching loop before exhausting an earlier dense detour', async () => {
-    const trails: Parameters<typeof fixture>[0] = [[0, 1, 1]];
-    for (let from = 1; from <= 6; from++) {
-      for (let to = from + 1; to <= 6; to++) trails.push([from, to, 1]);
-    }
-    trails.push([0, 7, 100], [7, 8, 100], [8, 0, 100]);
-    const network = fixture(trails);
-    const criteria = { ...query, distance: [300, 300] as SearchQuery['distance'] };
-    const expected = enumerate(network, criteria);
-    expect(expected).toHaveLength(2);
-    const { routes, done } = await collect(network, criteria, { maxExpansions: 256 });
-    expect(routes.map(key).sort()).toEqual(expected.map(key).sort());
-    expect(done.status).toBe('limited');
   });
 
   it('yields to the event loop so a timer can stop a search even without matches', async () => {

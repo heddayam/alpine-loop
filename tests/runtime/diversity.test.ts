@@ -1,147 +1,106 @@
 import { expect, it } from 'vitest';
-import { createRouteGroups } from '../../src/diversity.js';
-import type { RouteCandidate, SearchQuery } from '../../src/model.js';
-import { enumerate, fixture } from '../engine/oracle.js';
+import { solveSection } from '../../src/diversity.js';
+import type { SearchQuery } from '../../src/model.js';
+import { fixture } from '../engine/oracle.js';
 
-it('combines minor variations while preserving different hiking paths, starts and qualified directions', () => {
-  const graph = fixture([
-    [0, 1, 3500], // Shared approach.
-    [1, 2, 650], [2, 1, 350], [2, 1, 350], // Two different cycle branches.
-    [0, 3, 1750], [3, 1, 1750], // A physically separate approach of equal length.
-    ...Array.from({ length: 11 }, (): [number, number, number] => [4, 4, 1000]), // Separate physical rings at one start.
-    [5, 6, 975], [6, 5, 25], [6, 5, 25], // A small substitution within the same cycle.
-  ], [0, 1, 4, 5, 2]);
-  graph.starts.push({ ...graph.starts[1]!, id: 'another-source-at-the-same-node' });
-  const query: SearchQuery = { sections: ['fixture'], distance: [1, 10000], gain: [0, 0], repetition: 0.45, includeUnknown: true };
-  const valid = enumerate(graph, query);
-  function route(start: number, edges: number[], candidates = valid): RouteCandidate {
-    const found = candidates.find(candidate => candidate.start === start && candidate.edges.join(',') === edges.join(','));
-    if (!found) throw new Error(`Fixture route must independently satisfy constraints: ${start}/${edges}`);
-    return { ...found, id: `${start}/${edges}`, kind: found.repetition ? 'lollipop' : 'loop', uncertain: false };
-  }
-  const group = createRouteGroups(graph);
-  const first = route(0, [0, 2, 4, 1]);
-  expect(first).toMatchObject({ distance: 8000, repetition: 0.4375 });
-  const firstIdentity = group(first)!;
-  expect(firstIdentity.groupId).toBe(first.id);
-  expect(group(route(0, [0, 5, 3, 1]))).toEqual({ ...firstIdentity, preferred: false }); // Full reversed walk, same original start.
-  expect(group({ ...first, id: 'repeated-emission' })).toEqual({ ...firstIdentity, preferred: false });
+const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain: [0, 10_000], repetition: 1,
+  includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
+const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
-  const otherCycle = route(0, [0, 2, 6, 1]);
-  const otherCycleIdentity = group(otherCycle)!;
-  expect(otherCycleIdentity.groupId).toBe(otherCycle.id); // Shared long approach must not hide another cycle.
-  expect(group(route(0, [0, 7, 3, 1]))).toEqual({ ...otherCycleIdentity, preferred: false });
-  const otherApproach = route(0, [8, 10, 2, 4, 11, 9]);
-  const otherApproachIdentity = group(otherApproach)!;
-  expect(otherApproachIdentity.groupId).toBe(otherApproach.id);
-  expect(group(route(0, [8, 10, 5, 3, 11, 9]))).toEqual({ ...otherApproachIdentity, preferred: false });
-
-  const pureCycle = route(1, [2, 4]);
-  const cycleIdentity = group(pureCycle)!;
-  expect(cycleIdentity.groupId).toBe(pureCycle.id); // No approach to peel off.
-  expect(group(route(1, [5, 3]))).toEqual({ ...cycleIdentity, preferred: false });
-  const otherEntrance = route(4, [4, 2]);
-  const entranceIdentity = group(otherEntrance)!;
-  expect(entranceIdentity.groupId).toBe(pureCycle.id);
-  expect(entranceIdentity.optionId).not.toBe(cycleIdentity.optionId);
-  const sameNodeEntrance = route(5, [2, 4]);
-  const sameNodeIdentity = group(sameNodeEntrance)!;
-  expect(sameNodeIdentity.groupId).toBe(pureCycle.id);
-  expect(new Set([cycleIdentity.optionId, entranceIdentity.optionId, sameNodeIdentity.optionId]).size).toBe(3);
-
-  // The same option identity is recovered when either direction arrives first.
-  const reverseRing = route(2, [13]);
-  const ringIdentity = group(reverseRing)!;
-  expect(ringIdentity.groupId).toBe(reverseRing.id);
-  expect(group(route(2, [12]))).toEqual({ ...ringIdentity, preferred: false });
-  const rings = [ringIdentity.optionId];
-  for (let ring = 1; ring < 11; ring++) {
-    const next = route(2, [12 + ring * 2]);
-    const identity = group(next)!;
-    expect(identity.groupId).toBe(next.id);
-    expect(group(route(2, [13 + ring * 2]))).toEqual({ ...identity, preferred: false });
-    rings.push(identity.optionId);
-  }
-  expect(new Set(rings).size).toBe(11);
-
-  const nearFirst = route(3, [34, 36]);
-  const nearOther = route(3, [34, 38]);
-  const nearIdentity = group(nearFirst)!;
-  expect(nearIdentity.groupId).toBe(nearFirst.id);
-  // The 25m substitution does not become a second choice. Exact reverse remains available.
-  expect(group(nearOther)).toBeUndefined();
-  expect(group(route(3, [39, 35]))).toBeUndefined();
-  expect(group(route(3, [37, 35]))).toEqual({ ...nearIdentity, preferred: false });
-  expect(group(first)).toEqual({ ...firstIdentity, preferred: false }); // Later options never replace the representative.
-  expect(group(otherEntrance)).toEqual({ ...entranceIdentity, preferred: false });
-
-  // This stem puts the square/lollipop overlap at the floating-point 95% boundary.
-  // Summing trails in walk order assigned the two lollipop directions to different groups.
-  const boundaryGraph = fixture([
-    [0, 1, 100.1], [1, 2, 200.2], [2, 3, 300.3], [3, 0, 400.4], [4, 0, 52.68421052631584],
-  ], [0, 4]);
-  const boundaryRoutes = enumerate(boundaryGraph, query);
-  const boundaryGroup = createRouteGroups(boundaryGraph);
-  boundaryGroup(route(0, [0, 2, 4, 6], boundaryRoutes));
-  const boundaryIdentity = boundaryGroup(route(1, [8, 0, 2, 4, 6, 9], boundaryRoutes));
-  expect(boundaryGroup(route(1, [8, 7, 5, 3, 1, 9], boundaryRoutes))).toEqual({ ...boundaryIdentity, preferred: false });
+it('combines the same circuit across approaches and starts, preferring explicit start metadata', async () => {
+  const graph = fixture([[0, 1, 2000], [0, 2, 1000], [2, 1, 1000],
+    [1, 3, 3000], [3, 4, 3000], [4, 1, 3000]], [0, 1, 3, 4]);
+  graph.starts[0]!.kind = 'road-contact';
+  graph.starts[1]!.kind = 'parking';
+  graph.starts[3]!.access = 'unknown';
+  const routes = await solveSection(graph, { ...query, distance: [9000, 15_000], repetition: 0.2 });
+  expect(families(routes).size).toBe(1);
+  expect(routes).toHaveLength(8);
+  expect(routes.filter(route => route.preferred).map(route => route.route.start)).toEqual([2]);
+  expect(new Set(routes.map(route => `${route.route.start}:${route.direction}`)).size).toBe(8);
+  expect(routes.every(route => route.reverseId)).toBe(true);
 });
 
-it('combines independent small detours and safely improves a starting point without mixing reverse walks', async () => {
-  const graph = fixture([
-    [0, 1, 7000], [1, 2, 100], [1, 3, 150], [3, 2, 150],
-    [2, 4, 7000], [4, 5, 100], [4, 6, 150], [6, 5, 150], [5, 0, 7000],
-    [1, 7, 350], [7, 2, 350],
-  ]);
-  const query: SearchQuery = { sections: ['fixture'], distance: [1, 30000], gain: [0, 0], repetition: 0, includeUnknown: true };
-  function candidate(network: typeof graph, edges: number[]): RouteCandidate {
-    const valid = enumerate(network, query).find(route => route.start === 0 && route.edges.join(',') === edges.join(','));
-    if (!valid) throw Error(`Route must independently qualify: ${edges}`);
-    return { ...valid, id: edges.join('-'), kind: 'loop', uncertain: edges.some(index => network.edges[index]!.access === 'unknown') };
-  }
-  const group = createRouteGroups(graph);
-  const first = group(candidate(graph, [0, 2, 8, 10, 16]))!;
-  expect(group(candidate(graph, [0, 4, 6, 8, 12, 14, 16]))).toBeUndefined(); // Two independent 400m differences.
-  expect(group(candidate(graph, [0, 18, 20, 8, 10, 16]))!.groupId).not.toBe(first.groupId); // One 800m alternative.
+it('hides minor substitutions but preserves a substantial different branch', async () => {
+  const graph = fixture([[0, 1, 9500], [1, 0, 100], [1, 0, 200], [1, 2, 700], [2, 0, 700]]);
+  const routes = await solveSection(graph, { ...query, distance: [9000, 12_000], repetition: 0 });
+  expect(families(routes).size).toBe(2);
+  expect(routes).toHaveLength(4);
+  expect(routes.filter(route => route.preferred)).toHaveLength(2);
+});
 
-  const roads = fixture([[0, 1, 1000], [1, 2, 1000], [2, 0, 100, { connector: true }], [2, 0, 200, { connector: true }]]);
-  let choose = createRouteGroups(roads);
-  const { createRouteStore } = await import('../../src/route-store.js');
-  let store = createRouteStore();
-  function add(edges: number[]) {
-    const route = candidate(roads, edges);
-    const identity = choose(route);
-    if (identity) store.add({ type: 'route', ...identity, route: {
-      summary: { ...route, startId: roads.starts[0]!.id, startName: 'Test start', startPosition: roads.nodes[0]!, trailNames: ['Trail'] },
-      sections: edges.map(index => ({ section: 'fixture', id: roads.edges[index]!.trail, reverse: roads.edges[index]!.reverse })),
-    } });
-    return identity;
-  }
-  try {
-    add([0, 2, 6]);
-    add([7, 3, 1]);
-    const original = store.page(0)!.routes[0]!;
-    expect(original.reverseId).toBeTruthy();
-    add([0, 2, 4]); // A better road connection replaces the displayed walk.
-    const improved = store.page(0)!.routes[0]!;
-    expect(store.counts).toEqual({ groupCount: 1, routeCount: 1 });
-    expect(improved.roadDistance).toBe(100);
-    expect(improved.reverseId).toBeUndefined(); // The former walk's reverse is not this walk's reverse.
-    expect(store.route(original.id)!.summary.reverseId).toBe(original.reverseId); // Open details remain stable.
-    expect(add([0, 2, 6])).toBeUndefined();
-    add([5, 3, 1]);
-    const final = store.page(0)!.routes[0]!;
-    expect(final.reverseId).toBeTruthy();
-    expect(store.route(final.reverseId!)!.stored.sections.map(section => section.id)).toEqual([2, 1, 0]);
-  } finally { store.close(); }
-  roads.edges[0]!.access = 'unknown';
-  choose = createRouteGroups(roads);
-  store = createRouteStore();
-  try {
-    add([0, 2, 4]);
-    const uncertain = store.page(0)!.routes[0]!;
-    expect(uncertain.uncertain).toBe(true);
-    add([5, 3, 1]);
-    expect(store.page(0)!.routes[0]).toMatchObject({ uncertain: false, reverseId: uncertain.id });
-  } finally { store.close(); }
+it('finds a minor shortcut or longer trail variation when it alone satisfies strict minimums or maximums', async () => {
+  const graph = fixture([[0, 1, 9500, { gain: 9, backGain: 9 }],
+    [1, 0, 500, { gain: 1, backGain: 1 }], [1, 0, 400, { gain: 2, backGain: 2 }]]);
+  const shortcut = await solveSection(graph, { ...query, distance: [9900, 9900], repetition: 0 });
+  expect(shortcut).toHaveLength(2);
+  expect(shortcut.every(route => route.route.distance === 9900)).toBe(true);
+  const longer = await solveSection(graph, { ...query, distance: [10_000, 10_000], repetition: 0 });
+  expect(longer).toHaveLength(2);
+  expect(longer.every(route => route.route.distance === 10_000)).toBe(true);
+  const climb = await solveSection(graph, { ...query, distance: [0, 11_000], gain: [11, 11], repetition: 0 });
+  expect(climb).toHaveLength(2);
+  expect(climb.every(route => route.route.gain === 11)).toBe(true);
+});
+
+it('rejects road mileage and climb padding before minimum qualification', async () => {
+  const graph = fixture([[0, 1, 500], [1, 2, 500],
+    [2, 0, 50, { connector: true }], [2, 0, 100, { connector: true, gain: 30, backGain: 30 }]]);
+  expect(await solveSection(graph, { ...query, distance: [1075, 1200], repetition: 0 })).toEqual([]);
+  expect(await solveSection(graph, { ...query, distance: [0, 1200], gain: [20, 40], repetition: 0 })).toEqual([]);
+  graph.edges.filter(edge => edge.trail === 2).forEach(edge => { edge.gain = 100; });
+  const necessary = await solveSection(graph, { ...query, distance: [0, 1200], gain: [20, 40], repetition: 0 });
+  expect(necessary).toHaveLength(2); // The shorter road violates another upper limit.
+  expect(necessary.every(route => route.route.roadDistance === 100)).toBe(true);
+});
+
+it('preserves equal-road metric witnesses and does not let uncertain shortcuts suppress known access', async () => {
+  const tied = fixture([[0, 1, 1000], [1, 0, 100, { connector: true }],
+    [1, 0, 100, { connector: true, gain: 20, backGain: 20 }]]);
+  const routes = await solveSection(tied, { ...query, gain: [20, 20], repetition: 0 });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(route => route.route.gain === 20)).toBe(true);
+  const unknown = fixture([[0, 1, 1000], [1, 0, 50, { connector: true, unknown: true }],
+    [1, 0, 100, { connector: true }]]);
+  const known = await solveSection(unknown, { ...query, distance: [1075, 1100], repetition: 0 });
+  expect(known).toHaveLength(2);
+  expect(known.every(route => !route.route.uncertain && route.route.roadDistance === 100)).toBe(true);
+});
+
+it('does not link reverse directions represented by different minor witnesses', async () => {
+  const graph = fixture([[0, 1, 9000], [1, 0, 100, { connector: true, gain: 10 }],
+    [1, 0, 100, { connector: true, backGain: 10 }]]);
+  const routes = await solveSection(graph, { ...query, gain: [10, 10], repetition: 0 });
+  expect(families(routes).size).toBe(1);
+  expect(new Set(routes.map(route => route.direction))).toEqual(new Set([0, 1]));
+  expect(routes.every(route => !route.reverseId)).toBe(true);
+});
+
+it('prevents aggregate drift and assigns identical IDs despite graph storage order', async () => {
+  const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
+    [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
+  const criteria = { ...query, distance: [7000, 7000] as SearchQuery['distance'], repetition: 0 };
+  const routes = await solveSection(graph, criteria);
+  // Each one-patch difference meets 85%, but merging every combination would
+  // lower the common/combined fraction to 75%.
+  expect(families(routes).size).toBe(2);
+  graph.edges.reverse(); graph.starts.reverse();
+  const reordered = await solveSection(graph, criteria);
+  expect(reordered.map(route => [route.route.id, route.groupId, route.direction, route.preferred]).sort())
+    .toEqual(routes.map(route => [route.route.id, route.groupId, route.direction, route.preferred]).sort());
+});
+
+it('preserves cyclic common-trail order even when footprints match', async () => {
+  const graph = fixture([[0, 1, 1000], [2, 3, 1000], [4, 5, 1000], [6, 7, 1000],
+    [1, 2, 1, { connector: true }], [3, 4, 1, { connector: true }], [5, 6, 1, { connector: true }], [7, 0, 1, { connector: true }],
+    [1, 4, 1, { connector: true }], [5, 2, 1, { connector: true }], [3, 6, 1, { connector: true }]]);
+  const routes = await solveSection(graph, { ...query, distance: [4004, 4004], repetition: 0 });
+  expect(families(routes).size).toBeGreaterThan(1);
+});
+
+it('keeps both road-circuit directions reached through a trail approach', async () => {
+  const graph = fixture([[0, 1, 100], [1, 2, 1000, { connector: true }], [2, 3, 1000, { connector: true }], [3, 1, 1000, { connector: true }]]);
+  const routes = await solveSection(graph, query);
+  expect(routes).toHaveLength(2);
+  expect(routes.every(route => route.reverseId && route.route.kind === 'lollipop')).toBe(true);
 });

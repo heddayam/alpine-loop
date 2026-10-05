@@ -59,7 +59,7 @@ export function fixture(trails: Trail[], starts = [0]): TrailGraph {
     info: { id: 'oracle', name: 'Oracle', bounds: [-1, -1, 1, 1], sourceDate: '2026-01-01',
       attribution: [], limitations: [], startCount: starts.length },
     nodes: Array.from({ length: count }, (_, index) => [index / 100, 0]),
-    starts: starts.map(node => ({ id: `start-${node}`, node, name: `Start ${node}`, access: 'public' })),
+    starts: starts.map(node => ({ id: `start-${node}`, node, name: `Start ${node}`, access: 'public', kind: 'trailhead' })),
     edges: trails.flatMap(([from, to, distance, options = {}], trail): TrailEdge[] => {
       const access = options.unknown ? 'unknown' : 'public';
       const connector = options.connector ?? false;
