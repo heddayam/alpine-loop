@@ -1,103 +1,94 @@
-import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import type { StoredRoute, WorkerEvent } from './data-format.js';
-import { ROUTES_PER_PAGE, type RouteChoice } from './model.js';
+import type { StoredRoute } from './data-format.js';
+import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
 
+export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; preferred: boolean };
 type ChoiceRow = { summary: string; groupId: string; groupSize: number; reverseId: string | null };
-const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
+const selectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits.';
 
-/** Private current-search storage. SQLite deletes this unnamed temporary file on close. */
-export function createRouteStore() {
-  const db = new DatabaseSync('');
+/** A worker owns this private file until it closes; the server opens only published files. */
+export function createRouteStore(path: string, writable = false) {
+  const db = new DatabaseSync(path, { readOnly: !writable });
   try {
-    db.exec(`
-      PRAGMA temp_store=FILE;
-      PRAGMA cache_size=-4096;
-      PRAGMA mmap_size=0;
-      CREATE TABLE groups (
-        position INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
-        first_option TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE options (
-        position INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
-        group_id TEXT NOT NULL, first_id TEXT NOT NULL, walk_id TEXT NOT NULL
-      );
-      CREATE INDEX members ON options(group_id, position);
-      CREATE TABLE routes (
-        id TEXT PRIMARY KEY NOT NULL, option_id TEXT NOT NULL, walk_id TEXT NOT NULL,
-        summary TEXT NOT NULL, sections TEXT NOT NULL
-      );
-      CREATE INDEX directions ON routes(option_id);
+    db.exec('PRAGMA cache_size=-4096; PRAGMA mmap_size=0;');
+    if (writable) db.exec(`
+      PRAGMA journal_mode=DELETE;
+      PRAGMA synchronous=FULL;
+      CREATE TABLE groups (id TEXT PRIMARY KEY, first_id TEXT NOT NULL);
+      CREATE TABLE options (group_id TEXT, start_id TEXT, first_id TEXT NOT NULL, PRIMARY KEY(group_id, start_id));
+      CREATE TABLE routes (id TEXT PRIMARY KEY, group_id TEXT NOT NULL, start_id TEXT NOT NULL,
+        summary TEXT NOT NULL, steps TEXT NOT NULL, reverse_id TEXT,
+        distance REAL NOT NULL, gain REAL NOT NULL, repetition REAL NOT NULL, roadDistance REAL NOT NULL, uncertain INTEGER NOT NULL);
+      CREATE INDEX members ON routes(group_id, start_id);
+      CREATE TABLE geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
     `);
-    const existingRoute = db.prepare('SELECT 1 FROM routes WHERE id = ?');
-    const existingOption = db.prepare('SELECT walk_id FROM options WHERE id = ?');
-    const addGroup = db.prepare('INSERT OR IGNORE INTO groups(id, first_option) VALUES (?, ?)');
-    const addOption = db.prepare('INSERT INTO options(id, group_id, first_id, walk_id) VALUES (?, ?, ?, ?)');
-    const replaceOption = db.prepare('UPDATE options SET first_id = ?, walk_id = ? WHERE id = ?');
-    const growGroup = db.prepare('UPDATE groups SET size = size + 1 WHERE id = ?');
-    const addRoute = db.prepare('INSERT INTO routes(id, option_id, walk_id, summary, sections) VALUES (?, ?, ?, ?, ?)');
-    const totals = db.prepare('SELECT (SELECT COUNT(*) FROM options) AS routeCount, (SELECT COUNT(*) FROM groups) AS groupCount');
-    const groupSize = db.prepare('SELECT size FROM groups WHERE id = ?');
-    const columns = `r.summary, o.group_id AS groupId, g.size AS groupSize,
-      (SELECT id FROM routes WHERE option_id = o.id AND walk_id = r.walk_id AND id <> r.id ORDER BY rowid LIMIT 1) AS reverseId`;
-    // Page queries deliberately never select sections, including for group representatives.
-    const overview = db.prepare(`SELECT ${columns} FROM groups g
-      JOIN options o ON o.id = g.first_option JOIN routes r ON r.id = o.first_id
-      ORDER BY g.position LIMIT ? OFFSET ?`);
-    const members = db.prepare(`SELECT ${columns} FROM options o
-      JOIN groups g ON g.id = o.group_id JOIN routes r ON r.id = o.first_id
-      WHERE o.group_id = ? ORDER BY o.position LIMIT ? OFFSET ?`);
-    const detail = db.prepare(`SELECT ${columns}, r.sections FROM routes r
-      JOIN options o ON o.id = r.option_id JOIN groups g ON g.id = o.group_id WHERE r.id = ?`);
-
+    const columns = `r.summary, r.group_id AS groupId,
+      (SELECT COUNT(*) FROM options WHERE group_id = r.group_id) AS groupSize, r.reverse_id AS reverseId`;
+    const totals = db.prepare('SELECT (SELECT COUNT(*) FROM routes) AS routeCount, (SELECT COUNT(*) FROM groups) AS groupCount');
+    const detail = db.prepare(`SELECT ${columns}, r.steps FROM routes r WHERE id = ?`);
+    const getGeometry = db.prepare('SELECT points FROM geometry WHERE section_id = ? AND trail_id = ?');
+    const addRoute = writable ? db.prepare(`INSERT INTO routes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`): undefined;
+    const addGroup = writable ? db.prepare('INSERT OR IGNORE INTO groups VALUES (?, ?)') : undefined;
+    const setGroup = writable ? db.prepare('UPDATE groups SET first_id = ? WHERE id = ?') : undefined;
+    const addOption = writable ? db.prepare('INSERT OR IGNORE INTO options VALUES (?, ?, ?)') : undefined;
+    const addGeometry = writable ? db.prepare('INSERT OR IGNORE INTO geometry VALUES (?, ?, ?)') : undefined;
+    const preferredOption = db.prepare(`SELECT id FROM routes WHERE group_id = ? AND start_id = ?
+      ORDER BY uncertain, roadDistance, repetition, distance, id LIMIT 1`);
     return {
-      add(event: Extract<WorkerEvent, { type: 'route' }>): void {
-        const id = hash(event.route.summary.id);
-        if (existingRoute.get(id)) return;
-        const summary = JSON.stringify({ ...event.route.summary, id });
-        const sections = JSON.stringify(event.route.sections);
-        db.exec('BEGIN');
-        try {
-          const previous = existingOption.get(event.optionId);
-          if (!previous) {
-            const groupId = hash(event.groupId);
-            addGroup.run(groupId, event.optionId);
-            addOption.run(event.optionId, groupId, id, event.walkId);
-            growGroup.run(groupId);
-          } else if (event.preferred) {
-            replaceOption.run(id, event.walkId, event.optionId);
-          }
-          // Previously inspected representatives stay addressable; only the current
-          // best connection appears in the list. Reverse lookup never crosses walks.
-          addRoute.run(id, event.optionId, event.walkId, summary, sections);
-          db.exec('COMMIT');
-        } catch (error) {
-          // Some SQLite errors roll back automatically; otherwise discard this add only.
-          if (db.isTransaction) db.exec('ROLLBACK');
-          throw error;
-        }
+      begin(): void { db.exec('BEGIN'); },
+      commit(): void { db.exec('COMMIT'); },
+      add(saved: SavedChoice): void {
+        if (!addRoute || !addGroup || !setGroup || !addOption) throw new Error('Saved results are immutable');
+        const { route, groupId, reverseId, preferred } = saved, summary = route.summary;
+        addRoute.run(summary.id, groupId, summary.startId, JSON.stringify(summary), JSON.stringify(route.sections), reverseId ?? null,
+          summary.distance, summary.gain, summary.repetition, summary.roadDistance, Number(summary.uncertain));
+        addGroup.run(groupId, summary.id);
+        if (preferred) setGroup.run(summary.id, groupId);
+        addOption.run(groupId, summary.startId, summary.id);
+        const best = preferredOption.get(groupId, summary.startId)!;
+        db.prepare('UPDATE options SET first_id = ? WHERE group_id = ? AND start_id = ?').run(best.id as string, groupId, summary.startId);
       },
-      get counts(): { routeCount: number; groupCount: number } {
-        return totals.get() as { routeCount: number; groupCount: number };
+      saveGeometry(sectionId: string, trailId: number, points: Position[]): void {
+        if (!addGeometry || !points.length) throw new Error('Route drawing is missing');
+        addGeometry.run(sectionId, trailId, JSON.stringify(points));
       },
-      page(offset: number, groupId?: string): { routes: RouteChoice[]; pageTotal: number } | undefined {
-        const size = groupId === undefined ? undefined : groupSize.get(groupId);
-        if (groupId !== undefined && !size) return undefined;
-        const rows = groupId === undefined ? overview.all(ROUTES_PER_PAGE, offset) : members.all(groupId, ROUTES_PER_PAGE, offset);
-        return { routes: (rows as ChoiceRow[]).map(choice),
-          pageTotal: groupId === undefined ? Number(totals.get()!.groupCount) : Number(size!.size) };
+      get counts(): { routeCount: number; groupCount: number } { return totals.get() as { routeCount: number; groupCount: number }; },
+      page(offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc'): JobResults | undefined {
+        const counts = totals.get() as { routeCount: number; groupCount: number };
+        const pageTotal = groupId === undefined ? counts.groupCount
+          : Number(db.prepare('SELECT COUNT(*) AS size FROM options WHERE group_id = ?').get(groupId)!.size);
+        if (groupId !== undefined && !db.prepare('SELECT 1 FROM groups WHERE id = ?').get(groupId)) return undefined;
+        const from = groupId === undefined ? 'groups g JOIN routes r ON r.id = g.first_id'
+          : 'options o JOIN routes r ON r.id = o.first_id WHERE o.group_id = ?';
+        const rows = db.prepare(`SELECT ${columns} FROM ${from} ORDER BY r.${sort} ${order.toUpperCase()}, r.id ASC LIMIT ? OFFSET ?`)
+          .all(...(groupId === undefined ? [] : [groupId]), ROUTES_PER_PAGE, offset) as ChoiceRow[];
+        return { routes: rows.map(choice), pageTotal, offset, groupId, ...counts, sort, order, selectionNote };
       },
-      route(id: string): { stored: StoredRoute; summary: RouteChoice } | undefined {
-        const row = detail.get(id) as (ChoiceRow & { sections: string }) | undefined;
+      locations(): RouteLocation[] {
+        const rows = db.prepare('SELECT r.summary, r.group_id AS groupId FROM groups g JOIN routes r ON r.id = g.first_id ORDER BY g.id').all() as { summary: string; groupId: string }[];
+        return rows.map(row => {
+          const { id, startId, startName, startPosition, trailNames, distance } = JSON.parse(row.summary) as RouteChoice;
+          return { id, startId, startName, startPosition, trailNames, distance, groupId: row.groupId };
+        });
+      },
+      route(id: string): RouteView | undefined {
+        const row = detail.get(id) as (ChoiceRow & { steps: string }) | undefined;
         if (!row) return undefined;
-        return { stored: { summary: JSON.parse(row.summary), sections: JSON.parse(row.sections) }, summary: choice(row) };
+        const coordinates: Position[] = [];
+        for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
+          const shape = getGeometry.get(step.section, step.id);
+          if (!shape) throw new Error('Saved route drawing is missing');
+          const points = JSON.parse(shape.points as string) as Position[];
+          if (step.reverse) points.reverse();
+          const previous = coordinates.at(-1);
+          if (previous && (previous[0] !== points[0]![0] || previous[1] !== points[0]![1])) throw new Error('Saved route drawing has a broken connection');
+          for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[index]!);
+        }
+        return { ...choice(row), geometry: coordinates };
       },
       close(): void { if (db.isOpen) db.close(); },
     };
-  } catch (error) {
-    db.close();
-    throw error;
-  }
+  } catch (error) { db.close(); throw error; }
 }
