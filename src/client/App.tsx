@@ -247,16 +247,11 @@ export function App() {
   const [downloadRetry, setDownloadRetry] = useState(0);
   const downloadQuery = useRef<SearchQuery | null>(null);
   const [startupError, setStartupError] = useState("");
-  const [area, setArea] = useState<Bounds | null>(null);
-  const [areaMode, setAreaMode] = useState<"view" | "drawn" | "retained">(
-    "view",
-  );
+  const [regions, setRegions] = useState<string[]>([]);
   const [editing, setEditing] = useState(true);
-  const [drawing, setDrawing] = useState(false);
   const [camera, setCamera] = useState<{
     bounds: Bounds;
     revision: number;
-    selectArea?: boolean;
     padding?: number;
   }>();
   const [distance, setDistance] = useState<[string, string]>(["5", "12"]);
@@ -328,11 +323,10 @@ export function App() {
     ])
       .then(([info, snapshot, transfer]) => {
         if (controller.signal.aborted) return;
-        setArea(info.bounds);
-        setCamera({ bounds: info.bounds, revision: 0, selectArea: true });
+        setCamera({ bounds: info.bounds, revision: 0 });
         if (snapshot) {
           setSearch(snapshot);
-          restoreDraft(snapshot);
+          restoreDraft(snapshot, info);
           setEditing(false);
         }
         setDownload(transfer);
@@ -499,7 +493,7 @@ export function App() {
 
   const launch = async (event: FormEvent) => {
     event.preventDefault();
-    if (!area || busy || drawing || downloading || pendingDownload) return;
+    if (!regions.length || busy || downloading || pendingDownload) return;
     const distances = distance.map(Number),
       gains = gain.map(Number),
       repeated = Number(repetition);
@@ -534,7 +528,7 @@ export function App() {
       return;
     }
     const query: SearchQuery = {
-      area: [...area],
+      sections: [...regions],
       distance: [distances[0]! * MILE, distances[1]! * MILE],
       gain: [gains[0]! * FOOT, gains[1]! * FOOT],
       repetition: repeated / 100,
@@ -587,6 +581,7 @@ export function App() {
       );
       if (!controller.signal.aborted) {
         setSearch(snapshot);
+        setRegions([...snapshot.query.sections]);
         setSelected(null);
         overviewOffset.current = 0;
         setEditing(false);
@@ -685,17 +680,35 @@ export function App() {
       if (!controller.signal.aborted) setBusy(false);
     }
   };
-  const moveTo = (bounds: Bounds, selectArea = false, padding = 40) =>
+  const moveTo = (bounds: Bounds, padding = 40) =>
     setCamera((current) => ({
       bounds,
       revision: (current?.revision ?? 0) + 1,
-      selectArea,
       padding,
     }));
-  const restoreDraft = (snapshot = search) => {
+  const regionBounds = (ids: string[], info = dataset): Bounds | null => {
+    const sections = info?.sections.filter(section => ids.includes(section.id)) ?? [];
+    if (!sections.length) return null;
+    return [
+      Math.min(...sections.map(section => section.bounds[0])),
+      Math.min(...sections.map(section => section.bounds[1])),
+      Math.max(...sections.map(section => section.bounds[2])),
+      Math.max(...sections.map(section => section.bounds[3])),
+    ];
+  };
+  const chooseRegions = (ids: string[]) => {
+    if (!editing || busy || downloading || choosingDownload) return;
+    setRegions(ids);
+    setError("");
+    const bounds = regionBounds(ids);
+    if (bounds) moveTo(bounds);
+  };
+  const toggleRegion = (id: string) => chooseRegions(
+    regions.includes(id) ? regions.filter(region => region !== id) : [...regions, id],
+  );
+  const restoreDraft = (snapshot = search, info = dataset) => {
     if (!snapshot) return;
-    setArea(snapshot.query.area);
-    setAreaMode("retained");
+    setRegions([...snapshot.query.sections]);
     setDistance(
       snapshot.query.distance.map((value) => String(value / MILE)) as [
         string,
@@ -716,7 +729,8 @@ export function App() {
     setShowStarts(false);
     setReverseTarget(null);
     setHoveredId(null);
-    moveTo(snapshot.query.area, false, 0);
+    const bounds = regionBounds(snapshot.query.sections, info);
+    if (bounds) moveTo(bounds);
   };
   const pickRoute = (id: string) => {
     const route = search?.routes.find((route) => route.id === id);
@@ -745,7 +759,8 @@ export function App() {
       setShowStarts(false);
       setReverseTarget(null);
       setHoveredId(null);
-      moveTo(search.query.area, false, 0);
+      const bounds = regionBounds(search.query.sections);
+      if (bounds) moveTo(bounds);
       requestAnimationFrame(() => document.getElementById(focusId)?.focus());
     };
     if (search.groupId) void changePage(overviewOffset.current, undefined, focusId).then(changed => {
@@ -814,7 +829,6 @@ export function App() {
                       <li key={id}>{dataset.sections.find(section => section.id === id)?.name ?? id}</li>
                     ))}
                   </ul>
-                  {pendingDownload.coverage.coverageNote && <p>{pendingDownload.coverage.coverageNote}</p>}
                   <div className="download-actions">
                     <button id="confirm-download" className="primary" type="button" disabled={busy}
                       onClick={() => void beginDownload(pendingDownload.coverage.missing, pendingDownload.query)}>
@@ -853,7 +867,7 @@ export function App() {
                 >
                   <fieldset className="planner-fields" disabled={busy || downloading || choosingDownload}>
                   <div className="section-heading">
-                    <h2>Where</h2>
+                    <h2>Search regions</h2>
                     {search && (
                       <button
                         className="text-button"
@@ -869,76 +883,37 @@ export function App() {
                       </button>
                     )}
                   </div>
-                  {dataset.places.length === 1 ? (
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() => {
-                        setAreaMode("view");
-                        moveTo(dataset.bounds, true);
-                      }}
-                    >
-                      Show available trails
-                    </button>
-                  ) : (
-                    <>
-                      <label className="visually-hidden" htmlFor="place">
-                        Choose an area around a region
-                      </label>
-                      <select
-                        id="place"
-                        value=""
-                        onChange={(event) => {
-                          const place = dataset.places[Number(event.target.value)];
-                          if (place) {
-                            setArea(place.bounds);
-                            setAreaMode("drawn");
-                            moveTo(place.bounds);
-                          }
-                        }}
-                      >
-                        <option value="" disabled>
-                          Choose an area around…
-                        </option>
-                        {dataset.places.map((place, index) => (
-                          <option key={place.name} value={index}>
-                            {place.name}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                  <p className="area-description">
-                    {areaMode === "drawn"
-                      ? "Starts inside the outlined rectangle."
-                      : areaMode === "retained"
-                        ? "Previous search area. Pan the map to change it."
-                        : "Starts in the visible map area. Pan or zoom to choose."}
+                  <p className="region-description">
+                    Choose one or more regions. Every eligible start in each selected region is searched; routes stay within its mountain and highway boundaries.
                   </p>
-                  <details className="sections-panel">
-                    <summary>Trail sections <span>{dataset.sections.filter(section => section.installed).length} of {dataset.sections.length} downloaded</span></summary>
-                    <p>Choose a section to see its area, or download it for later. Searching an area prompts for any missing sections.</p>
-                    <ul className="sections-list">
-                      {dataset.sections.map(section => <li key={section.id}>
-                        <div>
-                          <button className="section-name" type="button" onClick={() => {
-                            setArea(section.bounds);
-                            setAreaMode("drawn");
-                            moveTo(section.bounds);
-                          }}>{section.name}</button>
-                          <span>{section.installed ? "Downloaded · " : section.needsRepair ? "Needs repair · " : ""}{megabytes(section.bytes)}</span>
-                        </div>
-                        {!section.installed && <button type="button" aria-label={`Download ${section.name}`}
-                          onClick={() => void beginDownload([section.id])}>Download</button>}
-                      </li>)}
-                    </ul>
-                    {!dataset.sections.length && <p>No prepared sections are available yet.</p>}
-                    {!!dataset.unavailable?.length && <ul className="unavailable-sections">
-                      {dataset.unavailable.map(region => <li key={region.name}>
-                        <strong>{region.name}</strong><span>{region.reason}</span>
-                      </li>)}
-                    </ul>}
-                  </details>
+                  <div className="region-list-heading">
+                    <span>{regions.length ? `${regions.length} selected` : "No regions selected"}</span>
+                    {dataset.sections.length > 1 && <button className="text-button" type="button"
+                      onClick={() => chooseRegions(regions.length === dataset.sections.length
+                        ? [] : dataset.sections.map(section => section.id))}>
+                      {regions.length === dataset.sections.length ? "Clear selection" : "Select all"}
+                    </button>}
+                  </div>
+                  <ul className="regions-list" aria-label="Search regions">
+                    {dataset.sections.map(section => <li key={section.id} className={regions.includes(section.id) ? "is-selected" : undefined}>
+                      <label>
+                        <input type="checkbox" aria-label={section.name} checked={regions.includes(section.id)}
+                          onChange={() => toggleRegion(section.id)} />
+                        <span>
+                          <strong>{section.name}</strong>
+                          <small>{section.installed ? "Downloaded · " : section.needsRepair ? "Needs repair · " : "Download available · "}{megabytes(section.bytes)}</small>
+                        </span>
+                      </label>
+                      {!section.installed && <button type="button" aria-label={`Download ${section.name}`}
+                        onClick={() => void beginDownload([section.id])}>Download</button>}
+                    </li>)}
+                  </ul>
+                  {!dataset.sections.length && <p className="region-description">No prepared regions are available yet.</p>}
+                  {!!dataset.unavailable?.length && <ul className="unavailable-regions">
+                    {dataset.unavailable.map(region => <li key={region.name}>
+                      <strong>{region.name}</strong><span>{region.reason}</span>
+                    </li>)}
+                  </ul>}
                   <h2 className="limits-heading">Limits</h2>
                   <Range
                     name="Distance"
@@ -1025,19 +1000,15 @@ export function App() {
                   <button
                     className="primary search-button"
                     type="submit"
-                    disabled={busy || !area || drawing}
+                    disabled={busy || !regions.length}
                   >
                     {busy
                       ? "Please wait…"
                       : running
                         ? "Replace current search"
-                        : "Search this area"}
+                        : "Search selected regions"}
                   </button>
-                  {drawing ? (
-                    <p className="field-hint">
-                      Finish drawing or cancel it to search.
-                    </p>
-                  ) : running ? (
+                  {running ? (
                     <p className="field-hint">
                       Replaces the running search and its results.
                     </p>
@@ -1065,6 +1036,8 @@ export function App() {
                           Edit search
                         </button>
                       </div>
+                      <p className="current-regions">{search.query.sections.map(id =>
+                        dataset.sections.find(section => section.id === id)?.name ?? id).join(" · ")}</p>
                       <p className="query-summary">
                         {miles(search.query.distance[0])}–
                         {miles(search.query.distance[1])} mi ·{" "}
@@ -1115,9 +1088,6 @@ export function App() {
                           {search.progress.completedStarts} fully explored.
                         </p>
                       </div>
-                      {search.coverageNote && search.coverageNote !== search.reason && (
-                        <p className="search-notice">{search.coverageNote}</p>
-                      )}
                       {search.status !== "running" &&
                         search.status !== "complete" && (
                           <p className="search-notice">
@@ -1228,7 +1198,7 @@ export function App() {
                           {running
                             ? "Exploring trails. Matching routes appear here as they are found."
                             : search.status === "complete"
-                              ? "No routes meet these limits. Edit the search to change your area or limits."
+                              ? "No routes meet these limits. Edit the search to change your regions or limits."
                               : "No matching routes found before exploration ended."}
                         </p>
                       )}
@@ -1264,16 +1234,9 @@ export function App() {
       {dataset && camera ? (
         <HikeMap
           dataset={dataset}
-          area={
-            editing
-              ? areaMode === "view"
-                ? null
-                : area
-              : (search?.query.area ?? area)
-          }
+          selectedSections={editing ? regions : search?.query.sections ?? regions}
           editing={editing}
           locked={busy || downloading || choosingDownload}
-          drawn={areaMode === "drawn"}
           routes={editing ? [] : mapRoutes}
           activeRoute={activeRoute}
           selectedId={mapActiveId}
@@ -1286,15 +1249,7 @@ export function App() {
             ? () => setRouteRetry((value) => value + 1)
             : undefined}
           camera={camera}
-          onArea={(bounds) => {
-            setArea(bounds);
-            setAreaMode("drawn");
-          }}
-          onViewport={(bounds) => {
-            setArea(bounds);
-            setAreaMode("view");
-          }}
-          onDrawing={setDrawing}
+          onToggleSection={toggleRegion}
           onSelect={pickRoute}
           onPreview={setHoveredId}
         />
