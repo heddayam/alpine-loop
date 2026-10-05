@@ -1,41 +1,158 @@
 {
-  "id": "fresh-north-bend-v1-3bea264079e1",
-  "name": "North Bend trails",
-  "bounds": [
-    -121.9,
-    47.4,
-    -121.6,
-    47.62
-  ],
+  "name": "Washington Cascades",
+  "regionId": "11202",
+  "state": "WA",
   "sourceDate": "2026-08-01",
+  "candidateRefs": [
+    "I90",
+    "US2",
+    "WA20",
+    "WA410",
+    "US12"
+  ],
   "places": [
     {
-      "name": "North Bend",
       "bounds": [
-        -121.9,
-        47.4,
-        -121.6,
-        47.62
-      ]
+        -121.8,
+        47.25,
+        -121.2,
+        47.6
+      ],
+      "name": "Snoqualmie Pass"
+    },
+    {
+      "bounds": [
+        -121.2,
+        47.65,
+        -120.7,
+        47.95
+      ],
+      "name": "Stevens Pass"
+    },
+    {
+      "bounds": [
+        -122.0,
+        46.6,
+        -121.4,
+        47.0
+      ],
+      "name": "Mount Rainier"
     }
   ],
+  "gmba": {
+    "file": "sources/gmba-standard-300/265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874/GMBA_Inventory_v2.0_standard_300.zip",
+    "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_300.zip",
+    "sha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874"
+  },
+  "coverage": {
+    "file": "sources/census-states-2024/3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc/cb_2024_us_state_500k.zip",
+    "url": "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_us_state_500k.zip",
+    "sha256": "3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc"
+  },
   "osm": {
     "file": "sources/geofabrik-washington-osm/3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e/geofabrik-washington-osm-washington-260801.osm.pbf",
-    "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf",
-    "sha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e"
+    "sha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf"
   },
   "elevation": [
     {
-      "file": "sources/usgs-3dep-689d4591d4be027ac158993e/40bccd5f1252cec0e5fd6f2a15e5a62590e42d43455a61cf1b48bc55784b5c85/USGS_13_n48w122_20250813.tif",
-      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w122/USGS_13_n48w122_20250813.tif",
-      "sha256": "40bccd5f1252cec0e5fd6f2a15e5a62590e42d43455a61cf1b48bc55784b5c85",
+      "bounds": [
+        -123,
+        46,
+        -122,
+        47
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4592d4be027ac1589944/ab4fb0a2afa65c49c41cb0c59c5ea102329b6e1e47425159b884d05f540c4bb5/USGS_13_n47w123_20250813.tif",
+      "sha256": "ab4fb0a2afa65c49c41cb0c59c5ea102329b6e1e47425159b884d05f540c4bb5",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n47w123/USGS_13_n47w123_20250813.tif"
+    },
+    {
+      "bounds": [
+        -122,
+        46,
+        -121,
+        47
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4592d4be027ac1589946/a77505b9187d185eaebdb0abe71e7e3171ca00ad74363ce728de14b67d357bca/USGS_13_n47w122_20250813.tif",
+      "sha256": "a77505b9187d185eaebdb0abe71e7e3171ca00ad74363ce728de14b67d357bca",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n47w122/USGS_13_n47w122_20250813.tif"
+    },
+    {
+      "bounds": [
+        -121,
+        46,
+        -120,
+        47
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-689d4592d4be027ac1589948/617fda4ef940046a86c2cb56310fc88b8d8872942981ac6028aafd1e47dcd3f3/USGS_13_n47w121_20250813.tif",
+      "sha256": "617fda4ef940046a86c2cb56310fc88b8d8872942981ac6028aafd1e47dcd3f3",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n47w121/USGS_13_n47w121_20250813.tif"
+    },
+    {
+      "bounds": [
+        -123,
+        47,
+        -122,
+        48
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6604fa8bd34e64ff154955e1/aecc6ef7492509dfd11586ad7961b20d086475df5b91a9cc252217af021d2b16/USGS_13_n48w123_20240327.tif",
+      "sha256": "aecc6ef7492509dfd11586ad7961b20d086475df5b91a9cc252217af021d2b16",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w123/USGS_13_n48w123_20240327.tif"
+    },
+    {
       "bounds": [
         -122,
         47,
         -121,
         48
-      ]
+      ],
+      "file": "sources/usgs-3dep-689d4591d4be027ac158993e/40bccd5f1252cec0e5fd6f2a15e5a62590e42d43455a61cf1b48bc55784b5c85/USGS_13_n48w122_20250813.tif",
+      "sha256": "40bccd5f1252cec0e5fd6f2a15e5a62590e42d43455a61cf1b48bc55784b5c85",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w122/USGS_13_n48w122_20250813.tif"
+    },
+    {
+      "bounds": [
+        -121,
+        47,
+        -120,
+        48
+      ],
+      "file": "sources/usgs-3dep-689d4591d4be027ac1589940/85d378ac5e576a884bee0d0fb06f1d817b5e5bfe4851d5dc02d740d1f6364f48/USGS_13_n48w121_20250813.tif",
+      "sha256": "85d378ac5e576a884bee0d0fb06f1d817b5e5bfe4851d5dc02d740d1f6364f48",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w121/USGS_13_n48w121_20250813.tif"
+    },
+    {
+      "bounds": [
+        -123,
+        48,
+        -122,
+        49
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6604fa86d34e64ff154955db/fec8c29431bf8ffa5e8a0f16288e906c571965f247038f6bd81805a9f3b0040d/USGS_13_n49w123_20240327.tif",
+      "sha256": "fec8c29431bf8ffa5e8a0f16288e906c571965f247038f6bd81805a9f3b0040d",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w123/USGS_13_n49w123_20240327.tif"
+    },
+    {
+      "bounds": [
+        -122,
+        48,
+        -121,
+        49
+      ],
+      "file": "sources/usgs-3dep-689d4590d4be027ac1589938/f0c67d4ee5e2ee67e652bd512c590f609ce3c5766a6d38a23fd460abb6804d73/USGS_13_n49w122_20250813.tif",
+      "sha256": "f0c67d4ee5e2ee67e652bd512c590f609ce3c5766a6d38a23fd460abb6804d73",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w122/USGS_13_n49w122_20250813.tif"
+    },
+    {
+      "bounds": [
+        -121,
+        48,
+        -120,
+        49
+      ],
+      "file": "sources/usgs-3dep-689d4591d4be027ac158993a/0641c47ed684ffa5cd50d25f80aff2b9fad91cc0e84b65ee3c7e900369e9eee7/USGS_13_n49w121_20250813.tif",
+      "sha256": "0641c47ed684ffa5cd50d25f80aff2b9fad91cc0e84b65ee3c7e900369e9eee7",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w121/USGS_13_n49w121_20250813.tif"
     }
-  ],
-  "elevationDefinition": "Bilinear samples in source CRS at every original/clipped geometry vertex and <=25m interpolation spacing. Sum positive/negative changes, no per-delta suppression. Horizontal meters use haversine; heights are estimated NAVD88 meters."
+  ]
 }

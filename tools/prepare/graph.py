@@ -3,6 +3,8 @@ import hashlib
 import math
 from collections import defaultdict
 
+from footprint import as_footprint
+
 PATHS = {"path", "footway", "bridleway", "steps", "pedestrian", "cycleway"}
 # Tracks are land-access roads; pedestrian permission does not change their role.
 ROADS = {"track", "service", "residential", "living_street", "unclassified", "road", "tertiary", "secondary",
@@ -82,24 +84,8 @@ def distance(a, b):
     return 12742017.6 * math.asin(min(1, math.sqrt(h)))
 
 
-def clip(a, b, bounds):
-    low, high = 0.0, 1.0
-    w, s, e, n = bounds
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    for p, q in ((-dx, a[0] - w), (dx, e - a[0]), (-dy, a[1] - s), (dy, n - a[1])):
-        if p == 0:
-            if q < 0:
-                return None
-        elif p < 0:
-            low = max(low, q / p)
-        else:
-            high = min(high, q / p)
-        if low >= high:
-            return None
-    return low, high
-
-
-def topology(ways, pois, tags_by_node, positions, bounds):
+def topology(ways, pois, tags_by_node, positions, footprint):
+    footprint = as_footprint(footprint)
     segments, points, frontiers = {}, {}, set()
     counts = {"selectedWays": 0, "outsideSegments": 0, "prohibitedSegments": 0, "duplicateSegments": 0, "zeroLengthSegments": 0}
     for way in sorted(ways.values(), key=lambda item: item["id"]):
@@ -109,42 +95,48 @@ def topology(ways, pois, tags_by_node, positions, bounds):
         access = directions(way["tags"])
         kind = role(way["tags"])
         for ordinal, (left, right) in enumerate(zip(way["nodes"], way["nodes"][1:])):
-            a, b = positions[left], positions[right]
-            interval = clip(a, b, bounds)
-            if interval is None:
+            physical = tuple(sorted((left, right)))
+            a, b = (positions[node] for node in physical)
+            source_reversed = physical[0] != left
+            intervals = footprint.intervals(a, b)
+            if not intervals:
                 counts["outsideSegments"] += 1
                 continue
-            endpoints = []
-            for part, fraction in enumerate(interval):
-                original = (part == 0 and fraction == 0) or (part == 1 and fraction == 1)
-                key = "n" + (left if part == 0 else right) if original else f"frontier:w{way['id']}:{ordinal}:{part}:{fraction.hex()}"
-                point = (a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction)
-                points[key] = point
-                if not original or any(abs(point[axis] - bounds[side]) < 1e-12 for axis, side in ((0, 0), (1, 1), (0, 2), (1, 3))):
-                    frontiers.add(key)
-                endpoints.append(key)
-            if distance(points[endpoints[0]], points[endpoints[1]]) < 1e-7:
-                counts["zeroLengthSegments"] += 1
-                continue
-            node_access = combine(crossing(tags_by_node.get(left, {})) if interval[0] == 0 else "public",
-                                  crossing(tags_by_node.get(right, {})) if interval[1] == 1 else "public")
-            states = [combine(value, node_access) for value in access]
-            key = tuple(sorted(endpoints))
-            if endpoints[0] != key[0]:
-                states.reverse()
-            lineage = {"way": way["id"], "segment": ordinal, "nodes": [left, right], "fraction": list(interval), "kind": kind,
-                       "reversed": endpoints[0] != key[0]}
-            if key in segments:
-                counts["duplicateSegments"] += 1
-                existing = segments[key]
-                existing["access"] = [combine(a, b) for a, b in zip(existing["access"], states)]
-                existing["source"].append(lineage)
-                existing["names"].update(filter(None, [way["tags"].get("name")]))
-                if kind == "connector":
-                    existing["kind"] = kind
-            else:
-                segments[key] = {"ends": key, "access": states, "source": [lineage],
-                                 "kind": kind, "names": set(filter(None, [way["tags"].get("name")]))}
+            for canonical_interval in intervals:
+                endpoints = []
+                for fraction in canonical_interval:
+                    original = fraction in (0, 1)
+                    key = "n" + physical[int(fraction)] if original else f"frontier:n{physical[0]}:n{physical[1]}:{fraction.hex()}"
+                    point = (a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction)
+                    points[key] = point
+                    if not original:
+                        frontiers.add(key)
+                    endpoints.append(key)
+                interval = (1 - canonical_interval[1], 1 - canonical_interval[0]) if source_reversed else canonical_interval
+                if source_reversed:
+                    endpoints.reverse()
+                if distance(points[endpoints[0]], points[endpoints[1]]) < 1e-7:
+                    counts["zeroLengthSegments"] += 1
+                    continue
+                node_access = combine(crossing(tags_by_node.get(left, {})) if interval[0] == 0 else "public",
+                                      crossing(tags_by_node.get(right, {})) if interval[1] == 1 else "public")
+                states = [combine(value, node_access) for value in access]
+                key = tuple(sorted(endpoints))
+                if endpoints[0] != key[0]:
+                    states.reverse()
+                lineage = {"way": way["id"], "segment": ordinal, "nodes": [left, right], "fraction": list(interval), "kind": kind,
+                           "reversed": endpoints[0] != key[0]}
+                if key in segments:
+                    counts["duplicateSegments"] += 1
+                    existing = segments[key]
+                    existing["access"] = [combine(a, b) for a, b in zip(existing["access"], states)]
+                    existing["source"].append(lineage)
+                    existing["names"].update(filter(None, [way["tags"].get("name")]))
+                    if kind == "connector":
+                        existing["kind"] = kind
+                else:
+                    segments[key] = {"ends": key, "access": states, "source": [lineage],
+                                     "kind": kind, "names": set(filter(None, [way["tags"].get("name")]))}
     usable = []
     adjacent = defaultdict(list)
     for segment in segments.values():
@@ -266,7 +258,8 @@ def assemble(corridors, entrances, info):
             if direction:
                 ends.reverse()
             edges.append({"from": ends[0], "to": ends[1], "trail": trail, "reverse": bool(direction),
-                          "distance": corridor["distance"], "gain": corridor["gains"][direction], "access": access})
+                          "distance": corridor["distance"], "gain": corridor["gains"][direction], "access": access,
+                          "connector": corridor["kind"] == "connector"})
             edge_ids.append(corridor["id"] + (":reverse" if direction else ":forward"))
     starts = [{"id": entrances[node]["id"], "node": indexes[node], "name": entrances[node]["name"], "access": entrances[node]["access"]}
               for node in sorted(entrances)]

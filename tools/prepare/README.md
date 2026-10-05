@@ -1,157 +1,129 @@
-# Fresh source compiler
+# Mountain preparation
 
-This is an offline maintainer tool. Users install its prepared gzip files; they
-do not need Osmium, Python, raw OSM, DEM tiles, or a database.
+This maintainer pipeline creates complete, independent mountain sections. Hikers
+download prepared files through the application; they never process OSM, acquire
+DEMs, install Python, or configure a source catalog.
 
-The original proof footprint was the explicit rectangle
-`[-121.9, 47.4, -121.6, 47.62]` around North Bend. The current broader Cascades snapshot uses
-`[-122.1, 46.5, -120.5, 48.1]`; neither is complete Washington coverage. No mountain inventory, start-to-mountain
-qualification, hiking-distance maximum, road-arrival proof, or reachability
-buffer is used. Map selection later filters starts inside this finite graph.
+GMBA Mountain Inventory v2.0 **standard, 300 selected ranges** supplies the outer
+mountain footprint. A named inventory ID is intersected with the published
+Census state outline, transformed into WGS84. The GMBA polygon is not simplified,
+and no custom terrain classifier or per-hike mountain-core test is added.
 
-## Reproduce
+## Run
 
-Requires Osmium CLI and Python 3.12+ with Rasterio 1.4.3. `sources.json` pins the
-existing raw Washington OSM snapshot and its one intersecting USGS 3DEP raster
-by URL and full SHA-256. `--source-root` resolves their relative file paths. All inputs are
-hashed before processing; missing or changed sources fail the build. No source
-download or legacy database access occurs.
+Requires Osmium CLI, Python 3.12+, and the pinned packages in `pyproject.toml`.
 
 ```sh
-python tests/data/fresh_compile.py
-python tools/prepare/build.py --source-root /path/to/alpine-loop/.cache --output /path/to/alpine-loop/.local-data/rewrite/fresh-north-bend
+uv run --project tools/prepare python tools/prepare/build.py plan \
+  --source-root .cache --output .local-data/cascades-plan.json
+
+uv run --project tools/prepare python tools/prepare/build.py build \
+  --source-root .cache --plan .local-data/cascades-plan.json \
+  --section mountain-ID-FROM-PLAN --output .local-data/mountains
 ```
 
-The output directory must be new. Osmium filters source-wide ways and embeds
-their node coordinates. Python streams those ways, retaining only geometries
-intersecting the footprint and their access context. This catches sparse
-segments crossing the rectangle even when every original node lies outside;
-a conventional node-in-box extract would miss those. Retained ways, nodes,
-corridors and elevation sample coordinates are materialized for the whole
-footprint. Memory grows with that footprint: partitioning the result does not
-make this a bounded-memory statewide compiler.
+`sources.json` pins the GMBA inventory, Washington OSM snapshot, Census state
+outline, and known USGS 3DEP products by HTTPS URL and full SHA-256. Missing
+sources download into the cache atomically; changed or incomplete downloads fail
+verification. Planning needs only the first three sources. Building verifies and
+loads the pinned elevation products intersecting each requested section.
+Uncovered or masked DEM samples fail the entire build; no zero elevations or
+silent partial graphs are emitted.
 
-Temporary Osmium intermediate files are removed, and
-the final directory appears only after all elevations and outputs are ready.
-The fixture runs the actual Osmium → OPL → topology → bilinear DEM → graph
-pipeline on a tiny offline source and a synthetic planar raster.
-It also exercises the CLI publication, role transitions, boundary identities,
-cross-cell discovery, complete endpoint/direction copies and deterministic file
-hashes. It makes no network requests.
+To add a range, select its `regionId`, supported `state`, source pins, and name in
+a source manifest and pass `--manifest`. Omit `candidateRefs` to discover numbered
+major road corridors automatically. For the Cascades it restricts discovery to
+the five reviewed candidates: I-90, US-2, SR-20, SR-410 and US-12. The committed
+DEM pins cover 46–49°N and 123–120°W; sections outside those tiles require
+additional verified products. The current source manifest is not a promise of
+complete statewide prepared coverage.
 
-## Source decisions
+## Size and highway policy
 
-- Linear `path`, `footway`, `bridleway`, `steps`, `track`, `pedestrian` and
-  `cycleway` ways are candidates. `area=yes` perimeters and ways explicitly
-  tagged disused, abandoned, construction or proposed are excluded.
-- Ordinary roads are walking-connection candidates without a hiking/foot route
-  relation. Unknown pedestrian access stays unknown; explicit pedestrian
-  prohibitions still exclude traversal. Vehicle restrictions such as
-  `motor_vehicle=private` do not override `foot=yes`.
-- As a product routing policy, `motorway`, `motorway_link` and any way tagged
-  `motorroad=yes` have no pedestrian traversal unless that direction has explicit
-  affirmative `foot` or `foot:forward/backward` evidence. Generic `access=yes`
-  and hiking-relation membership are insufficient. Specific foot prohibitions
-  still win, and unresolved conditions remain uncertain. `trunk` alone uses the
-  ordinary-road rule. This fallback is not a claim about universal traffic law.
-- Admitted roads, including `highway=track`, and `footway=sidewalk/crossing` carry
-  the `connector` role. Other admitted paths carry `trail`. A track remains a
-  connection even if walking is designated or vehicles are restricted; names
-  and permissions do not change its physical source classification. This is a candidate classification,
-  not proof of a recreational hike. An explicit connector wins if duplicate
-  source ways classify the same physical segment differently; the audit retains
-  each source classification. Admission and access permissions remain separate.
-- More-specific pedestrian and directional permissions override generic access.
-  Explicit prohibitions and purpose/private access are excluded. Missing or
-  unresolved conditional permission remains unknown; a default prohibition
-  remains excluded when its conditional exception cannot be evaluated.
-- `oneway:foot` and directional foot permissions constrain traversal. Generic
-  vehicle one-way tags do not forbid walking back on roads; ambiguous pedestrian
-  way direction is marked uncertain. Explicit barrier foot prohibitions block
-  passage. Parking-object restrictions do not invent crossing restrictions.
-- Mapped trailheads/parking connect only through shared routable OSM nodes.
-  Shared road/trail nodes provide uncertain entrances, not certified parking.
-  Explicit sidewalk/crossing contacts do not create inferred trail entrances;
-  mapped trailheads and parking retain their shared-node connections.
-  Unconnected or restricted POIs remain in the audit. No nearest-path connector
-  is invented, and ordinary road geometry vertices do not become starts.
-- Naming priority does not choose access evidence. An untagged named trailhead
-  retains applicable public permission from its mapped parking; restrictions
-  on the node still apply.
-- Every distinct mapped parking contact remains selectable, including one
-  beside a named trailhead. Selecting an area or enforcing exact route limits
-  must not silently move the starting point. Similar resulting routes are
-  handled during result selection; source preparation does not merge starts.
+A native Osmium pass embeds source node locations. Planning streams candidate
+consecutive source segments into a temporary SQLite spatial index. Counts use
+exact prepared polygon intersections and do not construct statewide trail
+topology. A source segment counts once per source way, regardless of admitted
+walking direction; duplicate source ways and unresolved node barriers make the
+count conservative. Road connectors are included, and compression into
+degree-two corridors has not occurred.
 
-Tag semantics follow the OSM documentation for
-[access precedence](https://wiki.openstreetmap.org/wiki/Key:access#Transport_mode_restrictions),
-[pedestrian access](https://wiki.openstreetmap.org/wiki/Key:foot), and
-[motorroad](https://wiki.openstreetmap.org/wiki/Tag:motorroad%3Dyes), and
-[vehicle tracks](https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack).
-These distinguish pedestrian permissions from motor-vehicle restrictions;
-motorroad implications vary by jurisdiction. The fallback above is deliberately
-stated as application policy rather than an inferred legal guarantee.
+The default limit is **250,000 candidate source segments**, adjustable with
+`--max-segments`. This is provisional until calibrated against measured
+preparation peaks and loaded graph memory. It is not a guarantee of search time.
 
-Source node identities join paths. Duplicate consecutive source-node segments
-are one physical segment, with conservative permission combination and all
-source references retained. Ways are clipped only at the declared source
-rectangle, preserving interior vertices; generated boundary endpoints are
-frontiers and never starts. Generated frontier identities include the exact
-clipping fraction, so changing the source rectangle does not reuse an identity
-for a different endpoint. Degree-two corridors are collapsed, retaining
-junctions, starts, barriers, permission and role transitions, and an anchor on
-isolated rings. No source geometry is simplified.
+- A region under the limit remains whole, even when major highways are present.
+- Only actual, source-connected numbered mainlines of motorway/trunk/primary
+  roads are candidates; ramps are excluded. Road relations preserve numbered
+  membership when an individual way lacks its reference.
+- Interstates have first priority. They cut only a currently oversized section.
+  Other major numbered roads are then chosen by exact subset enumeration to
+  minimize the number needed. A road can become a genuine divider when another
+  selected highway supplies its end boundary; applicability is retried.
+- A cut must actually split the current polygon. Missing road links are never
+  extended or snapped across gaps. One real connected carriageway represents a
+  divided road, preventing median sliver downloads.
+- Disconnected GMBA patches remain grouped as logical sides of the divider.
+  Cuts preserve the complete polygon union and disjoint interiors, including
+  holes. Sections still over the limit are explicitly unresolved.
+- More than twelve candidate lower-tier through corridors require an explicit
+  candidate selection, rather than an unbounded combinatorial planning run.
 
-## Elevation and output
+## Compilation and hard boundaries
 
-Coordinates are transformed into the raster CRS and sampled from the four
-surrounding pixel centers with bilinear weights. Samples include every retained
-source/boundary vertex plus intervals no longer than 25 m. Any missing or masked
-sample fails compilation. Gain and loss sum positive/negative sample changes;
-there is no per-delta suppression or smoothing threshold. These are DEM
-estimates: noise can inflate gain, and accuracy/current conditions are not
-certified. All sampled elevations stay in the drawing/GPX geometry, so it
-represents the same profile used for gain.
+Only one planned section's source context and topology are retained at a time,
+before elevation processing. Exact polygon clipping catches sparse segments
+whose original vertices both lie outside, and cannot bridge holes or separated
+mountain patches. Original OSM node identities join trails; coordinate proximity
+never invents a connection. Duplicate source node pairs retain conservative
+permissions and roles, including at clipped boundaries.
 
-One snapshot is compiled and compacted **before** storage partitioning. Numeric
-node, edge, section and start IDs are indexes in that snapshot's original arrays;
-they must never join records from different snapshots. Geographic cells are
-storage addresses, not independently compiled hiking regions.
+Selected highways are **hard hiking boundaries at every grade**. Crossing
+bridges and tunnels are clipped geometrically, and the selected highway has no
+walking edges even if OSM grants foot access. Generated frontier nodes never
+become starts. Real mapped starts on a divider remain independently selectable
+on each side, with section-local graph identities that cannot reconnect sides.
 
-`manifest.json` follows `src/data-format.ts`: version 2, cell size 0.1 degrees,
-`haversine-6371008.8` distance metric, copied dataset metadata, and each runtime
-file's compressed bytes, decoded JSON bytes and SHA-256. Dataset identity hashes
-the verified source manifest, Osmium version, actual compiler/policy files,
-metadata and emitted file evidence. The old input label is not reused as an ID.
-JSON keys/files are sorted; gzip omits filenames, timestamps and platform headers.
+The existing pedestrian access rules remain: specific foot permissions override
+generic access; explicit prohibitions are excluded; uncertainty is retained and
+labeled. Motorways, motorway links and `motorroad=yes` need affirmative
+pedestrian-specific permission in each admitted direction. Vehicle one-way tags
+do not invent walking restrictions. Tracks and explicit sidewalks/crossings are
+road connectors, independently of their names or foot permissions. Mapped
+parking and trailhead contacts use shared source nodes; no nearest-trail
+connection is invented.
 
-- `graph/<floor(lon*10)>_<floor(lat*10)>.json.gz` holds complete physical sections,
-  their names/roles/directed facts and endpoint coordinates. Each section appears
-  in every cell intersected by its complete geometry's bounding box. Readers
-  deduplicate IDs and exact-filter bounds; no section is clipped at a cell edge.
-- `starts/<cell>.json.gz` holds start facts and coordinates once, in their point's
-  cell. Starting-area selection does not require loading graph or geometry.
-- `geometry/<cell>.json.gz` holds each complete sampled corridor once, owned by
-  the cell containing its bounding-box midpoint. Reverse traversal uses the same
-  geometry in reverse. Role is also retained here for preparation inspection.
+DEMs are sampled bilinearly at every retained vertex and at intervals of at most
+25 m. All positive/negative changes contribute to gain/loss without suppression.
+The same complete sampled profile is retained in drawing/GPX geometry.
 
-An absent file inside the advertised processed footprint is empty for this
-snapshot. A declared but missing or corrupted file is an error. Outside the
-footprint, coverage is unknown. The CLI builds a fresh staging directory and
-renames it only after all runtime and audit files are complete.
+## Output and evidence
 
-`audit/graph.json.gz` and `audit/geometry.json.gz` preserve complete arrays for
-source replay. `audit/source-index.json.gz`, `audit/audit.json.gz` and
-`audit/provenance.json` retain source lineage/classification, frontiers, unmatched
-POIs, verified source hashes/URLs, compiler identity and build observations.
-These files are excluded from the runtime manifest. There is no old runtime
-format compatibility layer.
+`catalog.json` follows `src/data-format.ts`. Each built section declares its exact
+boundary, source count, start count, and three complete gzip files:
 
-The Little Si proof in `benchmarks/fresh-north-bend` contains separately pinned
-whole-file and geographic-network observations. Current Cascades builds and
-fixed-witness road shares are recorded in `benchmarks/network-review.json`.
-The latest snapshot occupies 73.86 MB, but preparation still materializes the
-whole footprint and peaked at 3.31 GB in the compiler process. These measurements
-do not prove statewide capacity. An old road converted to a trail but still
-tagged `highway=track` remains a connector; source corrections are not guessed
-from its name or permission tags.
+- `sections/<section.id>/graph.json.gz`: section-local nodes, directed edges,
+  starts, and physical trail/connector names and roles.
+- `sections/<section.id>/starts.json.gz`: start facts and coordinates, permitting
+  start selection without loading graph topology.
+- `sections/<section.id>/geometry.json.gz`: full measured corridor geometry,
+  indexed exactly like that section's graph.
+
+Every file declares compressed/decoded sizes and SHA-256. IDs incorporate pinned
+sources, compiler/policy evidence, and exact section geometry. JSON and gzip
+outputs are deterministic. There are no replicated geographic cells, cross
+section graph joins, or old format adapters.
+
+The final directory is published only after every requested section succeeds.
+The catalog includes truthful unavailable polygons/reasons for unbuilt or
+unresolved sections; these have no fictional download files.
+`provenance.json` records the plan, counts, elapsed time, and process RSS high-water
+marks. `--audit` additionally retains compressed source lineage and unmatched POIs.
+
+Offline checks use small generated source inventories, native Osmium, and a
+synthetic planar DEM; they make no network requests:
+
+```sh
+uv run --project tools/prepare python tests/data/fresh_compile.py
+uv run --project tools/prepare python tests/data/partitions.py
+```

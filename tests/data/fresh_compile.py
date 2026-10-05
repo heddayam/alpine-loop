@@ -7,6 +7,10 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as XML
+import zipfile
+
+import shapefile
+from shapely import box
 from pathlib import Path
 
 import numpy as np
@@ -17,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/prepare"))
 from build import build
 from elevation import Elevation
 from graph import topology
-from tiles import write_network
+from footprint import boundary
+from output import write_section
 
 
 class FreshCompiler(unittest.TestCase):
@@ -187,61 +192,67 @@ class FreshCompiler(unittest.TestCase):
             self.assertNotEqual(original_frontier, shifted_frontier)
 
             evidence = {"osm": hashlib.sha256(source.read_bytes()).hexdigest(), "dem": hashlib.sha256(dem.read_bytes()).hexdigest()}
-            network = root / "network"
-            manifest = write_network(network, graph, geometry, identity_evidence=evidence)
-            repeat = write_network(root / "repeat", graph, geometry, identity_evidence=evidence)
-            self.assertEqual(manifest, repeat, "Identical verified input and compiler produce identical gzip hashes and snapshot identity")
-            self.assertEqual((network / "manifest.json").read_bytes(), (root / "repeat/manifest.json").read_bytes())
-            self.assertEqual(graph["info"]["id"], "fixture", "Writer copies its parent's dataset metadata")
-            self.assertNotEqual(manifest["info"]["id"], "fixture")
-            self.assertEqual({path.relative_to(network).as_posix() for path in network.rglob("*.gz")}, set(manifest["files"]))
-            self.assertFalse((network / "graph.json.gz").exists(), "No legacy whole runtime graph")
-            cells, stored_geometry, stored_starts = {}, {}, {}
-            for filename, record in manifest["files"].items():
-                compressed = (network / filename).read_bytes()
+            section = {"id": "fixture-section", "regionId": "11202", "name": "Fixture",
+                       "bounds": bounds, "boundary": boundary(box(*bounds)), "sourceSegments": 50}
+            first = write_section(root / "network", section, graph, geometry)
+            repeat = write_section(root / "repeat", section, graph, geometry)
+            self.assertEqual(first, repeat, "Identical inputs produce deterministic compressed files")
+            self.assertEqual(set(first["files"]), {"graph", "starts", "geometry"})
+            stored = {}
+            for family, record in first["files"].items():
+                compressed = (root / "network" / record["path"]).read_bytes()
                 raw = gzip.decompress(compressed)
-                self.assertEqual(record, {"bytes": len(compressed), "jsonBytes": len(raw), "sha256": hashlib.sha256(compressed).hexdigest()})
-                value = json.loads(raw)
-                if filename.startswith("graph/"):
-                    cells[filename] = value
-                    nodes = dict(value["nodes"])
-                    for section in value["sections"]:
-                        self.assertEqual(section["kind"], geometry[section["id"]]["kind"])
-                        self.assertEqual(section["edges"], [[index, edge] for index, edge in enumerate(graph["edges"]) if edge["trail"] == section["id"]])
-                        for _, edge in section["edges"]:
-                            for node in (edge["from"], edge["to"]):
-                                self.assertEqual(nodes[node], graph["nodes"][node], "Every copy retains both complete endpoints")
-                elif filename.startswith("geometry/"):
-                    for index, shape in value:
-                        self.assertNotIn(index, stored_geometry, "Geometry has one owner")
-                        stored_geometry[index] = shape
-                else:
-                    for index, start, position in value:
-                        self.assertNotIn(index, stored_starts, "Starts have one owner")
-                        self.assertEqual(position, graph["nodes"][start["node"]])
-                        stored_starts[index] = start
-            self.assertEqual([stored_geometry[index] for index in range(len(geometry))], geometry)
-            self.assertEqual([stored_starts[index] for index in range(len(graph["starts"]))], graph["starts"])
-            crossing_section = next(index for index, trail in enumerate(lineage["trails"]) if any(source["way"] == "109" for segment in trail["segments"] for source in segment["source"]))
-            copies = [filename for filename, value in cells.items() if any(section["id"] == crossing_section for section in value["sections"])]
-            self.assertEqual(copies, ["graph/-1_0.json.gz", "graph/0_0.json.gz"], "Negative floor cell and positive cell both discover the full crossing corridor")
-            self.assertIn(crossing_section, dict(json.loads(gzip.decompress((network / "geometry/0_0.json.gz").read_bytes()))), "Crossing geometry belongs to its midpoint cell, not its first endpoint cell")
-            self.assertEqual([filename for filename in manifest["files"] if filename.startswith("starts/")], ["starts/0_0.json.gz"])
-            changed = [dict(shape, name="Changed name") if index == 0 else shape for index, shape in enumerate(geometry)]
-            self.assertNotEqual(write_network(root / "changed", graph, changed, identity_evidence=evidence)["info"]["id"], manifest["info"]["id"], "Actual output facts determine the snapshot identity")
-            inputs = dict(info, osm={"file": source.name, "sha256": evidence["osm"]},
-                          elevation=[{"file": dem.name, "sha256": evidence["dem"], "bounds": [-.01, -.01, .01, .01]}])
+                self.assertEqual(record["bytes"], len(compressed))
+                self.assertEqual(record["jsonBytes"], len(raw))
+                self.assertEqual(record["sha256"], hashlib.sha256(compressed).hexdigest())
+                stored[family] = json.loads(raw)
+            self.assertEqual(stored["graph"]["graph"], graph, "One independent graph retains every local node and edge")
+            self.assertEqual(stored["starts"], [[start, graph["nodes"][start["node"]]] for start in graph["starts"]])
+            self.assertEqual(stored["graph"]["trails"], [{"name": item["name"], "kind": item["kind"]} for item in geometry])
+            self.assertTrue(all(edge["connector"] == (geometry[edge["trail"]]["kind"] == "connector") for edge in graph["edges"]))
+            self.assertEqual(stored["geometry"], [{key: value for key, value in item.items() if key != "kind"} for item in geometry])
+
+            # Tiny published inventory and state archives exercise the actual plan/build CLI offline.
+            def archive(name, field, value):
+                stem = root / name
+                with shapefile.Writer(str(stem), shapeType=shapefile.POLYGON) as writer:
+                    writer.field(field, "C")
+                    writer.record(value)
+                    w, s, e, n = bounds
+                    writer.poly([[(w, s), (w, n), (e, n), (e, s), (w, s)]])
+                stem.with_suffix(".prj").write_text(rasterio.CRS.from_epsg(4326).to_wkt())
+                target = stem.with_suffix(".zip")
+                with zipfile.ZipFile(target, "w") as zipped:
+                    for suffix in (".shp", ".shx", ".dbf", ".prj"):
+                        zipped.write(stem.with_suffix(suffix), name + suffix)
+                return {"file": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
+            inputs = {"name": "Fixture", "regionId": "11202", "state": "WA", "sourceDate": "2026-08-01",
+                      "places": [], "gmba": archive("mountains", "GMBA_V2_ID", "11202"),
+                      "coverage": archive("states", "STUSPS", "WA"),
+                      "osm": {"file": source.name, "sha256": evidence["osm"]},
+                      "elevation": [{"file": dem.name, "sha256": evidence["dem"], "bounds": [-.01, -.01, .01, .01]}]}
             (root / "inputs.json").write_text(json.dumps(inputs))
-            subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] / "tools/prepare/build.py"),
-                            "--source-root", str(root), "--manifest", str(root / "inputs.json"), "--output", str(root / "published")],
+            cli = Path(__file__).resolve().parents[2] / "tools/prepare/build.py"
+            common = ["--source-root", str(root), "--manifest", str(root / "inputs.json")]
+            subprocess.run([sys.executable, str(cli), "plan", *common, "--output", str(root / "plan.json")],
                            check=True, capture_output=True, text=True)
+            plan = json.loads((root / "plan.json").read_text())
+            self.assertEqual(plan["cuts"], [], "A small real inventory footprint remains whole")
+            self.assertEqual(len(plan["sections"]), 1)
+            self.assertGreater(plan["sourceSegments"], 0)
+            subprocess.run([sys.executable, str(cli), "build", *common, "--plan", str(root / "plan.json"),
+                            "--output", str(root / "published"), "--audit"], check=True, capture_output=True, text=True)
             published = root / "published"
-            runtime = json.loads((published / "manifest.json").read_text())
-            provenance = json.loads((published / "audit/provenance.json").read_text())
-            self.assertEqual(provenance["snapshotId"], runtime["info"]["id"])
-            self.assertEqual({path.name for path in published.iterdir()}, {"manifest.json", "graph", "geometry", "starts", "audit"})
-            self.assertFalse(any(filename.startswith("audit/") for filename in runtime["files"]), "Runtime manifest excludes source replay artifacts")
-            self.assertEqual(json.loads(gzip.decompress((published / "audit/graph.json.gz").read_bytes()))["info"], runtime["info"])
+            catalog = json.loads((published / "catalog.json").read_text())
+            provenance = json.loads((published / "provenance.json").read_text())
+            self.assertEqual(catalog["version"], 1)
+            self.assertEqual(catalog["unavailable"], [])
+            self.assertEqual(provenance["plan"], plan)
+            self.assertEqual(catalog["sections"][0]["sourceSegments"], plan["sourceSegments"])
+            self.assertEqual(catalog["info"]["startCount"], len(graph["starts"]))
+            self.assertEqual({path.name for path in published.iterdir()}, {"catalog.json", "provenance.json", "sections", "audit"})
+            for family, record in catalog["sections"][0]["files"].items():
+                self.assertEqual(record["path"], f"sections/{plan['sections'][0]['id']}/{family}.json.gz")
             with rasterio.open(dem, "r+") as dataset:
                 values[99:101, 99:101] = -9999
                 dataset.write(values, 1)

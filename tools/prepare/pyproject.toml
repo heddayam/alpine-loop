@@ -2,4 +2,4 @@
 name = "alpine-prepare"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["rasterio==1.4.3"]
+dependencies = ["rasterio==1.4.3", "shapely==2.1.2", "pyshp==2.3.1"]

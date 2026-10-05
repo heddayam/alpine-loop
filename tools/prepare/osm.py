@@ -2,7 +2,8 @@
 import re
 import subprocess
 
-from graph import clip, routable
+from footprint import as_footprint
+from graph import routable
 
 
 def decode(value):
@@ -37,7 +38,7 @@ def poi_kind(tags):
     return None
 
 
-def extract(source, bounds, temporary):
+def extract(source, temporary):
     filtered, opl = [temporary / name for name in ("paths.pbf", "paths.opl")]
     # A node-in-box extract loses sparse segments crossing the box with both
     # endpoints outside. Native Osmium scans source-wide; Python retains only
@@ -46,31 +47,43 @@ def extract(source, bounds, temporary):
                     "nw/highway=trailhead", "nw/information=trailhead", "n/barrier", "n/foot", "n/access",
                     "-o", str(filtered)], check=True)
     subprocess.run(["osmium", "add-locations-to-ways", str(filtered), "-f", "opl", "-o", str(opl)], check=True)
+    subprocess.run(["osmium", "tags-filter", str(source), "r/route=road", "--omit-referenced",
+                    "-f", "opl", "-o", str(temporary / "roads.opl")], check=True)
     return opl
 
 
-def read_source(opl, bounds):
+def way_record(identity, fields, tags):
+    refs, points = [], []
+    for reference in filter(None, fields.get("N", "").split(",")):
+        match = re.fullmatch(r"n(-?\d+)x([^y]+)y(.+)", reference)
+        if not match:
+            raise ValueError(f"Missing inline node location: {reference}")
+        refs.append(match[1])
+        points.append((float(match[2]), float(match[3])))
+    return {"id": identity[1:], "nodes": refs, "tags": tags}, points
+
+
+def read_source(opl, footprint):
+    from shapely import LineString
+    footprint = as_footprint(footprint)
     ways, relations, pois, tagged_nodes, positions = {}, {}, [], {}, {}
-    w, s, e, n = bounds
+    w, s, e, n = footprint.bounds
     for identity, fields, tags in records(opl):
         if identity.startswith("w"):
-            refs, points = [], []
-            for reference in filter(None, fields.get("N", "").split(",")):
-                match = re.fullmatch(r"n(-?\d+)x([^y]+)y(.+)", reference)
-                if not match:
-                    raise ValueError(f"Missing inline node location: {reference}")
-                refs.append(match[1])
-                points.append((float(match[2]), float(match[3])))
-            if not any(clip(a, b, bounds) is not None for a, b in zip(points, points[1:])):
+            way, points = way_record(identity, fields, tags)
+            refs = way["nodes"]
+            if len(points) < 2 or max(p[0] for p in points) < w or min(p[0] for p in points) > e \
+                    or max(p[1] for p in points) < s or min(p[1] for p in points) > n \
+                    or not footprint.prepared.intersects(LineString(points)):
                 continue
-            ways[identity[1:]] = {"id": identity[1:], "nodes": refs, "tags": tags}
+            ways[identity[1:]] = way
             positions.update(zip(refs, points))
             if poi_kind(tags):
                 pois.append({"id": identity, "nodes": refs, "tags": tags, "kind": poi_kind(tags)})
         elif identity.startswith("r"):
             members = [part.split("@", 1)[0] for part in fields.get("M", "").split(",") if part]
             relations[identity[1:]] = {"members": members, "tags": tags}
-        elif tags and w <= float(fields["x"]) <= e and s <= float(fields["y"]) <= n:
+        elif tags and footprint.covers((float(fields["x"]), float(fields["y"]))):
             tagged_nodes[identity[1:]] = tags
             if poi_kind(tags):
                 pois.append({"id": identity, "nodes": [identity[1:]], "tags": tags, "kind": poi_kind(tags)})
