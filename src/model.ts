@@ -103,6 +103,7 @@ export type JobSnapshot = {
   queuePosition?: number;
   progress: JobProgress;
   reason?: string;
+  regions?: { id: string; name: string }[];
   inputs?: JobInputs;
   storageBytes: number;
   groupCount?: number;
