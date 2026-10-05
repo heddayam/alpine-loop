@@ -47,7 +47,8 @@ try {
       route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
       for (const step of route.sections) used.add(step.id);
       store.add({ ...saved, route, groupId: hash(`${chosen.section.id}/${saved.groupId}`),
-        reverseId: saved.reverseId && savedIds.has(saved.reverseId) ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined });
+        reverseId: saved.reverseId && savedIds.has(saved.reverseId) ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined,
+        oppositeId: saved.oppositeId && savedIds.has(saved.oppositeId) ? hash(`${chosen.section.id}/${saved.oppositeId}`) : undefined });
     }
     if (used.size) {
       const geometry = await dataset.readGeometry(chosen.section.id);

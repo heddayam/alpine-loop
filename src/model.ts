@@ -90,6 +90,8 @@ export type JobProgress = {
   expansions: number;
   totalStarts: number;
   completedStarts: number;
+  totalSearchPoints?: number;
+  completedSearchPoints?: number;
 };
 export type JobInputs = {
   version: string;
@@ -136,6 +138,8 @@ export type SearchProgress = {
   completedStarts: number;
   expansions: number;
   elapsedMs: number;
+  totalSearchPoints?: number;
+  completedSearchPoints?: number;
 };
 export type SearchEvent =
   | { type: 'route'; route: RouteCandidate }
