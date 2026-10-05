@@ -14,7 +14,8 @@ export type TrailEdge = {
   /** Derived from the section's physical classification when loading topology. */
   connector: boolean;
 };
-export type TrailStart = { id: string; node: number; name: string; access: Access };
+export type StartKind = 'trailhead' | 'parking' | 'road-contact';
+export type TrailStart = { id: string; node: number; name: string; access: Access; kind: StartKind };
 export type Attribution = { name: string; url: string; license: string };
 export type DatasetInfo = {
   id: string;
@@ -63,6 +64,7 @@ export type RouteCandidate = {
 export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'roadDistance' | 'repetition' | 'kind' | 'uncertain'> & {
   startId: string;
   startName: string;
+  startKind: StartKind;
   startPosition: Position;
   trailNames: string[];
 };
@@ -71,6 +73,55 @@ export type HikeRoute = RouteSummary & { geometry: Position[] };
 export type RouteChoice = RouteSummary & { groupId: string; groupSize: number; reverseId?: string };
 export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;
+export type JobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
+export type JobProgress = {
+  stage: 'preparing' | 'searching' | 'saving';
+  currentRegion?: { id: string; name: string };
+  completedRegions: string[];
+  totalRegions: number;
+  elapsedMs: number;
+  expansions: number;
+  totalStarts: number;
+  completedStarts: number;
+};
+export type JobInputs = {
+  version: string;
+  sections: {
+    id: string; name: string; bounds: Bounds;
+    boundary: { type: 'MultiPolygon'; coordinates: number[][][][] };
+    files: Record<'graph' | 'starts' | 'geometry', { path: string; sha256: string; bytes: number; jsonBytes: number }>;
+  }[];
+};
+/** Status/history contains metadata only. Results are readable only after durable completion. */
+export type JobSnapshot = {
+  id: string;
+  query: SearchQuery;
+  status: JobStatus;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  queuePosition?: number;
+  progress: JobProgress;
+  reason?: string;
+  inputs?: JobInputs;
+  storageBytes: number;
+  groupCount?: number;
+  routeCount?: number;
+};
+export type ResultSort = 'distance' | 'gain' | 'repetition' | 'roadDistance';
+export type SortOrder = 'asc' | 'desc';
+export type JobResults = {
+  routes: RouteChoice[];
+  pageTotal: number;
+  offset: number;
+  groupId?: string;
+  groupCount: number;
+  routeCount: number;
+  sort: ResultSort;
+  order: SortOrder;
+  selectionNote: string;
+};
+export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance'>;
 export type SearchStatus = 'running' | 'complete' | 'stopped' | 'limited' | 'failed';
 export type SearchProgress = {
   totalStarts: number;
