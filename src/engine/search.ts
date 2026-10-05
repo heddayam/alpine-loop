@@ -202,11 +202,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
     }
     for (const choices of adjacency.values()) choices.sort((a, b) => a - b);
     for (const root of [...adjacency.keys()].sort((a, b) => a - b)) {
-      const lowerReturn = ([0, 1, 2] as const).map(metric => lowerBounds(index, [root], budget[metric]!, metric,
-        node => (adjacency.get(node) ?? []).filter(id => {
-          const edge = index.physical[id]!;
-          return (edge.from === node ? edge.to : edge.from) >= root;
-        }), false, scratch[metric]));
+      let lowerReturn: (Float64Array | undefined)[] = [];
       yield undefined;
       const path: number[] = [];
       const nodes = [root];
@@ -225,7 +221,19 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery): Generat
         const next = edge.from === frame.node ? edge.to : edge.from;
         const sums = [frame.sums[0]! + edge.distance, frame.sums[1]! + edge.gain, frame.sums[2]! + edge.road];
         let found: Circuit | undefined;
-        if (id !== path.at(-1) && sums.every((sum, metric) => sum <= budget[metric]! && (!lowerReturn[metric] || lowerReturn[metric]![next]! <= budget[metric]! - sum))) {
+        if (id !== path.at(-1) && sums.every((sum, metric) => sum <= budget[metric]!)) {
+          if (!path.length && next !== root) {
+            // A canonical closure must use a different, greater root edge.
+            // Excluding the initial edge prevents the bound from promising an
+            // illegal immediate retrace through the already used corridor.
+            lowerReturn = ([0, 1, 2] as const).map(metric => lowerBounds(index, [root], budget[metric]!, metric,
+              node => (adjacency.get(node) ?? []).filter(part => {
+                const edge = index.physical[part]!;
+                return (edge.from === node ? edge.to : edge.from) >= root
+                  && ((edge.from !== root && edge.to !== root) || part > id);
+              }), false, scratch[metric]));
+          }
+          if (sums.some((sum, metric) => lowerReturn[metric] && lowerReturn[metric]![next]! > budget[metric]! - sum)) { yield undefined; continue; }
           if (next === root && (!path.length || path[0]! < id)) found = make([...path, id], nodes, sums);
           else if (next > root && !visited.has(next)) {
             path.push(id); nodes.push(next); visited.add(next);

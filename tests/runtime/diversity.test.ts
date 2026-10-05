@@ -73,7 +73,7 @@ it('does not link reverse directions represented by different minor witnesses', 
   const routes = await solveSection(graph, { ...query, gain: [10, 10], repetition: 0 });
   expect(families(routes).size).toBe(1);
   expect(new Set(routes.map(route => route.direction))).toEqual(new Set([0, 1]));
-  expect(routes.every(route => !route.reverseId)).toBe(true);
+  expect(routes.every(route => !route.reverseId && route.oppositeId)).toBe(true);
 });
 
 it('prevents aggregate drift and assigns identical IDs despite graph storage order', async () => {
