@@ -70,7 +70,14 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
 };
 export type HikeRoute = RouteSummary & { geometry: Position[] };
 /** One qualifying connection from a start to a distinct hike; reverse facts remain independent. */
-export type RouteChoice = RouteSummary & { groupId: string; groupSize: number; reverseId?: string };
+export type RouteChoice = RouteSummary & {
+  groupId: string;
+  groupSize: number;
+  /** Exact reversed walk, when that witness is retained and qualifies. */
+  reverseId?: string;
+  /** Preferred qualifying witness in the other loop direction at the same start. */
+  oppositeId?: string;
+};
 export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;
 export type JobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
@@ -123,7 +130,6 @@ export type JobResults = {
   selectionNote: string;
 };
 export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance'>;
-export type SearchStatus = 'running' | 'complete' | 'stopped' | 'limited' | 'failed';
 export type SearchProgress = {
   totalStarts: number;
   attemptedStarts: number;
@@ -131,23 +137,7 @@ export type SearchProgress = {
   expansions: number;
   elapsedMs: number;
 };
-export type SearchSnapshot = {
-  id: string;
-  datasetId: string;
-  query: SearchQuery;
-  status: SearchStatus;
-  progress: SearchProgress;
-  routes: RouteChoice[];
-  routeCount: number;
-  groupCount: number;
-  /** Omitted for the group overview; set when browsing the routes in one group. */
-  groupId?: string;
-  pageTotal: number;
-  offset: number;
-  selectionNote?: string;
-  reason?: string;
-};
 export type SearchEvent =
   | { type: 'route'; route: RouteCandidate }
   | { type: 'progress'; progress: SearchProgress }
-  | { type: 'done'; status: Exclude<SearchStatus, 'running' | 'failed'>; progress: SearchProgress; reason?: string };
+  | { type: 'done'; status: 'complete' | 'stopped' | 'limited'; progress: SearchProgress; reason?: string };

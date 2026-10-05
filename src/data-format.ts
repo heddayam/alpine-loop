@@ -1,4 +1,4 @@
-import type { Bounds, DatasetInfo, Position, RouteSummary, SearchEvent, TrailGraph, TrailGeometry, TrailStart } from './model.js';
+import type { Bounds, DatasetInfo, Position, RouteSummary, TrailGraph, TrailGeometry, TrailStart } from './model.js';
 
 export type Boundary = { type: 'MultiPolygon'; coordinates: number[][][][] };
 export type DataFile = { path: string; bytes: number; jsonBytes: number; sha256: string };
@@ -21,5 +21,3 @@ export type SectionGraph = { graph: TrailGraph; trails: { name: string | null; k
 export type SectionStarts = [start: TrailStart, position: Position][];
 export type SectionGeometry = TrailGeometry[];
 export type StoredRoute = { summary: RouteSummary; sections: { section: string; id: number; reverse: boolean }[] };
-export type WorkerEvent = Exclude<SearchEvent, { type: 'route' }>
-  | { type: 'route'; route: StoredRoute; groupId: string; optionId: string; walkId: string; preferred: boolean };

@@ -189,10 +189,10 @@ function RouteDetails({
           className="direction-status"
           role={directionError ? "alert" : "status"}
         >
-          <p>{directionError || "Loading reverse direction…"}</p>
+          <p>{directionError || "Loading the other direction…"}</p>
           {directionError && (
             <button type="button" onClick={onRetry}>
-              Retry reverse direction
+              Retry direction
             </button>
           )}
         </div>
@@ -208,18 +208,18 @@ function RouteDetails({
               ? "Lollipop · an out-and-back approach to a loop"
               : "Loop · returns without retracing trail"}
           </p>
-          {route.reverseId && (
+          {(route.reverseId || route.oppositeId) && (
             <button
               type="button"
               className="text-button reverse-direction"
               onClick={onReverse}
             >
-              {reversed ? "Use original direction" : "Reverse direction"}
+              {reversed ? "Use original direction" : route.reverseId ? "Reverse direction" : "Other loop direction"}
             </button>
           )}
           {reversed && (
             <p className="field-hint" role="status">
-              Reverse direction selected. GPX follows this direction.
+              Other direction selected. GPX follows this route.
             </p>
           )}
           <dl className="detail-metrics">
@@ -1395,10 +1395,11 @@ export function App() {
                       }}
                       backDisabled={false}
                       onReverse={() => {
-                        if (selected.reverseId) {
+                        const otherId = selected.reverseId ?? selected.oppositeId;
+                        if (otherId) {
                           startsOperation.current?.abort();
                           setLoadingStarts(false);
-                          setSelectedId(selected.reverseId);
+                          setSelectedId(otherId);
                           setShowStarts(false);
                         }
                       }}

@@ -78,7 +78,7 @@ sample();
 const sampler = setInterval(sample, result.sampleIntervalMs);
 try {
   const { createApp } = await import(pathToFileURL(path.join(options.server, 'server.js')));
-  app = await createApp(options.dataset, undefined, path.join(path.dirname(checkpoint), 'jobs'));
+  app = await createApp(options.dataset, undefined, path.join(path.dirname(checkpoint), 'jobs', definition.id));
   url = await app.listen({ host: '127.0.0.1', port: 0 });
   result.datasetId = (await api('GET', '/api/catalog')).id;
   assert.equal(result.datasetId, options.snapshotId);

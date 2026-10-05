@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
 import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
 
-export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; preferred: boolean };
+export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
 type ChoiceRow = { summary: string; groupId: string; groupSize: number; reverseId: string | null };
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
@@ -41,8 +41,8 @@ export function createRouteStore(path: string, writable = false) {
       commit(): void { db.exec('COMMIT'); },
       add(saved: SavedChoice): void {
         if (!addRoute || !addGroup || !setGroup || !addOption) throw new Error('Saved results are immutable');
-        const { route, groupId, reverseId, preferred } = saved, summary = route.summary;
-        addRoute.run(summary.id, groupId, summary.startId, JSON.stringify(summary), JSON.stringify(route.sections), reverseId ?? null,
+        const { route, groupId, reverseId, oppositeId, preferred } = saved, summary = route.summary;
+        addRoute.run(summary.id, groupId, summary.startId, JSON.stringify({ ...summary, oppositeId }), JSON.stringify(route.sections), reverseId ?? null,
           summary.distance, summary.gain, summary.repetition, summary.roadDistance, Number(summary.uncertain));
         addGroup.run(groupId, summary.id);
         if (preferred) setGroup.run(summary.id, groupId);
