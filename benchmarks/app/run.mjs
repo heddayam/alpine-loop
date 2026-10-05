@@ -10,7 +10,7 @@ import { gunzipSync } from 'node:zlib';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
-const usage = 'Usage: node benchmarks/app/run.mjs --dataset DIR --output FILE [--observation-ms 30000] [--rss-bytes 1000000000] [--query ID]\nRun npm run build first. Omitting --query runs all frozen queries sequentially.';
+const usage = 'Usage: node benchmarks/app/run.mjs --dataset DIR --output FILE [--observation-ms 30000] [--rss-bytes 1000000000] [--query ID|all-regions]\nRun npm run build first. Omitting --query runs all frozen queries sequentially.';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index], value = process.argv[index + 1];
@@ -34,7 +34,8 @@ function codeHashes(directory) {
   }).sort(([a], [b]) => a.localeCompare(b)));
 }
 const queryFile = path.join(root, 'benchmarks/queries.json'), manifestFile = path.join(dataset, 'catalog.json');
-const definitions = read(queryFile).queries.filter(query => !args.has('--query') || query.id === args.get('--query'));
+const definitions = args.get('--query') === 'all-regions' ? [{ id: 'all-regions-default', query: { distance: [8046.72, 19312.128], gain: [0, 1219.2], repetition: 0.2, includeUnknown: true } }]
+  : read(queryFile).queries.filter(query => !args.has('--query') || query.id === args.get('--query'));
 assert(definitions.length, `Unknown frozen query: ${args.get('--query')}`);
 const catalog = read(manifestFile);
 const startsFiles = catalog.sections.map(section => {
@@ -45,6 +46,7 @@ const startsFiles = catalog.sections.map(section => {
 });
 const startHashes = Object.fromEntries(startsFiles.map(({ section, file }) => [section.id, hash(file)]));
 function sectionRequest(definition) {
+  if (!definition.query.area) return { sections: catalog.sections.map(section => section.id).sort(), ...definition.query };
   const { area: [west, south, east, north], ...constraints } = definition.query;
   const selected = startsFiles.filter(({ records }) => records.some(([start, [lon, lat]]) =>
     lon >= west && lon <= east && lat >= south && lat <= north && (constraints.includeUnknown || start.access === 'public')));
@@ -58,7 +60,7 @@ const requests = new Map(definitions.map(definition => [definition.id, sectionRe
 const provenanceFile = path.join(dataset, 'provenance.json');
 const provenance = fs.existsSync(provenanceFile) ? read(provenanceFile) : null;
 const report = {
-  version: 2, startedAt: new Date().toISOString(), dataset, observationMs, rssGuardBytes: rssBytes,
+  version: 3, startedAt: new Date().toISOString(), dataset, observationMs, rssGuardBytes: rssBytes,
   machine: { node: process.version, platform: process.platform, arch: process.arch, cpu: os.cpus()[0]?.model, memoryBytes: os.totalmem() },
   inputs: { queriesSha256: hash(queryFile), manifestSha256: hash(manifestFile), snapshotId: catalog.info.id, preparedStartsSha256: startHashes,
     compiledHashes: codeHashes(server), packageLockSha256: hash(path.join(root, 'package-lock.json')),
@@ -70,9 +72,9 @@ const report = {
     'Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.',
     'Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.',
     'RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.',
-    'Route timing is first API observation with 100ms polls, not exact discovery time. Reconnect checks the current-search API, not browser rendering.',
-    'The observation window and sampled RSS guard only stop this measurement through the app Stop API. An outer deadline kills a hung child after the window plus 15 seconds.',
-    'Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are retained app choices, not independent existence certificates.',
+    'Completion timing is first durable completed-status observation with 100ms polls. Reconnect checks saved history and exact request identity, not browser rendering.',
+    'The observation window and sampled RSS guard only stop this measurement through the app cancellation API. An outer deadline kills a hung child after the window plus 15 seconds.',
+    'Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are completed saved families and witnesses, not independent existence certificates.',
     'Each result records the adapted sent request and effective query, including app defaults for newer settings. Explicit constraints and exact selected section IDs must remain unchanged.',
     'Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Failed or interrupted observations do not prove no matches.',
   ],
@@ -99,7 +101,7 @@ try {
     if (child.status !== 0) result.measurementError ??= 'Child failed or exceeded its outer measurement deadline; exploration was not certified complete.';
     report.results.push(result); report.currentQuery = null; save();
     console.log(JSON.stringify({ id: result.id, outcome: result.outcome, status: result.observation?.status,
-      routes: result.observation?.routeCount, peakRssBytes: result.osProcessPeakRssBytes, stopMs: result.stop?.latencyMs, error: result.measurementError }));
+      routes: result.observation?.routeCount, peakRssBytes: result.osProcessPeakRssBytes, cancelMs: result.cancel?.latencyMs, error: result.measurementError }));
   }
   assert.deepEqual(codeHashes(server), report.inputs.compiledHashes, 'Compiled app changed during measurement');
   assert.equal(hash(manifestFile), report.inputs.manifestSha256, 'Dataset manifest changed during measurement');

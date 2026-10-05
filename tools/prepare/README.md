@@ -104,6 +104,11 @@ road connectors, independently of their names or foot permissions. Mapped
 parking and trailhead contacts use shared source nodes; no nearest-trail
 connection is invented.
 
+Prepared starts carry explicit `trailhead`, `parking`, or `road-contact` metadata
+from mapped entrance evidence. A trailhead outranks co-located parking; names
+never infer a kind. Completed search jobs use this metadata to choose the
+displayed qualifying start while retaining the other qualifying entrances.
+
 Road-contact starts resolve car access in the order `motorcar`, `motor_vehicle`,
 `vehicle`, `access`, including directional restrictions. An explicit vehicle
 prohibition cannot be overridden by `foot=yes`. Non-current roads cannot supply

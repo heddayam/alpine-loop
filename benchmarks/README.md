@@ -25,12 +25,18 @@ After building the app and preparing mountain sections:
 node benchmarks/app/run.mjs --dataset .local-data/mountains --output /tmp/alpine-app-results.json --observation-ms 30000
 ```
 
-Use `--query north-bend-known` for one request. Each runs through a fresh HTTP
+Use `--query north-bend-known` for one frozen request or `--query all-regions`
+for the default 5–12 mile, 0–4000 foot all-region request. Use an observation
+window of 900000 ms to measure the ordinary-job target; shorter diagnostics
+remain explicitly unfinished when they do not complete. Status polling contains
+no route data, and the harness uses isolated job storage under its temporary
+directory. Each runs through a fresh HTTP
 server and actual search worker. The observation window and RSS guard belong
 to the harness; they do not relax constraints or impose app timeouts. Reports
-include frozen definitions, adapted requests, progressive results,
-completion/unfinished status, reconnect, Stop latency, memory, and input/code hashes. A failure or stopped
-search never proves no matches. Memory excludes the browser; timing is descriptive.
+include frozen definitions, adapted requests, durable completion/unfinished status,
+saved family/witness counts after completion, history reconnect, cancellation
+latency, memory, and input/code hashes. A failure or cancelled job never proves
+no matches. Memory excludes the browser; timing is descriptive.
 
 `mountain-preparation-review.json` records the replacement footprint, partitions,
 real compilation and runtime observations. A source-size proxy is a conservative

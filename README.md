@@ -2,8 +2,9 @@
 
 A local desktop app for finding loops and lollipops from mapped trails. Choose
 one or more prepared mountain regions, set distance, climb, repeated-trail and road limits,
-and compare results as exploration continues. Every shown route meets the
-requested constraints; unfinished work stays visible.
+and submit a search job. Browse stable results after exploration finishes.
+Every shown route meets the requested constraints; unfinished jobs show their
+stage and fully explored regions.
 
 ## Run
 
@@ -50,17 +51,40 @@ walking permission. A vehicle-closed track can remain walkable without creating
 a start at its trail junction. Unknown access is labeled; mapped road contacts
 do not certify legal parking or current road conditions.
 
-## Routes and progress
+## Search jobs and results
 
-Search explores eligible starts without a time or result cap. You can stop and
-keep the choices found so far. Reloading reconnects while the server lives;
-server restart recovery is outside the product scope.
+The Jobs dialog shows saved requests, FIFO queue positions, stages, current region,
+fully explored regions and elapsed time. Closing it leaves jobs running. Jobs
+search without a time or result cap; several minutes is normal for broad searches.
+Completed jobs become ready in the app without changing your screen.
 
-Small trail variations are grouped when the full trail path and loop each
-overlap by at least 95%, with no connected difference longer than 500 meters.
-Each qualifying original start remains available in the hike details. Preferred
-connections use mapped access, then less road walking and shorter distance.
-Only independently qualifying directions can be switched or exported as GPX.
+History and completed geometry live in `.local-data/jobs`. Reloading restores
+jobs; completed views have stable `?job=ID` URLs. Restarting interrupts the job
+that was running and continues queued jobs. Cancellation, interruption and failure
+discard unfinished results while keeping settings to copy into a new submission.
+Requests are immutable. Delete terminal jobs with confirmation to reclaim their
+saved storage; history is otherwise retained.
+
+Main circuits are discovered once, independently of their starting points.
+Minor variants share a family only when their common physical core trail is at
+least 85% of their combined core footprint, the common cyclic order agrees, and
+no connected difference exceeds one kilometer. Approaches and directions do not
+create additional hikes. A qualifying minor variation is retained when needed to
+meet the limits; there is no variation selector.
+
+Details retain qualifying starts and directions. The displayed start prefers an
+explicit mapped trailhead, then parking, then road contact; ties prefer certain
+access, less road walking, less repetition, shorter distance and stable IDs.
+Available directions each have their own exact metrics and GPX. Sorted paging
+never changes the job, and the map includes all result locations regardless of
+the visible page. Coincident locations offer a hike chooser.
+
+For the same start and ordered trail itinerary, avoidable longer road substitutions
+are removed before minimum distance and climb are applied. A shorter legal road
+alternative must meet all other limits and offer no worse access certainty.
+Road connections required for legal access or other constraints remain eligible.
+Completed geometry is stored once per used physical trail and survives source
+replacement or removal.
 
 Road limits count every road, vehicle track and sidewalk connection walked,
 including a lollipop's return. Defaults are one mile and 10% of the hike; both

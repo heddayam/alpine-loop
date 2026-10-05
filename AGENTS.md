@@ -12,10 +12,12 @@ do not resume their gates or carry their architecture into the replacement.
   eligible start in the selected regions; panning and zooming do not change scope.
   Include uncertain access by default, label it, and allow its exclusion.
   Respect explicit prohibitions.
-- Search every eligible start, show diverse results progressively, distinguish
-  attempted starts from completed exploration, and disclose unfinished work.
-- Keep the current search alive while the server runs. Reopening the browser
-  reconnects. Restart recovery, old saved jobs, old APIs, and old data formats
+- Search every eligible start through durable FIFO jobs. Publish immutable
+  diverse results only after complete exploration and geometry storage. Keep
+  progress honest; cancellation and failure expose no partial results.
+- Keep job history until manual deletion. Browser reconnect restores jobs and
+  stable completed-result URLs. On server restart, interrupt running jobs and
+  continue queued jobs; automatic mid-search resume and legacy APIs/data formats
   are not compatibility requirements.
 - Washington first; California later. No universal mileage cap, mountain-core
   qualification, drive-time service, or steepness controls in the first release.

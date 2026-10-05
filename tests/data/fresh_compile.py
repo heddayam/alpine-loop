@@ -209,6 +209,9 @@ class FreshCompiler(unittest.TestCase):
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
             starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
             self.assertEqual(set(starts), {"n1", "n2", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts remain")
+            self.assertEqual(starts["n1"]["kind"], "trailhead", "Trailhead evidence outranks co-located parking")
+            self.assertEqual(starts["n2"]["kind"], "parking", "A distinct mapped parking exit preserves its source kind")
+            self.assertEqual(starts["n50"]["kind"], "road-contact", "A road contact never acquires trailhead rank from its name")
             self.assertNotIn("n53", starts, "An explicit sidewalk/crossing-to-road contact is not a trail entrance")
             self.assertEqual(starts["n50"]["access"], "unknown", "Track-to-trail contact is not proof of legal arrival or parking")
             self.assertNotIn("n71", starts, "Two connected tracks do not establish a trail entrance")
