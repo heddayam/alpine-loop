@@ -4,16 +4,17 @@ import {
   tileLayer,
   polyline,
   layerGroup,
-  circleMarker,
+  marker,
+  divIcon,
   geoJSON,
   DomEvent,
   type Map as LeafletMap,
-  type CircleMarker,
   type LayerGroup,
   type LatLngBoundsExpression,
 } from "leaflet";
-import type { Bounds, HikeRoute, RouteSummary } from "../model.js";
+import type { Bounds, HikeRoute, RouteLocation } from "../model.js";
 import type { CatalogView } from "../data-format.js";
+import { clusterLocations } from "./clusters.js";
 
 const leafletBounds = (bounds: Bounds): LatLngBoundsExpression => [
   [bounds[1], bounds[0]],
@@ -28,6 +29,7 @@ export function HikeMap({
   routes,
   activeRoute,
   selectedId,
+  selectedGroupId,
   routeNotice,
   onRetryRoute,
   camera,
@@ -39,9 +41,10 @@ export function HikeMap({
   selectedSections: string[];
   editing: boolean;
   locked: boolean;
-  routes: RouteSummary[];
+  routes: RouteLocation[];
   activeRoute: HikeRoute | null;
   selectedId: string | null;
+  selectedGroupId?: string;
   routeNotice: string;
   onRetryRoute?: () => void;
   camera: { bounds: Bounds; revision: number; padding?: number };
@@ -54,12 +57,27 @@ export function HikeMap({
   const routeGroup = useRef<LayerGroup | null>(null);
   const startGroup = useRef<LayerGroup | null>(null);
   const sectionGroup = useRef<LayerGroup | null>(null);
-  const renderedStarts = useRef(
-    new Map<string, { marker: CircleMarker; routes: RouteSummary[] }>(),
-  );
-  const callbacks = useRef({ onToggleSection, onSelect, onPreview, selectedId, editing, locked });
-  callbacks.current = { onToggleSection, onSelect, onPreview, selectedId, editing, locked };
+  const [chooser, setChooser] = useState<RouteLocation[]>([]);
+  const callbacks = useRef({
+    onToggleSection,
+    onSelect,
+    onPreview,
+    selectedId,
+    editing,
+    locked,
+  });
+  callbacks.current = {
+    onToggleSection,
+    onSelect,
+    onPreview,
+    selectedId,
+    editing,
+    locked,
+  };
   const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (chooser.length) document.getElementById("map-chooser-title")?.focus();
+  }, [chooser]);
 
   useEffect(() => {
     const map = createMap(container.current!);
@@ -81,7 +99,6 @@ export function HikeMap({
     return () => {
       resize.disconnect();
       map.remove();
-      renderedStarts.current.clear();
       instance.current = null;
       routeGroup.current = null;
       startGroup.current = null;
@@ -121,7 +138,10 @@ export function HikeMap({
     group.clearLayers();
     if (!activeRoute) return;
     const line = polyline(
-      activeRoute.geometry.map(([longitude, latitude]) => [latitude, longitude]),
+      activeRoute.geometry.map(([longitude, latitude]) => [
+        latitude,
+        longitude,
+      ]),
       { color: "#b95b2c", weight: 5, opacity: 0.9 },
     ).addTo(group);
     line.on("click", (event) => {
@@ -130,64 +150,76 @@ export function HikeMap({
     });
   }, [ready, activeRoute]);
   useEffect(() => {
-    if (!ready || !startGroup.current) return;
-    const group = startGroup.current;
-    const starts = new Map<string, RouteSummary[]>();
-    for (const route of routes) {
-      const choices = starts.get(route.startId) ?? [];
-      choices.push(route);
-      starts.set(route.startId, choices);
-    }
-    for (const [id, entry] of renderedStarts.current) {
-      if (!starts.has(id)) {
-        group.removeLayer(entry.marker);
-        renderedStarts.current.delete(id);
-      }
-    }
-    for (const [id, choices] of starts) {
-      const first = choices[0]!;
-      let entry = renderedStarts.current.get(id);
-      if (!entry) {
-        entry = {
-          marker: circleMarker([first.startPosition[1], first.startPosition[0]], {
-            radius: 5,
-            color: "#315e49",
-            weight: 2,
-            fillColor: "white",
-            fillOpacity: 1,
-          }).addTo(group),
-          routes: choices,
-        };
-        const start = entry;
-        start.marker.on("mouseover", () =>
-          callbacks.current.onPreview(start.routes[0]!.id),
+    const map = instance.current,
+      group = startGroup.current;
+    if (!ready || !map || !group) return;
+    setChooser([]);
+    const draw = () => {
+      group.clearLayers();
+      for (const cluster of clusterLocations(routes, (route) =>
+        map.project(
+          [route.startPosition[1], route.startPosition[0]],
+          map.getZoom(),
+        ),
+      )) {
+        const choices = cluster.routes;
+        const active = choices.some(
+          (route) =>
+            route.id === selectedId || route.groupId === selectedGroupId,
         );
-        start.marker.on("mouseout", () => callbacks.current.onPreview(null));
-        start.marker.on("click", (event) => {
+        const multiple = choices.length > 1;
+        const dot = marker([cluster.position[1], cluster.position[0]], {
+          icon: divIcon({
+            className: `hike-marker${multiple ? " hike-cluster" : ""}${active ? " selected" : ""}`,
+            html: multiple
+              ? `<span>${choices.length.toLocaleString()}</span>`
+              : "<span></span>",
+            iconSize: multiple ? [32, 32] : [14, 14],
+            iconAnchor: multiple ? [16, 16] : [7, 7],
+          }),
+          title: multiple
+            ? `${choices.length} hikes${cluster.coincident ? " at this starting point" : " nearby"}`
+            : choices[0]!.startName || "Hike starting point",
+        }).addTo(group);
+        const label = document.createElement("span");
+        label.textContent = multiple
+          ? `${choices.length} hikes · ${cluster.coincident ? "choose a hike" : "zoom to explore"}`
+          : choices[0]!.startName || "Unnamed start";
+        dot.bindTooltip(label, { direction: "right" });
+        if (!multiple) {
+          dot.on("mouseover", () =>
+            callbacks.current.onPreview(choices[0]!.id),
+          );
+          dot.on("mouseout", () => callbacks.current.onPreview(null));
+        }
+        dot.on("click", (event) => {
           DomEvent.stopPropagation(event.originalEvent);
-          const route = start.routes.find(
-            (route) => route.id === callbacks.current.selectedId,
-          ) ?? start.routes[0]!;
-          callbacks.current.onSelect(route.id);
+          callbacks.current.onPreview(null);
+          if (!multiple) {
+            setChooser([]);
+            callbacks.current.onSelect(choices[0]!.id);
+          } else if (cluster.coincident || map.getZoom() >= 19)
+            setChooser(choices);
+          else {
+            setChooser([]);
+            map.fitBounds(
+              choices.map((route) => [
+                route.startPosition[1],
+                route.startPosition[0],
+              ]),
+              { padding: [60, 60], maxZoom: 19 },
+            );
+          }
         });
-        renderedStarts.current.set(id, start);
       }
-      entry.routes = choices;
-      const label = document.createElement("span");
-      label.textContent = `${first.startName || "Unnamed start"} · ${choices.length} ${choices.length === 1 ? "choice" : "choices"} on this page`;
-      entry.marker.bindTooltip(label, { direction: "right" });
-    }
-  }, [ready, routes]);
-  useEffect(() => {
-    for (const { marker, routes: choices } of renderedStarts.current.values()) {
-      const active = choices.some((route) => route.id === selectedId);
-      marker.setRadius(active ? 7 : 5).setStyle({
-        color: active ? "#b95b2c" : "#315e49",
-        opacity: selectedId && !active ? 0.4 : 1,
-      });
-      if (active) marker.bringToFront();
-    }
-  }, [ready, routes, selectedId]);
+    };
+    draw();
+    map.on("zoomend", draw);
+    return () => {
+      map.off("zoomend", draw);
+      group.clearLayers();
+    };
+  }, [ready, routes, selectedId, selectedGroupId]);
   useEffect(() => {
     const map = instance.current;
     if (!ready || !map) return;
@@ -207,13 +239,56 @@ export function HikeMap({
         >
           <p>{routeNotice}</p>
           {onRetryRoute && (
-            <button type="button" onClick={onRetryRoute}>Retry drawing</button>
+            <button type="button" onClick={onRetryRoute}>
+              Retry drawing
+            </button>
           )}
         </div>
       )}
+      {!!chooser.length && !editing && (
+        <section className="map-chooser" aria-labelledby="map-chooser-title">
+          <header>
+            <h2 id="map-chooser-title" tabIndex={-1}>
+              Choose a hike
+            </h2>
+            <button
+              type="button"
+              aria-label="Close hike chooser"
+              onClick={() => setChooser([])}
+            >
+              ×
+            </button>
+          </header>
+          <p>{chooser.length} hikes at this location</p>
+          <ul>
+            {chooser.map((route) => (
+              <li key={route.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    callbacks.current.onSelect(route.id);
+                    setChooser([]);
+                  }}
+                >
+                  <strong>
+                    {route.trailNames.slice(0, 2).join(" / ") ||
+                      route.startName ||
+                      "Unnamed trails"}
+                  </strong>
+                  <span>
+                    {(route.distance / 1609.344).toFixed(1)} mi ·{" "}
+                    {route.startName || "Unnamed start"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <span className="map-caption">
-        {!editing && !!routes.length && "Dots mark starts on this page. "}
-        Shaded regions are selected. Solid borders: downloaded. Dotted borders: download available.
+        {editing
+          ? "Shaded regions are selected. Solid borders: downloaded. Dotted borders: download available."
+          : "All completed hikes are on the map. Numbered clusters zoom; shared starting points offer a hike chooser."}
         {editing && !locked && " Click a region to select it."}
       </span>
     </section>
