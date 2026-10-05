@@ -121,10 +121,11 @@ function blocks(index: Index): number[][] {
 /** Whole-meter path labels underestimate every final route-order sum. A
  * query beyond safe integer labels simply runs without this optimization. */
 function lowerBounds(index: Index, sources: number[], limit: number, metric: 0 | 1 | 2,
-  choices: (node: number) => number[], reversible = false, reuse?: Float64Array): Float64Array | undefined {
+  choices: (node: number) => number[], reversible = false, reuse?: Float64Array, parents?: Int32Array, directedCost?: (id: number, node: number) => number | undefined): Float64Array | undefined {
   const budget = Math.floor(limit);
   if (!Number.isSafeInteger(budget)) return;
   const labels = (reuse ?? new Float64Array(index.incident.length)).fill(Infinity);
+  parents?.fill(-1);
   const heap: [number, number][] = [];
   const push = (distance: number, node: number) => {
     let at = heap.length;
@@ -155,13 +156,59 @@ function lowerBounds(index: Index, sources: number[], limit: number, metric: 0 |
       const edge = index.physical[id]!;
       if (reversible && edge.directions.length !== 2) continue;
       const next = edge.from === node ? edge.to : edge.from;
-      const weight = reversible ? index.approachCost[id]![metric]! : [edge.distance, edge.gain, edge.road][metric]!;
-      if (weight > budget - distance) continue;
+      const weight = directedCost ? directedCost(id, node) : reversible ? index.approachCost[id]![metric]! : [edge.distance, edge.gain, edge.road][metric]!;
+      if (weight === undefined || weight > budget - distance) continue;
       const candidate = distance + weight;
-      if (candidate < labels[next]!) { labels[next] = candidate; push(candidate, next); }
+      if (candidate < labels[next]!) { labels[next] = candidate; if (parents) parents[next] = node; push(candidate, next); }
     }
   }
   return labels;
+}
+
+/** Once a static return witness crosses the prefix, search the residual
+ * graph. A* uses the original conservative labels; visited prefix nodes and
+ * already-used root corridors cannot certify a legal closing path. */
+function residualReturn(index: Index, adjacency: Map<number, number[]>, root: number, current: number,
+  firstEdge: number, visited: Set<number>, labels: Float64Array, budget: number): boolean {
+  const distances = new Map([[current, 0]]);
+  const heap: [number, number, number][] = [];
+  const push = (distance: number, node: number) => {
+    const priority = distance + labels[node]!;
+    let at = heap.length;
+    heap.push([priority, node, distance]);
+    while (at) {
+      const parent = (at - 1) >>> 1;
+      if (heap[parent]![0] <= priority) break;
+      heap[at] = heap[parent]!; at = parent;
+    }
+    heap[at] = [priority, node, distance];
+  };
+  push(0, current);
+  while (heap.length) {
+    const [, node, distance] = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length) {
+      let at = 0;
+      while (at * 2 + 1 < heap.length) {
+        let child = at * 2 + 1;
+        if (child + 1 < heap.length && heap[child + 1]![0] < heap[child]![0]) child++;
+        if (heap[child]![0] >= last[0]) break;
+        heap[at] = heap[child]!; at = child;
+      }
+      heap[at] = last;
+    }
+    if (distances.get(node) !== distance) continue;
+    if (node === root) return true;
+    for (const id of adjacency.get(node) ?? []) {
+      const edge = index.physical[id]!, next = edge.from === node ? edge.to : edge.from;
+      if (next < root || (next !== root && visited.has(next)) || (next === root && id <= firstEdge)) continue;
+      if (edge.distance > budget - distance) continue;
+      const following = distance + edge.distance;
+      if (labels[next]! > budget - following || following >= (distances.get(next) ?? Infinity)) continue;
+      distances.set(next, following); push(following, next);
+    }
+  }
+  return false;
 }
 
 type Circuit = { physical: number[]; nodes: number[]; orientations: number[][]; distance: number; gain: number; road: number };
@@ -193,6 +240,8 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery, cyclicBl
       distance: sums[0]!, gain: sums[1]!, road: sums[2]! } : undefined;
   };
   const scratch = [0, 1, 2].map(() => new Float64Array(index.incident.length));
+  const returnParents = new Int32Array(index.incident.length);
+  const gainScratch = [new Float64Array(index.incident.length), new Float64Array(index.incident.length)];
   for (const block of cyclicBlocks) {
     const adjacency = new Map<number, number[]>();
     for (const id of block) {
@@ -203,11 +252,12 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery, cyclicBl
     for (const choices of adjacency.values()) choices.sort((a, b) => a - b);
     for (const root of [...adjacency.keys()].sort((a, b) => a - b)) {
       let lowerReturn: (Float64Array | undefined)[] = [];
+      let directedGain: (Float64Array | undefined)[] = [];
       yield undefined;
       const path: number[] = [];
       const nodes = [root];
       const visited = new Set(nodes);
-      const frames = [{ node: root, next: 0, sums: [0, 0, 0] }];
+      const frames: { node: number; next: number; sums: number[]; directions: (number[] | undefined)[] }[] = [{ node: root, next: 0, sums: [0, 0, 0], directions: [[0, 0, 0], [0, 0, 0]] }];
       while (frames.length) {
         const frame = frames[frames.length - 1]!;
         const choices = adjacency.get(frame.node)!;
@@ -221,7 +271,7 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery, cyclicBl
         const next = edge.from === frame.node ? edge.to : edge.from;
         const sums = [frame.sums[0]! + edge.distance, frame.sums[1]! + edge.gain, frame.sums[2]! + edge.road];
         let found: Circuit | undefined;
-        if (id !== path.at(-1) && sums.every((sum, metric) => sum <= budget[metric]!)) {
+        if (id !== path.at(-1) && (next === root || !visited.has(next)) && sums.every((sum, metric) => sum <= budget[metric]!)) {
           if (!path.length && next !== root) {
             // A canonical closure must use a different, greater root edge.
             // Excluding the initial edge prevents the bound from promising an
@@ -231,13 +281,44 @@ function* circuits(graph: TrailGraph, index: Index, query: SearchQuery, cyclicBl
                 const edge = index.physical[part]!;
                 return (edge.from === node ? edge.to : edge.from) >= root
                   && ((edge.from !== root && edge.to !== root) || part > id);
-              }), false, scratch[metric]));
+              }), false, scratch[metric], metric === 0 ? returnParents : undefined));
+            directedGain = [0, 1].map(direction => lowerBounds(index, [root], budget[1]!, 1,
+              node => (adjacency.get(node) ?? []).filter(part => {
+                const edge = index.physical[part]!;
+                return (edge.from === node ? edge.to : edge.from) >= root
+                  && ((edge.from !== root && edge.to !== root) || part > id);
+              }), false, gainScratch[direction], undefined, (part, node) => {
+                const edge = index.physical[part]!, other = edge.from === node ? edge.to : edge.from;
+                const id = edge.directions.find(id => graph.edges[id]!.from === (direction ? node : other));
+                return id === undefined ? undefined : Math.floor(graph.edges[id]!.gain);
+              }));
           }
+          const directions = frame.directions.map((previous, direction) => {
+            if (!previous) return;
+            const arc = edge.directions.find(part => {
+              const directed = graph.edges[part]!;
+              return directed.from === (direction ? next : frame.node) && directed.to === (direction ? frame.node : next)
+                && (next !== frame.node || directed.reverse === Boolean(direction));
+            });
+            if (arc === undefined) return;
+            const directed = graph.edges[arc]!;
+            const total = [previous[0]! + Math.floor(directed.distance), previous[1]! + Math.floor(directed.gain),
+              previous[2]! + (directed.connector ? Math.floor(directed.distance) : 0)];
+            if (total.some((sum, metric) => sum > budget[metric]!) || (directedGain[direction] && directedGain[direction]![next]! > budget[1]! - total[1]!)) return;
+            return total;
+          });
+          if (directions.every(value => !value)) { yield undefined; continue; }
           if (sums.some((sum, metric) => lowerReturn[metric] && lowerReturn[metric]![next]! > budget[metric]! - sum)) { yield undefined; continue; }
+          if (next !== root && lowerReturn[0]) {
+            let parent = returnParents[next]!;
+            while (parent >= 0 && parent !== root && !visited.has(parent)) parent = returnParents[parent]!;
+            if (parent >= 0 && parent !== root && !residualReturn(index, adjacency, root, next, path[0] ?? id,
+              visited, lowerReturn[0], budget[0]! - sums[0]!)) { yield undefined; continue; }
+          }
           if (next === root && (!path.length || path[0]! < id)) found = make([...path, id], nodes, sums);
           else if (next > root && !visited.has(next)) {
             path.push(id); nodes.push(next); visited.add(next);
-            frames.push({ node: next, next: 0, sums });
+            frames.push({ node: next, next: 0, sums, directions });
           }
         }
         yield found;
