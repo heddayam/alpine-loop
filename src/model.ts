@@ -108,6 +108,11 @@ export type JobSnapshot = {
   id: string;
   query: SearchQuery;
   status: JobStatus;
+  /** A deeper execution extends the same immutable constraints. */
+  searchEffort?: 'normal' | 'deep';
+  completedEffort?: 'normal' | 'deep';
+  /** Published results remain readable while a deeper execution is queued/running. */
+  resultsRevision?: number;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;

@@ -73,12 +73,27 @@ export async function createJobs(dataDirectory: string, directory: string) {
     return JSON.parse(row.snapshot as string) as JobSnapshot;
   };
   const save = (job: JobSnapshot) => update.run(JSON.stringify(job), job.id);
-  const resultPath = (id: string, staging = false) => join(directory, `${id}${staging ? '.staging' : ''}.sqlite`);
-  const discard = async (id: string) => {
-    for (const staging of [false, true]) for (const suffix of ['', '-journal', '-wal', '-shm']) {
-      await rm(resultPath(id, staging) + suffix, { force: true });
+  const resultPath = (id: string, staging = false, revision = 0) => join(directory,
+    `${id}${staging ? '.staging' : revision ? `.results-${revision}` : ''}.sqlite`);
+  const published = (job: JobSnapshot) => job.resultsRevision !== undefined || job.status === 'completed';
+  const publishedPath = (job: JobSnapshot) => resultPath(job.id, false, job.resultsRevision ?? 0);
+  const discard = async (id: string, keep?: JobSnapshot) => {
+    for (const file of await readdir(directory)) if (file.startsWith(`${id}.`) && file.endsWith('.sqlite')
+      || file.startsWith(`${id}.`) && /\.sqlite-(journal|wal|shm)$/.test(file)) {
+      if (keep && published(keep) && join(directory, file) === publishedPath(keep)) continue;
+      await rm(join(directory, file), { force: true });
     }
   };
+  const restore = (job: JobSnapshot, status: 'failed' | 'cancelled' | 'interrupted', reason: string) => {
+    job.status = published(job) ? 'completed' : status;
+    job.finishedAt = new Date().toISOString(); delete job.queuePosition;
+    job.reason = published(job) ? `Deeper search ${status}: ${reason} Existing results were kept.` : reason;
+    save(job);
+  };
+  let queueSequence = Math.max(Number(db.prepare('SELECT COALESCE(MAX(position), 0) AS size FROM jobs').get()!.size),
+    ...rows().map(job => (job as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0));
+  const queued = () => rows().filter(job => job.status === 'queued').sort((a, b) =>
+    ((a as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0) - ((b as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0));
   // Inputs are separate from frequently polled compact status/history metadata.
   for (const job of rows()) if (job.inputs) {
     saveInputs.run(job.id, JSON.stringify(job.inputs));
@@ -86,13 +101,12 @@ export async function createJobs(dataDirectory: string, directory: string) {
     delete job.inputs; save(job);
   }
   for (const job of rows()) if (job.status === 'running') {
-    job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
-    job.reason = 'The app restarted before this job finished. Copy its settings to submit it again.';
-    save(job); await discard(job.id);
+    restore(job, 'interrupted', 'The app restarted before this search finished.');
+    await discard(job.id, job);
   }
-  const known = new Set(rows().filter(job => job.status === 'completed').map(job => `${job.id}.sqlite`));
+  const known = new Set(rows().filter(published).map(job => publishedPath(job).slice(directory.length + 1)));
   for (const file of await readdir(directory)) {
-    if (/^[a-f0-9-]{36}(\.staging)?\.sqlite(?:-journal|-wal|-shm)?$/.test(file) && !known.has(file)) {
+    if (/^[a-f0-9-]{36}(\.staging|\.results-\d+)?\.sqlite(?:-journal|-wal|-shm)?$/.test(file) && !known.has(file)) {
       await rm(join(directory, file), { force: true });
     }
   }
@@ -101,7 +115,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
   let pumping = false;
   function snapshot(id: string, includeInputs = true): JobSnapshot {
     const job = find(id);
-    if (job.status === 'queued') job.queuePosition = rows().filter(entry => entry.status === 'queued').findIndex(entry => entry.id === id) + 1;
+    if (job.status === 'queued') job.queuePosition = queued().findIndex(entry => entry.id === id) + 1;
     if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
     if (includeInputs) {
       const inputs = loadInputs.get(id);
@@ -113,14 +127,18 @@ export async function createJobs(dataDirectory: string, directory: string) {
     job.status = 'running'; job.startedAt = new Date().toISOString(); delete job.queuePosition; save(job);
     let done: Extract<JobWorkerEvent, { type: 'done' }> | undefined, failure: string | undefined;
     let worker: Worker;
+    const revision = published(job) ? (job.resultsRevision ?? 0) + 1 : 0;
     try {
       worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-        workerData: { directory: dataDirectory, query: job.query, resultPath: resultPath(job.id, true) },
+        workerData: { directory: dataDirectory, query: { ...job.query, effort: job.searchEffort ?? job.query.effort ?? 'normal' },
+          resultPath: resultPath(job.id, true), revision,
+          sourceResultPath: published(job) ? publishedPath(job) : undefined,
+          expectedInputs: published(job) ? JSON.parse(loadInputs.get(job.id)!.facts as string) : undefined },
         resourceLimits: { maxOldGenerationSizeMb: 512 },
       });
     } catch (error) {
-      job.status = 'failed'; job.reason = error instanceof Error ? error.message : 'Could not start this job.';
-      job.finishedAt = new Date().toISOString(); save(job); await discard(job.id); return;
+      restore(job, 'failed', error instanceof Error ? error.message : 'Could not start this job.');
+      await discard(job.id, job); return;
     }
     const finished = new Promise<void>(resolve => {
       worker.on('message', (event: JobWorkerEvent) => {
@@ -145,18 +163,19 @@ export async function createJobs(dataDirectory: string, directory: string) {
     let current = find(job.id);
     if (current.status === 'running' && done && !failure && !closed) {
       try {
-        const store = createRouteStore(resultPath(job.id, true));
+        const store = createRouteStore(resultPath(job.id, true), false, revision);
         let counts: { routeCount: number; groupCount: number };
         try { counts = store.counts; } finally { store.close(); }
-        await rename(resultPath(job.id, true), resultPath(job.id));
+        await rename(resultPath(job.id, true), resultPath(job.id, false, revision));
         const folder = await open(directory, 'r');
         try { await folder.sync(); } finally { await folder.close(); }
-        const storageBytes = (await stat(resultPath(job.id))).size;
+        const storageBytes = (await stat(resultPath(job.id, false, revision))).size;
         // Cancellation/close can arrive during filesystem awaits. Publication itself
         // is synchronous, so the final state check and metadata commit are indivisible.
         current = find(job.id);
         if (current.status === 'running' && !closed) {
           const completed = { ...current, ...counts, storageBytes, status: 'completed' as const,
+            resultsRevision: revision, completedEffort: current.searchEffort ?? current.query.effort ?? 'normal',
             progress: done.progress, finishedAt: new Date().toISOString() };
           db.exec('BEGIN');
           try { save(completed); db.exec('COMMIT'); }
@@ -166,11 +185,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
     }
     current = find(job.id);
     if (current.status === 'running') {
-      current.status = closed ? 'interrupted' : 'failed'; current.finishedAt = new Date().toISOString();
-      current.reason = failure ?? 'The worker ended before all results were saved.';
-      save(current);
+      restore(current, closed ? 'interrupted' : 'failed', failure ?? 'The worker ended before all results were saved.');
     }
-    if (current.status !== 'completed') await discard(job.id);
+    await discard(job.id, current);
     if (active?.id === job.id) active = undefined;
   }
   async function pump() {
@@ -178,7 +195,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
     pumping = true;
     try {
       for (;;) {
-        const next = rows().find(job => job.status === 'queued');
+        const next = queued()[0];
         if (!next || closed) break;
         const execution = run(next);
         if (active?.id === next.id) active.finished = execution;
@@ -188,29 +205,45 @@ export async function createJobs(dataDirectory: string, directory: string) {
   }
   const startPump = () => { void pump(); };
   startPump();
-  function results<T>(id: string, read: (store: ReturnType<typeof createRouteStore>) => T): T {
+  function results<T>(id: string, read: (store: ReturnType<typeof createRouteStore>) => T, revision?: number): T {
     const job = find(id);
-    if (job.status !== 'completed') throw new RequestError('Results are available after this job completes.', 409);
-    const store = createRouteStore(resultPath(id));
+    if (!published(job)) throw new RequestError('Results are available after this job completes.', 409);
+    revision ??= job.resultsRevision ?? 0;
+    if (!Number.isSafeInteger(revision) || revision < 0 || revision > (job.resultsRevision ?? 0)) {
+      throw new RequestError('Choose a published results revision.', 400);
+    }
+    const store = createRouteStore(publishedPath(job), false, revision);
     try { return read(store); } finally { store.close(); }
   }
   return {
     start(query: SearchQuery): JobSnapshot {
       const job: JobSnapshot = { id: randomUUID(), query: structuredClone(query), status: 'queued', createdAt: new Date().toISOString(),
+        searchEffort: query.effort ?? 'normal',
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
-      insert.run(job.id, JSON.stringify(job)); startPump(); return snapshot(job.id, false);
+      insert.run(job.id, JSON.stringify({ ...job, queueSequence: ++queueSequence })); startPump(); return snapshot(job.id, false);
+    },
+    deepen(id: string): JobSnapshot {
+      const job = find(id);
+      if (job.status !== 'completed') throw new RequestError('Wait until this search finishes before searching deeper.', 409);
+      if ((job.completedEffort ?? job.query.effort ?? 'normal') === 'deep') throw new RequestError('This job has already completed its deeper search.', 409);
+      job.resultsRevision ??= 0;
+      job.status = 'queued'; job.searchEffort = 'deep'; delete job.reason; delete job.finishedAt; delete job.startedAt;
+      job.progress = { stage: 'preparing', completedRegions: [], totalRegions: job.query.sections.length,
+        elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 };
+      update.run(JSON.stringify({ ...job, queueSequence: ++queueSequence }), id);
+      startPump(); return snapshot(id, false);
     },
     list: () => {
       const entries = rows();
-      let queuedPosition = 0;
+      const positions = new Map(queued().map((job, index) => [job.id, index + 1]));
       for (const job of entries) {
-        if (job.status === 'queued') job.queuePosition = ++queuedPosition;
+        if (job.status === 'queued') job.queuePosition = positions.get(job.id);
         if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
       }
       return entries.toReversed();
     },
     get: snapshot,
-    page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc') {
+    page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number) {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
         throw new RequestError('Choose a valid results page and sort order.', 400);
       }
@@ -218,14 +251,14 @@ export async function createJobs(dataDirectory: string, directory: string) {
         const page = store.page(offset, groupId, sort, order);
         if (!page) throw new RequestError('This hike is not available.', 404);
         return page;
-      });
+      }, revision);
     },
-    locations: (id: string) => results(id, store => store.locations()),
-    route: (id: string, routeId: string) => results(id, store => {
+    locations: (id: string, revision?: number) => results(id, store => store.locations(), revision),
+    route: (id: string, routeId: string, revision?: number) => results(id, store => {
       const route = store.route(routeId);
       if (!route) throw new RequestError('This route is not available.', 404);
       return route;
-    }),
+    }, revision),
     async cancel(id: string) {
       const job = snapshot(id, false);
       if (terminal(job)) {
@@ -233,11 +266,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
         if (pending) await pending;
         return job;
       }
-      job.status = 'cancelled'; job.finishedAt = new Date().toISOString(); job.reason = 'Cancelled before completion. No unfinished results were saved.';
-      delete job.queuePosition; save(job);
+      restore(job, 'cancelled', 'Cancelled before completion.');
       const running = active?.id === id ? active : undefined;
       if (running) { await running.worker.terminate(); await running.finished; }
-      await discard(id); startPump(); return job;
+      await discard(id, job); startPump(); return job;
     },
     async delete(id: string) {
       const job = find(id);
@@ -256,10 +288,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
       if (current) {
         const job = snapshot(current.id, false);
         if (job.status === 'running') {
-          job.status = 'interrupted'; job.finishedAt = new Date().toISOString();
-          job.reason = 'The app closed before this job finished. Copy its settings to submit it again.'; save(job);
+          restore(job, 'interrupted', 'The app closed before this search finished.');
         }
-        await current.worker.terminate(); await current.finished; await discard(current.id);
+        await current.worker.terminate(); await current.finished; await discard(current.id, find(current.id));
       }
       while (pumping) await new Promise(resolve => setTimeout(resolve, 1));
       db.close(); await release();

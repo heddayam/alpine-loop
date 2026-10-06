@@ -47,14 +47,16 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return reply.code(202).send(jobs.start(query));
   });
   app.get<{ Params: { id: string } }>('/api/jobs/:id', async request => jobs.get(request.params.id));
-  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; sort?: ResultSort; order?: SortOrder } }>('/api/jobs/:id/results', async request =>
-    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order));
-  app.get<{ Params: { id: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id));
+  const revision = (value?: string) => value === undefined ? undefined : Number(value);
+  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
+    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order, revision(request.query.revision)));
+  app.get<{ Params: { id: string }; Querystring: { revision?: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id, revision(request.query.revision)));
+  app.post<{ Params: { id: string } }>('/api/jobs/:id/deepen', async (request, reply) => reply.code(202).send(jobs.deepen(request.params.id)));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => jobs.cancel(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });
-  app.get<{ Params: { id: string; routeId: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId));
-  app.get<{ Params: { id: string; routeId: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
-    const route = jobs.route(request.params.id, request.params.routeId);
+  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId, revision(request.query.revision)));
+  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
+    const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
     return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));
   });
   if (clientDirectory) await app.register(fastifyStatic, { root: clientDirectory });
