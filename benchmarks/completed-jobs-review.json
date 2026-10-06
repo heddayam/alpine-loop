@@ -206,7 +206,9 @@
       "oneCircuitApproachSteps": 21870000,
       "oneCircuitQualifyingWalks": 1059000
     },
-    "conclusion": "Repeated approach enumeration is a concrete dominant cost. Raw minor circuit variants are grouped only after exhaustive circuit/approach enumeration. This does not prove practical distinct-hike discovery impossible; it invalidates the current runtime expectation."
+    "conclusion": "Repeated approach enumeration is a concrete dominant cost. Raw minor circuit variants are grouped only after exhaustive circuit/approach enumeration. This does not prove practical distinct-hike discovery impossible; it invalidates the current runtime expectation.",
+    "localReport": ".local-data/jobs-hotspot-review/report.json",
+    "localReportSha256": "a827c7e406f4dfcbaedf8d165bdb89a847ad9d9461dad1d70aed30d8f421f610"
   },
   "scratchExperiment": {
     "commit": "dbc851a",
