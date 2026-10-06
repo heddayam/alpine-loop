@@ -254,7 +254,10 @@ export function HikeMap({
             <button
               type="button"
               aria-label="Close hike chooser"
-              onClick={() => setChooser([])}
+              onClick={() => {
+                callbacks.current.onPreview(null);
+                setChooser([]);
+              }}
             >
               ×
             </button>
@@ -265,7 +268,12 @@ export function HikeMap({
               <li key={route.id}>
                 <button
                   type="button"
+                  onPointerEnter={() => callbacks.current.onPreview(route.id)}
+                  onPointerLeave={() => callbacks.current.onPreview(null)}
+                  onFocus={() => callbacks.current.onPreview(route.id)}
+                  onBlur={() => callbacks.current.onPreview(null)}
                   onClick={() => {
+                    callbacks.current.onPreview(null);
                     callbacks.current.onSelect(route.id);
                     setChooser([]);
                   }}

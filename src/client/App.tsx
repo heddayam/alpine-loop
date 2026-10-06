@@ -364,6 +364,7 @@ export function App() {
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
   const originalDirectionId = useRef<string | null>(null);
+  const openedRouteId = useRef<string | null>(null);
   const [showStarts, setShowStarts] = useState(false);
   const [starts, setStarts] = useState<JobResults>();
   const [loadingStarts, setLoadingStarts] = useState(false);
@@ -387,7 +388,7 @@ export function App() {
   );
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
-  const activeId = editing ? null : (selectedId ?? hoveredId);
+  const activeId = editing ? null : (hoveredId ?? selectedId);
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const mapDataset =
     !editing && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
@@ -405,6 +406,7 @@ export function App() {
     setSelected(null);
     setSelectedId(null);
     setHoveredId(null);
+    openedRouteId.current = null;
     setShowStarts(false);
     setStarts(undefined);
     setStartsError("");
@@ -542,10 +544,13 @@ export function App() {
         setGeometry(route);
         if (selectedId === route.id) {
           setSelected(route);
-          moveTo(routeBounds(route));
-          requestAnimationFrame(() =>
-            document.getElementById("route-detail-heading")?.focus(),
-          );
+          if (openedRouteId.current !== route.id) {
+            openedRouteId.current = route.id;
+            moveTo(routeBounds(route));
+            requestAnimationFrame(() =>
+              document.getElementById("route-detail-heading")?.focus(),
+            );
+          }
         }
       })
       .catch((failure) => {
@@ -882,6 +887,7 @@ export function App() {
     if (pendingDownload) document.getElementById("confirm-download")?.focus();
   }, [pendingDownload]);
   const pickRoute = (id: string) => {
+    openedRouteId.current = null;
     startsOperation.current?.abort();
     setLoadingStarts(false);
     setSelected(
@@ -1412,9 +1418,9 @@ export function App() {
                           setShowStarts(false);
                         }
                       }}
-                      reversing={!!selectedId && geometry?.id !== selectedId}
+                      reversing={selected.id !== selectedId}
                       reversed={selected.id !== originalDirectionId.current}
-                      directionError={routeError}
+                      directionError={hoveredId ? "" : routeError}
                       onRetry={() => setRouteRetry((value) => value + 1)}
                     >
                       {selected.groupSize > 1 && (
