@@ -25,7 +25,15 @@ import type {
   DownloadSnapshot,
 } from "../data-format.js";
 import { HikeMap } from "./Map.js";
-import { JobsDialog, activeJob, requestSummary } from "./JobsDialog.js";
+import {
+  JobsDialog,
+  activeJob,
+  canSearchDeeper,
+  hasSavedResults,
+  requestSummary,
+  savedResultsURL,
+  searchModeLabel,
+} from "./JobsDialog.js";
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
@@ -151,6 +159,7 @@ function Range({
 function RouteDetails({
   route,
   jobId,
+  resultsRevision,
   onBack,
   backDisabled,
   children,
@@ -162,6 +171,7 @@ function RouteDetails({
 }: {
   route: RouteChoice;
   jobId: string;
+  resultsRevision: number;
   onBack: () => void;
   backDisabled: boolean;
   children: ReactNode;
@@ -258,7 +268,7 @@ function RouteDetails({
           )}
           <a
             className="primary button export-button"
-            href={`/api/jobs/${encodeURIComponent(jobId)}/routes/${encodeURIComponent(route.id)}.gpx`}
+            href={savedResultsURL({ id: jobId, resultsRevision }, `routes/${encodeURIComponent(route.id)}.gpx`)}
             download
           >
             Download GPX
@@ -373,7 +383,7 @@ export function App() {
   const operation = useRef<AbortController | null>(null);
   const pageOperation = useRef<AbortController | null>(null);
   const startsOperation = useRef<AbortController | null>(null);
-  const viewedIds = useRef(new Set<string>());
+  const viewedRevisions = useRef(new Map<string, number>());
   const initialJobId = useRef(
     new URLSearchParams(window.location.search).get("job"),
   );
@@ -383,6 +393,9 @@ export function App() {
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const mapDataset =
     !editing && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
+  const currentViewedJob = jobs.find((job) => job.id === viewedJob?.id) ?? viewedJob;
+  const updatedResultsAvailable = !!viewedJob && !!currentViewedJob &&
+    (currentViewedJob.resultsRevision ?? 0) > (viewedJob.resultsRevision ?? 0);
   const regionName = (id: string) =>
     dataset?.sections.find((section) => section.id === id)?.name ?? id;
   const moveTo = (bounds: Bounds, padding = 40) =>
@@ -408,7 +421,7 @@ export function App() {
     window.history.replaceState(null, "", url);
   };
   const openResults = async (job: JobSnapshot) => {
-    if (job.status !== "completed") {
+    if (!hasSavedResults(job)) {
       setJobsOpen(true);
       setHighlightedJob(job.id);
       return;
@@ -420,17 +433,17 @@ export function App() {
     setError("");
     setJobActionError("");
     try {
-      const [fullJob, page, positions] = await Promise.all([
-        request<JobSnapshot>(
-          `/api/jobs/${encodeURIComponent(job.id)}`,
-          controller.signal,
-        ),
+      const fullJob = await request<JobSnapshot>(
+        `/api/jobs/${encodeURIComponent(job.id)}`,
+        controller.signal,
+      );
+      const [page, positions] = await Promise.all([
         request<JobResults>(
-          `/api/jobs/${encodeURIComponent(job.id)}/results${resultQuery(0, "distance", "asc")}`,
+          savedResultsURL(fullJob, "results", resultQuery(0, "distance", "asc")),
           controller.signal,
         ),
         request<RouteLocation[]>(
-          `/api/jobs/${encodeURIComponent(job.id)}/locations`,
+          savedResultsURL(fullJob, "locations"),
           controller.signal,
         ),
       ]);
@@ -443,7 +456,7 @@ export function App() {
       clearSelection();
       setEditing(false);
       setJobsOpen(false);
-      viewedIds.current.add(job.id);
+      viewedRevisions.current.set(job.id, fullJob.resultsRevision ?? 0);
       localURL(job.id);
       const map = savedMap(fullJob) ?? dataset;
       if (map) moveTo(map.bounds);
@@ -526,7 +539,7 @@ export function App() {
     setRouteError("");
     setGeometry(null);
     void request<RouteView>(
-      `/api/jobs/${encodeURIComponent(viewedJob.id)}/routes/${encodeURIComponent(activeId)}`,
+      savedResultsURL(viewedJob, `routes/${encodeURIComponent(activeId)}`),
       controller.signal,
     )
       .then((route) => {
@@ -549,7 +562,7 @@ export function App() {
           );
       });
     return () => controller.abort();
-  }, [viewedJob?.id, activeId, selectedId, routeRetry]);
+  }, [viewedJob?.id, viewedJob?.resultsRevision, activeId, selectedId, routeRetry]);
   const changePage = async (
     offset: number,
     nextSort = sort,
@@ -564,7 +577,7 @@ export function App() {
     clearSelection();
     try {
       const page = await request<JobResults>(
-        `/api/jobs/${encodeURIComponent(viewedJob.id)}/results${resultQuery(offset, nextSort, nextOrder)}`,
+        savedResultsURL(viewedJob, "results", resultQuery(offset, nextSort, nextOrder)),
         controller.signal,
       );
       if (!controller.signal.aborted) {
@@ -611,19 +624,23 @@ export function App() {
     );
     if (sections?.length) moveTo(regionBounds(sections));
   };
-  const mutateJob = async (job: JobSnapshot, action: "cancel" | "delete") => {
+  const mutateJob = async (job: JobSnapshot, action: "cancel" | "delete" | "deepen") => {
     const controller = new AbortController();
     setPendingJob({ id: job.id, action });
     setJobActionError("");
     try {
       await request(
-        `/api/jobs/${encodeURIComponent(job.id)}${action === "cancel" ? "/cancel" : ""}`,
+        `/api/jobs/${encodeURIComponent(job.id)}${action === "delete" ? "" : `/${action}`}`,
         controller.signal,
-        action === "cancel" ? {} : undefined,
+        action === "delete" ? undefined : {},
         action === "delete" ? "DELETE" : undefined,
       );
       const next = await request<JobSnapshot[]>("/api/jobs", controller.signal);
       setJobs(next);
+      if (action === "deepen") {
+        setHighlightedJob(job.id);
+        setJobsOpen(true);
+      }
       if (action === "delete" && viewedJob?.id === job.id) {
         setViewedJob(undefined);
         setResults(undefined);
@@ -731,6 +748,7 @@ export function App() {
       gain: [gains[0]! * FOOT, gains[1]! * FOOT],
       repetition: repeated / 100,
       includeUnknown,
+      effort: "normal",
       roads: { distance: roadDistance * MILE, fraction: roadFraction / 100 },
     };
     const controller = new AbortController();
@@ -891,14 +909,13 @@ export function App() {
     startsOperation.current?.abort();
     const controller = new AbortController();
     startsOperation.current = controller;
-    const jobId = viewedJob.id,
-      groupId = selected.groupId;
+    const groupId = selected.groupId;
     setShowStarts(true);
     setLoadingStarts(true);
     setStartsError("");
     try {
       const page = await request<JobResults>(
-        `/api/jobs/${encodeURIComponent(jobId)}/results${resultQuery(offset, "distance", "asc", groupId)}`,
+        savedResultsURL(viewedJob, "results", resultQuery(offset, "distance", "asc", groupId)),
         controller.signal,
       );
       if (!controller.signal.aborted && startsOperation.current === controller)
@@ -953,7 +970,7 @@ export function App() {
       </nav>
     ) : null;
   const readyCount = jobs.filter(
-    (job) => job.status === "completed" && !viewedIds.current.has(job.id),
+    (job) => hasSavedResults(job) && viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
   ).length;
   return (
     <main className="workspace">
@@ -962,6 +979,7 @@ export function App() {
           <h1>Alpine Loop</h1>
           <button
             type="button"
+            id="open-search-jobs"
             className="jobs-button"
             onClick={() => {
               setHighlightedJob(null);
@@ -1117,9 +1135,8 @@ export function App() {
                   )}
                 </div>
                 <p className="region-description">
-                  Choose one or more regions. Every eligible start in each
-                  selected region is searched; routes stay within its mountain
-                  and highway boundaries.
+                  Choose one or more prepared regions. Routes stay within their
+                  mountain and highway boundaries.
                 </p>
                 <div className="region-list-heading">
                   <span>
@@ -1292,16 +1309,16 @@ export function App() {
                   {busy ? "Submitting…" : "Submit search job"}
                 </button>
                 <p className="field-hint">
-                  Results are ready after every selected region is fully
-                  explored. You can submit another job while one runs.
+                  Results are ready when the job finishes. You can submit
+                  another job while one runs.
                 </p>
               </fieldset>
             </form>
           ) : !editing && viewedJob && results ? (
             <>
-              <section className="search-summary" aria-label="Completed search">
+              <section className="search-summary" aria-label="Saved search">
                 <div className="section-heading">
-                  <h2>Completed search</h2>
+                  <h2>Search results</h2>
                   <button
                     type="button"
                     className="text-button"
@@ -1327,8 +1344,44 @@ export function App() {
                   {viewedJob.query.includeUnknown
                     ? "Uncertain access included"
                     : "Mapped public access only"}{" "}
-                  · Every selected region fully explored
+                  · {searchModeLabel(viewedJob.completedEffort ?? viewedJob.query.effort)}
                 </p>
+                {currentViewedJob && (
+                  <div className="saved-search-actions">
+                    {updatedResultsAvailable ? (
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={!!pendingJob || loadingPage}
+                        onClick={() => void openResults(currentViewedJob)}
+                      >
+                        View updated results
+                      </button>
+                    ) : canSearchDeeper(currentViewedJob) ? (
+                      <button
+                        type="button"
+                        disabled={!!pendingJob}
+                        onClick={() => void mutateJob(currentViewedJob, "deepen")}
+                      >
+                        {pendingJob?.id === currentViewedJob.id && pendingJob.action === "deepen"
+                          ? "Submitting…"
+                          : "Search deeper"}
+                      </button>
+                    ) : null}
+                    {activeJob(currentViewedJob) && (
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                          setHighlightedJob(currentViewedJob.id);
+                          setJobsOpen(true);
+                        }}
+                      >
+                        Deeper search {currentViewedJob.status} · View progress
+                      </button>
+                    )}
+                  </div>
+                )}
               </section>
               <section
                 className="results"
@@ -1389,6 +1442,7 @@ export function App() {
                     <RouteDetails
                       route={selected}
                       jobId={viewedJob.id}
+                      resultsRevision={viewedJob.resultsRevision ?? 0}
                       onBack={() => {
                         clearSelection();
                         if (mapDataset) moveTo(mapDataset.bounds);
@@ -1561,9 +1615,8 @@ export function App() {
                   </ol>
                 ) : (
                   <p className="empty-state">
-                    No qualifying hikes were found after fully exploring every
-                    selected region. Copy these settings to submit a different
-                    search.
+                    No qualifying hikes were found by this search. Copy these
+                    settings to try a different search.
                   </p>
                 )}
               </section>

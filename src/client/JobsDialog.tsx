@@ -6,6 +6,22 @@ const MILE = 1609.344,
   FOOT = 0.3048;
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
+export const hasSavedResults = (job: JobSnapshot) =>
+  job.resultsRevision !== undefined || job.status === "completed";
+export const canSearchDeeper = (job: JobSnapshot) =>
+  job.status === "completed" &&
+  (job.completedEffort ?? job.query.effort ?? "normal") === "normal";
+export const searchModeLabel = (effort: SearchQuery["effort"]) =>
+  effort === "deep" ? "Deeper search" : "Standard search";
+export const savedResultsURL = (
+  job: Pick<JobSnapshot, "id" | "resultsRevision">,
+  path: string,
+  query = "",
+) => {
+  const parameters = new URLSearchParams(query);
+  parameters.set("revision", String(job.resultsRevision ?? 0));
+  return `/api/jobs/${encodeURIComponent(job.id)}/${path}?${parameters}`;
+};
 export const elapsed = (ms: number) => {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   return seconds < 60
@@ -55,7 +71,7 @@ export function JobsDialog({
   onRefresh: () => void;
   onView: (job: JobSnapshot) => void;
   onCopy: (job: JobSnapshot) => void;
-  onAction: (job: JobSnapshot, action: "cancel" | "delete") => void;
+  onAction: (job: JobSnapshot, action: "cancel" | "delete" | "deepen") => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -68,7 +84,8 @@ export function JobsDialog({
     dialog.current?.showModal();
     return () => {
       dialog.current?.close();
-      previous?.focus();
+      if (previous?.isConnected) previous.focus();
+      else document.getElementById("open-search-jobs")?.focus();
     };
   }, [open]);
   useEffect(() => {
@@ -141,12 +158,19 @@ export function JobsDialog({
                       ? "Cancelling…"
                       : pending.action === "delete"
                         ? "Deleting…"
-                        : "Opening…"
+                        : pending.action === "deepen"
+                          ? "Submitting…"
+                          : "Opening…"
                     : status}
                 </span>
               </header>
               <p className="job-created">
-                {new Date(job.createdAt).toLocaleString()}
+                {new Date(job.createdAt).toLocaleString()} · {" "}
+                {searchModeLabel(
+                  activeJob(job)
+                    ? job.searchEffort ?? job.query.effort
+                    : job.completedEffort ?? job.query.effort,
+                )}
               </p>
               <p className="job-query">{requestSummary(job.query)}</p>
               <p className="job-limits">
@@ -185,25 +209,32 @@ export function JobsDialog({
               {job.status === "running" && (
                 <div className="job-search-progress">
                   <div>
-                    <span>Within-region search</span>
+                    <span>Region search progress</span>
                     {!!job.progress.totalSearchPoints && (
-                      <strong>{Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)}%</strong>
+                      <strong>
+                        {Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)}%
+                      </strong>
                     )}
                   </div>
                   <progress
                     aria-label="Within-region search progress"
                     max={job.progress.totalSearchPoints || undefined}
-                    value={job.progress.totalSearchPoints ? job.progress.completedSearchPoints ?? 0 : undefined}
+                    value={job.progress.totalSearchPoints
+                      ? job.progress.completedSearchPoints ?? 0
+                      : undefined}
                   />
                   {!!job.progress.totalSearchPoints && (
-                    <p>{(job.progress.completedSearchPoints ?? 0).toLocaleString()} of {job.progress.totalSearchPoints.toLocaleString()} loop search points fully explored</p>
+                    <p>
+                      {(job.progress.completedSearchPoints ?? 0).toLocaleString()} of{" "}
+                      {job.progress.totalSearchPoints.toLocaleString()} planned search steps completed
+                    </p>
                   )}
                 </div>
               )}
               {job.status !== "queued" && (
                 <p className="job-regions">
                   {job.progress.completedRegions.length} of{" "}
-                  {job.progress.totalRegions} regions fully explored
+                  {job.progress.totalRegions} regions completed
                   {job.progress.completedRegions.length
                     ? `: ${job.progress.completedRegions.map((id) => jobRegionName(job, id, regionName)).join(" · ")}`
                     : ""}
@@ -219,13 +250,24 @@ export function JobsDialog({
               {["cancelled", "failed", "interrupted"].includes(job.status) && (
                 <p className="job-note">Unfinished results were discarded.</p>
               )}
-              {job.status === "completed" && (
+              {hasSavedResults(job) && (
                 <p className="job-note">
+                  {activeJob(job) ? (
+                    <>
+                      {searchModeLabel(job.completedEffort ?? job.query.effort)} results remain available.
+                      <br />
+                    </>
+                  ) : job.groupCount === 0 ? (
+                    <>
+                      No qualifying hikes were found by this search.
+                      <br />
+                    </>
+                  ) : null}
                   Saved results: {storage(job.storageBytes)}
                 </p>
               )}
               <footer>
-                {job.status === "completed" && (
+                {hasSavedResults(job) && (
                   <button
                     type="button"
                     className="primary"
@@ -233,6 +275,15 @@ export function JobsDialog({
                     onClick={() => onView(job)}
                   >
                     View results
+                  </button>
+                )}
+                {canSearchDeeper(job) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onAction(job, "deepen")}
+                  >
+                    Search deeper
                   </button>
                 )}
                 <button
