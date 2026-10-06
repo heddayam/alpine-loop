@@ -95,6 +95,16 @@ it('preserves equal-road metric witnesses and does not let uncertain shortcuts s
   expect(known.every(route => !route.route.uncertain && route.route.roadDistance === 100)).toBe(true);
 });
 
+it('prefers a qualifying known approach before less road walking on an uncertain approach', async () => {
+  const graph = fixture([[0, 1, 100, { connector: true, unknown: true }],
+    [0, 1, 200, { connector: true }], [1, 2, 1000], [2, 1, 1000]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [0, 3000], repetition: 0.2,
+    roads: { distance: 1000, fraction: 0.5 } });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => !item.route.uncertain && item.route.roadDistance === 400
+    && item.route.distance === 2400)).toBe(true);
+});
+
 it('does not link reverse directions represented by different minor witnesses', async () => {
   const graph = fixture([[0, 1, 9000], [1, 0, 100, { connector: true, gain: 10 }],
     [1, 0, 100, { connector: true, backGain: 10 }]]);
