@@ -43,7 +43,7 @@ async function completeRegion(chosen: (typeof selections)[number]) {
   }, store.candidatePool);
   await verify();
   progress.stage = 'saving'; send();
-  const retained = solved.filter(saved => selection.isHike(saved.route));
+  const retained = solved;
   const savedIds = new Set(retained.map(saved => saved.route.id));
   const used = new Set<number>();
   for (const saved of retained) {

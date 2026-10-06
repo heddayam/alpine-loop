@@ -22,7 +22,7 @@
       "restart interrupts active jobs and automatically continues queued jobs",
       "cancelled, failed and interrupted jobs discard unfinished results while retaining requests",
       "completed maps and GPX remain unchanged after source replacement or removal",
-      "main circuits grouped with 85% common/combined core, matching cyclic order and connected differences at most 1 km; minor witnesses remain internal",
+      "similar main circuits grouped when every pair shares at least 60% of the longer circuit in the same cyclic path order, including roads; retain every exact circuit as a route version with its qualifying starts and directions",
       "retain qualifying minor shortcuts or longer trail variations; reject avoidable road mileage and climb padding before applying minimums",
       "explicit trailhead/parking/road-contact default-start ranking and qualifying alternative starts/directions",
       "accessible Jobs dialog, measured planned-discovery progress, region/stage/elapsed progress and stable completed-job URLs",
@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The bounded solver and single full-search interface are rebuilt and running at http://127.0.0.1:3101/. Every new job uses the full discovery plan; Search deeper is removed and existing saved results remain readable after refresh. The original north 13\u201318 mile/3000\u20135000 foot request completed in 22.4 seconds with 269 families and 19,862 independently verified saved witnesses. The default all-five-region request completed in 318.6 seconds with 4,776 families and 408,250 independently verified witnesses, 943 MB peak RSS, and 2.51 GB saved storage. Final unchanged 24-query observations: 15 completed within 60 seconds, nine honestly unfinished, zero failures, peak RSS 832 MB, worst cancellation 51.2 ms. A separate all-region cancelled observation took 560 ms including cleanup. A prior transient all-region RSS sample exceeded the 1 GB target; no universal runtime or memory ceiling is certified. Final offline verification passes 64 unique Vitest and 4 Node checks. Maintained source is 6,715 lines in 33 files. Bounded discovery may miss valid hikes; all shown routes meet exact submitted limits.",
+  "state": "The updated local app is running at http://127.0.0.1:3000/. Similar main loops form display groups; every exact circuit remains available as a route version, with its qualifying starts and directions. The reviewed north-region 14\u201318 mi / 3000\u20135000 ft request completed in 31.2 seconds with 56 groups, 840 versions and 44,238 independently verified saved walks. The 25 reviewed routes form the four proposed groups. All within-group circuit pairs meet the initial 60% shared-longer-loop and path-order rule. Earlier completed-result files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,818 lines in 33 files. This single-query observation does not replace previous benchmark results or certify exhaustive discovery.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -334,6 +334,20 @@
       "sourceAfter": 6690,
       "sourceFiles": 33,
       "realData": "No new performance measurement: prepared data is absent in this checkout. Prior recorded observations remain unchanged."
+    }
+  },
+  "loopGroupingDecision": {
+    "date": "2026-10-06",
+    "approved": "Group similar main circuits for display; retain exact circuit versions with their own qualifying starts and directions. User authorizes the initial path-difference judgment and later tuning.",
+    "policy": "Share at least 60% of the longer physical main circuit, including roads. Remove the retraced approach before comparison. Common paths must have the same cyclic order. Merge the most similar groups first; every cross pair must qualify. Stable circuit ordering resolves ties. Remove the old aggregate 85% and connected 1 km difference rules.",
+    "persistence": "Grouping does not discard distinct circuits. New completed jobs save their grouping explanation. Existing completed files remain immutable and readable under their original grouping.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "74 Vitest and four Node checks pass; after integration, 15 storage/app checks also pass. Independent exhaustive reference covers grouping and witness correctness.",
+      "realData": "benchmarks/loop-grouping-review.json",
+      "sourceBefore": 6704,
+      "sourceAfter": 6818,
+      "sourceFiles": 33
     }
   }
 }

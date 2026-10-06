@@ -11,7 +11,7 @@ export type CandidatePool = {
 };
 type Core = { edges: number[]; key: number[] };
 type Witnesses = [RouteCandidate | undefined, RouteCandidate | undefined];
-const MIN_LOOP_SIMILARITY = 0.6;
+export const MIN_LOOP_SIMILARITY = 0.6;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 function cycleRange(graph: TrailGraph, route: RouteCandidate): [number, number] {
   let first = 0, last = route.edges.length - 1;

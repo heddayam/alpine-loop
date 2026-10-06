@@ -36,7 +36,6 @@ export async function readDataset(directory: string) {
     const { graph, trails } = await sections.read<SectionGraph>(chosen.section, 'graph');
     graph.starts = chosen.eligible.map(start => ({ ...start, id: `${chosen.section.id}/${start.id}` }));
     if (!query.includeUnknown) graph.edges = graph.edges.filter(edge => edge.access === 'public');
-    function isHike(candidate: RouteCandidate) { return candidate.edges.some(index => !graph.edges[index]!.connector); }
     function describe(candidate: RouteCandidate): StoredRoute {
       const start = graph.starts[candidate.start]!;
       const steps = candidate.edges.map(index => graph.edges[index]!);
@@ -54,7 +53,7 @@ export async function readDataset(directory: string) {
         sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse })),
       };
     }
-    return { graph, isHike, describe };
+    return { graph, describe };
   }
   async function verifyInputs(inputs: JobInputs): Promise<void> {
     const file = join(directory, 'catalog.json');

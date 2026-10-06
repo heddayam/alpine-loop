@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
-import type { CandidatePool } from './diversity.js';
+import { MIN_LOOP_SIMILARITY, type CandidatePool } from './diversity.js';
 import type { RouteCandidate } from './model.js';
 import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
 
@@ -9,7 +9,7 @@ type ChoiceRow = { summary: string; groupId: string; variantId: string; variantC
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   variantId: row.variantId, variantCount: row.variantCount, groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
 const previousSelectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
-const selectionNote = 'Each group contains similar main loops. Every pair shares at least 60% of the longer main loop, including road sections, in the same order. Each exact loop is kept as a route version, with its starting points and qualifying directions. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
+const selectionNote = `Each group contains similar main loops. Every pair shares at least ${MIN_LOOP_SIMILARITY * 100}% of the longer main loop, including road sections, in the same order. Each exact loop is kept as a route version, with its starting points and qualifying directions. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.`;
 
 /** A worker owns this private file until it closes; the server opens only published files. */
 export function createRouteStore(path: string, writable = false, revision = 0) {
@@ -38,6 +38,7 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         CREATE TABLE IF NOT EXISTS groups (revision INTEGER, id TEXT, first_id TEXT NOT NULL, PRIMARY KEY(revision, id));
         CREATE TABLE IF NOT EXISTS variants (revision INTEGER, id TEXT, group_id TEXT NOT NULL, first_id TEXT NOT NULL, PRIMARY KEY(revision, id));
         CREATE INDEX IF NOT EXISTS grouped_variants ON variants(revision, group_id);
+        CREATE TABLE IF NOT EXISTS grouping (note TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS options (revision INTEGER, variant_id TEXT, start_id TEXT, first_id TEXT NOT NULL, PRIMARY KEY(revision, variant_id, start_id));
         CREATE TABLE IF NOT EXISTS routes (revision INTEGER, id TEXT, group_id TEXT NOT NULL, variant_id TEXT NOT NULL, start_id TEXT NOT NULL,
           summary TEXT NOT NULL, steps TEXT NOT NULL, reverse_id TEXT,
@@ -47,7 +48,9 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
         CREATE TEMP TABLE candidates (core TEXT, id TEXT, route TEXT NOT NULL, PRIMARY KEY(core, id));
       `);
+      if (!db.prepare('SELECT 1 FROM grouping').get()) db.prepare('INSERT INTO grouping VALUES (?)').run(selectionNote);
     }
+    const savedNote = previous ? previousSelectionNote : db.prepare('SELECT note FROM grouping').get()!.note as string;
     const addCandidate = writable ? db.prepare('INSERT INTO temp.candidates VALUES (?, ?, ?)') : undefined;
     const candidates = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? ORDER BY id') : undefined;
     const deleteCandidates = writable ? db.prepare('DELETE FROM temp.candidates WHERE core = ?') : undefined;
@@ -103,7 +106,7 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         const rows = db.prepare(`SELECT ${columns} FROM ${from} ORDER BY r.${sort} ${order.toUpperCase()}, r.id ASC LIMIT ? OFFSET ?`)
           .all(...parameters, ROUTES_PER_PAGE, offset) as ChoiceRow[];
         return { routes: rows.map(choice), pageTotal, offset, groupId, variantId, ...counts, sort, order,
-          selectionNote: previous ? previousSelectionNote : selectionNote };
+          selectionNote: savedNote };
       },
       locations(): RouteLocation[] {
         const rows = db.prepare(`SELECT r.summary, r.group_id AS groupId FROM groups g JOIN routes r ON r.revision = g.revision
