@@ -260,6 +260,26 @@ it('retains every qualifying circuit when tied road mileage moves a road from ap
   expect(routes.every(item => item.route.roadDistance === 110 && item.route.repetition === 100 / 1310)).toBe(true);
 });
 
+it('extends the normal candidate pool when searching deeper and regroups the expanded discoveries deterministically', async () => {
+  const graph = fixture([[0, 1, 9500], [1, 0, 100], [1, 0, 200], [1, 2, 700], [2, 0, 700],
+    [0, 3, 2000], [3, 4, 2500], [4, 0, 3000]], [0, 1, 2, 3, 4]);
+  const criteria: SearchQuery = { ...query, distance: [7000, 12_000], repetition: 0.2,
+    roads: { distance: 0, fraction: 0 } };
+  const pool = async (effort: 'normal' | 'deep') => {
+    const keys = new Set<string>();
+    for await (const event of search(graph, { ...criteria, effort })) if (event.type === 'route') {
+      keys.add(`${event.route.start}:${event.route.edges.join(',')}`);
+    }
+    return keys;
+  };
+  const normal = await pool('normal'), deeper = await pool('deep');
+  expect(normal.size).toBeGreaterThan(0);
+  expect([...normal].every(key => deeper.has(key))).toBe(true);
+  const routes = await compareOutputs(graph, { ...criteria, effort: 'deep' });
+  const repeated = await compareOutputs(graph, { ...criteria, effort: 'deep' });
+  expect(repeated).toEqual(routes);
+});
+
 it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
   let state = 123456789;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
