@@ -3,6 +3,40 @@ import { createHash } from 'node:crypto';
 
 export type OracleRoute = { start: number; edges: number[]; distance: number; gain: number; roadDistance: number; repetition: number };
 
+/** Linear independent witness validation for graphs too large to enumerate.
+ * Locate the first repeated vertex, then require the exact reversed stem. */
+export function measure(graph: TrailGraph, query: SearchQuery, start: number, edges: number[]): OracleRoute | undefined {
+  const entrance = graph.starts[start];
+  if (!entrance || (!query.includeUnknown && entrance.access !== 'public') || !edges.length) return;
+  const walk = edges.map(id => graph.edges[id]);
+  if (walk.some(edge => !edge || (!query.includeUnknown && edge.access !== 'public'))) return;
+  const nodes = [entrance.node];
+  for (const edge of walk) { if (edge!.from !== nodes.at(-1)) return; nodes.push(edge!.to); }
+  if (nodes.at(-1) !== entrance.node) return;
+  let attachment = -1, closure = -1;
+  const firstVisit = new Map([[entrance.node, 0]]);
+  for (let at = 1; at < nodes.length; at++) {
+    const prior = firstVisit.get(nodes[at]!);
+    if (prior !== undefined) { attachment = prior; closure = at; break; }
+    firstVisit.set(nodes[at]!, at);
+  }
+  if (closure <= attachment || closure + attachment !== edges.length) return;
+  const circuit = walk.slice(attachment, closure);
+  if (new Set(circuit.map(edge => edge!.trail)).size !== circuit.length) return;
+  for (let at = 0; at < attachment; at++) {
+    const outward = walk[attachment - 1 - at]!, back = walk[closure + at]!;
+    if (outward.trail !== back.trail || outward.from !== back.to || outward.to !== back.from || outward.reverse === back.reverse) return;
+  }
+  const distance = walk.reduce((sum, edge) => sum + edge!.distance, 0);
+  const gain = walk.reduce((sum, edge) => sum + edge!.gain, 0);
+  const roadDistance = walk.reduce((sum, edge) => sum + (edge!.connector ? edge!.distance : 0), 0);
+  const repetition = walk.slice(closure).reduce((sum, edge) => sum + edge!.distance, 0) / distance;
+  const roads = query.roads ?? { distance: 1609.344, fraction: 0.1 };
+  if (distance < query.distance[0] || distance > query.distance[1] || gain < query.gain[0] || gain > query.gain[1]
+    || repetition > query.repetition || roadDistance > roads.distance || roadDistance / distance > roads.fraction) return;
+  return { start, edges, distance, gain, roadDistance, repetition };
+}
+
 /** Tiny-graph reference: choose every simple reversible stem, then every
  * disjoint simple cycle. No production traversal, pruning or metric helpers. */
 export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] {
@@ -93,6 +127,12 @@ export type OracleFamily = { seed: number[]; witnesses: { route: OracleRoute; di
  * common/combined footprint from all of its members at each admission. This
  * deliberately has no streaming normalization, postings or future anchors. */
 export function distinct(graph: TrailGraph, query: SearchQuery): OracleFamily[] {
+  return groupPool(graph, normalized(graph, query));
+}
+
+/** Group only an explicitly supplied, independently validated discovery pool.
+ * Missing candidates affect recall, rather than the legality of kept hikes. */
+export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily[] {
   const compare = (a: number[], b: number[]) => {
     for (let at = 0; at < Math.min(a.length, b.length); at++) if (a[at] !== b[at]) return a[at]! - b[at]!;
     return a.length - b.length;
@@ -113,7 +153,6 @@ export function distinct(graph: TrailGraph, query: SearchQuery): OracleFamily[] 
   };
   type Member = ReturnType<typeof core>;
   const groups: { members: Member[]; routes: OracleRoute[] }[] = [];
-  const paths = normalized(graph, query);
   const circuits = paths.map(core).filter((item, at, all) => all.findIndex(other => !compare(item.key, other.key)) === at).sort((a, b) => compare(a.key, b.key));
   const physical = (trail: number) => graph.edges.find(edge => edge.trail === trail && !edge.reverse)
     ?? graph.edges.find(edge => edge.trail === trail)!;

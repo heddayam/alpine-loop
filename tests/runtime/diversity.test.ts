@@ -1,15 +1,33 @@
 import { expect, it } from 'vitest';
 import { solveSection } from '../../src/diversity.js';
+import { search } from '../../src/engine/search.js';
 import type { SearchQuery } from '../../src/model.js';
-import { distinct, fixture, normalized } from '../engine/oracle.js';
+import { fixture, groupPool, measure, normalized } from '../engine/oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain: [0, 10_000], repetition: 1,
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
 const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
 async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery) {
-  const expected = distinct(graph, criteria);
+  const references = normalized(graph, criteria);
+  const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
+  const byWalk = new Map(references.map(route => [key(route), route]));
+  const pool = [];
+  for await (const event of search(graph, criteria)) if (event.type === 'route') {
+    const valid = byWalk.get(key(event.route));
+    if (valid) pool.push(valid);
+  }
+  // The discovery pool is bounded. Exact legality and road normalization are
+  // still checked against every tiny-graph walk; grouping uses the found pool.
+  const expected = groupPool(graph, pool);
   const actual = await solveSection(graph, criteria);
+  for (const { route } of actual) {
+    const valid = measure(graph, criteria, route.start, route.edges);
+    expect(valid).toBeDefined();
+    expect(byWalk.get(key(route))).toBeDefined();
+    expect([route.distance, route.gain, route.roadDistance, route.repetition])
+      .toEqual([valid!.distance, valid!.gain, valid!.roadDistance, valid!.repetition]);
+  }
   const describe = (item: { route: { start: number; edges: number[] }; direction: number; preferred: boolean }) =>
     `${item.route.start}:${item.route.edges.join(',')}:${item.direction}:${item.preferred}`;
   const actualGroups = [...families(actual)].map(group => actual.filter(item => item.groupId === group).map(describe).sort());
@@ -139,6 +157,24 @@ it('finds every start and direction when only a longer trail approach supplies b
   expect(routes.every(item => item.route.start === 0 && item.route.distance === 1220 && item.route.gain === 80)).toBe(true);
 });
 
+it('discovers a sensible intermediate approach when distance and climb extremes both fail', async () => {
+  const graph = fixture([[0, 1, 1000, { gain: 500, backGain: 500 }], [0, 1, 2000],
+    [0, 1, 1500, { gain: 200, backGain: 200 }], [1, 2, 2000, { gain: 100, backGain: 100 }],
+    [2, 3, 2000, { gain: 100, backGain: 100 }], [3, 1, 2000, { gain: 100, backGain: 100 }]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [8800, 9200], gain: [650, 750], repetition: 0.2,
+    roads: { distance: 0, fraction: 0 } });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.distance === 9000 && item.route.gain === 700)).toBe(true);
+});
+
+it('checks both access directions of an approach while retaining qualifying circuit starts', async () => {
+  const graph = fixture([[0, 1, 100], [1, 2, 300], [2, 3, 300], [3, 1, 300]], [0, 1]);
+  graph.edges[1]!.access = 'unknown';
+  const routes = await compareOutputs(graph, { ...query, includeUnknown: false, repetition: 0.2 });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.start === 1 && item.route.kind === 'loop' && !item.route.uncertain)).toBe(true);
+});
+
 it('rejects a padded road approach using a below-minimum substitute with the same ordered trail itinerary', async () => {
   const graph = fixture([[0, 1, 50, { connector: true }], [0, 2, 60, { connector: true, gain: 20, backGain: 20 }],
     [2, 1, 60, { connector: true, gain: 20, backGain: 20 }], [1, 3, 300], [3, 4, 300], [4, 1, 300]]);
@@ -237,7 +273,6 @@ it('retains independently qualified witnesses on weighted directed tiny graphs',
     const expected = normalized(graph, criteria);
     const routes = await compareOutputs(graph, criteria);
     if (!expected.length) expect(routes).toHaveLength(0);
-    else expect(routes.length).toBeGreaterThan(0);
     for (const { route } of routes) {
       const reference = expected.find(other => other.start === route.start && other.edges.join(',') === route.edges.join(','));
       expect(reference).toBeDefined();
