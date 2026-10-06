@@ -8,11 +8,6 @@ export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
 export const hasSavedResults = (job: JobSnapshot) =>
   job.resultsRevision !== undefined || job.status === "completed";
-export const canSearchDeeper = (job: JobSnapshot) =>
-  job.status === "completed" &&
-  (job.completedEffort ?? job.query.effort ?? "normal") === "normal";
-export const searchModeLabel = (effort: SearchQuery["effort"]) =>
-  effort === "deep" ? "Deeper search" : "Standard search";
 export const savedResultsURL = (
   job: Pick<JobSnapshot, "id" | "resultsRevision">,
   path: string,
@@ -71,7 +66,7 @@ export function JobsDialog({
   onRefresh: () => void;
   onView: (job: JobSnapshot) => void;
   onCopy: (job: JobSnapshot) => void;
-  onAction: (job: JobSnapshot, action: "cancel" | "delete" | "deepen") => void;
+  onAction: (job: JobSnapshot, action: "cancel" | "delete") => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -158,19 +153,12 @@ export function JobsDialog({
                       ? "Cancelling…"
                       : pending.action === "delete"
                         ? "Deleting…"
-                        : pending.action === "deepen"
-                          ? "Submitting…"
-                          : "Opening…"
+                        : "Opening…"
                     : status}
                 </span>
               </header>
               <p className="job-created">
-                {new Date(job.createdAt).toLocaleString()} · {" "}
-                {searchModeLabel(
-                  activeJob(job)
-                    ? job.searchEffort ?? job.query.effort
-                    : job.completedEffort ?? job.query.effort,
-                )}
+                {new Date(job.createdAt).toLocaleString()}
               </p>
               <p className="job-query">{requestSummary(job.query)}</p>
               <p className="job-limits">
@@ -254,7 +242,7 @@ export function JobsDialog({
                 <p className="job-note">
                   {activeJob(job) ? (
                     <>
-                      {searchModeLabel(job.completedEffort ?? job.query.effort)} results remain available.
+                      Saved results remain available.
                       <br />
                     </>
                   ) : job.groupCount === 0 ? (
@@ -275,15 +263,6 @@ export function JobsDialog({
                     onClick={() => onView(job)}
                   >
                     View results
-                  </button>
-                )}
-                {canSearchDeeper(job) && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onAction(job, "deepen")}
-                  >
-                    Search deeper
                   </button>
                 )}
                 <button

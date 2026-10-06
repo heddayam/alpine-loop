@@ -32,12 +32,11 @@ const job = (status: JobSnapshot["status"]): JobSnapshot => ({
 const renderJob = (
   status: JobSnapshot["status"],
   progress: Partial<JobSnapshot["progress"]> = {},
-  snapshot: Partial<JobSnapshot> = {},
 ) =>
   renderToStaticMarkup(
     createElement(JobsDialog, {
       open: true,
-      jobs: [{ ...job(status), ...snapshot, progress: { ...job(status).progress, ...progress } }],
+      jobs: [{ ...job(status), progress: { ...job(status).progress, ...progress } }],
       regionName: () => "Cascades",
       highlightedId: null,
       error: "",
@@ -73,6 +72,8 @@ describe("saved-job interface boundaries", () => {
     }
     expect(renderJob("completed")).toContain("View results");
     expect(renderJob("completed")).toContain("0 hikes");
+    expect(renderJob("completed")).not.toContain("Search deeper");
+    expect(renderJob("completed")).not.toContain("Standard search");
     expect(renderJob("completed")).toContain("No qualifying hikes were found by this search.");
     expect(renderJob("queued")).toContain("Queue position 2");
     const measured = renderJob("running", {totalSearchPoints: 100, completedSearchPoints: 25});
@@ -84,29 +85,9 @@ describe("saved-job interface boundaries", () => {
     expect(renderJob("completed")).not.toContain('fully explored');
     expect(renderJob("running")).toContain('aria-label="Within-region search progress"');
   });
-  it("offers one deeper pass and keeps the earlier publication readable while it runs", () => {
-    expect(renderJob("completed")).toContain("Search deeper");
-    expect(renderJob("completed")).toContain("Standard search");
-    expect(renderJob("completed", {}, {
-      searchEffort: "deep", completedEffort: "deep", resultsRevision: 1,
-    })).not.toContain("Search deeper");
-    for (const status of ["queued", "running"] as const) {
-      const markup = renderJob(status, {}, {
-        searchEffort: "deep", completedEffort: "normal", resultsRevision: 0,
-      });
-      expect(markup).toContain("Deeper search");
-      expect(markup).toContain("Standard search results remain available.");
-      expect(markup).toContain("View results");
-      expect(markup).toContain(">Cancel</button>");
-      expect(markup).not.toContain("Search deeper");
-      expect(markup).not.toContain(">Delete</button>");
-    }
-    expect(renderJob("completed", {}, {
-      searchEffort: "deep", completedEffort: "normal", resultsRevision: 0,
-      reason: "Deeper search was cancelled; earlier results retained.",
-    })).toContain("Search deeper");
+  it("keeps saved result reads pinned to their selected publication", () => {
     const old = { id: "saved/job", resultsRevision: 0 };
-    for (const path of ["results", "locations", "routes/route.gpx"]) {
+    for (const path of ["results", "locations", "routes/route", "routes/route.gpx"]) {
       const url = new URL(savedResultsURL(old, path, "?offset=50&group=hike"), "http://localhost");
       expect(url.pathname).toBe(`/api/jobs/saved%2Fjob/${path}`);
       expect(url.searchParams.get("revision")).toBe("0");

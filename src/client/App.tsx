@@ -28,11 +28,9 @@ import { HikeMap } from "./Map.js";
 import {
   JobsDialog,
   activeJob,
-  canSearchDeeper,
   hasSavedResults,
   requestSummary,
   savedResultsURL,
-  searchModeLabel,
 } from "./JobsDialog.js";
 
 const MILE = 1609.344;
@@ -393,9 +391,6 @@ export function App() {
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const mapDataset =
     !editing && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
-  const currentViewedJob = jobs.find((job) => job.id === viewedJob?.id) ?? viewedJob;
-  const updatedResultsAvailable = !!viewedJob && !!currentViewedJob &&
-    (currentViewedJob.resultsRevision ?? 0) > (viewedJob.resultsRevision ?? 0);
   const regionName = (id: string) =>
     dataset?.sections.find((section) => section.id === id)?.name ?? id;
   const moveTo = (bounds: Bounds, padding = 40) =>
@@ -624,7 +619,7 @@ export function App() {
     );
     if (sections?.length) moveTo(regionBounds(sections));
   };
-  const mutateJob = async (job: JobSnapshot, action: "cancel" | "delete" | "deepen") => {
+  const mutateJob = async (job: JobSnapshot, action: "cancel" | "delete") => {
     const controller = new AbortController();
     setPendingJob({ id: job.id, action });
     setJobActionError("");
@@ -637,10 +632,6 @@ export function App() {
       );
       const next = await request<JobSnapshot[]>("/api/jobs", controller.signal);
       setJobs(next);
-      if (action === "deepen") {
-        setHighlightedJob(job.id);
-        setJobsOpen(true);
-      }
       if (action === "delete" && viewedJob?.id === job.id) {
         setViewedJob(undefined);
         setResults(undefined);
@@ -748,7 +739,7 @@ export function App() {
       gain: [gains[0]! * FOOT, gains[1]! * FOOT],
       repetition: repeated / 100,
       includeUnknown,
-      effort: "normal",
+      effort: "deep",
       roads: { distance: roadDistance * MILE, fraction: roadFraction / 100 },
     };
     const controller = new AbortController();
@@ -1344,44 +1335,8 @@ export function App() {
                   {viewedJob.query.includeUnknown
                     ? "Uncertain access included"
                     : "Mapped public access only"}{" "}
-                  · {searchModeLabel(viewedJob.completedEffort ?? viewedJob.query.effort)}
+                  · Search completed
                 </p>
-                {currentViewedJob && (
-                  <div className="saved-search-actions">
-                    {updatedResultsAvailable ? (
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={!!pendingJob || loadingPage}
-                        onClick={() => void openResults(currentViewedJob)}
-                      >
-                        View updated results
-                      </button>
-                    ) : canSearchDeeper(currentViewedJob) ? (
-                      <button
-                        type="button"
-                        disabled={!!pendingJob}
-                        onClick={() => void mutateJob(currentViewedJob, "deepen")}
-                      >
-                        {pendingJob?.id === currentViewedJob.id && pendingJob.action === "deepen"
-                          ? "Submitting…"
-                          : "Search deeper"}
-                      </button>
-                    ) : null}
-                    {activeJob(currentViewedJob) && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => {
-                          setHighlightedJob(currentViewedJob.id);
-                          setJobsOpen(true);
-                        }}
-                      >
-                        Deeper search {currentViewedJob.status} · View progress
-                      </button>
-                    )}
-                  </div>
-                )}
               </section>
               <section
                 className="results"
