@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -293,6 +293,35 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(`/api/jobs/${job.id}`)).json().status).toBe('interrupted');
     expect((await app.inject(`/api/jobs/${job.id}/results`)).statusCode).toBe(409);
     expect((await readdir(jobDirectory)).some(file => file.startsWith(job.id))).toBe(false);
+  });
+
+  it('keeps the earlier publication after a deeper file was renamed but its metadata was never committed', async () => {
+    const { directory, jobDirectory } = await fixture();
+    let app = await openApp(directory, jobDirectory);
+    const original = await finished(app, (await submit(app)).json());
+    const page = (await app.inject(`/api/jobs/${original.id}/results?revision=0`)).json();
+    const previousFile = join(jobDirectory, 'before-deeper.sqlite');
+    await copyFile(join(jobDirectory, `${original.id}.sqlite`), previousFile);
+    const deeper = await finished(app, (await app.inject({ method: 'POST', url: `/api/jobs/${original.id}/deepen` })).json());
+    expect(deeper.resultsRevision).toBe(1);
+    await app.close();
+    // Reconstruct the filesystem and metadata at the rename-before-publication seam.
+    await copyFile(previousFile, join(jobDirectory, `${original.id}.sqlite`));
+    await rm(previousFile);
+    const metadata = new DatabaseSync(join(jobDirectory, 'metadata.sqlite'));
+    try {
+      metadata.prepare('UPDATE jobs SET snapshot = ? WHERE id = ?').run(JSON.stringify({ ...original,
+        status: 'running', searchEffort: 'deep' }), original.id);
+    } finally { metadata.close(); }
+    app = await openApp(directory, jobDirectory);
+    const restored = (await app.inject(`/api/jobs/${original.id}`)).json() as JobSnapshot;
+    expect(restored).toMatchObject({ status: 'completed', resultsRevision: 0, completedEffort: 'normal' });
+    expect(restored.reason).toContain('interrupted');
+    expect((await app.inject(`/api/jobs/${original.id}/results?revision=0`)).json()).toEqual(page);
+    expect((await app.inject(`/api/jobs/${original.id}/results?revision=1`)).statusCode).toBe(400);
+    expect((await readdir(jobDirectory)).filter(file => file.startsWith(original.id))).toEqual([`${original.id}.sqlite`]);
+    const retried = await finished(app, (await app.inject({ method: 'POST', url: `/api/jobs/${original.id}/deepen` })).json());
+    expect(retried).toMatchObject({ status: 'completed', resultsRevision: 1, completedEffort: 'deep' });
   });
 
   it('fails on changed inputs during execution and discards unfinished results', async () => {
