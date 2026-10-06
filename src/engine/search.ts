@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { quality, walkKey } from './quality.js';
+import { canonical, quality, walkKey } from './quality.js';
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
 import { DEFAULT_ROAD_LIMITS } from '../model.js';
 
@@ -298,7 +298,7 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
 const DISCOVERY = { normal: { passes: 8, circuits: 256, proofs: 128 }, deep: { passes: 24, circuits: 256, proofs: 128 } };
 type Tree = { parent: Int32Array; edge: Int32Array; depth: Int32Array; distance: Float64Array;
   gain: Float64Array; road: Float64Array; upper: Float64Array; ancestors: Int32Array[] };
-type Circuit = { physical: number[]; nodes: number[]; rings: number[][]; key: string };
+type Circuit = { physical: number[]; nodes: number[]; rings: number[][]; key: string; discoveryKey: string };
 class Heap {
   private entries: [number, number][] = [];
   get length() { return this.entries.length; }
@@ -420,10 +420,13 @@ function makeCircuit(graph: TrailGraph, index: Index, parts: number[], start: nu
     node = next;
   }
   if (node !== start || new Set(parts).size !== parts.length || new Set(nodes).size !== nodes.length || (!legalForward && !legalBackward)) return;
-  const order = parts.map(id => index.physical[id]!.trail), lowest = Math.min(...order), at = order.indexOf(lowest);
-  const rotated = [...order.slice(at), ...order.slice(0, at)], reversed = [rotated[0]!, ...rotated.slice(1).toReversed()];
-  const key = JSON.stringify(rotated.join(',') < reversed.join(',') ? rotated : reversed);
-  return { physical: parts, nodes, rings: [legalForward ? forward : undefined, legalBackward ? backward : undefined].filter((ring): ring is number[] => !!ring), key };
+  const order = canonical(parts.map(id => index.physical[id]!.trail));
+  const reversed = [order[0]!, ...order.slice(1).toReversed()];
+  // Discovery's text-based tie order predates the shared numeric identity.
+  // Preserve it so the bounded local shortlist selects the same circuits.
+  const discoveryKey = JSON.stringify(order.join(',') < reversed.join(',') ? order : reversed);
+  return { physical: parts, nodes, rings: [legalForward ? forward : undefined, legalBackward ? backward : undefined].filter((ring): ring is number[] => !!ring),
+    key: JSON.stringify(order), discoveryKey };
 }
 /** Balance circuit trials between disconnected components and distance bands.
  * This is a discovery budget, never a limit on saved hikes or qualifying starts. */
@@ -529,7 +532,7 @@ function localCircuits(graph: TrailGraph, index: Index, query: SearchQuery, core
     if (found && found.key !== core.key) unique.set(found.key, found);
   }
   return [...unique.values()].sort((a, b) => Math.min(...a.rings.map(ring => interest(graph, query, ring)))
-    - Math.min(...b.rings.map(ring => interest(graph, query, ring))) || a.key.localeCompare(b.key)).slice(0, 4);
+    - Math.min(...b.rings.map(ring => interest(graph, query, ring))) || a.discoveryKey.localeCompare(b.discoveryKey)).slice(0, 4);
 }
 
 /** Integer upper core length plus a generous ordered-sum guard makes this
