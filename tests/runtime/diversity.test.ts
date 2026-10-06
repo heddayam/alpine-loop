@@ -188,13 +188,22 @@ it('preserves cyclic common-trail order even when footprints match', async () =>
   expect(families(routes).size).toBeGreaterThan(1);
 });
 
-it('prevents a chain of similar circuits from grouping dissimilar endpoints', async () => {
+it('keeps displayed hikes distinct even when hidden versions differ', async () => {
   const graph = fixture([[0, 1, 2500], [0, 1, 2500], [1, 2, 2500], [1, 2, 2500], [2, 0, 5000]]);
   const routes = await compareOutputs(graph, { ...query, distance: [10_000, 10_000], repetition: 0 });
   // Neighbors share 75%; opposite combinations share only 50%.
   expect(families(routes).size).toBe(2);
   expect(routes.filter(item => item.preferredVariant)).toHaveLength(4);
-  for (const group of families(routes)) expect(new Set(routes.filter(item => item.groupId === group).map(item => item.variantId)).size).toBe(2);
+  const trails = (item: (typeof routes)[number]) => new Set(item.route.edges.map(id => graph.edges[id]!.trail));
+  const share = (a: (typeof routes)[number], b: (typeof routes)[number]) => [...trails(a)].filter(trail => trails(b).has(trail))
+    .reduce((length, trail) => length + graph.edges.find(edge => edge.trail === trail)!.distance, 0) / 10_000;
+  const shown = routes.filter(item => item.preferred);
+  expect(share(shown[0]!, shown[1]!)).toBe(0.5);
+  for (const representative of shown) for (const version of routes.filter(item => item.groupId === representative.groupId)) {
+    expect(share(representative, version)).toBeGreaterThanOrEqual(0.6);
+  }
+  const sizes = [...families(routes)].map(group => new Set(routes.filter(item => item.groupId === group).map(item => item.variantId)).size);
+  expect(sizes.sort()).toEqual([1, 3]);
 });
 
 it('includes roads in main-loop similarity and accepts the exact 60% boundary', async () => {

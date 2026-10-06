@@ -124,8 +124,8 @@ export function normalized(graph: TrailGraph, query: SearchQuery): OracleRoute[]
 
 export type OracleFamily = { seed: number[]; witnesses: { route: OracleRoute; direction: 0 | 1; preferred: boolean; preferredVariant: boolean; preferredStart: boolean }[] };
 
-/** Exhaustive output reference. Keep each exact circuit, then compare every
- * cross pair afresh when considering a merge. No postings or cached group links. */
+/** Exhaustive output reference. Select each circuit's route first, then assign
+ * it to the most similar fixed displayed route. No production grouping helpers. */
 export function distinct(graph: TrailGraph, query: SearchQuery): OracleFamily[] {
   return groupPool(graph, normalized(graph, query));
 }
@@ -152,7 +152,6 @@ export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily
   };
   type Member = ReturnType<typeof core>;
   const circuits = paths.map(core).filter((item, at, all) => all.findIndex(other => !compare(item.key, other.key)) === at).sort((a, b) => compare(a.key, b.key));
-  const groups: { members: Member[] }[] = circuits.map(member => ({ members: [member] }));
   const physical = (trail: number) => graph.edges.find(edge => edge.trail === trail && !edge.reverse)
     ?? graph.edges.find(edge => edge.trail === trail)!;
   const length = (trails: number[]) => [...new Set(trails)].sort((a, b) => a - b).reduce((sum, trail) => sum + physical(trail).distance, 0);
@@ -161,17 +160,6 @@ export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily
     if (compare(cyclic(common), cyclic(b.key.filter(trail => common.includes(trail))))) return 0;
     return length(common) / Math.max(length(a.key), length(b.key));
   };
-  while (true) {
-    let best = -1, left = -1, right = -1;
-    for (let a = 0; a < groups.length; a++) for (let b = a + 1; b < groups.length; b++) {
-      const score = Math.min(...groups[a]!.members.flatMap(x => groups[b]!.members.map(y => similarity(x, y))));
-      if (score >= 0.6 && score > best) { best = score; left = a; right = b; }
-    }
-    if (left < 0) break;
-    groups[left]!.members.push(...groups[right]!.members);
-    groups[left]!.members.sort((a, b) => compare(a.key, b.key));
-    groups.splice(right, 1);
-  }
   const walk = (route: OracleRoute, reverse = false) => JSON.stringify([graph.starts[route.start]!.id,
     (reverse ? route.edges.toReversed() : route.edges).map(id => [graph.edges[id]!.trail, reverse ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse])]);
   const uncertain = (route: OracleRoute) => graph.starts[route.start]!.access === 'unknown'
@@ -186,25 +174,32 @@ export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily
   const rank = { trailhead: 0, parking: 1, 'road-contact': 2 };
   const preference = (a: { route: OracleRoute }, b: { route: OracleRoute }) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
     || quality(a.route, b.route) || graph.starts[a.route.start]!.id.localeCompare(graph.starts[b.route.start]!.id);
-  return groups.map(group => {
-    const witnesses = group.members.flatMap(member => {
-      const anchor = member.key[0]!, first = member.edges.findIndex(edge => edge.trail === anchor);
-      const order = [...member.edges.slice(first), ...member.edges.slice(0, first)].map(edge => edge.trail);
-      const reversed = member.edges.length < 3 ? member.edges[first]!.reverse : compare(order, member.key) !== 0;
-      const reference = member.edges[first]!;
-      const forward = reversed ? !reference.reverse : reference.reverse;
-      const eligible = paths.filter(route => !compare(core(route).key, member.key)).map(route => ({ route,
-        direction: (core(route).edges.find(edge => edge.trail === anchor)!.reverse === forward ? 0 : 1) as 0 | 1,
-        preferred: false, preferredVariant: false, preferredStart: false }));
-      const choices = eligible.filter((item, at) => !eligible.some((other, before) => other.route.start === item.route.start
-        && other.direction === item.direction && (quality(other.route, item.route) < 0 || (quality(other.route, item.route) === 0 && before < at))));
-      choices.sort(preference);
-      choices[0]!.preferredVariant = true;
-      for (const item of choices) item.preferredStart = choices.find(other => other.route.start === item.route.start) === item;
-      return choices;
-    });
-    witnesses.sort(preference);
-    witnesses[0]!.preferred = true;
-    return { seed: group.members[0]!.key, witnesses };
-  });
+  const versions = circuits.map(member => {
+    const anchor = member.key[0]!, first = member.edges.findIndex(edge => edge.trail === anchor);
+    const order = [...member.edges.slice(first), ...member.edges.slice(0, first)].map(edge => edge.trail);
+    const reversed = member.edges.length < 3 ? member.edges[first]!.reverse : compare(order, member.key) !== 0;
+    const reference = member.edges[first]!;
+    const forward = reversed ? !reference.reverse : reference.reverse;
+    const eligible = paths.filter(route => !compare(core(route).key, member.key)).map(route => ({ route,
+      direction: (core(route).edges.find(edge => edge.trail === anchor)!.reverse === forward ? 0 : 1) as 0 | 1,
+      preferred: false, preferredVariant: false, preferredStart: false }));
+    const choices = eligible.filter((item, at) => !eligible.some((other, before) => other.route.start === item.route.start
+      && other.direction === item.direction && (quality(other.route, item.route) < 0 || (quality(other.route, item.route) === 0 && before < at))));
+    choices.sort(preference);
+    choices[0]!.preferredVariant = true;
+    for (const item of choices) item.preferredStart = choices.find(other => other.route.start === item.route.start) === item;
+    return { member, choices };
+  }).sort((a, b) => preference(a.choices[0]!, b.choices[0]!) || compare(a.member.key, b.member.key));
+  const groups: { representative: Member; witnesses: OracleFamily['witnesses'] }[] = [];
+  for (const version of versions) {
+    const matches = groups.map((group, index) => ({ group, index, score: similarity(version.member, group.representative) }))
+      .filter(match => match.score >= 0.6).sort((a, b) => b.score - a.score || a.index - b.index);
+    const group = matches[0]?.group;
+    if (group) group.witnesses.push(...version.choices);
+    else {
+      version.choices[0]!.preferred = true;
+      groups.push({ representative: version.member, witnesses: version.choices });
+    }
+  }
+  return groups.map(group => ({ seed: group.representative.key, witnesses: group.witnesses }));
 }
