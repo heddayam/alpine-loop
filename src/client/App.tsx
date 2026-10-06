@@ -2,6 +2,8 @@ import {
   useEffect,
   useRef,
   useState,
+  lazy,
+  Suspense,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -24,7 +26,6 @@ import type {
   Coverage,
   DownloadSnapshot,
 } from "../data-format.js";
-import { HikeMap } from "./Map.js";
 import {
   JobsDialog,
   activeJob,
@@ -32,6 +33,10 @@ import {
   requestSummary,
   savedResultsURL,
 } from "./JobsDialog.js";
+
+const HikeMap = lazy(async () => ({
+  default: (await import("./Map.js")).HikeMap,
+}));
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
@@ -1679,30 +1684,34 @@ export function App() {
         )}
       </aside>
       {mapDataset && camera ? (
-        <HikeMap
-          dataset={mapDataset}
-          selectedSections={
-            editing ? regions : (viewedJob?.query.sections ?? regions)
-          }
-          editing={editing}
-          locked={busy || downloading || choosingDownload}
-          routes={editing ? [] : locations}
-          activeRoute={activeRoute}
-          selectedId={selectedId}
-          selectedGroupId={selected?.groupId}
-          routeNotice={
-            activeId
-              ? routeError || (!activeRoute ? "Loading route drawing…" : "")
-              : ""
-          }
-          onRetryRoute={
-            routeError ? () => setRouteRetry((value) => value + 1) : undefined
-          }
-          camera={camera}
-          onToggleSection={toggleRegion}
-          onSelect={pickRoute}
-          onPreview={setHoveredId}
-        />
+        <Suspense
+          fallback={<div className="map-placeholder" aria-label="Loading map" />}
+        >
+          <HikeMap
+            dataset={mapDataset}
+            selectedSections={
+              editing ? regions : (viewedJob?.query.sections ?? regions)
+            }
+            editing={editing}
+            locked={busy || downloading || choosingDownload}
+            routes={editing ? [] : locations}
+            activeRoute={activeRoute}
+            selectedId={selectedId}
+            selectedGroupId={selected?.groupId}
+            routeNotice={
+              activeId
+                ? routeError || (!activeRoute ? "Loading route drawing…" : "")
+                : ""
+            }
+            onRetryRoute={
+              routeError ? () => setRouteRetry((value) => value + 1) : undefined
+            }
+            camera={camera}
+            onToggleSection={toggleRegion}
+            onSelect={pickRoute}
+            onPreview={setHoveredId}
+          />
+        </Suspense>
       ) : (
         <div className="map-placeholder" />
       )}

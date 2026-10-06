@@ -1,25 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  map as createMap,
-  tileLayer,
-  polyline,
-  layerGroup,
-  marker,
-  divIcon,
-  geoJSON,
-  DomEvent,
-  type Map as LeafletMap,
-  type LayerGroup,
-  type LatLngBoundsExpression,
-} from "leaflet";
+  Map as MapLibreMap,
+  Marker,
+  Popup,
+  NavigationControl,
+  MercatorCoordinate,
+  LngLatBounds,
+  setWorkerUrl,
+  type GeoJSONSource,
+  type ExpressionSpecification,
+  type LineLayerSpecification,
+} from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { Bounds, HikeRoute, RouteLocation } from "../model.js";
 import type { CatalogView } from "../data-format.js";
 import { clusterLocations } from "./clusters.js";
 
-const leafletBounds = (bounds: Bounds): LatLngBoundsExpression => [
-  [bounds[1], bounds[0]],
-  [bounds[3], bounds[2]],
+setWorkerUrl(workerUrl);
+const empty = { type: "FeatureCollection" as const, features: [] };
+const selected: ExpressionSpecification = [
+  "boolean", ["feature-state", "selected"], false,
 ];
+const border: LineLayerSpecification["paint"] = {
+  "line-color": ["case", selected, "#315e49", "#7f8d7f"],
+  "line-width": ["case", selected, 3, 1.5],
+  "line-opacity": ["case", selected, 0.9, 0.65],
+};
 
 export function HikeMap({
   dataset,
@@ -53,16 +60,16 @@ export function HikeMap({
   onPreview: (id: string | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const instance = useRef<LeafletMap | null>(null);
-  const routeGroup = useRef<LayerGroup | null>(null);
-  const startGroup = useRef<LayerGroup | null>(null);
-  const sectionGroup = useRef<LayerGroup | null>(null);
+  const [map, setMap] = useState<MapLibreMap | null>(null);
+  const [mapError, setMapError] = useState("");
+  const starts = useRef<{ marker: Marker; routes: RouteLocation[] }[]>([]);
   const [chooser, setChooser] = useState<RouteLocation[]>([]);
   const callbacks = useRef({
     onToggleSection,
     onSelect,
     onPreview,
     selectedId,
+    selectedGroupId,
     editing,
     locked,
   });
@@ -71,129 +78,207 @@ export function HikeMap({
     onSelect,
     onPreview,
     selectedId,
+    selectedGroupId,
     editing,
     locked,
   };
-  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (chooser.length) document.getElementById("map-chooser-title")?.focus();
   }, [chooser]);
 
   useEffect(() => {
-    const map = createMap(container.current!);
-    instance.current = map;
-    map.zoomControl.setPosition("bottomright");
-    map.fitBounds(leafletBounds(dataset.bounds), { padding: [30, 30] });
-    tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
-    map.createPane("sections").style.zIndex = "350";
-    sectionGroup.current = layerGroup().addTo(map);
-    routeGroup.current = layerGroup().addTo(map);
-    startGroup.current = layerGroup().addTo(map);
-    const resize = new ResizeObserver(() => map.invalidateSize());
+    let instance: MapLibreMap;
+    try {
+      instance = new MapLibreMap({
+        container: container.current!,
+        bounds: camera.bounds,
+        fitBoundsOptions: { padding: camera.padding ?? 40 },
+        maxZoom: 19,
+        dragRotate: false,
+        touchPitch: false,
+        renderWorldCopies: false,
+        attributionControl: { compact: true },
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tileSize: 256,
+              maxzoom: 19,
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              attribution:
+                '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            },
+            sections: { type: "geojson", data: empty, promoteId: "id" },
+            route: { type: "geojson", data: empty },
+          },
+          layers: [
+            { id: "osm", type: "raster", source: "osm" },
+            {
+              id: "sections-fill",
+              type: "fill",
+              source: "sections",
+              paint: {
+                "fill-color": "#315e49",
+                "fill-opacity": ["case", selected, 0.14, 0.015],
+              },
+            },
+            {
+              id: "sections-solid",
+              type: "line",
+              source: "sections",
+              filter: ["==", ["get", "installed"], true],
+              paint: border,
+            },
+            {
+              id: "sections-dotted",
+              type: "line",
+              source: "sections",
+              filter: ["==", ["get", "installed"], false],
+              paint: { ...border, "line-dasharray": [2, 3] },
+            },
+            {
+              id: "route",
+              type: "line",
+              source: "route",
+              layout: { "line-cap": "round", "line-join": "round" },
+              paint: {
+                "line-color": "#b95b2c", "line-width": 5, "line-opacity": 0.9,
+              },
+            },
+          ],
+        },
+      });
+    } catch {
+      setMapError(
+        "The map could not start. Reload the page or try a browser with graphics acceleration enabled.",
+      );
+      return;
+    }
+    instance.touchZoomRotate.disableRotation();
+    instance.keyboard.disableRotation();
+    instance.addControl(
+      new NavigationControl({ showCompass: false }), "bottom-right",
+    );
+    const tooltip = new Popup({
+      closeButton: false, closeOnClick: false, offset: 12,
+    });
+    instance.on("mousemove", "sections-fill", (event) => {
+      const name = event.features?.[0]?.properties.name;
+      if (typeof name === "string")
+        tooltip.setLngLat(event.lngLat).setText(name).addTo(instance);
+      instance.getCanvas().style.cursor =
+        callbacks.current.editing && !callbacks.current.locked ? "pointer" : "";
+    });
+    instance.on("mouseleave", "sections-fill", () => {
+      tooltip.remove();
+      instance.getCanvas().style.cursor = "";
+    });
+    instance.on("movestart", () => tooltip.remove());
+    instance.on("click", "sections-fill", (event) => {
+      if (!callbacks.current.editing || callbacks.current.locked) return;
+      const id = event.features?.[0]?.properties.id;
+      if (typeof id === "string") callbacks.current.onToggleSection(id);
+    });
+    instance.on("click", "route", (event) => {
+      const id = event.features?.[0]?.properties.id;
+      if (typeof id === "string") callbacks.current.onSelect(id);
+    });
+    instance.once("style.load", () => setMap(instance));
+    const resize = new ResizeObserver(() => instance.resize());
     resize.observe(container.current!);
-    setReady(true);
     return () => {
       resize.disconnect();
-      map.remove();
-      instance.current = null;
-      routeGroup.current = null;
-      startGroup.current = null;
-      sectionGroup.current = null;
+      tooltip.remove();
+      instance.remove();
     };
-  }, [dataset.id]);
+  }, []);
 
   useEffect(() => {
-    if (!ready || !sectionGroup.current) return;
-    sectionGroup.current.clearLayers();
-    for (const section of dataset.sections) {
-      const selected = selectedSections.includes(section.id);
-      const polygon = geoJSON(section.boundary, {
-        pane: "sections",
-        style: {
-          color: selected ? "#315e49" : "#7f8d7f",
-          weight: selected ? 3 : 1.5,
-          opacity: selected ? 0.9 : 0.65,
-          fillOpacity: selected ? 0.14 : 0.015,
-          dashArray: section.installed ? undefined : "3 5",
+    if (!map) return;
+    (map.getSource("sections") as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: dataset.sections.map((section) => ({
+        type: "Feature",
+        id: section.id,
+        geometry: section.boundary,
+        properties: {
+          id: section.id, name: section.name, installed: section.installed,
         },
-      }).addTo(sectionGroup.current);
-      const label = document.createElement("span");
-      label.textContent = section.name;
-      polygon.bindTooltip(label, { sticky: true });
-      polygon.on("click", (event) => {
-        if (!callbacks.current.editing || callbacks.current.locked) return;
-        DomEvent.stopPropagation(event.originalEvent);
-        callbacks.current.onToggleSection(section.id);
-      });
+      })),
+    });
+  }, [map, dataset.sections]);
+  useEffect(() => {
+    if (!map) return;
+    for (const section of dataset.sections) {
+      map.setFeatureState(
+        { source: "sections", id: section.id },
+        { selected: selectedSections.includes(section.id) },
+      );
     }
-  }, [ready, dataset.sections, selectedSections]);
+  }, [map, dataset.sections, selectedSections]);
 
   useEffect(() => {
-    if (!ready || !routeGroup.current) return;
-    const group = routeGroup.current;
-    group.clearLayers();
-    if (!activeRoute) return;
-    const line = polyline(
-      activeRoute.geometry.map(([longitude, latitude]) => [
-        latitude,
-        longitude,
-      ]),
-      { color: "#b95b2c", weight: 5, opacity: 0.9 },
-    ).addTo(group);
-    line.on("click", (event) => {
-      DomEvent.stopPropagation(event.originalEvent);
-      callbacks.current.onSelect(activeRoute.id);
-    });
-  }, [ready, activeRoute]);
-  useEffect(() => {
-    const map = instance.current,
-      group = startGroup.current;
-    if (!ready || !map || !group) return;
-    setChooser([]);
-    const draw = () => {
-      group.clearLayers();
-      for (const cluster of clusterLocations(routes, (route) =>
-        map.project(
-          [route.startPosition[1], route.startPosition[0]],
-          map.getZoom(),
+    if (!map) return;
+    (map.getSource("route") as GeoJSONSource).setData(
+      activeRoute ? {
+        type: "Feature",
+        properties: { id: activeRoute.id },
+        geometry: { type: "LineString", coordinates: activeRoute.geometry },
+      } : empty,
+    );
+  }, [map, activeRoute]);
+
+  const highlightStarts = () => {
+    const { selectedId, selectedGroupId } = callbacks.current;
+    for (const start of starts.current) {
+      start.marker.getElement().classList.toggle(
+        "selected", start.routes.some(
+          (route) => route.id === selectedId || route.groupId === selectedGroupId,
         ),
-      )) {
+      );
+    }
+  };
+  useEffect(() => {
+    highlightStarts();
+    setChooser([]);
+  }, [map, selectedId, selectedGroupId]);
+  useEffect(() => {
+    if (!map) return;
+    setChooser([]);
+    const clear = () => {
+      for (const start of starts.current) start.marker.remove();
+      starts.current = [];
+    };
+    const draw = () => {
+      clear();
+      // World coordinates keep cluster membership independent of panning.
+      const scale = 512 * 2 ** map.getZoom();
+      for (const cluster of clusterLocations(routes, (route) => {
+        const [longitude, latitude] = route.startPosition;
+        const point = MercatorCoordinate.fromLngLat([longitude, latitude]);
+        return { x: point.x * scale, y: point.y * scale };
+      })) {
         const choices = cluster.routes;
-        const active = choices.some(
-          (route) =>
-            route.id === selectedId || route.groupId === selectedGroupId,
-        );
         const multiple = choices.length > 1;
-        const dot = marker([cluster.position[1], cluster.position[0]], {
-          icon: divIcon({
-            className: `hike-marker${multiple ? " hike-cluster" : ""}${active ? " selected" : ""}`,
-            html: multiple
-              ? `<span>${choices.length.toLocaleString()}</span>`
-              : "<span></span>",
-            iconSize: multiple ? [32, 32] : [14, 14],
-            iconAnchor: multiple ? [16, 16] : [7, 7],
-          }),
-          title: multiple
-            ? `${choices.length} hikes${cluster.coincident ? " at this starting point" : " nearby"}`
-            : choices[0]!.startName || "Hike starting point",
-        }).addTo(group);
-        const label = document.createElement("span");
-        label.textContent = multiple
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `hike-marker${multiple ? " hike-cluster" : ""}`;
+        button.textContent = multiple ? choices.length.toLocaleString() : "";
+        button.title = multiple
           ? `${choices.length} hikes · ${cluster.coincident ? "choose a hike" : "zoom to explore"}`
           : choices[0]!.startName || "Unnamed start";
-        dot.bindTooltip(label, { direction: "right" });
+        button.setAttribute("aria-label", button.title);
         if (!multiple) {
-          dot.on("mouseover", () =>
-            callbacks.current.onPreview(choices[0]!.id),
-          );
-          dot.on("mouseout", () => callbacks.current.onPreview(null));
+          for (const event of ["pointerenter", "focus"])
+            button.addEventListener(event, () =>
+              callbacks.current.onPreview(choices[0]!.id),
+            );
+          for (const event of ["pointerleave", "blur"])
+            button.addEventListener(event, () => callbacks.current.onPreview(null));
         }
-        dot.on("click", (event) => {
-          DomEvent.stopPropagation(event.originalEvent);
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
           callbacks.current.onPreview(null);
           if (!multiple) {
             setChooser([]);
@@ -203,35 +288,42 @@ export function HikeMap({
           else {
             setChooser([]);
             map.fitBounds(
-              choices.map((route) => [
-                route.startPosition[1],
-                route.startPosition[0],
-              ]),
-              { padding: [60, 60], maxZoom: 19 },
+              choices.reduce((bounds, route) => {
+                const [longitude, latitude] = route.startPosition;
+                return bounds.extend([longitude, latitude]);
+              }, new LngLatBounds()),
+              { padding: 60, maxZoom: 19, duration: 350 },
             );
           }
         });
+        starts.current.push({
+          marker: new Marker({ element: button }).setLngLat(cluster.position).addTo(map),
+          routes: choices,
+        });
       }
+      highlightStarts();
     };
     draw();
     map.on("zoomend", draw);
     return () => {
       map.off("zoomend", draw);
-      group.clearLayers();
+      clear();
     };
-  }, [ready, routes, selectedId, selectedGroupId]);
+  }, [map, routes]);
   useEffect(() => {
-    const map = instance.current;
-    if (!ready || !map) return;
-    map.fitBounds(leafletBounds(camera.bounds), {
-      padding: [camera.padding ?? 40, camera.padding ?? 40],
-      animate: false,
+    if (!map) return;
+    map.fitBounds(camera.bounds, {
+      padding: camera.padding ?? 40,
+      duration: 350,
     });
-  }, [ready, camera]);
+  }, [map, camera]);
 
   return (
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
+      {mapError && (
+        <div className="map-notice preview-notice" role="alert">{mapError}</div>
+      )}
       {!editing && routeNotice && (
         <div
           className="map-notice preview-notice"

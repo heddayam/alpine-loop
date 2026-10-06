@@ -124,3 +124,11 @@ actual compiled-worker/API/GPX flows, section identity isolation, and download
 integrity/cancellation/reuse. Python preparation checks use tiny committed source
 recipes and synthetic DEMs; their commands are in the preparation guide.
 Real-data timing and capacity measurements are separate from the offline suite.
+
+The map uses MapLibre for continuous zoom and pan. Its implementation stays in
+one client module; Vite builds the pinned worker directly from the dependency.
+The map code loads separately so the form and saved jobs can render first.
+OpenStreetMap raster tiles remain the basemap. Region selection updates feature
+state, and hike selection updates existing marker styling. The
+[renderer review](benchmarks/map-renderer-review.json) records the source and
+compressed-build cost and browser verification.

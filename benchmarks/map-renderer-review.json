@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-06",
+  "baselineCommit": "b9de41e",
+  "decision": "Replace Leaflet with MapLibre for continuous desktop zoom and pan while retaining the current map interface and OpenStreetMap raster basemap. Cartography and route interaction redesign remain separate work.",
+  "dependency": "maplibre-gl@6.13.0",
+  "implementation": [
+    "One map instance with two GeoJSON overlay sources; prepared section IDs are promoted for selection state.",
+    "Update region feature state and existing marker selection styles without rebuilding their geometry or markers.",
+    "Reuse deterministic clustering of all saved result locations in world coordinates, redrawing clusters at zoom end rather than on every animation frame or pan.",
+    "Lazy-load the map module and its CSS; use Vite's bundled worker URL without checked-in worker assets or synchronization scripts.",
+    "Preserve region locking, coincident-start chooser, hover/focus previews, route selection, saved-job geometry, GPX controls, resize handling and reduced-motion-aware camera transitions."
+  ],
+  "maintainedSource": {
+    "method": "scripts/source-size.mjs; normal readable formatting; app plus preparation and tooling",
+    "before": { "files": 33, "lines": 6790, "mapModuleLines": 304 },
+    "after": { "files": 33, "lines": 6889, "mapModuleLines": 396 },
+    "addedLines": 99
+  },
+  "javascriptGzipBytes": {
+    "method": "Node gzipSync of emitted production JavaScript, same default settings before and after. These are compressed-size estimates, not network transfer or interaction timing measurements.",
+    "before": { "entry": 113346 },
+    "after": { "entry": 69672, "map": 284839, "worker": 144651, "total": 499162 }
+  },
+  "verification": {
+    "build": "passed; upstream map chunk exceeds Vite's 500 kB warning threshold and remains separate from the app entry",
+    "typecheck": "passed",
+    "offlineChecks": "75 Vitest and four Node checks pass. Four localhost fixture checks initially failed because the sandbox denied listeners; only those checks were rerun with localhost permission.",
+    "realSavedJob": "fd647958-28c0-487c-8e79-ee3f28bd035d",
+    "browser": [
+      "Real saved hike geometry, route details, GPX control and full-height map render; no browser errors.",
+      "All 46 saved hike locations retained; panning moves markers without changing cluster membership.",
+      "Independent committed network fixture: all three hikes at a coincident start are offered and chooser selection draws the selected route and highlights its marker.",
+      "Switching from a saved job to the current two-section catalog updates polygon geometry without recreating the map.",
+      "Prepared string-ID polygons toggle the corresponding checkboxes and display selected shading; installed regions have solid borders and undownloaded regions have dashed borders.",
+      "Zooming and panning preserve the selected prepared region; no browser errors."
+    ],
+    "limitation": "No claim of measured frame-rate or improvement in raster label quality. The existing live server serves the new client build without restart or interruption of jobs."
+  }
+}
