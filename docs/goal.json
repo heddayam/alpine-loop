@@ -60,7 +60,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is now 5,001 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending. Search and download regions now share exact prepared-section identities, replacing named rectangles, drawing and viewport start filters. Exact section selection, all eligible supplied starts, overlapping-bound isolation, downloads, GPX and reconnect pass offline checks; native preparation fixtures pass. A separate two-second real whole-region observation preserves query/reconnect and stops in 2.2 ms, with exploration honestly unfinished. Browser region selection, polygon toggling, pan/zoom stability and reconnect to the existing live search are verified. Previous 24-query timings describe the historical rectangle scope; new region measurements disclose expanded start scope. A reported invalid vehicle-arrival start is fixed: car access is resolved separately from walking for roads and mapped parking. All five Cascades sections are rebuilt and installed with 10,187 starts; 973 prior vehicle-restricted starts are removed and 11 independently eligible road contacts are added. The reported GPX start is absent, its full walking profile and the closed track remain walkable, and all seven reference walks retain their original starts/profiles/constraints. A focused two-second HTTP observation preserves query/reconnect with no failures and stops in 3.7 ms; exploration is honestly unfinished. Maintained source is 5,010 lines in 30 files. Prior 11,149-start measurements above describe the previous data snapshot.",
+  "state": "Job infrastructure, completed-only browsing and within-region progress implemented. The current exhaustive solver fails ordinary-job runtime acceptance; redesign is required. All five regenerated sections and 10,187 starts are installed. The small whole-region slice completed with 32 families and 80 independently checked witnesses. Frozen measurements: 1 completed, 21 unfinished after 30 seconds, 2 memory failures; default all-region search remained unfinished after 15 minutes. The 5\u201315 minute target is not met. Evidence: benchmarks/completed-jobs-review.json. User steering now requests a fundamental-limit versus design diagnosis.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -140,7 +140,7 @@
     }
   },
   "solverResearch": {
-    "status": "Historical solver research is archived, not an active preparation requirement. The current solver is retained; a bounded observation does not establish complete route-family recovery. The preparation acceptance is source correctness, whole-walk retention, independent section identities and honest whole-app behavior.",
+    "status": "Historical solver research remains archived. The completed-jobs solver replaces streaming search, but measurements reject its ordinary-job runtime. The current redesign investigation is governed by the active user goal, not historical gates.",
     "archive": "archive/before-mountain-preparation-2026-10-05",
     "preservedProductDecision": "Road connections may enable a valid loop but must not add avoidable road distance solely to reach minimum hike length. Constraints and original starts must remain exact."
   },
@@ -266,6 +266,44 @@
     "grouping": "Canonical circuit order; aggregate common and combined physical core-trail sets, 85% shared fraction, common cyclic order, each connected combined-minus-common component at most 1000 m. Approaches/direction do not define main hike identity.",
     "history": "Keep until confirmed manual terminal-job deletion. Cancel/failure/interruption discard partial output; queued jobs continue after restart.",
     "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region, fully explored loop search points within the current region and fully explored regions. The user approved the within-region bar without an explanatory note. No live result stream or speculative ETA.",
-    "validation": "Pending integration and real-data measurement; old bounded observations below describe prior solver/data only."
-  }
+    "validation": {
+      "status": "Infrastructure and exact small-graph correctness verified; ordinary-job runtime not accepted.",
+      "review": "benchmarks/completed-jobs-review.json",
+      "completedSliceFamilies": 32,
+      "completedSliceWitnesses": 80,
+      "frozen24": {
+        "observationMs": 30000,
+        "complete": 1,
+        "unfinished": 21,
+        "failed": 2,
+        "peakRssBytes": 806486016,
+        "worstCancelMs": 44.75104099999953,
+        "worstWorkerExitMs": 33.79583300000013,
+        "completed": [
+          {
+            "id": "stevens-known",
+            "observedMs": 883.413958,
+            "groups": 9,
+            "witnesses": 36
+          }
+        ],
+        "failures": [
+          {
+            "id": "north-bend-known",
+            "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+            "atMs": 15465.395375
+          },
+          {
+            "id": "middle-fork-day",
+            "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+            "atMs": 11513.0075
+          }
+        ]
+      },
+      "allRegionOutcome": "unfinished after 900000ms; cancellation 7.23ms",
+      "sourceLines": 6375,
+      "runtimeTargetMet": false
+    }
+  },
+  "previousPreparationState": "The GMBA/highway preparation replacement is implemented and verified on the complete Washington Cascades. Five independent sections are installed (94,179,785 download bytes; 11,149 section-local starts), using I-90, US 12, US 2 and SR 20 at a 700,000-source-segment capacity. All seven qualifying known walks retain their original starts, exact sampled 3D profiles and constraints. The 24 frozen HTTP observations preserve every query/reconnect with no failures: 5 complete, 19 honestly unfinished at the ten-second measurement window; peak RSS 441,073,664 bytes and worst Stop 14.1 ms. Largest-section search plus route/GPX inspection while exploration remains active peaks at 700,940,288 bytes. Preparation peaks at 1,647,411,200 compiler bytes, separately from app memory. The desktop UI supports actual section footprints/sizes and verified cancellable/reusable downloads with unchanged query resume. Maintained source is now 5,001 lines in 30 files; 30 obsolete tracked files and 72 lockfile entries were retired. This preparation work does not certify complete source-family discovery or replace the solver. Hosted delivery and public prepared-data publication remain pending. Search and download regions now share exact prepared-section identities, replacing named rectangles, drawing and viewport start filters. Exact section selection, all eligible supplied starts, overlapping-bound isolation, downloads, GPX and reconnect pass offline checks; native preparation fixtures pass. A separate two-second real whole-region observation preserves query/reconnect and stops in 2.2 ms, with exploration honestly unfinished. Browser region selection, polygon toggling, pan/zoom stability and reconnect to the existing live search are verified. Previous 24-query timings describe the historical rectangle scope; new region measurements disclose expanded start scope. A reported invalid vehicle-arrival start is fixed: car access is resolved separately from walking for roads and mapped parking. All five Cascades sections are rebuilt and installed with 10,187 starts; 973 prior vehicle-restricted starts are removed and 11 independently eligible road contacts are added. The reported GPX start is absent, its full walking profile and the closed track remain walkable, and all seven reference walks retain their original starts/profiles/constraints. A focused two-second HTTP observation preserves query/reconnect with no failures and stops in 3.7 ms; exploration is honestly unfinished. Maintained source is 5,010 lines in 30 files. Prior 11,149-start measurements above describe the previous data snapshot."
 }

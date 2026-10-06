@@ -1,0 +1,244 @@
+{
+  "date": "2026-10-05",
+  "status": "Job infrastructure, completed-only browsing and within-region progress implemented. The current exhaustive solver fails ordinary-job runtime acceptance; redesign is required.",
+  "implementationCommit": "69de5ce",
+  "methodology": "Exact prepared regions; frozen numeric/access constraints unchanged. Frozen rectangles select regions containing prepared starts independently of access filtering. Thirty-second frozen-query observations and a fifteen-minute all-region observation cannot certify unfinished exploration. Timings are descriptive; the user preview and separate measurement jobs ran concurrently.",
+  "inputs": {
+    "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+    "manifestSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+    "snapshotId": "mountains-2b6ffea097117e3a296303f9f016f38e3ec14b42070cf2e6c2ba1e1cd27dce5a",
+    "preparedStartsSha256": {
+      "mountain-c0f9cfc84ae35acfa51dae73": "47803d52a72bf8503bd2630d6e84e7a7b2a518a9fb3c2e8a461dfa5c74d62899",
+      "mountain-98d01931128751f9f515fa07": "9674abc57532e678ed1bd54054d5e129cf1bcce8ca4bfd615ea74f455476a7ff",
+      "mountain-c3bf848c1f0d95dee5a4a131": "5b5ffa2c71713bfea8684884172eda9f52b516ce7189874b69ad552374c380dd",
+      "mountain-d83464381288bbcb6a784a75": "6c18a221df0a81fbcb160bcacab756d0d70411914c40bb06c459631e98a4a314",
+      "mountain-9b22599e6865d915fd8c8a47": "7853287b6fc61acf349eb7805e2e08d3e4da8c760dd051fcfc7dcf69ed7a2bbb"
+    },
+    "compiledHashes": {
+      "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+      "dataset.js": "cf524a6314788e7fdee60a00fa75eb2b0f079a4751a2d98e7fed48f94a91e8b4",
+      "diversity.js": "b48f15a6f264482c4d0d71257c3468a2840d4ec33fbd5501d1b06e607d83d476",
+      "engine/search.js": "2ed92347e7603cd049e8483024b0a31cc901a41002f80a80358c648618370d18",
+      "jobs.js": "6fb408787ae39ba985a4bc4616c177725d219fccccde4a5518d7d594982a73a9",
+      "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+      "route-store.js": "8b6cc69b6fba96423bd1d8209afd708390af2bad707babd5a43699d93588a44d",
+      "search-worker.js": "26f500147f89570ee6d7eef98f957eb8ed8702bd22d805b1c3853632e00f7ead",
+      "searches.js": "cc5abd258bacae9fbb0b792109b6b408b115852d399d85590d0dff155177ed52",
+      "sections.js": "3618a05a35f66311a595893057586dca3c7799eb629a420f999c62ff97f2a207",
+      "server.js": "ad137bb039d48c7d71e15d4fc892b91505fa46335bdacd4bec3c63ee3af16f9b"
+    },
+    "packageLockSha256": "ee64f85cd5a3fc29208f5038ec8d3b5b6f9f251a953b73b1dce5e79e2c0d5a36",
+    "harnessHashes": {
+      "run.mjs": "508fc148d5e77a35a7beb322650cde46c8038521e907902a4a88e6c1df5622c0",
+      "query.mjs": "4113272d80cc8d11f71a9d574b09646188550bed9e0362db49c1289d7c34ce6d"
+    }
+  },
+  "source": {
+    "beforeCommit": "be0d7a8ccea79d7c17d0e088b1f626e86f5268d0",
+    "beforeLines": 5010,
+    "beforeFiles": 30,
+    "afterLines": 6375,
+    "afterFiles": 32,
+    "method": "scripts/source-size.mjs",
+    "claim": "Source grew by 1365 lines; this change simplifies the hiker interaction, not maintained source size."
+  },
+  "offline": {
+    "command": "npm run verify",
+    "outcome": "Build, TypeScript, 43 Vitest and 4 Node checks pass. Worker/API loopback tests require execution outside the filesystem/network sandbox.",
+    "preparation": "Fresh native compile checks verify explicit start kinds; existing partition checks pass on committed offline fixtures.",
+    "boundaries": [
+      "independent exhaustive raw and road-normalized small-graph oracles",
+      "directed/parallel/self-loop/asymmetric/strict-decimal metrics",
+      "qualifying minor variants and aggregate grouping",
+      "FIFO, restart interruption, queued continuation, cancellation and cleanup",
+      "crash-safe publication, saved GPX after source removal",
+      "completed-only paging and all map locations",
+      "dialog focus, empty completion, reconnect and off-page selection"
+    ]
+  },
+  "preparedData": {
+    "snapshotId": "mountains-2b6ffea097117e3a296303f9f016f38e3ec14b42070cf2e6c2ba1e1cd27dce5a",
+    "catalogSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+    "sections": 5,
+    "starts": 10187,
+    "installed": ".local-data/mountains",
+    "previousData": ".local-data/backups/mountains-before-completed-jobs-2026-10-05",
+    "knownWalksRetained": 7,
+    "knownWalkCheck": "Independently verify SHA/byte counts of all read files, match each entire prior eligible sampled 3D walk to a unique directed continuation from its identical original source start in one complete new section graph. Verify access, original area/distance/gain/repetition/road criteria, simple loop or lollipop structure, and remeasure haversine distance and complete elevation profile. No preparation helpers or solver imports. This demonstrates known-walk retention, not search discovery completeness.",
+    "checkerSha256": "da72bd85ea5a97bc06b101042d5270e117fc022dd13dd0219c023a131a3786c2"
+  },
+  "firstCompleteSlice": {
+    "query": {
+      "sections": [
+        "mountain-9b22599e6865d915fd8c8a47"
+      ],
+      "distance": [
+        0,
+        1609.344
+      ],
+      "gain": [
+        0,
+        1219.2
+      ],
+      "repetition": 0,
+      "roads": {
+        "distance": 0,
+        "fraction": 0
+      },
+      "includeUnknown": true
+    },
+    "jobId": "936deb16-945d-41b1-8fb1-19e36b891757",
+    "workerElapsedMs": 2931.6065830000002,
+    "observedElapsedMs": 3041.608917,
+    "observedRssBytes": 311623680,
+    "groups": 32,
+    "witnesses": 80,
+    "progress": {
+      "stage": "saving",
+      "completedRegions": [
+        "mountain-9b22599e6865d915fd8c8a47"
+      ],
+      "totalRegions": 1,
+      "elapsedMs": 2931.6065830000002,
+      "expansions": 53591,
+      "totalStarts": 1655,
+      "completedStarts": 1655,
+      "totalSearchPoints": 10424,
+      "completedSearchPoints": 10424
+    },
+    "independentVerification": {
+      "jobId": "936deb16-945d-41b1-8fb1-19e36b891757",
+      "checkedWitnesses": 80,
+      "checkerSha256": "4a7836b2f0d89bf552876d455041c459a07fa3778ecfcb12812b3826f6a2a2bf",
+      "method": "Independent source-walk verifier reads retained directed steps against the pinned graph. Checks legal start/access, directed continuity, one simple circuit with optional identical reversible stem, exact traversal-order metrics and all strict submitted limits. Does not import the production solver, grouping, metric helpers or route store."
+    },
+    "storageBytes": 266240
+  },
+  "frozen24": {
+    "observationMs": 30000,
+    "complete": 1,
+    "unfinished": 21,
+    "failed": 2,
+    "peakRssBytes": 806486016,
+    "worstCancelMs": 44.75104099999953,
+    "worstWorkerExitMs": 33.79583300000013,
+    "completed": [
+      {
+        "id": "stevens-known",
+        "observedMs": 883.413958,
+        "groups": 9,
+        "witnesses": 36
+      }
+    ],
+    "failures": [
+      {
+        "id": "north-bend-known",
+        "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+        "atMs": 15465.395375
+      },
+      {
+        "id": "middle-fork-day",
+        "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+        "atMs": 11513.0075
+      }
+    ]
+  },
+  "defaultAllRegions": {
+    "outcome": "unfinished",
+    "observation": {
+      "atMs": 900010.7890420001,
+      "status": "running",
+      "reason": null,
+      "storageBytes": 0,
+      "progress": {
+        "stage": "searching",
+        "completedRegions": [],
+        "totalRegions": 5,
+        "elapsedMs": 900004,
+        "expansions": 585162752,
+        "totalStarts": 10187,
+        "completedStarts": 0,
+        "currentRegion": {
+          "id": "mountain-98d01931128751f9f515fa07",
+          "name": "Washington Cascades \u2014 south of I90, north of US12"
+        },
+        "totalSearchPoints": 18311,
+        "completedSearchPoints": 0
+      }
+    },
+    "osProcessPeakRssBytes": 555253760,
+    "cancel": {
+      "trigger": "observation_window",
+      "requestedMs": 900010.899583,
+      "latencyMs": 7.233166999998502,
+      "status": "cancelled",
+      "activeWorkersBefore": 1,
+      "activeWorkersAfterResponse": 0,
+      "workerExitLatencyMs": 5.550000000046566
+    },
+    "reconnect": {
+      "atMs": 1040.567417,
+      "latencyMs": 0.7420830000000933,
+      "sameJob": true,
+      "sameQuery": true,
+      "status": "running"
+    }
+  },
+  "progress": {
+    "definition": "Fully explored canonical loop search points within the current region; a point finishes only after its circuits and reversible approaches finish. No attempted-start percentage, route count, ETA or explanatory note.",
+    "browser": "Actual new worker displayed 107 of 10424 points / 1%; existing pre-counter user job was cancelled and resubmitted with unchanged settings on explicit authorization.",
+    "screenshot": ".local-data/jobs-user-progress.jpg"
+  },
+  "groupingObservation": {
+    "case": "Two displayed Cabin-SST Spur / Cabin representatives in the small slice overlap by 95.28%, but belong to separate aggregate families. Adding the later representative to the earlier family would reduce its common/combined trail footprint to 84.04%.",
+    "implication": "The approved aggregate rule prevents gradual drift but can still display similar representatives. A family-first replacement may need a revised stable structural definition; do not silently change this UX rule."
+  },
+  "diagnosis": {
+    "userQuery20SecondObservation": {
+      "circuits": 29562,
+      "approachSteps": 13260000,
+      "startDirectionEvaluations": 4530000,
+      "minimumQualifiedWalks": 2,
+      "minimumQualifiedCircuits": 1
+    },
+    "middleFork20SecondObservation": {
+      "circuits": 7,
+      "oneCircuitApproachSteps": 21870000,
+      "oneCircuitQualifyingWalks": 1059000
+    },
+    "conclusion": "Repeated approach enumeration is a concrete dominant cost. Raw minor circuit variants are grouped only after exhaustive circuit/approach enumeration. This does not prove practical distinct-hike discovery impossible; it invalidates the current runtime expectation."
+  },
+  "scratchExperiment": {
+    "commit": "dbc851a",
+    "integrated": false,
+    "correctness": "29 focused solver/oracle/scratch checks pass in the agent experiment.",
+    "observation": "Disk-backed exact scratch avoids previous heap failures, but remained unfinished: North Bend 165s / 2.93GB scratch; Middle Fork 153s / 1.90GB scratch. It is preserved as an experiment, not deployed as a speed fix. Worker adapter is retained locally as a patch."
+  },
+  "evidence": [
+    {
+      "path": ".local-data/completed-jobs-frozen24.json",
+      "sha256": "7a58d986478d9a2fb234d374eb33417e24965523c419b94ebfe66f335ceb4561"
+    },
+    {
+      "path": ".local-data/completed-jobs-all-regions.json",
+      "sha256": "376e5eb342bed34a933bda6e9bbb1a5cd37eab35044286411e45d0d1642b7fa6"
+    },
+    {
+      "path": ".local-data/jobs-final-slice-verification/report.json",
+      "sha256": "a91e91037c8b7e87163aec41fbf7d78774e481340881f2b11cecc35459709a05"
+    },
+    {
+      "path": ".local-data/jobs-final-slice-verification/independent.json",
+      "sha256": "d039b207dd09ffe5c1a55ca8a660c451e1abc57b6c902d548318e789211ab754"
+    },
+    {
+      "path": ".local-data/jobs-known-walks.json",
+      "sha256": "007c40633722d31218c5281e1db06bc26f130ad7ed23f92a722c47d94d4ac0e1"
+    },
+    {
+      "path": ".local-data/jobs-user-progress.jpg",
+      "sha256": "7e03a161ad59eee0d2e4bcbecf460a1f6a928e86721fe81b16e6eb13a9b4c999"
+    }
+  ],
+  "nextExperiment": "Optimize one circuit\u2019s qualifying access separately for each start/direction with exact joint resource constraints and safe branch-and-bound; compare every retained witness against the independent oracle, then rerun the dominant real query. Investigate symbolic local-detour choices only after that measurement. No speed guarantee, hidden caps or approximate constraints."
+}

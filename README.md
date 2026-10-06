@@ -56,7 +56,9 @@ do not certify legal parking or current road conditions.
 The Jobs dialog shows saved requests, FIFO queue positions, stages, current region,
 a progress bar for fully explored loop search points, fully explored regions and
 elapsed time. Closing it leaves jobs running. Jobs
-search without a time or result cap; several minutes is normal for broad searches.
+search without a time or result cap. The current solver is too slow for ordinary
+whole-region searches; the [measured review](benchmarks/completed-jobs-review.json)
+records unfinished jobs, memory failures and the required solver redesign.
 Completed jobs become ready in the app without changing your screen.
 
 History and completed geometry live in `.local-data/jobs`. Reloading restores

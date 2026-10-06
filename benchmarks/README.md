@@ -6,6 +6,15 @@ physical-trail traversal divided by total route distance. Its SHA-256 remains
 `bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4`.
 Do not change these requests to make an implementation pass.
 
+The [completed-jobs review](completed-jobs-review.json) records the current
+implementation: one frozen request completed, 21 remained unfinished after
+30 seconds, and two failed at the worker memory boundary. The default all-region
+request remained unfinished after 15 minutes. These observations reject the
+ordinary-job runtime target; they do not certify complete discovery or absence
+of qualifying hikes. Private profiling identifies repeated approach enumeration
+for one main circuit as a dominant cost. A disk-backed scratch experiment is
+preserved separately and is not deployed as a runtime fix.
+
 The app now searches exact prepared sections. The harness uses each frozen
 rectangle only to identify sections containing at least one prepared start in
 the installed dataset, then searches every eligible start in those sections.
