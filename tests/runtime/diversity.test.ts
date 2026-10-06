@@ -105,6 +105,19 @@ it('prefers a qualifying known approach before less road walking on an uncertain
     && item.route.distance === 2400)).toBe(true);
 });
 
+it('keeps road-minimum certificates separate for known and uncertain starts at the same location', async () => {
+  const graph = fixture([[0, 1, 1000], [1, 0, 50, { connector: true, unknown: true }],
+    [1, 0, 100, { connector: true }]], [0, 0]);
+  graph.starts[1]!.id = 'uncertain-entry';
+  graph.starts[1]!.access = 'unknown';
+  const routes = await compareOutputs(graph, { ...query, distance: [1075, 1100], repetition: 0 });
+  // The below-minimum unknown shortcut cannot suppress a certain hike, but
+  // it is equally uncertain from the second entrance and prevents padding.
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.start === 0 && !item.route.uncertain
+    && item.route.roadDistance === 100)).toBe(true);
+});
+
 it('does not link reverse directions represented by different minor witnesses', async () => {
   const graph = fixture([[0, 1, 9000], [1, 0, 100, { connector: true, gain: 10 }],
     [1, 0, 100, { connector: true, backGain: 10 }]]);
