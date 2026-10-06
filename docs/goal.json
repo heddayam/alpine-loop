@@ -22,7 +22,7 @@
       "restart interrupts active jobs and automatically continues queued jobs",
       "cancelled, failed and interrupted jobs discard unfinished results while retaining requests",
       "completed maps and GPX remain unchanged after source replacement or removal",
-      "similar main circuits grouped when every pair shares at least 60% of the longer circuit in the same cyclic path order, including roads; retain every exact circuit as a route version with its qualifying starts and directions",
+      "choose fixed displayed main loops in existing route-preference order; every exact circuit version must share at least 60% of the longer main loop with its displayed loop in the same cyclic path order, including roads; no two displayed main loops pass that rule; retain versions with their qualifying starts and directions",
       "retain qualifying minor shortcuts or longer trail variations; reject avoidable road mileage and climb padding before applying minimums",
       "explicit trailhead/parking/road-contact default-start ranking and qualifying alternative starts/directions",
       "accessible Jobs dialog, measured planned-discovery progress, region/stage/elapsed progress and stable completed-job URLs",
@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The updated local app is running at http://127.0.0.1:3000/. Similar main loops form display groups; every exact circuit remains available as a route version, with its qualifying starts and directions. The reviewed north-region 14\u201318 mi / 3000\u20135000 ft request completed in 31.2 seconds with 56 groups, 840 versions and 44,238 independently verified saved walks. The 25 reviewed routes form the four proposed groups. All within-group circuit pairs meet the initial 60% shared-longer-loop and path-order rule. Earlier completed-result files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,818 lines in 33 files. This single-query observation does not replace previous benchmark results or certify exhaustive discovery.",
+  "state": "The updated local app is running at http://127.0.0.1:3000/. Each route version is grouped against a fixed displayed main loop; hidden versions cannot keep similar displayed hikes apart. The same north-region 14\u201318 mi / 3000\u20135000 ft request completed in 35.9 seconds with 46 displayed groups, 840 versions and 44,238 independently verified saved walks. Both reviewed Big Sandy/Frog Pond and Corral Creek/Sasse pairs now share groups. All version-to-display checks pass, and none of the 1,035 displayed pairs meets the similarity rule. The retained walks, versions, starts, directions and geometry are unchanged from the previous result. Four earlier completed files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,790 lines in 33 files. This single-query observation does not certify exhaustive discovery or replace the frozen benchmark corpus.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -339,15 +339,17 @@
   "loopGroupingDecision": {
     "date": "2026-10-06",
     "approved": "Group similar main circuits for display; retain exact circuit versions with their own qualifying starts and directions. User authorizes the initial path-difference judgment and later tuning.",
-    "policy": "Share at least 60% of the longer physical main circuit, including roads. Remove the retraced approach before comparison. Common paths must have the same cyclic order. Merge the most similar groups first; every cross pair must qualify. Stable circuit ordering resolves ties. Remove the old aggregate 85% and connected 1 km difference rules.",
+    "policy": "Choose the preferred qualifying route for each exact circuit first. Process circuits in the existing route-preference order. Attach each circuit to the most similar qualifying displayed loop already chosen, or show it as a new hike if none qualifies. Share at least 60% of the longer physical main circuit, including roads, after removing the retraced approach; shared paths must have the same cyclic order. Keep displayed routes fixed. Existing route preference resolves tied matches. Every version must match its displayed loop; versions need not all match one another. No two displayed loops can meet this rule.",
     "persistence": "Grouping does not discard distinct circuits. New completed jobs save their grouping explanation. Existing completed files remain immutable and readable under their original grouping.",
     "validation": {
       "buildAndTypecheck": "Passed",
-      "offline": "74 Vitest and four Node checks pass; after integration, 15 storage/app checks also pass. Independent exhaustive reference covers grouping and witness correctness.",
-      "realData": "benchmarks/loop-grouping-review.json",
-      "sourceBefore": 6704,
-      "sourceAfter": 6818,
+      "offline": "75 Vitest and four Node checks pass, including an independent exhaustive tiny-graph reference, a hidden-version regression and immutable stored explanations.",
+      "realData": "benchmarks/display-grouping-review.json",
+      "sourceBefore": 6818,
+      "sourceAfter": 6790,
       "sourceFiles": 33
-    }
+    },
+    "previousPolicy": "Share at least 60% of the longer physical main circuit, including roads. Remove the retraced approach before comparison. Common paths must have the same cyclic order. Merge the most similar groups first; every cross pair must qualify. Stable circuit ordering resolves ties. Remove the old aggregate 85% and connected 1 km difference rules.",
+    "correction": "User reported near-identical Teanaway main results that differ mainly in access. The prior all-pairs grouping allowed hidden versions to block a merge between similar displayed routes. Fixed representatives replace that machinery without adding a second grouping pass or threshold."
   }
 }

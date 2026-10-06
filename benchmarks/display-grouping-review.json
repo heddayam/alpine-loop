@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-06",
+  "query": {
+    "sections": [
+      "mountain-c3bf848c1f0d95dee5a4a131"
+    ],
+    "effort": "deep",
+    "distance": [
+      22530.816,
+      28968.192000000003
+    ],
+    "gain": [
+      914.4000000000001,
+      1524
+    ],
+    "repetition": 0.1,
+    "includeUnknown": true,
+    "roads": {
+      "distance": 8046.72,
+      "fraction": 0.35
+    }
+  },
+  "threshold": 0.6,
+  "rule": "Choose the preferred qualifying route for each exact circuit first. Process circuits in the existing route-preference order. Attach each circuit to the most similar qualifying displayed loop already chosen, or show it as a new hike if none qualifies. Share at least 60% of the longer physical main circuit, including roads, after removing the retraced approach; shared paths must have the same cyclic order. Keep displayed routes fixed. Existing route preference resolves tied matches. Every version must match its displayed loop; versions need not all match one another. No two displayed loops can meet this rule.",
+  "previous": {
+    "jobId": "489eb52d-aa07-48aa-8077-6d5c359dfc58",
+    "groups": 56,
+    "savedWalks": 44238,
+    "review": "benchmarks/loop-grouping-review.json"
+  },
+  "current": {
+    "jobId": "fd647958-28c0-487c-8e79-ee3f28bd035d",
+    "elapsedMs": 35949.757291999995,
+    "groupCount": 46,
+    "variantCount": 840,
+    "verifiedWalks": 44238,
+    "groupedChecks": 840,
+    "displayChecks": 1035,
+    "examples": [
+      {
+        "name": "Big Sandy / Frog Pond",
+        "routeIds": [
+          "17016c9726a5c8ccf0b9413e6b82d229",
+          "f0965899517950f4c9805d838111df66"
+        ],
+        "groupId": "6f3eda2030e21d3edb0cd8e354c2d234"
+      },
+      {
+        "name": "Corral Creek / Sasse",
+        "routeIds": [
+          "d7ad1fdcda70cf64da211a8df6907239",
+          "b13ebfd899832cae6da60aa838c82b30"
+        ],
+        "groupId": "994cb1ab8f42798d17e173d3fd2cceec"
+      }
+    ],
+    "reviewedGroups": [
+      [
+        1,
+        3,
+        4,
+        5,
+        7,
+        8,
+        11,
+        12,
+        14,
+        15,
+        17,
+        18,
+        19,
+        20,
+        22,
+        24,
+        25
+      ],
+      [
+        2,
+        9,
+        10,
+        13,
+        23
+      ],
+      [
+        6,
+        16,
+        21
+      ]
+    ],
+    "previousUnchanged": true,
+    "unchangedFiles": 4,
+    "retainedDataUnchanged": true,
+    "storageBytes": 324775936
+  },
+  "verification": "Read only completed SQLite files after confirming DELETE journaling. Independently reconstructed every saved walk from directed prepared edges and checked its start, connections, closure, simple main circuit, retraced stem, exact measurements and submitted limits. All 840 versions match their fixed displayed representative; all 1,035 displayed pairs remain distinct under the same shared-length and cyclic-order rule. SQL comparison confirms the full previous set of walks, exact versions, per-version starts, direction links and geometry is unchanged. SHA-256 comparison confirms all four earlier published files are unchanged.",
+  "ui": "Real browser confirms the new 46-hike result and the merged Big Sandy group with 201 versions. Focusing a version changes the map preview while keeping the selected route and GPX link unchanged.",
+  "source": {
+    "before": 6818,
+    "after": 6790,
+    "files": 33
+  },
+  "limits": "One real query; its 35.9-second duration is an observation, not a guarantee. Bounded discovery can miss qualifying hikes. Versions in a group can differ from each other; each must match the fixed displayed loop. Older saved searches retain their original grouping and explanation.",
+  "diagnosis": {
+    "area": "Teanaway displayed starts, latitude 47.2–47.45 and longitude -121.1–-120.7",
+    "displayedGroups": 27,
+    "similarDisplayedPairs": 18,
+    "examples": [
+      {
+        "routeIds": [
+          "d7ad1fdcda70cf64da211a8df6907239",
+          "b13ebfd899832cae6da60aa838c82b30"
+        ],
+        "mainLoopShare": 0.8150596042305139,
+        "trailOnlyShare": 0.9133736039719661,
+        "hiddenCrossPairShare": 0.5483192516060932,
+        "hiddenCrossPairOrderMatches": true
+      },
+      {
+        "routeIds": [
+          "17016c9726a5c8ccf0b9413e6b82d229",
+          "f0965899517950f4c9805d838111df66"
+        ],
+        "mainLoopShare": 0.8030534706341075,
+        "trailOnlyShare": 0.9285106556150591,
+        "hiddenCrossPairShare": 0,
+        "hiddenCrossPairOrderMatches": false
+      }
+    ],
+    "cause": "The previous all-pairs requirement allowed a dissimilar hidden version to block grouping of two similar displayed main loops."
+  }
+}
