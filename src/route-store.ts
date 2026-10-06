@@ -4,7 +4,7 @@ import type { CandidatePool } from './diversity.js';
 import type { RouteCandidate } from './model.js';
 import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
 
-export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
+export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean; preferredStart: boolean };
 type ChoiceRow = { summary: string; groupId: string; groupSize: number; reverseId: string | null };
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
@@ -33,18 +33,13 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         PRIMARY KEY(revision, id));
       CREATE INDEX IF NOT EXISTS members ON routes(revision, group_id, start_id);
       CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
-      CREATE TEMP TABLE candidates (core TEXT, witness TEXT, route TEXT NOT NULL, PRIMARY KEY(core, witness));
+      CREATE TEMP TABLE candidates (core TEXT, id TEXT, route TEXT NOT NULL, PRIMARY KEY(core, id));
     `);
-    const getCandidate = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? AND witness = ?') : undefined;
-    const setCandidate = writable ? db.prepare('INSERT OR REPLACE INTO temp.candidates VALUES (?, ?, ?)') : undefined;
-    const candidates = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? ORDER BY witness') : undefined;
+    const addCandidate = writable ? db.prepare('INSERT INTO temp.candidates VALUES (?, ?, ?)') : undefined;
+    const candidates = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? ORDER BY id') : undefined;
     const deleteCandidates = writable ? db.prepare('DELETE FROM temp.candidates WHERE core = ?') : undefined;
     const candidatePool: CandidatePool | undefined = writable ? {
-      get(core, witness) {
-        const row = getCandidate!.get(core, witness);
-        return row ? JSON.parse(row.route as string) as RouteCandidate : undefined;
-      },
-      set: (core, witness, route) => { setCandidate!.run(core, witness, JSON.stringify(route)); },
+      add: (core, route) => { addCandidate!.run(core, route.id, JSON.stringify(route)); },
       *routes(core) { for (const row of candidates!.iterate(core)) yield JSON.parse(row.route as string) as RouteCandidate; },
       delete: core => { deleteCandidates!.run(core); },
     } : undefined;
@@ -55,27 +50,20 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
     const detail = db.prepare(`SELECT ${columns}, r.steps FROM routes r WHERE revision = ${revision} AND id = ?`);
     const getGeometry = db.prepare('SELECT points FROM geometry WHERE section_id = ? AND trail_id = ?');
     const addRoute = writable ? db.prepare(`INSERT INTO routes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`): undefined;
-    const addGroup = writable ? db.prepare('INSERT OR IGNORE INTO groups VALUES (?, ?, ?)') : undefined;
-    const setGroup = writable ? db.prepare('UPDATE groups SET first_id = ? WHERE revision = ? AND id = ?') : undefined;
-    const addOption = writable ? db.prepare('INSERT OR IGNORE INTO options VALUES (?, ?, ?, ?)') : undefined;
-    const setOption = writable ? db.prepare('UPDATE options SET first_id = ? WHERE revision = ? AND group_id = ? AND start_id = ?') : undefined;
+    const addGroup = writable ? db.prepare('INSERT INTO groups VALUES (?, ?, ?)') : undefined;
+    const addOption = writable ? db.prepare('INSERT INTO options VALUES (?, ?, ?, ?)') : undefined;
     const addGeometry = writable ? db.prepare('INSERT OR IGNORE INTO geometry VALUES (?, ?, ?)') : undefined;
-    const preferredOption = db.prepare(`SELECT id FROM routes WHERE revision = ${revision} AND group_id = ? AND start_id = ?
-      ORDER BY uncertain, roadDistance, repetition, distance, id LIMIT 1`);
     return {
       candidatePool,
       begin(): void { db.exec('BEGIN'); },
       commit(): void { db.exec('COMMIT'); },
       add(saved: SavedChoice): void {
-        if (!addRoute || !addGroup || !setGroup || !addOption || !setOption) throw new Error('Saved results are immutable');
-        const { route, groupId, reverseId, oppositeId, preferred } = saved, summary = route.summary;
+        if (!addRoute || !addGroup || !addOption) throw new Error('Saved results are immutable');
+        const { route, groupId, reverseId, oppositeId, preferred, preferredStart } = saved, summary = route.summary;
         addRoute.run(revision, summary.id, groupId, summary.startId, JSON.stringify({ ...summary, oppositeId }), JSON.stringify(route.sections), reverseId ?? null,
           summary.distance, summary.gain, summary.repetition, summary.roadDistance, Number(summary.uncertain));
-        addGroup.run(revision, groupId, summary.id);
-        if (preferred) setGroup.run(summary.id, revision, groupId);
-        addOption.run(revision, groupId, summary.startId, summary.id);
-        const best = preferredOption.get(groupId, summary.startId)!;
-        setOption.run(best.id as string, revision, groupId, summary.startId);
+        if (preferred) addGroup.run(revision, groupId, summary.id);
+        if (preferredStart) addOption.run(revision, groupId, summary.startId, summary.id);
       },
       saveGeometry(sectionId: string, trailId: number, points: Position[]): void {
         if (!addGeometry || !points.length) throw new Error('Route drawing is missing');
