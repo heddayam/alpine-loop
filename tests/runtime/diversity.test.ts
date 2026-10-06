@@ -188,6 +188,14 @@ it('retains a road-only main circuit when an asymmetric trail stem satisfies the
   expect(routes.every(item => item.route.roadDistance === 100 && item.route.repetition === 1 / 1101)).toBe(true);
 });
 
+it('keeps a different trail approach after a better-looking road witness is eliminated as padding', async () => {
+  const graph = fixture([[0, 1, 10, { connector: true }], [0, 1, 5, { connector: true }],
+    [0, 2, 20, { connector: true }], [2, 1, 10], [1, 3, 300], [3, 4, 300], [4, 1, 300]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [919, 1000], repetition: 0.2 });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.distance === 960 && item.route.roadDistance === 40)).toBe(true);
+});
+
 it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
   let state = 123456789;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
