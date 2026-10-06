@@ -1,31 +1,19 @@
 import { createHash } from 'node:crypto';
 import { search, validateQuery } from './engine/search.js';
-import { quality, walkKey } from './engine/quality.js';
+import { canonical, compareNumbers, quality, walkKey } from './engine/quality.js';
 import type { RouteCandidate, SearchProgress, SearchQuery, TrailGraph } from './model.js';
 
-export type SolvedRoute = { route: RouteCandidate; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
+export type SolvedRoute = { route: RouteCandidate; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean; preferredStart: boolean };
 export type CandidatePool = {
-  get(core: string, witness: string): RouteCandidate | undefined;
-  set(core: string, witness: string, route: RouteCandidate): void;
+  add(core: string, route: RouteCandidate): void;
   routes(core: string): Iterable<RouteCandidate>;
   delete(core: string): void;
 };
 type Core = { edges: number[]; trails: Set<number>; order: number[]; key: number[] };
 type Witnesses = [RouteCandidate | undefined, RouteCandidate | undefined];
 type Family = { id: string; position: number; common: Set<number>; combined: Set<number>; order: number[];
-  orientation: Map<number, boolean>; starts: Map<number, Map<string, RouteCandidate>> };
+  seed: Core; cores: string[] };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
-const compareNumbers = (a: number[], b: number[]) => {
-  for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index]! - b[index]!;
-  return a.length - b.length;
-};
-function canonical(order: number[]): number[] {
-  if (!order.length) return [];
-  const smallest = Math.min(...order), at = order.indexOf(smallest);
-  const forward = [...order.slice(at), ...order.slice(0, at)];
-  const back = [forward[0]!, ...forward.slice(1).toReversed()];
-  return compareNumbers(forward, back) <= 0 ? forward : back;
-}
 function cycleRange(graph: TrailGraph, route: RouteCandidate): [number, number] {
   let first = 0, last = route.edges.length - 1;
   while (first < last && graph.edges[route.edges[first]!]!.trail === graph.edges[route.edges[last]!]!.trail) { first++; last--; }
@@ -48,15 +36,14 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
   validateQuery(query);
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
   const batches = new Map<string, Core>();
-  const memory = new Map<string, Map<string, RouteCandidate>>();
+  const memory = new Map<string, RouteCandidate[]>();
   const pool: CandidatePool = savedPool ?? {
-    get: (core, witness) => memory.get(core)?.get(witness),
-    set(core, witness, route) {
-      let routes = memory.get(core);
-      if (!routes) { routes = new Map(); memory.set(core, routes); }
-      routes.set(witness, route);
+    add(core, route) {
+      const routes = memory.get(core);
+      if (routes) routes.push(route);
+      else memory.set(core, [route]);
     },
-    routes: core => memory.get(core)?.values() ?? [],
+    routes: core => memory.get(core) ?? [],
     delete: core => { memory.delete(core); },
   };
   let progress: SearchProgress | undefined;
@@ -68,17 +55,10 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       continue;
     }
     const route = event.route;
-    route.id = `route-${hash(walkKey(graph, route))}`;
     const core = coreOf(graph, route), key = JSON.stringify(core.key);
     if (!batches.has(key)) batches.set(key, core);
-    // A fixed physical circuit has the same orientation relation at every
-    // possible future shared-core anchor. Retain its best normalized witness
-    // per start/direction, while preserving every qualifying canonical core.
-    const anchor = Math.min(...core.trails);
-    const direction = graph.edges[core.edges.find(id => graph.edges[id]!.trail === anchor)!]!.reverse;
-    const witness = `${route.start}:${direction}`;
-    const previous = pool.get(key, witness);
-    if (!previous || quality(graph, route, previous) < 0) pool.set(key, witness, route);
+    // Search already selects one route per exact circuit, start, and direction.
+    pool.add(key, route);
   }
   const physical = new Map<number, (typeof graph.edges)[number]>();
   for (const edge of graph.edges) if (!physical.has(edge.trail) || !edge.reverse) physical.set(edge.trail, edge);
@@ -117,31 +97,15 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       const merged = merge(choice, core);
       if (!merged) continue;
       family = choice;
-      const oldCommon = [...family.common].sort((a, b) => a - b);
-      const kept = oldCommon.flatMap((trail, at) => merged.common.has(trail) ? [at] : []);
       for (const trail of family.common) if (!merged.common.has(trail)) {
         incidentFamilies.get(trail)!.delete(family);
-      }
-      if (kept.length !== oldCommon.length) for (const [start, options] of family.starts) {
-        const projected = new Map<string, RouteCandidate>();
-        for (const [pattern, route] of options) {
-          const reduced = kept.map(at => pattern[at]).join(''), previous = projected.get(reduced);
-          if (!previous || quality(graph, route, previous) < 0) projected.set(reduced, route);
-        }
-        family.starts.set(start, projected);
       }
       Object.assign(family, merged);
       break;
     }
     if (!family) {
-      const seedOrder = core.edges.map(id => graph.edges[id]!.trail), canonicalOrder = canonical(seedOrder);
-      const anchor = canonicalOrder[0]!, position = seedOrder.indexOf(anchor);
-      const forward = [...seedOrder.slice(position), ...seedOrder.slice(0, position)];
-      const reversed = seedOrder.length < 3 ? graph.edges[core.edges[position]!]!.reverse : compareNumbers(forward, canonicalOrder) !== 0;
-      const orientation = new Map(core.edges.map(id => [graph.edges[id]!.trail,
-        reversed ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse]));
       family = { id: `family-${hash(JSON.stringify(core.key))}`, position: families.length, common: new Set(core.trails),
-        combined: new Set(core.trails), order: core.order, orientation, starts: new Map() };
+        combined: new Set(core.trails), order: core.order, seed: core, cores: [] };
       families.push(family);
       for (const trail of family.common) {
         let choices = incidentFamilies.get(trail);
@@ -149,35 +113,43 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
         choices.add(family);
       }
     }
-    const common = [...family.common].sort((a, b) => a - b);
-    for (const route of pool.routes(key)) {
-      const [first, last] = cycleRange(graph, route);
-      let options = family.starts.get(route.start);
-      if (!options) { options = new Map(); family.starts.set(route.start, options); }
-      // Equal orientation patterns remain equal after any future shared-core
-      // shrink. Keep their best witness once instead of one pair per trail.
-      const orientation = new Map(route.edges.slice(first, last + 1).map(id => [graph.edges[id]!.trail, graph.edges[id]!.reverse]));
-      const pattern = common.map(trail => orientation.get(trail) === family.orientation.get(trail) ? '0' : '1').join('');
-      const previous = options.get(pattern);
-      if (!previous || quality(graph, route, previous) < 0) options.set(pattern, route);
-      if (++work % 256 === 0) { await new Promise<void>(resolve => setTimeout(resolve, 0)); if (progress) await onProgress?.(progress); }
-    }
-    pool.delete(key);
+    family.cores.push(key);
+    if (++work % 256 === 0) { await new Promise<void>(resolve => setTimeout(resolve, 0)); if (progress) await onProgress?.(progress); }
   }
   const result: SolvedRoute[] = [], rank = { trailhead: 0, parking: 1, 'road-contact': 2 };
   for (const family of families) {
-    const choices: SolvedRoute[] = [];
-    for (const options of family.starts.values()) {
-      const witnesses: Witnesses = [undefined, undefined];
-      for (const [pattern, route] of options) {
-        const direction = Number(pattern[0]) as 0 | 1;
+    // Membership is final. One shared trail now identifies both directions.
+    const anchor = Math.min(...family.common), seedOrder = family.seed.edges.map(id => graph.edges[id]!.trail);
+    const position = seedOrder.indexOf(family.seed.key[0]!);
+    const forward = [...seedOrder.slice(position), ...seedOrder.slice(0, position)];
+    const reversed = seedOrder.length < 3 ? graph.edges[family.seed.edges[position]!]!.reverse : compareNumbers(forward, family.seed.key) !== 0;
+    const seedEdge = graph.edges[family.seed.edges.find(id => graph.edges[id]!.trail === anchor)!]!;
+    const orientation = reversed ? !seedEdge.reverse : seedEdge.reverse;
+    const starts = new Map<number, Witnesses>();
+    for (const key of family.cores) {
+      for (const route of pool.routes(key)) {
+        let witnesses = starts.get(route.start);
+        if (!witnesses) { witnesses = [undefined, undefined]; starts.set(route.start, witnesses); }
+        const edge = graph.edges[route.edges.find(id => graph.edges[id]!.trail === anchor)!]!;
+        const direction = edge.reverse === orientation ? 0 : 1;
         if (!witnesses[direction] || quality(graph, route, witnesses[direction]!) < 0) witnesses[direction] = route;
+        if (++work % 256 === 0) { await new Promise<void>(resolve => setTimeout(resolve, 0)); if (progress) await onProgress?.(progress); }
       }
-      for (const [direction, route] of witnesses.entries()) if (route) choices.push({ route, groupId: family.id, direction: direction as 0 | 1, preferred: false });
+      pool.delete(key);
+    }
+    const choices: SolvedRoute[] = [];
+    for (const witnesses of starts.values()) {
+      for (const [direction, route] of witnesses.entries()) if (route) choices.push({ route, groupId: family.id,
+        direction: direction as 0 | 1, preferred: false, preferredStart: false });
     }
     choices.sort((a, b) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
       || quality(graph, a.route, b.route) || graph.starts[a.route.start]!.id.localeCompare(graph.starts[b.route.start]!.id));
     choices[0]!.preferred = true;
+    const selectedStarts = new Set<number>();
+    for (const choice of choices) if (!selectedStarts.has(choice.route.start)) {
+      choice.preferredStart = true;
+      selectedStarts.add(choice.route.start);
+    }
     const walks = new Map(choices.map(choice => [walkKey(graph, choice.route), choice.route.id]));
     const directions = new Map(choices.map(choice => [`${choice.route.start}:${choice.direction}`, choice.route.id]));
     for (const choice of choices) {

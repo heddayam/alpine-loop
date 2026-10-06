@@ -41,10 +41,11 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
     expect([route.distance, route.gain, route.roadDistance, route.repetition])
       .toEqual([valid!.distance, valid!.gain, valid!.roadDistance, valid!.repetition]);
   }
-  const describe = (item: { route: { start: number; edges: number[] }; direction: number; preferred: boolean }) =>
-    `${item.route.start}:${item.route.edges.join(',')}:${item.direction}:${item.preferred}`;
+  const describe = (item: { route: { start: number; edges: number[] }; direction: number; preferred: boolean; preferredStart: boolean }) =>
+    `${item.route.start}:${item.route.edges.join(',')}:${item.direction}:${item.preferred}:${item.preferredStart}`;
   const actualGroups = [...families(actual)].map(group => actual.filter(item => item.groupId === group).map(describe).sort());
-  expect(actualGroups.sort()).toEqual(expected.map(group => group.witnesses.map(describe).sort()).sort());
+  expect(actualGroups.sort()).toEqual(expected.map(group => group.witnesses.map(item => describe({ ...item,
+    preferredStart: group.witnesses.find(candidate => candidate.route.start === item.route.start) === item })).sort()).sort());
   return actual;
 }
 

@@ -321,5 +321,19 @@
     "status": "Implemented, deployed to the requested local app, and verified; detailed measurements and limitations in benchmarks/bounded-discovery-review.json.",
     "previousTwoStageDecision": "Constraints remain immutable. One successful deeper execution atomically publishes another result revision, retains the earlier revision for stable browsing, and shares physical geometry. Cancelled/failed/interrupted extensions retain earlier completed results and can be retried. Extensions require the original prepared inputs.",
     "review": "benchmarks/bounded-discovery-review.json"
+  },
+  "variantSimplificationDecision": {
+    "date": "2026-10-06",
+    "scope": "Finish family membership before selecting route witnesses. Share one physical-circuit identity rule. Remove repeated route hashing and exact-circuit ranking. Store explicit family and start representatives without SQL reranking.",
+    "policy": "Grouping thresholds, cyclic order, discovery plans, route constraints and saved-result schema stay unchanged. A new hiker-based definition of different hikes is deferred by the user.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "68 Vitest tests and four Node checks pass, including independent exhaustive grouping/witness checks, persisted selection with tied metrics in both insertion orders, and actual app/worker history, geometry, GPX, cancellation and restart flows.",
+      "discoveryComparison": "Old and new searches match across 40 generated graphs and 81,542 emitted routes, including IDs, emission order and deterministic progress.",
+      "sourceBefore": 6715,
+      "sourceAfter": 6690,
+      "sourceFiles": 33,
+      "realData": "No new performance measurement: prepared data is absent in this checkout. Prior recorded observations remain unchanged."
+    }
   }
 }
