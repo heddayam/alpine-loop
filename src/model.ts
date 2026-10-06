@@ -41,7 +41,7 @@ export type TrailGeometry = { id: string; name: string | null; coordinates: Posi
 export type SearchQuery = {
   /** Exactly the prepared sections to search, considering every eligible start. */
   sections: string[];
-  /** Bounded candidate discovery; deeper tries more alternatives. Defaults to normal. */
+  /** Internal discovery plans. Public jobs always use the deep plan. */
   effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
@@ -108,10 +108,7 @@ export type JobSnapshot = {
   id: string;
   query: SearchQuery;
   status: JobStatus;
-  /** A deeper execution extends the same immutable constraints. */
-  searchEffort?: 'normal' | 'deep';
-  completedEffort?: 'normal' | 'deep';
-  /** Published results remain readable while a deeper execution is queued/running. */
+  /** Identifies the saved result set, including previously completed local jobs. */
   resultsRevision?: number;
   createdAt: string;
   startedAt?: string;

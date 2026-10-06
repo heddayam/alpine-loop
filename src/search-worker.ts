@@ -1,16 +1,14 @@
 import { createHash } from 'node:crypto';
-import { copyFile } from 'node:fs/promises';
 import { parentPort, workerData } from 'node:worker_threads';
 import { readDataset } from './dataset.js';
 import { solveSection } from './diversity.js';
 import { createRouteStore } from './route-store.js';
 import type { JobInputs, JobProgress, Position, SearchQuery } from './model.js';
 
-const { directory, query, resultPath, sourceResultPath, expectedInputs, revision = 0 } = workerData as {
-  directory: string; query: SearchQuery; resultPath: string; sourceResultPath?: string; expectedInputs?: JobInputs; revision?: number };
+const { directory, query, resultPath } = workerData as {
+  directory: string; query: SearchQuery; resultPath: string };
 const started = performance.now();
 const dataset = await readDataset(directory);
-if (expectedInputs) await dataset.verifyInputs(expectedInputs);
 const selected = dataset.selectedSections(query);
 const inputs: JobInputs = { version: dataset.catalog.info.id,
   sections: selected.map(({ id, name, bounds, boundary, files }) => ({ id, name, bounds, boundary, files })) };
@@ -22,8 +20,7 @@ send(true);
 await dataset.verifyInputs(inputs);
 const selections = await dataset.starts(query);
 progress.totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);
-if (sourceResultPath) await copyFile(sourceResultPath, resultPath);
-const store = createRouteStore(resultPath, true, revision);
+const store = createRouteStore(resultPath, true);
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 let verification: Promise<void> | undefined;
 const verify = () => verification ??= dataset.verifyInputs(inputs).finally(() => { verification = undefined; });

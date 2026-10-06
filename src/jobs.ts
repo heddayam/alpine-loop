@@ -7,8 +7,7 @@ export class RequestError extends Error {
 export function parseQuery(value: unknown): SearchQuery {
   if (!value || typeof value !== 'object') throw new RequestError('Choose regions and hike constraints.', 400);
   const query = value as SearchQuery;
-  const effort = query.effort ?? 'normal';
-  if (effort !== 'normal' && effort !== 'deep') throw new RequestError('Choose Standard or Deeper search.', 400);
+  if (query.effort !== undefined && query.effort !== 'deep') throw new RequestError('Submit a search using the current search settings.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
   if (!Array.isArray(query.sections) || !query.sections.length || new Set(query.sections).size !== query.sections.length
@@ -25,7 +24,7 @@ export function parseQuery(value: unknown): SearchQuery {
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
-  return { sections: [...query.sections], effort, distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
+  return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 
@@ -87,13 +86,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
   const restore = (job: JobSnapshot, status: 'failed' | 'cancelled' | 'interrupted', reason: string) => {
     job.status = published(job) ? 'completed' : status;
     job.finishedAt = new Date().toISOString(); delete job.queuePosition;
-    job.reason = published(job) ? `Deeper search ${status}: ${reason} Existing results were kept.` : reason;
+    job.reason = published(job) ? `${reason} Existing results were kept.` : reason;
     save(job);
   };
-  let queueSequence = Math.max(Number(db.prepare('SELECT COALESCE(MAX(position), 0) AS size FROM jobs').get()!.size),
-    ...rows().map(job => (job as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0));
-  const queued = () => rows().filter(job => job.status === 'queued').sort((a, b) =>
-    ((a as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0) - ((b as JobSnapshot & { queueSequence?: number }).queueSequence ?? 0));
+  const queued = () => rows().filter(job => job.status === 'queued');
   // Inputs are separate from frequently polled compact status/history metadata.
   for (const job of rows()) if (job.inputs) {
     saveInputs.run(job.id, JSON.stringify(job.inputs));
@@ -127,13 +123,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
     job.status = 'running'; job.startedAt = new Date().toISOString(); delete job.queuePosition; save(job);
     let done: Extract<JobWorkerEvent, { type: 'done' }> | undefined, failure: string | undefined;
     let worker: Worker;
-    const revision = published(job) ? (job.resultsRevision ?? 0) + 1 : 0;
+    const revision = 0;
     try {
       worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-        workerData: { directory: dataDirectory, query: { ...job.query, effort: job.searchEffort ?? job.query.effort ?? 'normal' },
-          resultPath: resultPath(job.id, true), revision,
-          sourceResultPath: published(job) ? publishedPath(job) : undefined,
-          expectedInputs: published(job) ? JSON.parse(loadInputs.get(job.id)!.facts as string) : undefined },
+        workerData: { directory: dataDirectory, query: job.query, resultPath: resultPath(job.id, true) },
         resourceLimits: { maxOldGenerationSizeMb: 512 },
       });
     } catch (error) {
@@ -175,7 +168,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
         current = find(job.id);
         if (current.status === 'running' && !closed) {
           const completed = { ...current, ...counts, storageBytes, status: 'completed' as const,
-            resultsRevision: revision, completedEffort: current.searchEffort ?? current.query.effort ?? 'normal',
+            resultsRevision: revision,
             progress: done.progress, finishedAt: new Date().toISOString() };
           db.exec('BEGIN');
           try { save(completed); db.exec('COMMIT'); }
@@ -218,20 +211,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
   return {
     start(query: SearchQuery): JobSnapshot {
       const job: JobSnapshot = { id: randomUUID(), query: structuredClone(query), status: 'queued', createdAt: new Date().toISOString(),
-        searchEffort: query.effort ?? 'normal',
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
-      insert.run(job.id, JSON.stringify({ ...job, queueSequence: ++queueSequence })); startPump(); return snapshot(job.id, false);
-    },
-    deepen(id: string): JobSnapshot {
-      const job = find(id);
-      if (job.status !== 'completed') throw new RequestError('Wait until this search finishes before searching deeper.', 409);
-      if ((job.completedEffort ?? job.query.effort ?? 'normal') === 'deep') throw new RequestError('This job has already completed its deeper search.', 409);
-      job.resultsRevision ??= 0;
-      job.status = 'queued'; job.searchEffort = 'deep'; delete job.reason; delete job.finishedAt; delete job.startedAt;
-      job.progress = { stage: 'preparing', completedRegions: [], totalRegions: job.query.sections.length,
-        elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 };
-      update.run(JSON.stringify({ ...job, queueSequence: ++queueSequence }), id);
-      startPump(); return snapshot(id, false);
+      insert.run(job.id, JSON.stringify(job));
+      startPump(); return snapshot(job.id, false);
     },
     list: () => {
       const entries = rows();

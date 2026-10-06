@@ -43,7 +43,6 @@ export async function createApp(directory: string, clientDirectory?: string, job
   app.get('/api/jobs', async () => jobs.list());
   app.post('/api/jobs', async (request, reply) => {
     const query = parseQuery(request.body);
-    if (query.effort !== 'normal') throw new RequestError('Submit a standard search, then use Search deeper on its completed job.', 400);
     const coverage = await (await availableData()).coverage(query);
     if (coverage.missing.length) return reply.code(409).send({ message: 'Download the selected trail sections before searching.', ...coverage });
     return reply.code(202).send(jobs.start(query));
@@ -53,7 +52,6 @@ export async function createApp(directory: string, clientDirectory?: string, job
   app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
     jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order, revision(request.query.revision)));
   app.get<{ Params: { id: string }; Querystring: { revision?: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id, revision(request.query.revision)));
-  app.post<{ Params: { id: string } }>('/api/jobs/:id/deepen', async (request, reply) => reply.code(202).send(jobs.deepen(request.params.id)));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => jobs.cancel(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });
   app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId, revision(request.query.revision)));
