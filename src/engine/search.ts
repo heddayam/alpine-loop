@@ -665,10 +665,13 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
       const roots = groups.map(group => anchor(graph, index, group, pass));
       const tree = yield* forest(graph, index, roots, pass), choices = yield* proposals(graph, index, query, tree, groups);
       progress.completedSearchPoints = pass * (plan.circuits + 1) + 1;
-      let trials = 0;
+      let trials = 0, turn = 0;
       const pending: { core: Circuit; depth: number }[] = [];
       for (let choice = 0; choice < choices.length || pending.length; ) {
-        const item = pending.shift() ?? { core: circuit(graph, index, tree, choices[choice++]!), depth: 0 };
+        // Keep most trials for new main circuits. Local variants must not
+        // consume the pass before geographically distinct seeds are tried.
+        const item = pending.length && (choice >= choices.length || turn++ % 5 === 4)
+          ? pending.shift()! : { core: circuit(graph, index, tree, choices[choice++]!), depth: 0 };
         const core = item.core;
         if (!core || seen.has(core.key)) continue;
         if (trials++ >= plan.circuits) break;
