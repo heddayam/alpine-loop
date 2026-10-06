@@ -87,8 +87,35 @@ it('keeps versions at the same start distinct and pages versions and starting po
       expect(opposite.geometry).toEqual(route.geometry.toReversed());
       expect(published.page(0, 'missing')).toBeUndefined();
       expect(published.page(0, undefined, 'distance', 'asc', 'missing')).toBeUndefined();
-      expect(published.page()!.selectionNote).toContain('60%');
+      expect(published.page()!.selectionNote).toContain('60% of the longer main loop with the shown loop');
     } finally { published.close(); }
+  } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+it('keeps a published grouping explanation and its selected routes unchanged', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'alpine-saved-grouping-'));
+  const file = join(directory, 'results.sqlite');
+  const store = createRouteStore(file, true);
+  const previousNote = 'Each group contains similar main loops. Every pair shares at least 60% of the longer main loop, including road sections, in the same order. Each exact loop is kept as a route version, with its starting points and qualifying directions. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
+  try {
+    store.begin();
+    store.add(saved('first', 'east', true));
+    store.add(saved('second', 'west', true, false));
+    store.saveGeometry('fixture', 0, drawing);
+    store.commit();
+    store.close();
+    const fixture = new DatabaseSync(file);
+    try { fixture.prepare('UPDATE grouping SET note = ?').run(previousNote); }
+    finally { fixture.close(); }
+    const before = await readFile(file);
+    const published = createRouteStore(file);
+    try {
+      expect(published.page()!.selectionNote).toBe(previousNote);
+      expect(published.page()!.routes.map(route => route.id)).toEqual(['z-first-east']);
+      expect(published.page(0, 'hike')!.routes.map(route => route.id)).toEqual(['z-first-east', 'z-second-west']);
+      expect(published.locations().map(route => route.id)).toEqual(['z-first-east']);
+    } finally { published.close(); }
+    expect(await readFile(file)).toEqual(before);
   } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

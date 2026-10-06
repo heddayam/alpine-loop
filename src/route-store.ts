@@ -9,7 +9,7 @@ type ChoiceRow = { summary: string; groupId: string; variantId: string; variantC
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   variantId: row.variantId, variantCount: row.variantCount, groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
 const previousSelectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
-const selectionNote = `Each group contains similar main loops. Every pair shares at least ${MIN_LOOP_SIMILARITY * 100}% of the longer main loop, including road sections, in the same order. Each exact loop is kept as a route version, with its starting points and qualifying directions. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.`;
+const selectionNote = `Each hike shows one main loop. Preferred routes are selected first. Each route version shares at least ${MIN_LOOP_SIMILARITY * 100}% of the longer main loop with the shown loop, including road sections, in the same order. No two shown main loops meet this rule. Each exact loop keeps its starting points and qualifying directions. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.`;
 
 /** A worker owns this private file until it closes; the server opens only published files. */
 export function createRouteStore(path: string, writable = false, revision = 0) {
