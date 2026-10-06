@@ -166,6 +166,19 @@ it('does not use a shorter road substitute that intersects another part of the m
   expect(routes.some(item => item.route.roadDistance === 400 && item.route.kind === 'lollipop')).toBe(true);
 });
 
+it('preserves every start and direction when merging removes the initial common-trail anchor', async () => {
+  const graph = fixture([[0, 1, 100, { gain: 10 }], [0, 1, 200, { backGain: 10 }], [1, 2, 4500], [2, 0, 4500]], [0, 1, 2]);
+  graph.starts[0]!.kind = 'road-contact';
+  graph.starts[1]!.kind = 'parking';
+  graph.starts[2]!.access = 'unknown';
+  const routes = await compareOutputs(graph, { ...query, distance: [9100, 9200], gain: [10, 10], repetition: 0 });
+  expect(families(routes).size).toBe(1);
+  expect(routes).toHaveLength(6);
+  expect(new Set(routes.map(item => `${item.route.start}:${item.direction}`)).size).toBe(6);
+  expect(routes.find(item => item.preferred)!.route.start).toBe(2);
+  expect(routes.every(item => item.oppositeId && !item.reverseId)).toBe(true);
+});
+
 it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
   let state = 123456789;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
