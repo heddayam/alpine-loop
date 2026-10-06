@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { search, validateQuery } from './engine/search.js';
+import { quality, walkKey } from './engine/quality.js';
 import type { RouteCandidate, SearchProgress, SearchQuery, TrailGraph } from './model.js';
 
 export type SolvedRoute = { route: RouteCandidate; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
@@ -33,30 +34,16 @@ function coreOf(graph: TrailGraph, route: RouteCandidate): Core {
   const order = trails.length ? trails : edges.map(id => graph.edges[id]!.trail);
   return { edges, trails: new Set(order), order, key: canonical(edges.map(id => graph.edges[id]!.trail)) };
 }
-function walkKey(graph: TrailGraph, route: RouteCandidate, reverse = false): string {
-  const edges = reverse ? route.edges.toReversed() : route.edges;
-  return JSON.stringify([graph.starts[route.start]!.id,
-    edges.map(id => [graph.edges[id]!.trail, reverse ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse])]);
-}
-function quality(graph: TrailGraph, a: RouteCandidate, b: RouteCandidate): number {
-  for (const difference of [Number(a.uncertain) - Number(b.uncertain), a.roadDistance - b.roadDistance,
-    a.repetition - b.repetition, a.distance - b.distance]) if (difference) return difference;
-  const pair = (route: RouteCandidate) => {
-    const forward = walkKey(graph, route), back = walkKey(graph, route, true);
-    return forward < back ? forward : back;
-  };
-  return pair(a).localeCompare(pair(b)) || a.id.localeCompare(b.id);
-}
 
-/** Complete a section privately. Minimums follow every legal road substitution;
- * only the final family/start/direction witnesses leave this module. */
+/** Group the privately completed discovery pool. Strict qualifying, road-normalized
+ * candidates become final family/start/direction witnesses here. */
 export async function solveSection(graph: TrailGraph, query: SearchQuery,
   onProgress?: (progress: SearchProgress) => void | Promise<void>): Promise<SolvedRoute[]> {
   validateQuery(query);
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
   const batches = new Map<string, { core: Core; routes: Map<string, RouteCandidate> }>();
   let progress: SearchProgress | undefined;
-  for await (const event of search(graph, query, { prefer: (a, b) => quality(graph, a, b) })) {
+  for await (const event of search(graph, query)) {
     if (event.type !== 'route') {
       progress = event.progress;
       await onProgress?.(progress);
