@@ -7,7 +7,6 @@ type Core = { edges: number[]; trails: Set<number>; order: number[]; key: number
 type Witnesses = [RouteCandidate | undefined, RouteCandidate | undefined];
 type Family = { id: string; position: number; common: Set<number>; combined: Set<number>; order: number[];
   orientation: Map<number, boolean>; starts: Map<number, Map<number, Witnesses>> };
-type RoadChoice = { road: number; best?: RouteCandidate; extras?: Map<string, RouteCandidate> };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 const compareNumbers = (a: number[], b: number[]) => {
   for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index]! - b[index]!;
@@ -55,10 +54,9 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
   onProgress?: (progress: SearchProgress) => void | Promise<void>): Promise<SolvedRoute[]> {
   validateQuery(query);
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
-  const alternatives = new Map<string, { known?: RoadChoice; unknown?: RoadChoice }>();
+  const batches = new Map<string, { core: Core; routes: Map<string, RouteCandidate> }>();
   let progress: SearchProgress | undefined;
-  const qualifies = (route: RouteCandidate) => route.distance >= query.distance[0] && route.gain >= query.gain[0];
-  for await (const event of search(graph, { ...query, distance: [0, query.distance[1]], gain: [0, query.gain[1]] })) {
+  for await (const event of search(graph, query, { prefer: (a, b) => quality(graph, a, b) })) {
     if (event.type !== 'route') {
       progress = event.progress;
       await onProgress?.(progress);
@@ -66,49 +64,19 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       continue;
     }
     const route = event.route;
-    const trailSteps = route.edges.filter(id => !graph.edges[id]!.connector);
-    if (!trailSteps.length) continue;
     route.id = `route-${hash(walkKey(graph, route))}`;
-    // Delimited physical IDs and direction flags keep exact itineraries compact.
-    const key = `${route.start}:${trailSteps.map(id => {
-      const edge = graph.edges[id]!;
-      return `${edge.trail.toString(36)}${edge.reverse ? 'r' : 'f'}`;
-    }).join('.')}`;
-    let choices = alternatives.get(key);
-    if (!choices) { choices = {}; alternatives.set(key, choices); }
-    const certainty = route.uncertain ? 'unknown' : 'known';
-    let choice = choices[certainty];
-    if (!choice || route.roadDistance < choice.road) choices[certainty] = choice = { road: route.roadDistance };
-    if (route.roadDistance !== choice.road || !qualifies(route)) continue;
-    const [first, last] = cycleRange(graph, route);
-    let coreTrail = false;
-    for (let part = first; part <= last; part++) if (!graph.edges[route.edges[part]!]!.connector) { coreTrail = true; break; }
-    if (coreTrail) {
-      if (!choice.best || quality(graph, route, choice.best) < 0) choice.best = route;
-    } else {
-      // Both directions of a road circuit have the same trail-stem itinerary.
-      // Share the minimum-road facts while preserving their separate witnesses.
-      const core = coreOf(graph, route), anchor = core.key[0]!;
-      const keeper = JSON.stringify([core.key, graph.edges[core.edges.find(id => graph.edges[id]!.trail === anchor)!]!.reverse]);
-      choice.extras ??= new Map();
-      const previous = choice.extras.get(keeper);
-      if (!previous || quality(graph, route, previous) < 0) choice.extras.set(keeper, route);
-    }
-  }
-  const batches = new Map<string, { core: Core; routes: RouteCandidate[] }>();
-  function retain(route: RouteCandidate) {
     const core = coreOf(graph, route), key = JSON.stringify(core.key);
-    const prior = batches.get(key);
-    if (prior) prior.routes.push(route);
-    else batches.set(key, { core, routes: [route] });
+    let batch = batches.get(key);
+    if (!batch) { batch = { core, routes: new Map() }; batches.set(key, batch); }
+    // A fixed physical circuit has the same orientation relation at every
+    // possible future shared-core anchor. Retain its best normalized witness
+    // per start/direction, while preserving every qualifying canonical core.
+    const anchor = Math.min(...core.trails);
+    const direction = graph.edges[core.edges.find(id => graph.edges[id]!.trail === anchor)!]!.reverse;
+    const witness = `${route.start}:${direction}`;
+    const previous = batch.routes.get(witness);
+    if (!previous || quality(graph, route, previous) < 0) batch.routes.set(witness, route);
   }
-  for (const { known, unknown } of alternatives.values()) {
-    for (const choice of [known, unknown && (!known || known.road >= unknown.road) ? unknown : undefined]) {
-      if (choice?.best) retain(choice.best);
-      for (const route of choice?.extras?.values() ?? []) retain(route);
-    }
-  }
-  alternatives.clear();
   const physical = new Map<number, (typeof graph.edges)[number]>();
   for (const edge of graph.edges) if (!physical.has(edge.trail) || !edge.reverse) physical.set(edge.trail, edge);
   const sum = (trails: Set<number>) => [...trails].sort((a, b) => a - b).reduce((total, trail) => total + physical.get(trail)!.distance, 0);
@@ -170,7 +138,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
         choices.add(family);
       }
     }
-    for (const route of batch.routes) {
+    for (const route of batch.routes.values()) {
       const [first, last] = cycleRange(graph, route);
       let options = family.starts.get(route.start);
       if (!options) { options = new Map(); family.starts.set(route.start, options); }
@@ -184,7 +152,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       }
       if (++work % 256 === 0) { await new Promise<void>(resolve => setTimeout(resolve, 0)); if (progress) await onProgress?.(progress); }
     }
-    batch.routes.length = 0;
+    batch.routes.clear();
   }
   const result: SolvedRoute[] = [], rank = { trailhead: 0, parking: 1, 'road-contact': 2 };
   for (const family of families) {
