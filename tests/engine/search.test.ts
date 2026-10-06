@@ -87,6 +87,14 @@ describe('independent legality oracle and explicit discovery quality', () => {
     expect(routes.every(route => route.distance === 1_200)).toBe(true);
   });
 
+  it('keeps zero-repetition witnesses when the actual return fraction underflows to zero', async () => {
+    const graph = fixture([[0, 1, 1e-200], [1, 2, 1e200], [2, 1, 1e200]]);
+    const routes = await compare(graph, { ...query, distance: [0, 1e201], gain: [0, 0], repetition: 0,
+      roads: { distance: 0, fraction: 0 } });
+    expect(routes).toHaveLength(2);
+    expect(routes.every(route => route.kind === 'lollipop' && route.repetition === 0)).toBe(true);
+  });
+
   it('does not turn irreversible stems, extra lobes or pure retraces into routes', async () => {
     const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [0, 3, 100, { oneWay: true }],
       [3, 4, 100], [4, 5, 100], [5, 3, 100], [0, 6, 100]]);
