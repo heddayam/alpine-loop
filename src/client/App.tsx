@@ -209,8 +209,8 @@ function RouteDetails({
           <div className="starting-point">
             <h3>Starting point</h3>
             <p>{startName(route)}</p>
-            {children}
           </div>
+          {children}
           <p className="route-kind">
             {route.kind === "lollipop"
               ? "Lollipop · an out-and-back approach to a loop"
@@ -317,9 +317,16 @@ const resultQuery = (
   offset: number,
   sort: ResultSort,
   order: SortOrder,
-  group?: string,
-) =>
-  `?offset=${offset}&sort=${sort}&order=${order}${group ? `&group=${encodeURIComponent(group)}` : ""}`;
+  filter?: { group: string } | { variant: string },
+) => {
+  const parameters = new URLSearchParams({ offset: String(offset), sort, order });
+  if (filter) {
+    if ("group" in filter) parameters.set("group", filter.group);
+    else parameters.set("variant", filter.variant);
+  }
+  return `?${parameters}`;
+};
+type ChoiceKind = "versions" | "starts";
 
 export function App() {
   const [dataset, setDataset] = useState<CatalogView>();
@@ -365,10 +372,10 @@ export function App() {
   const [routeRetry, setRouteRetry] = useState(0);
   const originalDirectionId = useRef<string | null>(null);
   const openedRouteId = useRef<string | null>(null);
-  const [showStarts, setShowStarts] = useState(false);
-  const [starts, setStarts] = useState<JobResults>();
-  const [loadingStarts, setLoadingStarts] = useState(false);
-  const [startsError, setStartsError] = useState("");
+  const [choiceKind, setChoiceKind] = useState<ChoiceKind | null>(null);
+  const [choices, setChoices] = useState<JobResults>();
+  const [loadingChoices, setLoadingChoices] = useState(false);
+  const [choicesError, setChoicesError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{
@@ -381,7 +388,7 @@ export function App() {
   const downloadQuery = useRef<SearchQuery | null>(null);
   const operation = useRef<AbortController | null>(null);
   const pageOperation = useRef<AbortController | null>(null);
-  const startsOperation = useRef<AbortController | null>(null);
+  const choicesOperation = useRef<AbortController | null>(null);
   const viewedRevisions = useRef(new Map<string, number>());
   const initialJobId = useRef(
     new URLSearchParams(window.location.search).get("job"),
@@ -400,16 +407,19 @@ export function App() {
       revision: (current?.revision ?? 0) + 1,
       padding,
     }));
+  const closeChoices = () => {
+    choicesOperation.current?.abort();
+    setLoadingChoices(false);
+    setChoiceKind(null);
+    setChoices(undefined);
+    setChoicesError("");
+    setHoveredId(null);
+  };
   const clearSelection = () => {
-    startsOperation.current?.abort();
-    setLoadingStarts(false);
+    closeChoices();
     setSelected(null);
     setSelectedId(null);
-    setHoveredId(null);
     openedRouteId.current = null;
-    setShowStarts(false);
-    setStarts(undefined);
-    setStartsError("");
   };
   const localURL = (id?: string) => {
     const url = new URL(window.location.href);
@@ -485,7 +495,7 @@ export function App() {
       controller.abort();
       operation.current?.abort();
       pageOperation.current?.abort();
-      startsOperation.current?.abort();
+      choicesOperation.current?.abort();
     };
   }, []);
   useEffect(() => {
@@ -888,66 +898,74 @@ export function App() {
   }, [pendingDownload]);
   const pickRoute = (id: string) => {
     openedRouteId.current = null;
-    startsOperation.current?.abort();
-    setLoadingStarts(false);
     setSelected(
       results?.routes.find((route) => route.id === id) ??
-        starts?.routes.find((route) => route.id === id) ??
+        choices?.routes.find((route) => route.id === id) ??
         null,
     );
     setSelectedId(id);
-    setHoveredId(null);
     originalDirectionId.current = id;
-    setShowStarts(false);
-    setStarts(undefined);
+    closeChoices();
   };
-  const loadStarts = async (offset = 0) => {
+  const loadChoices = async (kind: ChoiceKind, offset = 0) => {
     if (!selected || !viewedJob) return;
-    startsOperation.current?.abort();
+    choicesOperation.current?.abort();
     const controller = new AbortController();
-    startsOperation.current = controller;
-    const groupId = selected.groupId;
-    setShowStarts(true);
-    setLoadingStarts(true);
-    setStartsError("");
+    choicesOperation.current = controller;
+    setChoiceKind(kind);
+    setChoices(undefined);
+    setLoadingChoices(true);
+    setChoicesError("");
+    setHoveredId(null);
     try {
       const page = await request<JobResults>(
-        savedResultsURL(viewedJob, "results", resultQuery(offset, "distance", "asc", groupId)),
+        savedResultsURL(
+          viewedJob,
+          "results",
+          resultQuery(
+            offset,
+            "distance",
+            "asc",
+            kind === "versions"
+              ? { group: selected.groupId }
+              : { variant: selected.variantId },
+          ),
+        ),
         controller.signal,
       );
-      if (!controller.signal.aborted && startsOperation.current === controller)
-        setStarts(page);
+      if (!controller.signal.aborted && choicesOperation.current === controller)
+        setChoices(page);
     } catch (failure) {
-      if (!controller.signal.aborted && startsOperation.current === controller)
-        setStartsError(
+      if (!controller.signal.aborted && choicesOperation.current === controller)
+        setChoicesError(
           failure instanceof Error
             ? failure.message
-            : "Starting points could not load.",
+            : `${kind === "versions" ? "Route versions" : "Starting points"} could not load.`,
         );
     } finally {
-      if (!controller.signal.aborted && startsOperation.current === controller)
-        setLoadingStarts(false);
+      if (!controller.signal.aborted && choicesOperation.current === controller)
+        setLoadingChoices(false);
     }
   };
   const pages = (
     page: JobResults,
     onPage: (offset: number) => void,
-    isStarts = false,
+    label = "Hike",
   ) =>
     page.pageTotal > ROUTES_PER_PAGE ? (
       <nav
         className="result-pages"
-        aria-label={isStarts ? "Starting point pages" : "Hike pages"}
+        aria-label={`${label} pages`}
       >
         <button
           type="button"
-          disabled={loadingPage || loadingStarts || page.offset === 0}
+          disabled={loadingPage || loadingChoices || page.offset === 0}
           onClick={() => onPage(Math.max(0, page.offset - ROUTES_PER_PAGE))}
         >
           Previous
         </button>
         <span
-          id={isStarts ? "starts-page-summary" : "page-summary"}
+          id={label === "Hike" ? "page-summary" : "choice-page-summary"}
           tabIndex={-1}
         >
           {page.offset + 1}–{page.offset + page.routes.length} of{" "}
@@ -957,7 +975,7 @@ export function App() {
           type="button"
           disabled={
             loadingPage ||
-            loadingStarts ||
+            loadingChoices ||
             page.offset + ROUTES_PER_PAGE >= page.pageTotal
           }
           onClick={() => onPage(page.offset + ROUTES_PER_PAGE)}
@@ -1412,10 +1430,8 @@ export function App() {
                       onReverse={() => {
                         const otherId = selected.reverseId ?? selected.oppositeId;
                         if (otherId) {
-                          startsOperation.current?.abort();
-                          setLoadingStarts(false);
+                          closeChoices();
                           setSelectedId(otherId);
-                          setShowStarts(false);
                         }
                       }}
                       reversing={selected.id !== selectedId}
@@ -1423,84 +1439,135 @@ export function App() {
                       directionError={hoveredId ? "" : routeError}
                       onRetry={() => setRouteRetry((value) => value + 1)}
                     >
-                      {selected.groupSize > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            className="text-button"
-                            aria-expanded={showStarts}
-                            aria-controls="starting-point-choices"
-                            onClick={() =>
-                              showStarts
-                                ? setShowStarts(false)
-                                : void loadStarts()
-                            }
-                          >
-                            {showStarts
-                              ? "Close starting points"
-                              : `Choose from ${selected.groupSize.toLocaleString()} starting points`}
-                          </button>
-                          {showStarts && (
+                      {(selected.variantCount > 1 || selected.groupSize > 1) && (
+                        <div className="route-choices">
+                          <div className="route-choice-actions">
+                            {selected.variantCount > 1 && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                aria-expanded={choiceKind === "versions"}
+                                aria-controls="route-choice-list"
+                                onClick={() =>
+                                  choiceKind === "versions"
+                                    ? closeChoices()
+                                    : void loadChoices("versions")
+                                }
+                              >
+                                {choiceKind === "versions"
+                                  ? "Close route versions"
+                                  : `Compare ${selected.variantCount.toLocaleString()} route versions`}
+                              </button>
+                            )}
+                            {selected.groupSize > 1 && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                aria-expanded={choiceKind === "starts"}
+                                aria-controls="route-choice-list"
+                                onClick={() =>
+                                  choiceKind === "starts"
+                                    ? closeChoices()
+                                    : void loadChoices("starts")
+                                }
+                              >
+                                {choiceKind === "starts"
+                                  ? "Close starting points"
+                                  : `Choose from ${selected.groupSize.toLocaleString()} starting points`}
+                              </button>
+                            )}
+                          </div>
+                          {choiceKind && (
                             <div
-                              id="starting-point-choices"
-                              className="starting-point-choices"
+                              id="route-choice-list"
+                              className="route-choice-list"
                             >
-                              <h3>Starting points for this hike</h3>
-                              {loadingStarts ? (
-                                <p role="status">Loading starting points…</p>
-                              ) : startsError ? (
+                              <h3>
+                                {choiceKind === "versions"
+                                  ? "Route versions"
+                                  : "Starting points for this version"}
+                              </h3>
+                              <p className="field-hint">
+                                Move over a choice to see its route.
+                              </p>
+                              {loadingChoices ? (
+                                <p role="status">
+                                  Loading {choiceKind === "versions"
+                                    ? "route versions"
+                                    : "starting points"}…
+                                </p>
+                              ) : choicesError ? (
                                 <p role="alert">
-                                  {startsError}
+                                  {choicesError}
                                   <button
                                     type="button"
-                                    onClick={() => void loadStarts()}
+                                    onClick={() => void loadChoices(choiceKind)}
                                   >
                                     Retry
                                   </button>
                                 </p>
                               ) : (
-                                starts && (
-                                  <>
-                                    {pages(
-                                      starts,
-                                      (offset) => void loadStarts(offset),
-                                      true,
-                                    )}
-                                    <ul className="start-list">
-                                      {starts.routes.map((route) => (
-                                        <li key={route.id}>
-                                          <button
-                                            type="button"
-                                            aria-current={
-                                              route.startId === selected.startId
-                                                ? "true"
-                                                : undefined
-                                            }
-                                            onClick={() => pickRoute(route.id)}
-                                          >
-                                            <span>{startName(route)}</span>
+                                choices && <>
+                                  {pages(
+                                    choices,
+                                    (offset) => void loadChoices(choiceKind, offset),
+                                    choiceKind === "versions"
+                                      ? "Route version"
+                                      : "Starting point",
+                                  )}
+                                  <ul className="choice-list">
+                                    {choices.routes.map((route) => (
+                                      <li key={route.id}>
+                                        <button
+                                          type="button"
+                                          aria-current={
+                                            (choiceKind === "versions"
+                                              ? route.variantId === selected.variantId
+                                              : route.startId === selected.startId)
+                                              ? "true"
+                                              : undefined
+                                          }
+                                          onClick={() => pickRoute(route.id)}
+                                          onPointerEnter={() => setHoveredId(route.id)}
+                                          onPointerLeave={() => setHoveredId(null)}
+                                          onFocus={() => setHoveredId(route.id)}
+                                          onBlur={() => setHoveredId(null)}
+                                        >
+                                          <span>
+                                            {choiceKind === "versions"
+                                              ? routeName(route)
+                                              : startName(route)}
+                                          </span>
+                                          {choiceKind === "versions" && route.trailNames.length > 2 && (
+                                            <small>
+                                              Also: {route.trailNames.slice(2).join(" · ")}
+                                            </small>
+                                          )}
+                                          {choiceKind === "versions" ? (
+                                            <small>From {startName(route)}</small>
+                                          ) : (
                                             <small>
                                               {route.startKind === "trailhead"
                                                 ? "Trailhead"
                                                 : route.startKind === "parking"
                                                   ? "Parking"
-                                                  : "Road contact"}{" "}
-                                              · {miles(route.distance)} mi · ↑{" "}
-                                              {feet(route.gain)} ft
-                                              {route.uncertain
-                                                ? " · Access uncertain"
-                                                : ""}
+                                                  : "Road contact"}
                                             </small>
-                                          </button>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </>
-                                )
+                                          )}
+                                          <small>
+                                            {miles(route.distance)} mi · ↑ {feet(route.gain)} ft
+                                            {" · "}{(route.roadDistance / MILE).toFixed(2)} mi roads
+                                            {route.uncertain ? " · Access uncertain" : ""}
+                                          </small>
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
                               )}
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
                     </RouteDetails>
                   ) : (
@@ -1565,6 +1632,9 @@ export function App() {
                           </span>
                           <span className="route-kind">
                             {route.kind === "lollipop" ? "Lollipop" : "Loop"}
+                            {route.variantCount > 1
+                              ? ` · ${route.variantCount.toLocaleString()} route versions`
+                              : ""}
                             {route.roadDistance > 0
                               ? ` · ${(route.roadDistance / MILE).toFixed(2)} mi road connections`
                               : ""}

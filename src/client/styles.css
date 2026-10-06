@@ -445,28 +445,38 @@ h2 {
   color: var(--muted);
   font-weight: 500;
 }
-.starting-point > .text-button {
-  margin-top: 5px;
+.route-choices {
+  margin: 12px 0;
 }
-.starting-point-choices {
+.route-choice-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+.route-choice-list {
   margin-top: 10px;
   padding: 10px;
   background: #f5f7f1;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
-.starting-point-choices .result-pages {
+.route-choice-list h3 {
+  font-size: 12px;
+  margin: 0 0 5px;
+}
+.route-choice-list .result-pages {
   position: static;
   background: transparent;
 }
-.start-list {
+.choice-list {
   max-height: 240px;
   overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.start-list button {
+.choice-list button {
   display: block;
   width: 100%;
   padding: 8px;
@@ -475,14 +485,15 @@ h2 {
   text-align: left;
   font-size: 12px;
 }
-.start-list small {
+.choice-list small {
   display: block;
   margin-top: 2px;
   color: var(--muted);
   font-weight: 400;
 }
-.start-list button:hover,
-.start-list [aria-current="true"] {
+.choice-list button:hover,
+.choice-list button:focus-visible,
+.choice-list [aria-current="true"] {
   background: #e5ecdf;
 }
 .direction-status {
