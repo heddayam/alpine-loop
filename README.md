@@ -59,8 +59,9 @@ a progress bar for completed discovery steps, completed regions and
 elapsed time. Closing it leaves jobs running. Jobs
 use bounded discovery effort without a mileage or displayed-result cap. A
 completed empty search means no qualifying hikes were found by that search.
-The bounded solver replacement is currently being implemented and measured;
-the [previous measured review](benchmarks/completed-jobs-review.json) records the
+Every job uses the full discovery plan, with one submission and one completed
+result set. Searches can miss valid hikes; every shown route meets the submitted
+limits. The [previous measured review](benchmarks/completed-jobs-review.json) records the
 exhaustive solver's unfinished jobs and memory failures.
 Completed jobs become ready in the app without changing your screen.
 
@@ -68,14 +69,13 @@ History and completed geometry live in `.local-data/jobs`. Reloading restores
 jobs; completed views have stable `?job=ID` URLs. Restarting interrupts the job
 that was running and continues queued jobs. Cancellation, interruption and failure
 discard unfinished results while keeping settings to copy into a new submission.
-Constraints are immutable. **Search deeper** offers one longer discovery run on
-the same completed job. Earlier results remain readable while it runs and if it
-is cancelled, interrupted or fails. The expanded results are published together;
-open **View updated results** to switch from the earlier saved revision. Deeper
-discovery requires the original prepared data. Delete terminal jobs with confirmation to reclaim their
+Constraints and completed results are immutable. Copy settings to submit another
+job. Delete terminal jobs with confirmation to reclaim their
 saved storage; history is otherwise retained.
 
-Main circuits are discovered once, independently of their starting points.
+Distinct main circuits are proposed by deterministic weighted shortest-path
+forests and short local trail alternatives. A small set of sensible reversible
+connections evaluates every eligible start separately from the main circuit.
 Minor variants share a family only when their common physical core trail is at
 least 85% of their combined core footprint, the common cyclic order agrees, and
 no connected difference exceeds one kilometer. Approaches and directions do not

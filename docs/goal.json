@@ -26,7 +26,7 @@
       "retain qualifying minor shortcuts or longer trail variations; reject avoidable road mileage and climb padding before applying minimums",
       "explicit trailhead/parking/road-contact default-start ranking and qualifying alternative starts/directions",
       "accessible Jobs dialog, measured planned-discovery progress, region/stage/elapsed progress and stable completed-job URLs",
-      "one longer Search deeper execution on the same completed job; prior results remain available and version-pinned during execution and after publication"
+      "one full bounded discovery execution per immutable job; existing completed searches remain available"
     ],
     "setup": [
       "one local command after prerequisites",
@@ -44,7 +44,7 @@
       "allStartsAttemptedP90Ms": null,
       "cancelMs": 1000,
       "runtimeBytes": 1000000000,
-      "priority": "User decision 2026-10-05: bounded diverse discovery with exact returned-route limits; a small set of sensible lollipop approaches and road connections. Target normal jobs about one minute, with one longer Search deeper execution after completion. Benchmarks establish achieved timings; no exhaustive-discovery claim. Cancellation below one second."
+      "priority": "User decision 2026-10-05: bounded diverse discovery with exact returned-route limits and a small set of sensible lollipop approaches and road connections. Every new job uses the full discovery plan; there is no second-stage action. All-region jobs may take longer. Measure achieved timings; no exhaustive-discovery claim. Cancellation below one second."
     },
     "delivery": [
       "working replacement",
@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "Bounded solver replacement in progress after user approved abandoning exhaustive enumeration. Same-job deeper execution, version-pinned existing results and atomic publication are implemented and verified through actual worker/API flows. The final exact optimization still left the reported north-region 13\u201318 mile job unfinished after 900 seconds (438,908,711 expansions, 120/10,424 roots, peak sampled RSS 463,241,216 bytes); cancellation took 10.3ms. New solver runtime and route-quality measurements remain pending.",
+  "state": "The bounded solver and single-search interface are rebuilt and running at http://127.0.0.1:3101/. The user tested deeper north-region 13\u201318 mile search in 29.7 seconds and south-region search in 4.9 seconds before the distinct-seed scheduling refinement. Saved results remain available. Full verification passes 62 Vitest and 4 Node checks. Broader final runtime and recall measurements remain in progress; a high-repetition known-walk diagnostic is still expensive. Bounded discovery may miss valid hikes.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -266,7 +266,7 @@
     "data": "Resolve region IDs and prepared files at execution start, pin exact footprints/hashes throughout, fail on missing/changed data.",
     "grouping": "Canonical circuit order; aggregate common and combined physical core-trail sets, 85% shared fraction, common cyclic order, each connected combined-minus-common component at most 1000 m. Approaches/direction do not define main hike identity.",
     "history": "Keep until confirmed manual terminal-job deletion. Cancel/failure/interruption discard partial output; queued jobs continue after restart.",
-    "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region, fully explored loop search points within the current region and fully explored regions. The user approved the within-region bar without an explanatory note. No live result stream or speculative ETA.",
+    "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region, completed planned-discovery steps within the current region and completed regions. User approved a within-region bar without an explanatory note. No live result stream or speculative ETA.",
     "validation": {
       "status": "Infrastructure and exact small-graph correctness verified; ordinary-job runtime not accepted.",
       "review": "benchmarks/completed-jobs-review.json",
@@ -313,13 +313,12 @@
       "Bounded discovery of diverse main loops; some valid hikes may be missed.",
       "A small set of sensible lollipop approaches and road connections; unusually long access detours may be missed.",
       "Exact submitted limits on every returned route; prepared-region scope and uncertain-access policy unchanged.",
-      "Normal-search target about one minute, measured before promising.",
-      "Search deeper only on completed jobs, extending the same job and URL.",
-      "One longer deeper search, rather than repeatable discovery passes.",
-      "Existing results remain available while deeper work runs."
+      "One full discovery search per new job; remove Search deeper and the two-stage workflow.",
+      "Existing saved results remain available.",
+      "All-region jobs may be slower."
     ],
     "completion": "All planned discovery work in every selected region, grouping and durable saving have finished. This does not certify exhaustive discovery.",
-    "extension": "Constraints remain immutable. One successful deeper execution atomically publishes another result revision, retains the earlier revision for stable browsing, and shares physical geometry. Cancelled/failed/interrupted extensions retain earlier completed results and can be retried. Extensions require the original prepared inputs.",
-    "status": "Implementation and real-data measurements in progress."
+    "status": "Implemented and deployed to the requested local app; broader performance verification in progress.",
+    "previousTwoStageDecision": "Constraints remain immutable. One successful deeper execution atomically publishes another result revision, retains the earlier revision for stable browsing, and shares physical geometry. Cancelled/failed/interrupted extensions retain earlier completed results and can be retried. Extensions require the original prepared inputs."
   }
 }
