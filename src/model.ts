@@ -39,8 +39,10 @@ export type TrailGeometry = { id: string; name: string | null; coordinates: Posi
 
 /** Engine/transport measurements use meters and fractions; UI converts units. */
 export type SearchQuery = {
-  /** Exactly the prepared sections to explore, including every eligible start. */
+  /** Exactly the prepared sections to search, considering every eligible start. */
   sections: string[];
+  /** Bounded candidate discovery; deeper tries more alternatives. Defaults to normal. */
+  effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
   repetition: number;

@@ -7,6 +7,8 @@ export class RequestError extends Error {
 export function parseQuery(value: unknown): SearchQuery {
   if (!value || typeof value !== 'object') throw new RequestError('Choose regions and hike constraints.', 400);
   const query = value as SearchQuery;
+  const effort = query.effort ?? 'normal';
+  if (effort !== 'normal' && effort !== 'deep') throw new RequestError('Choose Standard or Deeper search.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
   if (!Array.isArray(query.sections) || !query.sections.length || new Set(query.sections).size !== query.sections.length
@@ -23,7 +25,7 @@ export function parseQuery(value: unknown): SearchQuery {
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
-  return { sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
+  return { sections: [...query.sections], effort, distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 

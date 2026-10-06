@@ -6,7 +6,7 @@ export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 
 type ChoiceRow = { summary: string; groupId: string; groupSize: number; reverseId: string | null };
 const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
   groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
-const selectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits.';
+const selectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
 
 /** A worker owns this private file until it closes; the server opens only published files. */
 export function createRouteStore(path: string, writable = false) {
