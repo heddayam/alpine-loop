@@ -50,7 +50,7 @@ async function completeRegion(chosen: (typeof selections)[number]) {
     const route = selection.describe(saved.route);
     route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
     for (const step of route.sections) used.add(step.id);
-    store.add({ ...saved, route, groupId: hash(`${chosen.section.id}/${saved.groupId}`),
+    store.add({ ...saved, route, groupId: hash(`${chosen.section.id}/${saved.groupId}`), variantId: hash(`${chosen.section.id}/${saved.variantId}`),
       reverseId: saved.reverseId && savedIds.has(saved.reverseId) ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined,
       oppositeId: saved.oppositeId && savedIds.has(saved.oppositeId) ? hash(`${chosen.section.id}/${saved.oppositeId}`) : undefined });
   }
