@@ -179,6 +179,15 @@ it('preserves every start and direction when merging removes the initial common-
   expect(routes.every(item => item.oppositeId && !item.reverseId)).toBe(true);
 });
 
+it('retains a road-only main circuit when an asymmetric trail stem satisfies the road and repetition limits', async () => {
+  const graph = fixture([[0, 1, 1000, { backDistance: 1 }], [1, 2, 30, { connector: true }],
+    [2, 3, 30, { connector: true }], [3, 1, 40, { connector: true }]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [1101, 1101], repetition: 0.2,
+    roads: { distance: 100, fraction: 0.1 } });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.roadDistance === 100 && item.route.repetition === 1 / 1101)).toBe(true);
+});
+
 it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
   let state = 123456789;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
