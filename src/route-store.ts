@@ -20,10 +20,6 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
       if (revision !== 0) throw new Error('This results revision is not available');
       for (const table of ['groups', 'options', 'routes']) db.exec(`CREATE TEMP VIEW ${table} AS SELECT 0 AS revision, * FROM main.${table}`);
     }
-    if (legacy && writable) {
-      for (const table of ['groups', 'options', 'routes']) db.exec(`ALTER TABLE ${table} RENAME TO original_${table}`);
-      db.exec('DROP INDEX IF EXISTS members');
-    }
     if (writable) db.exec(`
       PRAGMA journal_mode=DELETE;
       PRAGMA synchronous=FULL;
@@ -36,9 +32,6 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
       CREATE INDEX IF NOT EXISTS members ON routes(revision, group_id, start_id);
       CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
     `);
-    if (legacy && writable) for (const table of ['groups', 'options', 'routes']) {
-      db.exec(`INSERT INTO ${table} SELECT 0, * FROM original_${table}; DROP TABLE original_${table}`);
-    }
     const columns = `r.summary, r.group_id AS groupId,
       (SELECT COUNT(*) FROM options WHERE revision = r.revision AND group_id = r.group_id) AS groupSize, r.reverse_id AS reverseId`;
     const totals = db.prepare(`SELECT (SELECT COUNT(*) FROM routes WHERE revision = ${revision}) AS routeCount,
