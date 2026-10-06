@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RouteCandidate, SearchEvent, SearchQuery, TrailGraph } from '../../src/model.js';
 import { search } from '../../src/engine/search.js';
-import { enumerate, fixture } from './oracle.js';
+import { enumerate, fixture, measure, normalized } from './oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 10_000], gain: [0, 10_000], repetition: 1, includeUnknown: true };
 const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
@@ -15,7 +15,7 @@ async function collect(graph: TrailGraph, criteria = query, options: Parameters<
 }
 
 async function compare(graph: TrailGraph, criteria = query) {
-  const expected = enumerate(graph, criteria);
+  const expected = normalized(graph, criteria);
   const { routes, done } = await collect(graph, criteria, { sliceExpansions: 100_000 });
   expect(done.status).toBe('complete');
   expect(done.progress.attemptedStarts).toBe(done.progress.totalStarts);
@@ -23,6 +23,7 @@ async function compare(graph: TrailGraph, criteria = query) {
   expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
   const byId = new Map(expected.map(route => [key(route), route]));
   for (const route of routes) {
+    expect(measure(graph, criteria, route.start, route.edges)).toBeDefined();
     const reference = byId.get(key(route));
     expect(reference).toBeDefined();
     expect([route.distance, route.gain, route.roadDistance, route.repetition])
@@ -92,6 +93,12 @@ describe('independent legality oracle and explicit discovery quality', () => {
     const routes = await compare(graph);
     expect(routes).toHaveLength(2);
     expect(routes.every(route => route.kind === 'loop' && route.edges.length === 3)).toBe(true);
+  });
+
+  it('does not offer an all-road walk even when loose road limits would permit it', async () => {
+    const graph = fixture([[0, 1, 100, { connector: true }], [1, 2, 100, { connector: true }],
+      [2, 0, 100, { connector: true }]]);
+    expect(await compare(graph, { ...query, roads: { distance: 1000, fraction: 1 } })).toEqual([]);
   });
 
   it('explores every supplied start regardless of location and applies unknown access to starts and edges', async () => {

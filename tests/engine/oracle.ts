@@ -10,6 +10,7 @@ export function measure(graph: TrailGraph, query: SearchQuery, start: number, ed
   if (!entrance || (!query.includeUnknown && entrance.access !== 'public') || !edges.length) return;
   const walk = edges.map(id => graph.edges[id]);
   if (walk.some(edge => !edge || (!query.includeUnknown && edge.access !== 'public'))) return;
+  if (!walk.some(edge => !edge!.connector)) return;
   const nodes = [entrance.node];
   for (const edge of walk) { if (edge!.from !== nodes.at(-1)) return; nodes.push(edge!.to); }
   if (nodes.at(-1) !== entrance.node) return;
