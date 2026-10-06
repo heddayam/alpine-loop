@@ -164,22 +164,24 @@ function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, 
   if (![...counts.values()].includes(1)) return false;
   const gap = (from: number, to: number, edges: number[]): boolean => {
     if (!edges.length) return from === to;
-    const key = edges.join(',');
+    const publicOnly = !route.uncertain;
+    const key = `${Number(publicOnly)}:${edges.join(',')}`;
     const known = index.roadCertificates.get(key);
     if (known !== undefined) return known;
-    let labels = index.roadShortest.get(to);
+    const target = to * 2 + Number(publicOnly);
+    let labels = index.roadShortest.get(target);
     if (!labels) {
       const budget = Math.min(query.distance[1], (query.roads ?? DEFAULT_ROAD_LIMITS).distance) + index.rounding;
       labels = sparseBounds([to], budget, node => {
         const choices: [number, number][] = [];
         for (const physicalId of index.incident[node]!) for (const id of index.physical[physicalId]!.directions) {
           const edge = graph.edges[id]!;
-          if (edge.connector && edge.to === node) choices.push([edge.from, edge.distance]);
+          if (edge.connector && edge.to === node && (!publicOnly || edge.access === 'public')) choices.push([edge.from, edge.distance]);
         }
         return choices;
       });
       if (index.roadShortest.size >= 128) index.roadShortest.delete(index.roadShortest.keys().next().value!);
-      index.roadShortest.set(to, labels);
+      index.roadShortest.set(target, labels);
     }
     const length = edges.reduce((sum, id) => sum + graph.edges[id]!.distance, 0);
     let prefix = 0, certain = Number.isFinite(index.rounding);
@@ -190,7 +192,8 @@ function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, 
       visited.add(edge.to);
       for (const physicalId of index.incident[edge.from]!) for (const alternativeId of index.physical[physicalId]!.directions) {
         const alternative = graph.edges[alternativeId]!;
-        if (alternativeId === id || !alternative.connector || alternative.from !== edge.from) continue;
+        if (alternativeId === id || !alternative.connector || alternative.from !== edge.from
+          || (publicOnly && alternative.access === 'unknown')) continue;
         const lower = prefix + alternative.distance + (labels.get(alternative.to) ?? Infinity);
         if (lower <= length + 8 * index.rounding) { certain = false; break; }
       }
@@ -292,7 +295,7 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
 /** A deterministic discovery pass changes its anchor and positive edge cost,
  * yielding a different shortest-path forest. Every non-tree corridor closes
  * one simple fundamental circuit; this avoids enumerating all simple paths. */
-const DISCOVERY = { normal: { passes: 8, circuits: 256, proofs: 512 }, deep: { passes: 24, circuits: 256, proofs: 2048 } };
+const DISCOVERY = { normal: { passes: 8, circuits: 256, proofs: 128 }, deep: { passes: 24, circuits: 256, proofs: 128 } };
 type Tree = { parent: Int32Array; edge: Int32Array; depth: Int32Array; distance: Float64Array;
   gain: Float64Array; road: Float64Array; upper: Float64Array; ancestors: Int32Array[] };
 type Circuit = { physical: number[]; nodes: number[]; rings: number[][]; key: string };
@@ -540,8 +543,8 @@ function distanceCeiling(graph: TrailGraph, index: Index, query: SearchQuery, co
   return Math.min(query.distance[1], (upper + index.rounding) / denominator + index.rounding);
 }
 function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core: Circuit, mode: number, contact?: number): Generator<undefined, Map<number, number>> {
-  const uphill = [0, 2, 8, 0, 4, 16, 0, 0][mode]!, pavement = mode === 6 ? 0 : 12;
-  const knownOnly = mode === 3 || mode === 7, labels = new Map<number, number>(), parents = new Map<number, number>(), heap = new Heap();
+  const uphill = [0, 2, 8, 0][mode]!, pavement = 12;
+  const knownOnly = mode === 3, labels = new Map<number, number>(), parents = new Map<number, number>(), heap = new Heap();
   const coreNodes = new Set(core.nodes), min = (metric: (id: number) => number) => Math.min(...core.rings.map(ring => ring.reduce((sum, id) => sum + metric(id), 0)));
   const ceiling = distanceCeiling(graph, index, query, core);
   const distanceBudget = Math.max(0, Math.min(query.distance[1] - min(id => Math.floor(graph.edges[id]!.distance)),
@@ -615,7 +618,9 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
         const position = ring.findIndex(id => graph.edges[id]!.from === node);
         const rotated = [...ring.slice(position), ...ring.slice(0, position)];
         yield* verify(start, outward, rotated);
-        if (!outward.length || contact !== undefined || mode !== modes[0]) continue;
+        const anchor = Math.min(...ring.map(id => graph.edges[id]!.trail));
+        const direction = graph.edges[ring.find(id => graph.edges[id]!.trail === anchor)!]!.reverse;
+        if (!outward.length || contact !== undefined || mode !== modes[0] || best.has(`${start}:${direction}`)) continue;
         const pathNodes = [graph.starts[start]!.node, ...outward.map(id => graph.edges[id]!.to)];
         const physical = outward.map(id => index.incident[graph.edges[id]!.from]!.find(item => index.physical[item]!.trail === graph.edges[id]!.trail)!);
         const paths = alternatives(index, physical, pathNodes, new Set([...core.nodes, ...pathNodes])).map(parts => {
@@ -677,14 +682,7 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
         if (trials++ >= plan.circuits) break;
         seen.add(core.key);
         if (item.depth < 2) for (const variant of localCircuits(graph, index, query, core)) pending.push({ core: variant, depth: item.depth + 1 });
-        const emitted = new Set<string>();
-        const phases = [{ modes: [0, 1, 2, 3], proofs: DISCOVERY.normal.proofs }];
-        if (query.effort === 'deep') phases.push({ modes: [4, 5, 6, 7], proofs: plan.proofs });
-        for (const phase of phases) for (const route of witnesses(graph, index, query, core, phase.modes, phase.proofs)) {
-          if (route && emitted.has(route.id)) continue;
-          if (route) emitted.add(route.id);
-          yield route;
-        }
+        yield* witnesses(graph, index, query, core, [0, 1, 2, 3], plan.proofs);
         progress.completedSearchPoints = pass * (plan.circuits + 1) + 1 + trials;
         yield undefined;
       }
