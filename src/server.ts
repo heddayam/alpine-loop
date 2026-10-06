@@ -49,8 +49,8 @@ export async function createApp(directory: string, clientDirectory?: string, job
   });
   app.get<{ Params: { id: string } }>('/api/jobs/:id', async request => jobs.get(request.params.id));
   const revision = (value?: string) => value === undefined ? undefined : Number(value);
-  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
-    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order, revision(request.query.revision)));
+  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; variant?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
+    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order, revision(request.query.revision), request.query.variant));
   app.get<{ Params: { id: string }; Querystring: { revision?: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id, revision(request.query.revision)));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => jobs.cancel(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });

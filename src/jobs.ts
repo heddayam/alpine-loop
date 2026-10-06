@@ -225,12 +225,13 @@ export async function createJobs(dataDirectory: string, directory: string) {
       return entries.toReversed();
     },
     get: snapshot,
-    page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number) {
+    page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number, variantId?: string) {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
         throw new RequestError('Choose a valid results page and sort order.', 400);
       }
+      if (groupId !== undefined && variantId !== undefined) throw new RequestError('Choose route versions or starting points, not both.', 400);
       return results(id, store => {
-        const page = store.page(offset, groupId, sort, order);
+        const page = store.page(offset, groupId, sort, order, variantId);
         if (!page) throw new RequestError('This hike is not available.', 404);
         return page;
       }, revision);
