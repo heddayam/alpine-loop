@@ -61,8 +61,10 @@ use bounded discovery effort without a mileage or displayed-result cap. A
 completed empty search means no qualifying hikes were found by that search.
 Every job uses the full discovery plan, with one submission and one completed
 result set. Searches can miss valid hikes; every shown route meets the submitted
-limits. The [previous measured review](benchmarks/completed-jobs-review.json) records the
-exhaustive solver's unfinished jobs and memory failures.
+limits. The [bounded-discovery review](benchmarks/bounded-discovery-review.json) records
+current correctness and real-data measurements; the
+[previous review](benchmarks/completed-jobs-review.json) retains the exhaustive
+solver's unfinished jobs and memory failures.
 Completed jobs become ready in the app without changing your screen.
 
 History and completed geometry live in `.local-data/jobs`. Reloading restores

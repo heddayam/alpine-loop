@@ -1,0 +1,2225 @@
+{
+  "date": "2026-10-05",
+  "status": "Implemented, rebuilt, deployed locally, and verified. One full bounded discovery search per job; no second-stage action.",
+  "userDecision": [
+    "Bounded diverse discovery can miss valid hikes.",
+    "Exact returned-route limits and road-padding rejection.",
+    "Sensible reversible approaches, rather than every winding alternative.",
+    "One full search per immutable job; no second-stage action.",
+    "All-region requests may be slower."
+  ],
+  "architecture": "Deterministic weighted shortest-path forests propose canonical main circuits. A bounded local neighborhood preserves useful trail changes. Connections evaluate all eligible prepared starts independently. Exact ordered-walk checks and completed road-substitution proofs precede grouping. A private disk-backed SQLite TEMP pool retains normalized per-core/start/direction candidates; grouping streams cores in numeric canonical order and keeps preferred routes by their orientation pattern across the shrinking common trail set. FIFO workers privately save shared physical geometry before metadata publication.",
+  "literature": [
+    {
+      "url": "https://www.cs.tufts.edu/comp/150GA/homeworks/hw1/Johnson%2075.PDF",
+      "use": "Elementary circuit enumeration scales with the number of circuits; supports abandoning exhaustive enumeration, without asserting all hike queries are infeasible."
+    },
+    {
+      "url": "https://arxiv.org/abs/1906.07754",
+      "use": "Constrained tour construction motivates bounded candidate search with strict final feasibility checks."
+    },
+    {
+      "url": "https://link.springer.com/article/10.1007/s42979-024-03223-3",
+      "use": "Fixed-length round-trip heuristics motivate diverse candidates and local improvement; street-network timings are not transferred to mountain data."
+    }
+  ],
+  "verification": {
+    "offline": {
+      "vitest": 64,
+      "node": 4,
+      "result": "passed",
+      "method": "Full build/typecheck plus 63 Vitest and 4 Node checks passed after the memory fix. One additional independent disk-pool/cross-section oracle regression passed with all 27 diversity checks; final typecheck passed. 64 unique Vitest checks passed in total."
+    },
+    "corpusHistorical": {
+      "samples": 1024,
+      "normalCandidates": 7149,
+      "deepCandidates": 7173,
+      "referenceNonempty": 797,
+      "normalNonempty": 797,
+      "deepNonempty": 797,
+      "referenceCircuits": 2093,
+      "normalCircuits": 2083,
+      "deepCircuits": 2086,
+      "referenceFamilies": 2082,
+      "normalFamilyRepresentatives": 2074,
+      "deepFamilyRepresentatives": 2077
+    },
+    "knownWalkRecallHistorical": {
+      "method": "Bounded production discovery on entire pinned sections with original distance/gain/repetition/access/road constraints. Independently validate every emitted walk in actual traversal order. Pairwise 85% common trail/order/1km rule compares known source main circuits with found circuits; original-start coverage is separate. This measures seven known-route recall and does not certify real-network completeness.",
+      "catalogSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+      "searchCompiledSha256": "de5131f5ac97f41affdcc81ca3e12c6f7901428682103f1f20ccd54dd159c627",
+      "rows": [
+        {
+          "queryId": "pass-lakes",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "normal",
+          "status": "complete",
+          "elapsedMs": 34507,
+          "candidates": 97560,
+          "exactCoreWitnesses": 0,
+          "familyWitnesses": 0,
+          "originalStartExact": 0,
+          "originalStartFamily": 0,
+          "normalCandidatesMissing": 0,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 2098,
+            "expansions": 35661818,
+            "elapsedMs": 34506,
+            "totalSearchPoints": 2056,
+            "completedSearchPoints": 2056
+          }
+        },
+        {
+          "queryId": "paradise-short",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "normal",
+          "status": "complete",
+          "elapsedMs": 10827,
+          "candidates": 29407,
+          "exactCoreWitnesses": 58,
+          "familyWitnesses": 58,
+          "originalStartExact": 2,
+          "originalStartFamily": 2,
+          "normalCandidatesMissing": 0,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 2098,
+            "expansions": 11954605,
+            "elapsedMs": 10827,
+            "totalSearchPoints": 2056,
+            "completedSearchPoints": 2056
+          }
+        },
+        {
+          "queryId": "paradise-day",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "normal",
+          "status": "complete",
+          "elapsedMs": 28437,
+          "candidates": 97106,
+          "exactCoreWitnesses": 0,
+          "familyWitnesses": 0,
+          "originalStartExact": 0,
+          "originalStartFamily": 0,
+          "normalCandidatesMissing": 0,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 2098,
+            "expansions": 31346187,
+            "elapsedMs": 28437,
+            "totalSearchPoints": 2056,
+            "completedSearchPoints": 2056
+          }
+        },
+        {
+          "queryId": "sunrise-day",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "normal",
+          "status": "complete",
+          "elapsedMs": 43831,
+          "candidates": 153650,
+          "exactCoreWitnesses": 8,
+          "familyWitnesses": 16,
+          "originalStartExact": 2,
+          "originalStartFamily": 4,
+          "normalCandidatesMissing": 0,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 2098,
+            "expansions": 41988412,
+            "elapsedMs": 43831,
+            "totalSearchPoints": 2056,
+            "completedSearchPoints": 2056
+          }
+        },
+        {
+          "queryId": "north-bend-known",
+          "section": "mountain-c3bf848c1f0d95dee5a4a131",
+          "effort": "normal",
+          "status": "complete",
+          "elapsedMs": 88,
+          "candidates": 12,
+          "exactCoreWitnesses": 4,
+          "familyWitnesses": 4,
+          "originalStartExact": 2,
+          "originalStartFamily": 2,
+          "normalCandidatesMissing": 0,
+          "progress": {
+            "totalStarts": 77,
+            "attemptedStarts": 77,
+            "completedStarts": 77,
+            "expansions": 10800,
+            "elapsedMs": 87,
+            "totalSearchPoints": 2056,
+            "completedSearchPoints": 2056
+          }
+        }
+      ]
+    },
+    "unfinishedDeepRecallHistorical": {
+      "method": "Bounded production discovery on entire pinned sections with original distance/gain/repetition/access/road constraints. Independently validate every emitted walk in actual traversal order. Pairwise 85% common trail/order/1km rule compares known source main circuits with found circuits; original-start coverage is separate. This measures seven known-route recall and does not certify real-network completeness.",
+      "catalogSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+      "searchCompiledSha256": "5789b0617f7be0c3997372d331c43ffbd40b21011839f10ffa4e039c3d0ee1d9",
+      "rows": [
+        {
+          "queryId": "pass-lakes",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "deep",
+          "status": "stopped",
+          "elapsedMs": 180002,
+          "candidates": 100942,
+          "exactCoreWitnesses": 32,
+          "familyWitnesses": 32,
+          "originalStartExact": 2,
+          "originalStartFamily": 2,
+          "normalCandidatesMissing": null,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 0,
+            "expansions": 314998784,
+            "elapsedMs": 180002,
+            "totalSearchPoints": 6168,
+            "completedSearchPoints": 1839
+          }
+        },
+        {
+          "queryId": "paradise-day",
+          "section": "mountain-98d01931128751f9f515fa07",
+          "effort": "deep",
+          "status": "stopped",
+          "elapsedMs": 180002,
+          "candidates": 89530,
+          "exactCoreWitnesses": 0,
+          "familyWitnesses": 0,
+          "originalStartExact": 0,
+          "originalStartFamily": 0,
+          "normalCandidatesMissing": null,
+          "progress": {
+            "totalStarts": 2098,
+            "attemptedStarts": 2098,
+            "completedStarts": 0,
+            "expansions": 309501952,
+            "elapsedMs": 180004,
+            "totalSearchPoints": 6168,
+            "completedSearchPoints": 2294
+          }
+        }
+      ],
+      "normalStreamComparison": "Not measured across scheduling changes; these were deep-only runs."
+    },
+    "allRegionPrototypeIndependentWalks": 173291,
+    "singleSearchBeforeAccessSimplification": {
+      "elapsedMs": 29025.177874999998,
+      "groups": 270,
+      "witnesses": 20028,
+      "peakRssBytes": 636321792,
+      "unchanged": true,
+      "allWitnessesIndependentlyVerified": 20028,
+      "evidence": ".local-data/solver-performance-fix/single-search-before-access-simplification/report.json"
+    },
+    "sensibleApproachPreferenceDifference": {
+      "sample": 27,
+      "seed": 123456789,
+      "preservedMainFamilies": 4,
+      "preservedStartDirectionWitnesses": 16,
+      "changedApproachPreferences": 5,
+      "changedDefaultStarts": 2,
+      "finding": "Some longer winding approaches from the exhaustive oracle are intentionally omitted. Preferred-route selection is independently checked over the discovered feasible pool. Main family/start/direction coverage remains equal in the randomized corpus.",
+      "evidence": ".local-data/solver-performance-fix/sensible-approach-preference-difference.json"
+    },
+    "finalFocusedContracts": 46,
+    "finalPassLakes": {
+      "elapsedMs": 171203.745709,
+      "completedRegions": [
+        "mountain-98d01931128751f9f515fa07"
+      ],
+      "starts": 2098,
+      "groups": 1285,
+      "witnesses": 142468,
+      "peakRssBytes": 798146560,
+      "storageBytes": 1086644224,
+      "allWalksIndependentlyVerified": 142468,
+      "knownCoreAndOriginalStart": {
+        "method": "Read only a metadata-published terminal completed results database. Independently map stored physical directed steps to the pinned source graph to assess known-core recall. Parent separately validated every saved route with strict actual-order metrics/access/topology. Check all saved source geometry exactly. Compare known source main circuit by exact canonical trail order or pairwise shared-core85%/cyclic-order/1km rule; original-start availability is separate. Known-circuit recall does not certify all-network completeness.",
+        "queryId": "pass-lakes",
+        "jobId": "7252d166-8df2-46ab-982f-d9948ec4e112",
+        "catalogSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+        "resultFileSha256": "7dfda4591762fed639a8c577ed9c440cc34ed91032edf536aea65c2e5d149a78",
+        "sourceCheckerSha256": "37d7f9307f7aaa14c6055eee9c611da6715726698cddbddb9776eb497cd23ced",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            9656.064,
+            22530.816
+          ],
+          "gain": [
+            457.20000000000005,
+            1524
+          ],
+          "repetition": 0.4,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "checkedStoredSequences": 142468,
+        "savedGroups": 1285,
+        "checkedGeometries": 4532,
+        "exactCoreRoutes": 32,
+        "nearCoreRoutes": 32,
+        "exactGroupIds": [
+          "be6f35a0f46ddddb0363409730f475b3"
+        ],
+        "nearGroupIds": [
+          "be6f35a0f46ddddb0363409730f475b3"
+        ],
+        "originalStartExactRoutes": [
+          "86288073da5e3f9aa9ba779c4a5918c9",
+          "9cdc8a220d94a377912bb2a3c149d45b"
+        ],
+        "originalStartNearRoutes": [
+          "86288073da5e3f9aa9ba779c4a5918c9",
+          "9cdc8a220d94a377912bb2a3c149d45b"
+        ],
+        "originalStartDirections": [
+          false,
+          true
+        ]
+      },
+      "evidence": ".local-data/solver-performance-fix/final-pass-lakes/report.json",
+      "timing": "Descriptive; may overlap the first frozen query observation."
+    },
+    "allRegionsBeforeStatementReuse": {
+      "status": "failed",
+      "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+      "observedMs": 125411.741167,
+      "peakRssBytes": 966230016,
+      "progress": {
+        "stage": "searching",
+        "completedRegions": [
+          "mountain-98d01931128751f9f515fa07"
+        ],
+        "totalRegions": 5,
+        "elapsedMs": 125203.21691599999,
+        "expansions": 93086482,
+        "totalStarts": 10187,
+        "completedStarts": 2098,
+        "currentRegion": {
+          "id": "mountain-9b22599e6865d915fd8c8a47",
+          "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20"
+        },
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 3417
+      },
+      "evidence": ".local-data/solver-performance-fix/all-regions-before-statement-reuse/report.json"
+    },
+    "privatePoolBoundary": {
+      "checks": "Independent exhaustive fixture comparison through actual disk-backed candidate storage across consecutive sections with overlapping numeric IDs. Temporary candidates never contribute to public counts or persist in the result schema. Existing candidate legality, grouped preference, worker/API/restart/cancellation/publication checks pass.",
+      "groupingProof": "Two routes with equal orientation patterns remain equal at every possible future anchor because common trails only shrink. Route quality is anchor-independent, so retain the best per start/pattern, project on shrink, and merge equal projections by quality. Finally choose the best for each direction at the smallest remaining common trail.",
+      "review": "Independent read-only review found no blocking correctness, transaction or cleanup issue. Runtime SQLite TEMP_STORE=1, temp_store=FILE, temp.cache_size=-4096 were verified."
+    },
+    "allRegionsFiveMinuteDiagnostic": {
+      "status": "running",
+      "outcome": "unfinished",
+      "reason": "Harness observation window; four regions completed and fifth still searching. This is not a completion or absence certificate.",
+      "observedMs": 300010.024958,
+      "progress": {
+        "stage": "searching",
+        "completedRegions": [
+          "mountain-98d01931128751f9f515fa07",
+          "mountain-9b22599e6865d915fd8c8a47",
+          "mountain-c0f9cfc84ae35acfa51dae73",
+          "mountain-c3bf848c1f0d95dee5a4a131"
+        ],
+        "totalRegions": 5,
+        "elapsedMs": 299998,
+        "expansions": 184953328,
+        "totalStarts": 10187,
+        "completedStarts": 8031,
+        "currentRegion": {
+          "id": "mountain-d83464381288bbcb6a784a75",
+          "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20"
+        },
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 1006
+      },
+      "peakRssBytes": 917553152,
+      "cancel": {
+        "trigger": "observation_window",
+        "requestedMs": 300010.12395800004,
+        "latencyMs": 560.4284580000094,
+        "status": "cancelled",
+        "activeWorkersBefore": 1,
+        "activeWorkersAfterResponse": 0,
+        "workerExitLatencyMs": 25.565082999994047
+      },
+      "activeWorkersAtEnd": 0,
+      "unchanged": true,
+      "evidence": ".local-data/solver-performance-fix/all-regions-five-minute-observation/report.json"
+    },
+    "finalUserNorth": {
+      "query": {
+        "sections": [
+          "mountain-9b22599e6865d915fd8c8a47"
+        ],
+        "effort": "deep",
+        "distance": [
+          20921.472,
+          28968.192000000003
+        ],
+        "gain": [
+          914.4000000000001,
+          1524
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "elapsedMs": 22415.935083,
+      "groups": 269,
+      "witnesses": 19862,
+      "allWalksIndependentlyVerified": 19862,
+      "peakRssBytes": 615219200,
+      "storageBytes": 198656000,
+      "progress": {
+        "stage": "saving",
+        "completedRegions": [
+          "mountain-9b22599e6865d915fd8c8a47"
+        ],
+        "totalRegions": 1,
+        "elapsedMs": 22228.907334,
+        "expansions": 8560932,
+        "totalStarts": 1655,
+        "completedStarts": 1655,
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 6168
+      },
+      "unchanged": true,
+      "timing": "Descriptive; overlapped all-region and frozen-query measurements.",
+      "evidence": ".local-data/solver-performance-fix/final-user-north/report.json"
+    },
+    "allRegionOneGigabyteGuard": {
+      "outcome": "unfinished",
+      "reason": "Harness RSS guard, not a worker failure or an absence certificate.",
+      "observedMs": 197044.795458,
+      "peakRssBytes": 1021493248,
+      "memoryGuard": {
+        "atMs": 197019.464208,
+        "rssBytes": 1014169600
+      },
+      "progress": {
+        "stage": "preparing",
+        "completedRegions": [
+          "mountain-98d01931128751f9f515fa07",
+          "mountain-9b22599e6865d915fd8c8a47",
+          "mountain-c0f9cfc84ae35acfa51dae73"
+        ],
+        "totalRegions": 5,
+        "elapsedMs": 197017,
+        "expansions": 107278713,
+        "totalStarts": 10187,
+        "completedStarts": 5362,
+        "currentRegion": {
+          "id": "mountain-c3bf848c1f0d95dee5a4a131",
+          "name": "Washington Cascades \u2014 north of I90, south of US2"
+        }
+      },
+      "cancel": {
+        "trigger": "harness_rss_guard",
+        "requestedMs": 197019.663291,
+        "latencyMs": 276.47891700000037,
+        "status": "cancelled",
+        "activeWorkersBefore": 1,
+        "activeWorkersAfterResponse": 0,
+        "workerExitLatencyMs": 96.3863339999807
+      },
+      "activeWorkersAtEnd": 0,
+      "evidence": ".local-data/solver-performance-fix/all-regions-one-gigabyte-guard/report.json"
+    },
+    "independentChecker": {
+      "checks": [
+        {
+          "request": "all-regions-default",
+          "job": "856cd6a1-b468-44fe-b684-aa0180977f62",
+          "witnesses": 408250
+        }
+      ],
+      "checkerSha256": "8d6908b9682ed1754c14e3d47e982ab67ba6b55952574c399cc42ddf16ab7ac5",
+      "method": "Reads terminal saved directed steps and pinned prepared graph without production solver, metric helpers, grouping or route store. Independently verifies legal start/access, ordered metrics and constraints, one simple circuit and identical reversible approach."
+    },
+    "browser": {
+      "url": "http://127.0.0.1:3101/",
+      "singleFullSearch": true,
+      "searchDeeperRemoved": true,
+      "oldSavedResultsRestoredAfterRefresh": true,
+      "oldNorthFamilies": 271,
+      "oldSouthFamilies": 181,
+      "screenshot": ".local-data/solver-performance-fix/single-search-jobs.jpg"
+    }
+  },
+  "sourceSize": {
+    "beforeBoundedLines": 7006,
+    "currentLines": 6715,
+    "originalRewriteLines": 24063,
+    "method": "scripts/source-size.mjs"
+  },
+  "finalAllRegions": {
+    "status": "completed",
+    "outcome": "complete_within_snapshot",
+    "query": {
+      "sections": [
+        "mountain-98d01931128751f9f515fa07",
+        "mountain-9b22599e6865d915fd8c8a47",
+        "mountain-c0f9cfc84ae35acfa51dae73",
+        "mountain-c3bf848c1f0d95dee5a4a131",
+        "mountain-d83464381288bbcb6a784a75"
+      ],
+      "effort": "deep",
+      "distance": [
+        8046.72,
+        19312.128
+      ],
+      "gain": [
+        0,
+        1219.2
+      ],
+      "repetition": 0.2,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "elapsedMs": 318606.208958,
+    "progress": {
+      "stage": "saving",
+      "completedRegions": [
+        "mountain-98d01931128751f9f515fa07",
+        "mountain-9b22599e6865d915fd8c8a47",
+        "mountain-c0f9cfc84ae35acfa51dae73",
+        "mountain-c3bf848c1f0d95dee5a4a131",
+        "mountain-d83464381288bbcb6a784a75"
+      ],
+      "totalRegions": 5,
+      "elapsedMs": 317495.322333,
+      "expansions": 190779221,
+      "totalStarts": 10187,
+      "completedStarts": 10187,
+      "totalSearchPoints": 6168,
+      "completedSearchPoints": 6168
+    },
+    "groups": 4776,
+    "witnesses": 408250,
+    "storageBytes": 2513584128,
+    "peakRssBytes": 943439872,
+    "sampledPeakRssBytes": 939933696,
+    "rssObservationGuardBytes": 1300000000,
+    "observationMs": 900000,
+    "unchangedDuringMeasurement": true,
+    "sameJobAndQueryOnReconnect": {
+      "atMs": 1016.6782079999999,
+      "latencyMs": 0.80925000000002,
+      "sameJob": true,
+      "sameQuery": true,
+      "status": "running"
+    },
+    "activeWorkersAtEnd": 0,
+    "inputs": {
+      "catalogSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+      "datasetId": "mountains-2b6ffea097117e3a296303f9f016f38e3ec14b42070cf2e6c2ba1e1cd27dce5a",
+      "sourceAndCompiledHashes": {
+        "src/client/clusters.ts": "bb5585d6d90f9719ad11b408c7773dff12db15351cad4c8b231d5f1171651846",
+        "src/client/env.d.ts": "35d26ea66c86da9701e4f4b467913481ffeae910761cea34c775c5dacb7f8eaa",
+        "src/data-format.ts": "b649d5d79cff26c132a2de3853ff2e2503fd65100127b6ea66a86fac5167664f",
+        "src/dataset.ts": "53c16d4c6a22a8af2f528e5dda746988037c4df66e586519bda6336ed5b341f0",
+        "src/diversity.ts": "2121234f03ff9c2f699c2b1ef5834ca98c87e65f7355a01cc98d685ccfd01996",
+        "src/engine/quality.ts": "5ccd320da65e5fe0402c2cd8dc8a9abe7ab7edddac05b057cf00a039f26f4721",
+        "src/engine/search.ts": "d9c5ad2d4141e71e35b47286cd9dfac937485450ab88ad268dd2c086feb4b006",
+        "src/jobs.ts": "afba8f555591c2f92a86d59f1cf6cdf0e8915cd3046b5eab36ab75d96ba550fc",
+        "src/model.ts": "93d7130f2d6aaa95d32ae6e396cca007d72b58bb561c09767509616f0e23aacc",
+        "src/route-store.ts": "4d5b7d39de6c6fff9bde9315fa32839c956e04bf3b176d4c566702b2132477e0",
+        "src/search-worker.ts": "f4de392197456b2dfca88fc04d4fecdbb8a4f6f220cd89bafea47ab9af737cdb",
+        "src/sections.ts": "e4ec977f60a275f185498506f66cf2cc425927fb0abe2721abff6bbefd9e5ab0",
+        "src/server.ts": "54bd7b7bfcc40ed452b0f1982dffbd5ea3629c83e0451415a97265f26e48a127",
+        "dist/server/data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dist/server/dataset.js": "cf524a6314788e7fdee60a00fa75eb2b0f079a4751a2d98e7fed48f94a91e8b4",
+        "dist/server/diversity.js": "ab99ec93e9588bf6a5b81fe600a3a8c269dc0c63bf9f32cf7ac567cee265b853",
+        "dist/server/engine/circuit-bounds.js": "55ff2ce0a62a3cb854d3c1df150d32ff3edd45ec561a62db7cff6afcac018c97",
+        "dist/server/engine/quality.js": "a6ecf87a1be3181e4883d047954f779cd3cbd361db61970cb50a25ee10d8b44b",
+        "dist/server/engine/search.js": "38142ce29be8f4f8e222e95fe38adcf1012786a63619ea5a40d4b6bcab1a981a",
+        "dist/server/jobs.js": "a1421339145e15a0e78f181fb53dfc3cfab4d7dcc15bcb4c8ab213127f31ea02",
+        "dist/server/model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "dist/server/route-store.js": "674f3e1659cf53fe8fd9b12b4d8b771acdf6ad7341e84946a663c236cb343d7a",
+        "dist/server/search-worker.js": "2d1c7f7bcfb2cfd1371cd63fed5e9dea3d27b1104fe7405f1b1c98a10b064930",
+        "dist/server/searches.js": "cc5abd258bacae9fbb0b792109b6b408b115852d399d85590d0dff155177ed52",
+        "dist/server/sections.js": "3618a05a35f66311a595893057586dca3c7799eb629a420f999c62ff97f2a207",
+        "dist/server/server.js": "ad86e26f7745938781ec0f0cafa1f0641be00a66b6ac13527a1afafc0855802f"
+      },
+      "harnessSha256": "4113272d80cc8d11f71a9d574b09646188550bed9e0362db49c1289d7c34ce6d"
+    },
+    "timing": "Descriptive; overlapped the final frozen-query observations. The guard was explicitly increased to observe full completion after a separate earlier transient RSS peak exceeded 1 GB. This completed run peaked below 1 GB; no universal memory ceiling is certified.",
+    "independentVerification": "passed",
+    "evidence": ".local-data/solver-performance-fix/final-all-regions/report.json",
+    "allWalksIndependentlyVerified": 408250
+  },
+  "limitations": [
+    "A completed search is not an exhaustive certificate.",
+    "Historical recall and prototype timing above describe their pinned versions; unfinished observations do not prove absence.",
+    "Real-data timings are descriptive; filesystem caches and concurrent user activity are uncontrolled.",
+    "The completed all-region request saves 2.51 GB of route witnesses and geometry; history storage remains visible and manually deletable.",
+    "The default all-region request takes about five minutes in this observation. A one-minute runtime is not universal. A separate earlier transient RSS sample exceeded the 1 GB target, so no universal 1 GB resident-memory ceiling is claimed."
+  ],
+  "solverCommit": "8da6f9e",
+  "policy": "Twenty-four deterministic circuit passes, 256 canonical circuit trials per pass; four weighted connection methods plus selected contacts. Optional stem variants only when no normalized witness exists at that start and direction. At most 128 ambiguous road-proof work steps per candidate; unfinished proofs exclude the candidate. No time, mileage or final-result cap.",
+  "finalFrozen24BeforeDiskPool": {
+    "status": "completed measurement",
+    "observationMs": 60000,
+    "rssGuardBytes": 1000000000,
+    "completed": 15,
+    "unfinished": 9,
+    "failed": 0,
+    "hasFailures": false,
+    "peakRssBytes": 828981248,
+    "worstCancelMs": 20.709917000000132,
+    "worstWorkerExitMs": 11.165625000001455,
+    "inputs": {
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "manifestSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+      "snapshotId": "mountains-2b6ffea097117e3a296303f9f016f38e3ec14b42070cf2e6c2ba1e1cd27dce5a",
+      "preparedStartsSha256": {
+        "mountain-c0f9cfc84ae35acfa51dae73": "47803d52a72bf8503bd2630d6e84e7a7b2a518a9fb3c2e8a461dfa5c74d62899",
+        "mountain-98d01931128751f9f515fa07": "9674abc57532e678ed1bd54054d5e129cf1bcce8ca4bfd615ea74f455476a7ff",
+        "mountain-c3bf848c1f0d95dee5a4a131": "5b5ffa2c71713bfea8684884172eda9f52b516ce7189874b69ad552374c380dd",
+        "mountain-d83464381288bbcb6a784a75": "6c18a221df0a81fbcb160bcacab756d0d70411914c40bb06c459631e98a4a314",
+        "mountain-9b22599e6865d915fd8c8a47": "7853287b6fc61acf349eb7805e2e08d3e4da8c760dd051fcfc7dcf69ed7a2bbb"
+      },
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "cf524a6314788e7fdee60a00fa75eb2b0f079a4751a2d98e7fed48f94a91e8b4",
+        "diversity.js": "fa58b4fde55d488f992923006d617efa7f911911878b5e08c9dbdd19de068ce3",
+        "engine/circuit-bounds.js": "55ff2ce0a62a3cb854d3c1df150d32ff3edd45ec561a62db7cff6afcac018c97",
+        "engine/quality.js": "a6ecf87a1be3181e4883d047954f779cd3cbd361db61970cb50a25ee10d8b44b",
+        "engine/search.js": "38142ce29be8f4f8e222e95fe38adcf1012786a63619ea5a40d4b6bcab1a981a",
+        "jobs.js": "a1421339145e15a0e78f181fb53dfc3cfab4d7dcc15bcb4c8ab213127f31ea02",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "route-store.js": "489fa0d3b309add27ee01a033905b0fcfee70c8160220c224f34a1b8bf2126f6",
+        "search-worker.js": "88fa97994ce48a935a160fc92b3f5453f767afda4f5c128338aefb2ce3debfa2",
+        "searches.js": "cc5abd258bacae9fbb0b792109b6b408b115852d399d85590d0dff155177ed52",
+        "sections.js": "3618a05a35f66311a595893057586dca3c7799eb629a420f999c62ff97f2a207",
+        "server.js": "ad86e26f7745938781ec0f0cafa1f0641be00a66b6ac13527a1afafc0855802f"
+      },
+      "packageLockSha256": "ee64f85cd5a3fc29208f5038ec8d3b5b6f9f251a953b73b1dce5e79e2c0d5a36",
+      "harnessHashes": {
+        "run.mjs": "affbed511e78bea6dcc932c225f197b04a8540efc2b05be6ea7c943d40ff1637",
+        "query.mjs": "4113272d80cc8d11f71a9d574b09646188550bed9e0362db49c1289d7c34ce6d"
+      }
+    },
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M3",
+      "memoryBytes": 17179869184
+    },
+    "methodology": [
+      "Frozen rectangles identify prepared sections containing at least one prepared start. Region selection is independent of access filters; eligibility is applied by the unchanged submitted query. Searches consider all eligible starts in those exact sections.",
+      "Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.",
+      "Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.",
+      "RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.",
+      "Completion timing is first durable completed-status observation with 100ms polls. Reconnect checks saved history and exact request identity, not browser rendering.",
+      "The observation window and sampled RSS guard only stop this measurement through the app cancellation API. An outer deadline kills a hung child after the window plus 15 seconds.",
+      "Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are completed saved families and witnesses, not independent existence certificates.",
+      "Each result records the adapted sent request and effective query, including app defaults for newer settings. Explicit constraints and exact selected section IDs must remain unchanged.",
+      "Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Bounded discovery can miss qualifying hikes; completed empty searches do not prove absence. Failed or interrupted observations likewise do not prove no matches."
+    ],
+    "rows": [
+      {
+        "id": "north-bend-short",
+        "outcome": "unfinished",
+        "observedMs": 60003.986042,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "north-bend-pure",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 7046.164125,
+        "groups": 717,
+        "witnesses": 7988
+      },
+      {
+        "id": "north-bend-known",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 1803.3619170000002,
+        "groups": 322,
+        "witnesses": 1268
+      },
+      {
+        "id": "middle-fork-day",
+        "outcome": "unfinished",
+        "observedMs": 60001.91225,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "middle-fork-flat",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 26045.754333,
+        "groups": 84,
+        "witnesses": 2261
+      },
+      {
+        "id": "pass-lakes",
+        "outcome": "unfinished",
+        "observedMs": 60004.478708,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "pass-long",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 51824.620917,
+        "groups": 744,
+        "witnesses": 48734
+      },
+      {
+        "id": "pass-demanding",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 29480.315166999997,
+        "groups": 0,
+        "witnesses": 0
+      },
+      {
+        "id": "stevens-short",
+        "outcome": "unfinished",
+        "observedMs": 60006.040208000006,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "stevens-day",
+        "outcome": "unfinished",
+        "observedMs": 60005.671292,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "stevens-pure",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 7182.409167000001,
+        "groups": 862,
+        "witnesses": 13796
+      },
+      {
+        "id": "stevens-known",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 899.6198750000001,
+        "groups": 9,
+        "witnesses": 36
+      },
+      {
+        "id": "wenatchee-easy",
+        "outcome": "unfinished",
+        "observedMs": 60005.301084,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "wenatchee-day",
+        "outcome": "unfinished",
+        "observedMs": 60007.161625,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "stevens-long",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 26077.615875,
+        "groups": 562,
+        "witnesses": 37394
+      },
+      {
+        "id": "wenatchee-demanding",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 4992.744917,
+        "groups": 0,
+        "witnesses": 0
+      },
+      {
+        "id": "paradise-short",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 35063.297959,
+        "groups": 684,
+        "witnesses": 18010
+      },
+      {
+        "id": "paradise-day",
+        "outcome": "unfinished",
+        "observedMs": 60003.503792,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "paradise-known",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 1045.554875,
+        "groups": 214,
+        "witnesses": 688
+      },
+      {
+        "id": "sunrise-pure",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 3842.1009590000003,
+        "groups": 461,
+        "witnesses": 4404
+      },
+      {
+        "id": "sunrise-day",
+        "outcome": "unfinished",
+        "observedMs": 60006.633375000005,
+        "groups": null,
+        "witnesses": null
+      },
+      {
+        "id": "carbon-easy",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 36781.915041,
+        "groups": 724,
+        "witnesses": 27608
+      },
+      {
+        "id": "sunrise-long",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 33688.909083,
+        "groups": 400,
+        "witnesses": 82753
+      },
+      {
+        "id": "paradise-demanding",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 9310.316,
+        "groups": 0,
+        "witnesses": 0
+      }
+    ],
+    "evidence": ".local-data/solver-performance-fix/final-frozen24.json",
+    "implementationNote": "Final discovery policy before disk-backed private candidate storage, orientation-pattern compaction, and SQL statement reuse. Follow-up changes preserve candidate feasibility, canonical grouping and witness quality; they change storage/retention. Compiled module hashes above pin this earlier diagnostic."
+  },
+  "finalFrozen24": {
+    "status": "completed measurement",
+    "observationMs": 60000,
+    "rssGuardBytes": 1000000000,
+    "completed": 15,
+    "unfinished": 9,
+    "failed": 0,
+    "hasFailures": false,
+    "peakRssBytes": 832487424,
+    "worstCancelMs": 51.189165999996476,
+    "worstWorkerExitMs": 41.25958299999911,
+    "inputs": {
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "manifestSha256": "f099cf3ea9cc2aeca134ba3d38aacf48a6aa070b5eac4c61f39d57fcbc64604e",
+      "snapshotId": "mountains-2b6ffea097117e3a296303f9f016f38e3ec14b42070cf2e6c2ba1e1cd27dce5a",
+      "preparedStartsSha256": {
+        "mountain-c0f9cfc84ae35acfa51dae73": "47803d52a72bf8503bd2630d6e84e7a7b2a518a9fb3c2e8a461dfa5c74d62899",
+        "mountain-98d01931128751f9f515fa07": "9674abc57532e678ed1bd54054d5e129cf1bcce8ca4bfd615ea74f455476a7ff",
+        "mountain-c3bf848c1f0d95dee5a4a131": "5b5ffa2c71713bfea8684884172eda9f52b516ce7189874b69ad552374c380dd",
+        "mountain-d83464381288bbcb6a784a75": "6c18a221df0a81fbcb160bcacab756d0d70411914c40bb06c459631e98a4a314",
+        "mountain-9b22599e6865d915fd8c8a47": "7853287b6fc61acf349eb7805e2e08d3e4da8c760dd051fcfc7dcf69ed7a2bbb"
+      },
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "cf524a6314788e7fdee60a00fa75eb2b0f079a4751a2d98e7fed48f94a91e8b4",
+        "diversity.js": "ab99ec93e9588bf6a5b81fe600a3a8c269dc0c63bf9f32cf7ac567cee265b853",
+        "engine/circuit-bounds.js": "55ff2ce0a62a3cb854d3c1df150d32ff3edd45ec561a62db7cff6afcac018c97",
+        "engine/quality.js": "a6ecf87a1be3181e4883d047954f779cd3cbd361db61970cb50a25ee10d8b44b",
+        "engine/search.js": "38142ce29be8f4f8e222e95fe38adcf1012786a63619ea5a40d4b6bcab1a981a",
+        "jobs.js": "a1421339145e15a0e78f181fb53dfc3cfab4d7dcc15bcb4c8ab213127f31ea02",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "route-store.js": "674f3e1659cf53fe8fd9b12b4d8b771acdf6ad7341e84946a663c236cb343d7a",
+        "search-worker.js": "2d1c7f7bcfb2cfd1371cd63fed5e9dea3d27b1104fe7405f1b1c98a10b064930",
+        "searches.js": "cc5abd258bacae9fbb0b792109b6b408b115852d399d85590d0dff155177ed52",
+        "sections.js": "3618a05a35f66311a595893057586dca3c7799eb629a420f999c62ff97f2a207",
+        "server.js": "ad86e26f7745938781ec0f0cafa1f0641be00a66b6ac13527a1afafc0855802f"
+      },
+      "packageLockSha256": "ee64f85cd5a3fc29208f5038ec8d3b5b6f9f251a953b73b1dce5e79e2c0d5a36",
+      "harnessHashes": {
+        "run.mjs": "affbed511e78bea6dcc932c225f197b04a8540efc2b05be6ea7c943d40ff1637",
+        "query.mjs": "4113272d80cc8d11f71a9d574b09646188550bed9e0362db49c1289d7c34ce6d"
+      }
+    },
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M3",
+      "memoryBytes": 17179869184
+    },
+    "methodology": [
+      "Frozen rectangles identify prepared sections containing at least one prepared start. Region selection is independent of access filters; eligibility is applied by the unchanged submitted query. Searches consider all eligible starts in those exact sections.",
+      "Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.",
+      "Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.",
+      "RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.",
+      "Completion timing is first durable completed-status observation with 100ms polls. Reconnect checks saved history and exact request identity, not browser rendering.",
+      "The observation window and sampled RSS guard only stop this measurement through the app cancellation API. An outer deadline kills a hung child after the window plus 15 seconds.",
+      "Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are completed saved families and witnesses, not independent existence certificates.",
+      "Each result records the adapted sent request and effective query, including app defaults for newer settings. Explicit constraints and exact selected section IDs must remain unchanged.",
+      "Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Bounded discovery can miss qualifying hikes; completed empty searches do not prove absence. Failed or interrupted observations likewise do not prove no matches."
+    ],
+    "timing": "Descriptive; the first part overlapped isolated all-region measurements, and one original-user request. No live app was contacted. Later rows also overlapped a terminal-result independent checker.",
+    "rows": [
+      {
+        "id": "north-bend-short",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            4828.032,
+            9656.064
+          ],
+          "gain": [
+            0,
+            457.20000000000005
+          ],
+          "repetition": 0.15,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60004.355375,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 59994,
+          "expansions": 59231758,
+          "totalStarts": 4767,
+          "completedStarts": 2098,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 2783
+        },
+        "peakRssBytes": 713424896,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60004.797459,
+          "latencyMs": 17.789082999996026,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 13.55029099999956
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1065.965084,
+          "latencyMs": 0.5450829999999769,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "north-bend-pure",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            8046.72,
+            16093.44
+          ],
+          "gain": [
+            152.4,
+            1066.8
+          ],
+          "repetition": 0,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 7725.190500000001,
+        "groups": 717,
+        "witnesses": 7988,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 7611.425542,
+          "expansions": 4506734,
+          "totalStarts": 4767,
+          "completedStarts": 4767,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 697729024,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1099.2557499999998,
+          "latencyMs": 0.8207080000001952,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "north-bend-known",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            6437.376,
+            16093.44
+          ],
+          "gain": [
+            0,
+            1066.8
+          ],
+          "repetition": 0.3,
+          "includeUnknown": false,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 1798.8715,
+        "groups": 322,
+        "witnesses": 1268,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 1679.3001250000002,
+          "expansions": 804036,
+          "totalStarts": 144,
+          "completedStarts": 144,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 696352768,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1064.797,
+          "latencyMs": 0.625374999999849,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "middle-fork-day",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            12874.752,
+            24140.16
+          ],
+          "gain": [
+            304.8,
+            1524
+          ],
+          "repetition": 0.35,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60002.489125,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 1,
+          "elapsedMs": 59995,
+          "expansions": 53362688,
+          "totalStarts": 2669,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 3854
+        },
+        "peakRssBytes": 484818944,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60002.58575,
+          "latencyMs": 7.275125000000116,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 5.972916999999143
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1045.875375,
+          "latencyMs": 0.5328340000000935,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "middle-fork-flat",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            4828.032,
+            11265.408
+          ],
+          "gain": [
+            0,
+            152.4
+          ],
+          "repetition": 0.25,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 27937.608917,
+        "groups": 84,
+        "witnesses": 2261,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 27858.13325,
+          "expansions": 21922807,
+          "totalStarts": 2669,
+          "completedStarts": 2669,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 563101696,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1043.8980000000001,
+          "latencyMs": 0.5801669999998467,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "pass-lakes",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            9656.064,
+            22530.816
+          ],
+          "gain": [
+            457.20000000000005,
+            1524
+          ],
+          "repetition": 0.4,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60004.517083,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 2,
+          "elapsedMs": 59996,
+          "expansions": 56008704,
+          "totalStarts": 4767,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-98d01931128751f9f515fa07",
+            "name": "Washington Cascades \u2014 south of I90, north of US12"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 2844
+        },
+        "peakRssBytes": 483065856,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60004.610042,
+          "latencyMs": 38.41166599999997,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 36.684457999996084
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1060.690917,
+          "latencyMs": 0.6858330000000024,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "pass-long",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            72420.48,
+            104607.36
+          ],
+          "gain": [
+            1524,
+            5486.400000000001
+          ],
+          "repetition": 0.4,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 53596.83575,
+        "groups": 744,
+        "witnesses": 48734,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 53482.089375,
+          "expansions": 39105756,
+          "totalStarts": 4767,
+          "completedStarts": 4767,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 832487424,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1061.74325,
+          "latencyMs": 0.9168749999998909,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "pass-demanding",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "effort": "deep",
+          "distance": [
+            1609.344,
+            3218.688
+          ],
+          "gain": [
+            2438.4,
+            2743.2000000000003
+          ],
+          "repetition": 0.05,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 26856.673584,
+        "groups": 0,
+        "witnesses": 0,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07",
+            "mountain-c3bf848c1f0d95dee5a4a131"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 26790.498874999997,
+          "expansions": 19146500,
+          "totalStarts": 4767,
+          "completedStarts": 4767,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 528482304,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1060.866792,
+          "latencyMs": 0.5292920000001686,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "stevens-short",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            4828.032,
+            11265.408
+          ],
+          "gain": [
+            152.4,
+            762
+          ],
+          "repetition": 0.25,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60006.156166,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 2,
+          "elapsedMs": 59996,
+          "expansions": 54394880,
+          "totalStarts": 4825,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 4539
+        },
+        "peakRssBytes": 634748928,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60006.263416,
+          "latencyMs": 6.229041999999026,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 4.9238750000004075
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1070.733458,
+          "latencyMs": 2.0051250000001346,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "stevens-day",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            12874.752,
+            25749.504
+          ],
+          "gain": [
+            609.6,
+            1828.8000000000002
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60014.014917,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 2,
+          "elapsedMs": 59995,
+          "expansions": 53253760,
+          "totalStarts": 4825,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 4873
+        },
+        "peakRssBytes": 543522816,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60014.21529199999,
+          "latencyMs": 28.44483300000138,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 26.91866700000537
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1076.236334,
+          "latencyMs": 0.69337500000006,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "stevens-pure",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            9656.064,
+            24140.16
+          ],
+          "gain": [
+            304.8,
+            1524
+          ],
+          "repetition": 0,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 8588.501959000001,
+        "groups": 862,
+        "witnesses": 13796,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 8445.72575,
+          "expansions": 4156151,
+          "totalStarts": 4825,
+          "completedStarts": 4825,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 647741440,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1082.656667,
+          "latencyMs": 0.6737500000001546,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "stevens-known",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            6437.376,
+            19312.128
+          ],
+          "gain": [
+            0,
+            1371.6000000000001
+          ],
+          "repetition": 0.4,
+          "includeUnknown": false,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 646.708458,
+        "groups": 9,
+        "witnesses": 36,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 564.043667,
+          "expansions": 32570,
+          "totalStarts": 112,
+          "completedStarts": 112,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 516734976,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 646.027125,
+          "latencyMs": 0.6577909999999747,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "completed"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "wenatchee-easy",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            3218.688,
+            8046.72
+          ],
+          "gain": [
+            0,
+            243.84
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60024.644250000005,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 2,
+          "elapsedMs": 59997,
+          "expansions": 49507963,
+          "totalStarts": 4825,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 5889
+        },
+        "peakRssBytes": 476446720,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60025.079209,
+          "latencyMs": 51.189165999996476,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 41.25958299999911
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1074.1765,
+          "latencyMs": 0.7891250000000127,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "wenatchee-day",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            9656.064,
+            19312.128
+          ],
+          "gain": [
+            304.8,
+            1219.2
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60004.9905,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 2,
+          "elapsedMs": 59993,
+          "expansions": 49815552,
+          "totalStarts": 4825,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-c3bf848c1f0d95dee5a4a131",
+            "name": "Washington Cascades \u2014 north of I90, south of US2"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 3384
+        },
+        "peakRssBytes": 514719744,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60005.139209,
+          "latencyMs": 22.63208300000406,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 18.763208000003942
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1088.0567919999999,
+          "latencyMs": 2.679417000000285,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "stevens-long",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            80467.2,
+            120700.8
+          ],
+          "gain": [
+            2133.6,
+            6705.6
+          ],
+          "repetition": 0.45,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 24007.488333,
+        "groups": 562,
+        "witnesses": 37394,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 23893.370459,
+          "expansions": 13695816,
+          "totalStarts": 4825,
+          "completedStarts": 4825,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 676036608,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1074.739708,
+          "latencyMs": 0.6480420000000322,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "wenatchee-demanding",
+        "query": {
+          "sections": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "effort": "deep",
+          "distance": [
+            1609.344,
+            3218.688
+          ],
+          "gain": [
+            2438.4,
+            2743.2000000000003
+          ],
+          "repetition": 0,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 5223.884,
+        "groups": 0,
+        "witnesses": 0,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-c3bf848c1f0d95dee5a4a131",
+            "mountain-d83464381288bbcb6a784a75"
+          ],
+          "totalRegions": 2,
+          "elapsedMs": 5082.87125,
+          "expansions": 2085213,
+          "totalStarts": 4825,
+          "completedStarts": 4825,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 477446144,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1080.706459,
+          "latencyMs": 2.3256249999999454,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "paradise-short",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            3218.688,
+            8046.72
+          ],
+          "gain": [
+            0,
+            548.64
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 34314.09425,
+        "groups": 684,
+        "witnesses": 18010,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 34146.44425,
+          "expansions": 36607130,
+          "totalStarts": 2098,
+          "completedStarts": 2098,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 549027840,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1050.049542,
+          "latencyMs": 0.6410410000000866,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "paradise-day",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            9656.064,
+            19312.128
+          ],
+          "gain": [
+            457.20000000000005,
+            1371.6000000000001
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60004.624709,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 1,
+          "elapsedMs": 59994,
+          "expansions": 58610053,
+          "totalStarts": 2098,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-98d01931128751f9f515fa07",
+            "name": "Washington Cascades \u2014 south of I90, north of US12"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 3868
+        },
+        "peakRssBytes": 450625536,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60004.737792,
+          "latencyMs": 9.711000000002969,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 8.074166999998852
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1048.659959,
+          "latencyMs": 0.7591660000000502,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "paradise-known",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            4828.032,
+            12874.752
+          ],
+          "gain": [
+            0,
+            1066.8
+          ],
+          "repetition": 0.25,
+          "includeUnknown": false,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 1041.756208,
+        "groups": 214,
+        "witnesses": 688,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 967.3765409999999,
+          "expansions": 482950,
+          "totalStarts": 67,
+          "completedStarts": 67,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 543277056,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1041.2316250000001,
+          "latencyMs": 0.48937499999988177,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "completed"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "sunrise-pure",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            6437.376,
+            16093.44
+          ],
+          "gain": [
+            304.8,
+            1219.2
+          ],
+          "repetition": 0,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 3828.825917,
+        "groups": 461,
+        "witnesses": 4404,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 3715.655667,
+          "expansions": 2136792,
+          "totalStarts": 2098,
+          "completedStarts": 2098,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 568918016,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1043.0110000000002,
+          "latencyMs": 0.5123749999997926,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "sunrise-day",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            12874.752,
+            25749.504
+          ],
+          "gain": [
+            609.6,
+            1676.4
+          ],
+          "repetition": 0.35,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "running",
+        "outcome": "unfinished",
+        "observedMs": 60002.252042,
+        "groups": null,
+        "witnesses": null,
+        "progress": {
+          "stage": "searching",
+          "completedRegions": [],
+          "totalRegions": 1,
+          "elapsedMs": 59995,
+          "expansions": 53895168,
+          "totalStarts": 2098,
+          "completedStarts": 0,
+          "currentRegion": {
+            "id": "mountain-98d01931128751f9f515fa07",
+            "name": "Washington Cascades \u2014 south of I90, north of US12"
+          },
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 2961
+        },
+        "peakRssBytes": 450199552,
+        "cancel": {
+          "trigger": "observation_window",
+          "requestedMs": 60002.352542,
+          "latencyMs": 15.13879199999792,
+          "status": "cancelled",
+          "activeWorkersBefore": 1,
+          "activeWorkersAfterResponse": 0,
+          "workerExitLatencyMs": 13.205708000001323
+        },
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1045.654125,
+          "latencyMs": 1.0594590000000608,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "carbon-easy",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            3218.688,
+            9656.064
+          ],
+          "gain": [
+            0,
+            365.76
+          ],
+          "repetition": 0.3,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 36068.102,
+        "groups": 724,
+        "witnesses": 27608,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 35735.437875,
+          "expansions": 36173523,
+          "totalStarts": 2098,
+          "completedStarts": 2098,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 513310720,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1059.042,
+          "latencyMs": 0.7885409999998956,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "sunrise-long",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            88513.92,
+            136794.24
+          ],
+          "gain": [
+            2438.4,
+            7620
+          ],
+          "repetition": 0.45,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 35769.265332999996,
+        "groups": 400,
+        "witnesses": 82753,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 35480.69970899999,
+          "expansions": 17777897,
+          "totalStarts": 2098,
+          "completedStarts": 2098,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 646742016,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1044.425166,
+          "latencyMs": 1.0982920000001286,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      },
+      {
+        "id": "paradise-demanding",
+        "query": {
+          "sections": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "effort": "deep",
+          "distance": [
+            1609.344,
+            3218.688
+          ],
+          "gain": [
+            2438.4,
+            2743.2000000000003
+          ],
+          "repetition": 0.05,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "status": "completed",
+        "outcome": "complete_within_snapshot",
+        "observedMs": 10282.287291999999,
+        "groups": 0,
+        "witnesses": 0,
+        "progress": {
+          "stage": "saving",
+          "completedRegions": [
+            "mountain-98d01931128751f9f515fa07"
+          ],
+          "totalRegions": 1,
+          "elapsedMs": 10232.855625,
+          "expansions": 6069396,
+          "totalStarts": 2098,
+          "completedStarts": 2098,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 6168
+        },
+        "peakRssBytes": 432685056,
+        "cancel": null,
+        "sameJobAndQueryOnReconnect": {
+          "atMs": 1062.8222500000002,
+          "latencyMs": 0.6032499999996617,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "activeWorkersAtEnd": 0
+      }
+    ],
+    "evidence": ".local-data/solver-performance-fix/final-frozen24-disk-pool.json"
+  }
+}

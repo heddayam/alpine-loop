@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The bounded solver and single-search interface are rebuilt and running at http://127.0.0.1:3101/. The user tested deeper north-region 13\u201318 mile search in 29.7 seconds and south-region search in 4.9 seconds before the distinct-seed scheduling refinement. Saved results remain available. Full verification passes 62 Vitest and 4 Node checks. Broader final runtime and recall measurements remain in progress; a high-repetition known-walk diagnostic is still expensive. Bounded discovery may miss valid hikes.",
+  "state": "The bounded solver and single full-search interface are rebuilt and running at http://127.0.0.1:3101/. Every new job uses the full discovery plan; Search deeper is removed and existing saved results remain readable after refresh. The original north 13\u201318 mile/3000\u20135000 foot request completed in 22.4 seconds with 269 families and 19,862 independently verified saved witnesses. The default all-five-region request completed in 318.6 seconds with 4,776 families and 408,250 independently verified witnesses, 943 MB peak RSS, and 2.51 GB saved storage. Final unchanged 24-query observations: 15 completed within 60 seconds, nine honestly unfinished, zero failures, peak RSS 832 MB, worst cancellation 51.2 ms. A separate all-region cancelled observation took 560 ms including cleanup. A prior transient all-region RSS sample exceeded the 1 GB target; no universal runtime or memory ceiling is certified. Final offline verification passes 64 unique Vitest and 4 Node checks. Maintained source is 6,715 lines in 33 files. Bounded discovery may miss valid hikes; all shown routes meet exact submitted limits.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -268,7 +268,7 @@
     "history": "Keep until confirmed manual terminal-job deletion. Cancel/failure/interruption discard partial output; queued jobs continue after restart.",
     "progress": "Queue position, elapsed execution, preparation/search/saving stage, current region, completed planned-discovery steps within the current region and completed regions. User approved a within-region bar without an explanatory note. No live result stream or speculative ETA.",
     "validation": {
-      "status": "Infrastructure and exact small-graph correctness verified; ordinary-job runtime not accepted.",
+      "status": "Historical exhaustive implementation observations; superseded by the bounded-discovery measurements in benchmarks/bounded-discovery-review.json.",
       "review": "benchmarks/completed-jobs-review.json",
       "completedSliceFamilies": 32,
       "completedSliceWitnesses": 80,
@@ -318,7 +318,8 @@
       "All-region jobs may be slower."
     ],
     "completion": "All planned discovery work in every selected region, grouping and durable saving have finished. This does not certify exhaustive discovery.",
-    "status": "Implemented and deployed to the requested local app; broader performance verification in progress.",
-    "previousTwoStageDecision": "Constraints remain immutable. One successful deeper execution atomically publishes another result revision, retains the earlier revision for stable browsing, and shares physical geometry. Cancelled/failed/interrupted extensions retain earlier completed results and can be retried. Extensions require the original prepared inputs."
+    "status": "Implemented, deployed to the requested local app, and verified; detailed measurements and limitations in benchmarks/bounded-discovery-review.json.",
+    "previousTwoStageDecision": "Constraints remain immutable. One successful deeper execution atomically publishes another result revision, retains the earlier revision for stable browsing, and shares physical geometry. Cancelled/failed/interrupted extensions retain earlier completed results and can be retried. Extensions require the original prepared inputs.",
+    "review": "benchmarks/bounded-discovery-review.json"
   }
 }

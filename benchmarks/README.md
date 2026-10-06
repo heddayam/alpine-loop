@@ -12,11 +12,28 @@ exhaustive implementation: one frozen request completed, 21 remained unfinished 
 request remained unfinished after 15 minutes. These observations reject the
 ordinary-job runtime target; they do not certify complete discovery or absence
 of qualifying hikes. Private profiling identifies repeated approach enumeration
-for one main circuit as a dominant cost. A disk-backed scratch experiment is
-preserved separately and is not deployed as a runtime fix. The current app uses
+for one main circuit as a dominant cost. A historical disk-backed exhaustive scratch experiment is
+preserved separately; it did not address that enumeration cost. The replacement
+uses a private disk pool for its bounded normalized candidates and compacts
+family witnesses by their common-trail orientation pattern to control memory. The current app uses
 bounded diverse discovery, one full search per job, and exact returned-route
 constraints. Completion certifies finishing the planned work, not finding every
-qualifying hike.
+qualifying hike. The [bounded-discovery review](bounded-discovery-review.json)
+records the current policy and measurements: 15 of the unchanged 24 requests
+completed within a 60-second observation window, nine remained unfinished, and
+none failed. Peak server/worker/measurement-client RSS was 832 MB and worst
+observed cancellation was 51.2 ms. A separate harder Pass Lakes request completed
+in 171 seconds; every one of its 142,468 saved route witnesses passed the
+independent checker, including the known main circuit at its original start
+in both directions. These measurements do not promise a one-minute search or
+certify exhaustive recall. The final default all-five-region request completed
+in 318.6 seconds with 4,776 families and 408,250 independently verified saved
+witnesses, 943 MB peak RSS, and 2.51 GB saved storage. A separate five-minute
+observation was cancelled in 560 ms including cleanup. An earlier transient
+all-region RSS peak exceeded 1 GB; the completion run explicitly allowed a
+1.3 GB observation guard. The build/source/input hashes and stopped observations
+remain in the review. These timings overlapped other isolated measurements and
+are descriptive.
 
 The app now searches exact prepared sections. The harness uses each frozen
 rectangle only to identify sections containing at least one prepared start in
@@ -42,8 +59,10 @@ node benchmarks/app/run.mjs --dataset .local-data/mountains --output /tmp/alpine
 
 Use `--query north-bend-known` for one frozen request or `--query all-regions`
 for the default 5–12 mile, 0–4000 foot all-region request. Use an observation
-window of 900000 ms to measure the ordinary-job target; shorter diagnostics
-remain explicitly unfinished when they do not complete. Status polling contains
+window long enough to observe completion when measuring full runtime; shorter
+diagnostics remain explicitly unfinished when they do not complete. The final
+frozen-query diagnostic used 60000 ms; its unfinished requests were cancelled
+through the app and never treated as empty results. Status polling contains
 no route data, and the harness uses isolated job storage under its temporary
 directory. Each runs through a fresh HTTP
 server and actual search worker. The observation window and RSS guard belong
