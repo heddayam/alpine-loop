@@ -3,7 +3,7 @@ import { search, validateQuery } from './engine/search.js';
 import { canonical, compareNumbers, quality, walkKey } from './engine/quality.js';
 import type { RouteCandidate, SearchProgress, SearchQuery, TrailGraph } from './model.js';
 
-export type SolvedRoute = { route: RouteCandidate; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean; preferredStart: boolean };
+export type SolvedRoute = { route: RouteCandidate; groupId: string; variantId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean; preferredVariant: boolean; preferredStart: boolean };
 export type CandidatePool = {
   add(core: string, route: RouteCandidate): void;
   routes(core: string): Iterable<RouteCandidate>;

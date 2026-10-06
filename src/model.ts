@@ -71,13 +71,17 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   trailNames: string[];
 };
 export type HikeRoute = RouteSummary & { geometry: Position[] };
-/** One qualifying connection from a start to a distinct hike; reverse facts remain independent. */
+/** One qualifying walk of an exact circuit; similar circuits share a display group. */
 export type RouteChoice = RouteSummary & {
   groupId: string;
+  variantId: string;
+  /** Number of exact circuits available in this display group. */
+  variantCount: number;
+  /** Number of qualifying starting points for this circuit. */
   groupSize: number;
   /** Exact reversed walk, when that witness is retained and qualifies. */
   reverseId?: string;
-  /** Preferred qualifying witness in the other loop direction at the same start. */
+  /** Qualifying walk in the other direction of this circuit at the same start. */
   oppositeId?: string;
 };
 export type RouteView = HikeRoute & RouteChoice;
@@ -129,6 +133,7 @@ export type JobResults = {
   pageTotal: number;
   offset: number;
   groupId?: string;
+  variantId?: string;
   groupCount: number;
   routeCount: number;
   sort: ResultSort;
