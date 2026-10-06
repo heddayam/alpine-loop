@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest';
-import { solveSection } from '../../src/diversity.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { solveSection, type CandidatePool } from '../../src/diversity.js';
+import { createRouteStore } from '../../src/route-store.js';
 import { search } from '../../src/engine/search.js';
 import type { SearchQuery } from '../../src/model.js';
 import { distinct, fixture, groupPool, measure, normalized } from '../engine/oracle.js';
@@ -8,7 +13,7 @@ const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain:
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
 const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
-async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false) {
+async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false, savedPool?: CandidatePool) {
   const references = normalized(graph, criteria);
   const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
   const byWalk = new Map(references.map(route => [key(route), route]));
@@ -28,7 +33,7 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
       group.witnesses.map(item => `${item.route.start}:${item.direction}`).sort()])).sort();
     expect(coverage(expected)).toEqual(coverage(exhaustive));
   }
-  const actual = await solveSection(graph, criteria);
+  const actual = await solveSection(graph, criteria, undefined, savedPool);
   for (const { route } of actual) {
     const valid = measure(graph, criteria, route.start, route.edges);
     expect(valid).toBeDefined();
@@ -42,6 +47,30 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
   expect(actualGroups.sort()).toEqual(expected.map(group => group.witnesses.map(describe).sort()).sort());
   return actual;
 }
+
+it('keeps private disk candidates exact across consecutive sections without publishing the scratch table', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'alpine-candidate-pool-'));
+  const file = join(directory, 'results.sqlite'), store = createRouteStore(file, true);
+  try {
+    const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
+      [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
+    store.begin();
+    const grouped = await compareOutputs(graph, { ...query, distance: [7000, 7000], repetition: 0 }, false, store.candidatePool);
+    expect(families(grouped).size).toBe(2);
+    store.commit();
+    // Numeric trail/start IDs overlap, but the next section has different facts.
+    const directed = fixture([[0, 1, 900, { backDistance: 100 }], [1, 2, 200],
+      [2, 3, 100], [3, 1, 200]], [0, 1, 2]);
+    store.begin();
+    const next = await compareOutputs(directed, { ...query, distance: [1500, 1500], repetition: 100 / 1500 }, false, store.candidatePool);
+    expect(next).toHaveLength(2);
+    expect(store.counts).toEqual({ groupCount: 0, routeCount: 0 });
+    store.commit(); store.close();
+    const saved = new DatabaseSync(file, { readOnly: true });
+    try { expect(saved.prepare("SELECT name FROM sqlite_master WHERE name = 'candidates'").all()).toEqual([]); }
+    finally { saved.close(); }
+  } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
+});
 
 it('combines the same circuit across approaches and starts, preferring explicit start metadata', async () => {
   const graph = fixture([[0, 1, 2000], [0, 2, 1000], [2, 1, 1000],

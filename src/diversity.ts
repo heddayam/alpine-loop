@@ -4,10 +4,16 @@ import { quality, walkKey } from './engine/quality.js';
 import type { RouteCandidate, SearchProgress, SearchQuery, TrailGraph } from './model.js';
 
 export type SolvedRoute = { route: RouteCandidate; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
+export type CandidatePool = {
+  get(core: string, witness: string): RouteCandidate | undefined;
+  set(core: string, witness: string, route: RouteCandidate): void;
+  routes(core: string): Iterable<RouteCandidate>;
+  delete(core: string): void;
+};
 type Core = { edges: number[]; trails: Set<number>; order: number[]; key: number[] };
 type Witnesses = [RouteCandidate | undefined, RouteCandidate | undefined];
 type Family = { id: string; position: number; common: Set<number>; combined: Set<number>; order: number[];
-  orientation: Map<number, boolean>; starts: Map<number, Map<number, Witnesses>> };
+  orientation: Map<number, boolean>; starts: Map<number, Map<string, RouteCandidate>> };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 const compareNumbers = (a: number[], b: number[]) => {
   for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index]! - b[index]!;
@@ -38,10 +44,21 @@ function coreOf(graph: TrailGraph, route: RouteCandidate): Core {
 /** Group the privately completed discovery pool. Strict qualifying, road-normalized
  * candidates become final family/start/direction witnesses here. */
 export async function solveSection(graph: TrailGraph, query: SearchQuery,
-  onProgress?: (progress: SearchProgress) => void | Promise<void>): Promise<SolvedRoute[]> {
+  onProgress?: (progress: SearchProgress) => void | Promise<void>, savedPool?: CandidatePool): Promise<SolvedRoute[]> {
   validateQuery(query);
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
-  const batches = new Map<string, { core: Core; routes: Map<string, RouteCandidate> }>();
+  const batches = new Map<string, Core>();
+  const memory = new Map<string, Map<string, RouteCandidate>>();
+  const pool: CandidatePool = savedPool ?? {
+    get: (core, witness) => memory.get(core)?.get(witness),
+    set(core, witness, route) {
+      let routes = memory.get(core);
+      if (!routes) { routes = new Map(); memory.set(core, routes); }
+      routes.set(witness, route);
+    },
+    routes: core => memory.get(core)?.values() ?? [],
+    delete: core => { memory.delete(core); },
+  };
   let progress: SearchProgress | undefined;
   for await (const event of search(graph, query)) {
     if (event.type !== 'route') {
@@ -53,16 +70,15 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
     const route = event.route;
     route.id = `route-${hash(walkKey(graph, route))}`;
     const core = coreOf(graph, route), key = JSON.stringify(core.key);
-    let batch = batches.get(key);
-    if (!batch) { batch = { core, routes: new Map() }; batches.set(key, batch); }
+    if (!batches.has(key)) batches.set(key, core);
     // A fixed physical circuit has the same orientation relation at every
     // possible future shared-core anchor. Retain its best normalized witness
     // per start/direction, while preserving every qualifying canonical core.
     const anchor = Math.min(...core.trails);
     const direction = graph.edges[core.edges.find(id => graph.edges[id]!.trail === anchor)!]!.reverse;
     const witness = `${route.start}:${direction}`;
-    const previous = batch.routes.get(witness);
-    if (!previous || quality(graph, route, previous) < 0) batch.routes.set(witness, route);
+    const previous = pool.get(key, witness);
+    if (!previous || quality(graph, route, previous) < 0) pool.set(key, witness, route);
   }
   const physical = new Map<number, (typeof graph.edges)[number]>();
   for (const edge of graph.edges) if (!physical.has(edge.trail) || !edge.reverse) physical.set(edge.trail, edge);
@@ -93,8 +109,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
     return { common, combined };
   }
   let work = 0;
-  for (const batch of [...batches.values()].sort((a, b) => compareNumbers(a.core.key, b.core.key))) {
-    const { core } = batch;
+  for (const [key, core] of [...batches].sort((a, b) => compareNumbers(a[1].key, b[1].key))) {
     const possible = new Set<Family>();
     for (const trail of core.trails) for (const family of incidentFamilies.get(trail) ?? []) possible.add(family);
     let family: Family | undefined;
@@ -102,9 +117,18 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       const merged = merge(choice, core);
       if (!merged) continue;
       family = choice;
+      const oldCommon = [...family.common].sort((a, b) => a - b);
+      const kept = oldCommon.flatMap((trail, at) => merged.common.has(trail) ? [at] : []);
       for (const trail of family.common) if (!merged.common.has(trail)) {
         incidentFamilies.get(trail)!.delete(family);
-        for (const options of family.starts.values()) options.delete(trail);
+      }
+      if (kept.length !== oldCommon.length) for (const [start, options] of family.starts) {
+        const projected = new Map<string, RouteCandidate>();
+        for (const [pattern, route] of options) {
+          const reduced = kept.map(at => pattern[at]).join(''), previous = projected.get(reduced);
+          if (!previous || quality(graph, route, previous) < 0) projected.set(reduced, route);
+        }
+        family.starts.set(start, projected);
       }
       Object.assign(family, merged);
       break;
@@ -125,28 +149,31 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
         choices.add(family);
       }
     }
-    for (const route of batch.routes.values()) {
+    const common = [...family.common].sort((a, b) => a - b);
+    for (const route of pool.routes(key)) {
       const [first, last] = cycleRange(graph, route);
       let options = family.starts.get(route.start);
       if (!options) { options = new Map(); family.starts.set(route.start, options); }
-      for (let part = first; part <= last; part++) {
-        const edge = graph.edges[route.edges[part]!]!;
-        if (!family.common.has(edge.trail)) continue;
-        let witnesses = options.get(edge.trail);
-        if (!witnesses) { witnesses = [undefined, undefined]; options.set(edge.trail, witnesses); }
-        const direction = edge.reverse === family.orientation.get(edge.trail) ? 0 : 1;
-        if (!witnesses[direction] || quality(graph, route, witnesses[direction]!) < 0) witnesses[direction] = route;
-      }
+      // Equal orientation patterns remain equal after any future shared-core
+      // shrink. Keep their best witness once instead of one pair per trail.
+      const orientation = new Map(route.edges.slice(first, last + 1).map(id => [graph.edges[id]!.trail, graph.edges[id]!.reverse]));
+      const pattern = common.map(trail => orientation.get(trail) === family.orientation.get(trail) ? '0' : '1').join('');
+      const previous = options.get(pattern);
+      if (!previous || quality(graph, route, previous) < 0) options.set(pattern, route);
       if (++work % 256 === 0) { await new Promise<void>(resolve => setTimeout(resolve, 0)); if (progress) await onProgress?.(progress); }
     }
-    batch.routes.clear();
+    pool.delete(key);
   }
   const result: SolvedRoute[] = [], rank = { trailhead: 0, parking: 1, 'road-contact': 2 };
   for (const family of families) {
-    const anchor = [...family.common].sort((a, b) => a - b)[0]!;
     const choices: SolvedRoute[] = [];
-    for (const options of family.starts.values()) for (const [direction, route] of options.get(anchor)!.entries()) {
-      if (route) choices.push({ route, groupId: family.id, direction: direction as 0 | 1, preferred: false });
+    for (const options of family.starts.values()) {
+      const witnesses: Witnesses = [undefined, undefined];
+      for (const [pattern, route] of options) {
+        const direction = Number(pattern[0]) as 0 | 1;
+        if (!witnesses[direction] || quality(graph, route, witnesses[direction]!) < 0) witnesses[direction] = route;
+      }
+      for (const [direction, route] of witnesses.entries()) if (route) choices.push({ route, groupId: family.id, direction: direction as 0 | 1, preferred: false });
     }
     choices.sort((a, b) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
       || quality(graph, a.route, b.route) || graph.starts[a.route.start]!.id.localeCompare(graph.starts[b.route.start]!.id));

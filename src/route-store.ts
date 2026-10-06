@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
+import type { CandidatePool } from './diversity.js';
+import type { RouteCandidate } from './model.js';
 import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
 
 export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
@@ -13,7 +15,7 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Invalid saved-results revision');
   const db = new DatabaseSync(path, { readOnly: !writable });
   try {
-    db.exec('PRAGMA cache_size=-4096; PRAGMA mmap_size=0;');
+    db.exec('PRAGMA cache_size=-4096; PRAGMA mmap_size=0; PRAGMA temp_store=FILE; PRAGMA temp.cache_size=-4096;');
     const existing = db.prepare('PRAGMA table_info(routes)').all();
     const legacy = existing.length && !existing.some(column => column.name === 'revision');
     if (legacy && !writable) {
@@ -31,7 +33,21 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         PRIMARY KEY(revision, id));
       CREATE INDEX IF NOT EXISTS members ON routes(revision, group_id, start_id);
       CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
+      CREATE TEMP TABLE candidates (core TEXT, witness TEXT, route TEXT NOT NULL, PRIMARY KEY(core, witness));
     `);
+    const getCandidate = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? AND witness = ?') : undefined;
+    const setCandidate = writable ? db.prepare('INSERT OR REPLACE INTO temp.candidates VALUES (?, ?, ?)') : undefined;
+    const candidates = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? ORDER BY witness') : undefined;
+    const deleteCandidates = writable ? db.prepare('DELETE FROM temp.candidates WHERE core = ?') : undefined;
+    const candidatePool: CandidatePool | undefined = writable ? {
+      get(core, witness) {
+        const row = getCandidate!.get(core, witness);
+        return row ? JSON.parse(row.route as string) as RouteCandidate : undefined;
+      },
+      set: (core, witness, route) => { setCandidate!.run(core, witness, JSON.stringify(route)); },
+      *routes(core) { for (const row of candidates!.iterate(core)) yield JSON.parse(row.route as string) as RouteCandidate; },
+      delete: core => { deleteCandidates!.run(core); },
+    } : undefined;
     const columns = `r.summary, r.group_id AS groupId,
       (SELECT COUNT(*) FROM options WHERE revision = r.revision AND group_id = r.group_id) AS groupSize, r.reverse_id AS reverseId`;
     const totals = db.prepare(`SELECT (SELECT COUNT(*) FROM routes WHERE revision = ${revision}) AS routeCount,
@@ -42,14 +58,16 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
     const addGroup = writable ? db.prepare('INSERT OR IGNORE INTO groups VALUES (?, ?, ?)') : undefined;
     const setGroup = writable ? db.prepare('UPDATE groups SET first_id = ? WHERE revision = ? AND id = ?') : undefined;
     const addOption = writable ? db.prepare('INSERT OR IGNORE INTO options VALUES (?, ?, ?, ?)') : undefined;
+    const setOption = writable ? db.prepare('UPDATE options SET first_id = ? WHERE revision = ? AND group_id = ? AND start_id = ?') : undefined;
     const addGeometry = writable ? db.prepare('INSERT OR IGNORE INTO geometry VALUES (?, ?, ?)') : undefined;
     const preferredOption = db.prepare(`SELECT id FROM routes WHERE revision = ${revision} AND group_id = ? AND start_id = ?
       ORDER BY uncertain, roadDistance, repetition, distance, id LIMIT 1`);
     return {
+      candidatePool,
       begin(): void { db.exec('BEGIN'); },
       commit(): void { db.exec('COMMIT'); },
       add(saved: SavedChoice): void {
-        if (!addRoute || !addGroup || !setGroup || !addOption) throw new Error('Saved results are immutable');
+        if (!addRoute || !addGroup || !setGroup || !addOption || !setOption) throw new Error('Saved results are immutable');
         const { route, groupId, reverseId, oppositeId, preferred } = saved, summary = route.summary;
         addRoute.run(revision, summary.id, groupId, summary.startId, JSON.stringify({ ...summary, oppositeId }), JSON.stringify(route.sections), reverseId ?? null,
           summary.distance, summary.gain, summary.repetition, summary.roadDistance, Number(summary.uncertain));
@@ -57,7 +75,7 @@ export function createRouteStore(path: string, writable = false, revision = 0) {
         if (preferred) setGroup.run(summary.id, revision, groupId);
         addOption.run(revision, groupId, summary.startId, summary.id);
         const best = preferredOption.get(groupId, summary.startId)!;
-        db.prepare('UPDATE options SET first_id = ? WHERE revision = ? AND group_id = ? AND start_id = ?').run(best.id as string, revision, groupId, summary.startId);
+        setOption.run(best.id as string, revision, groupId, summary.startId);
       },
       saveGeometry(sectionId: string, trailId: number, points: Position[]): void {
         if (!addGeometry || !points.length) throw new Error('Route drawing is missing');

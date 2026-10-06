@@ -32,6 +32,7 @@ async function completeRegion(chosen: (typeof selections)[number]) {
   const selection = await dataset.select(query, chosen);
   const previousExpansions = progress.expansions;
   progress.stage = 'searching'; send();
+  store.begin();
   const solved = await solveSection(selection.graph, query, async measured => {
     if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
     progress.expansions = previousExpansions + measured.expansions;
@@ -39,13 +40,12 @@ async function completeRegion(chosen: (typeof selections)[number]) {
     progress.completedSearchPoints = measured.completedSearchPoints;
     if (measured.totalSearchPoints !== undefined && measured.completedSearchPoints === measured.totalSearchPoints) progress.stage = 'saving';
     if (Date.now() - lastProgress >= 100) { send(); lastProgress = Date.now(); }
-  });
+  }, store.candidatePool);
   await verify();
   progress.stage = 'saving'; send();
   const retained = solved.filter(saved => selection.isHike(saved.route));
   const savedIds = new Set(retained.map(saved => saved.route.id));
   const used = new Set<number>();
-  store.begin();
   for (const saved of retained) {
     const route = selection.describe(saved.route);
     route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
