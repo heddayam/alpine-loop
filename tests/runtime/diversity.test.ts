@@ -2,24 +2,32 @@ import { expect, it } from 'vitest';
 import { solveSection } from '../../src/diversity.js';
 import { search } from '../../src/engine/search.js';
 import type { SearchQuery } from '../../src/model.js';
-import { fixture, groupPool, measure, normalized } from '../engine/oracle.js';
+import { distinct, fixture, groupPool, measure, normalized } from '../engine/oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain: [0, 10_000], repetition: 1,
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
 const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
-async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery) {
+async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false) {
   const references = normalized(graph, criteria);
   const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
   const byWalk = new Map(references.map(route => [key(route), route]));
   const pool = [];
   for await (const event of search(graph, criteria)) if (event.type === 'route') {
     const valid = byWalk.get(key(event.route));
-    if (valid) pool.push(valid);
+    expect(measure(graph, criteria, event.route.start, event.route.edges)).toBeDefined();
+    expect(valid).toBeDefined();
+    pool.push(valid!);
   }
-  // The discovery pool is bounded. Exact legality and road normalization are
-  // still checked against every tiny-graph walk; grouping uses the found pool.
-  const expected = groupPool(graph, pool);
+  const exhaustive = distinct(graph, criteria);
+  const expected = foundPool ? groupPool(graph, pool) : exhaustive;
+  if (foundPool) {
+    // This committed tiny corpus still discovers every family/start/direction.
+    // Preference may differ when a sensible approach omits a winding detour.
+    const coverage = (groups: typeof exhaustive) => groups.map(group => JSON.stringify([group.seed,
+      group.witnesses.map(item => `${item.route.start}:${item.direction}`).sort()])).sort();
+    expect(coverage(expected)).toEqual(coverage(exhaustive));
+  }
   const actual = await solveSection(graph, criteria);
   for (const { route } of actual) {
     const valid = measure(graph, criteria, route.start, route.edges);
@@ -314,7 +322,7 @@ it('retains independently qualified witnesses on weighted directed tiny graphs',
       gain: [random() * 20, 30 + random() * 60], repetition: random(), includeUnknown: random() < 0.5,
       roads: { distance: random() * 400, fraction: random() } };
     const expected = normalized(graph, criteria);
-    const routes = await compareOutputs(graph, criteria);
+    const routes = await compareOutputs(graph, criteria, true);
     if (!expected.length) expect(routes).toHaveLength(0);
     for (const { route } of routes) {
       const reference = expected.find(other => other.start === route.start && other.edges.join(',') === route.edges.join(','));
