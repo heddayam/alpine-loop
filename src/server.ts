@@ -42,7 +42,9 @@ export async function createApp(directory: string, clientDirectory?: string, job
   app.post('/api/downloads/stop', async () => (await availableData()).downloads.stop());
   app.get('/api/jobs', async () => jobs.list());
   app.post('/api/jobs', async (request, reply) => {
-    const query = parseQuery(request.body), coverage = await (await availableData()).coverage(query);
+    const query = parseQuery(request.body);
+    if (query.effort !== 'normal') throw new RequestError('Submit a standard search, then use Search deeper on its completed job.', 400);
+    const coverage = await (await availableData()).coverage(query);
     if (coverage.missing.length) return reply.code(409).send({ message: 'Download the selected trail sections before searching.', ...coverage });
     return reply.code(202).send(jobs.start(query));
   });

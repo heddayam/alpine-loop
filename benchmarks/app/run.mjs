@@ -68,7 +68,7 @@ const report = {
   sourceCompilation: provenance ? { provenanceSha256: hash(provenanceFile), evidence: provenance.plan.evidence,
     policy: provenance.plan.policy, observations: provenance.observations } : null,
   methodology: [
-    'Frozen rectangles identify prepared sections containing at least one prepared start. Region selection is independent of access filters; eligibility is applied by the unchanged submitted query. Searches explore all eligible starts in those exact sections.',
+    'Frozen rectangles identify prepared sections containing at least one prepared start. Region selection is independent of access filters; eligibility is applied by the unchanged submitted query. Searches consider all eligible starts in those exact sections.',
     'Whole-section start scope expands the original rectangles. Timing, start counts and results are not directly comparable to earlier rectangular observations. Each result retains its original frozen definition and the adapted exact-section request.',
     'Fresh process, ephemeral loopback HTTP server and real search worker for each query; no live app is contacted.',
     'RSS includes server, worker threads and in-process HTTP measurement client; browser and coordinator memory are excluded. Sampling can miss peaks; OS high-water and sample gaps are also recorded.',
@@ -76,7 +76,7 @@ const report = {
     'The observation window and sampled RSS guard only stop this measurement through the app cancellation API. An outer deadline kills a hung child after the window plus 15 seconds.',
     'Route constraints remain frozen; historical pilot dataset IDs/start counts do not describe the supplied sections. Counts are completed saved families and witnesses, not independent existence certificates.',
     'Each result records the adapted sent request and effective query, including app defaults for newer settings. Explicit constraints and exact selected section IDs must remain unchanged.',
-    'Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Failed or interrupted observations do not prove no matches.',
+    'Timing is descriptive; filesystem caches and concurrent machine activity are uncontrolled. Bounded discovery can miss qualifying hikes; completed empty searches do not prove absence. Failed or interrupted observations likewise do not prove no matches.',
   ],
   plannedQueries: definitions.map(query => query.id), results: [],
 };

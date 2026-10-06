@@ -2,9 +2,10 @@
 
 A local desktop app for finding loops and lollipops from mapped trails. Choose
 one or more prepared mountain regions, set distance, climb, repeated-trail and road limits,
-and submit a search job. Browse stable results after exploration finishes.
+and submit a search job. Browse stable results after discovery finishes.
 Every shown route meets the requested constraints; unfinished jobs show their
-stage, within-region progress and fully explored regions.
+stage, within-region progress and completed regions. Discovery tries a bounded
+set of alternatives; it can miss qualifying hikes.
 
 ## Run
 
@@ -37,12 +38,12 @@ Applied dividers are hard hike boundaries, including bridges and underpasses.
 Each resulting section is compiled independently before graph construction and
 stored as three complete files: starts, topology, and measured route geometry.
 There are no replicated geographic cells or cross-section graph joins. Search
-loads one section at a time, while searching every eligible start across the
+loads one section at a time, considering every eligible start across the
 selected sections. Missing or unprepared coverage is disclosed.
 
 Search regions and prepared data sections share the same identity and exact
 footprint. Select regions from the list or click their map polygons. Every
-eligible start in those regions is explored; panning and zooming only change the
+eligible start in those regions is considered; panning and zooming only change the
 view. There are no separate named rectangles or custom drawing scopes. Unknown
 pedestrian access is included and labeled by default, and can be excluded.
 Explicit prohibitions are respected.
@@ -54,18 +55,24 @@ do not certify legal parking or current road conditions.
 ## Search jobs and results
 
 The Jobs dialog shows saved requests, FIFO queue positions, stages, current region,
-a progress bar for fully explored loop search points, fully explored regions and
+a progress bar for completed discovery steps, completed regions and
 elapsed time. Closing it leaves jobs running. Jobs
-search without a time or result cap. The current solver is too slow for ordinary
-whole-region searches; the [measured review](benchmarks/completed-jobs-review.json)
-records unfinished jobs, memory failures and the required solver redesign.
+use bounded discovery effort without a mileage or displayed-result cap. A
+completed empty search means no qualifying hikes were found by that search.
+The bounded solver replacement is currently being implemented and measured;
+the [previous measured review](benchmarks/completed-jobs-review.json) records the
+exhaustive solver's unfinished jobs and memory failures.
 Completed jobs become ready in the app without changing your screen.
 
 History and completed geometry live in `.local-data/jobs`. Reloading restores
 jobs; completed views have stable `?job=ID` URLs. Restarting interrupts the job
 that was running and continues queued jobs. Cancellation, interruption and failure
 discard unfinished results while keeping settings to copy into a new submission.
-Requests are immutable. Delete terminal jobs with confirmation to reclaim their
+Constraints are immutable. **Search deeper** offers one longer discovery run on
+the same completed job. Earlier results remain readable while it runs and if it
+is cancelled, interrupted or fails. The expanded results are published together;
+open **View updated results** to switch from the earlier saved revision. Deeper
+discovery requires the original prepared data. Delete terminal jobs with confirmation to reclaim their
 saved storage; history is otherwise retained.
 
 Main circuits are discovered once, independently of their starting points.
