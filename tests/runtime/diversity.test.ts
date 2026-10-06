@@ -196,6 +196,34 @@ it('keeps a different trail approach after a better-looking road witness is elim
   expect(routes.every(item => item.route.distance === 960 && item.route.roadDistance === 40)).toBe(true);
 });
 
+it('keeps preferred approaches when a finite asymmetric edge makes ratio bounds unusable', async () => {
+  const graph = fixture([[0, 1, 0.3], [0, 2, 0.1], [2, 1, 0.1], [1, 3, 200], [3, 4, 200], [4, 1, 100],
+    [10, 11, 1, { backDistance: Number.MIN_VALUE }]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [500, 501], repetition: 0.2,
+    roads: { distance: 0, fraction: 0 } });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.edges.length === 7)).toBe(true);
+});
+
+it('preserves actual gain order when the climb limit disables integer bounds', async () => {
+  const graph = fixture([[0, 4, 50], [4, 2, 50], [1, 2, 100, { gain: 1e100, backGain: 1e100 }],
+    [2, 3, 100, { gain: 1e84, backGain: 1e84 }], [3, 1, 100, { gain: 1e84, backGain: 1e84 }]]);
+  const edges = [0, 2, 6, 8, 4, 3, 1];
+  const gain = edges.reduce((sum, id) => sum + graph.edges[id]!.gain, 0);
+  const routes = await compareOutputs(graph, { ...query, distance: [500, 500], gain: [gain, gain], repetition: 0.2,
+    roads: { distance: 0, fraction: 0 } });
+  expect(routes).toHaveLength(1);
+  expect(routes[0]!.route.edges).toEqual(edges);
+});
+
+it('retains every qualifying circuit when tied road mileage moves a road from approach into the core', async () => {
+  const graph = fixture([[0, 1, 100], [3, 4, 1000], [4, 3, 100, { connector: true }],
+    [1, 3, 5, { connector: true }], [4, 1, 105, { connector: true }]]);
+  const routes = await compareOutputs(graph, { ...query, distance: [1310, 1310] });
+  expect(routes).toHaveLength(2);
+  expect(routes.every(item => item.route.roadDistance === 110 && item.route.repetition === 100 / 1310)).toBe(true);
+});
+
 it('retains independently qualified witnesses on weighted directed tiny graphs', async () => {
   let state = 123456789;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; };
