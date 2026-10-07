@@ -1,0 +1,89 @@
+{
+  "name": "Diablo Range & East Bay",
+  "regionId": "17046",
+  "state": "CA",
+  "sourceDate": "2026-08-01",
+  "gmba": {
+    "file": "sources/gmba-standard-all/GMBA_Inventory_v2.0_standard.zip",
+    "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard.zip",
+    "sha256": "3d67de8143beba5ce427cb2c3041194079fe070b371ac0a2bce91f3bc62d9d27"
+  },
+  "coverage": {
+    "file": "sources/census-states-2024/3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc/cb_2024_us_state_500k.zip",
+    "url": "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_us_state_500k.zip",
+    "sha256": "3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc"
+  },
+  "osm": {
+    "file": "sources/geofabrik-california-osm/california-260801.osm.pbf",
+    "url": "https://download.geofabrik.de/north-america/us/california-260801.osm.pbf",
+    "sha256": "db5d25b3d52de8465af73b4f9c2d84853c348c4597424d0e8b38bd0788373bf1"
+  },
+  "elevation": [
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n38w123_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n38w123/USGS_13_n38w123_20250826.tif",
+      "sha256": "73c9935d3b750c01f19b292760547b8c2db0a1c8beb3ee0aaea375425b713538",
+      "bounds": [
+        -123,
+        37,
+        -122,
+        38
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n37w122_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n37w122/USGS_13_n37w122_20250826.tif",
+      "sha256": "786ad73dc03e5c7cde26b285631ef04198e386ac83d3e91ac8c1e577e7fdcd80",
+      "bounds": [
+        -122,
+        36,
+        -121,
+        37
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n38w122_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n38w122/USGS_13_n38w122_20250826.tif",
+      "sha256": "d6dd52bd01ef81d8af06a336d881ca73083e15139f22c2e84262e77aa138ffb4",
+      "bounds": [
+        -122,
+        37,
+        -121,
+        38
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n39w122_20250520.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n39w122/USGS_13_n39w122_20250520.tif",
+      "sha256": "76da1d095839553bfda3cf8dc464695b45b907bd0755b379ab2215cfa1bb416b",
+      "bounds": [
+        -122,
+        38,
+        -121,
+        39
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n36w121_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n36w121/USGS_13_n36w121_20250826.tif",
+      "sha256": "8098be86d67530d3dee2a4fa3fd741f232ca90c35c82040589c3b0d957f56655",
+      "bounds": [
+        -121,
+        35,
+        -120,
+        36
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n37w121_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n37w121/USGS_13_n37w121_20250826.tif",
+      "sha256": "41a0f5ad41d40c07e0625c9e473493ca16100e9a0ad1149c2679df273291cafa",
+      "bounds": [
+        -121,
+        36,
+        -120,
+        37
+      ]
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "name": "Sonoma\u2013Marin Coast",
+  "regionId": "17173",
+  "state": "CA",
+  "sourceDate": "2026-08-01",
+  "gmba": {
+    "file": "sources/gmba-standard-all/GMBA_Inventory_v2.0_standard.zip",
+    "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard.zip",
+    "sha256": "3d67de8143beba5ce427cb2c3041194079fe070b371ac0a2bce91f3bc62d9d27"
+  },
+  "coverage": {
+    "file": "sources/census-states-2024/3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc/cb_2024_us_state_500k.zip",
+    "url": "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_us_state_500k.zip",
+    "sha256": "3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc"
+  },
+  "osm": {
+    "file": "sources/geofabrik-california-osm/california-260801.osm.pbf",
+    "url": "https://download.geofabrik.de/north-america/us/california-260801.osm.pbf",
+    "sha256": "db5d25b3d52de8465af73b4f9c2d84853c348c4597424d0e8b38bd0788373bf1"
+  },
+  "elevation": [
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n39w124_20260601.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n39w124/USGS_13_n39w124_20260601.tif",
+      "sha256": "ea12b027e83a667bb97b3b4db2574f93787602b62cd5d4360798fb8fe802dadf",
+      "bounds": [
+        -124,
+        38,
+        -123,
+        39
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n40w124_20250520.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n40w124/USGS_13_n40w124_20250520.tif",
+      "sha256": "bd6cec7b7aeac5c7c4613751e9bf257270c2b7fd86eb2bd66475533184dcfadd",
+      "bounds": [
+        -124,
+        39,
+        -123,
+        40
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n38w123_20250826.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n38w123/USGS_13_n38w123_20250826.tif",
+      "sha256": "73c9935d3b750c01f19b292760547b8c2db0a1c8beb3ee0aaea375425b713538",
+      "bounds": [
+        -123,
+        37,
+        -122,
+        38
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n39w123_20260601.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n39w123/USGS_13_n39w123_20260601.tif",
+      "sha256": "68e1bdf99704c5bb7ab8136354f39a3401bc5bdd8889b086336a4b5e259c65f9",
+      "bounds": [
+        -123,
+        38,
+        -122,
+        39
+      ]
+    }
+  ]
+}

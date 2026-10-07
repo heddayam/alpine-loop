@@ -1,0 +1,626 @@
+{
+  "date": "2026-10-07",
+  "scope": "Local preparation and installation; no public data release.",
+  "sourcePolicy": {
+    "boundaries": "Exact GMBA v2 standard named polygons, intersected with pinned Census WA/CA boundaries. Cascades/Olympics use 300 selection; Bay ranges use the full standard archive.",
+    "osmDate": "2026-08-01",
+    "elevation": "SHA-pinned USGS 3DEP 1/3 arc-second, bilinear sampling at vertices and at most 25m intervals. All new-region samples resolve without supplements.",
+    "capacitySourceSegments": 700000,
+    "sources": [
+      "https://www.earthenv.org/mountains",
+      "https://doi.org/10.1038/s41597-022-01256-y",
+      "https://download.geofabrik.de/north-america/us/california.html",
+      "https://www.usgs.gov/3d-elevation-program/about-3dep-products-services"
+    ]
+  },
+  "newRegions": [
+    {
+      "manifest": "tools/prepare/manifests/olympics.json",
+      "name": "Olympic Mountains",
+      "regionId": "11688",
+      "state": "WA",
+      "sourceDate": "2026-08-01",
+      "gmbaArchiveSha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874",
+      "osmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+      "demTiles": 6,
+      "sourceSegments": 306965,
+      "cuts": [],
+      "sectionIds": [
+        "mountain-bcb514054a1fdcb6bcf393a1"
+      ],
+      "starts": 879,
+      "compressedBytes": 10194035,
+      "catalogSha256": "7cd8854a2aee2fcb7260c74908cc3a2280f4b4756f16a7412310401c8595e0b9",
+      "planSha256": "d5654be4a4012e61287b14f2a9301598527f0bf45cb6a90e7e4992a918d92f6f",
+      "preparation": {
+        "elapsedSeconds": 59.62897591700312,
+        "peakRssBytes": 850493440,
+        "counts": [
+          {
+            "directedEdges": 32138,
+            "duplicateSegments": 0,
+            "elevationSamples": 499483,
+            "elevationSupplementSamples": 0,
+            "frontierNodes": 836,
+            "nodes": 14782,
+            "outsideSegments": 13872,
+            "physicalTrails": 16069,
+            "prohibitedSegments": 19506,
+            "selectedWays": 10987,
+            "starts": 879,
+            "zeroLengthSegments": 0
+          }
+        ]
+      },
+      "independentGeometryAudit": {
+        "catalogId": "mountains-a7e1f6fa3af1c62ba8c27ce01e69c12e4ea27b3fb1e879c84912c92ff188f8af",
+        "sections": [
+          {
+            "id": "mountain-bcb514054a1fdcb6bcf393a1",
+            "name": "Olympic Mountains",
+            "starts": 879,
+            "physicalTrails": 16069,
+            "directedEdges": 32138,
+            "measuredPoints": 516839,
+            "counts": {
+              "directedEdges": 32138,
+              "duplicateSegments": 0,
+              "elevationSamples": 499483,
+              "elevationSupplementSamples": 0,
+              "frontierNodes": 836,
+              "nodes": 14782,
+              "outsideSegments": 13872,
+              "physicalTrails": 16069,
+              "prohibitedSegments": 19506,
+              "selectedWays": 10987,
+              "starts": 879,
+              "zeroLengthSegments": 0
+            }
+          }
+        ],
+        "starts": 879,
+        "checks": [
+          "all file hashes and compressed/decoded sizes",
+          "exact planned boundary union and disjoint sections",
+          "all finite 3D measured geometry inside boundary and off highway dividers",
+          "sample spans at most 25m",
+          "every directed edge distance/gain/endpoints/access/role",
+          "start metadata and no generated frontier starts"
+        ]
+      },
+      "appSearch": {
+        "outcome": "complete_within_snapshot",
+        "effectiveQuery": {
+          "sections": [
+            "mountain-bcb514054a1fdcb6bcf393a1"
+          ],
+          "effort": "deep",
+          "distance": [
+            8046.72,
+            19312.128
+          ],
+          "gain": [
+            0,
+            1219.2
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "completedStarts": 879,
+        "completedObservedMs": 4417.361958,
+        "displayedHikes": 38,
+        "retainedWalks": 38,
+        "mapLocations": 38,
+        "peakRssBytes": 232144896,
+        "reconnect": {
+          "atMs": 1043.283792,
+          "latencyMs": 0.6890000000000782,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "inspectedRoute": {
+          "id": "880e8450c367a8593ac26cb5961a668e",
+          "distance": 8061.320930206785,
+          "gain": 527.2034611658194,
+          "roadDistance": 290.80426865163577,
+          "repetition": 0.018133100519102715,
+          "points": 685
+        }
+      }
+    },
+    {
+      "manifest": "tools/prepare/manifests/santa-cruz.json",
+      "name": "Santa Cruz Mountains",
+      "regionId": "11806",
+      "state": "CA",
+      "sourceDate": "2026-08-01",
+      "gmbaArchiveSha256": "3d67de8143beba5ce427cb2c3041194079fe070b371ac0a2bce91f3bc62d9d27",
+      "osmSha256": "db5d25b3d52de8465af73b4f9c2d84853c348c4597424d0e8b38bd0788373bf1",
+      "demTiles": 4,
+      "sourceSegments": 362525,
+      "cuts": [],
+      "sectionIds": [
+        "mountain-1a7dedc54daf4232348839e3"
+      ],
+      "starts": 2517,
+      "compressedBytes": 11378499,
+      "catalogSha256": "fe4ac5c0d33e0d82a047c222b4f5ef7fe8121b90e6ecf55731ee4081a14f0de4",
+      "planSha256": "30350d8bf68ddee3a9c98ee6ff2b60553da10292af60142d681db510df3b2e88",
+      "preparation": {
+        "elapsedSeconds": 129.57311624998692,
+        "peakRssBytes": 1111326720,
+        "counts": [
+          {
+            "directedEdges": 87528,
+            "duplicateSegments": 5,
+            "elevationSamples": 459049,
+            "elevationSupplementSamples": 0,
+            "frontierNodes": 1339,
+            "nodes": 39124,
+            "outsideSegments": 21523,
+            "physicalTrails": 43768,
+            "prohibitedSegments": 125487,
+            "selectedWays": 33962,
+            "starts": 2517,
+            "zeroLengthSegments": 0
+          }
+        ]
+      },
+      "independentGeometryAudit": {
+        "catalogId": "mountains-759e961962e449eb1b352be4e4d5bdf8551f79d3ba15588e2c99ce7b381c5821",
+        "sections": [
+          {
+            "id": "mountain-1a7dedc54daf4232348839e3",
+            "name": "Santa Cruz Mountains",
+            "starts": 2517,
+            "physicalTrails": 43768,
+            "directedEdges": 87528,
+            "measuredPoints": 507461,
+            "counts": {
+              "directedEdges": 87528,
+              "duplicateSegments": 5,
+              "elevationSamples": 459049,
+              "elevationSupplementSamples": 0,
+              "frontierNodes": 1339,
+              "nodes": 39124,
+              "outsideSegments": 21523,
+              "physicalTrails": 43768,
+              "prohibitedSegments": 125487,
+              "selectedWays": 33962,
+              "starts": 2517,
+              "zeroLengthSegments": 0
+            }
+          }
+        ],
+        "starts": 2517,
+        "checks": [
+          "all file hashes and compressed/decoded sizes",
+          "exact planned boundary union and disjoint sections",
+          "all finite 3D measured geometry inside boundary and off highway dividers",
+          "sample spans at most 25m",
+          "every directed edge distance/gain/endpoints/access/role",
+          "start metadata and no generated frontier starts"
+        ]
+      },
+      "appSearch": {
+        "outcome": "complete_within_snapshot",
+        "effectiveQuery": {
+          "sections": [
+            "mountain-1a7dedc54daf4232348839e3"
+          ],
+          "effort": "deep",
+          "distance": [
+            8046.72,
+            19312.128
+          ],
+          "gain": [
+            0,
+            1219.2
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "completedStarts": 2517,
+        "completedObservedMs": 30410.342332999997,
+        "displayedHikes": 124,
+        "retainedWalks": 124,
+        "mapLocations": 124,
+        "peakRssBytes": 345325568,
+        "reconnect": {
+          "atMs": 1036.9085420000001,
+          "latencyMs": 1.3189579999998386,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "inspectedRoute": {
+          "id": "5066347d79c56d281b650158da1e090f",
+          "distance": 8061.747965388973,
+          "gain": 298.63590330737,
+          "roadDistance": 313.8247909744155,
+          "repetition": 0.19411789318403902,
+          "points": 748
+        }
+      }
+    },
+    {
+      "manifest": "tools/prepare/manifests/diablo.json",
+      "name": "Diablo Range & East Bay",
+      "regionId": "17046",
+      "state": "CA",
+      "sourceDate": "2026-08-01",
+      "gmbaArchiveSha256": "3d67de8143beba5ce427cb2c3041194079fe070b371ac0a2bce91f3bc62d9d27",
+      "osmSha256": "db5d25b3d52de8465af73b4f9c2d84853c348c4597424d0e8b38bd0788373bf1",
+      "demTiles": 6,
+      "sourceSegments": 640044,
+      "cuts": [],
+      "sectionIds": [
+        "mountain-e7c44d3adae6b1354f5085fe"
+      ],
+      "starts": 3697,
+      "compressedBytes": 20541164,
+      "catalogSha256": "68bbd5a69ce84f590181a770fc974185681eb16008cd79942a596fa6f6660fc3",
+      "planSha256": "da8d4bfa1bf686c81e3eb2f08a85cbd1325f574d89e66be9c00ade59191bb3fe",
+      "preparation": {
+        "elapsedSeconds": 166.18985466699814,
+        "peakRssBytes": 1776926720,
+        "counts": [
+          {
+            "directedEdges": 135781,
+            "duplicateSegments": 12,
+            "elevationSamples": 888690,
+            "elevationSupplementSamples": 0,
+            "frontierNodes": 3072,
+            "nodes": 55108,
+            "outsideSegments": 47363,
+            "physicalTrails": 67891,
+            "prohibitedSegments": 112545,
+            "selectedWays": 46424,
+            "starts": 3697,
+            "zeroLengthSegments": 0
+          }
+        ]
+      },
+      "independentGeometryAudit": {
+        "catalogId": "mountains-c50caae4b2f95428d57c18c20a7474893e806850cddb023e5f34f2bbdef8e36b",
+        "sections": [
+          {
+            "id": "mountain-e7c44d3adae6b1354f5085fe",
+            "name": "Diablo Range & East Bay",
+            "starts": 3697,
+            "physicalTrails": 67891,
+            "directedEdges": 135781,
+            "measuredPoints": 969364,
+            "counts": {
+              "directedEdges": 135781,
+              "duplicateSegments": 12,
+              "elevationSamples": 888690,
+              "elevationSupplementSamples": 0,
+              "frontierNodes": 3072,
+              "nodes": 55108,
+              "outsideSegments": 47363,
+              "physicalTrails": 67891,
+              "prohibitedSegments": 112545,
+              "selectedWays": 46424,
+              "starts": 3697,
+              "zeroLengthSegments": 0
+            }
+          }
+        ],
+        "starts": 3697,
+        "checks": [
+          "all file hashes and compressed/decoded sizes",
+          "exact planned boundary union and disjoint sections",
+          "all finite 3D measured geometry inside boundary and off highway dividers",
+          "sample spans at most 25m",
+          "every directed edge distance/gain/endpoints/access/role",
+          "start metadata and no generated frontier starts"
+        ]
+      },
+      "appSearch": {
+        "outcome": "complete_within_snapshot",
+        "effectiveQuery": {
+          "sections": [
+            "mountain-e7c44d3adae6b1354f5085fe"
+          ],
+          "effort": "deep",
+          "distance": [
+            8046.72,
+            19312.128
+          ],
+          "gain": [
+            0,
+            1219.2
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "completedStarts": 3697,
+        "completedObservedMs": 103291.528208,
+        "displayedHikes": 201,
+        "retainedWalks": 201,
+        "mapLocations": 201,
+        "peakRssBytes": 405831680,
+        "reconnect": {
+          "atMs": 1030.2585000000001,
+          "latencyMs": 0.5731249999998909,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "inspectedRoute": {
+          "id": "ae9dee80803ba81a4234383e7e7ef092",
+          "distance": 8054.157241405168,
+          "gain": 655.0056800754841,
+          "roadDistance": 0,
+          "repetition": 0.18286257272968695,
+          "points": 560
+        }
+      }
+    },
+    {
+      "manifest": "tools/prepare/manifests/sonoma-marin.json",
+      "name": "Sonoma–Marin Coast",
+      "regionId": "17173",
+      "state": "CA",
+      "sourceDate": "2026-08-01",
+      "gmbaArchiveSha256": "3d67de8143beba5ce427cb2c3041194079fe070b371ac0a2bce91f3bc62d9d27",
+      "osmSha256": "db5d25b3d52de8465af73b4f9c2d84853c348c4597424d0e8b38bd0788373bf1",
+      "demTiles": 4,
+      "sourceSegments": 268103,
+      "cuts": [],
+      "sectionIds": [
+        "mountain-490a968fcacd502034997692"
+      ],
+      "starts": 1450,
+      "compressedBytes": 7622076,
+      "catalogSha256": "67215a450d057c9b298f426ab5d89f35b1c538a1e08a4e656407f5bd1aa7b825",
+      "planSha256": "67aa2aa288f477e6fb3efa6020250006910c43ae11896d877a13226edf7c57c7",
+      "preparation": {
+        "elapsedSeconds": 111.702605959028,
+        "peakRssBytes": 787480576,
+        "counts": [
+          {
+            "directedEdges": 35554,
+            "duplicateSegments": 5,
+            "elevationSamples": 359414,
+            "elevationSupplementSamples": 0,
+            "frontierNodes": 941,
+            "nodes": 15092,
+            "outsideSegments": 19007,
+            "physicalTrails": 17777,
+            "prohibitedSegments": 35536,
+            "selectedWays": 12404,
+            "starts": 1450,
+            "zeroLengthSegments": 0
+          }
+        ]
+      },
+      "independentGeometryAudit": {
+        "catalogId": "mountains-077f6fedcf1fe8d432b246ad2b5732d86fdf00fa09b27472b8319bf18b9ce240",
+        "sections": [
+          {
+            "id": "mountain-490a968fcacd502034997692",
+            "name": "Sonoma–Marin Coast",
+            "starts": 1450,
+            "physicalTrails": 17777,
+            "directedEdges": 35554,
+            "measuredPoints": 379876,
+            "counts": {
+              "directedEdges": 35554,
+              "duplicateSegments": 5,
+              "elevationSamples": 359414,
+              "elevationSupplementSamples": 0,
+              "frontierNodes": 941,
+              "nodes": 15092,
+              "outsideSegments": 19007,
+              "physicalTrails": 17777,
+              "prohibitedSegments": 35536,
+              "selectedWays": 12404,
+              "starts": 1450,
+              "zeroLengthSegments": 0
+            }
+          }
+        ],
+        "starts": 1450,
+        "checks": [
+          "all file hashes and compressed/decoded sizes",
+          "exact planned boundary union and disjoint sections",
+          "all finite 3D measured geometry inside boundary and off highway dividers",
+          "sample spans at most 25m",
+          "every directed edge distance/gain/endpoints/access/role",
+          "start metadata and no generated frontier starts"
+        ]
+      },
+      "appSearch": {
+        "outcome": "complete_within_snapshot",
+        "effectiveQuery": {
+          "sections": [
+            "mountain-490a968fcacd502034997692"
+          ],
+          "effort": "deep",
+          "distance": [
+            8046.72,
+            19312.128
+          ],
+          "gain": [
+            0,
+            1219.2
+          ],
+          "repetition": 0.2,
+          "includeUnknown": true,
+          "roads": {
+            "distance": 1609.344,
+            "fraction": 0.1
+          }
+        },
+        "completedStarts": 1450,
+        "completedObservedMs": 66163.31991600001,
+        "displayedHikes": 183,
+        "retainedWalks": 183,
+        "mapLocations": 183,
+        "peakRssBytes": 280576000,
+        "reconnect": {
+          "atMs": 1060.4136250000001,
+          "latencyMs": 8.639916000000085,
+          "sameJob": true,
+          "sameQuery": true,
+          "status": "running"
+        },
+        "inspectedRoute": {
+          "id": "6fc955332e2f295a521e0b81e6aaa3c2",
+          "distance": 8050.683785937708,
+          "gain": 663.4939179490602,
+          "roadDistance": 578.6767375442687,
+          "repetition": 0.13626336715393572,
+          "points": 825
+        }
+      }
+    }
+  ],
+  "coverageProbes": {
+    "note": "Approximate landmark-point containment probes; exact prepared boundaries are authoritative.",
+    "probes": {
+      "Montara Mountain": [
+        -122.471,
+        37.579
+      ],
+      "Big Basin": [
+        -122.215,
+        37.172
+      ],
+      "Mount Diablo": [
+        -121.914,
+        37.882
+      ],
+      "Tilden": [
+        -122.244,
+        37.89
+      ],
+      "Mount Tamalpais": [
+        -122.596,
+        37.923
+      ],
+      "San Bruno Mountain": [
+        -122.435,
+        37.697
+      ]
+    },
+    "coverage": {
+      "Diablo Range & East Bay": {
+        "Montara Mountain": false,
+        "Big Basin": false,
+        "Mount Diablo": true,
+        "Tilden": true,
+        "Mount Tamalpais": false,
+        "San Bruno Mountain": false
+      },
+      "Santa Cruz Mountains": {
+        "Montara Mountain": true,
+        "Big Basin": true,
+        "Mount Diablo": false,
+        "Tilden": false,
+        "Mount Tamalpais": false,
+        "San Bruno Mountain": false
+      },
+      "Sonoma–Marin Coast": {
+        "Montara Mountain": false,
+        "Big Basin": false,
+        "Mount Diablo": false,
+        "Tilden": false,
+        "Mount Tamalpais": true,
+        "San Bruno Mountain": false
+      }
+    }
+  },
+  "installation": {
+    "catalogId": "mountains-composed-01a60e8578d7cb99c266c57cc90def826c95d9d5317ab3517e5297ec56b1650e",
+    "catalogSha256": "821d522e3f4d7d7121e56b9d442535c865ce0972d35287f67b0ab0adf57ef183",
+    "preparedSections": 9,
+    "unavailable": 0,
+    "starts": 18730,
+    "compressedBytes": 138934836,
+    "preservedExistingSections": 5,
+    "originalCatalogSha256": "a084f68d16e91e600507d79670cfd8677cbe6faf1203a5d628b58a310f50be04",
+    "unchangedExistingDataAndJobFiles": [
+      ".local-data/jobs/827fe573-9265-4e98-8234-f1fec9ff7fba.sqlite",
+      ".local-data/jobs/db0191b1-f280-4dd7-a36d-c7cef150691c.sqlite",
+      ".local-data/jobs/489eb52d-aa07-48aa-8077-6d5c359dfc58.sqlite",
+      ".local-data/jobs/dbdfef03-4ff8-4a96-8324-50ddf4dde600.sqlite",
+      ".local-data/jobs/owner.sqlite",
+      ".local-data/jobs/abadf16f-b475-4749-b573-e758684d69e5.sqlite",
+      ".local-data/jobs/fd647958-28c0-487c-8e79-ee3f28bd035d.sqlite",
+      ".local-data/jobs/87a8bd25-fb38-46b6-9034-d205641eced0.sqlite",
+      ".local-data/jobs/646c17b8-0364-4a65-b9f8-baf5d3312fd5.sqlite",
+      ".local-data/jobs/27bd6616-5dda-4b3f-982b-df442ec2adba.sqlite",
+      ".local-data/jobs/97d38ef5-5203-4432-a3a9-fb0c30017726.sqlite",
+      ".local-data/jobs/0ee030e7-e887-4938-9b29-f0ce9812fc1b.sqlite",
+      ".local-data/mountains/sections/mountain-1a237ff8895adebfa21e390b/geometry.jsonl.gz",
+      ".local-data/mountains/sections/mountain-1a237ff8895adebfa21e390b/graph.json.gz",
+      ".local-data/mountains/sections/mountain-1a237ff8895adebfa21e390b/starts.json.gz",
+      ".local-data/mountains/sections/mountain-e003916c5698006638c9c77c/geometry.jsonl.gz",
+      ".local-data/mountains/sections/mountain-e003916c5698006638c9c77c/graph.json.gz",
+      ".local-data/mountains/sections/mountain-e003916c5698006638c9c77c/starts.json.gz",
+      ".local-data/mountains/sections/mountain-70611e49c04901ed37bd793e/geometry.jsonl.gz",
+      ".local-data/mountains/sections/mountain-70611e49c04901ed37bd793e/graph.json.gz",
+      ".local-data/mountains/sections/mountain-70611e49c04901ed37bd793e/starts.json.gz",
+      ".local-data/mountains/sections/mountain-d43a7b201dc5e484847ccc42/geometry.jsonl.gz",
+      ".local-data/mountains/sections/mountain-d43a7b201dc5e484847ccc42/graph.json.gz",
+      ".local-data/mountains/sections/mountain-d43a7b201dc5e484847ccc42/starts.json.gz",
+      ".local-data/mountains/sections/mountain-7a6c62952459c6276843dae6/geometry.jsonl.gz",
+      ".local-data/mountains/sections/mountain-7a6c62952459c6276843dae6/graph.json.gz",
+      ".local-data/mountains/sections/mountain-7a6c62952459c6276843dae6/starts.json.gz"
+    ],
+    "savedJobPreservation": {
+      "originalCompletedJobs": 11,
+      "currentCompletedJobs": 14,
+      "originalResultDatabasesUnchanged": true,
+      "originalJobsAvailableThroughApi": true,
+      "additionalJobsCreatedDuringPreparation": [
+        "78cb139e-973e-4728-aea7-d2752f24679a",
+        "5175ec81-b4c1-418b-aabf-9ed97e4c6015",
+        "4f602440-17f5-48ad-9b23-aa8a2af44866"
+      ],
+      "mutableJobFiles": [
+        {
+          "file": ".local-data/jobs/metadata.sqlite",
+          "beforeSha256": "9a33ef10a48c71bf89e3330957c6d1e7a146f862b7cec6fbd80cb22a1df10433",
+          "afterSha256": "2ae4d9ade3c0a64c19cea9977641bc50c1ea1cb293a7de7a1bc5c55692279e3a"
+        },
+        {
+          "file": ".local-data/jobs/owner.sqlite-journal",
+          "beforeSha256": "e43d0c5944bd4fb1a29f78a929b97c60bee1e1d822e10f65b7ad7049ebfc29e7",
+          "afterSha256": "6fef1d1d1cd76840818da7b90ef5e4079cc9c754140ca7cca0b6be34e56cd646"
+        }
+      ],
+      "note": "Job metadata and the transient ownership journal may change during normal server ownership and new searches. Original immutable result databases and owner database hashes are unchanged."
+    }
+  },
+  "checks": {
+    "offline": "npm run verify: build, typecheck, 124 Vitest checks and 10 Node checks pass, including 5 composition checks.",
+    "geometry": "Every new prepared edge and 3D geometry audited independently; complete planned unions, disjoint interiors, sizes/hashes, finite samples, exact distance/gain/endpoints, access, start metadata and no frontier starts.",
+    "app": "Complete isolated HTTP job for every new region; exact scope, all eligible starts, immutable completed status, map locations, reconnect, memory and first saved-route limits checked.",
+    "discoveryLimit": "Bounded discovery is unchanged; these observations are not exhaustive hiking-route existence certificates.",
+    "browser": "Live Search area selector shows Olympic Mountains, Santa Cruz Mountains, Diablo Range & East Bay and Sonoma–Marin Coast. API confirms nine installed sections and zero unavailable. Screenshot: .local-data/olympics-bay-build/installed-regions.jpg.",
+    "maintainedSource": {
+      "lines": 9336,
+      "files": 48,
+      "maximumLines": 12031
+    }
+  },
+  "sourceAcquisitionNote": "USGS index lists n37w123 20210617 as 6,891,248 bytes, but its complete HTTP object is 5,494,012 bytes. Verified response length, raster metadata and SHA-256 before pinning the actual object.",
+  "evidenceDirectory": ".local-data/olympics-bay-build"
+}
