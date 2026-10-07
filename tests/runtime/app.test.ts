@@ -3,9 +3,12 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { gunzipSync, gzipSync } from 'node:zlib';
+import type { SectionGeometry } from '../../src/data-format.js';
 import { ROUTES_PER_PAGE, type JobResults, type JobSnapshot, type RouteView } from '../../src/model.js';
 import { createNetworkFixture, query } from './network-fixture.js';
 
@@ -38,6 +41,26 @@ async function finished(app: App, initial: JobSnapshot, timeout = 5000) {
 const submit = (app: App, payload = query) => app.inject({ method: 'POST', url: '/api/jobs', payload });
 
 describe('completed jobs through the actual app and worker', () => {
+  it.each(['missing', 'disconnected', 'shifted'] as const)('rejects %s drawing geometry before publication', async fault => {
+    const { directory, jobDirectory, catalog } = await fixture();
+    const file = catalog.sections[0]!.files.geometry;
+    const geometry = JSON.parse(gunzipSync(await readFile(join(directory, file.path))).toString()) as SectionGeometry;
+    if (fault === 'missing') geometry[0]!.coordinates = [];
+    else if (fault === 'disconnected') geometry[0]!.coordinates[0]![0] += .01;
+    else for (const shape of geometry) for (const point of shape.coordinates) point[0] += .01;
+    const raw = Buffer.from(JSON.stringify(geometry)), compressed = gzipSync(raw);
+    Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
+    await writeFile(join(directory, file.path), compressed);
+    await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
+    const app = await openApp(directory, jobDirectory);
+    const snapshot = await finished(app, (await submit(app)).json());
+    expect(snapshot.status).toBe('failed');
+    expect(snapshot.reason).toMatch(/drawing/i);
+    expect((await app.inject(`/api/jobs/${snapshot.id}/results`)).statusCode).toBe(409);
+    await app.close();
+    expect((await readdir(jobDirectory)).some(name => name.startsWith(snapshot.id))).toBe(false);
+  });
+
   it('publishes stable grouped pages, all locations, directions and GPX; retains them after source removal and restart', async () => {
     const count = ROUTES_PER_PAGE + 1;
     const { directory, jobDirectory, firstLoop } = await fixture({ startCount: count, routeCount: count,

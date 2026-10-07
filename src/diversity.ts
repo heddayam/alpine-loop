@@ -25,9 +25,11 @@ function coreOf(graph: TrailGraph, route: RouteCandidate): Core {
 }
 
 /** Group main circuits for display, while retaining qualifying starts and
- * directions separately for every exact circuit. Grouping never removes a circuit. */
+ * directions separately for every exact circuit. Grouping never removes a circuit.
+ * With onRoute, emit witnesses circuit by circuit instead of retaining the return array. */
 export async function solveSection(graph: TrailGraph, query: SearchQuery,
-  onProgress?: (progress: SearchProgress) => void | Promise<void>, savedPool?: CandidatePool): Promise<SolvedRoute[]> {
+  onProgress?: (progress: SearchProgress) => void | Promise<void>, savedPool?: CandidatePool,
+  onRoute?: (route: SolvedRoute) => void): Promise<SolvedRoute[]> {
   validateQuery(query);
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
   const batches = new Map<string, Core>();
@@ -66,10 +68,44 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
   };
   type Choice = Omit<SolvedRoute, 'groupId'>;
   const rank = { trailhead: 0, parking: 1, 'road-contact': 2 };
-  const preference = (a: Choice, b: Choice) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
+  const preference = (a: { route: RouteCandidate }, b: { route: RouteCandidate }) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
     || quality(graph, a.route, b.route) || graph.starts[a.route.start]!.id.localeCompare(graph.starts[b.route.start]!.id);
-  const variants: { core: Core; choices: Choice[]; trails: Set<number>; length: number; key: string }[] = [];
+  const variants: { core: Core; route: RouteCandidate; trails: Set<number>; length: number; key: string;
+    groupId: string; preferred: boolean }[] = [];
   for (const [key, core] of batches) {
+    let preferred: RouteCandidate | undefined;
+    for (const route of pool.routes(key)) {
+      if (!preferred || preference({ route }, { route: preferred }) < 0) preferred = route;
+      if (shouldYield()) await yieldProgress();
+    }
+    const trails = new Set(core.key);
+    const length = [...trails].sort((a, b) => a - b).reduce((total, trail) => total + physical.get(trail)!.distance, 0);
+    variants.push({ core, route: preferred!, trails, length, key, groupId: '', preferred: false });
+  }
+  variants.sort((a, b) => preference(a, b) || compareNumbers(a.core.key, b.core.key));
+  const representatives: (typeof variants)[number][] = [], result: SolvedRoute[] = [];
+  for (const variant of variants) {
+    let representative: (typeof variants)[number] | undefined, best = MIN_LOOP_SIMILARITY;
+    for (const shown of representatives) {
+      const common = variant.core.key.filter(trail => shown.trails.has(trail));
+      const length = [...common].sort((a, b) => a - b).reduce((total, trail) => total + physical.get(trail)!.distance, 0);
+      const score = length / Math.max(variant.length, shown.length);
+      if (score >= best && compareNumbers(canonical(common), canonical(shown.core.key.filter(trail => variant.trails.has(trail)))) === 0
+        && (!representative || score > best)) { representative = shown; best = score; }
+      if (shouldYield()) await yieldProgress();
+    }
+    if (!representative) {
+      representative = variant;
+      representatives.push(variant);
+    }
+    // Keep the displayed route fixed: a hidden version must not keep similar
+    // displayed hikes apart, or replace the route that defines membership.
+    variant.groupId = `family-${hash(representative.key)}`;
+    variant.preferred = representative === variant;
+  }
+  // Keep only circuit representatives during grouping. Witnesses stay in the
+  // candidate pool until their circuit can be saved and released together.
+  for (const { core, key, groupId, preferred } of variants) {
     const variantId = `circuit-${hash(key)}`;
     const anchor = core.key[0]!, seedOrder = core.edges.map(id => graph.edges[id]!.trail);
     const position = seedOrder.indexOf(anchor);
@@ -105,31 +141,13 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery,
       choice.reverseId = walks.get(walkKey(graph, choice.route, true));
       choice.oppositeId = directions.get(`${choice.route.start}:${1 - choice.direction}`);
     }
-    const trails = new Set(core.key);
-    const length = [...trails].sort((a, b) => a - b).reduce((total, trail) => total + physical.get(trail)!.distance, 0);
-    variants.push({ core, choices: versions, trails, length, key });
-  }
-  variants.sort((a, b) => preference(a.choices[0]!, b.choices[0]!) || compareNumbers(a.core.key, b.core.key));
-  const representatives: (typeof variants)[number][] = [], result: SolvedRoute[] = [];
-  for (const variant of variants) {
-    let representative: (typeof variants)[number] | undefined, best = MIN_LOOP_SIMILARITY;
-    for (const shown of representatives) {
-      const common = variant.core.key.filter(trail => shown.trails.has(trail));
-      const length = [...common].sort((a, b) => a - b).reduce((total, trail) => total + physical.get(trail)!.distance, 0);
-      const score = length / Math.max(variant.length, shown.length);
-      if (score >= best && compareNumbers(canonical(common), canonical(shown.core.key.filter(trail => variant.trails.has(trail)))) === 0
-        && (!representative || score > best)) { representative = shown; best = score; }
+    versions[0]!.preferred = preferred;
+    for (const choice of versions) {
+      const saved = { ...choice, groupId };
+      if (onRoute) onRoute(saved);
+      else result.push(saved);
       if (shouldYield()) await yieldProgress();
     }
-    if (!representative) {
-      representative = variant;
-      representatives.push(variant);
-      variant.choices[0]!.preferred = true;
-    }
-    // Keep the displayed route fixed: a hidden version must not keep similar
-    // displayed hikes apart, or replace the route that defines membership.
-    const groupId = `family-${hash(representative.key)}`;
-    result.push(...variant.choices.map(choice => ({ ...choice, groupId })));
   }
   return result;
 }

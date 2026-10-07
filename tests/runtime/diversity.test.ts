@@ -13,7 +13,7 @@ const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain:
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
 const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
-async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false, savedPool?: CandidatePool) {
+async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false, savedPool?: CandidatePool, stream = false) {
   const references = normalized(graph, criteria);
   const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
   const byWalk = new Map(references.map(route => [key(route), route]));
@@ -33,13 +33,24 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
       group.witnesses.map(item => `${item.route.start}:${item.direction}`).sort()])).sort();
     expect(coverage(expected)).toEqual(coverage(exhaustive));
   }
-  const actual = await solveSection(graph, criteria, undefined, savedPool);
+  const emitted: Awaited<ReturnType<typeof solveSection>> = [];
+  const returned = await solveSection(graph, criteria, undefined, savedPool, stream ? route => { emitted.push(route); } : undefined);
+  const actual = stream ? emitted : returned;
   for (const { route } of actual) {
     const valid = measure(graph, criteria, route.start, route.edges);
     expect(valid).toBeDefined();
     expect(byWalk.get(key(route))).toBeDefined();
     expect([route.distance, route.gain, route.roadDistance, route.repetition])
       .toEqual([valid!.distance, valid!.gain, valid!.roadDistance, valid!.repetition]);
+  }
+  const physicalWalk = (route: { start: number; edges: number[] }, reverse = false) => JSON.stringify([route.start,
+    (reverse ? route.edges.toReversed() : route.edges).map(id => [graph.edges[id]!.trail, graph.edges[id]!.reverse !== reverse])]);
+  const byPhysicalWalk = new Map(actual.map(item => [physicalWalk(item.route), item.route.id]));
+  for (const item of actual) {
+    expect(item.reverseId).toBe(byPhysicalWalk.get(physicalWalk(item.route, true)));
+    const opposite = actual.find(other => other.variantId === item.variantId && other.route.start === item.route.start
+      && other.direction !== item.direction);
+    expect(item.oppositeId).toBe(opposite?.route.id);
   }
   const describe = (item: { route: { start: number; edges: number[] }; direction: number; preferred: boolean; preferredVariant: boolean; preferredStart: boolean }) =>
     `${item.route.start}:${item.route.edges.join(',')}:${item.direction}:${item.preferred}:${item.preferredVariant}:${item.preferredStart}`;
@@ -55,14 +66,14 @@ it('keeps private disk candidates exact across consecutive sections without publ
     const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
       [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
     store.begin();
-    const grouped = await compareOutputs(graph, { ...query, distance: [7000, 7000], repetition: 0 }, false, store.candidatePool);
+    const grouped = await compareOutputs(graph, { ...query, distance: [7000, 7000], repetition: 0 }, false, store.candidatePool, true);
     expect(families(grouped).size).toBe(1);
     store.commit();
     // Numeric trail/start IDs overlap, but the next section has different facts.
     const directed = fixture([[0, 1, 900, { backDistance: 100 }], [1, 2, 200],
       [2, 3, 100], [3, 1, 200]], [0, 1, 2]);
     store.begin();
-    const next = await compareOutputs(directed, { ...query, distance: [1500, 1500], repetition: 100 / 1500 }, false, store.candidatePool);
+    const next = await compareOutputs(directed, { ...query, distance: [1500, 1500], repetition: 100 / 1500 }, false, store.candidatePool, true);
     expect(next).toHaveLength(2);
     expect(store.counts).toEqual({ groupCount: 0, routeCount: 0 });
     store.commit(); store.close();

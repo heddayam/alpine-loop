@@ -25,53 +25,63 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 let verification: Promise<void> | undefined;
 const verify = () => verification ??= dataset.verifyInputs(inputs).finally(() => { verification = undefined; });
 let lastProgress = 0, lastVerified = Date.now();
-async function completeRegion(chosen: (typeof selections)[number]) {
-  await verify();
-  delete progress.totalSearchPoints; delete progress.completedSearchPoints;
-  progress.stage = 'preparing'; progress.currentRegion = { id: chosen.section.id, name: chosen.section.name }; send();
+const samePosition = (a: Position, b: Position) => a[0] === b[0] && a[1] === b[1];
+async function saveRoutes(chosen: (typeof selections)[number]) {
   const selection = await dataset.select(query, chosen);
+  const { graph } = selection;
+  const used = new Map<number, [Position, Position]>();
   const previousExpansions = progress.expansions;
   progress.stage = 'searching'; send();
   store.begin();
-  const solved = await solveSection(selection.graph, query, async measured => {
+  await solveSection(graph, query, async measured => {
     if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
     progress.expansions = previousExpansions + measured.expansions;
     progress.totalSearchPoints = measured.totalSearchPoints;
     progress.completedSearchPoints = measured.completedSearchPoints;
     if (measured.totalSearchPoints !== undefined && measured.completedSearchPoints === measured.totalSearchPoints) progress.stage = 'saving';
     if (Date.now() - lastProgress >= 100) { send(); lastProgress = Date.now(); }
-  }, store.candidatePool);
-  await verify();
-  progress.stage = 'saving'; send();
-  const retained = solved;
-  const savedIds = new Set(retained.map(saved => saved.route.id));
-  const used = new Set<number>();
-  for (const saved of retained) {
+  }, store.candidatePool, saved => {
+    const start = graph.starts[saved.route.start]!.node;
+    let previous = start;
+    for (const edgeId of saved.route.edges) {
+      const edge = graph.edges[edgeId]!;
+      if (edge.from !== previous) throw new Error(`Route drawing has a broken connection in ${chosen.section.name}.`);
+      const endpoints: [Position, Position] = edge.reverse
+        ? [graph.nodes[edge.to]!, graph.nodes[edge.from]!]
+        : [graph.nodes[edge.from]!, graph.nodes[edge.to]!];
+      const expected = used.get(edge.trail);
+      if (expected && (!samePosition(expected[0], endpoints[0]) || !samePosition(expected[1], endpoints[1]))) {
+        throw new Error(`Route drawing has inconsistent endpoints in ${chosen.section.name}.`);
+      }
+      if (!expected) used.set(edge.trail, endpoints);
+      previous = edge.to;
+    }
+    if (!saved.route.edges.length || previous !== start) throw new Error(`Route drawing does not close in ${chosen.section.name}.`);
     const route = selection.describe(saved.route);
     route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
-    for (const step of route.sections) used.add(step.id);
     store.add({ ...saved, route, groupId: hash(`${chosen.section.id}/${saved.groupId}`), variantId: hash(`${chosen.section.id}/${saved.variantId}`),
-      reverseId: saved.reverseId && savedIds.has(saved.reverseId) ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined,
-      oppositeId: saved.oppositeId && savedIds.has(saved.oppositeId) ? hash(`${chosen.section.id}/${saved.oppositeId}`) : undefined });
-  }
+      reverseId: saved.reverseId ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined,
+      oppositeId: saved.oppositeId ? hash(`${chosen.section.id}/${saved.oppositeId}`) : undefined });
+  });
+  return used;
+}
+async function completeRegion(chosen: (typeof selections)[number]) {
+  await verify();
+  delete progress.totalSearchPoints; delete progress.completedSearchPoints;
+  progress.stage = 'preparing'; progress.currentRegion = { id: chosen.section.id, name: chosen.section.name }; send();
+  // The graph and each circuit's witnesses can be collected before parsing
+  // geometry. Closed graph walks plus matching trail endpoints prove drawing continuity.
+  const used = await saveRoutes(chosen);
+  await verify();
+  progress.stage = 'saving'; send();
   if (used.size) {
     const geometry = await dataset.readGeometry(chosen.section.id);
-    for (const saved of retained) {
-      let first: Position | undefined, previous: Position | undefined;
-      for (const edgeId of saved.route.edges) {
-        const edge = selection.graph.edges[edgeId]!;
-        const points = geometry[edge.trail]?.coordinates;
-        if (!points?.length) throw new Error(`Route drawing is missing in ${chosen.section.name}.`);
-        const beginning = points[edge.reverse ? points.length - 1 : 0]!;
-        const ending = points[edge.reverse ? 0 : points.length - 1]!;
-        if (previous && (previous[0] !== beginning[0] || previous[1] !== beginning[1])) throw new Error(`Route drawing has a broken connection in ${chosen.section.name}.`);
-        first ??= beginning; previous = ending;
-      }
-      if (!first || !previous || first[0] !== previous[0] || first[1] !== previous[1]) throw new Error(`Route drawing does not close in ${chosen.section.name}.`);
-    }
-    for (const id of used) {
+    for (const [id, endpoints] of used) {
       const shape = geometry[id];
       if (!shape?.coordinates.length) throw new Error(`Route drawing is missing in ${chosen.section.name}.`);
+      if (!samePosition(shape.coordinates[0]!, endpoints[0]) || !samePosition(shape.coordinates.at(-1)!, endpoints[1])) {
+        throw new Error(`Route drawing has mismatched endpoints in ${chosen.section.name}.`);
+      }
       store.saveGeometry(chosen.section.id, id, shape.coordinates);
     }
   }
