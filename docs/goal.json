@@ -573,5 +573,40 @@
       "Add a compact maximum Stem % search input beside Stem distance. Both limits apply independently. Percentage measures the one-way stem relative to the full hike distance.",
       "Keep result stats in distance units. New search defaults are 2 miles of stem, 20% stem, and 0.5 miles of road. Restore saved limits, using 100% for absolute-only saved searches."
     ]
+  },
+  "regionalPreparation": {
+    "date": "2026-10-07",
+    "userRequest": "Prepare Olympic Mountains, Washington, and mountain regions around South San Francisco / the Bay Area.",
+    "status": "Built, independently verified and locally installed four complete GMBA ranges. All nine sections are Ready, including the unchanged five Cascades sections. Existing immutable saved-result databases and section files remain byte-for-byte unchanged; all original completed jobs remain available.",
+    "regions": [
+      {
+        "name": "Olympic Mountains",
+        "gmbaId": "11688",
+        "starts": 879,
+        "sourceSegments": 306965
+      },
+      {
+        "name": "Santa Cruz Mountains",
+        "gmbaId": "11806",
+        "starts": 2517,
+        "sourceSegments": 362525
+      },
+      {
+        "name": "Diablo Range & East Bay",
+        "gmbaId": "17046",
+        "starts": 3697,
+        "sourceSegments": 640044
+      },
+      {
+        "name": "Sonoma–Marin Coast",
+        "gmbaId": "17173",
+        "starts": 1450,
+        "sourceSegments": 268103
+      }
+    ],
+    "coverage": "Santa Cruz Mountains includes Montara and Big Basin; Diablo Range includes Mount Diablo and Tilden; Sonoma–Marin includes Mount Tamalpais. Exact GMBA boundaries remain authoritative and exclude San Bruno Mountain. Full named ranges extend beyond the immediate Bay Area.",
+    "partitionPolicy": "All four additions are below 700,000 candidate source segments and remain whole, with no highway dividers.",
+    "validation": "benchmarks/olympics-bay-preparation.json",
+    "hosting": "Local only; no public release or publication configuration change."
   }
 }

@@ -11,7 +11,7 @@
     "start": "node scripts/start.mjs",
     "dev": "npm start",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/witness.test.mjs tests/data/install-data.test.mjs tests/data/build-cache.test.mjs",
+    "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/witness.test.mjs tests/data/install-data.test.mjs tests/data/build-cache.test.mjs tests/data/compose-catalog.test.mjs",
     "verify": "npm run build && npm run typecheck && npm test",
     "size": "node scripts/source-size.mjs"
   },

@@ -1,0 +1,89 @@
+{
+  "name": "Olympic Mountains",
+  "regionId": "11688",
+  "state": "WA",
+  "sourceDate": "2026-08-01",
+  "gmba": {
+    "file": "sources/gmba-standard-300/265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874/GMBA_Inventory_v2.0_standard_300.zip",
+    "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_300.zip",
+    "sha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874"
+  },
+  "coverage": {
+    "file": "sources/census-states-2024/3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc/cb_2024_us_state_500k.zip",
+    "url": "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_us_state_500k.zip",
+    "sha256": "3e81cbb6cf5f60d9b01ef3e730afa14d61ce5f784252a0b33a696135e71447bc"
+  },
+  "osm": {
+    "file": "sources/geofabrik-washington-osm/3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e/geofabrik-washington-osm-washington-260801.osm.pbf",
+    "sha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "url": "https://download.geofabrik.de/north-america/us/washington-260801.osm.pbf"
+  },
+  "elevation": [
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n48w125_20240327.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w125/USGS_13_n48w125_20240327.tif",
+      "sha256": "88f011c61a723c0bf32867fea6d29bea3bd9352acc5b8aad6c64924f9e98ce4c",
+      "bounds": [
+        -125,
+        47,
+        -124,
+        48
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n49w125_20240327.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w125/USGS_13_n49w125_20240327.tif",
+      "sha256": "34b753c421a1f6a1d9983feca57222376bb1aca544bb5c77ed78dcec23544799",
+      "bounds": [
+        -125,
+        48,
+        -124,
+        49
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n48w124_20240327.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w124/USGS_13_n48w124_20240327.tif",
+      "sha256": "eb714d6619e7dfa20541017af5897ce3a9670f75ebbd8aac784756bf327eb2b7",
+      "bounds": [
+        -124,
+        47,
+        -123,
+        48
+      ]
+    },
+    {
+      "file": "sources/usgs-3dep-regions/USGS_13_n49w124_20240327.tif",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w124/USGS_13_n49w124_20240327.tif",
+      "sha256": "cbfc7a739df9eff5a089959d0ffe651644d298ba26d4b553d9c7c04c093292d6",
+      "bounds": [
+        -124,
+        48,
+        -123,
+        49
+      ]
+    },
+    {
+      "bounds": [
+        -123,
+        47,
+        -122,
+        48
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6604fa8bd34e64ff154955e1/aecc6ef7492509dfd11586ad7961b20d086475df5b91a9cc252217af021d2b16/USGS_13_n48w123_20240327.tif",
+      "sha256": "aecc6ef7492509dfd11586ad7961b20d086475df5b91a9cc252217af021d2b16",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n48w123/USGS_13_n48w123_20240327.tif"
+    },
+    {
+      "bounds": [
+        -123,
+        48,
+        -122,
+        49
+      ],
+      "file": "progressive-feasibility/shared-sources/usgs-3dep-6604fa86d34e64ff154955db/fec8c29431bf8ffa5e8a0f16288e906c571965f247038f6bd81805a9f3b0040d/USGS_13_n49w123_20240327.tif",
+      "sha256": "fec8c29431bf8ffa5e8a0f16288e906c571965f247038f6bd81805a9f3b0040d",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/historical/n49w123/USGS_13_n49w123_20240327.tif"
+    }
+  ]
+}

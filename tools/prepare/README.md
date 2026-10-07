@@ -4,8 +4,10 @@ This maintainer pipeline creates complete, independent mountain sections. Hikers
 download prepared files through the application; they never process OSM, acquire
 DEMs, install Python, or configure a source catalog.
 
-GMBA Mountain Inventory v2.0 **standard, 300 selected ranges** supplies the outer
-mountain footprint. A named inventory ID is intersected with the published
+Pinned GMBA Mountain Inventory v2.0 **standard** polygons supply the outer
+mountain footprint. The Cascades and Olympics use the 300-selection archive;
+the Bay Area manifests select named subranges from the full standard archive.
+A named inventory ID is intersected with the published
 Census state outline, transformed into WGS84. The GMBA polygon is not simplified,
 and no custom terrain classifier or per-hike mountain-core test is added.
 
@@ -24,6 +26,28 @@ uv run --project tools/prepare python tools/prepare/build.py build \
 
 The default builds every ready section. Use `--section mountain-ID-FROM-PLAN`
 to compile a small real slice first; other sections remain visibly unprepared.
+
+Additional source manifests are committed in `manifests/`:
+
+| Manifest | Named GMBA range | Inventory ID | State |
+| --- | --- | --- | --- |
+| `olympics.json` | Olympic Mountains | 11688 | WA |
+| `santa-cruz.json` | Santa Cruz Mountains | 11806 | CA |
+| `diablo.json` | Diablo Range & East Bay | 17046 | CA |
+| `sonoma-marin.json` | Sonoma–Marin Coast | 17173 | CA |
+
+Pass the same `--manifest tools/prepare/manifests/NAME.json` to both `plan`
+and `build`, choosing a separate plan file and new output directory for each.
+These manifests pin August 1, 2026 OSM sources and complete intersecting 3DEP
+products. The Bay Area ranges retain their complete GMBA extents, including
+parts beyond the immediate Bay Area; San Bruno Mountain lies outside these
+standard polygons. Source identity, exact geometry and the 700,000-segment
+capacity policy determine any necessary highway partitions.
+
+Combine complete independent builds with `scripts/compose-catalog.mjs`; see
+[local catalog composition](../../docs/catalog-composition.md). Existing section
+IDs and file contents remain unchanged. Install a verified combined catalog
+only when no search is running or queued, then restart the local server to load it.
 
 `sources.json` pins the GMBA inventory, Washington OSM snapshot, Census state
 outline, USGS 3DEP products, and explicit border elevation supplements by HTTPS
