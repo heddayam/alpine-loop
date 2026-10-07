@@ -524,18 +524,15 @@ label.area-row:hover {
   font-size: 12px;
   margin-top: 8px;
 }
-.hike-list,
-.choice-list {
+.hike-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.hike-list li + li,
-.choice-list li + li {
+.hike-list li + li {
   border-top: 1px solid var(--line);
 }
-.hike-list button,
-.choice-list button {
+.hike-list button {
   display: block;
   width: 100%;
   text-align: left;
@@ -545,13 +542,10 @@ label.area-row:hover {
   font-size: 12px;
   line-height: 1.5;
 }
-.hike-list button:hover,
-.choice-list button:hover,
-.choice-list [aria-current="true"] {
+.hike-list button:hover {
   background: #eee;
 }
-.hike-list span,
-.choice-list small {
+.hike-list span {
   display: block;
   margin-top: 3px;
   font-weight: 400;
@@ -644,7 +638,7 @@ label.area-row:hover {
 .starting-point,
 .road-detail,
 .trail-names,
-.direction-status {
+.route-loading {
   font-size: 12px;
   line-height: 1.6;
   margin-top: 12px;
@@ -659,9 +653,6 @@ label.area-row:hover {
   color: var(--muted);
   font-size: 11px;
   margin-top: 12px;
-}
-.reverse-direction {
-  margin-top: 8px;
 }
 .detail-metrics {
   display: grid;
@@ -699,31 +690,13 @@ label.area-row:hover {
   text-decoration: none;
   margin-top: 18px;
 }
-.route-choices {
-  margin: 12px 0;
-}
-.route-choice-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.route-choice-list {
-  border-top: 1px solid var(--line);
-  margin-top: 12px;
-  padding-top: 12px;
-}
-.choice-list {
-  max-height: 250px;
-  overflow-y: auto;
-}
 .error-banner,
 .startup {
   margin: 16px 20px;
 }
 .error-banner button,
 .job-error button,
-.direction-status button {
+.route-loading button {
   margin-top: 8px;
 }
 .workspace-status {
@@ -926,4 +899,33 @@ dialog::backdrop {
   .workspace:not(.is-results-collapsed) {
     --results-width: 280px;
   }
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.virtual-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.virtual-list .hike-list > li:not(.list-spacer) {
+  height: var(--row-height);
+}
+.virtual-list .hike-list button {
+  height: 100%;
+}
+.virtual-list .hike-list strong,
+.virtual-list .hike-list span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hike-list li.list-spacer,
+.hike-list .list-spacer + li {
+  border-top: 0;
 }

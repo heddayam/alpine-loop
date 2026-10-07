@@ -58,6 +58,11 @@ export function JobsDialog({
   onView,
   onCopy,
   onAction,
+  loading = false,
+  hasOlder = false,
+  hasNewer = false,
+  onOlder,
+  onNewer,
 }: {
   open: boolean;
   jobs: JobSnapshot[];
@@ -70,8 +75,14 @@ export function JobsDialog({
   onView: (job: JobSnapshot) => void;
   onCopy: (job: JobSnapshot) => void;
   onAction: (job: JobSnapshot, action: "cancel" | "delete") => void;
+  loading?: boolean;
+  hasOlder?: boolean;
+  hasNewer?: boolean;
+  onOlder?: () => void;
+  onNewer?: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -92,6 +103,7 @@ export function JobsDialog({
         .getElementById(`job-card-${highlightedId}`)
         ?.scrollIntoView({ block: "nearest" });
   }, [open, highlightedId, jobs.length]);
+  useEffect(() => { if (list.current) list.current.scrollTop = 0; }, [jobs[0]?.id]);
   return (
     <dialog
       ref={dialog}
@@ -110,7 +122,9 @@ export function JobsDialog({
           ×
         </button>
       </header>
-      <div className="jobs-list">
+      <div className="jobs-list" ref={list}>
+        {hasNewer && <button type="button" disabled={loading} onClick={() => { if (list.current) list.current.scrollTop = 0; onNewer?.(); }}>Newer jobs</button>}
+        {loading && <p role="status">Loading jobs…</p>}
         {error && (
           <div className="job-error" role="alert">
             <p>{error}</p>
@@ -119,7 +133,7 @@ export function JobsDialog({
             </button>
           </div>
         )}
-        {!jobs.length && <p className="empty-state">No jobs yet.</p>}
+        {!jobs.length && !loading && <p className="empty-state">No jobs yet.</p>}
         {jobs.map((job) => {
           const busy = pending?.id === job.id;
           const roads = job.query.roads ?? DEFAULT_ROAD_LIMITS;
@@ -295,9 +309,10 @@ export function JobsDialog({
             </article>
           );
         })}
+        {hasOlder && <button type="button" disabled={loading} onClick={() => { if (list.current) list.current.scrollTop = 0; onOlder?.(); }}>Older jobs</button>}
       </div>
       <footer className="jobs-storage">
-        Results storage:{" "}
+        Shown jobs storage:{" "}
         {storage(jobs.reduce((bytes, job) => bytes + job.storageBytes, 0))}
       </footer>
     </dialog>

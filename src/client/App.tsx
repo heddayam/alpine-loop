@@ -6,16 +6,13 @@ import {
   lazy,
   Suspense,
   type FormEvent,
-  type ReactNode,
 } from "react";
 import type {
   Bounds,
-  RouteChoice,
   RouteSummary,
   RouteView,
   SearchQuery,
   JobSnapshot,
-  JobResults,
   RouteLocation,
   Position,
 } from "../model.js";
@@ -38,7 +35,11 @@ import {
 import { RegionPicker, regionLabel } from "./RegionPicker.js";
 import { SettingsDialog } from "./SettingsDialog.js";
 import { locationsInView } from "./clusters.js";
-import { ElevationProfile } from "./ElevationProfile.js";
+import { ElevationProfile, createProfileCursor } from "./ElevationProfile.js";
+import { request } from "./request.js";
+import { useJobs } from "./useJobs.js";
+import { RouteCache } from "./RouteCache.js";
+import { FixedList } from "./FixedList.js";
 
 const HikeMap = lazy(async () => ({
   default: (await import("./Map.js")).HikeMap,
@@ -65,44 +66,6 @@ const startName = (route: RouteSummary) => {
       ? `${route.startName} · ${position}`
       : route.startName;
 };
-async function request<T>(
-  url: string,
-  signal: AbortSignal,
-  body?: unknown,
-  method?: string,
-): Promise<T> {
-  const response = await fetch(url, {
-    signal,
-    cache: "no-store",
-    ...(method ? { method } : {}),
-    ...(body === undefined
-      ? {}
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok)
-    throw Object.assign(
-      new Error(
-        response.status === 404
-          ? "This saved job or route is no longer available."
-          : typeof data?.error === "string"
-            ? data.error
-            : (data?.message ??
-              data?.error?.message ??
-              "The server could not complete this request."),
-      ),
-      {
-        status: response.status,
-        sections: data?.missing ?? data?.sections,
-        bytes: data?.bytes,
-      },
-    );
-  return data as T;
-}
 
 function Range({
   name,
@@ -157,28 +120,12 @@ function Range({
 }
 
 function RouteDetails({
-  route,
-  jobId,
-  resultsRevision,
-  onBack,
-  children,
-  onReverse,
-  reversing,
-  reversed,
-  directionError,
-  onRetry,
-  onProfileHover,
+  route, jobId, resultsRevision, onBack, onProfileHover,
 }: {
-  route: SelectedRoute;
+  route: RouteView;
   jobId: string;
   resultsRevision: number;
   onBack: () => void;
-  children: ReactNode;
-  onReverse: () => void;
-  reversing: boolean;
-  reversed: boolean;
-  directionError: string;
-  onRetry: () => void;
   onProfileHover: (position: Position | null) => void;
 }) {
   return (
@@ -189,94 +136,58 @@ function RouteDetails({
       <h2 id="route-detail-heading" tabIndex={-1}>
         {routeName(route)}
       </h2>
-      {reversing ? (
-        <div
-          className="direction-status"
-          role={directionError ? "alert" : "status"}
-        >
-          <p>{directionError || "Loading the other direction…"}</p>
-          {directionError && (
-            <button type="button" onClick={onRetry}>
-              Retry direction
-            </button>
-          )}
+      <div className="starting-point">
+        <h3>Starting point</h3>
+        <p>{startName(route)}</p>
+      </div>
+      <p className="route-kind">
+        {route.kind === "lollipop" ? "Lollipop" : "Loop"}
+      </p>
+      <dl className="detail-metrics">
+        <div>
+          <dt>Distance</dt>
+          <dd>
+            {miles(route.distance)} <small>mi</small>
+          </dd>
         </div>
-      ) : (
-        <>
-          <div className="starting-point">
-            <h3>Starting point</h3>
-            <p>{startName(route)}</p>
-          </div>
-          {children}
-          <p className="route-kind">
-            {route.kind === "lollipop" ? "Lollipop" : "Loop"}
-          </p>
-          {(route.reverseId || route.oppositeId) && (
-            <button
-              type="button"
-              className="text-button reverse-direction"
-              onClick={onReverse}
-            >
-              {reversed
-                ? "Use original direction"
-                : route.reverseId
-                  ? "Reverse direction"
-                  : "Other loop direction"}
-            </button>
-          )}
-          <dl className="detail-metrics">
-            <div>
-              <dt>Distance</dt>
-              <dd>
-                {miles(route.distance)} <small>mi</small>
-              </dd>
-            </div>
-            <div>
-              <dt>Climb</dt>
-              <dd>
-                {feet(route.gain)} <small>ft</small>
-              </dd>
-            </div>
-            <div>
-              <dt>Repeated</dt>
-              <dd>
-                {Math.round(route.repetition * 100)}
-                <small>%</small>
-              </dd>
-            </div>
-          </dl>
-          {route.geometry && (
-            <ElevationProfile
-              key={route.id}
-              route={{ ...route, geometry: route.geometry }}
-              onHover={onProfileHover}
-            />
-          )}
-          <div className="road-detail">
-            <p>
-              <strong>Road connections: </strong>
-              {(route.roadDistance / MILE).toFixed(2)} mi (
-              {((100 * route.roadDistance) / route.distance).toFixed(1)}%)
-            </p>
-          </div>
-          {route.uncertain && <p className="access-note">Access uncertain</p>}
-          <a
-            className="primary button export-button"
-            href={savedResultsURL(
-              { id: jobId, resultsRevision },
-              `routes/${encodeURIComponent(route.id)}.gpx`,
-            )}
-            download
-          >
-            Download GPX
-          </a>
-          {!!route.trailNames.length && (
-            <div className="trail-names">
-              <h3>Trails</h3>
-              <p>{[...new Set(route.trailNames)].join(" · ")}</p>
-            </div>
-          )}
-        </>
+        <div>
+          <dt>Climb</dt>
+          <dd>
+            {feet(route.gain)} <small>ft</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Repeated</dt>
+          <dd>
+            {Math.round(route.repetition * 100)}
+            <small>%</small>
+          </dd>
+        </div>
+      </dl>
+      <ElevationProfile key={route.id} route={route} onHover={onProfileHover} />
+      <div className="road-detail">
+        <p>
+          <strong>Road connections: </strong>
+          {(route.roadDistance / MILE).toFixed(2)} mi (
+          {((100 * route.roadDistance) / route.distance).toFixed(1)}%)
+        </p>
+      </div>
+      {route.uncertain && <p className="access-note">Access uncertain</p>}
+      <a
+        className="primary button export-button"
+        href={savedResultsURL(
+          { id: jobId, resultsRevision },
+          `routes/${encodeURIComponent(route.id)}.gpx`,
+        )}
+        download
+      >
+        Download GPX
+      </a>
+      {!!route.trailNames.length && (
+        <div className="trail-names">
+          <h3>Trails</h3>
+          <p>{[...new Set(route.trailNames)].join(" · ")}</p>
+        </div>
       )}
     </section>
   );
@@ -308,21 +219,6 @@ const savedMap = (job: JobSnapshot): CatalogView | undefined =>
         })),
       }
     : undefined;
-const resultQuery = (
-  offset: number,
-  filter: { group: string } | { variant: string },
-) => {
-  const parameters = new URLSearchParams({
-    offset: String(offset),
-    sort: "distance",
-    order: "asc",
-  });
-  if ("group" in filter) parameters.set("group", filter.group);
-  else parameters.set("variant", filter.variant);
-  return `?${parameters}`;
-};
-type ChoiceKind = "versions" | "starts";
-type SelectedRoute = RouteChoice & { geometry?: Position[] };
 
 export function App() {
   const [dataset, setDataset] = useState<CatalogView>();
@@ -346,14 +242,13 @@ export function App() {
     revision: number;
     padding?: number;
   }>();
-  const [jobs, setJobs] = useState<JobSnapshot[]>([]);
+  const jobHistory = useJobs();
+  const { jobs } = jobHistory;
   const [jobsOpen, setJobsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const downloadDialog = useRef<HTMLDialogElement>(null);
   const [highlightedJob, setHighlightedJob] = useState<string | null>(null);
-  const [jobsError, setJobsError] = useState("");
   const [jobActionError, setJobActionError] = useState("");
-  const [jobsRetry, setJobsRetry] = useState(0);
   const [pendingJob, setPendingJob] = useState<{
     id: string;
     action: string;
@@ -364,21 +259,15 @@ export function App() {
   const [resultScope, setResultScope] = useState<
     "view" | "all" | ReadonlySet<string>
   >("view");
-  const [resultLimit, setResultLimit] = useState(50);
-  const resultList = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<SelectedRoute | null>(null);
-  const [profilePosition, setProfilePosition] = useState<Position | null>(null);
+  const [selected, setSelected] = useState<RouteView | null>(null);
+  const profileCursor = useMemo(createProfileCursor, []);
+  const routeCache = useRef(new RouteCache());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [geometry, setGeometry] = useState<RouteView | null>(null);
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
-  const originalDirectionId = useRef<string | null>(null);
   const focusedRouteId = useRef<string | null>(null);
-  const [choiceKind, setChoiceKind] = useState<ChoiceKind | null>(null);
-  const [choices, setChoices] = useState<JobResults>();
-  const [loadingChoices, setLoadingChoices] = useState(false);
-  const [choicesError, setChoicesError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{
@@ -391,11 +280,7 @@ export function App() {
   const downloadQuery = useRef<SearchQuery | null>(null);
   const operation = useRef<AbortController | null>(null);
   const viewOperation = useRef<AbortController | null>(null);
-  const choicesOperation = useRef<AbortController | null>(null);
   const viewedRevisions = useRef(new Map<string, number>());
-  const initialJobId = useRef(
-    new URLSearchParams(window.location.search).get("job"),
-  );
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
   const activeId = hoveredId ?? selectedId;
@@ -404,12 +289,12 @@ export function App() {
       geometry?.id === activeId
         ? geometry
         : selected?.id === activeId && selected.geometry
-          ? { ...selected, geometry: selected.geometry }
+          ? selected
           : null,
     [geometry, activeId, selected],
   );
   useEffect(
-    () => setProfilePosition(null),
+    () => profileCursor.set(null),
     [selectedId, resultsCollapsed, viewedJob?.id],
   );
   const sortedLocations = useMemo(
@@ -431,12 +316,12 @@ export function App() {
     [sortedLocations, resultScope, mapBounds],
   );
   useEffect(() => {
-    setResultLimit(50);
     setHoveredId(null);
-    if (resultList.current) resultList.current.scrollTop = 0;
   }, [visibleLocations]);
-  const mapDataset =
-    !showSearchArea && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
+  const mapDataset = useMemo(
+    () => !showSearchArea && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset,
+    [showSearchArea, viewedJob, dataset],
+  );
   const regionName = (id: string) =>
     regionLabel(
       dataset?.sections.find((section) => section.id === id)?.name ?? id,
@@ -447,16 +332,8 @@ export function App() {
       revision: (current?.revision ?? 0) + 1,
       padding,
     }));
-  const closeChoices = () => {
-    choicesOperation.current?.abort();
-    setLoadingChoices(false);
-    setChoiceKind(null);
-    setChoices(undefined);
-    setChoicesError("");
-    setHoveredId(null);
-  };
   const clearSelection = () => {
-    closeChoices();
+    setHoveredId(null);
     setSelected(null);
     setSelectedId(null);
     focusedRouteId.current = null;
@@ -474,6 +351,7 @@ export function App() {
     setViewedJob(undefined);
     setResultsCollapsed(true);
     setLocations([]);
+    routeCache.current.clear();
     setGeometry(null);
     setRouteError("");
     setShowSearchArea(true);
@@ -501,6 +379,7 @@ export function App() {
         controller.signal,
       );
       if (controller.signal.aborted) return;
+      routeCache.current.clear();
       setViewedJob(fullJob);
       setResultsCollapsed(false);
       setLocations(positions);
@@ -540,94 +419,70 @@ export function App() {
       controller.abort();
       operation.current?.abort();
       viewOperation.current?.abort();
-      choicesOperation.current?.abort();
     };
   }, []);
   useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("job");
+    if (!id) return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try {
-        const next = await request<JobSnapshot[]>(
-          "/api/jobs",
-          controller.signal,
-        );
-        if (controller.signal.aborted) return;
-        setJobs(next);
-        setJobsError("");
-        const id = initialJobId.current;
-        if (id) {
-          initialJobId.current = null;
-          const job = next.find((item) => item.id === id);
-          if (job) void openResults(job);
-          else {
-            setError("This saved job has been deleted.");
-            localURL();
-          }
+    void request<JobSnapshot>(`/api/jobs/${encodeURIComponent(id)}?inputs=false`, controller.signal)
+      .then((job) => {
+        if (!controller.signal.aborted) {
+          jobHistory.upsert(job);
+          void openResults(job);
         }
-      } catch (failure) {
-        if (!controller.signal.aborted)
-          setJobsError(
-            failure instanceof Error
-              ? failure.message
-              : "Jobs could not reconnect.",
-          );
-      }
-      if (!controller.signal.aborted)
-        timer = setTimeout(() => void poll(), 1000);
-    };
-    void poll();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [jobsRetry]);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) {
+          setError(failure.message);
+          localURL();
+        }
+      });
+    return () => controller.abort();
+  }, []);
   useEffect(() => {
     if (!activeId || !viewedJob) {
       setGeometry(null);
       return;
     }
-    if (selected?.id === activeId && selected.geometry) {
-      setGeometry({ ...selected, geometry: selected.geometry });
-      setRouteError("");
-      return;
-    }
     const controller = new AbortController();
-    setRouteError("");
-    setGeometry(null);
-    void request<RouteView>(
-      savedResultsURL(viewedJob, `routes/${encodeURIComponent(activeId)}`),
-      controller.signal,
-    )
-      .then((route) => {
-        if (controller.signal.aborted) return;
-        setGeometry(route);
-        if (selectedId === route.id) {
-          setSelected(route);
-          if (focusedRouteId.current !== route.id) {
-            focusedRouteId.current = route.id;
-            requestAnimationFrame(() =>
-              document.getElementById("route-detail-heading")?.focus(),
-            );
-          }
+    const key = savedResultsURL(viewedJob, `routes/${encodeURIComponent(activeId)}`);
+    const publish = (route: RouteView) => {
+      if (controller.signal.aborted) return;
+      setGeometry(route);
+      if (selectedId === route.id) {
+        setSelected(route);
+        if (focusedRouteId.current !== route.id) {
+          focusedRouteId.current = route.id;
+          requestAnimationFrame(() => document.getElementById("route-detail-heading")?.focus());
         }
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted)
-          setRouteError(
-            failure instanceof Error
-              ? failure.message
-              : "Route drawing could not load.",
-          );
-      });
+      }
+    };
+    setRouteError("");
+    const cached = selected?.id === activeId ? selected : routeCache.current.get(key);
+    if (cached) publish(cached);
+    else {
+      setGeometry(null);
+      // Intentional selection loads immediately; passing over a marker does not.
+      const timer = setTimeout(() => {
+        void request<RouteView>(key, controller.signal)
+          .then((route) => {
+            if (!controller.signal.aborted) {
+              routeCache.current.add(key, route);
+              publish(route);
+            }
+          })
+          .catch((failure) => {
+            if (!controller.signal.aborted) setRouteError(failure.message);
+          });
+      }, activeId === selectedId ? 0 : 120);
+      return () => {
+        clearTimeout(timer);
+        controller.abort();
+      };
+    }
     return () => controller.abort();
-  }, [
-    viewedJob?.id,
-    viewedJob?.resultsRevision,
-    activeId,
-    selectedId,
-    routeRetry,
-  ]);
+  }, [viewedJob?.id, viewedJob?.resultsRevision, activeId, selectedId, routeRetry]);
   const copySettings = (job: JobSnapshot) => {
     viewOperation.current?.abort();
     setPendingJob(null);
@@ -668,8 +523,8 @@ export function App() {
         action === "delete" ? undefined : {},
         action === "delete" ? "DELETE" : undefined,
       );
-      const next = await request<JobSnapshot[]>("/api/jobs", controller.signal);
-      setJobs(next);
+      if (action === "delete") jobHistory.remove(job.id);
+      else jobHistory.upsert(await request<JobSnapshot>(`/api/jobs/${encodeURIComponent(job.id)}?inputs=false`, controller.signal));
       if (action === "delete" && viewedJob?.id === job.id) {
         closeResults();
       }
@@ -703,10 +558,7 @@ export function App() {
         query,
       );
       if (controller.signal.aborted) return;
-      setJobs((current) => [
-        job,
-        ...current.filter((item) => item.id !== job.id),
-      ]);
+      jobHistory.upsert(job);
       setHighlightedJob(job.id);
       setSettingsOpen(false);
       setJobsOpen(true);
@@ -929,62 +781,14 @@ export function App() {
   const pickRoute = (id: string) => {
     setResultsCollapsed(false);
     setShowSearchArea(false);
+    setHoveredId(null);
     if (id === selectedId) {
-      closeChoices();
-      if (!selected?.geometry) setRouteRetry((value) => value + 1);
+      if (!selected) setRouteRetry((value) => value + 1);
       return;
     }
     focusedRouteId.current = null;
-    setSelected(choices?.routes.find((route) => route.id === id) ?? null);
+    setSelected(null);
     setSelectedId(id);
-    originalDirectionId.current = id;
-    closeChoices();
-  };
-  const loadChoices = async (kind: ChoiceKind, offset = 0) => {
-    if (!selected || !viewedJob) return;
-    choicesOperation.current?.abort();
-    const controller = new AbortController();
-    choicesOperation.current = controller;
-    setChoiceKind(kind);
-    if (!offset) setChoices(undefined);
-    setLoadingChoices(true);
-    setChoicesError("");
-    setHoveredId(null);
-    try {
-      const page = await request<JobResults>(
-        savedResultsURL(
-          viewedJob,
-          "results",
-          resultQuery(
-            offset,
-            kind === "versions"
-              ? { group: selected.groupId }
-              : { variant: selected.variantId },
-          ),
-        ),
-        controller.signal,
-      );
-      if (!controller.signal.aborted && choicesOperation.current === controller)
-        setChoices((current) =>
-          offset && current
-            ? {
-                ...page,
-                offset: 0,
-                routes: [...current.routes, ...page.routes],
-              }
-            : page,
-        );
-    } catch (failure) {
-      if (!controller.signal.aborted && choicesOperation.current === controller)
-        setChoicesError(
-          failure instanceof Error
-            ? failure.message
-            : `${kind === "versions" ? "Route versions" : "Starting points"} could not load.`,
-        );
-    } finally {
-      if (!controller.signal.aborted && choicesOperation.current === controller)
-        setLoadingChoices(false);
-    }
   };
   const readyCount = jobs.filter(
     (job) =>
@@ -1044,12 +848,12 @@ export function App() {
                 {error}
               </div>
             )}
-            {(jobActionError || jobsError) && !jobsOpen && (
+            {(jobActionError || jobHistory.error) && !jobsOpen && (
               <div className="error-banner" role="alert">
-                {jobActionError || jobsError}
+                {jobActionError || jobHistory.error}
                 <button
                   type="button"
-                  onClick={() => setJobsRetry((value) => value + 1)}
+                  onClick={jobHistory.refresh}
                 >
                   Reconnect
                 </button>
@@ -1268,7 +1072,7 @@ export function App() {
                     : (viewedJob?.query.sections ?? regions)
                 }
                 routes={locations}
-                profilePosition={profilePosition}
+                profileCursor={profileCursor}
                 activeRoute={activeRoute}
                 selectedId={selectedId}
                 selectedGroupId={selected?.groupId}
@@ -1382,162 +1186,10 @@ export function App() {
                       jobId={viewedJob.id}
                       resultsRevision={viewedJob.resultsRevision ?? 0}
                       onBack={clearSelection}
-                      onReverse={() => {
-                        const otherId =
-                          selected.reverseId ?? selected.oppositeId;
-                        if (otherId) {
-                          closeChoices();
-                          setSelectedId(otherId);
-                        }
-                      }}
-                      reversing={selected.id !== selectedId}
-                      reversed={selected.id !== originalDirectionId.current}
-                      directionError={hoveredId ? "" : routeError}
-                      onRetry={() => setRouteRetry((value) => value + 1)}
-                      onProfileHover={setProfilePosition}
-                    >
-                      {(selected.variantCount > 1 ||
-                        selected.groupSize > 1) && (
-                        <div className="route-choices">
-                          <div className="route-choice-actions">
-                            {selected.variantCount > 1 && (
-                              <button
-                                type="button"
-                                className="text-button"
-                                aria-expanded={choiceKind === "versions"}
-                                aria-controls="route-choice-list"
-                                onClick={() =>
-                                  choiceKind === "versions"
-                                    ? closeChoices()
-                                    : void loadChoices("versions")
-                                }
-                              >
-                                {choiceKind === "versions"
-                                  ? "Close route versions"
-                                  : `Compare ${selected.variantCount.toLocaleString()} route versions`}
-                              </button>
-                            )}
-                            {selected.groupSize > 1 && (
-                              <button
-                                type="button"
-                                className="text-button"
-                                aria-expanded={choiceKind === "starts"}
-                                aria-controls="route-choice-list"
-                                onClick={() =>
-                                  choiceKind === "starts"
-                                    ? closeChoices()
-                                    : void loadChoices("starts")
-                                }
-                              >
-                                {choiceKind === "starts"
-                                  ? "Close starting points"
-                                  : `Choose from ${selected.groupSize.toLocaleString()} starting points`}
-                              </button>
-                            )}
-                          </div>
-                          {choiceKind && (
-                            <div
-                              id="route-choice-list"
-                              className="route-choice-list"
-                            >
-                              <h3>
-                                {choiceKind === "versions"
-                                  ? "Route versions"
-                                  : "Starting points for this version"}
-                              </h3>
-                              {choices && (
-                                <ul
-                                  className="choice-list"
-                                  onScroll={(event) => {
-                                    const list = event.currentTarget;
-                                    if (
-                                      list.scrollHeight -
-                                        list.scrollTop -
-                                        list.clientHeight <
-                                        80 &&
-                                      !loadingChoices &&
-                                      !choicesError &&
-                                      choices.routes.length < choices.pageTotal
-                                    ) {
-                                      void loadChoices(
-                                        choiceKind,
-                                        choices.routes.length,
-                                      );
-                                    }
-                                  }}
-                                >
-                                  {choices.routes.map((route) => (
-                                    <li key={route.id}>
-                                      <button
-                                        type="button"
-                                        aria-current={
-                                          (
-                                            choiceKind === "versions"
-                                              ? route.variantId ===
-                                                selected.variantId
-                                              : route.startId ===
-                                                selected.startId
-                                          )
-                                            ? "true"
-                                            : undefined
-                                        }
-                                        onClick={() => pickRoute(route.id)}
-                                        onPointerEnter={() =>
-                                          setHoveredId(route.id)
-                                        }
-                                        onPointerLeave={() =>
-                                          setHoveredId(null)
-                                        }
-                                        onFocus={() => setHoveredId(route.id)}
-                                        onBlur={() => setHoveredId(null)}
-                                      >
-                                        <span>
-                                          {choiceKind === "versions"
-                                            ? routeName(route)
-                                            : startName(route)}
-                                        </span>
-                                        {choiceKind === "versions" && (
-                                          <small>{startName(route)}</small>
-                                        )}
-                                        <small>
-                                          {miles(route.distance)} mi · ↑{" "}
-                                          {feet(route.gain)} ft
-                                          {route.roadDistance > 0
-                                            ? ` · ${(route.roadDistance / MILE).toFixed(2)} mi roads`
-                                            : ""}
-                                          {route.uncertain
-                                            ? " · Access uncertain"
-                                            : ""}
-                                        </small>
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              {loadingChoices && <p role="status">Loading…</p>}
-                              {choicesError && (
-                                <p role="alert">
-                                  {choicesError}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void loadChoices(
-                                        choiceKind,
-                                        choices?.routes.length ?? 0,
-                                      )
-                                    }
-                                  >
-                                    Retry
-                                  </button>
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </RouteDetails>
+                      onProfileHover={profileCursor.set}
+                    />
                   ) : (
-                    <div className="direction-status">
+                    <div className="route-loading">
                       <button
                         type="button"
                         className="text-button"
@@ -1593,44 +1245,25 @@ export function App() {
                     </span>
                   </div>
                 )}
-                <div
-                  className="results-list"
-                  ref={resultList}
-                  onScroll={(event) => {
-                    const list = event.currentTarget;
-                    if (
-                      list.scrollHeight - list.scrollTop - list.clientHeight <
-                      80
-                    )
-                      setResultLimit((limit) =>
-                        Math.min(visibleLocations.length, limit + 50),
-                      );
-                  }}
-                >
-                  <ul className="hike-list">
-                    {visibleLocations.slice(0, resultLimit).map((route) => (
-                      <li key={route.id}>
+                <div className="results-list">
+                  <FixedList items={visibleLocations} rowHeight={70}>
+                    {(route, index) => (
+                      <li key={route.id} aria-posinset={index + 1} aria-setsize={visibleLocations.length}>
                         <button
                           type="button"
+                          data-row={index}
                           onPointerEnter={() => setHoveredId(route.id)}
                           onPointerLeave={() => setHoveredId(null)}
                           onFocus={() => setHoveredId(route.id)}
                           onBlur={() => setHoveredId(null)}
                           onClick={() => pickRoute(route.id)}
                         >
-                          <strong>
-                            {route.trailNames.slice(0, 2).join(" / ") ||
-                              route.startName ||
-                              "Unnamed trails"}
-                          </strong>
-                          <span>
-                            {miles(route.distance)} mi ·{" "}
-                            {route.startName || "Unnamed start"}
-                          </span>
+                          <strong>{route.trailNames.slice(0, 2).join(" / ") || route.startName || "Unnamed trails"}</strong>
+                          <span>{miles(route.distance)} mi · {route.startName || "Unnamed start"}</span>
                         </button>
                       </li>
-                    ))}
-                  </ul>
+                    )}
+                  </FixedList>
                   {!visibleLocations.length && (
                     <p className="empty-state">
                       {!locations.length
@@ -1707,19 +1340,26 @@ export function App() {
           </>
         )}
       </dialog>
-      <JobsDialog
-        open={jobsOpen}
-        jobs={jobs}
-        regionName={regionName}
-        highlightedId={highlightedJob}
-        error={jobActionError || jobsError}
-        pending={pendingJob}
-        onClose={() => setJobsOpen(false)}
-        onRefresh={() => setJobsRetry((value) => value + 1)}
-        onView={(job) => void openResults(job)}
-        onCopy={copySettings}
-        onAction={(job, action) => void mutateJob(job, action)}
-      />
+      {jobsOpen && (
+        <JobsDialog
+          open={jobsOpen}
+          jobs={jobHistory.history}
+          regionName={regionName}
+          highlightedId={highlightedJob}
+          error={jobActionError || jobHistory.error}
+          pending={pendingJob}
+          onClose={() => setJobsOpen(false)}
+          onRefresh={jobHistory.refresh}
+          loading={jobHistory.loading}
+          hasOlder={jobHistory.hasOlder}
+          hasNewer={jobHistory.hasNewer}
+          onOlder={jobHistory.older}
+          onNewer={jobHistory.newer}
+          onView={(job) => void openResults(job)}
+          onCopy={copySettings}
+          onAction={(job, action) => void mutateJob(job, action)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { HikeRoute, Position } from "../model.js";
 
 const MILE = 1609.344;
@@ -108,7 +108,22 @@ function tickStep(range: number) {
   );
 }
 
-export function ElevationProfile({
+/** Profile motion goes straight to its map marker; the application does not rerender. */
+export function createProfileCursor() {
+  const listeners = new Set<(position: Position | null) => void>();
+  return {
+    set: (position: Position | null) => {
+      for (const listener of listeners) listener(position);
+    },
+    subscribe: (listener: (position: Position | null) => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+  };
+}
+export type ProfileCursor = ReturnType<typeof createProfileCursor>;
+
+export const ElevationProfile = memo(function ElevationProfile({
   route,
   onHover,
 }: {
@@ -121,11 +136,17 @@ export function ElevationProfile({
   );
   const [cursor, setCursor] = useState<number | null>(null);
   const hover = useRef(onHover);
+  const frame = useRef(0);
+  const pending = useRef<number | null>(null);
   hover.current = onHover;
   useEffect(() => {
     setCursor(null);
     hover.current(null);
-    return () => hover.current(null);
+    return () => {
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+      hover.current(null);
+    };
   }, [route.id, samples]);
 
   const chart = useMemo(() => {
@@ -186,8 +207,14 @@ export function ElevationProfile({
   const move = (distance: number | null) => {
     const next =
       distance === null ? null : Math.max(0, Math.min(total, distance));
-    setCursor(next);
-    hover.current(next === null ? null : elevationPosition(samples, next));
+    pending.current = next;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const position = pending.current;
+      setCursor(position);
+      hover.current(position === null ? null : elevationPosition(samples, position));
+    });
   };
 
   return (
@@ -296,4 +323,4 @@ export function ElevationProfile({
       </svg>
     </section>
   );
-}
+});
