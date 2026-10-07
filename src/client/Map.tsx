@@ -9,7 +9,6 @@ import {
   setWorkerUrl,
   type GeoJSONSource,
   type ExpressionSpecification,
-  type LineLayerSpecification,
 } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -40,11 +39,6 @@ function bluredFont(value: unknown, pointLabel: boolean): unknown {
 const selected: ExpressionSpecification = [
   "boolean", ["feature-state", "selected"], false,
 ];
-const border: LineLayerSpecification["paint"] = {
-  "line-color": ["case", selected, "#315e49", "#7f8d7f"],
-  "line-width": ["case", selected, 3, 1.5],
-  "line-opacity": ["case", selected, 0.9, 0.65],
-};
 
 export function HikeMap({
   dataset,
@@ -80,6 +74,7 @@ export function HikeMap({
   const container = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [mapError, setMapError] = useState("");
+  const sectionTooltip = useRef<Popup | null>(null);
   const starts = useRef<{ marker: Marker; routes: RouteLocation[] }[]>([]);
   const [chooser, setChooser] = useState<RouteLocation[]>([]);
   const callbacks = useRef({
@@ -132,12 +127,17 @@ export function HikeMap({
     const tooltip = new Popup({
       closeButton: false, closeOnClick: false, offset: 12,
     });
+    sectionTooltip.current = tooltip;
     instance.on("mousemove", "sections-fill", (event) => {
+      if (!callbacks.current.editing || callbacks.current.locked) {
+        tooltip.remove();
+        instance.getCanvas().style.cursor = "";
+        return;
+      }
       const name = event.features?.[0]?.properties.name;
       if (typeof name === "string")
         tooltip.setLngLat(event.lngLat).setText(name).addTo(instance);
-      instance.getCanvas().style.cursor =
-        callbacks.current.editing && !callbacks.current.locked ? "pointer" : "";
+      instance.getCanvas().style.cursor = "pointer";
     });
     instance.on("mouseleave", "sections-fill", () => {
       tooltip.remove();
@@ -197,23 +197,18 @@ export function HikeMap({
         type: "fill",
         source: "sections",
         paint: {
-          "fill-color": "#315e49",
-          "fill-opacity": ["case", selected, 0.14, 0.015],
+          "fill-opacity": 0,
         },
       });
       instance.addLayer({
-        id: "sections-solid",
+        id: "sections-outline",
         type: "line",
         source: "sections",
-        filter: ["==", ["get", "installed"], true],
-        paint: border,
-      });
-      instance.addLayer({
-        id: "sections-dotted",
-        type: "line",
-        source: "sections",
-        filter: ["==", ["get", "installed"], false],
-        paint: { ...border, "line-dasharray": [2, 3] },
+        paint: {
+          "line-color": "#555555",
+          "line-width": 1,
+          "line-opacity": ["case", selected, 0.65, 0],
+        },
       });
       instance.addLayer({
         id: "route",
@@ -232,9 +227,17 @@ export function HikeMap({
     return () => {
       resize.disconnect();
       tooltip.remove();
+      sectionTooltip.current = null;
       instance.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!editing || locked) {
+      sectionTooltip.current?.remove();
+      if (map) map.getCanvas().style.cursor = "";
+    }
+  }, [map, editing, locked]);
 
   useEffect(() => {
     if (!map) return;
@@ -245,7 +248,7 @@ export function HikeMap({
         id: section.id,
         geometry: section.boundary,
         properties: {
-          id: section.id, name: section.name, installed: section.installed,
+          id: section.id, name: section.name,
         },
       })),
     });
@@ -439,12 +442,6 @@ export function HikeMap({
           height={24}
         />
       </a>
-      <span className="map-caption">
-        {editing
-          ? "Shaded regions are selected. Solid borders: downloaded. Dotted borders: download available."
-          : "All completed hikes are on the map. Numbered clusters zoom; shared starting points offer a hike chooser."}
-        {editing && !locked && " Click a region to select it."}
-      </span>
     </section>
   );
 }
