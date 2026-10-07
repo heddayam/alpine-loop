@@ -159,6 +159,13 @@ export function HikeMap({
     });
     instance.once("style.load", () => {
       if (new URLSearchParams(window.location.search).get("canopy") !== "off") {
+        for (const id of ["nature_natural", "nature_natural_texture"]) {
+          const filter = instance.getFilter(id);
+          if (filter) instance.setFilter(id, [
+            "all", filter as ExpressionSpecification,
+            ["!=", ["get", "type"], "wood"],
+          ]);
+        }
         instance.addSource("tree-canopy", {
           type: "raster", tileSize: 256, minzoom: 6, maxzoom: 12,
           bounds: [-128, 22, -65, 52],
