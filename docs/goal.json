@@ -18,7 +18,7 @@
       "adjustable maximum road distance and share; trails remain the main experience",
       "hikes remain within reviewed hard highway partitions; disclose that crossings of selected dividers, including bridges and underpasses, are excluded",
       "durable immutable FIFO jobs and manually retained history",
-      "completed-only sorted paging and all-result map locations; bounded diverse discovery with exact route limits and no mileage or displayed-result cap",
+      "completed-only map browsing with continuous scrolling and all-result map locations; bounded diverse discovery with exact route limits and no mileage or displayed-result cap",
       "restart interrupts active jobs and automatically continues queued jobs",
       "cancelled, failed and interrupted jobs discard unfinished results while retaining requests",
       "completed maps and GPX remain unchanged after source replacement or removal",
@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The updated local app is running at http://127.0.0.1:3000/. Each route version is grouped against a fixed displayed main loop; hidden versions cannot keep similar displayed hikes apart. The same north-region 14\u201318 mi / 3000\u20135000 ft request completed in 35.9 seconds with 46 displayed groups, 840 versions and 44,238 independently verified saved walks. Both reviewed Big Sandy/Frog Pond and Corral Creek/Sasse pairs now share groups. All version-to-display checks pass, and none of the 1,035 displayed pairs meets the similarity rule. The retained walks, versions, starts, directions and geometry are unchanged from the previous result. Four earlier completed files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,953 lines in 33 files. The Leaflet renderer has been replaced by a compact MapLibre module with a Vite-built worker and separately loaded map code. Region selection, stable clustering, saved route drawing and shared-start choosing are browser-verified; source and bundle measurements are in benchmarks/map-renderer-review.json. Maptoolkit Hiking now supplies vector trails, contours and shaded relief without an account or key. Its integration adds no dependency and 16 maintained lines; saved-hike drawing, region selection, pan/zoom and visible provider attribution are browser-verified. Map labels now use MapMaker's Blured preset (Averia Serif Libre), matching all 41 label font expressions and verified on a saved hike; this adds 24 maintained lines and no dependency. A trial USFS/NLCD 2025 tree-canopy WMS overlay adds 24 maintained lines and no dependency; the saved-job URL accepts canopy=off for comparison. OSM woodland fill and texture are excluded while canopy is enabled, so forest tint comes from one layer. Loading still depends on the live WMS service; a faster cached source was not confirmed by the quick check. User evaluation is pending. This single-query observation does not certify exhaustive discovery or replace the frozen benchmark corpus.",
+  "state": "The updated local app is running at http://127.0.0.1:3000/. Each route version is grouped against a fixed displayed main loop; hidden versions cannot keep similar displayed hikes apart. The same north-region 14\u201318 mi / 3000\u20135000 ft request completed in 35.9 seconds with 46 displayed groups, 840 versions and 44,238 independently verified saved walks. Both reviewed Big Sandy/Frog Pond and Corral Creek/Sasse pairs now share groups. All version-to-display checks pass, and none of the 1,035 displayed pairs meets the similarity rule. The retained walks, versions, starts, directions and geometry are unchanged from the previous result. Four earlier completed files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,953 lines in 33 files. The Leaflet renderer has been replaced by a compact MapLibre module with a Vite-built worker and separately loaded map code. Region selection, stable clustering, saved route drawing and shared-start choosing are browser-verified; source and bundle measurements are in benchmarks/map-renderer-review.json. Maptoolkit Hiking now supplies vector trails, contours and shaded relief without an account or key. Its integration adds no dependency and 16 maintained lines; saved-hike drawing, region selection, pan/zoom and visible provider attribution are browser-verified. Map labels now use MapMaker's Blured preset (Averia Serif Libre), matching all 41 label font expressions and verified on a saved hike; this adds 24 maintained lines and no dependency. A trial USFS/NLCD 2025 tree-canopy WMS overlay adds 24 maintained lines and no dependency; the saved-job URL accepts canopy=off for comparison. OSM woodland fill and texture are excluded while canopy is enabled, so forest tint comes from one layer. Loading still depends on the live WMS service; a faster cached source was not confirmed by the quick check. User evaluation is pending. This single-query observation does not certify exhaustive discovery or replace the frozen benchmark corpus. The 2026-10-06 UI overhaul is implemented: collapsible search at left, main map at right, Settings/Jobs in the header, grouped place names, download management in Settings and contextual scrolling result lists. Build/typecheck and 17 focused offline checks pass; real saved searches and a separate disposable download fixture are browser-verified. Maintained source is 7,303 lines in 35 files; no dependencies or server interfaces changed.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -351,5 +351,31 @@
     },
     "previousPolicy": "Share at least 60% of the longer physical main circuit, including roads. Remove the retraced approach before comparison. Common paths must have the same cyclic order. Merge the most similar groups first; every cross pair must qualify. Stable circuit ordering resolves ties. Remove the old aggregate 85% and connected 1 km difference rules.",
     "correction": "User reported near-identical Teanaway main results that differ mainly in access. The prior all-pairs grouping allowed hidden versions to block a merge between similar displayed routes. Fixed representatives replace that machinery without adding a second grouping pass or threshold."
+  },
+  "uiOverhaulDecision": {
+    "date": "2026-10-06",
+    "approved": [
+      "Desktop search panel on the left, main map on the right, with a small collapse tab at the middle of the search-panel edge.",
+      "Site name on the left of a shared top bar; Settings and Jobs on the right. Search submission opens Jobs automatically.",
+      "Grouped multi-region dropdown with familiar place names. Exact prepared IDs and highway boundaries remain unchanged.",
+      "Manage areas inside Settings, with separate download selection, total sizes, progress, cancellation and reuse.",
+      "Regular map shows only thin selected-area outlines, with no downloaded/available distinction. Region selection occurs only in the dropdown.",
+      "Map clusters and shared starts open contextual hike lists; Hikes in view lists starts within the current viewport without changing search scope.",
+      "Continuous scrolling for hikes, route versions and starting points; no pagination controls.",
+      "Simple professional utility styling: square controls, restrained colors, plain type and minimal explanatory text.",
+      "Distance, elevation gain and repetition visible; road and uncertain-access controls under More options. Data limitations and attribution are in one collapsed Settings disclosure."
+    ],
+    "architecture": "Client-only overhaul with two focused UI modules. Existing search, job, download and saved-route interfaces are reused; no dependencies, server models, lockfile or root configuration were added or changed. Removed the general result-list paging/sorting state and the duplicate map region-selection flow. Prepared IDs, constraints and saved results retain their existing meaning.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "17 focused client, whole-app job/GPX and download integrity/cancellation checks pass using committed offline fixtures. Tests require localhost fixture access.",
+      "browser": "Desktop and narrow workspace reviewed. Grouped dropdown, familiar labels, keyboard dismissal, collapse/expand and Settings work. A 481-hike saved search appends beyond the first 50 entries. A real saved hike appends route versions from 50 to 100 of 201 and starting points from 50 to 100 of 110, with no pagination controls. Stable saved URLs, route geometry and GPX links work with no client errors. A separate disposable committed-fixture app verifies size totals, missing-data confirmation/cancellation, downloads and automatic submission of the unchanged request followed by Jobs.",
+      "sourceBefore": 6953,
+      "sourceAfter": 7303,
+      "sourceFilesBefore": 33,
+      "sourceFilesAfter": 35,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/workspace.jpg"
+    }
   }
 }

@@ -17,10 +17,8 @@ import type {
   JobSnapshot,
   JobResults,
   RouteLocation,
-  ResultSort,
-  SortOrder,
 } from "../model.js";
-import { DEFAULT_ROAD_LIMITS, ROUTES_PER_PAGE } from "../model.js";
+import { DEFAULT_ROAD_LIMITS } from "../model.js";
 import type {
   CatalogView,
   Coverage,
@@ -32,7 +30,12 @@ import {
   hasSavedResults,
   requestSummary,
   savedResultsURL,
+  elapsed,
+  storage,
 } from "./JobsDialog.js";
+
+import { RegionPicker, regionLabel } from "./RegionPicker.js";
+import { SettingsDialog } from "./SettingsDialog.js";
 
 const HikeMap = lazy(async () => ({
   default: (await import("./Map.js")).HikeMap,
@@ -41,11 +44,12 @@ const HikeMap = lazy(async () => ({
 const MILE = 1609.344;
 const FOOT = 0.3048;
 const miles = (meters: number) => (meters / MILE).toFixed(1);
+const inputUnits = (value: number, unit: number) => {
+  const converted = value / unit;
+  const rounded = Number(converted.toPrecision(15));
+  return String(rounded * unit === value ? rounded : converted);
+};
 const feet = (meters: number) => Math.round(meters / FOOT).toLocaleString();
-const megabytes = (bytes: number) =>
-  `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
-const roadExplanation =
-  "Includes roads, forest vehicle tracks and sidewalk connections, based on mapped classification. Return walks count too.";
 const routeName = (route: RouteSummary) =>
   route.trailNames.slice(0, 2).join(" / ") ||
   route.startName ||
@@ -192,7 +196,7 @@ function RouteDetails({
         onClick={onBack}
         disabled={backDisabled}
       >
-        ← All hikes
+        Close
       </button>
       <h2 id="route-detail-heading" tabIndex={-1}>
         {routeName(route)}
@@ -217,9 +221,7 @@ function RouteDetails({
           </div>
           {children}
           <p className="route-kind">
-            {route.kind === "lollipop"
-              ? "Lollipop · an out-and-back approach to a loop"
-              : "Loop · returns without retracing trail"}
+            {route.kind === "lollipop" ? "Lollipop" : "Loop"}
           </p>
           {(route.reverseId || route.oppositeId) && (
             <button
@@ -227,13 +229,12 @@ function RouteDetails({
               className="text-button reverse-direction"
               onClick={onReverse}
             >
-              {reversed ? "Use original direction" : route.reverseId ? "Reverse direction" : "Other loop direction"}
+              {reversed
+                ? "Use original direction"
+                : route.reverseId
+                  ? "Reverse direction"
+                  : "Other loop direction"}
             </button>
-          )}
-          {reversed && (
-            <p className="field-hint" role="status">
-              Other direction selected. GPX follows this route.
-            </p>
           )}
           <dl className="detail-metrics">
             <div>
@@ -249,7 +250,7 @@ function RouteDetails({
               </dd>
             </div>
             <div>
-              <dt>Walked again</dt>
+              <dt>Repeated</dt>
               <dd>
                 {Math.round(route.repetition * 100)}
                 <small>%</small>
@@ -262,16 +263,14 @@ function RouteDetails({
               {(route.roadDistance / MILE).toFixed(2)} mi (
               {((100 * route.roadDistance) / route.distance).toFixed(1)}%)
             </p>
-            <p className="field-hint">{roadExplanation}</p>
           </div>
-          {route.uncertain && (
-            <p className="access-note">
-              Some access is uncertain. Check before heading out.
-            </p>
-          )}
+          {route.uncertain && <p className="access-note">Access uncertain</p>}
           <a
             className="primary button export-button"
-            href={savedResultsURL({ id: jobId, resultsRevision }, `routes/${encodeURIComponent(route.id)}.gpx`)}
+            href={savedResultsURL(
+              { id: jobId, resultsRevision },
+              `routes/${encodeURIComponent(route.id)}.gpx`,
+            )}
             download
           >
             Download GPX
@@ -282,10 +281,6 @@ function RouteDetails({
               <p>{[...new Set(route.trailNames)].join(" · ")}</p>
             </div>
           )}
-          <p className="quiet">
-            Start: {route.startPosition[1].toFixed(5)},{" "}
-            {route.startPosition[0].toFixed(5)}
-          </p>
         </>
       )}
     </section>
@@ -320,15 +315,15 @@ const savedMap = (job: JobSnapshot): CatalogView | undefined =>
     : undefined;
 const resultQuery = (
   offset: number,
-  sort: ResultSort,
-  order: SortOrder,
-  filter?: { group: string } | { variant: string },
+  filter: { group: string } | { variant: string },
 ) => {
-  const parameters = new URLSearchParams({ offset: String(offset), sort, order });
-  if (filter) {
-    if ("group" in filter) parameters.set("group", filter.group);
-    else parameters.set("variant", filter.variant);
-  }
+  const parameters = new URLSearchParams({
+    offset: String(offset),
+    sort: "distance",
+    order: "asc",
+  });
+  if ("group" in filter) parameters.set("group", filter.group);
+  else parameters.set("variant", filter.variant);
   return `?${parameters}`;
 };
 type ChoiceKind = "versions" | "starts";
@@ -337,7 +332,8 @@ export function App() {
   const [dataset, setDataset] = useState<CatalogView>();
   const [startupError, setStartupError] = useState("");
   const [regions, setRegions] = useState<string[]>([]);
-  const [editing, setEditing] = useState(true);
+  const [showSearchArea, setShowSearchArea] = useState(true);
+  const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [distance, setDistance] = useState<[string, string]>(["5", "12"]);
   const [gain, setGain] = useState<[string, string]>(["0", "4000"]);
   const [repetition, setRepetition] = useState("20");
@@ -355,6 +351,8 @@ export function App() {
   }>();
   const [jobs, setJobs] = useState<JobSnapshot[]>([]);
   const [jobsOpen, setJobsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const downloadDialog = useRef<HTMLDialogElement>(null);
   const [highlightedJob, setHighlightedJob] = useState<string | null>(null);
   const [jobsError, setJobsError] = useState("");
   const [jobActionError, setJobActionError] = useState("");
@@ -364,11 +362,7 @@ export function App() {
     action: string;
   } | null>(null);
   const [viewedJob, setViewedJob] = useState<JobSnapshot>();
-  const [results, setResults] = useState<JobResults>();
   const [locations, setLocations] = useState<RouteLocation[]>([]);
-  const [sort, setSort] = useState<ResultSort>("distance");
-  const [order, setOrder] = useState<SortOrder>("asc");
-  const [loadingPage, setLoadingPage] = useState(false);
   const [selected, setSelected] = useState<RouteChoice | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -392,7 +386,7 @@ export function App() {
   const [downloadRetry, setDownloadRetry] = useState(0);
   const downloadQuery = useRef<SearchQuery | null>(null);
   const operation = useRef<AbortController | null>(null);
-  const pageOperation = useRef<AbortController | null>(null);
+  const viewOperation = useRef<AbortController | null>(null);
   const choicesOperation = useRef<AbortController | null>(null);
   const viewedRevisions = useRef(new Map<string, number>());
   const initialJobId = useRef(
@@ -400,12 +394,14 @@ export function App() {
   );
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
-  const activeId = editing ? null : (hoveredId ?? selectedId);
+  const activeId = hoveredId ?? selectedId;
   const activeRoute = geometry?.id === activeId ? geometry : null;
   const mapDataset =
-    !editing && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
+    !showSearchArea && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
   const regionName = (id: string) =>
-    dataset?.sections.find((section) => section.id === id)?.name ?? id;
+    regionLabel(
+      dataset?.sections.find((section) => section.id === id)?.name ?? id,
+    );
   const moveTo = (bounds: Bounds, padding = 40) =>
     setCamera((current) => ({
       bounds,
@@ -434,13 +430,13 @@ export function App() {
   };
   const openResults = async (job: JobSnapshot) => {
     if (!hasSavedResults(job)) {
-      setJobsOpen(true);
       setHighlightedJob(job.id);
+      setJobsOpen(true);
       return;
     }
-    pageOperation.current?.abort();
+    viewOperation.current?.abort();
     const controller = new AbortController();
-    pageOperation.current = controller;
+    viewOperation.current = controller;
     setPendingJob({ id: job.id, action: "open" });
     setError("");
     setJobActionError("");
@@ -449,24 +445,15 @@ export function App() {
         `/api/jobs/${encodeURIComponent(job.id)}`,
         controller.signal,
       );
-      const [page, positions] = await Promise.all([
-        request<JobResults>(
-          savedResultsURL(fullJob, "results", resultQuery(0, "distance", "asc")),
-          controller.signal,
-        ),
-        request<RouteLocation[]>(
-          savedResultsURL(fullJob, "locations"),
-          controller.signal,
-        ),
-      ]);
+      const positions = await request<RouteLocation[]>(
+        savedResultsURL(fullJob, "locations"),
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
       setViewedJob(fullJob);
-      setResults(page);
       setLocations(positions);
-      setSort("distance");
-      setOrder("asc");
       clearSelection();
-      setEditing(false);
+      setShowSearchArea(false);
       setJobsOpen(false);
       viewedRevisions.current.set(job.id, fullJob.resultsRevision ?? 0);
       localURL(job.id);
@@ -499,7 +486,7 @@ export function App() {
     return () => {
       controller.abort();
       operation.current?.abort();
-      pageOperation.current?.abort();
+      viewOperation.current?.abort();
       choicesOperation.current?.abort();
     };
   }, []);
@@ -577,60 +564,33 @@ export function App() {
           );
       });
     return () => controller.abort();
-  }, [viewedJob?.id, viewedJob?.resultsRevision, activeId, selectedId, routeRetry]);
-  const changePage = async (
-    offset: number,
-    nextSort = sort,
-    nextOrder = order,
-  ) => {
-    if (!viewedJob) return;
-    pageOperation.current?.abort();
-    const controller = new AbortController();
-    pageOperation.current = controller;
-    setLoadingPage(true);
-    setError("");
-    clearSelection();
-    try {
-      const page = await request<JobResults>(
-        savedResultsURL(viewedJob, "results", resultQuery(offset, nextSort, nextOrder)),
-        controller.signal,
-      );
-      if (!controller.signal.aborted) {
-        setResults(page);
-        setSort(nextSort);
-        setOrder(nextOrder);
-        requestAnimationFrame(() =>
-          document.getElementById("page-summary")?.focus(),
-        );
-      }
-    } catch (failure) {
-      if (!controller.signal.aborted)
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "Results page could not load.",
-        );
-    } finally {
-      if (!controller.signal.aborted) setLoadingPage(false);
-    }
-  };
+  }, [
+    viewedJob?.id,
+    viewedJob?.resultsRevision,
+    activeId,
+    selectedId,
+    routeRetry,
+  ]);
   const copySettings = (job: JobSnapshot) => {
-    pageOperation.current?.abort();
+    viewOperation.current?.abort();
     setPendingJob(null);
     const query = job.query;
     setRegions([...query.sections]);
     setDistance(
-      query.distance.map((value) => String(value / MILE)) as [string, string],
+      query.distance.map((value) => inputUnits(value, MILE)) as [
+        string,
+        string,
+      ],
     );
     setGain(
-      query.gain.map((value) => String(value / FOOT)) as [string, string],
+      query.gain.map((value) => inputUnits(value, FOOT)) as [string, string],
     );
     setRepetition(String(query.repetition * 100));
     const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
-    setRoadMiles(String(roads.distance / MILE));
+    setRoadMiles(inputUnits(roads.distance, MILE));
     setRoadPercent(String(roads.fraction * 100));
     setIncludeUnknown(query.includeUnknown);
-    setEditing(true);
+    setShowSearchArea(true);
     setJobsOpen(false);
     clearSelection();
     setError("");
@@ -654,9 +614,8 @@ export function App() {
       setJobs(next);
       if (action === "delete" && viewedJob?.id === job.id) {
         setViewedJob(undefined);
-        setResults(undefined);
         setLocations([]);
-        setEditing(true);
+        setShowSearchArea(true);
         clearSelection();
         localURL();
       }
@@ -669,7 +628,8 @@ export function App() {
     }
   };
   const chooseRegions = (ids: string[]) => {
-    if (!editing || busy || downloading || choosingDownload) return;
+    if (busy || downloading || choosingDownload) return;
+    setShowSearchArea(true);
     setRegions(ids);
     setError("");
     const sections = dataset?.sections.filter((section) =>
@@ -677,12 +637,6 @@ export function App() {
     );
     if (sections?.length) moveTo(regionBounds(sections));
   };
-  const toggleRegion = (id: string) =>
-    chooseRegions(
-      regions.includes(id)
-        ? regions.filter((region) => region !== id)
-        : [...regions, id],
-    );
   const beginSearch = async (query: SearchQuery) => {
     const controller = new AbortController();
     operation.current = controller;
@@ -700,6 +654,7 @@ export function App() {
         ...current.filter((item) => item.id !== job.id),
       ]);
       setHighlightedJob(job.id);
+      setSettingsOpen(false);
       setJobsOpen(true);
     } catch (failure) {
       if (!controller.signal.aborted) {
@@ -796,9 +751,16 @@ export function App() {
     if (signal.aborted) return;
     setDataset(info);
     setDownload(snapshot);
-    const query = snapshot.status === "complete" ? downloadQuery.current : null;
+    const waitingQuery = downloadQuery.current;
     downloadQuery.current = null;
-    if (query) await beginSearch(query);
+    if (waitingQuery) {
+      if (snapshot.status === "complete") await beginSearch(waitingQuery);
+      else
+        setError(
+          snapshot.reason ||
+            "Download stopped. Submit the search to try again.",
+        );
+    }
   };
   const beginDownload = async (
     sections: string[],
@@ -899,15 +861,21 @@ export function App() {
     };
   }, [downloading, downloadRetry]);
   useEffect(() => {
-    if (pendingDownload) document.getElementById("confirm-download")?.focus();
+    if (!pendingDownload) return;
+    const previous =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    downloadDialog.current?.showModal();
+    return () => {
+      downloadDialog.current?.close();
+      if (previous?.isConnected) previous.focus();
+    };
   }, [pendingDownload]);
   const pickRoute = (id: string) => {
+    setShowSearchArea(false);
     openedRouteId.current = null;
-    setSelected(
-      results?.routes.find((route) => route.id === id) ??
-        choices?.routes.find((route) => route.id === id) ??
-        null,
-    );
+    setSelected(choices?.routes.find((route) => route.id === id) ?? null);
     setSelectedId(id);
     originalDirectionId.current = id;
     closeChoices();
@@ -918,7 +886,7 @@ export function App() {
     const controller = new AbortController();
     choicesOperation.current = controller;
     setChoiceKind(kind);
-    setChoices(undefined);
+    if (!offset) setChoices(undefined);
     setLoadingChoices(true);
     setChoicesError("");
     setHoveredId(null);
@@ -929,8 +897,6 @@ export function App() {
           "results",
           resultQuery(
             offset,
-            "distance",
-            "asc",
             kind === "versions"
               ? { group: selected.groupId }
               : { variant: selected.variantId },
@@ -939,7 +905,15 @@ export function App() {
         controller.signal,
       );
       if (!controller.signal.aborted && choicesOperation.current === controller)
-        setChoices(page);
+        setChoices((current) =>
+          offset && current
+            ? {
+                ...page,
+                offset: 0,
+                routes: [...current.routes, ...page.routes],
+              }
+            : page,
+        );
     } catch (failure) {
       if (!controller.signal.aborted && choicesOperation.current === controller)
         setChoicesError(
@@ -952,488 +926,302 @@ export function App() {
         setLoadingChoices(false);
     }
   };
-  const pages = (
-    page: JobResults,
-    onPage: (offset: number) => void,
-    label = "Hike",
-  ) =>
-    page.pageTotal > ROUTES_PER_PAGE ? (
-      <nav
-        className="result-pages"
-        aria-label={`${label} pages`}
-      >
-        <button
-          type="button"
-          disabled={loadingPage || loadingChoices || page.offset === 0}
-          onClick={() => onPage(Math.max(0, page.offset - ROUTES_PER_PAGE))}
-        >
-          Previous
-        </button>
-        <span
-          id={label === "Hike" ? "page-summary" : "choice-page-summary"}
-          tabIndex={-1}
-        >
-          {page.offset + 1}–{page.offset + page.routes.length} of{" "}
-          {page.pageTotal.toLocaleString()}
-        </span>
-        <button
-          type="button"
-          disabled={
-            loadingPage ||
-            loadingChoices ||
-            page.offset + ROUTES_PER_PAGE >= page.pageTotal
-          }
-          onClick={() => onPage(page.offset + ROUTES_PER_PAGE)}
-        >
-          Next
-        </button>
-      </nav>
-    ) : null;
   const readyCount = jobs.filter(
-    (job) => hasSavedResults(job) && viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
+    (job) =>
+      hasSavedResults(job) &&
+      viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
   ).length;
+  const currentJob = jobs.find((job) => job.id === highlightedJob);
   return (
-    <main className="workspace">
-      <aside className="sidebar" aria-label="Route planner">
-        <header className="app-label">
-          <h1>Alpine Loop</h1>
+    <div className="app-shell">
+      <header className="app-header">
+        <h1>
+          <span className="brand-mark" aria-hidden="true">
+            △
+          </span>{" "}
+          Alpine Loop
+        </h1>
+        <nav aria-label="App">
           <button
+            id="open-settings"
             type="button"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
+            {downloading && (
+              <span className="header-count" aria-label="Download running">
+                ↓
+              </span>
+            )}
+          </button>
+          <button
             id="open-search-jobs"
+            type="button"
             className="jobs-button"
-            onClick={() => {
-              setHighlightedJob(null);
-              setJobsOpen(true);
-            }}
+            onClick={() => setJobsOpen(true)}
           >
             Jobs
             {readyCount ? (
-              <span className="ready-indicator">{readyCount} ready</span>
+              <span className="header-count">{readyCount} ready</span>
             ) : jobs.some(activeJob) ? (
-              <span className="active-indicator">Running</span>
+              <span className="header-count">Running</span>
             ) : null}
           </button>
-        </header>
-        <div className="sidebar-content">
-          {error && (
-            <div className="error-banner" role="alert">
-              {error}
-            </div>
-          )}
-          {(jobActionError || jobsError) && !jobsOpen && (
-            <div className="error-banner" role="alert">
-              {jobActionError || jobsError}
-              <button
-                type="button"
-                onClick={() => setJobsRetry((value) => value + 1)}
-              >
-                Reconnect jobs
-              </button>
-            </div>
-          )}
-          {editing && !dataset && (
-            <div className="startup" role={startupError ? "alert" : "status"}>
-              <p>{startupError || "Opening trail data…"}</p>
-              {startupError && <p>Saved jobs are still available from Jobs.</p>}
-            </div>
-          )}
-          {pendingDownload && dataset && (
-            <section
-              className="download-panel"
-              aria-labelledby="download-heading"
-            >
-              <h2 id="download-heading">Download trails for this search</h2>
-              <p>
-                {megabytes(pendingDownload.coverage.bytes)} total. Downloaded
-                sections stay on this computer.
-              </p>
-              <ul>
-                {pendingDownload.coverage.missing.map((id) => (
-                  <li key={id}>{regionName(id)}</li>
-                ))}
-              </ul>
-              <div className="download-actions">
-                <button
-                  id="confirm-download"
-                  type="button"
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    void beginDownload(
-                      pendingDownload.coverage.missing,
-                      pendingDownload.query,
-                    )
-                  }
-                >
-                  Download and submit job
-                </button>
+        </nav>
+      </header>
+      <main className={`workspace${searchCollapsed ? " is-collapsed" : ""}`}>
+        <aside className="sidebar" aria-label="Search" hidden={searchCollapsed}>
+          <div className="sidebar-content">
+            {error && (
+              <div className="error-banner" role="alert">
+                {error}
+              </div>
+            )}
+            {(jobActionError || jobsError) && !jobsOpen && (
+              <div className="error-banner" role="alert">
+                {jobActionError || jobsError}
                 <button
                   type="button"
-                  disabled={busy}
-                  onClick={() => setPendingDownload(null)}
+                  onClick={() => setJobsRetry((value) => value + 1)}
                 >
-                  Cancel
+                  Reconnect
                 </button>
               </div>
-            </section>
-          )}
-          {download && (
-            <section className="download-panel" aria-label="Trail download">
-              <h2>
-                {downloading
-                  ? "Downloading trail sections"
-                  : download.status === "complete"
-                    ? "Trail sections ready"
-                    : download.status === "stopped"
-                      ? "Download stopped"
-                      : "Download failed"}
-              </h2>
-              <p>{download.sections.map(regionName).join(" · ")}</p>
-              {downloading && (
-                <progress
-                  aria-label="Trail download progress"
-                  value={Math.min(download.completedBytes, download.totalBytes)}
-                  max={Math.max(1, download.totalBytes)}
-                />
-              )}
-              <p>
-                {megabytes(download.completedBytes)} of{" "}
-                {megabytes(download.totalBytes)}
-                {downloading && downloadQuery.current
-                  ? ". Your job is submitted when the download finishes."
-                  : ""}
-              </p>
-              {download.reason && <p>{download.reason}</p>}
-              {downloadError && <p role="alert">{downloadError}</p>}
-              <div className="download-actions">
-                {downloading ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void stopDownload()}
-                    >
-                      Cancel download
-                    </button>
-                    {downloadError && (
-                      <button
-                        type="button"
-                        onClick={() => setDownloadRetry((value) => value + 1)}
-                      >
-                        Reconnect
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button type="button" onClick={() => setDownload(null)}>
-                    Dismiss
-                  </button>
-                )}
+            )}
+            {!dataset && (
+              <div className="startup" role={startupError ? "alert" : "status"}>
+                {startupError || "Opening trail data…"}
               </div>
-            </section>
-          )}
-          {editing && dataset ? (
-            <form className="planner" onSubmit={(event) => void launch(event)}>
-              <fieldset
-                className="planner-fields"
-                disabled={busy || downloading || choosingDownload}
+            )}
+            {dataset && (
+              <form
+                className="planner"
+                onSubmit={(event) => void launch(event)}
               >
-                <div className="section-heading">
-                  <h2>Search regions</h2>
-                  {viewedJob && (
-                    <button
-                      className="text-button"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setError("");
-                        setEditing(false);
-                      }}
-                    >
-                      Back to results
-                    </button>
-                  )}
-                </div>
-                <p className="region-description">
-                  Choose one or more prepared regions. Routes stay within their
-                  mountain and highway boundaries.
-                </p>
-                <div className="region-list-heading">
-                  <span>
-                    {regions.length
-                      ? `${regions.length} selected`
-                      : "No regions selected"}
-                  </span>
-                  {dataset.sections.length > 1 && (
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() =>
-                        chooseRegions(
-                          regions.length === dataset.sections.length
-                            ? []
-                            : dataset.sections.map((section) => section.id),
-                        )
-                      }
-                    >
-                      {regions.length === dataset.sections.length
-                        ? "Clear selection"
-                        : "Select all"}
-                    </button>
-                  )}
-                </div>
-                <ul className="regions-list" aria-label="Search regions">
-                  {dataset.sections.map((section) => (
-                    <li
-                      key={section.id}
-                      className={
-                        regions.includes(section.id) ? "is-selected" : undefined
-                      }
-                    >
-                      <label>
-                        <input
-                          type="checkbox"
-                          aria-label={section.name}
-                          checked={regions.includes(section.id)}
-                          onChange={() => toggleRegion(section.id)}
-                        />
-                        <span>
-                          <strong>{section.name}</strong>
-                          <small>
-                            {section.installed
-                              ? "Downloaded · "
-                              : section.needsRepair
-                                ? "Needs repair · "
-                                : "Download available · "}
-                            {megabytes(section.bytes)}
-                          </small>
-                        </span>
-                      </label>
-                      {!section.installed && (
-                        <button
-                          type="button"
-                          aria-label={`Download ${section.name}`}
-                          onClick={() => void beginDownload([section.id])}
-                        >
-                          Download
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                {!dataset.sections.length && (
-                  <p className="region-description">
-                    No prepared regions are available yet.
-                  </p>
-                )}
-                {!!dataset.unavailable?.length && (
-                  <ul className="unavailable-regions">
-                    {dataset.unavailable.map((region) => (
-                      <li key={region.name}>
-                        <strong>{region.name}</strong>
-                        <span>{region.reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <h2 className="limits-heading">Limits</h2>
-                <Range
-                  name="Distance"
-                  unit="miles"
-                  value={distance}
-                  onChange={setDistance}
-                />
-                <Range
-                  name="Elevation gain"
-                  unit="feet"
-                  value={gain}
-                  onChange={setGain}
-                />
-                <label className="repetition-field" htmlFor="repetition">
-                  <span>Maximum walked again</span>
-                  <span className="percent-input">
-                    <input
-                      id="repetition"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="any"
-                      required
-                      value={repetition}
-                      onChange={(event) => setRepetition(event.target.value)}
-                    />
-                    <span>%</span>
-                  </span>
-                </label>
-                <p className="field-hint">
-                  20% = 2 miles walked again in a 10-mile hike.
-                </p>
-                <details
-                  className="road-controls"
-                  onInvalidCapture={(event) => {
-                    event.currentTarget.open = true;
-                  }}
+                <fieldset
+                  className="planner-fields"
+                  disabled={busy || downloading || choosingDownload}
                 >
-                  <summary>
-                    Road connections
-                    <span>
-                      At most {roadMiles || "—"} mi and {roadPercent || "—"}%
-                    </span>
-                  </summary>
-                  <div className="road-inputs">
-                    <label htmlFor="road-miles">
-                      Maximum miles
+                  <h2 className="planner-title">Search</h2>
+                  <label className="field-label" id="search-region-label">
+                    Region
+                  </label>
+                  <RegionPicker
+                    dataset={dataset}
+                    value={regions}
+                    disabled={busy || downloading || choosingDownload}
+                    onChange={chooseRegions}
+                  />
+                  <Range
+                    name="Distance"
+                    unit="miles"
+                    value={distance}
+                    onChange={setDistance}
+                  />
+                  <Range
+                    name="Elevation gain"
+                    unit="feet"
+                    value={gain}
+                    onChange={setGain}
+                  />
+                  <label className="repetition-field" htmlFor="repetition">
+                    <span>Repeated trail, max</span>
+                    <span className="percent-input">
                       <input
-                        id="road-miles"
-                        type="number"
-                        min="0"
-                        step="any"
-                        required
-                        value={roadMiles}
-                        onChange={(event) => setRoadMiles(event.target.value)}
-                      />
-                    </label>
-                    <label htmlFor="road-percent">
-                      Maximum percentage
-                      <input
-                        id="road-percent"
+                        id="repetition"
                         type="number"
                         min="0"
                         max="100"
                         step="any"
                         required
-                        value={roadPercent}
-                        onChange={(event) => setRoadPercent(event.target.value)}
+                        value={repetition}
+                        onChange={(event) => setRepetition(event.target.value)}
                       />
+                      <span>%</span>
+                    </span>
+                  </label>
+                  <details
+                    className="more-options"
+                    onInvalidCapture={(event) => {
+                      event.currentTarget.open = true;
+                    }}
+                  >
+                    <summary>More options</summary>
+                    <div className="road-inputs">
+                      <label htmlFor="road-miles">
+                        Roads, max miles
+                        <input
+                          id="road-miles"
+                          type="number"
+                          min="0"
+                          step="any"
+                          required
+                          value={roadMiles}
+                          onChange={(event) => setRoadMiles(event.target.value)}
+                        />
+                      </label>
+                      <label htmlFor="road-percent">
+                        Roads, max %
+                        <input
+                          id="road-percent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          required
+                          value={roadPercent}
+                          onChange={(event) =>
+                            setRoadPercent(event.target.value)
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={includeUnknown}
+                        onChange={(event) =>
+                          setIncludeUnknown(event.target.checked)
+                        }
+                      />
+                      Include uncertain access
                     </label>
-                  </div>
-                  <p className="field-hint">
-                    Both limits apply. {roadExplanation}
-                  </p>
-                </details>
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={includeUnknown}
-                    onChange={(event) =>
-                      setIncludeUnknown(event.target.checked)
-                    }
-                  />{" "}
-                  Include uncertain access
-                </label>
-                <button
-                  className="primary search-button"
-                  type="submit"
-                  disabled={busy || !regions.length}
-                >
-                  {busy ? "Submitting…" : "Submit search job"}
-                </button>
-                <p className="field-hint">
-                  Results are ready when the job finishes. You can submit
-                  another job while one runs.
-                </p>
-              </fieldset>
-            </form>
-          ) : !editing && viewedJob && results ? (
-            <>
-              <section className="search-summary" aria-label="Saved search">
-                <div className="section-heading">
-                  <h2>Search results</h2>
+                  </details>
+                  <button
+                    className="primary search-button"
+                    type="submit"
+                    disabled={busy || !regions.length}
+                  >
+                    {busy ? "Submitting…" : "Search"}
+                  </button>
+                </fieldset>
+              </form>
+            )}
+            {downloading && (
+              <section
+                className="workspace-status"
+                aria-label="Download progress"
+              >
+                <div>
+                  <strong>Downloading</strong>
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => copySettings(viewedJob)}
+                    onClick={() => setSettingsOpen(true)}
                   >
-                    Copy settings
+                    Details
                   </button>
                 </div>
-                <p className="current-regions">
-                  {viewedJob.query.sections
-                    .map(
-                      (id) =>
-                        viewedJob.inputs?.sections.find(
-                          (section) => section.id === id,
-                        )?.name ?? regionName(id),
-                    )
-                    .join(" · ")}
+                <progress
+                  aria-label="Trail download progress"
+                  value={Math.min(download.completedBytes, download.totalBytes)}
+                  max={Math.max(1, download.totalBytes)}
+                />
+                <p>
+                  {storage(download.completedBytes)} /{" "}
+                  {storage(download.totalBytes)}
                 </p>
-                <p className="query-summary">
-                  {requestSummary(viewedJob.query)}
-                </p>
-                <p className="access-summary">
-                  {viewedJob.query.includeUnknown
-                    ? "Uncertain access included"
-                    : "Mapped public access only"}{" "}
-                  · Search completed
-                </p>
+                {downloadError && <p role="alert">{downloadError}</p>}
               </section>
-              <section
-                className="results"
-                aria-label="Completed search results"
-                aria-busy={loadingPage}
-              >
-                <h2 className="results-heading">
-                  {results.groupCount.toLocaleString()}{" "}
-                  {results.groupCount === 1 ? "hike" : "hikes"} found
-                </h2>
-                {!selectedId && (
+            )}
+            {currentJob && (
+              <section className="workspace-status" aria-label="Latest search">
+                <div>
+                  <strong>
+                    {currentJob.status === "completed"
+                      ? "Results ready"
+                      : currentJob.status === "queued"
+                        ? `Queued · ${currentJob.queuePosition ?? "—"}`
+                        : currentJob.status === "running"
+                          ? currentJob.progress.stage === "saving"
+                            ? "Saving"
+                            : "Searching"
+                          : currentJob.status[0]!.toUpperCase() +
+                            currentJob.status.slice(1)}
+                  </strong>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={!!pendingJob}
+                    onClick={() =>
+                      hasSavedResults(currentJob)
+                        ? void openResults(currentJob)
+                        : setJobsOpen(true)
+                    }
+                  >
+                    {hasSavedResults(currentJob) ? "View results" : "Details"}
+                  </button>
+                </div>
+                {currentJob.status === "running" && (
                   <>
-                    <div className="result-sort">
-                      <label htmlFor="sort-by">Sort by</label>
-                      <select
-                        id="sort-by"
-                        value={sort}
-                        disabled={loadingPage}
-                        onChange={(event) =>
-                          void changePage(
-                            0,
-                            event.target.value as ResultSort,
-                            order,
-                          )
-                        }
-                      >
-                        <option value="distance">Distance</option>
-                        <option value="gain">Climb</option>
-                        <option value="repetition">Walked again</option>
-                        <option value="roadDistance">Road distance</option>
-                      </select>
-                      <button
-                        type="button"
-                        disabled={loadingPage}
-                        onClick={() =>
-                          void changePage(
-                            0,
-                            sort,
-                            order === "asc" ? "desc" : "asc",
-                          )
-                        }
-                        aria-label={`Sort ${order === "asc" ? "descending" : "ascending"}`}
-                      >
-                        {order === "asc" ? "↑ Low first" : "↓ High first"}
-                      </button>
-                    </div>
-                    {results.selectionNote && (
-                      <details className="selection-note">
-                        <summary>How hikes are combined</summary>
-                        <p>{results.selectionNote}</p>
-                      </details>
-                    )}
-                    {pages(results, (offset) => void changePage(offset))}
+                    <progress
+                      aria-label="Within-region search progress"
+                      max={currentJob.progress.totalSearchPoints || undefined}
+                      value={
+                        currentJob.progress.totalSearchPoints
+                          ? (currentJob.progress.completedSearchPoints ?? 0)
+                          : undefined
+                      }
+                    />
+                    <p>
+                      {elapsed(currentJob.progress.elapsedMs)} ·{" "}
+                      {currentJob.progress.completedRegions.length} /{" "}
+                      {currentJob.progress.totalRegions} regions
+                    </p>
                   </>
                 )}
-                {selectedId ? (
-                  selected ? (
+              </section>
+            )}
+          </div>
+        </aside>
+        <button
+          className="collapse-search"
+          type="button"
+          aria-controls="search-panel"
+          aria-label={
+            searchCollapsed ? "Expand search panel" : "Collapse search panel"
+          }
+          aria-expanded={!searchCollapsed}
+          onClick={() => setSearchCollapsed((value) => !value)}
+        >
+          <span aria-hidden="true">{searchCollapsed ? "›" : "‹"}</span>
+        </button>
+        <section className="browser-panel" aria-label="Browse hikes">
+          <header className="browser-toolbar">
+            <div>
+              <h2>
+                {viewedJob
+                  ? `${viewedJob.groupCount?.toLocaleString() ?? "Saved"} ${viewedJob.groupCount === 1 ? "hike" : "hikes"}`
+                  : "Map"}
+              </h2>
+              {viewedJob && <p>{requestSummary(viewedJob.query)}</p>}
+            </div>
+            {viewedJob && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => copySettings(viewedJob)}
+              >
+                Copy settings
+              </button>
+            )}
+          </header>
+          <div className="results-workspace">
+            {viewedJob && selectedId && (
+              <div className="route-inspector" aria-label="Selected hike">
+                {selectedId &&
+                  (selected ? (
                     <RouteDetails
                       route={selected}
                       jobId={viewedJob.id}
                       resultsRevision={viewedJob.resultsRevision ?? 0}
                       onBack={() => {
                         clearSelection();
-                        if (mapDataset) moveTo(mapDataset.bounds);
                       }}
                       backDisabled={false}
                       onReverse={() => {
-                        const otherId = selected.reverseId ?? selected.oppositeId;
+                        const otherId =
+                          selected.reverseId ?? selected.oppositeId;
                         if (otherId) {
                           closeChoices();
                           setSelectedId(otherId);
@@ -1444,7 +1232,8 @@ export function App() {
                       directionError={hoveredId ? "" : routeError}
                       onRetry={() => setRouteRetry((value) => value + 1)}
                     >
-                      {(selected.variantCount > 1 || selected.groupSize > 1) && (
+                      {(selected.variantCount > 1 ||
+                        selected.groupSize > 1) && (
                         <div className="route-choices">
                           <div className="route-choice-actions">
                             {selected.variantCount > 1 && (
@@ -1492,83 +1281,91 @@ export function App() {
                                   ? "Route versions"
                                   : "Starting points for this version"}
                               </h3>
-                              <p className="field-hint">
-                                Move over a choice to see its route.
-                              </p>
-                              {loadingChoices ? (
-                                <p role="status">
-                                  Loading {choiceKind === "versions"
-                                    ? "route versions"
-                                    : "starting points"}…
-                                </p>
-                              ) : choicesError ? (
+                              {choices && (
+                                <ul
+                                  className="choice-list"
+                                  onScroll={(event) => {
+                                    const list = event.currentTarget;
+                                    if (
+                                      list.scrollHeight -
+                                        list.scrollTop -
+                                        list.clientHeight <
+                                        80 &&
+                                      !loadingChoices &&
+                                      !choicesError &&
+                                      choices.routes.length < choices.pageTotal
+                                    ) {
+                                      void loadChoices(
+                                        choiceKind,
+                                        choices.routes.length,
+                                      );
+                                    }
+                                  }}
+                                >
+                                  {choices.routes.map((route) => (
+                                    <li key={route.id}>
+                                      <button
+                                        type="button"
+                                        aria-current={
+                                          (
+                                            choiceKind === "versions"
+                                              ? route.variantId ===
+                                                selected.variantId
+                                              : route.startId ===
+                                                selected.startId
+                                          )
+                                            ? "true"
+                                            : undefined
+                                        }
+                                        onClick={() => pickRoute(route.id)}
+                                        onPointerEnter={() =>
+                                          setHoveredId(route.id)
+                                        }
+                                        onPointerLeave={() =>
+                                          setHoveredId(null)
+                                        }
+                                        onFocus={() => setHoveredId(route.id)}
+                                        onBlur={() => setHoveredId(null)}
+                                      >
+                                        <span>
+                                          {choiceKind === "versions"
+                                            ? routeName(route)
+                                            : startName(route)}
+                                        </span>
+                                        {choiceKind === "versions" && (
+                                          <small>{startName(route)}</small>
+                                        )}
+                                        <small>
+                                          {miles(route.distance)} mi · ↑{" "}
+                                          {feet(route.gain)} ft
+                                          {route.roadDistance > 0
+                                            ? ` · ${(route.roadDistance / MILE).toFixed(2)} mi roads`
+                                            : ""}
+                                          {route.uncertain
+                                            ? " · Access uncertain"
+                                            : ""}
+                                        </small>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {loadingChoices && <p role="status">Loading…</p>}
+                              {choicesError && (
                                 <p role="alert">
                                   {choicesError}
                                   <button
                                     type="button"
-                                    onClick={() => void loadChoices(choiceKind)}
+                                    onClick={() =>
+                                      void loadChoices(
+                                        choiceKind,
+                                        choices?.routes.length ?? 0,
+                                      )
+                                    }
                                   >
                                     Retry
                                   </button>
                                 </p>
-                              ) : (
-                                choices && <>
-                                  {pages(
-                                    choices,
-                                    (offset) => void loadChoices(choiceKind, offset),
-                                    choiceKind === "versions"
-                                      ? "Route version"
-                                      : "Starting point",
-                                  )}
-                                  <ul className="choice-list">
-                                    {choices.routes.map((route) => (
-                                      <li key={route.id}>
-                                        <button
-                                          type="button"
-                                          aria-current={
-                                            (choiceKind === "versions"
-                                              ? route.variantId === selected.variantId
-                                              : route.startId === selected.startId)
-                                              ? "true"
-                                              : undefined
-                                          }
-                                          onClick={() => pickRoute(route.id)}
-                                          onPointerEnter={() => setHoveredId(route.id)}
-                                          onPointerLeave={() => setHoveredId(null)}
-                                          onFocus={() => setHoveredId(route.id)}
-                                          onBlur={() => setHoveredId(null)}
-                                        >
-                                          <span>
-                                            {choiceKind === "versions"
-                                              ? routeName(route)
-                                              : startName(route)}
-                                          </span>
-                                          {choiceKind === "versions" && route.trailNames.length > 2 && (
-                                            <small>
-                                              Also: {route.trailNames.slice(2).join(" · ")}
-                                            </small>
-                                          )}
-                                          {choiceKind === "versions" ? (
-                                            <small>From {startName(route)}</small>
-                                          ) : (
-                                            <small>
-                                              {route.startKind === "trailhead"
-                                                ? "Trailhead"
-                                                : route.startKind === "parking"
-                                                  ? "Parking"
-                                                  : "Road contact"}
-                                            </small>
-                                          )}
-                                          <small>
-                                            {miles(route.distance)} mi · ↑ {feet(route.gain)} ft
-                                            {" · "}{(route.roadDistance / MILE).toFixed(2)} mi roads
-                                            {route.uncertain ? " · Access uncertain" : ""}
-                                          </small>
-                                        </button>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </>
                               )}
                             </div>
                           )}
@@ -1582,7 +1379,7 @@ export function App() {
                         className="text-button"
                         onClick={clearSelection}
                       >
-                        ← All hikes
+                        Close
                       </button>
                       <p role={routeError ? "alert" : "status"}>
                         {routeError || "Loading hike details…"}
@@ -1596,125 +1393,108 @@ export function App() {
                         </button>
                       )}
                     </div>
-                  )
-                ) : results.routes.length ? (
-                  <ol className="route-list">
-                    {results.routes.map((route) => (
-                      <li key={route.groupId}>
-                        <button
-                          id={`group-${route.groupId}`}
-                          className="route-card"
-                          type="button"
-                          onClick={() => pickRoute(route.id)}
-                          onPointerEnter={() => setHoveredId(route.id)}
-                          onPointerLeave={() => setHoveredId(null)}
-                          onFocus={() => setHoveredId(route.id)}
-                          onBlur={() => setHoveredId(null)}
-                        >
-                          <span className="route-card-top">
-                            <span className="route-name">
-                              {routeName(route)}
-                            </span>
-                          </span>
-                          {route.trailNames.length > 2 && (
-                            <span className="route-trails">
-                              Also: {route.trailNames.slice(2).join(" · ")}
-                            </span>
-                          )}
-                          <span className="route-start">
-                            From {startName(route)}
-                          </span>
-                          <span className="route-metrics">
-                            <strong>
-                              {miles(route.distance)} <small>mi</small>
-                            </strong>
-                            <strong>
-                              ↑ {feet(route.gain)} <small>ft</small>
-                            </strong>
-                            <span>
-                              {Math.round(route.repetition * 100)}% again
-                            </span>
-                          </span>
-                          <span className="route-kind">
-                            {route.kind === "lollipop" ? "Lollipop" : "Loop"}
-                            {route.variantCount > 1
-                              ? ` · ${route.variantCount.toLocaleString()} route versions`
-                              : ""}
-                            {route.roadDistance > 0
-                              ? ` · ${(route.roadDistance / MILE).toFixed(2)} mi road connections`
-                              : ""}
-                            {route.uncertain ? " · Access uncertain" : ""}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="empty-state">
-                    No qualifying hikes were found by this search. Copy these
-                    settings to try a different search.
-                  </p>
-                )}
-              </section>
-            </>
-          ) : null}
-        </div>
-        {dataset && (
-          <footer className="data-notes">
-            <details>
-              <summary>Trail data & limitations</summary>
-              <p>
-                {dataset.name} · {dataset.sourceDate}
+                  ))}
+              </div>
+            )}
+            {mapDataset && camera ? (
+              <Suspense
+                fallback={
+                  <div className="map-placeholder" aria-label="Loading map" />
+                }
+              >
+                <HikeMap
+                  sections={mapDataset.sections}
+                  selectedSections={
+                    showSearchArea
+                      ? regions
+                      : (viewedJob?.query.sections ?? regions)
+                  }
+                  routes={locations}
+                  activeRoute={activeRoute}
+                  selectedId={selectedId}
+                  selectedGroupId={selected?.groupId}
+                  routeNotice={
+                    activeId
+                      ? routeError || (!activeRoute ? "Loading route…" : "")
+                      : ""
+                  }
+                  onRetryRoute={
+                    routeError
+                      ? () => setRouteRetry((value) => value + 1)
+                      : undefined
+                  }
+                  camera={camera}
+                  onSelect={pickRoute}
+                  onPreview={setHoveredId}
+                />
+              </Suspense>
+            ) : (
+              <div className="map-placeholder" />
+            )}
+          </div>
+        </section>
+      </main>
+      <SettingsDialog
+        open={settingsOpen}
+        dataset={dataset}
+        download={download}
+        downloadError={downloadError}
+        busy={busy || choosingDownload}
+        onClose={() => setSettingsOpen(false)}
+        onDownload={(ids) => void beginDownload(ids)}
+        onStopDownload={() => void stopDownload()}
+        onRetryDownload={() => setDownloadRetry((value) => value + 1)}
+        onDismissDownload={() => setDownload(null)}
+      />
+      <dialog
+        ref={downloadDialog}
+        className="download-modal"
+        aria-labelledby="download-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          if (!busy) setPendingDownload(null);
+        }}
+      >
+        {pendingDownload && (
+          <>
+            <header className="dialog-heading">
+              <h2 id="download-title">Download trail data?</h2>
+            </header>
+            <div className="dialog-body">
+              <p className="download-total">
+                {storage(pendingDownload.coverage.bytes)}
               </p>
-              <ul>
-                {dataset.limitations.map((note) => (
-                  <li key={note}>{note}</li>
+              <ul className="download-names">
+                {pendingDownload.coverage.missing.map((id) => (
+                  <li key={id}>{regionName(id)}</li>
                 ))}
               </ul>
-              {dataset.attribution.map((source) => (
-                <p key={source.url}>
-                  <a href={source.url} target="_blank" rel="noreferrer">
-                    {source.name}
-                  </a>
-                  <span className="license">{source.license}</span>
-                </p>
-              ))}
-            </details>
-          </footer>
+              <div className="download-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={busy}
+                  onClick={() =>
+                    void beginDownload(
+                      pendingDownload.coverage.missing,
+                      pendingDownload.query,
+                    )
+                  }
+                >
+                  Download and search
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setPendingDownload(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </>
         )}
-      </aside>
-      {mapDataset && camera ? (
-        <Suspense
-          fallback={<div className="map-placeholder" aria-label="Loading map" />}
-        >
-          <HikeMap
-            dataset={mapDataset}
-            selectedSections={
-              editing ? regions : (viewedJob?.query.sections ?? regions)
-            }
-            editing={editing}
-            locked={busy || downloading || choosingDownload}
-            routes={editing ? [] : locations}
-            activeRoute={activeRoute}
-            selectedId={selectedId}
-            selectedGroupId={selected?.groupId}
-            routeNotice={
-              activeId
-                ? routeError || (!activeRoute ? "Loading route drawing…" : "")
-                : ""
-            }
-            onRetryRoute={
-              routeError ? () => setRouteRetry((value) => value + 1) : undefined
-            }
-            camera={camera}
-            onToggleSection={toggleRegion}
-            onSelect={pickRoute}
-            onPreview={setHoveredId}
-          />
-        </Suspense>
-      ) : (
-        <div className="map-placeholder" />
-      )}
+      </dialog>
       <JobsDialog
         open={jobsOpen}
         jobs={jobs}
@@ -1728,6 +1508,6 @@ export function App() {
         onCopy={copySettings}
         onAction={(job, action) => void mutateJob(job, action)}
       />
-    </main>
+    </div>
   );
 }

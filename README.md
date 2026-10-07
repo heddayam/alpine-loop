@@ -18,8 +18,8 @@ npm start
 Open the printed local URL. Launch installs dependencies and builds the app.
 It obtains the published mountain catalog automatically; missing trail sections
 are downloaded when you choose **Download and search**. Panning never downloads
-anything. The same region list selects searches and offers individual downloads. Downloads show
-actual size and progress, support cancellation, and reuse verified files.
+anything. Settings → Manage areas offers grouped downloads with actual sizes,
+progress, cancellation and verified-file reuse.
 
 This development checkout uses `.local-data/mountains`. Public prepared-data
 publication is still pending; the catalog release descriptor remains unset.
@@ -42,7 +42,9 @@ loads one section at a time, considering every eligible start across the
 selected sections. Missing or unprepared coverage is disclosed.
 
 Search regions and prepared data sections share the same identity and exact
-footprint. Select regions from the list or click their map polygons. Every
+footprint. Familiar place names identify each area in a grouped search dropdown;
+exact boundaries remain visible on the map and in Settings. Select regions from
+the dropdown. Map clicks browse hikes without changing the search area. Every
 eligible start in those regions is considered; panning and zooming only change the
 view. There are no separate named rectangles or custom drawing scopes. Unknown
 pedestrian access is included and labeled by default, and can be excluded.
@@ -87,9 +89,12 @@ meet the limits; there is no variation selector.
 Details retain qualifying starts and directions. The displayed start prefers an
 explicit mapped trailhead, then parking, then road contact; ties prefer certain
 access, less road walking, less repetition, shorter distance and stable IDs.
-Available directions each have their own exact metrics and GPX. Sorted paging
-never changes the job, and the map includes all result locations regardless of
-the visible page. Coincident locations offer a hike chooser.
+Available directions each have their own exact metrics and GPX. The search
+panel stays on the left and collapses using its edge tab; the main map fills the
+right. The map shows all result locations. Clicking a cluster or shared starting
+point opens its hike list; **Hikes in view** lists starts in the current map view.
+Panning changes browsing only. Lists load more hikes, versions and starting
+points as you scroll. Route details and GPX open over the map. Search submission opens Jobs; closing it leaves the search running.
 
 For the same start and ordered trail itinerary, avoidable longer road substitutions
 are removed before minimum distance and climb are applied. A shorter legal road
@@ -136,7 +141,7 @@ the community service requires a visible logo and copyright line, uses fair-use
 rate limits, and excludes offline basemap downloads and printed map exports.
 An experimental USFS/NLCD 2025 tree-canopy overlay fills forest-coverage gaps;
 add `&canopy=off` to a saved-job URL to compare without it.
-Region selection updates feature state, and hike selection updates existing
-marker styling. The
+Region selection draws only the selected boundaries, and hike selection updates
+existing marker styling. The
 [renderer review](benchmarks/map-renderer-review.json) records the source and
 compressed-build cost and browser verification.
