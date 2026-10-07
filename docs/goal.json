@@ -64,7 +64,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "Preferred-only hikes and local resource fixes implemented; integrated build, typecheck and offline flows pass. Full real-data performance and browser verification are in progress. Existing saved results remain immutable. All five Washington sections remain installed; graph, starts and coordinates are unchanged, while geometry records now stream in prepared catalog format 2.",
+  "state": "The updated local app is running at http://127.0.0.1:3000 with all five Washington regions installed and all eight existing saved jobs preserved. New jobs save one preferred valid walk per displayed hike; loop/start/direction alternatives are removed from results and UI. The real all-region default completed all 10,187 starts in 488.3 seconds, retaining 918 displayed hikes and 918 walks in 14.9 MB instead of 1,286,407 walks in 8.45 GB. Backend OS peak RSS fell from 660.2 MB to 356.7 MB; active search averages 43.7% of one core. All 918 walks and their 803,177 geometry points independently pass route, road, drawing and main-loop checks. Build, typecheck, 102 Vitest checks, five Node checks and two preparation fixture checks pass. Native continuous scrolling, keyboard navigation, history pages, old/new saved URLs and GPX pass browser/live checks. Browser/GPU memory remains material and can spike on cold loading/zoom; details and primary-source research are in benchmarks/local-resource-improvements.json. No new dependency; maintained source is 8,028 lines across 41 files. Task worktrees are archived and task branches removed.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -448,6 +448,7 @@
     "approved": "Remove loop, starting-point and direction variants from persistence and UI; these are outside the core app.",
     "policy": "Explore the same planned circuits and every eligible start. Keep one preferred valid walk per exact circuit for grouping, then save only fixed displayed representatives using the existing preference and 60% ordered main-loop rule. Preserve existing immutable result files and addressed route/GPX links; show only their preferred representatives.",
     "supersedes": "Earlier requirements to retain qualifying circuit versions, alternative starts and directions.",
-    "review": "benchmarks/local-resource-improvements.json"
+    "review": "benchmarks/local-resource-improvements.json",
+    "status": "Implemented and verified; resource measurements and limits recorded in the review."
   }
 }
