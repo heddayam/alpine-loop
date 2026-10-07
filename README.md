@@ -134,6 +134,8 @@ vector trails, contours and shaded relief. Labels use MapMaker's "Blured" preset
 style file or another font service. No account or API key is needed;
 the community service requires a visible logo and copyright line, uses fair-use
 rate limits, and excludes offline basemap downloads and printed map exports.
+An experimental USFS/NLCD 2025 tree-canopy overlay fills forest-coverage gaps;
+add `&canopy=off` to a saved-job URL to compare without it.
 Region selection updates feature state, and hike selection updates existing
 marker styling. The
 [renderer review](benchmarks/map-renderer-review.json) records the source and

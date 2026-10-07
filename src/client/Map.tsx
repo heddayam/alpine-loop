@@ -158,6 +158,23 @@ export function HikeMap({
         setMapError("The basemap could not load. Check your connection and reload the page.");
     });
     instance.once("style.load", () => {
+      if (new URLSearchParams(window.location.search).get("canopy") !== "off") {
+        instance.addSource("tree-canopy", {
+          type: "raster", tileSize: 256, minzoom: 6, maxzoom: 12,
+          bounds: [-128, 22, -65, 52],
+          tiles: [
+            "https://dmsdata.cr.usgs.gov/geoserver/mrlc_NLCD-Tree-Canopy-Native_conus_year_data/wms"
+            + "?service=WMS&version=1.1.1&request=GetMap&layers=NLCD-Tree-Canopy-Native_conus_year_data"
+            + "&styles=&format=image/png&transparent=true&srs=EPSG:3857"
+            + "&bbox={bbox-epsg-3857}&width=256&height=256&time=2025-01-01",
+          ],
+          attribution: 'Tree canopy: <a href="https://www.mrlc.gov/data-services-page">USFS / NLCD 2025</a>',
+        });
+        instance.addLayer({
+          id: "tree-canopy", type: "raster", source: "tree-canopy",
+          paint: { "raster-opacity": 0.4 },
+        }, "nature_natural_texture");
+      }
       for (const layer of instance.getStyle().layers) {
         if (layer.type !== "symbol" || !layer.layout?.["text-font"]) continue;
         instance.setLayoutProperty(layer.id, "text-font", bluredFont(
