@@ -165,7 +165,7 @@ def build_catalog(manifest, plan, root, output, selected, audit_enabled, base_ur
     with tempfile.TemporaryDirectory(prefix=".mountains-", dir=output.parent) as directory, tempfile.TemporaryDirectory(prefix="alpine-source-") as temporary:
         staging = Path(directory)
         opl = extract(source, Path(temporary))
-        catalog = {"version": 1, "info": dict(plan["info"]), "sections": [], "unavailable": []}
+        catalog = {"version": 2, "info": dict(plan["info"]), "sections": [], "unavailable": []}
         if base_url:
             url = urlparse(base_url)
             if url.scheme not in ("http", "https") or not url.netloc or url.username or url.password or url.query or url.fragment or not url.path.endswith("/"):

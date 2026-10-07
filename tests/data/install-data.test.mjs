@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { installCatalog } from '../../scripts/install-data.mjs';
 
-const body = Buffer.from(JSON.stringify({ version: 1, info: { id: 'mountains' }, sections: [{ id: 'test' }] }));
+const body = Buffer.from(JSON.stringify({ version: 2, info: { id: 'mountains' }, sections: [{ id: 'test' }] }));
 const release = { catalogUrl: 'https://fixture.invalid/catalog.json', catalogSha256: createHash('sha256').update(body).digest('hex') };
 async function directory(t) {
   const root = await mkdtemp(join(tmpdir(), 'alpine-catalog-test-'));

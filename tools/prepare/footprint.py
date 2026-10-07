@@ -67,14 +67,23 @@ class Footprint:
         line = LineString([a[:2], b[:2]])
         if line.length == 0 or not self.prepared.intersects(line):
             return []
-        if self.prepared.contains(line) and not any(divider.covers(line) for divider in self.dividers):
+        if self.prepared.contains(line) and not any(divider.intersects(line) for divider in self.dividers):
             return [(0.0, 1.0)]
-        clipped = intersection(line, self.geometry)
+        clipped = line
+        for divider in self.dividers:
+            # Clipping can round an exact highway endpoint off its divider.
+            # Exclude overlaps against the untouched source segment first.
+            if divider.covers(line):
+                return []
+            for overlap in get_parts(intersection(line, divider)):
+                if isinstance(overlap, LineString) and overlap.length > 0:
+                    clipped = clipped.difference(overlap)
+        if clipped.equals(line) and self.prepared.contains(line):
+            return [(0.0, 1.0)]
+        clipped = intersection(clipped, self.geometry)
         intervals = []
         for part in get_parts(clipped):
             if not isinstance(part, LineString) or part.length == 0:
-                continue
-            if any(divider.covers(part) for divider in self.dividers):
                 continue
             low, high = sorted(line.project(Point(point), normalized=True) for point in (part.coords[0], part.coords[-1]))
             # Preserve original node identities despite floating point overlay.

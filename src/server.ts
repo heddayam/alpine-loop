@@ -15,7 +15,7 @@ export async function createApp(directory: string, clientDirectory?: string, job
     if (!dataset) throw new RequestError('Prepared trail data is unavailable. Saved jobs remain available in Jobs.', 503);
     return dataset;
   };
-  const app = Fastify({ bodyLimit: 4096 });
+  const app = Fastify({ bodyLimit: 16_384 });
   app.setErrorHandler((error, _request, reply) => {
     const status = error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
     if (status === 500) app.log.error(error);
@@ -40,18 +40,23 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return reply.code(202).send((await availableData()).downloads.start(ids));
   });
   app.post('/api/downloads/stop', async () => (await availableData()).downloads.stop());
-  app.get('/api/jobs', async () => jobs.list());
+  app.get('/api/jobs', async () => jobs.history().jobs);
+  app.get('/api/jobs/active', async () => jobs.active());
+  app.get<{ Querystring: { before?: string } }>('/api/jobs/history', async request => jobs.history(request.query.before));
   app.post('/api/jobs', async (request, reply) => {
     const query = parseQuery(request.body);
     const coverage = await (await availableData()).coverage(query);
+    query.sections = coverage.sections;
     if (coverage.missing.length) return reply.code(409).send({ message: 'Download the selected trail sections before searching.', ...coverage });
     return reply.code(202).send(jobs.start(query));
   });
-  app.get<{ Params: { id: string } }>('/api/jobs/:id', async request => jobs.get(request.params.id));
+  app.get<{ Params: { id: string }; Querystring: { inputs?: string } }>('/api/jobs/:id', async request => jobs.get(request.params.id, request.query.inputs !== 'false'));
   const revision = (value?: string) => value === undefined ? undefined : Number(value);
-  app.get<{ Params: { id: string }; Querystring: { offset?: string; group?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
-    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.group, request.query.sort, request.query.order, revision(request.query.revision)));
+  app.get<{ Params: { id: string }; Querystring: { offset?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
+    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.sort, request.query.order, revision(request.query.revision)));
   app.get<{ Params: { id: string }; Querystring: { revision?: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id, revision(request.query.revision)));
+  app.get<{ Params: { id: string }; Querystring: { west?: string; south?: string; east?: string; north?: string; revision?: string } }>('/api/jobs/:id/paths', async request =>
+    jobs.paths(request.params.id, [request.query.west, request.query.south, request.query.east, request.query.north].map(value => value === undefined || !value.trim() ? NaN : Number(value)), revision(request.query.revision)));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => jobs.cancel(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });
   app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId, revision(request.query.revision)));

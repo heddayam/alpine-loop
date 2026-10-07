@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-06",
+  "query": {
+    "sections": [
+      "mountain-c3bf848c1f0d95dee5a4a131"
+    ],
+    "effort": "deep",
+    "distance": [
+      22530.816,
+      28968.192000000003
+    ],
+    "gain": [
+      914.4000000000001,
+      1524
+    ],
+    "repetition": 0.1,
+    "includeUnknown": true,
+    "roads": {
+      "distance": 8046.72,
+      "fraction": 0.35
+    }
+  },
+  "threshold": 0.6,
+  "previous": {
+    "groups": 255,
+    "savedWalks": 12372
+  },
+  "current": {
+    "jobId": "827fe573-9265-4e98-8234-f1fec9ff7fba",
+    "elapsedMs": 31166.158457999998,
+    "groupCount": 56,
+    "variantCount": 840,
+    "verifiedWalks": 44238,
+    "checkedGroupedPairs": 30115,
+    "previousUnchanged": true
+  },
+  "review": {
+    "location": [
+      47.25951,
+      -120.90297
+    ],
+    "routeNumbers": "The 25 former displayed representatives, ordered by saved route ID.",
+    "groups": [
+      {
+        "name": "Big Sandy / Frog Pond",
+        "routes": [
+          1,
+          3,
+          4,
+          5,
+          11,
+          12,
+          15,
+          17,
+          18,
+          19,
+          20,
+          22,
+          24,
+          25
+        ]
+      },
+      {
+        "name": "Lactose Intolerant / Shag Carpet north loop",
+        "routes": [
+          2,
+          9,
+          10,
+          13,
+          23
+        ]
+      },
+      {
+        "name": "Paul\u2019s Trail western extension",
+        "routes": [
+          6,
+          16,
+          21
+        ]
+      },
+      {
+        "name": "Northwest extension",
+        "routes": [
+          7,
+          8,
+          14
+        ]
+      }
+    ]
+  },
+  "verification": "Independently reconstructed all saved walks from prepared directed edges: connected closed walks, simple main circuits, retraced stems, exact measurements and every submitted limit. Checked all within-group circuit pairs against the 60% and path-order rule. Both previous completed SQLite files have identical SHA-256 digests.",
+  "ui": "Real browser checks confirm version selection, keyboard focus previews and restoration, version-specific start counts, direction selection and corresponding GPX URL.",
+  "source": {
+    "before": 6704,
+    "after": 6818,
+    "files": 33
+  },
+  "limits": "This is one real query, not a performance guarantee. Bounded discovery may miss qualifying routes. Retaining versions increases saved storage; this result uses 324,583,424 bytes."
+}

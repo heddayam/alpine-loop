@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { regionLabel } from "./RegionPicker.js";
 import type { JobSnapshot, SearchQuery } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
+import { distanceText, elevationText, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
-const MILE = 1609.344,
-  FOOT = 0.3048;
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
 export const hasSavedResults = (job: JobSnapshot) =>
@@ -27,24 +27,29 @@ export const storage = (bytes: number) =>
   bytes < 1_000_000
     ? `${(bytes / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} KB`
     : `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
-export const requestSummary = (query: SearchQuery) =>
-  `${(query.distance[0] / MILE).toLocaleString()}–${(query.distance[1] / MILE).toLocaleString()} mi · ${Math.round(query.gain[0] / FOOT).toLocaleString()}–${Math.round(query.gain[1] / FOOT).toLocaleString()} ft climb`;
+export const requestSummary = (query: SearchQuery, units: UnitSystem = "imperial") => {
+  const display = unitsFor(units);
+  return `${distanceText(query.distance[0], units)}–${distanceText(query.distance[1], units)} ${display.distanceLabel}, ${elevationText(query.gain[0], units)}–${elevationText(query.gain[1], units)} ${display.elevationLabel} Elev. Gain`;
+};
 export const jobRegionName = (
   job: JobSnapshot,
   id: string,
   regionName: (id: string) => string,
 ) =>
-  job.regions?.find((region) => region.id === id)?.name ??
-  job.inputs?.sections.find((section) => section.id === id)?.name ??
-  regionName(id);
+  regionLabel(
+    job.regions?.find((region) => region.id === id)?.name ??
+      job.inputs?.sections.find((section) => section.id === id)?.name ??
+      regionName(id),
+  );
 export const jobTitle = (
   job: JobSnapshot,
   regionName: (id: string) => string,
 ) =>
-  `${job.query.sections.map((id) => jobRegionName(job, id, regionName)).join(" · ")} · ${new Date(job.createdAt).toLocaleString()}`;
+  `${job.query.boundary ? "Drawn boundary; " : ""}${job.query.sections.map((id) => jobRegionName(job, id, regionName)).join(", ")}; ${new Date(job.createdAt).toLocaleString()}`;
 
 export function JobsDialog({
   open,
+  units = "imperial",
   jobs,
   regionName,
   highlightedId,
@@ -55,8 +60,14 @@ export function JobsDialog({
   onView,
   onCopy,
   onAction,
+  loading = false,
+  hasOlder = false,
+  hasNewer = false,
+  onOlder,
+  onNewer,
 }: {
   open: boolean;
+  units?: UnitSystem;
   jobs: JobSnapshot[];
   regionName: (id: string) => string;
   highlightedId: string | null;
@@ -67,8 +78,15 @@ export function JobsDialog({
   onView: (job: JobSnapshot) => void;
   onCopy: (job: JobSnapshot) => void;
   onAction: (job: JobSnapshot, action: "cancel" | "delete") => void;
+  loading?: boolean;
+  hasOlder?: boolean;
+  hasNewer?: boolean;
+  onOlder?: () => void;
+  onNewer?: () => void;
 }) {
+  const display = unitsFor(units);
   const dialog = useRef<HTMLDialogElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -89,12 +107,12 @@ export function JobsDialog({
         .getElementById(`job-card-${highlightedId}`)
         ?.scrollIntoView({ block: "nearest" });
   }, [open, highlightedId, jobs.length]);
+  useEffect(() => { if (list.current) list.current.scrollTop = 0; }, [jobs[0]?.id]);
   return (
     <dialog
       ref={dialog}
       className="jobs-modal"
       aria-labelledby="jobs-title"
-      aria-describedby="jobs-description"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -102,16 +120,15 @@ export function JobsDialog({
     >
       <header className="jobs-heading">
         <div>
-          <h2 id="jobs-title">Search jobs</h2>
-          <p id="jobs-description">
-            Saved on this computer until you delete them.
-          </p>
+          <h2 id="jobs-title">Jobs</h2>
         </div>
         <button type="button" aria-label="Close jobs" onClick={onClose}>
           ×
         </button>
       </header>
-      <div className="jobs-list">
+      <div className="jobs-list" ref={list}>
+        {hasNewer && <button type="button" disabled={loading} onClick={() => { if (list.current) list.current.scrollTop = 0; onNewer?.(); }}>Newer jobs</button>}
+        {loading && <p role="status">Loading jobs…</p>}
         {error && (
           <div className="job-error" role="alert">
             <p>{error}</p>
@@ -120,12 +137,7 @@ export function JobsDialog({
             </button>
           </div>
         )}
-        {!jobs.length && (
-          <p className="empty-state">
-            No search jobs yet. Submit a search to explore your selected
-            regions.
-          </p>
-        )}
+        {!jobs.length && !loading && <p className="empty-state">No jobs yet.</p>}
         {jobs.map((job) => {
           const busy = pending?.id === job.id;
           const roads = job.query.roads ?? DEFAULT_ROAD_LIMITS;
@@ -143,9 +155,10 @@ export function JobsDialog({
             >
               <header>
                 <h3>
+                  {job.query.boundary && "Drawn boundary · "}
                   {job.query.sections
                     .map((id) => jobRegionName(job, id, regionName))
-                    .join(" · ")}
+                    .join(", ")}
                 </h3>
                 <span className={`job-status status-${job.status}`}>
                   {busy
@@ -160,19 +173,16 @@ export function JobsDialog({
               <p className="job-created">
                 {new Date(job.createdAt).toLocaleString()}
               </p>
-              <p className="job-query">{requestSummary(job.query)}</p>
+              <p className="job-query">{requestSummary(job.query, units)}</p>
+              {job.query.boundary && <p className="job-limits">Starting points inside the boundary; hikes may extend outside.</p>}
               <p className="job-limits">
-                At most {job.query.repetition * 100}% walked again · roads{" "}
-                {+(roads.distance / MILE).toFixed(3)} mi and{" "}
-                {roads.fraction * 100}%<br />
-                {job.query.includeUnknown
-                  ? "Uncertain access included"
-                  : "Mapped public access only"}
+                Stem up to {distanceText(stemLimit(job.query), units, 3)} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${job.query.repetition * 100}%`}; roads{" "}
+                {distanceText(roads.distance, units, 3)} {display.distanceLabel} and{" "}
+                {roads.fraction * 100}%
               </p>
               {job.status === "queued" ? (
                 <p className="job-stage">
-                  Queue position {job.queuePosition ?? "—"}. Runs after earlier
-                  jobs.
+                  Queue position {job.queuePosition ?? "—"}
                 </p>
               ) : job.status === "running" ? (
                 <p className="job-stage" role="status">
@@ -182,14 +192,14 @@ export function JobsDialog({
                       ? "Saving results"
                       : "Searching trails"}
                   {job.progress.currentRegion
-                    ? ` · ${job.progress.currentRegion.name}`
-                    : ""}{" "}
-                  · {elapsed(job.progress.elapsedMs)} elapsed
+                    ? `: ${job.progress.currentRegion.name}`
+                    : ""}
+                  , {elapsed(job.progress.elapsedMs)} elapsed
                 </p>
               ) : (
                 <p className="job-stage">
                   {job.status === "completed"
-                    ? `${job.groupCount?.toLocaleString() ?? "Saved"} ${job.groupCount === 1 ? "hike" : "hikes"} · `
+                    ? `${job.groupCount?.toLocaleString() ?? "Saved"} ${job.groupCount === 1 ? "hike" : "hikes"}, `
                     : ""}
                   {elapsed(job.progress.elapsedMs)} elapsed
                 </p>
@@ -200,32 +210,29 @@ export function JobsDialog({
                     <span>Region search progress</span>
                     {!!job.progress.totalSearchPoints && (
                       <strong>
-                        {Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)}%
+                        {Math.floor(
+                          (100 * (job.progress.completedSearchPoints ?? 0)) /
+                            job.progress.totalSearchPoints,
+                        )}
+                        %
                       </strong>
                     )}
                   </div>
                   <progress
                     aria-label="Within-region search progress"
                     max={job.progress.totalSearchPoints || undefined}
-                    value={job.progress.totalSearchPoints
-                      ? job.progress.completedSearchPoints ?? 0
-                      : undefined}
+                    value={
+                      job.progress.totalSearchPoints
+                        ? (job.progress.completedSearchPoints ?? 0)
+                        : undefined
+                    }
                   />
-                  {!!job.progress.totalSearchPoints && (
-                    <p>
-                      {(job.progress.completedSearchPoints ?? 0).toLocaleString()} of{" "}
-                      {job.progress.totalSearchPoints.toLocaleString()} planned search steps completed
-                    </p>
-                  )}
                 </div>
               )}
               {job.status !== "queued" && (
                 <p className="job-regions">
                   {job.progress.completedRegions.length} of{" "}
                   {job.progress.totalRegions} regions completed
-                  {job.progress.completedRegions.length
-                    ? `: ${job.progress.completedRegions.map((id) => jobRegionName(job, id, regionName)).join(" · ")}`
-                    : ""}
                 </p>
               )}
               {job.reason && <p className="job-error">{job.reason}</p>}
@@ -238,20 +245,9 @@ export function JobsDialog({
               {["cancelled", "failed", "interrupted"].includes(job.status) && (
                 <p className="job-note">Unfinished results were discarded.</p>
               )}
-              {hasSavedResults(job) && (
+              {hasSavedResults(job) && job.groupCount === 0 && (
                 <p className="job-note">
-                  {activeJob(job) ? (
-                    <>
-                      Saved results remain available.
-                      <br />
-                    </>
-                  ) : job.groupCount === 0 ? (
-                    <>
-                      No qualifying hikes were found by this search.
-                      <br />
-                    </>
-                  ) : null}
-                  Saved results: {storage(job.storageBytes)}
+                  No qualifying hikes were found by this search.
                 </p>
               )}
               <footer>
@@ -316,9 +312,10 @@ export function JobsDialog({
             </article>
           );
         })}
+        {hasOlder && <button type="button" disabled={loading} onClick={() => { if (list.current) list.current.scrollTop = 0; onOlder?.(); }}>Older jobs</button>}
       </div>
       <footer className="jobs-storage">
-        Saved-results storage:{" "}
+        Shown jobs storage:{" "}
         {storage(jobs.reduce((bytes, job) => bytes + job.storageBytes, 0))}
       </footer>
     </dialog>

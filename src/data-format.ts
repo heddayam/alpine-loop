@@ -9,7 +9,7 @@ export type PreparedSection = {
   files: { graph: DataFile; starts: DataFile; geometry: DataFile };
 };
 export type UnavailableSection = { name: string; bounds: Bounds; boundary: Boundary; reason: string };
-export type SectionCatalog = { version: 1; info: DatasetInfo; baseUrl?: string; sections: PreparedSection[]; unavailable?: UnavailableSection[] };
+export type SectionCatalog = { version: 2; info: DatasetInfo; baseUrl?: string; sections: PreparedSection[]; unavailable?: UnavailableSection[] };
 export type SectionView = PreparedSection & { installed: boolean; bytes: number; needsRepair?: boolean };
 export type CatalogView = DatasetInfo & { sections: SectionView[]; unavailable?: UnavailableSection[] };
 export type Coverage = { sections: string[]; missing: string[]; bytes: number };

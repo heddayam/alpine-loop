@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { JobSnapshot, RouteLocation } from "../../src/model.js";
 import { JobsDialog, savedResultsURL } from "../../src/client/JobsDialog.js";
-import { clusterLocations } from "../../src/client/clusters.js";
+import {
+  clusterLocations,
+  locationsInView,
+} from "../../src/client/clusters.js";
 
 const job = (status: JobSnapshot["status"]): JobSnapshot => ({
   id: status,
@@ -36,7 +39,9 @@ const renderJob = (
   renderToStaticMarkup(
     createElement(JobsDialog, {
       open: true,
-      jobs: [{ ...job(status), progress: { ...job(status).progress, ...progress } }],
+      jobs: [
+        { ...job(status), progress: { ...job(status).progress, ...progress } },
+      ],
       regionName: () => "Cascades",
       highlightedId: null,
       error: "",
@@ -54,11 +59,28 @@ const location = (id: string, x: number, y = 0): RouteLocation => ({
   startId: id,
   startName: id,
   startPosition: [x, y],
+  bounds: [x, y, x, y],
   trailNames: [],
   distance: 1000,
+  gain: 100,
+  repetition: 0,
 });
 
 describe("saved-job interface boundaries", () => {
+  it("filters by visible starting points, including viewport edges, without changing the saved results", () => {
+    const locations = [
+      location("west", -122, 47),
+      location("east", -121, 48),
+      location("inside", -121.5, 47.5),
+      location("outside", -120, 47.5),
+      location("south", -121.5, 46.9),
+    ];
+    expect(
+      locationsInView(locations, [-122, 47, -121, 48]).map((route) => route.id),
+    ).toEqual(["west", "east", "inside"]);
+    expect(locationsInView(locations, [-123, 46, -119, 49])).toEqual(locations);
+    expect(locations).toHaveLength(5);
+  });
   it("exposes results and deletion only for terminal jobs and keeps zero-result completion ready", () => {
     for (const status of ["queued", "running"] as const) {
       expect(renderJob(status)).toContain(">Cancel</button>");
@@ -74,27 +96,44 @@ describe("saved-job interface boundaries", () => {
     expect(renderJob("completed")).toContain("0 hikes");
     expect(renderJob("completed")).not.toContain("Search deeper");
     expect(renderJob("completed")).not.toContain("Standard search");
-    expect(renderJob("completed")).toContain("No qualifying hikes were found by this search.");
+    expect(renderJob("completed")).toContain(
+      "No qualifying hikes were found by this search.",
+    );
     expect(renderJob("queued")).toContain("Queue position 2");
-    const measured = renderJob("running", {totalSearchPoints: 100, completedSearchPoints: 25});
+    const measured = renderJob("running", {
+      totalSearchPoints: 100,
+      completedSearchPoints: 25,
+    });
     expect(measured).toContain('value="25"');
     expect(measured).toContain('max="100"');
-    expect(measured).toContain('25%');
-    expect(measured).toContain('25 of 100 planned search steps completed');
-    expect(measured).not.toContain('fully explored');
-    expect(renderJob("completed")).not.toContain('fully explored');
-    expect(renderJob("running")).toContain('aria-label="Within-region search progress"');
+    expect(measured).toContain("25%");
+    expect(measured).not.toContain("planned search steps");
+    expect(measured).not.toContain("fully explored");
+    expect(renderJob("completed")).not.toContain("fully explored");
+    expect(renderJob("running")).toContain(
+      'aria-label="Within-region search progress"',
+    );
   });
   it("keeps saved result reads pinned to their selected publication", () => {
     const old = { id: "saved/job", resultsRevision: 0 };
-    for (const path of ["results", "locations", "routes/route", "routes/route.gpx"]) {
-      const url = new URL(savedResultsURL(old, path, "?offset=50&group=hike"), "http://localhost");
+    for (const path of [
+      "results",
+      "locations",
+      "routes/route",
+      "routes/route.gpx",
+    ]) {
+      const url = new URL(
+        savedResultsURL(old, path, "?offset=50&group=hike"),
+        "http://localhost",
+      );
       expect(url.pathname).toBe(`/api/jobs/saved%2Fjob/${path}`);
       expect(url.searchParams.get("revision")).toBe("0");
       expect(url.searchParams.get("offset")).toBe("50");
       expect(url.searchParams.get("group")).toBe("hike");
     }
-    expect(savedResultsURL({ id: "legacy" }, "results")).toContain("revision=0");
+    expect(savedResultsURL({ id: "legacy" }, "results")).toContain(
+      "revision=0",
+    );
   });
   it("clusters the entire location set deterministically and preserves all choices at a shared start", () => {
     const locations = Array.from({ length: 75 }, (_, i) =>

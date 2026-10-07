@@ -1,20 +1,29 @@
-import type { SectionGeometry, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
+import type { SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
 import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
+import { boundarySections, pointInBoundary } from './boundary.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
-export async function readDataset(directory: string) {
-  const sections = await openSections(directory);
+export async function readDataset(directory: string, budget?: WorkBudget) {
+  const sections = await openSections(directory, budget);
   const { catalog } = sections;
   const byId = new Map(catalog.sections.map(section => [section.id, section]));
-  const selected = (query: SearchQuery) => query.sections.map(id => {
-    const section = byId.get(id);
-    if (!section) throw Object.assign(new Error('A selected search region is unavailable in this catalog.'), { statusCode: 400 });
-    return section;
-  });
+  const selected = (query: SearchQuery) => {
+    if (query.boundary) {
+      const matches = boundarySections(query.boundary, catalog.sections);
+      if (!matches.length) throw Object.assign(new Error('The drawn boundary does not overlap any prepared search regions.'), { statusCode: 400 });
+      return matches;
+    }
+    return query.sections.map(id => {
+      const section = byId.get(id);
+      if (!section) throw Object.assign(new Error('A selected search region is unavailable in this catalog.'), { statusCode: 400 });
+      return section;
+    });
+  };
   async function coverage(query: SearchQuery) {
     const required = selected(query), missing: string[] = [];
     let bytes = 0;
@@ -27,7 +36,8 @@ export async function readDataset(directory: string) {
     const result = [];
     for (const section of selected(query)) {
       const records = await sections.read<SectionStarts>(section, 'starts');
-      const eligible = records.filter(([start]) => query.includeUnknown || start.access === 'public').map(([start]) => start);
+      const eligible = records.filter(([start, position]) => (query.includeUnknown || start.access === 'public') &&
+        (!query.boundary || pointInBoundary(position, query.boundary))).map(([start]) => start);
       result.push({ section, eligible });
     }
     return result;
@@ -36,7 +46,6 @@ export async function readDataset(directory: string) {
     const { graph, trails } = await sections.read<SectionGraph>(chosen.section, 'graph');
     graph.starts = chosen.eligible.map(start => ({ ...start, id: `${chosen.section.id}/${start.id}` }));
     if (!query.includeUnknown) graph.edges = graph.edges.filter(edge => edge.access === 'public');
-    function isHike(candidate: RouteCandidate) { return candidate.edges.some(index => !graph.edges[index]!.connector); }
     function describe(candidate: RouteCandidate): StoredRoute {
       const start = graph.starts[candidate.start]!;
       const steps = candidate.edges.map(index => graph.edges[index]!);
@@ -54,7 +63,7 @@ export async function readDataset(directory: string) {
         sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse })),
       };
     }
-    return { graph, isHike, describe };
+    return { graph, describe };
   }
   async function verifyInputs(inputs: JobInputs): Promise<void> {
     const file = join(directory, 'catalog.json');
@@ -69,7 +78,7 @@ export async function readDataset(directory: string) {
     }
   }
   return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
-    readGeometry: (id: string) => sections.read<SectionGeometry>(id, 'geometry'),
+    readGeometry: (id: string, trails: ReadonlySet<number>) => sections.geometry(id, trails),
     view: sections.view, downloads: sections.downloads };
 }
 

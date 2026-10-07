@@ -1,0 +1,438 @@
+{
+  "date": "2026-10-06",
+  "scope": "Prepare and locally install all five existing Washington Cascades GMBA/highway sections. The reviewed region footprints, cuts and segment capacity remain unchanged. This is the existing Cascades catalog; it does not add other Washington mountain ranges.",
+  "catalogId": "mountains-79685c66c2dc3afc78fe0ec9eef3dba208af0087f8aceb832d07d88c9e0a1152",
+  "source": {
+    "manifest": "tools/prepare/sources.json",
+    "manifestSha256": "fd901d8497696102a5e2903d474ce7b409d555c0d4484e6ef1e8253954e61769",
+    "sourceDate": "2026-08-01",
+    "osmSha256": "3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e",
+    "gmbaSha256": "265affa0fcdac91e7a922979895355628870c29ddfdf361955465c1faaf8d874",
+    "primaryElevationSources": 18,
+    "supplementElevationSources": 3,
+    "allSourceChecksumsVerified": true,
+    "environment": {
+      "gdal": "3.9.3",
+      "geos": "3.13.1",
+      "numpy": "2.5.3",
+      "pyshp": "2.3.1",
+      "python": "3.13.13",
+      "rasterio": "1.4.3",
+      "shapely": "2.1.2"
+    },
+    "osmium": "osmium version 1.19.1"
+  },
+  "compilation": {
+    "commands": [
+      "tools/prepare/.venv/bin/python -u tools/prepare/build.py plan --source-root .cache --output .local-data/cascades-corrected-plan.json",
+      "tools/prepare/.venv/bin/python -u tools/prepare/build.py build --source-root .cache --plan .local-data/cascades-corrected-plan.json --output .local-data/mountains-corrected --audit"
+    ],
+    "elapsedSeconds": 521.3669964579749,
+    "peakRssBytes": 1580695552,
+    "memoryScope": "Compiler process OS high-water RSS; native child processes are excluded.",
+    "maxSourceSegments": 700000,
+    "cuts": [
+      "I90",
+      "US12",
+      "US2",
+      "WA20"
+    ],
+    "unavailableSections": 0,
+    "planSha256": "25edf803ef499282b322ff2fb5cec105bb694201d0fbabae686b85b2a3eb4785",
+    "catalogSha256": "fcb3b4529a7ab9f1fa9b1e05455744527dd1eb7e46b8e705625ec6c44b702cef",
+    "provenanceSha256": "6d013d406f5395fe59ba0fbb89793ce16037e32c671e16430646f3e57ba48bc5",
+    "compilerSha256": {
+      "build.py": "300731437814d4762a5b0d6632e856d403387cb326226a2acf91ffc0873c0d9a",
+      "elevation.py": "6a930be17585bddc06822ec0f556ef1dcfa24e449a5a99651379f546d43e2ad3",
+      "footprint.py": "c5c6c789b5054df850a473d4450722b9ce9890b4326a6589b6e66d5d1753134a",
+      "graph.py": "5b5fd8c4e693f6d92154c974770c1f56812c5efae9022d3080ae0903ec8e139c",
+      "osm.py": "a62422ded3fc482748b27594bb535ebbc3bdf46d7431b83c53eda38be4e5e58e",
+      "output.py": "562cf2d7d5eea3c4b638aa9e3c40c62a4a01d1f31d5008c5fa6ebfab02214f29",
+      "partition.py": "a9f71d68dba65da19c7f2c243036c0525f214abbed489455d773dd6cb506fd2a",
+      "pyproject.toml": "da6d527136c2d96c0bd278ef288ee9f68d3c13797dfed055b7c5f6a3c8dde717"
+    }
+  },
+  "sections": [
+    {
+      "id": "mountain-1a237ff8895adebfa21e390b",
+      "name": "Washington Cascades — south of I90, south of US12",
+      "starts": 1609,
+      "physicalTrails": 39194,
+      "directedEdges": 78388,
+      "measuredPoints": 1137550,
+      "displayName": "Mount St. Helens & Mount Adams",
+      "sourceSegments": 579293
+    },
+    {
+      "id": "mountain-e003916c5698006638c9c77c",
+      "name": "Washington Cascades — south of I90, north of US12",
+      "starts": 2098,
+      "physicalTrails": 39757,
+      "directedEdges": 79514,
+      "measuredPoints": 958286,
+      "displayName": "Mount Rainier & Central Cascades",
+      "sourceSegments": 549064
+    },
+    {
+      "id": "mountain-70611e49c04901ed37bd793e",
+      "name": "Washington Cascades — north of I90, south of US2",
+      "starts": 2669,
+      "physicalTrails": 40397,
+      "directedEdges": 80794,
+      "measuredPoints": 728225,
+      "displayName": "Alpine Lakes",
+      "sourceSegments": 491863
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42",
+      "name": "Washington Cascades — north of I90, north of US2, south of WA20",
+      "starts": 2156,
+      "physicalTrails": 34039,
+      "directedEdges": 68078,
+      "measuredPoints": 1003321,
+      "displayName": "Glacier Peak & Mountain Loop",
+      "sourceSegments": 654645
+    },
+    {
+      "id": "mountain-7a6c62952459c6276843dae6",
+      "name": "Washington Cascades — north of I90, north of US2, north of WA20",
+      "starts": 1655,
+      "physicalTrails": 23110,
+      "directedEdges": 46220,
+      "measuredPoints": 633582,
+      "displayName": "Mount Baker & North Cascades",
+      "sourceSegments": 375305
+    }
+  ],
+  "totals": {
+    "starts": 10187,
+    "physicalTrails": 176497,
+    "directedEdges": 352994,
+    "measuredPoints": 4460964,
+    "compressedBytes": 94146477
+  },
+  "dataVerification": {
+    "checks": [
+      "15 file checksums and compressed/decoded sizes",
+      "complete planned boundary union and disjoint interiors",
+      "all measured geometry stays within section boundaries; no selected highway is walked",
+      "finite 3D samples at intervals up to 25m",
+      "every directed edge matches its geometry distance, gain, endpoints and role",
+      "start counts, identity, access and absence of frontier starts",
+      "previously installed section boundaries remain identical"
+    ],
+    "geometryBoundaryToleranceDegrees": 1e-10,
+    "sourceBoundaryAudit": {
+      "nearDividerCorridors": 1202,
+      "checkedSourceRecords": 13577,
+      "originalNodes": 14468,
+      "method": "Conservative 1e-7-degree proximity selects candidates only. Exact original OSM source-segment intersection and retained fractions determine highway overlap; no buffered exclusion.",
+      "fractionTolerance": 1e-12,
+      "violationsBeforeFix": 14,
+      "violationsAfterFix": 0
+    },
+    "fix": "Exclude positive-length overlaps with divider highways from original source segments before clipping, so decimal coordinate roundoff cannot retain highway fragments. Preserve tangent contacts and nearby parallel trails."
+  },
+  "appMemoryFix": {
+    "previousAllRegionOutcome": {
+      "status": "failed",
+      "reason": "Worker terminated due to reaching memory limit: JS heap out of memory",
+      "atMs": 213739.36470799998,
+      "peakRssBytes": 846348288
+    },
+    "change": "Group compact circuit representatives, then stream each circuit's retained starts and directions from the existing disk candidate pool into immutable result storage. Release the graph before loading geometry. Constraints, discovery plan, grouping rules and 512 MB worker heap remain unchanged.",
+    "northRegion": {
+      "effectiveQuery": {
+        "sections": [
+          "mountain-7a6c62952459c6276843dae6"
+        ],
+        "effort": "deep",
+        "distance": [
+          8046.72,
+          19312.128
+        ],
+        "gain": [
+          0,
+          1219.2
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        }
+      },
+      "completedObservedMs": 232396.764833,
+      "savedResults": {
+        "groups": 198,
+        "witnesses": 810150,
+        "locations": 198
+      },
+      "sampledPeakRssBytes": 426917888,
+      "osProcessPeakRssBytes": 426934272,
+      "reconnect": {
+        "atMs": 1046.975125,
+        "latencyMs": 0.8351250000000618,
+        "sameJob": true,
+        "sameQuery": true,
+        "status": "running"
+      },
+      "outcome": "complete_within_snapshot"
+    },
+    "northGroupingAudit": {
+      "groups": 198,
+      "circuits": 4113,
+      "displayedPairs": 19503,
+      "minimumVersionShare": 0.6001719577400635,
+      "largestShownPairShare": 0.5995404246400555,
+      "checks": [
+        "Every saved exact circuit shares at least 60% of the longer main circuit with its fixed displayed hike in the same cyclic order",
+        "No two displayed main circuits meet the 60% same-order rule; road segments are included"
+      ]
+    },
+    "northSavedWalkAudit": {
+      "jobId": "34018c12-184c-4392-af8b-692ef8278f10",
+      "region": "mountain-7a6c62952459c6276843dae6",
+      "routes": 810150,
+      "traversals": 54937996,
+      "physicalShapes": 2014,
+      "groups": 198,
+      "circuits": 4113,
+      "badReverseLinks": 0,
+      "maxDistanceDelta": 3.265267878305167e-08,
+      "maxGainDelta": 4.547473508864641e-13,
+      "maxRoadDelta": 8.812321539153345e-09,
+      "maxRepetitionDelta": 7.683575997674552e-13,
+      "elapsedMs": 260281.427375,
+      "checks": [
+        "All saved physical coordinates equal the pinned prepared geometry",
+        "Every saved walk is continuous, closed, and starts at its displayed position",
+        "Every route summary matches independently summed saved profiles and physical road/access classification",
+        "Every saved route meets the unchanged exact request limits",
+        "Every stored reverse link exists and is reciprocal within the same circuit and start"
+      ],
+      "reciprocalReverseLinks": 806746,
+      "reciprocalLinkAuditMs": 40614.254042
+    }
+  },
+  "verification": {
+    "build": "Passed",
+    "typecheck": "Passed",
+    "focusedOffline": "8 preparation partition checks and 43 runtime/independent grouping checks pass; native fresh compilation checks also pass.",
+    "maintainedSourceBefore": {
+      "files": 36,
+      "lines": 7853
+    },
+    "maintainedSourceAfter": {
+      "files": 36,
+      "lines": 7890
+    },
+    "dependenciesAdded": 0
+  },
+  "delivery": "Prepared sources, catalogs, audit files and job databases remain outside Git. Hosted delivery remains deferred.",
+  "localEvidence": {
+    ".local-data/wa-preparation-verification.json": "b420ee0dbfe911838c4340f1a39b1073e70158c74b79d58c79055a127e794072",
+    ".local-data/wa-source-boundary-before-fix.json": "52c2aca4215da348b854f65fb119dfc86248be6d254fbd152f6542734e340e58",
+    ".local-data/wa-source-boundary-verification.json": "df817805d59935d6d67208629aaea9b43f5ba4149930cf414f35a71cb439d743",
+    ".local-data/verify-wa-preparation.py": "5aa5d6445d790cbd076ff4163d69beabc345f71e0309dc952ccdda9425790cfa",
+    ".local-data/verify-wa-source-boundaries.py": "02cb18000ef16919db33ab16355d35cefb959c906769caea6717e86134e67b72",
+    ".local-data/wa-all-region-search-before-memory-fix.json": "3628269062dd24fc6131c77cfcc3829c599c07828095c272d7ef501afdc55bdb",
+    ".local-data/wa-worker-memory-review/manifest.json": "51d072e3e76d34a626624016487bd1f21d47715695bb45295913c0bf02cadadd",
+    ".local-data/wa-all-region-search.json": "8c16815b3a058dc8cf28b83a7b76120682d0f00d17bde5f53b6a7c10ac6620ab",
+    ".local-data/wa-installation-verification.json": "a1d529fe2580a43e73c3736f01a85d8f41963d5663c9185a34967607107c1c14"
+  },
+  "allRegionAppCheck": {
+    "command": "node benchmarks/app/run.mjs --dataset .local-data/mountains-corrected --output .local-data/wa-all-region-search.json --query all-regions --observation-ms 1500000 --rss-bytes 1500000000",
+    "startedAt": "2026-10-07T06:15:38.490Z",
+    "finishedAt": "2026-10-07T06:27:12.452Z",
+    "machine": {
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M3",
+      "memoryBytes": 17179869184
+    },
+    "inputs": {
+      "queriesSha256": "bc41b5ee66c8c1ee3e08cb38f57907e0e3a408e2dcb0e6151bbc55ec8d7652f4",
+      "manifestSha256": "fcb3b4529a7ab9f1fa9b1e05455744527dd1eb7e46b8e705625ec6c44b702cef",
+      "snapshotId": "mountains-79685c66c2dc3afc78fe0ec9eef3dba208af0087f8aceb832d07d88c9e0a1152",
+      "preparedStartsSha256": {
+        "mountain-1a237ff8895adebfa21e390b": "47803d52a72bf8503bd2630d6e84e7a7b2a518a9fb3c2e8a461dfa5c74d62899",
+        "mountain-e003916c5698006638c9c77c": "2356adcf13f21f2c0bc2f550cbd05f072dcb78617f8f82922f62cd9c860916d2",
+        "mountain-70611e49c04901ed37bd793e": "58622f3cf2d912e017368e022e8305f8acfc645be3f9fe86b72b07e14ba0c3de",
+        "mountain-d43a7b201dc5e484847ccc42": "0233a9867240405e84d2e19699e2371cd7b09fe06b62dc0e95c8768e5a62a3de",
+        "mountain-7a6c62952459c6276843dae6": "84916f0538cac183d17a744e611388e0ade9737802eb9fc829a155dae8c3f622"
+      },
+      "compiledHashes": {
+        "data-format.js": "7c2c521acbe3a27d01646111d2389f3105ba8e4bb5f2d364fec6953d38e6ccd6",
+        "dataset.js": "c6f1bab3e085a80290485e566032e5c450aec6ea9f53599c203a8d8d16d6d41a",
+        "diversity.js": "9f07abe8b19067732be7d4a7842dbb24ec9f996d91104de792c07ed8381b54bd",
+        "engine/circuit-bounds.js": "55ff2ce0a62a3cb854d3c1df150d32ff3edd45ec561a62db7cff6afcac018c97",
+        "engine/quality.js": "7d67804b5337d4f63b92bcb8209ec1c4e52b642b3d18bb9ec3d91b973f8cad20",
+        "engine/search.js": "5fa204f8efe977d4dffb6e90d6383084ea57a364a8408c84cbc4fe0c9bbcb276",
+        "jobs.js": "dc63c634d24c55971070f54d86c39b2d99e2ff1813b78b01846c9afbc5d6133f",
+        "model.js": "a63d4a4b400b349db74391569a1191dd558d3434720f4b6413a21089361803ce",
+        "route-store.js": "d6f4cafb1563453f05c316cb683c67b543505810d726724ed42abab4f305808a",
+        "search-worker.js": "07bd8c18ee03f86e3effcdae47ff88a3426eb82ba290c8bdee88a81a5ba1301f",
+        "searches.js": "cc5abd258bacae9fbb0b792109b6b408b115852d399d85590d0dff155177ed52",
+        "sections.js": "3618a05a35f66311a595893057586dca3c7799eb629a420f999c62ff97f2a207",
+        "server.js": "556051ad3d99310b92b0aa3e46376ede25c8dd60bfa012cf92af2ecc9a3191d0"
+      },
+      "packageLockSha256": "2b79a55bc3ec1e148bff74eaafad064421bde95f7c5f8846bd060d463ce0ce75",
+      "harnessHashes": {
+        "run.mjs": "affbed511e78bea6dcc932c225f197b04a8540efc2b05be6ea7c943d40ff1637",
+        "query.mjs": "4113272d80cc8d11f71a9d574b09646188550bed9e0362db49c1289d7c34ce6d"
+      }
+    },
+    "effectiveQuery": {
+      "sections": [
+        "mountain-1a237ff8895adebfa21e390b",
+        "mountain-70611e49c04901ed37bd793e",
+        "mountain-7a6c62952459c6276843dae6",
+        "mountain-d43a7b201dc5e484847ccc42",
+        "mountain-e003916c5698006638c9c77c"
+      ],
+      "effort": "deep",
+      "distance": [
+        8046.72,
+        19312.128
+      ],
+      "gain": [
+        0,
+        1219.2
+      ],
+      "repetition": 0.2,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "observation": {
+      "atMs": 693041.045208,
+      "status": "completed",
+      "reason": null,
+      "routeCount": 1286407,
+      "groupCount": 918,
+      "storageBytes": 8447655936,
+      "progress": {
+        "stage": "saving",
+        "completedRegions": [
+          "mountain-1a237ff8895adebfa21e390b",
+          "mountain-70611e49c04901ed37bd793e",
+          "mountain-7a6c62952459c6276843dae6",
+          "mountain-d43a7b201dc5e484847ccc42",
+          "mountain-e003916c5698006638c9c77c"
+        ],
+        "totalRegions": 5,
+        "elapsedMs": 692006.3747500001,
+        "expansions": 194214789,
+        "totalStarts": 10187,
+        "completedStarts": 10187,
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 6168
+      }
+    },
+    "completedObservedMs": 693041.0648749999,
+    "savedResults": {
+      "groups": 918,
+      "witnesses": 1286407,
+      "locations": 918
+    },
+    "inspectedRoute": {
+      "id": "ad99a3ff9a9477d6f06a7c64f01e6a26",
+      "distance": 8046.874421670186,
+      "gain": 215.0452641998022,
+      "roadDistance": 163.27715146226603,
+      "repetition": 0.14570700427214656,
+      "points": 488
+    },
+    "sampledPeakRssBytes": 623280128,
+    "osProcessPeakRssBytes": 624017408,
+    "maxSampleGapMs": 557.595750000095,
+    "reconnect": {
+      "atMs": 1058.116333,
+      "latencyMs": 0.9311250000000655,
+      "sameJob": true,
+      "sameQuery": true,
+      "status": "running"
+    },
+    "activeWorkersAtEnd": 0,
+    "outcome": "complete_within_snapshot",
+    "methodology": [
+      "Isolated real HTTP app and worker; no user job is added or changed. Exact query limits and all five selected section IDs are unchanged.",
+      "All 10,187 eligible starts finish the existing full bounded discovery plan. This single query does not certify exhaustive route discovery or replace the frozen benchmark corpus.",
+      "All 918 displayed groups have map locations; a saved route detail meets exact request limits. Reconnect preserves job and query identity.",
+      "RSS includes server, worker and the HTTP measurement client; browser/coordinator are excluded. The measurement guard only stops a measurement and does not change app constraints or work.",
+      "Timings are descriptive. Filesystem caches and concurrent activity are uncontrolled; the independent North result audit overlapped part of this combined run and may have increased I/O time."
+    ]
+  },
+  "installation": {
+    "catalogId": "mountains-79685c66c2dc3afc78fe0ec9eef3dba208af0087f8aceb832d07d88c9e0a1152",
+    "sections": [
+      {
+        "id": "mountain-1a237ff8895adebfa21e390b",
+        "name": "Washington Cascades — south of I90, south of US12",
+        "installed": true,
+        "startCount": 1609,
+        "bytes": 23745575
+      },
+      {
+        "id": "mountain-e003916c5698006638c9c77c",
+        "name": "Washington Cascades — south of I90, north of US12",
+        "installed": true,
+        "startCount": 2098,
+        "bytes": 20334949
+      },
+      {
+        "id": "mountain-70611e49c04901ed37bd793e",
+        "name": "Washington Cascades — north of I90, south of US2",
+        "installed": true,
+        "startCount": 2669,
+        "bytes": 16062224
+      },
+      {
+        "id": "mountain-d43a7b201dc5e484847ccc42",
+        "name": "Washington Cascades — north of I90, north of US2, south of WA20",
+        "installed": true,
+        "startCount": 2156,
+        "bytes": 20693926
+      },
+      {
+        "id": "mountain-7a6c62952459c6276843dae6",
+        "name": "Washington Cascades — north of I90, north of US2, north of WA20",
+        "installed": true,
+        "startCount": 1655,
+        "bytes": 13309803
+      }
+    ],
+    "unavailable": 0,
+    "coverage": {
+      "sections": [
+        "mountain-1a237ff8895adebfa21e390b",
+        "mountain-70611e49c04901ed37bd793e",
+        "mountain-7a6c62952459c6276843dae6",
+        "mountain-d43a7b201dc5e484847ccc42",
+        "mountain-e003916c5698006638c9c77c"
+      ],
+      "missing": [],
+      "bytes": 0
+    },
+    "jobHistoryUnchanged": true,
+    "completedResultFilesUnchanged": 6,
+    "savedRouteAndGpxUnchanged": true,
+    "savedRouteEvidence": {
+      "job": "fd647958-28c0-487c-8e79-ee3f28bd035d",
+      "routeId": "db9aae6d0999ab4ddb58004f5a122d2c",
+      "groupCount": 46,
+      "routeCount": 44238,
+      "geometryPoints": 1884,
+      "detailSha256": "73985f0646f4821c8d484613434c845e65136d29ea413ae43c39cb091bf0f13b",
+      "gpxSha256": "15b4a4587d94440b01ed4b51dfa598ec116ee1ea8fcad0c4f56e5debc27e8858"
+    },
+    "dataDirectory": ".local-data/mountains",
+    "previousCatalogPreserved": ".local-data/mountains-before-wa-complete",
+    "plan": ".local-data/cascades-plan.json",
+    "browser": "All five familiar region names show Ready in Settings. The previous 46-hike result URL restores, and Johnson-Medra/Koppen opens with its saved elevation profile and GPX link. No browser errors."
+  }
+}

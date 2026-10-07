@@ -133,7 +133,7 @@ boundary, source count, start count, and three complete gzip files:
   starts, and physical trail/connector names and roles.
 - `sections/<section.id>/starts.json.gz`: start facts and coordinates, permitting
   start selection without loading graph topology.
-- `sections/<section.id>/geometry.json.gz`: full measured corridor geometry,
+- `sections/<section.id>/geometry.jsonl.gz`: one full measured coordinate array per corridor per line,
   indexed exactly like that section's graph.
 
 Every file declares compressed/decoded sizes and SHA-256. IDs incorporate pinned

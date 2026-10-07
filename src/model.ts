@@ -1,6 +1,8 @@
-/** Map bounds describe prepared footprints and camera views; search selects section IDs. */
+/** Map bounds describe prepared footprints, drawn areas and camera views. */
 export type Bounds = [west: number, south: number, east: number, north: number];
 export type Position = [longitude: number, latitude: number, elevationMeters?: number];
+/** A simple polygon's vertices, without a duplicate closing vertex. */
+export type SearchBoundary = [longitude: number, latitude: number][];
 export type Access = 'public' | 'unknown';
 
 export type TrailEdge = {
@@ -41,11 +43,16 @@ export type TrailGeometry = { id: string; name: string | null; coordinates: Posi
 export type SearchQuery = {
   /** Exactly the prepared sections to search, considering every eligible start. */
   sections: string[];
+  /** Restrict starting points only. Routes may leave this boundary. */
+  boundary?: SearchBoundary;
   /** Internal discovery plans. Public jobs always use the deep plan. */
   effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
-  repetition: number;
+  /** Maximum one-way approach distance in meters. Both stem limits apply when supplied. */
+  stem?: number;
+  /** Maximum one-way stem as a fraction of total hike distance. */
+  repetition?: number;
   includeUnknown: boolean;
   /** Omission uses the adjustable defaults; search snapshots record resolved limits. */
   roads?: RoadLimits;
@@ -71,14 +78,9 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   trailNames: string[];
 };
 export type HikeRoute = RouteSummary & { geometry: Position[] };
-/** One qualifying connection from a start to a distinct hike; reverse facts remain independent. */
+/** The preferred qualifying walk for one displayed hike. */
 export type RouteChoice = RouteSummary & {
   groupId: string;
-  groupSize: number;
-  /** Exact reversed walk, when that witness is retained and qualifies. */
-  reverseId?: string;
-  /** Preferred qualifying witness in the other loop direction at the same start. */
-  oppositeId?: string;
 };
 export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;
@@ -122,20 +124,23 @@ export type JobSnapshot = {
   groupCount?: number;
   routeCount?: number;
 };
+/** Newest-first durable history; the cursor is the last returned job's ID. */
+export type JobHistoryPage = { jobs: JobSnapshot[]; nextCursor?: string };
 export type ResultSort = 'distance' | 'gain' | 'repetition' | 'roadDistance';
 export type SortOrder = 'asc' | 'desc';
 export type JobResults = {
   routes: RouteChoice[];
   pageTotal: number;
   offset: number;
-  groupId?: string;
   groupCount: number;
   routeCount: number;
   sort: ResultSort;
   order: SortOrder;
   selectionNote: string;
 };
-export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance'>;
+export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition'> & { bounds: Bounds };
+/** Each shared physical trail is drawn once, with its preferred hikes in distance order. */
+export type RoutePath = { id: string; routeIds: string[]; geometry: [number, number][] };
 export type SearchProgress = {
   totalStarts: number;
   attemptedStarts: number;

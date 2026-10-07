@@ -302,12 +302,12 @@ class FreshCompiler(unittest.TestCase):
                 self.assertEqual(record["bytes"], len(compressed))
                 self.assertEqual(record["jsonBytes"], len(raw))
                 self.assertEqual(record["sha256"], hashlib.sha256(compressed).hexdigest())
-                stored[family] = json.loads(raw)
+                stored[family] = [json.loads(line) for line in raw.splitlines()] if family == "geometry" else json.loads(raw)
             self.assertEqual(stored["graph"]["graph"], graph, "One independent graph retains every local node and edge")
             self.assertEqual(stored["starts"], [[start, graph["nodes"][start["node"]]] for start in graph["starts"]])
             self.assertEqual(stored["graph"]["trails"], [{"name": item["name"], "kind": item["kind"]} for item in geometry])
             self.assertTrue(all(edge["connector"] == (geometry[edge["trail"]]["kind"] == "connector") for edge in graph["edges"]))
-            self.assertEqual(stored["geometry"], [{key: value for key, value in item.items() if key != "kind"} for item in geometry])
+            self.assertEqual(stored["geometry"], [item["coordinates"] for item in geometry])
 
             # Tiny published inventory and state archives exercise the actual plan/build CLI offline.
             def archive(name, field, value):
@@ -342,14 +342,14 @@ class FreshCompiler(unittest.TestCase):
             published = root / "published"
             catalog = json.loads((published / "catalog.json").read_text())
             provenance = json.loads((published / "provenance.json").read_text())
-            self.assertEqual(catalog["version"], 1)
+            self.assertEqual(catalog["version"], 2)
             self.assertEqual(catalog["unavailable"], [])
             self.assertEqual(provenance["plan"], plan)
             self.assertEqual(catalog["sections"][0]["sourceSegments"], plan["sourceSegments"])
             self.assertEqual(catalog["info"]["startCount"], len(graph["starts"]))
             self.assertEqual({path.name for path in published.iterdir()}, {"catalog.json", "provenance.json", "sections", "audit"})
             for family, record in catalog["sections"][0]["files"].items():
-                self.assertEqual(record["path"], f"sections/{plan['sections'][0]['id']}/{family}.json.gz")
+                self.assertEqual(record["path"], f"sections/{plan['sections'][0]['id']}/{family}.{'jsonl' if family == 'geometry' else 'json'}.gz")
             with rasterio.open(dem, "r+") as dataset:
                 values[99:101, 99:101] = -9999
                 dataset.write(values, 1)

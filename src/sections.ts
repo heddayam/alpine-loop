@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { Readable, Transform, Writable } from 'node:stream';
+import { basename, dirname, join, resolve } from 'node:path';
+import { PassThrough, Readable, Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { createGunzip, gunzipSync } from 'node:zlib';
+import { createGunzip } from 'node:zlib';
 import type { CatalogView, DataFile, DownloadSnapshot, PreparedSection, SectionCatalog } from './data-format.js';
+import { StringDecoder } from 'node:string_decoder';
+import type { WorkBudget } from './work-budget.js';
+import type { Position } from './model.js';
 
 const families = ['graph', 'starts', 'geometry'] as const;
 type Family = typeof families[number];
@@ -14,7 +17,6 @@ const digest = /^[a-f0-9]{64}$/;
 const catalogLimit = 16 * 1024 * 1024;
 const compressedLimit = 128 * 1024 * 1024;
 const jsonLimit = 512 * 1024 * 1024;
-const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const count = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0;
@@ -35,7 +37,7 @@ function validBoundary(value: unknown): boolean {
 }
 
 function catalogFrom(value: unknown): SectionCatalog {
-  if (!object(value) || value.version !== 1 || !object(value.info) || !Array.isArray(value.sections)
+  if (!object(value) || value.version !== 2 || !object(value.info) || !Array.isArray(value.sections)
     || (!value.sections.length && (!Array.isArray(value.unavailable) || !value.unavailable.length))) {
     throw new Error('Invalid mountain-section catalog');
   }
@@ -70,7 +72,7 @@ function catalogFrom(value: unknown): SectionCatalog {
     ids.add(section.id);
     for (const family of families) {
       const facts = section.files[family];
-      if (!object(facts) || facts.path !== `sections/${section.id}/${family}.json.gz`
+      if (!object(facts) || facts.path !== `sections/${section.id}/${family}.${family === 'geometry' ? 'jsonl' : 'json'}.gz`
         || !Number.isSafeInteger(facts.bytes) || (facts.bytes as number) <= 0 || (facts.bytes as number) > compressedLimit
         || !Number.isSafeInteger(facts.jsonBytes) || (facts.jsonBytes as number) <= 0 || (facts.jsonBytes as number) > jsonLimit
         || typeof facts.sha256 !== 'string' || !digest.test(facts.sha256)) {
@@ -93,22 +95,68 @@ async function ensureDirectory(path: string) {
   if (!(await fileStat(path))?.isDirectory()) throw new Error('Prepared-data directory is unsafe');
 }
 
-async function readVerified<T>(file: string, facts: DataFile): Promise<T> {
+/** Backpressure keeps compressed and decoded buffers bounded; checks finish before publication. */
+async function* decoded(file: string, facts: DataFile, budget?: WorkBudget): AsyncGenerator<Buffer> {
   const stat = await fileStat(file);
   if (!stat?.isFile() || stat.size !== facts.bytes) throw new Error(`Prepared section file is missing or has the wrong size: ${facts.path}`);
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  for await (const chunk of createReadStream(file)) {
-    bytes += chunk.length;
-    if (bytes > facts.bytes) throw new Error(`Prepared section file exceeds its declared size: ${facts.path}`);
-    chunks.push(chunk);
+  let bytes = 0, jsonBytes = 0;
+  const sha = createHash('sha256'), output = new PassThrough();
+  const source = createReadStream(file);
+  const completion = pipeline(source, new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.length; sha.update(chunk);
+      callback(bytes > facts.bytes ? new Error(`Prepared section file exceeds its declared size: ${facts.path}`) : null, chunk);
+    },
+  }), createGunzip(), new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      jsonBytes += chunk.length;
+      callback(jsonBytes > facts.jsonBytes ? new Error(`Prepared section file decoded size mismatch: ${facts.path}`) : null, chunk);
+    },
+  }), output);
+  // Attach immediately; consumption below still propagates pipeline failures.
+  void completion.catch(() => {});
+  try {
+    for await (const chunk of output) {
+      await budget?.checkpoint();
+      yield chunk as Buffer;
+    }
+    await completion;
+    if (bytes !== facts.bytes || sha.digest('hex') !== facts.sha256) throw new Error(`Prepared section file checksum mismatch: ${facts.path}`);
+    if (jsonBytes !== facts.jsonBytes) throw new Error(`Prepared section file decoded size mismatch: ${facts.path}`);
+  } finally {
+    output.destroy(); source.destroy();
+    await completion.catch(() => {});
   }
-  if (bytes !== facts.bytes) throw new Error(`Prepared section file has the wrong size: ${facts.path}`);
-  const compressed = Buffer.concat(chunks, bytes);
-  if (hash(compressed) !== facts.sha256) throw new Error(`Prepared section file checksum mismatch: ${facts.path}`);
-  const json = gunzipSync(compressed, { maxOutputLength: facts.jsonBytes + 1 });
-  if (json.length !== facts.jsonBytes) throw new Error(`Prepared section file decoded size mismatch: ${facts.path}`);
-  return JSON.parse(json.toString('utf8')) as T;
+}
+
+async function readVerified<T>(file: string, facts: DataFile, budget?: WorkBudget): Promise<T> {
+  const parts: string[] = [], decoder = new StringDecoder('utf8');
+  for await (const chunk of decoded(file, facts, budget)) parts.push(decoder.write(chunk));
+  parts.push(decoder.end());
+  return JSON.parse(parts.join('')) as T;
+}
+
+async function* geometry(file: string, facts: DataFile, ids: ReadonlySet<number>, budget?: WorkBudget) {
+  const decoder = new StringDecoder('utf8');
+  let pending = '', id = 0;
+  for await (const chunk of decoded(file, facts, budget)) {
+    pending += decoder.write(chunk);
+    let end: number;
+    while ((end = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, end); pending = pending.slice(end + 1);
+      if (ids.has(id)) {
+        const coordinates: unknown = JSON.parse(line);
+        if (!Array.isArray(coordinates) || !coordinates.length || !coordinates.every(point => Array.isArray(point)
+          && (point.length === 2 || point.length === 3) && point.every(Number.isFinite))) {
+          throw new Error('Prepared route drawing has invalid coordinates.');
+        }
+        yield { id, coordinates: coordinates as Position[] };
+      }
+      id++;
+    }
+  }
+  pending += decoder.end();
+  if (pending) throw new Error('Prepared route drawing has an unfinished geometry record.');
 }
 
 async function verify(file: string, facts: DataFile, signal?: AbortSignal) {
@@ -160,7 +208,7 @@ async function download(file: string, facts: DataFile, baseUrl: string, signal: 
 }
 
 /** Catalog visibility is independent of installed data; a complete section is the atomic download unit. */
-export async function openSections(directory: string) {
+export async function openSections(directory: string, budget?: WorkBudget) {
   const root = resolve(directory);
   const catalogFile = join(root, 'catalog.json');
   const stat = await fileStat(catalogFile);
@@ -201,7 +249,7 @@ export async function openSections(directory: string) {
     const advance = (bytes: number) => { if (state) state.completedBytes += bytes; };
     for (const family of families) {
       signal.throwIfAborted();
-      const facts = section.files[family], staged = join(staging, `${family}.json.gz`), final = join(root, facts.path);
+      const facts = section.files[family], staged = join(staging, basename(facts.path)), final = join(root, facts.path);
       if (await isVerified(final, facts, signal)) {
         if (!await isVerified(staged, facts, signal)) await copyFile(final, staged);
         advance(facts.bytes);
@@ -260,11 +308,16 @@ export async function openSections(directory: string) {
   return {
     catalog,
     installed,
-    async read<T>(section: PreparedSection | string, family: Family): Promise<T> {
+    async read<T>(section: PreparedSection | string, family: Exclude<Family, 'geometry'>): Promise<T> {
       if (!families.includes(family)) throw new Error('Unknown prepared section file family');
       const entry = selected(section);
       if (!await installed(entry)) throw new Error(`Mountain section is not installed: ${entry.name}`);
-      return readVerified<T>(join(root, entry.files[family].path), entry.files[family]);
+      return readVerified<T>(join(root, entry.files[family].path), entry.files[family], budget);
+    },
+    async *geometry(section: PreparedSection | string, ids: ReadonlySet<number>) {
+      const entry = selected(section);
+      if (!await installed(entry)) throw new Error(`Mountain section is not installed: ${entry.name}`);
+      yield* geometry(join(root, entry.files.geometry.path), entry.files.geometry, ids, budget);
     },
     async view(): Promise<CatalogView> {
       const sections = [];

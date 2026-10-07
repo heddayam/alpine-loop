@@ -1,118 +1,184 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
-import type { CandidatePool } from './diversity.js';
-import type { RouteCandidate } from './model.js';
-import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
+import { MIN_LOOP_SIMILARITY } from './diversity.js';
+import { ROUTES_PER_PAGE, type Bounds, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RoutePath, type RouteView, type SortOrder } from './model.js';
 
-export type SavedChoice = { route: StoredRoute; groupId: string; direction: 0 | 1; reverseId?: string; oppositeId?: string; preferred: boolean };
-type ChoiceRow = { summary: string; groupId: string; groupSize: number; reverseId: string | null };
-const choice = (row: ChoiceRow): RouteChoice => ({ ...JSON.parse(row.summary), groupId: row.groupId,
-  groupSize: row.groupSize, reverseId: row.reverseId ?? undefined });
-const selectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Starting points and qualifying directions are available in the details. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
+export type SavedChoice = { route: StoredRoute; groupId: string };
+type Counts = { routeCount: number; groupCount: number };
+type ChoiceRow = { summary: string; groupId: string };
+type StoreOptions = { writable?: boolean; revision?: number; counts?: Counts };
+const choice = (row: ChoiceRow): RouteChoice => {
+  const summary = JSON.parse(row.summary);
+  // Older files include links to alternatives; the public result now has one walk.
+  delete summary.oppositeId;
+  return { ...summary, groupId: row.groupId };
+};
+const previousSelectionNote = 'Each hike represents a distinct main circuit. Minor variations share at least 85% common trail length, preserve its order, and have no connected difference over 1 km. Every saved route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.';
+const selectionNote = `Each hike shows one preferred qualifying walk. Similar main loops share at least ${MIN_LOOP_SIMILARITY * 100}% of the longer loop, including road sections, in the same order. Alternative loops, starting points and directions are not saved. Every shown route meets the submitted limits. Searches try a bounded set of alternatives and can miss qualifying hikes.`;
 
 /** A worker owns this private file until it closes; the server opens only published files. */
-export function createRouteStore(path: string, writable = false, revision = 0) {
+export function createRouteStore(path: string, { writable = false, revision = 0, counts: suppliedCounts }: StoreOptions = {}) {
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Invalid saved-results revision');
+  if (suppliedCounts && Object.values(suppliedCounts).some(count => !Number.isSafeInteger(count) || count < 0)) throw new Error('Invalid saved-results counts');
   const db = new DatabaseSync(path, { readOnly: !writable });
   try {
     db.exec('PRAGMA cache_size=-4096; PRAGMA mmap_size=0; PRAGMA temp_store=FILE; PRAGMA temp.cache_size=-4096;');
     const existing = db.prepare('PRAGMA table_info(routes)').all();
-    const legacy = existing.length && !existing.some(column => column.name === 'revision');
-    if (legacy && !writable) {
-      if (revision !== 0) throw new Error('This results revision is not available');
-      for (const table of ['groups', 'options', 'routes']) db.exec(`CREATE TEMP VIEW ${table} AS SELECT 0 AS revision, * FROM main.${table}`);
+    const oldFormat = existing.some(column => column.name === 'start_id');
+    const hasRevision = !existing.length || existing.some(column => column.name === 'revision');
+    if (!hasRevision && revision !== 0) throw new Error('This results revision is not available');
+    if (writable) {
+      if (oldFormat) throw new Error('Previous saved results are immutable');
+      db.exec(`
+        PRAGMA journal_mode=DELETE;
+        PRAGMA synchronous=FULL;
+        CREATE TABLE IF NOT EXISTS routes (revision INTEGER, id TEXT, group_id TEXT NOT NULL,
+          summary TEXT NOT NULL, steps TEXT NOT NULL,
+          distance REAL NOT NULL, gain REAL NOT NULL, repetition REAL NOT NULL, roadDistance REAL NOT NULL,
+          PRIMARY KEY(revision, id), UNIQUE(revision, group_id));
+        CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
+        CREATE TABLE IF NOT EXISTS results (revision INTEGER PRIMARY KEY, routeCount INTEGER NOT NULL, groupCount INTEGER NOT NULL, note TEXT NOT NULL);
+      `);
+      db.prepare('INSERT OR IGNORE INTO results VALUES (?, 0, 0, ?)').run(revision, selectionNote);
     }
-    if (writable) db.exec(`
-      PRAGMA journal_mode=DELETE;
-      PRAGMA synchronous=FULL;
-      CREATE TABLE IF NOT EXISTS groups (revision INTEGER, id TEXT, first_id TEXT NOT NULL, PRIMARY KEY(revision, id));
-      CREATE TABLE IF NOT EXISTS options (revision INTEGER, group_id TEXT, start_id TEXT, first_id TEXT NOT NULL, PRIMARY KEY(revision, group_id, start_id));
-      CREATE TABLE IF NOT EXISTS routes (revision INTEGER, id TEXT, group_id TEXT NOT NULL, start_id TEXT NOT NULL,
-        summary TEXT NOT NULL, steps TEXT NOT NULL, reverse_id TEXT,
-        distance REAL NOT NULL, gain REAL NOT NULL, repetition REAL NOT NULL, roadDistance REAL NOT NULL, uncertain INTEGER NOT NULL,
-        PRIMARY KEY(revision, id));
-      CREATE INDEX IF NOT EXISTS members ON routes(revision, group_id, start_id);
-      CREATE TABLE IF NOT EXISTS geometry (section_id TEXT, trail_id INTEGER, points TEXT NOT NULL, PRIMARY KEY(section_id, trail_id));
-      CREATE TEMP TABLE candidates (core TEXT, witness TEXT, route TEXT NOT NULL, PRIMARY KEY(core, witness));
-    `);
-    const getCandidate = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? AND witness = ?') : undefined;
-    const setCandidate = writable ? db.prepare('INSERT OR REPLACE INTO temp.candidates VALUES (?, ?, ?)') : undefined;
-    const candidates = writable ? db.prepare('SELECT route FROM temp.candidates WHERE core = ? ORDER BY witness') : undefined;
-    const deleteCandidates = writable ? db.prepare('DELETE FROM temp.candidates WHERE core = ?') : undefined;
-    const candidatePool: CandidatePool | undefined = writable ? {
-      get(core, witness) {
-        const row = getCandidate!.get(core, witness);
-        return row ? JSON.parse(row.route as string) as RouteCandidate : undefined;
-      },
-      set: (core, witness, route) => { setCandidate!.run(core, witness, JSON.stringify(route)); },
-      *routes(core) { for (const row of candidates!.iterate(core)) yield JSON.parse(row.route as string) as RouteCandidate; },
-      delete: core => { deleteCandidates!.run(core); },
-    } : undefined;
-    const columns = `r.summary, r.group_id AS groupId,
-      (SELECT COUNT(*) FROM options WHERE revision = r.revision AND group_id = r.group_id) AS groupSize, r.reverse_id AS reverseId`;
-    const totals = db.prepare(`SELECT (SELECT COUNT(*) FROM routes WHERE revision = ${revision}) AS routeCount,
-      (SELECT COUNT(*) FROM groups WHERE revision = ${revision}) AS groupCount`);
-    const detail = db.prepare(`SELECT ${columns}, r.steps FROM routes r WHERE revision = ${revision} AND id = ?`);
+    const revisionFilter = hasRevision ? `r.revision = ${revision}` : '1';
+    const from = oldFormat
+      ? `groups g JOIN routes r ON ${hasRevision ? 'r.revision = g.revision AND ' : ''}r.id = g.first_id WHERE ${revisionFilter}`
+      : `routes r WHERE ${revisionFilter}`;
+    const metadata = !oldFormat ? db.prepare('SELECT routeCount, groupCount, note FROM results WHERE revision = ?').get(revision) : undefined;
+    if (!oldFormat && !metadata) throw new Error('This results revision is not available');
+    const savedNote = oldFormat && existing.some(column => column.name === 'variant_id')
+      ? db.prepare('SELECT note FROM grouping').get()!.note as string
+      : metadata?.note as string | undefined ?? previousSelectionNote;
+    let counts: Counts | undefined = metadata ? { routeCount: Number(metadata.routeCount), groupCount: Number(metadata.groupCount) } : suppliedCounts && { ...suppliedCounts };
+    const readCounts = (): Counts => {
+      // Published counts never change. Old files need at most one fallback scan
+      // per connection; completed job metadata normally supplies these totals.
+      return counts ??= db.prepare(`SELECT (SELECT COUNT(*) FROM routes r WHERE ${revisionFilter}) AS routeCount,
+        (SELECT COUNT(*) FROM ${from}) AS groupCount`).get() as Counts;
+    };
+    const columns = 'r.summary, r.group_id AS groupId';
+    const detail = db.prepare(`SELECT ${columns}, r.steps FROM routes r WHERE ${revisionFilter} AND r.id = ?`);
     const getGeometry = db.prepare('SELECT points FROM geometry WHERE section_id = ? AND trail_id = ?');
-    const addRoute = writable ? db.prepare(`INSERT INTO routes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`): undefined;
-    const addGroup = writable ? db.prepare('INSERT OR IGNORE INTO groups VALUES (?, ?, ?)') : undefined;
-    const setGroup = writable ? db.prepare('UPDATE groups SET first_id = ? WHERE revision = ? AND id = ?') : undefined;
-    const addOption = writable ? db.prepare('INSERT OR IGNORE INTO options VALUES (?, ?, ?, ?)') : undefined;
-    const setOption = writable ? db.prepare('UPDATE options SET first_id = ? WHERE revision = ? AND group_id = ? AND start_id = ?') : undefined;
+    const addRoute = writable ? db.prepare('INSERT INTO routes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)') : undefined;
     const addGeometry = writable ? db.prepare('INSERT OR IGNORE INTO geometry VALUES (?, ?, ?)') : undefined;
-    const preferredOption = db.prepare(`SELECT id FROM routes WHERE revision = ${revision} AND group_id = ? AND start_id = ?
-      ORDER BY uncertain, roadDistance, repetition, distance, id LIMIT 1`);
+    const saveCounts = writable ? db.prepare('UPDATE results SET routeCount = ?, groupCount = ? WHERE revision = ?') : undefined;
+    const requireTransaction = () => {
+      if (!writable) throw new Error('Saved results are immutable');
+      if (!db.isTransaction) throw new Error('Begin a saved-results transaction before writing');
+    };
     return {
-      candidatePool,
-      begin(): void { db.exec('BEGIN'); },
-      commit(): void { db.exec('COMMIT'); },
-      add(saved: SavedChoice): void {
-        if (!addRoute || !addGroup || !setGroup || !addOption || !setOption) throw new Error('Saved results are immutable');
-        const { route, groupId, reverseId, oppositeId, preferred } = saved, summary = route.summary;
-        addRoute.run(revision, summary.id, groupId, summary.startId, JSON.stringify({ ...summary, oppositeId }), JSON.stringify(route.sections), reverseId ?? null,
-          summary.distance, summary.gain, summary.repetition, summary.roadDistance, Number(summary.uncertain));
-        addGroup.run(revision, groupId, summary.id);
-        if (preferred) setGroup.run(summary.id, revision, groupId);
-        addOption.run(revision, groupId, summary.startId, summary.id);
-        const best = preferredOption.get(groupId, summary.startId)!;
-        setOption.run(best.id as string, revision, groupId, summary.startId);
+      begin(): void {
+        if (!writable) throw new Error('Saved results are immutable');
+        db.exec('BEGIN');
+      },
+      commit(): void {
+        requireTransaction();
+        const current = readCounts();
+        saveCounts!.run(current.routeCount, current.groupCount, revision);
+        db.exec('COMMIT');
+      },
+      add({ route, groupId }: SavedChoice): void {
+        requireTransaction();
+        const summary = route.summary;
+        addRoute!.run(revision, summary.id, groupId, JSON.stringify(summary), JSON.stringify(route.sections),
+          summary.distance, summary.gain, summary.repetition, summary.roadDistance);
+        const current = readCounts();
+        current.routeCount++; current.groupCount++;
       },
       saveGeometry(sectionId: string, trailId: number, points: Position[]): void {
-        if (!addGeometry || !points.length) throw new Error('Route drawing is missing');
-        addGeometry.run(sectionId, trailId, JSON.stringify(points));
+        requireTransaction();
+        if (!points.length) throw new Error('Route drawing is missing');
+        addGeometry!.run(sectionId, trailId, JSON.stringify(points));
       },
-      get counts(): { routeCount: number; groupCount: number } { return totals.get() as { routeCount: number; groupCount: number }; },
-      page(offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc'): JobResults | undefined {
-        const counts = totals.get() as { routeCount: number; groupCount: number };
-        const pageTotal = groupId === undefined ? counts.groupCount
-          : Number(db.prepare(`SELECT COUNT(*) AS size FROM options WHERE revision = ${revision} AND group_id = ?`).get(groupId)!.size);
-        if (groupId !== undefined && !db.prepare(`SELECT 1 FROM groups WHERE revision = ${revision} AND id = ?`).get(groupId)) return undefined;
-        const from = groupId === undefined ? `groups g JOIN routes r ON r.revision = g.revision AND r.id = g.first_id WHERE g.revision = ${revision}`
-          : `options o JOIN routes r ON r.revision = o.revision AND r.id = o.first_id WHERE o.revision = ${revision} AND o.group_id = ?`;
+      get counts(): Counts { return { ...readCounts() }; },
+      page(offset = 0, sort: ResultSort = 'distance', order: SortOrder = 'asc'): JobResults {
+        if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid saved-results offset');
+        if (!['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) throw new Error('Invalid saved-results ordering');
+        const current = readCounts();
         const rows = db.prepare(`SELECT ${columns} FROM ${from} ORDER BY r.${sort} ${order.toUpperCase()}, r.id ASC LIMIT ? OFFSET ?`)
-          .all(...(groupId === undefined ? [] : [groupId]), ROUTES_PER_PAGE, offset) as ChoiceRow[];
-        return { routes: rows.map(choice), pageTotal, offset, groupId, ...counts, sort, order, selectionNote };
+          .all(ROUTES_PER_PAGE, offset) as ChoiceRow[];
+        return { routes: rows.map(choice), pageTotal: current.groupCount, offset, ...current, sort, order, selectionNote: savedNote };
       },
       locations(): RouteLocation[] {
-        const rows = db.prepare(`SELECT r.summary, r.group_id AS groupId FROM groups g JOIN routes r ON r.revision = g.revision
-          AND r.id = g.first_id WHERE g.revision = ${revision} ORDER BY g.id`).all() as { summary: string; groupId: string }[];
+        const rows = db.prepare(`SELECT ${columns}, r.steps FROM ${from} ORDER BY r.group_id`).all() as (ChoiceRow & { steps: string })[];
+        // Only small extents cross the API; shared trail drawings are read once.
+        const shapes = new Map<string, Bounds>();
         return rows.map(row => {
-          const { id, startId, startName, startPosition, trailNames, distance } = JSON.parse(row.summary) as RouteChoice;
-          return { id, startId, startName, startPosition, trailNames, distance, groupId: row.groupId };
+          const { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId } = choice(row);
+          const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+          const steps = JSON.parse(row.steps) as StoredRoute['sections'];
+          if (!steps.length) throw new Error('Saved route drawing is missing');
+          for (const step of steps) {
+            const key = `${step.section}:${step.id}`;
+            let extent = shapes.get(key);
+            if (!extent) {
+              const shape = getGeometry.get(step.section, step.id);
+              if (!shape) throw new Error('Saved route drawing is missing');
+              const points = JSON.parse(shape.points as string) as Position[];
+              if (!points.length) throw new Error('Saved route drawing is missing');
+              extent = [Infinity, Infinity, -Infinity, -Infinity];
+              for (const [longitude, latitude] of points) {
+                extent[0] = Math.min(extent[0], longitude);
+                extent[1] = Math.min(extent[1], latitude);
+                extent[2] = Math.max(extent[2], longitude);
+                extent[3] = Math.max(extent[3], latitude);
+              }
+              shapes.set(key, extent);
+            }
+            bounds[0] = Math.min(bounds[0], extent[0]);
+            bounds[1] = Math.min(bounds[1], extent[1]);
+            bounds[2] = Math.max(bounds[2], extent[2]);
+            bounds[3] = Math.max(bounds[3], extent[3]);
+          }
+          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId, bounds };
         });
+      },
+      paths(bounds: Bounds): RoutePath[] {
+        const rows = db.prepare(`SELECT r.id, r.steps FROM ${from} ORDER BY r.distance, r.id`).all() as { id: string; steps: string }[];
+        const paths = new Map<string, RoutePath | null>();
+        for (const row of rows) {
+          for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
+            const key = `${step.section}:${step.id}`;
+            if (!paths.has(key)) {
+              const shape = getGeometry.get(step.section, step.id);
+              if (!shape) throw new Error('Saved route drawing is missing');
+              const points = JSON.parse(shape.points as string) as Position[];
+              if (!points.length) throw new Error('Saved route drawing is missing');
+              const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+              for (const [longitude, latitude] of points) {
+                extent[0] = Math.min(extent[0], longitude);
+                extent[1] = Math.min(extent[1], latitude);
+                extent[2] = Math.max(extent[2], longitude);
+                extent[3] = Math.max(extent[3], latitude);
+              }
+              const visible = extent[0] <= bounds[2] && extent[2] >= bounds[0]
+                && extent[1] <= bounds[3] && extent[3] >= bounds[1];
+              paths.set(key, visible ? { id: key, routeIds: [], geometry: points.map(([lon, lat]) => [lon, lat]) } : null);
+            }
+            const path = paths.get(key);
+            if (path && path.routeIds.at(-1) !== row.id) path.routeIds.push(row.id);
+          }
+        }
+        return [...paths.values()].filter((path): path is RoutePath => path !== null);
       },
       route(id: string): RouteView | undefined {
         const row = detail.get(id) as (ChoiceRow & { steps: string }) | undefined;
         if (!row) return undefined;
-        const coordinates: Position[] = [];
+        const coordinates: Position[] = [], shapes = new Map<string, Position[]>();
         for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
-          const shape = getGeometry.get(step.section, step.id);
-          if (!shape) throw new Error('Saved route drawing is missing');
-          const points = JSON.parse(shape.points as string) as Position[];
-          if (step.reverse) points.reverse();
-          const previous = coordinates.at(-1);
-          if (previous && (previous[0] !== points[0]![0] || previous[1] !== points[0]![1])) throw new Error('Saved route drawing has a broken connection');
-          for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[index]!);
+          const key = `${step.section}:${step.id}`;
+          let points = shapes.get(key);
+          if (!points) {
+            const shape = getGeometry.get(step.section, step.id);
+            if (!shape) throw new Error('Saved route drawing is missing');
+            points = JSON.parse(shape.points as string) as Position[];
+            if (!points.length) throw new Error('Saved route drawing is missing');
+            shapes.set(key, points);
+          }
+          const previous = coordinates.at(-1), first = points[step.reverse ? points.length - 1 : 0]!;
+          if (previous && (previous[0] !== first[0] || previous[1] !== first[1])) throw new Error('Saved route drawing has a broken connection');
+          for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[step.reverse ? points.length - 1 - index : index]!);
         }
         return { ...choice(row), geometry: coordinates };
       },

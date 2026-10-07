@@ -1,0 +1,317 @@
+{
+  "date": "2026-10-07",
+  "status": "Implemented, locally running and verified. Full default search completed; all saved routes independently checked; browser interaction, history, memory and startup checks complete.",
+  "source": {
+    "baselineCommit": "d6725f16a88ecfb4c27aca6e40d9b82d5a8eef3d",
+    "implementationCommit": "8b0e9e8add7237ab0cee6c8700f4e7091afec051",
+    "finalBrowserCache": "16 inactive tiles per source, one inactive zoom level, one map worker",
+    "dependencyChanges": 0,
+    "beforeLines": 7890,
+    "afterLines": 8028,
+    "beforeFiles": 36,
+    "afterFiles": 41,
+    "sourceSizeMethod": "scripts/source-size.mjs physical lines; normal readable formatting"
+  },
+  "decision": "New jobs save only one preferred valid walk per displayed hike. Remove loop/start/direction alternatives from results and UI. Retain all planned discovery, every eligible start, strict route constraints, existing preference and fixed 60% ordered main-loop grouping. Existing immutable completed files and addressed GPX links remain usable.",
+  "machine": {
+    "cpu": "Apple M3",
+    "logicalCpus": 8,
+    "memoryBytes": 17179869184,
+    "node": "v24.11.0"
+  },
+  "request": {
+    "sections": [
+      "mountain-1a237ff8895adebfa21e390b",
+      "mountain-70611e49c04901ed37bd793e",
+      "mountain-7a6c62952459c6276843dae6",
+      "mountain-d43a7b201dc5e484847ccc42",
+      "mountain-e003916c5698006638c9c77c"
+    ],
+    "effort": "deep",
+    "distance": [
+      8046.72,
+      19312.128
+    ],
+    "gain": [
+      0,
+      1219.2
+    ],
+    "repetition": 0.2,
+    "includeUnknown": true,
+    "roads": {
+      "distance": 1609.344,
+      "fraction": 0.1
+    }
+  },
+  "inputs": {
+    "beforeCatalogSha256": "fcb3b4529a7ab9f1fa9b1e05455744527dd1eb7e46b8e705625ec6c44b702cef",
+    "afterCatalogSha256": "a084f68d16e91e600507d79670cfd8677cbe6faf1203a5d628b58a310f50be04",
+    "afterSnapshotId": "mountains-c977ae8b05f7086baafe2720fafe3401ba46be90adf9610df8d4d9819df0e3ea",
+    "change": "Catalog format 2 stores one coordinate array per physical trail per gzip JSONL line. Graph, starts and measured coordinates are unchanged."
+  },
+  "comparison": {
+    "before": {
+      "displayedHikes": 918,
+      "savedWalks": 1286407,
+      "resultBytes": 8447655936,
+      "elapsedMs": 688262.734084,
+      "osBackendPeakRssBytes": 660160512,
+      "searchAverageCpuPercent": 80.62359723798754,
+      "wholeJobAverageCpuPercent": 57.518970648160085,
+      "wholeJobCpuMs": 395881.64
+    },
+    "after": {
+      "displayedHikes": 918,
+      "savedWalks": 918,
+      "resultBytes": 14934016,
+      "elapsedMs": 488279.908084,
+      "osBackendPeakRssBytes": 356728832,
+      "sampledBackendPeakRssBytes": 355516416,
+      "searchAverageCpuPercent": 43.67802184476557,
+      "wholeJobAverageCpuPercent": 43.74084750652031,
+      "wholeJobCpuMs": 213577.77,
+      "completedStarts": 10187,
+      "totalStarts": 10187,
+      "completedRegions": 5,
+      "idleBackendRssBytes": 160940032,
+      "postSearchBackendRssBytes": 228999168
+    },
+    "resultStorageReductionPercent": 99.82321704253651
+  },
+  "browser": {
+    "before": {
+      "profileHoverCpuPercent": [
+        38.324040447370976,
+        45.3598240131282,
+        41.16220479002292,
+        38.78338034953852,
+        41.96716427811174
+      ],
+      "extraBoundaryLoads": 310,
+      "idlePhysicalFootprintBytes": [
+        843477808,
+        817492784,
+        820032304
+      ],
+      "averageHoverCpuPercent": 41.11932277563447
+    },
+    "after": {
+      "profileHoverCpuPercent": [
+        16.635772341764017,
+        19.34178011414901,
+        14.290651440730532,
+        16.673996146688125,
+        14.05024333234613
+      ],
+      "extraBoundaryLoads": 0,
+      "idlePhysicalFootprintBytes": [
+        727218144,
+        700773024,
+        671773272
+      ],
+      "peakPhysicalFootprintBytes": 1056322496,
+      "lastRow": "70",
+      "mountedRowsAtEnd": 14,
+      "keyboardFocusedLastRow": "70",
+      "averageHoverCpuPercent": 16.19848867513556
+    },
+    "scope": "Same existing 71-hike saved job, isolated Chrome headless 1440x900, Apple M3 Metal. Browser physical footprint includes shared browser/GPU/native services and blank-tab overhead; it is not app-only memory. CPU 100% means one logical core. Process exits make some CDP whole-browser CPU-delta samples invalid; reported hover intervals have stable workers. External basemap caching and host activity are uncontrolled.",
+    "fullMap": {
+      "displayedHikes": 918,
+      "blankPhysicalFootprintBytes": [
+        333524776,
+        618820976
+      ],
+      "peakPhysicalFootprintBytes": 1206846240,
+      "settledPostZoomPhysicalFootprintBytes": [
+        1149027008,
+        991216296,
+        944651528,
+        784380480
+      ],
+      "note": "Fresh headless Chrome with full five-region map, one zoom and no screenshot readbacks. Whole browser includes GPU/native/shared services, blank tabs and Chrome services. Peak remains material; bounded caches do not impose an absolute browser memory ceiling."
+    }
+  },
+  "safeguards": {
+    "workerCpuFractionOfOneCore": 0.4,
+    "workerOldGenerationMiB": 256,
+    "backendRssWatchdogMiB": 768,
+    "checkpointPersistenceMs": 1000,
+    "historyPageSize": 50,
+    "idlePollMs": 15000,
+    "activePollMs": 1000,
+    "hoverCacheEstimatedMiB": 8,
+    "hoverCacheEntries": 16
+  },
+  "verification": {
+    "buildTypecheck": "passed",
+    "offlineVitest": 102,
+    "offlineNode": 5,
+    "preparationFixtureChecks": 2,
+    "independentRealRoutes": {
+      "checked": 918,
+      "points": 803177,
+      "mainLoopComparisons": 91550,
+      "maxDistanceDeltaM": 2.0627339836210012e-08,
+      "maxGainDeltaM": 1.5916157281026244e-12,
+      "result": "passed",
+      "method": "Independent source-witness validator plus direct prepared directed edges, road limits, saved-geometry continuity/distance/gain, and no two displayed main loops meeting the 60% ordered similarity rule. No production solver/grouping imports."
+    },
+    "longFrozenRequest": {
+      "id": "pass-long",
+      "observedMs": 30075.213499999998,
+      "outcome": "Cancelled explicitly after 30 seconds; not a completed/empty result.",
+      "cancelMs": 5.913749999999709,
+      "peakBackendRssBytes": 395739136,
+      "partialFilesAfterCancel": 0
+    },
+    "browserFunctional": "Old saved URL restored preferred route and unchanged GPX. New 918-hike URL restored outside first history page. Native scroll and End key reach row 917 with 14 mounted rows. 121-job history has pages of 50,50,21; Newer works; closing unmounts all job cards. Profile cursor moves without boundary reloads; actual zoom preserves complete result scope.",
+    "liveApp": {
+      "url": "http://127.0.0.1:3000",
+      "installedSections": 5,
+      "historyJobs": 8,
+      "originalJobId": "dbdfef03-4ff8-4a96-8324-50ddf4dde600",
+      "preferredPageSize": 50,
+      "preferredRouteId": "1f1d818a5ae945469a381cc085168f42",
+      "geometryPoints": 1653,
+      "gpxStatus": 200
+    }
+  },
+  "changes": [
+    {
+      "issue": "Repeated GeoJSON upload and full-app profile hover renders",
+      "fix": "Memoize saved map inputs and route locations. Keep chart cursor local, coalesce motion with requestAnimationFrame and notify only the map marker."
+    },
+    {
+      "issue": "CPU saturation and repeated solver allocation",
+      "fix": "One shared measured thread-CPU budget across loading/search/grouping/saving. Reuse forest arrays and precompute pass weights, circuit/ring facts and ranking scores."
+    },
+    {
+      "issue": "Whole-file decoding spikes and worker heap alone insufficient",
+      "fix": "Stream gzip/checksums/size validation with backpressure; parse only chosen physical geometry records. Retain one section graph at a time. Add smaller worker heap and a whole-backend RSS watchdog."
+    },
+    {
+      "issue": "Millions of duplicate candidate and saved walk rows",
+      "fix": "Retain one preferred candidate per circuit, save only fixed displayed representatives, store physical geometry once, and remove variant/candidate/options tables."
+    },
+    {
+      "issue": "Synchronous million-row COUNT for result pages",
+      "fix": "Maintain counts transactionally in the worker, persist immutable counts in results, send final counts before publication, and reuse existing job metadata for old files."
+    },
+    {
+      "issue": "Frequent FULL-durability progress writes and whole-history polling",
+      "fix": "Keep live compact progress in memory, checkpoint at most once a second, durably persist state transitions and inputs, index active/FIFO lookup, and page retained history. Poll active rows, slow down while idle/hidden, and directly restore old IDs."
+    },
+    {
+      "issue": "Map marker rebuilds, unbounded list DOM and repeated hover geometry",
+      "fix": "Reconcile stable viewport clusters/markers at settled integer zooms. Virtualize continuous scrolling and bound the delayed hover LRU. Bound inactive tiles and map workers."
+    },
+    {
+      "issue": "Rebuild on every launch",
+      "fix": "Fingerprint source, build configuration and dependency lock; reuse complete outputs. Rebuild after changes or missing outputs."
+    }
+  ],
+  "research": [
+    {
+      "url": "https://nodejs.org/download/release/v24.11.0/docs/api/process.html#processthreadcpuusagepreviousvalue",
+      "use": "Measure CPU time rather than assume yielding limits CPU. Conservatively fall back to process CPU when thread accounting is unavailable."
+    },
+    {
+      "url": "https://nodejs.org/download/release/v24.11.0/docs/api/worker_threads.html#workerresourcelimits",
+      "use": "Worker JS heap limits exclude native and buffer allocations; monitor backend RSS separately."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.x/doc/api/stream.md",
+      "use": "Use pipeline/async iteration for backpressure and propagate checksum, decode and stream failures before result publication."
+    },
+    {
+      "url": "https://www.sqlite.org/pragma.html",
+      "use": "Keep DELETE/FULL durability for critical writes, use a small page cache, disable mmap, and prefer disk temp storage."
+    },
+    {
+      "url": "https://www.sqlite.org/tempfiles.html",
+      "use": "Disk temporary storage can still buffer smaller operations; reduce the data volume rather than rely on PRAGMA alone."
+    },
+    {
+      "url": "https://react.dev/reference/react/memo",
+      "use": "Local motion state and stable inputs prevent repeated application and map work."
+    },
+    {
+      "url": "https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/",
+      "use": "Cap inactive tile cache/zoom levels without truncating visible tiles."
+    },
+    {
+      "url": "https://maplibre.org/maplibre-gl-js/docs/API/functions/setWorkerCount/",
+      "use": "Set one map worker before constructing the map."
+    }
+  ],
+  "limitations": [
+    "CPU budgeting and RSS watchdogs are cooperative safeguards, not hard operating-system quotas. Long native calls, garbage collection and graphics work can burst; the RSS watchdog samples every 250 ms.",
+    "Backend RSS includes the real server, search worker and in-process measurement client; it excludes browser memory. Browser/GPU/shared-service memory is separate and still material.",
+    "Timings are descriptive, not statistically controlled. The improved full search overlapped short offline checks and browser diagnostics; filesystem cache and other apps were uncontrolled. No p90 claim.",
+    "The full run verifies identical displayed-hike counts and all new returned routes; old full-run displayed route IDs were not retained, so real-route identity equality is not claimed.",
+    "Bounded discovery can still miss valid hikes. No start, discovery allowance or submitted constraint was removed or relaxed.",
+    "Existing saved result files are preserved. Their old alternatives consume disk until the user manually deletes those jobs.",
+    "Rare main-loop delays remain under host contention: maximum 100ms memory-sampler gap was 1169.0ms versus 4962.7ms before; cause is not isolated."
+  ],
+  "reproduction": {
+    "standardFullRun": "npm run build && node benchmarks/app/run.mjs --dataset .local-data/mountains --output .local-data/resource-audit/reproduction.json --observation-ms 1200000 --query all-regions",
+    "observedFullRun": "node .local-data/resource-audit/improved.mjs all-regions 1200000",
+    "browser": "node .local-data/resource-audit/browser-final.mjs browser-final",
+    "independentVerification": "node .local-data/resource-audit/verify-improved.mjs",
+    "rawReports": [
+      ".local-data/resource-audit/summary.json",
+      ".local-data/resource-audit/improved-all-regions/report.json",
+      ".local-data/resource-audit/improved-all-regions/verification.json",
+      ".local-data/resource-audit/improved-pass-long/report.json",
+      ".local-data/resource-audit/browser-final/report.json",
+      ".local-data/resource-audit/browser-preferred/report.json",
+      ".local-data/resource-audit/build-reuse.json",
+      ".local-data/resource-audit/browser-all-regions-final/report.json"
+    ],
+    "codeHashes": {
+      "src/client/App.tsx": "8b8fc7339caebab15b84b63e10c3a442084547e254c0a2810838250fb505c268",
+      "src/client/ElevationProfile.tsx": "d9671b1c3100f580b80ce1878c864431204aed1837b022c572f81656029ffb55",
+      "src/client/FixedList.tsx": "fb894123c0e0754bb176a3ccd1b1b038266b41bb3e9fc18fbf4d160bb5f7f62a",
+      "src/client/JobsDialog.tsx": "a430e4a55e2996f19c38194a5bafa677cc226b5a90e19899bf967cf30a3dd289",
+      "src/client/Map.tsx": "8e43770470fb19df16361bd83ac1b804f208c49a32d1796407c4dd8d775ce89e",
+      "src/client/RegionPicker.tsx": "548b94c2057972c2c08291211f9f8baded2d1b5bad4774dc70ca2792145446ba",
+      "src/client/RouteCache.ts": "6208c12f68403033263bf257a10b835b8f3f84bd97fb8cde7bb0c46f2a174832",
+      "src/client/SettingsDialog.tsx": "0aa88a52f69c7ab9de6515bb116ffddb5398e0fec79300b90afe61d22ef7633f",
+      "src/client/clusters.ts": "99ff01886854ada5ac7681dc9cc0dcbb7c328630060a71aa83712a8e5161c407",
+      "src/client/env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "src/client/main.tsx": "7b0df62e6345edec89de78c7ef002d68b0fcd5ab044f17feeaf9cf9cdbd68563",
+      "src/client/request.ts": "f8f0d2ba78ef6b75e82ad5e4072c8e83d1c300ab8fa514afcf4623bbd78851c5",
+      "src/client/styles.css": "ea52958cccefe76da0df08874fbec78e62bb6f36d38df96bd5084c96dd3594df",
+      "src/client/useJobs.ts": "3f5d4881c4804763e817361d3b8e65a48fec4973f5e65c63cbf844ef9333b904",
+      "src/data-format.ts": "77693460b963816948e1c14041b19d3581dc2c54e367bb9b66ee27f8a91303b8",
+      "src/dataset.ts": "52e0b5c95c366fcaea533c6e1ee4609798b68ba319f8e6cfeb37409e1378ef52",
+      "src/diversity.ts": "f30e650ace53dbb2302f93c53ff90384080eb453282b2939a64d137e43a61aa8",
+      "src/engine/quality.ts": "57cb6fd69f4890ffbde123fe8727ed78cec85b53a638fc8165f3503c198926fb",
+      "src/engine/search.ts": "731e4add17400965747a09fa9273d69239ac116f1d0f5028557e9fcae94f469b",
+      "src/jobs.ts": "58e80fe283bfe4147ae9a050b186e62516ff6f23e57050c4674ed85a812d7486",
+      "src/model.ts": "999e7707cdebc9db99741dbb73840fcbab0281c5b809465b58ba6282b657ab11",
+      "src/route-store.ts": "a7f3ec71ceb667e59e4f515afe65858f94897afd4e5e53fd60c80ef6c9d8314f",
+      "src/search-worker.ts": "1da89298df241c3df720a3c03534da4a08ca29dc77250d0fe602263ae6e43133",
+      "src/sections.ts": "df29828050704c389fadc1646d846ef79438b450fc214fe7aba2c3271a6a7c1c",
+      "src/server.ts": "c0561f97a487b03ab3b48e9feee047b19d8f6ba33839dee94e08f51f32077a7a",
+      "src/work-budget.ts": "2225a1db7fd8136e76e6c8eb93066fe7ffa4c8312edf5d25bb8f70231da92540"
+    },
+    "rawReportHashes": {
+      ".local-data/resource-audit/summary.json": "3fc06b61f3fdedf76bfdabaecf3e674c10ca8612547f8c6a659a1d590993ac8e",
+      ".local-data/resource-audit/improved-all-regions/report.json": "7d1f93e73650b3b81313ec27f167a0dc29bd25708beb93b240aa524fd2688f3c",
+      ".local-data/resource-audit/improved-all-regions/verification.json": "c09edfd1b146618d82c8ea2b63bbe5e84d1aa374372e5ced3d09e024996f1405",
+      ".local-data/resource-audit/improved-pass-long/report.json": "e78a0ec41fe10fed232b0270305468973d051797247d06fabbd88daf5a5170b3",
+      ".local-data/resource-audit/browser-final/report.json": "7cba5ebb4033a272555837a4b9f1115314aecdc0ce0716837e31bc975fb2defa",
+      ".local-data/resource-audit/browser-preferred/report.json": "bb43e8f3be57bbfca5c08103cc5444b655930edd86f78fb5b69f44aebc6faaf4",
+      ".local-data/resource-audit/build-reuse.json": "bedfa975b776680394a4061f62e119f6e6cebf30c36b9dbcb89323d2be165c7c",
+      ".local-data/resource-audit/browser-all-regions-final/report.json": "8bd6b8005ff47e28b505af83d87bd6ca1ba189bf3c10be81affaa7ddb1e714bd"
+    }
+  },
+  "buildReuse": {
+    "firstEnsureMs": 2394.53925,
+    "builds": 1,
+    "reuseMs": 4.670999999999822,
+    "reuseCpuMs": 6.433
+  }
+}

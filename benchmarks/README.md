@@ -14,12 +14,15 @@ ordinary-job runtime target; they do not certify complete discovery or absence
 of qualifying hikes. Private profiling identifies repeated approach enumeration
 for one main circuit as a dominant cost. A historical disk-backed exhaustive scratch experiment is
 preserved separately; it did not address that enumeration cost. The replacement
-uses a private disk pool for its bounded normalized candidates and compacts
-family witnesses by their common-trail orientation pattern to control memory. The current app uses
+uses a private disk pool for its bounded normalized candidates. It finishes
+family membership before choosing one route per start and direction. Search and
+grouping share physical-circuit identity, and storage keeps the selected family
+and start representatives without ranking them again. The current app uses
 bounded diverse discovery, one full search per job, and exact returned-route
 constraints. Completion certifies finishing the planned work, not finding every
 qualifying hike. The [bounded-discovery review](bounded-discovery-review.json)
-records the current policy and measurements: 15 of the unchanged 24 requests
+records the policy and measurements before the 2026-10-06 variant simplification:
+15 of the unchanged 24 requests
 completed within a 60-second observation window, nine remained unfinished, and
 none failed. Peak server/worker/measurement-client RSS was 832 MB and worst
 observed cancellation was 51.2 ms. A separate harder Pass Lakes request completed
@@ -98,3 +101,9 @@ and snapshot-specific runners are preserved at
 this checkout, but their numeric trail IDs describe the explicitly pinned older
 source snapshot, rather than new mountain sections. A hike excluded by an applied hard highway boundary
 must be reported separately from a constraint failure or solver miss.
+
+The [local resource improvements](local-resource-improvements.json) compare the
+2026-10-07 CPU/memory audit with preferred-only results. The default still searches
+all five regions and every eligible start; it stores one walk per displayed hike.
+The report separates backend RSS from browser physical footprint, records CPU
+fractions relative to one core, and includes full completion and browser checks.

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RouteCandidate, SearchEvent, SearchQuery, TrailGraph } from '../../src/model.js';
 import { search } from '../../src/engine/search.js';
-import { enumerate, fixture, measure, normalized } from './oracle.js';
+import { distinct, fixture, measure, normalized } from './oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 10_000], gain: [0, 10_000], repetition: 1, includeUnknown: true };
+const stemQuery: SearchQuery = { sections: ['fixture'], distance: [0, 20_000], gain: [0, 10_000], stem: 1_000, includeUnknown: true };
 const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
 async function collect(graph: TrailGraph, criteria = query, options: Parameters<typeof search>[2] = {}) {
   const events: SearchEvent[] = [];
@@ -47,9 +48,60 @@ describe('independent legality oracle and explicit discovery quality', () => {
   it('counts only the extra return traversal as repetition', async () => {
     const graph = fixture([[0, 1, 2_000], [1, 2, 2_000], [2, 3, 2_000], [3, 1, 2_000]]);
     const routes = await compare(graph, { ...query, distance: [10_000, 10_000], repetition: 0.2 });
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.repetition === 0.2 && route.kind === 'lollipop')).toBe(true);
     expect(await compare(graph, { ...query, repetition: 0.199 })).toHaveLength(0);
+  });
+
+  it('uses the same absolute stem limit for short and long circuits', async () => {
+    const graph = fixture([[0, 1, 1_000], [1, 2, 1_000], [2, 3, 1_000], [3, 1, 1_000],
+      [1, 4, 3_000], [4, 5, 3_000], [5, 1, 3_000]]);
+    const routes = await compare(graph, stemQuery);
+    expect(routes.map(route => route.distance).sort((a, b) => a - b)).toEqual([5_000, 11_000]);
+    expect(routes.map(route => route.distance * route.repetition)).toEqual([1_000, 1_000]);
+    expect(await compare(graph, { ...stemQuery, stem: 999 })).toHaveLength(0);
+    for (const distance of [5_000, 11_000]) {
+      expect(await compare(graph, { ...stemQuery, distance: [distance, distance] })).toHaveLength(1);
+    }
+  });
+
+  it('enforces both stem limits independently for short and long hikes', async () => {
+    const graph = fixture([[0, 1, 1_000], [1, 2, 1_000], [2, 3, 1_000], [3, 1, 1_000],
+      [1, 4, 3_000], [4, 5, 3_000], [5, 1, 3_000]]);
+    const routes = await compare(graph, { ...stemQuery, repetition: 0.1 });
+    expect(routes.map(route => route.distance)).toEqual([11_000]);
+    expect(await compare(graph, { ...stemQuery, repetition: 0.1, stem: 999 })).toHaveLength(0);
+    expect(await compare(graph, { ...stemQuery, repetition: 0 })).toHaveLength(0);
+    expect((await compare(graph, { ...stemQuery, repetition: 0.2 })).map(route => route.distance).sort((a,b) => a-b)).toEqual([5_000, 11_000]);
+  });
+
+  it('checks the actual return direction and exact decimal stem boundary', async () => {
+    const graph = fixture([[0, 1, 900, { backDistance: 100.25 }], [1, 2, 300], [2, 3, 300], [3, 1, 300]]);
+    const criteria: SearchQuery = { ...stemQuery, stem: 100.25, distance: [1_900.25, 1_900.25] };
+    const routes = await compare(graph, criteria);
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.distance * routes[0]!.repetition).toBe(100.25);
+    expect(await compare(graph, { ...criteria, stem: 100.249 })).toHaveLength(0);
+  });
+
+  it('keeps a longer outward approach when the cheaper path exceeds the absolute return limit', async () => {
+    const graph = fixture([[0, 1, 100, { backDistance: 200 }],
+      [0, 2, 180, { backDistance: 20 }], [2, 3, 180, { backDistance: 20 }],
+      [3, 4, 180, { backDistance: 20 }], [4, 5, 180, { backDistance: 20 }], [5, 1, 180, { backDistance: 20 }],
+      [1, 6, 300], [6, 7, 300], [7, 1, 300]]);
+    const routes = await compare(graph, { ...stemQuery, stem: 100, distance: [1_900, 1_900] });
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.distance * routes[0]!.repetition).toBe(100);
+  });
+
+  it('allows zero-stem loops but excludes any positive approach, including fraction underflow', async () => {
+    const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [0, 3, 100],
+      [3, 4, 100], [4, 5, 100], [5, 3, 100]]);
+    const routes = await compare(graph, { ...stemQuery, stem: 0 });
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.kind).toBe('loop');
+    const tiny = fixture([[0, 1, 1e-200], [1, 2, 1e200], [2, 1, 1e200]]);
+    expect(await compare(tiny, { ...stemQuery, stem: 0, distance: [0, 1e201], gain: [0, 0] })).toHaveLength(0);
   });
 
   it('counts both road stem traversals while allowing a road prefix to be diluted by trails', async () => {
@@ -57,7 +109,7 @@ describe('independent legality oracle and explicit discovery quality', () => {
       [1, 2, 900], [2, 3, 900], [3, 1, 900]]);
     const criteria = { ...query, distance: [3_000, 3_000] as SearchQuery['distance'], roads: { distance: 300, fraction: 0.1 } };
     const routes = await compare(graph, criteria);
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.roadDistance === 300 && route.kind === 'lollipop')).toBe(true);
     expect(await compare(graph, { ...criteria, roads: { distance: 299, fraction: 1 } })).toHaveLength(0);
     expect(await compare(graph, { ...criteria, roads: { distance: 300, fraction: 0.099 } })).toHaveLength(0);
@@ -75,15 +127,15 @@ describe('independent legality oracle and explicit discovery quality', () => {
     for (const roads of [{ distance: 0, fraction: 1 }, { distance: 30_000, fraction: 0 }]) {
       expect((await compare(graph, { ...criteria, roads })).map(route => route.roadDistance)).toEqual([0]);
     }
-    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.1 } })).toHaveLength(3);
-    expect(await compare(graph, { ...criteria, roads: { distance: 1_000, fraction: 0.2 } })).toHaveLength(4);
-    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.2 } })).toHaveLength(5);
+    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.1 } })).toHaveLength(2);
+    expect(await compare(graph, { ...criteria, roads: { distance: 1_000, fraction: 0.2 } })).toHaveLength(3);
+    expect(await compare(graph, { ...criteria, roads: { distance: 2_000, fraction: 0.2 } })).toHaveLength(3);
   });
 
   it('retains longer alternative stems required by the minimum distance', async () => {
     const graph = fixture([[0, 1, 100], [0, 2, 75], [2, 1, 75], [1, 3, 300], [3, 4, 300], [4, 1, 300]]);
     const routes = await compare(graph, { ...query, distance: [1_180, 1_220] });
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.distance === 1_200)).toBe(true);
   });
 
@@ -91,7 +143,7 @@ describe('independent legality oracle and explicit discovery quality', () => {
     const graph = fixture([[0, 1, 1e-200], [1, 2, 1e200], [2, 1, 1e200]]);
     const routes = await compare(graph, { ...query, distance: [0, 1e201], gain: [0, 0], repetition: 0,
       roads: { distance: 0, fraction: 0 } });
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.kind === 'lollipop' && route.repetition === 0)).toBe(true);
   });
 
@@ -99,7 +151,7 @@ describe('independent legality oracle and explicit discovery quality', () => {
     const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [0, 3, 100, { oneWay: true }],
       [3, 4, 100], [4, 5, 100], [5, 3, 100], [0, 6, 100]]);
     const routes = await compare(graph);
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.kind === 'loop' && route.edges.length === 3)).toBe(true);
   });
 
@@ -114,15 +166,16 @@ describe('independent legality oracle and explicit discovery quality', () => {
     graph.starts[1]!.access = 'unknown';
     graph.nodes[1] = [100, 80];
     const routes = await compare(graph);
-    expect(routes).toHaveLength(4);
-    expect(new Set(routes.map(route => route.start))).toEqual(new Set([0, 1]));
+    expect(routes).toHaveLength(1);
+    // All starts are explored, but only the circuit's preferred walk survives.
+    expect(routes[0]!.start).toBe(0);
     expect(routes.every(route => route.uncertain)).toBe(true);
     const { done } = await collect(graph);
     expect(done.progress).toMatchObject({ totalStarts: 2, attemptedStarts: 2, completedStarts: 2 });
     expect(await compare(graph, { ...query, includeUnknown: false })).toHaveLength(0);
     graph.edges.forEach(edge => { edge.access = 'public'; });
     const publicRoutes = await compare(graph, { ...query, includeUnknown: false });
-    expect(publicRoutes).toHaveLength(2);
+    expect(publicRoutes).toHaveLength(1);
     expect(publicRoutes.every(route => route.start === 0)).toBe(true);
     expect((await collect(graph, { ...query, includeUnknown: false })).done.progress)
       .toMatchObject({ totalStarts: 1, attemptedStarts: 1, completedStarts: 1 });
@@ -138,7 +191,7 @@ describe('independent legality oracle and explicit discovery quality', () => {
     const graph = fixture([[0, 1, 1e-200, { connector: true }], [1, 2, 1e200], [2, 0, 1e200]]);
     const routes = await compare(graph, { ...query, distance: [0, 1e201], gain: [0, 0], repetition: 0,
       roads: { distance: 1, fraction: 0 } });
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(1);
     expect(routes.every(route => route.roadDistance > 0 && route.roadDistance / route.distance === 0)).toBe(true);
   });
 
@@ -178,12 +231,26 @@ describe('independent legality oracle and explicit discovery quality', () => {
         gain: [Math.floor(random() * 30), 30 + Math.floor(random() * 70)],
         repetition: random(), includeUnknown: random() < 0.5,
         roads: random() < 0.5 ? undefined : { distance: random() * 300, fraction: random() } });
+      await compare(graph, { ...stemQuery, distance: [Math.floor(random() * 100), 100 + Math.floor(random() * 500)],
+        gain: [Math.floor(random() * 30), 30 + Math.floor(random() * 70)],
+        stem: random() * 200, includeUnknown: random() < 0.5,
+        roads: random() < 0.5 ? undefined : { distance: random() * 300, fraction: random() } });
     }
   });
 });
 
 describe('private candidate lifecycle', () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100]], [0, 1, 2]);
+  it('requires one finite stem limit while retaining recorded legacy fractions', async () => {
+    for (const criteria of [{ ...stemQuery, stem: undefined },
+      { ...stemQuery, stem: -1 }, { ...stemQuery, stem: NaN }, { ...stemQuery, stem: Infinity }]) {
+      await expect(collect(graph, criteria)).rejects.toThrow(/stem/i);
+    }
+    for (const repetition of [-1, 1.1, NaN, Infinity]) {
+      await expect(collect(graph, { ...query, repetition })).rejects.toThrow(/legacy/i);
+    }
+    expect((await collect(graph, { ...stemQuery, stem: 0 })).done.status).toBe('complete');
+  });
   it('validates road limits and snapshots them before yielding progress', async () => {
     for (const roads of [{ distance: -1, fraction: 0.1 }, { distance: Infinity, fraction: 0.1 },
       { distance: NaN, fraction: 0.1 }, { distance: 100, fraction: -0.1 },
@@ -192,7 +259,7 @@ describe('private candidate lifecycle', () => {
     }
     const roadsGraph = fixture([[0, 1, 100, { connector: true }], [1, 2, 100], [2, 0, 100]]);
     const criteria = { ...query, roads: { distance: 100, fraction: 1 } };
-    const expected = enumerate(roadsGraph, criteria).map(key).sort();
+    const expected = distinct(roadsGraph, criteria).map(group => key(group.route)).sort();
     const iterator = search(roadsGraph, criteria);
     expect((await iterator.next()).value).toMatchObject({ type: 'progress' });
     criteria.roads.distance = 0; criteria.roads.fraction = 0;
@@ -261,4 +328,18 @@ it('reports monotonic completion of selected discovery work and preserves interr
   expect(terminal).toMatchObject({ type: 'done', status: 'stopped' });
   if (terminal?.type !== 'done') throw new Error('Missing terminal search event');
   expect(terminal.progress.completedSearchPoints).toBeLessThan(terminal.progress.totalSearchPoints!);
+});
+
+it('preserves every preferred circuit and completed discovery point when work is scheduled', async () => {
+  const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [0, 3, 150], [3, 2, 150]], [0, 1, 2, 3]);
+  const criteria: SearchQuery = { ...query, effort: 'deep' };
+  const uninterrupted = await collect(graph, criteria), scheduled = await collect(graph, criteria, {
+    sliceExpansions: 32,
+    budget: { checkpoint: () => new Promise<void>(resolve => setTimeout(resolve, 0)) },
+  });
+  expect(scheduled.routes).toEqual(uninterrupted.routes);
+  expect(scheduled.done.status).toBe('complete');
+  expect(scheduled.done.progress.expansions).toBe(uninterrupted.done.progress.expansions);
+  expect(scheduled.done.progress.completedSearchPoints).toBe(uninterrupted.done.progress.completedSearchPoints);
+  expect(scheduled.done.progress.completedStarts).toBe(4);
 });
