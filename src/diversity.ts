@@ -44,8 +44,8 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery, option
   ranked.sort((a, b) => preference(graph, a.route, b.route) || compareNumbers(a.core, b.core));
   const representatives: (typeof ranked)[number][] = [], result: SolvedRoute[] = [];
   let work = 0, yieldedAt = performance.now();
-  const checkpoint = async () => {
-    if (++work % 128 || performance.now() - yieldedAt < 8) return;
+  const shouldYield = () => ++work % 128 === 0 && performance.now() - yieldedAt >= 8;
+  const yieldProgress = async () => {
     if (options.budget) await options.budget.checkpoint();
     else await new Promise<void>(resolve => setTimeout(resolve, 0));
     if (progress) await options.onProgress?.(progress);
@@ -60,7 +60,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery, option
         represented = true;
         break;
       }
-      await checkpoint();
+      if (shouldYield()) await yieldProgress();
     }
     if (!represented) {
       representatives.push(item);
@@ -68,7 +68,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery, option
       if (options.onRoute) await options.onRoute(saved);
       else result.push(saved);
     }
-    await checkpoint();
+    if (shouldYield()) await yieldProgress();
   }
   await options.budget?.checkpoint();
   return result;
