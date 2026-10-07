@@ -73,5 +73,26 @@
       ],
       "limitation": "Basemap appearance and flows verified in the browser; no new frame-rate, GPU-memory or remote-service availability measurement. Route discovery is unchanged."
     }
+  },
+  "labelTypography": {
+    "date": "2026-10-06",
+    "baselineCommit": "20d862e",
+    "reference": "https://mapmaker.maptoolkit.org/?name=hiking&user=maptoolkit",
+    "preset": "Blured",
+    "fontFamily": "Averia Serif Libre",
+    "addedDependencies": 0,
+    "maintainedSource": {
+      "before": 6905,
+      "after": 6929,
+      "addedLines": 24,
+      "mapModuleLines": 426
+    },
+    "implementation": "Override the label font expressions once after the provider style loads, matching the preset's weights and retaining non-Latin fallbacks; continue using the provider's existing glyph endpoint.",
+    "verification": {
+      "referenceComparison": "All 41 label font expressions match the independent style copied from MapMaker with Hiking and Blured selected.",
+      "build": "passed",
+      "typecheck": "passed",
+      "browser": "Saved Iron Peak / Fourth Creek hike renders with the new labels, contours, route geometry and attribution; no browser errors or warnings."
+    }
   }
 }

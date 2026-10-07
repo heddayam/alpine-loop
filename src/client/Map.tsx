@@ -19,6 +19,24 @@ import { clusterLocations } from "./clusters.js";
 
 setWorkerUrl(workerUrl);
 const empty = { type: "FeatureCollection" as const, features: [] };
+// Match MapMaker's "Blured" preset while keeping its non-Latin font fallbacks.
+const bluredWeights: Record<string, string> = {
+  "Ysabeau Regular": "Regular",
+  "Ysabeau Bold": "Regular",
+  "Ysabeau Small Caps Regular": "Regular",
+  "Ysabeau Small Caps Bold": "Bold",
+  "Ysabeau Extrabold Italic": "Bold Italic",
+  "Ysabeau Medium Italic": "Italic",
+  "Ysabeau Italic": "Light Italic",
+};
+function bluredFont(value: unknown, pointLabel: boolean): unknown {
+  if (Array.isArray(value))
+    return value.map((item) => bluredFont(item, pointLabel));
+  if (typeof value !== "string") return value;
+  const weight = pointLabel && value === "Ysabeau Bold"
+    ? "Bold" : bluredWeights[value];
+  return weight ? `Averia Serif Libre ${weight}` : value;
+}
 const selected: ExpressionSpecification = [
   "boolean", ["feature-state", "selected"], false,
 ];
@@ -140,6 +158,12 @@ export function HikeMap({
         setMapError("The basemap could not load. Check your connection and reload the page.");
     });
     instance.once("style.load", () => {
+      for (const layer of instance.getStyle().layers) {
+        if (layer.type !== "symbol" || !layer.layout?.["text-font"]) continue;
+        instance.setLayoutProperty(layer.id, "text-font", bluredFont(
+          layer.layout["text-font"], layer.id.startsWith("place_point_label"),
+        ) as ExpressionSpecification);
+      }
       instance.addSource("sections", {
         type: "geojson", data: empty, promoteId: "id",
       });
