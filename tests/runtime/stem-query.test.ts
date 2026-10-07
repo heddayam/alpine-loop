@@ -14,15 +14,19 @@ describe('persisted stem search constraints', () => {
     expect(parseQuery({ ...query, stem: 30_000 }).stem).toBe(30_000);
   });
 
+  it('retains both limits when submitted together', () => {
+    expect(parseQuery({ ...query, repetition: 0.2 })).toMatchObject({ stem: query.stem, repetition: 0.2 });
+  });
+
   it('preserves legacy limits for immutable saved and queued searches', () => {
     const parsed = parseQuery({ ...query, stem: undefined, repetition: 0.2 });
     expect(parsed.repetition).toBe(0.2);
     expect(parsed).not.toHaveProperty('stem');
   });
 
-  it('rejects conflicting, absent, malformed and nonfinite limits', () => {
+  it('rejects absent, malformed and nonfinite limits', () => {
     for (const value of [
-      { ...query, stem: undefined }, { ...query, repetition: 0.2 },
+      { ...query, stem: undefined },
       ...[-1, NaN, Infinity, '1', null].map(stem => ({ ...query, stem })),
       ...[-1, 1.1, NaN, Infinity, '0.2', null].map(repetition => ({ ...query, stem: undefined, repetition })),
     ]) {

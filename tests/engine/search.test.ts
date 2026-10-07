@@ -65,6 +65,16 @@ describe('independent legality oracle and explicit discovery quality', () => {
     }
   });
 
+  it('enforces both stem limits independently for short and long hikes', async () => {
+    const graph = fixture([[0, 1, 1_000], [1, 2, 1_000], [2, 3, 1_000], [3, 1, 1_000],
+      [1, 4, 3_000], [4, 5, 3_000], [5, 1, 3_000]]);
+    const routes = await compare(graph, { ...stemQuery, repetition: 0.1 });
+    expect(routes.map(route => route.distance)).toEqual([11_000]);
+    expect(await compare(graph, { ...stemQuery, repetition: 0.1, stem: 999 })).toHaveLength(0);
+    expect(await compare(graph, { ...stemQuery, repetition: 0 })).toHaveLength(0);
+    expect((await compare(graph, { ...stemQuery, repetition: 0.2 })).map(route => route.distance).sort((a,b) => a-b)).toEqual([5_000, 11_000]);
+  });
+
   it('checks the actual return direction and exact decimal stem boundary', async () => {
     const graph = fixture([[0, 1, 900, { backDistance: 100.25 }], [1, 2, 300], [2, 3, 300], [3, 1, 300]]);
     const criteria: SearchQuery = { ...stemQuery, stem: 100.25, distance: [1_900.25, 1_900.25] };
@@ -232,7 +242,7 @@ describe('independent legality oracle and explicit discovery quality', () => {
 describe('private candidate lifecycle', () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100]], [0, 1, 2]);
   it('requires one finite stem limit while retaining recorded legacy fractions', async () => {
-    for (const criteria of [{ ...stemQuery, stem: undefined }, { ...stemQuery, repetition: 0.2 },
+    for (const criteria of [{ ...stemQuery, stem: undefined },
       { ...stemQuery, stem: -1 }, { ...stemQuery, stem: NaN }, { ...stemQuery, stem: Infinity }]) {
       await expect(collect(graph, criteria)).rejects.toThrow(/stem/i);
     }

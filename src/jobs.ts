@@ -1,4 +1,5 @@
 import { DEFAULT_ROAD_LIMITS, type SearchQuery } from './model.js';
+import { boundaryError } from './boundary.js';
 
 export class RequestError extends Error {
   constructor(message: string, public statusCode: number) { super(message); }
@@ -7,31 +8,37 @@ export class RequestError extends Error {
 export function parseQuery(value: unknown): SearchQuery {
   if (!value || typeof value !== 'object') throw new RequestError('Choose regions and hike constraints.', 400);
   const query = value as SearchQuery;
+  if (query.boundary !== undefined) {
+    const error = boundaryError(query.boundary);
+    if (error) throw new RequestError(error, 400);
+  }
   if (query.effort !== undefined && query.effort !== 'deep') throw new RequestError('Submit a search using the current search settings.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
-  if (!Array.isArray(query.sections) || !query.sections.length || new Set(query.sections).size !== query.sections.length
+  if (!Array.isArray(query.sections) || (!query.sections.length && !query.boundary) || new Set(query.sections).size !== query.sections.length
     || query.sections.some(id => typeof id !== 'string' || !id.trim())) {
     throw new RequestError('Choose at least one distinct search region.', 400);
   }
   if ([query.distance, query.gain].some(values => !range(values, 2) || values[0]! < 0 || values[0]! > values[1]!)
     || query.distance[1] <= 0
     || typeof query.includeUnknown !== 'boolean') {
-    throw new RequestError('Use ordered, nonnegative distance and elevation-gain ranges.', 400);
+    throw new RequestError('Use ordered, nonnegative distance and elevation gain ranges.', 400);
   }
-  if ((query.stem === undefined) === (query.repetition === undefined)) throw new RequestError('Specify exactly one stem-distance limit.', 400);
+  if (query.stem === undefined && query.repetition === undefined) throw new RequestError('Specify a stem distance or percentage limit.', 400);
   if (query.stem !== undefined && (typeof query.stem !== 'number' || !Number.isFinite(query.stem) || query.stem < 0)) {
     throw new RequestError('Use a finite, nonnegative stem distance.', 400);
   }
   if (query.repetition !== undefined && (typeof query.repetition !== 'number' || !Number.isFinite(query.repetition)
-    || query.repetition < 0 || query.repetition > 1)) throw new RequestError('This saved search has an invalid repeated-trail limit.', 400);
+    || query.repetition < 0 || query.repetition > 1)) throw new RequestError('Use a stem percentage from 0% to 100%.', 400);
   const roads = query.roads === undefined ? DEFAULT_ROAD_LIMITS : query.roads;
   if (!roads || typeof roads.distance !== 'number' || !Number.isFinite(roads.distance) || roads.distance < 0
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
   return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain],
-    ...(query.stem === undefined ? { repetition: query.repetition } : { stem: query.stem }),
+    ...(query.boundary ? { boundary: query.boundary.map(point => [...point]) } : {}),
+    ...(query.stem === undefined ? {} : { stem: query.stem }),
+    ...(query.repetition === undefined ? {} : { repetition: query.repetition }),
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 
@@ -267,6 +274,14 @@ export async function createJobs(dataDirectory: string, directory: string) {
       return results(id, store => store.page(offset, sort, order), revision);
     },
     locations: (id: string, revision?: number) => results(id, store => store.locations(), revision),
+    paths(id: string, bounds: number[], revision?: number) {
+      if (bounds.length !== 4 || bounds.some(value => !Number.isFinite(value))
+        || bounds[0]! > bounds[2]! || bounds[1]! > bounds[3]!
+        || bounds[0]! < -180 || bounds[2]! > 180 || bounds[1]! < -90 || bounds[3]! > 90) {
+        throw new RequestError('Choose valid map bounds.', 400);
+      }
+      return results(id, store => store.paths(bounds as [number, number, number, number]), revision);
+    },
     route: (id: string, routeId: string, revision?: number) => results(id, store => {
       const route = store.route(routeId);
       if (!route) throw new RequestError('This route is not available.', 404);

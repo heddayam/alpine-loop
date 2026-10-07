@@ -59,8 +59,11 @@ const location = (id: string, x: number, y = 0): RouteLocation => ({
   startId: id,
   startName: id,
   startPosition: [x, y],
+  bounds: [x, y, x, y],
   trailNames: [],
   distance: 1000,
+  gain: 100,
+  repetition: 0,
 });
 
 describe("saved-job interface boundaries", () => {

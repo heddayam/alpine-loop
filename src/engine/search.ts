@@ -11,10 +11,10 @@ type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: numb
 export function validateQuery(query: SearchQuery): void {
   for (const range of [query.distance, query.gain]) {
     if (range.length !== 2 || range.some(value => !Number.isFinite(value) || value < 0) || range[0] > range[1]) {
-      throw new Error('Search distance and gain need ordered, finite, nonnegative ranges');
+      throw new Error('Search distance and elevation gain need ordered, finite, nonnegative ranges');
     }
   }
-  if ((query.stem === undefined) === (query.repetition === undefined)) throw new Error('Specify exactly one stem-distance limit');
+  if (query.stem === undefined && query.repetition === undefined) throw new Error('Specify a stem distance or percentage limit');
   if (query.stem !== undefined && (!Number.isFinite(query.stem) || query.stem < 0)) throw new Error('Stem distance must be finite and nonnegative');
   if (query.repetition !== undefined && (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1)) {
     throw new Error('Legacy repeated-trail limits must be a fraction between zero and one');
@@ -101,7 +101,8 @@ function candidate(graph: TrailGraph, query: SearchQuery, start: number, edges: 
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
   if (distance < query.distance[0] || distance > query.distance[1] || gain < query.gain[0] || gain > query.gain[1]
     || roadDistance > roads.distance || roadDistance / distance > roads.fraction
-    || (query.stem === undefined ? repetition > query.repetition! : repeatedDistance > query.stem)) return;
+    || (query.stem !== undefined && repeatedDistance > query.stem)
+    || (query.repetition !== undefined && repetition > query.repetition)) return;
   const route: RouteCandidate = { id: '', start, edges, distance, gain, roadDistance, repetition,
     kind: back.length ? 'lollipop' : 'loop', uncertain: graph.starts[start]!.access === 'unknown'
       || edges.some(id => graph.edges[id]!.access === 'unknown') };
@@ -519,8 +520,9 @@ function interest(graph: TrailGraph, query: SearchQuery, edges: number[], back: 
   const violation = (value: number, range: [number, number]) => Math.max(range[0] - value, value - range[1], 0) / Math.max(range[1], 1);
   const roads = edges.reduce((sum, id) => sum + (graph.edges[id]!.connector ? graph.edges[id]!.distance : 0), 0);
   const repeatedDistance = back.reduce((sum, id) => sum + graph.edges[id]!.distance, 0);
-  const stemViolation = query.stem === undefined ? Math.max(0, repeatedDistance / distance - query.repetition!)
-    : Math.max(0, repeatedDistance - query.stem) / Math.max(query.distance[1], 1);
+  const stemViolation = Math.max(
+    Math.max(0, repeatedDistance / distance - (query.repetition ?? 1)),
+    Math.max(0, repeatedDistance - (query.stem ?? Infinity)) / Math.max(query.distance[1], 1));
   return violation(distance, query.distance) + violation(gain, query.gain)
     + stemViolation + roads / Math.max(distance, 1) * 0.001;
 }
@@ -571,7 +573,7 @@ function localCircuits(graph: TrailGraph, index: Index, query: SearchQuery, core
 function stemDistanceBudget(index: Index, query: SearchQuery, ceiling: number): number {
   if (query.stem === 0) return 0;
   if (!Number.isFinite(index.stemRatio)) return Infinity;
-  return query.stem === undefined ? (index.stemRatio + 1) * query.repetition! * ceiling : (index.stemRatio + 1) * query.stem;
+  return (index.stemRatio + 1) * Math.min(query.stem ?? Infinity, (query.repetition ?? 1) * ceiling);
 }
 
 /** Integer upper core length plus a generous ordered-sum guard makes this

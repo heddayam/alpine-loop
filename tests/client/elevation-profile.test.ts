@@ -46,8 +46,17 @@ describe("distance-indexed saved elevation geometry", () => {
       }),
     );
     expect(markup).toContain("138.2 mi");
-    expect(markup).toContain("Distance (mi)");
-    expect(markup).toContain("Elevation (ft)");
+    expect(markup).toMatch(/text-anchor="end">138\.2 mi<\/text>/);
+    expect(markup).not.toContain("Distance (mi)");
+    expect(markup).toMatch(/profile-elevation-tick[^>]*>[\d,]+ ft<\/text>/);
+    expect(markup).not.toContain("Elevation (ft)");
+    const metric = renderToStaticMarkup(createElement(ElevationProfile, { route: route(geometry), units: "metric", onHover: () => {} }));
+    expect(metric).toContain("222.4 km");
+    expect(metric).toMatch(/text-anchor="end">222\.4 km<\/text>/);
+    expect(metric).not.toContain("Distance (km)");
+    expect(metric).toMatch(/profile-elevation-tick[^>]*>[\d,]+ m<\/text>/);
+    expect(metric).not.toContain("Elevation (m)");
+    expect(metric).not.toContain("(ft)");
   });
 
   it("interpolates coordinates and elevation at the hovered distance and clamps to exact endpoints", () => {

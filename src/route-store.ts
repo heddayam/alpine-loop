@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
 import { MIN_LOOP_SIMILARITY } from './diversity.js';
-import { ROUTES_PER_PAGE, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RouteView, type SortOrder } from './model.js';
+import { ROUTES_PER_PAGE, type Bounds, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RoutePath, type RouteView, type SortOrder } from './model.js';
 
 export type SavedChoice = { route: StoredRoute; groupId: string };
 type Counts = { routeCount: number; groupCount: number };
@@ -101,11 +101,66 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
         return { routes: rows.map(choice), pageTotal: current.groupCount, offset, ...current, sort, order, selectionNote: savedNote };
       },
       locations(): RouteLocation[] {
-        const rows = db.prepare(`SELECT ${columns} FROM ${from} ORDER BY r.group_id`).all() as ChoiceRow[];
+        const rows = db.prepare(`SELECT ${columns}, r.steps FROM ${from} ORDER BY r.group_id`).all() as (ChoiceRow & { steps: string })[];
+        // Only small extents cross the API; shared trail drawings are read once.
+        const shapes = new Map<string, Bounds>();
         return rows.map(row => {
-          const { id, startId, startName, startPosition, trailNames, distance, groupId } = choice(row);
-          return { id, startId, startName, startPosition, trailNames, distance, groupId };
+          const { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId } = choice(row);
+          const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+          const steps = JSON.parse(row.steps) as StoredRoute['sections'];
+          if (!steps.length) throw new Error('Saved route drawing is missing');
+          for (const step of steps) {
+            const key = `${step.section}:${step.id}`;
+            let extent = shapes.get(key);
+            if (!extent) {
+              const shape = getGeometry.get(step.section, step.id);
+              if (!shape) throw new Error('Saved route drawing is missing');
+              const points = JSON.parse(shape.points as string) as Position[];
+              if (!points.length) throw new Error('Saved route drawing is missing');
+              extent = [Infinity, Infinity, -Infinity, -Infinity];
+              for (const [longitude, latitude] of points) {
+                extent[0] = Math.min(extent[0], longitude);
+                extent[1] = Math.min(extent[1], latitude);
+                extent[2] = Math.max(extent[2], longitude);
+                extent[3] = Math.max(extent[3], latitude);
+              }
+              shapes.set(key, extent);
+            }
+            bounds[0] = Math.min(bounds[0], extent[0]);
+            bounds[1] = Math.min(bounds[1], extent[1]);
+            bounds[2] = Math.max(bounds[2], extent[2]);
+            bounds[3] = Math.max(bounds[3], extent[3]);
+          }
+          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId, bounds };
         });
+      },
+      paths(bounds: Bounds): RoutePath[] {
+        const rows = db.prepare(`SELECT r.id, r.steps FROM ${from} ORDER BY r.distance, r.id`).all() as { id: string; steps: string }[];
+        const paths = new Map<string, RoutePath | null>();
+        for (const row of rows) {
+          for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
+            const key = `${step.section}:${step.id}`;
+            if (!paths.has(key)) {
+              const shape = getGeometry.get(step.section, step.id);
+              if (!shape) throw new Error('Saved route drawing is missing');
+              const points = JSON.parse(shape.points as string) as Position[];
+              if (!points.length) throw new Error('Saved route drawing is missing');
+              const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+              for (const [longitude, latitude] of points) {
+                extent[0] = Math.min(extent[0], longitude);
+                extent[1] = Math.min(extent[1], latitude);
+                extent[2] = Math.max(extent[2], longitude);
+                extent[3] = Math.max(extent[3], latitude);
+              }
+              const visible = extent[0] <= bounds[2] && extent[2] >= bounds[0]
+                && extent[1] <= bounds[3] && extent[3] >= bounds[1];
+              paths.set(key, visible ? { id: key, routeIds: [], geometry: points.map(([lon, lat]) => [lon, lat]) } : null);
+            }
+            const path = paths.get(key);
+            if (path && path.routeIds.at(-1) !== row.id) path.routeIds.push(row.id);
+          }
+        }
+        return [...paths.values()].filter((path): path is RoutePath => path !== null);
       },
       route(id: string): RouteView | undefined {
         const row = detail.get(id) as (ChoiceRow & { steps: string }) | undefined;

@@ -48,6 +48,11 @@ it('stores only one walk per hike, with immutable totals and preferred-only pagi
       expect(published.page(ROUTES_PER_PAGE).routes.map(route => route.id)).toEqual(['r50', 'r51']);
       expect(published.page(0, 'distance', 'desc').routes[0]!.id).toBe('r51');
       expect(published.locations()).toHaveLength(count);
+      const paths = published.paths([-1, -1, 1, 1]);
+      expect(paths).toHaveLength(1);
+      expect(paths[0]!.geometry).toEqual(drawing.map(([lon, lat]) => [lon, lat]));
+      expect(paths[0]!.routeIds).toEqual(Array.from({ length: count }, (_, index) => `r${index.toString().padStart(2, '0')}`));
+      expect(published.paths([2, 2, 3, 3])).toEqual([]);
       expect(published.route('alternative')).toBeUndefined();
       expect(published.page().selectionNote).toContain('Alternative loops, starting points and directions are not saved');
       expect(() => published.begin()).toThrow('immutable');
@@ -70,11 +75,16 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
       { section: 'fixture', id: 1, reverse: false }, { section: 'fixture', id: 0, reverse: true }];
     store.begin(); store.add(item);
     store.saveGeometry('fixture', 0, approach); store.saveGeometry('fixture', 1, loop);
+    store.saveGeometry('fixture', 99, [[-10, -10], [10, 10]]);
     store.commit(); store.close();
     const published = createRouteStore(file);
     try {
       expect(published.route('lollipop')!.geometry).toEqual(expected);
       expect(published.route('lollipop')!.geometry).toEqual(expected);
+      expect(published.locations()[0]!.bounds).toEqual([0, 0, 3, 1]);
+      expect(published.paths([-1, -1, 4, 2]).map(path => path.routeIds)).toEqual([['lollipop'], ['lollipop']]);
+      expect(published.paths([2.5, -.5, 3.5, .5]).map(path => path.geometry))
+        .toEqual([loop.map(([lon, lat]) => [lon, lat])]);
     } finally { published.close(); }
     const fixture = new DatabaseSync(file, { readOnly: true });
     try { expect(JSON.parse(fixture.prepare('SELECT points FROM geometry WHERE trail_id = 0').get()!.points as string)).toEqual(approach); }
@@ -142,6 +152,8 @@ it.each(['legacy', 'revision', 'variants'] as const)('reads %s completed files w
       expect(published.counts).toEqual({ routeCount: 4, groupCount: 1 });
       expect(published.page().routes.map(route => route.id)).toEqual(['preferred']);
       expect(published.locations().map(route => route.id)).toEqual(['preferred']);
+      expect(published.paths([-1, -1, 2, 2])[0]!.routeIds).toEqual(['preferred']);
+      expect(published.locations()[0]!.bounds).toEqual([0, 0, 1, 1]);
       for (const id of ['preferred', 'other-start', 'reverse', 'tiny-loop-change']) {
         const route = published.route(id)!;
         expect(route.id).toBe(id);

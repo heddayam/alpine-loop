@@ -4,13 +4,14 @@ import type {
   SectionView,
   UnavailableSection,
 } from "../data-format.js";
+import type { SearchBoundary } from "../model.js";
 
 const formatBoundary = (name: string) =>
   name
     .replace(/\bI(\d+)\b/g, "I-$1")
     .replace(/\bUS(\d+)\b/g, "US $1")
     .replace(/\bWA(\d+)\b/g, "SR $1")
-    .replace(/,\s*/g, " · ")
+    .replace(/\s*[,·]\s*/g, ", ")
     .replace(/^[a-z]/, (letter) => letter.toUpperCase());
 
 export const boundaryLabel = (name: string) =>
@@ -19,13 +20,13 @@ export const boundaryLabel = (name: string) =>
   );
 
 const washingtonAreas: Record<string, string> = {
-  "north of i-90 · south of us 2": "Alpine Lakes",
-  "north of i-90 · north of us 2 · south of sr 20":
+  "north of i-90, south of us 2": "Alpine Lakes",
+  "north of i-90, north of us 2, south of sr 20":
     "Glacier Peak & Mountain Loop",
-  "north of i-90 · north of us 2 · north of sr 20":
+  "north of i-90, north of us 2, north of sr 20":
     "Mount Baker & North Cascades",
-  "south of i-90 · north of us 12": "Mount Rainier & Central Cascades",
-  "south of i-90 · south of us 12": "Mount St. Helens & Mount Adams",
+  "south of i-90, north of us 12": "Mount Rainier & Central Cascades",
+  "south of i-90, south of us 12": "Mount St. Helens & Mount Adams",
 };
 
 export const sectionLabel = (name: string) => {
@@ -84,13 +85,17 @@ export function groupedCatalog(dataset: CatalogView): RegionGroup[] {
 export function RegionPicker({
   dataset,
   value,
+  savedSections = [],
   disabled = false,
   onChange,
+  boundary,
 }: {
   dataset: CatalogView;
   value: string[];
+  savedSections?: { id: string; name: string }[];
   disabled?: boolean;
   onChange: (ids: string[]) => void;
+  boundary?: SearchBoundary;
 }) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
@@ -100,9 +105,10 @@ export function RegionPicker({
     (selected) => !dataset.sections.some((section) => section.id === selected),
   );
   const selection =
-    value.length === 1
+    boundary ? "Drawn area" : value.length === 1
       ? sectionLabel(
           dataset.sections.find((section) => section.id === value[0])?.name ??
+            savedSections.find((section) => section.id === value[0])?.name ??
             value[0]!,
         )
       : value.length
@@ -160,7 +166,7 @@ export function RegionPicker({
       <summary
         ref={summary}
         className="region-summary"
-        aria-label={`Search regions: ${selection}`}
+        aria-label={`Search area: ${selection}`}
         aria-disabled={disabled || undefined}
         aria-controls={`${id}-regions`}
         tabIndex={disabled ? -1 : 0}
@@ -246,8 +252,13 @@ export function RegionPicker({
                   disabled={disabled}
                   onChange={() => update([selected], false)}
                 />
-                <span>{selected}</span>
-                <small>Unavailable</small>
+                <span>
+                  {sectionLabel(
+                    savedSections.find((section) => section.id === selected)
+                      ?.name ?? selected,
+                  )}
+                </span>
+                <small>Saved region unavailable</small>
               </label>
             ))}
           </section>

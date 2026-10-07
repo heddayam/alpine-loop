@@ -35,7 +35,8 @@ export function measure(graph: TrailGraph, query: SearchQuery, start: number, ed
   const repetition = repeatedDistance / distance;
   const roads = query.roads ?? { distance: 1609.344, fraction: 0.1 };
   if (distance < query.distance[0] || distance > query.distance[1] || gain < query.gain[0] || gain > query.gain[1]
-    || (query.stem === undefined ? repetition > query.repetition! : repeatedDistance > query.stem)
+    || (query.stem !== undefined && repeatedDistance > query.stem)
+    || (query.repetition !== undefined && repetition > query.repetition)
     || roadDistance > roads.distance || roadDistance / distance > roads.fraction) return;
   return { start, edges, distance, gain, roadDistance, repetition };
 }
@@ -63,7 +64,8 @@ export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] 
             const repetition = repeatedDistance / distance;
             if (distance >= query.distance[0] && distance <= query.distance[1]
               && gain >= query.gain[0] && gain <= query.gain[1]
-              && (query.stem === undefined ? repetition <= query.repetition! : repeatedDistance <= query.stem)
+              && (query.stem === undefined || repeatedDistance <= query.stem)
+              && (query.repetition === undefined || repetition <= query.repetition)
               && roadDistance <= roads.distance && roadDistance / distance <= roads.fraction) {
               results.push({ start, edges, distance, gain, roadDistance, repetition });
             }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CatalogView, DownloadSnapshot } from "../data-format.js";
+import type { UnitSystem } from "./units.js";
 import {
   boundaryLabel,
   groupedCatalog,
@@ -16,6 +17,8 @@ const size = (bytes: number) => {
 
 export function SettingsDialog({
   open,
+  units,
+  onUnits,
   dataset,
   download,
   downloadError,
@@ -27,6 +30,8 @@ export function SettingsDialog({
   onDismissDownload,
 }: {
   open: boolean;
+  units: UnitSystem;
+  onUnits: (units: UnitSystem) => void;
   dataset?: CatalogView;
   download: DownloadSnapshot | null;
   downloadError: string;
@@ -95,6 +100,29 @@ export function SettingsDialog({
         </button>
       </header>
       <div className="dialog-body">
+        <fieldset className="unit-settings">
+          <legend>Units</legend>
+          <label>
+            <input
+              type="radio"
+              name="units"
+              value="imperial"
+              checked={units === "imperial"}
+              onChange={() => onUnits("imperial")}
+            />
+            Imperial <span>miles, feet</span>
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="units"
+              value="metric"
+              checked={units === "metric"}
+              onChange={() => onUnits("metric")}
+            />
+            Metric <span>kilometers, meters</span>
+          </label>
+        </fieldset>
         {download && (
           <section
             className="download-panel"
@@ -118,7 +146,7 @@ export function SettingsDialog({
                       ?.name ?? id,
                   ),
                 )
-                .join(" · ")}
+                .join(", ")}
             </p>
             {downloading && (
               <>
@@ -237,7 +265,7 @@ export function SettingsDialog({
                       />
                       <span>{sectionLabel(section.name)}</span>
                       <span className="area-status">
-                        {section.needsRepair ? "Repair · " : ""}
+                        {section.needsRepair ? "Repair, " : ""}
                         {size(section.bytes)}
                       </span>
                     </label>
@@ -267,7 +295,7 @@ export function SettingsDialog({
               >
                 Download selected
                 {chosen.length
-                  ? ` · ${size(chosen.reduce((bytes, section) => bytes + section.bytes, 0))}`
+                  ? ` (${size(chosen.reduce((bytes, section) => bytes + section.bytes, 0))})`
                   : ""}
               </button>
               {!!chosen.length && (
@@ -287,7 +315,7 @@ export function SettingsDialog({
           <details className="settings-notes">
             <summary>About trail data</summary>
             <p>
-              {dataset.name} · {dataset.sourceDate}
+              {dataset.name}, {dataset.sourceDate}
             </p>
             <p>
               Routes stay within each area. Major highway boundaries exclude
@@ -312,7 +340,7 @@ export function SettingsDialog({
                 <a href={source.url} target="_blank" rel="noreferrer">
                   {source.name}
                 </a>
-                {" · "}
+                {", "}
                 {source.license}
               </p>
             ))}

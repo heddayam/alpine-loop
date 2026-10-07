@@ -1,7 +1,7 @@
 # Alpine Loop
 
 A local desktop app for finding loops and lollipops from mapped trails. Choose
-one or more prepared mountain regions, set distance, climb, repeated-trail and road limits,
+one or more prepared mountain regions, set distance, elevation gain, stem and road limits,
 and submit a search job. Browse stable results after discovery finishes.
 Every shown route meets the requested constraints; unfinished jobs show their
 stage, within-region progress and completed regions. Discovery tries a bounded
@@ -45,14 +45,23 @@ selected sections. Missing or unprepared coverage is disclosed.
 Search regions and prepared data sections share the same identity and exact
 footprint. Familiar place names identify each area in a grouped search dropdown;
 exact boundaries remain visible on the map and in Settings. Select regions from
-the dropdown. Map clicks browse hikes without changing the search area. Every
-eligible start in those regions is considered; panning and zooming only change the
-view. There are no separate named rectangles or custom drawing scopes. Unknown
-pedestrian access is included and labeled by default, and can be excluded.
+the dropdown, or choose **Draw** beside it under **Search area** and click around an area on the map.
+Finish with the first point, the Finish button or Enter; Undo removes the last
+point and Cancel or Escape keeps the previous selection. Drawing automatically
+selects every overlapping prepared section and considers every eligible starting
+point inside or on the boundary. Hikes may extend outside the drawn boundary;
+the prepared highway partitions still apply. Crossed or unsupported boundaries
+are rejected; a valid area with no eligible starts completes with no results.
+The boundary is saved with the job and restored by View results or Copy settings.
+**Redraw** replaces the polygon; the adjacent clear button removes the
+starting-point restriction and returns to the full selected regions. Panning and zooming
+only change the view. Drawing uses available prepared coverage and does not
+prepare new trail data. Unknown
+pedestrian access is included by default, and can be excluded.
 Explicit prohibitions are respected.
 Road and parking starts respect mapped car-access restrictions separately from
 walking permission. A vehicle-closed track can remain walkable without creating
-a start at its trail junction. Unknown access is labeled; mapped road contacts
+a start at its trail junction. Mapped road contacts
 do not certify legal parking or current road conditions.
 
 ## Search jobs and results
@@ -74,8 +83,9 @@ History and completed geometry live in `.local-data/jobs`. Reloading restores
 jobs; completed views have stable `?job=ID` URLs. Restarting interrupts the job
 that was running and continues queued jobs. Cancellation, interruption and failure
 discard unfinished results while keeping settings to copy into a new submission.
-Constraints and completed results are immutable. Copy settings to submit another
-job. Delete terminal jobs with confirmation to reclaim their
+Constraints and completed results are immutable. Opening saved results populates
+the search bar with their settings; edit them to submit another job. The Jobs
+dialog can also copy a retained request. Delete terminal jobs with confirmation to reclaim their
 saved storage; history is otherwise retained.
 
 Distinct main circuits are proposed by deterministic weighted shortest-path
@@ -90,11 +100,35 @@ Loop variations, alternative starts and reverse directions are discarded.
 The chosen start prefers an explicit mapped trailhead, then parking, then road
 contact; ties prefer certain access, less road walking, less repetition, shorter
 distance and stable IDs. Every eligible start is still evaluated. Details show
-that walk's exact metrics, elevation profile and GPX. The search panel stays on
-the left; results open on the right. The map shows all result locations. Clicking
-a cluster or shared start opens its hike list; **In view** filters by the current
-map viewport and **All** keeps the complete search. Continuous scrolling mounts
-only visible rows. Search submission opens Jobs; closing it leaves work running.
+that walk's exact metrics, elevation profile and GPX. All constraints stay visible
+in the compact top bar. One collapsible left dock identifies the saved regions,
+route count and request above the comparison list, with distance, Elev. Gain and stem
+sorting and an underlined Asc/Desc control. Selecting a hike jumps to its full route with nearby terrain visible;
+selecting its row again closes the details. Stem is the one-way approach walked again
+on the return, limited by absolute distance. Stem steppers change by 1 mi; elevation
+gain changes by 500 ft. Settings offers a locally remembered imperial/metric choice
+for search, results and profiles; metric steps are 1 km and 100 m. Changing units
+preserves the exact submitted limits. Typed values remain unrestricted within valid
+limits. The profile uses the dock's width,
+with elevation labels inside the plot and pointer/keyboard tracking on the route.
+The map shows all result locations as compact hollow circles and numbered cluster
+circles. Counts use 28 px circles with 13 px semibold numbers; larger counts get
+enough room to remain circular. The active trailhead fills charcoal at the same size; the route uses a
+single burnt-orange line. No outer selection ring or route outline is added.
+From zoom 9, muted paths show the other saved hikes in the area at 95% opacity.
+Strokes grow from 2 to 3 px as you zoom in. Shared physical trail sections draw
+once, keeping overlapping hikes from darkening the map. Hover or click a path to
+inspect a route; orange identifies the hovered or selected walk. Only geometry
+around the current view is sent, and a surrounding window avoids requests on short pans.
+Clicking a cluster or shared start opens its
+hike list and jumps to the extent of every associated walk, with nearby terrain
+visible. Route and group framing share the same camera behavior and use no
+animation. **In view** filters by the current map viewport and **All** keeps the
+complete search. Continuous scrolling mounts only visible rows. Editing the top
+bar shows a subtle Settings changed status while saved results retain their original request. Searches
+from an older catalog retain their named regions and saved geometry; choose current
+regions explicitly before submitting a new job. Search submission opens Jobs;
+closing it leaves work running.
 History is retained until manual deletion and browsed in pages of 50 jobs.
 
 The search worker targets 40% of one core using measured CPU time and cooperative
@@ -108,7 +142,7 @@ usage and limitations. Existing completed files remain unchanged; deleting an ol
 job reclaims its previously saved alternatives.
 
 For the same start and ordered trail itinerary, avoidable longer road substitutions
-are removed before minimum distance and climb are applied. A shorter legal road
+are removed before minimum distance and elevation gain are applied. A shorter legal road
 alternative must meet all other limits and offer no worse access certainty.
 Road connections required for legal access or other constraints remain eligible.
 Completed geometry is stored once per used physical trail and survives source

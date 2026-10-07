@@ -1,13 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { HikeRoute, Position } from "../model.js";
+import { distanceText, elevationText, unitsFor, type UnitSystem } from "./units.js";
 
-const MILE = 1609.344;
-const FOOT = 0.3048;
 const WIDTH = 280;
-const HEIGHT = 174;
-const LEFT = 44;
-const RIGHT = 270;
-const TOP = 24;
+const HEIGHT = 162;
+const LEFT = 6;
+const RIGHT = 274;
+const TOP = 6;
 const BOTTOM = 140;
 
 type ProfileSample = { distance: number; position: Position };
@@ -117,7 +116,9 @@ export function createProfileCursor() {
     },
     subscribe: (listener: (position: Position | null) => void) => {
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }
@@ -125,11 +126,14 @@ export type ProfileCursor = ReturnType<typeof createProfileCursor>;
 
 export const ElevationProfile = memo(function ElevationProfile({
   route,
+  units = "imperial",
   onHover,
 }: {
   route: HikeRoute;
+  units?: UnitSystem;
   onHover: (position: Position | null) => void;
 }) {
+  const display = unitsFor(units);
   const samples = useMemo(
     () => elevationSamples(route.geometry),
     [route.geometry],
@@ -154,11 +158,11 @@ export const ElevationProfile = memo(function ElevationProfile({
     let maximum = -Infinity;
     for (const { position } of samples) {
       if (!Number.isFinite(position[2])) continue;
-      minimum = Math.min(minimum, position[2]! / FOOT);
-      maximum = Math.max(maximum, position[2]! / FOOT);
+      minimum = Math.min(minimum, position[2]! / display.elevation);
+      maximum = Math.max(maximum, position[2]! / display.elevation);
     }
     if (minimum === Infinity) return null;
-    const padding = Math.max((maximum - minimum) * 0.06, 20);
+    const padding = Math.max((maximum - minimum) * 0.06, 6 / display.elevation);
     const step = tickStep((maximum - minimum + 2 * padding) / 3);
     const floor = Math.floor((minimum - padding) / step) * step;
     const ceiling = Math.ceil((maximum + padding) / step) * step;
@@ -169,8 +173,8 @@ export const ElevationProfile = memo(function ElevationProfile({
     const total = samples.at(-1)!.distance;
     const x = (distance: number) =>
       LEFT + ((RIGHT - LEFT) * distance) / (total || 1);
-    const y = (feet: number) =>
-      BOTTOM - ((BOTTOM - TOP) * (feet - floor)) / (ceiling - floor);
+    const y = (elevation: number) =>
+      BOTTOM - ((BOTTOM - TOP) * (elevation - floor)) / (ceiling - floor);
     let path = "";
     let connected = false;
     for (const sample of samples) {
@@ -178,32 +182,28 @@ export const ElevationProfile = memo(function ElevationProfile({
         connected = false;
         continue;
       }
-      path += `${connected ? "L" : "M"}${x(sample.distance).toFixed(2)},${y(sample.position[2]! / FOOT).toFixed(2)}`;
+      path += `${connected ? "L" : "M"}${x(sample.distance).toFixed(2)},${y(sample.position[2]! / display.elevation).toFixed(2)}`;
       connected = true;
     }
     return { ticks, total, x, y, path };
-  }, [samples]);
+  }, [samples, display]);
   if (!chart) {
     return (
       <section className="elevation-profile">
-        <h3>Elevation</h3>
         <p>No elevation data</p>
       </section>
     );
   }
   const { ticks, total, x, y, path } = chart;
-  const miles = (distance: number) =>
-    (distance / MILE).toFixed(total < MILE ? 2 : 1);
-  const feet = (elevation: number) =>
-    Math.round(elevation).toLocaleString("en-US");
+  const distance = (meters: number) => distanceText(meters, units, total < display.distance ? 2 : 1);
   const position = cursor === null ? null : elevationPosition(samples, cursor);
   const elevation = position?.[2];
   const grade = cursor === null ? null : elevationGrade(samples, cursor);
   const roundedGrade = grade === null ? null : Math.round(grade * 10) / 10;
   const readout =
     cursor === null
-      ? `${miles(total)} mi`
-      : `${miles(cursor)} mi${Number.isFinite(elevation) ? ` · ${feet(elevation! / FOOT)} ft` : ""}${roundedGrade === null ? "" : ` · ${roundedGrade > 0 ? "+" : ""}${roundedGrade.toFixed(1)}% grade`}`;
+      ? ""
+      : `${distance(cursor)} ${display.distanceLabel}${Number.isFinite(elevation) ? `, ${elevationText(elevation!, units)} ${display.elevationLabel}` : ""}${roundedGrade === null ? "" : `, ${roundedGrade > 0 ? "+" : ""}${roundedGrade.toFixed(1)}% grade`}`;
   const move = (distance: number | null) => {
     const next =
       distance === null ? null : Math.max(0, Math.min(total, distance));
@@ -213,14 +213,15 @@ export const ElevationProfile = memo(function ElevationProfile({
       frame.current = 0;
       const position = pending.current;
       setCursor(position);
-      hover.current(position === null ? null : elevationPosition(samples, position));
+      hover.current(
+        position === null ? null : elevationPosition(samples, position),
+      );
     });
   };
 
   return (
     <section className="elevation-profile" aria-label="Hike elevation profile">
       <header>
-        <h3>Elevation</h3>
         <output className="profile-readout">{readout}</output>
       </header>
       <svg
@@ -232,9 +233,9 @@ export const ElevationProfile = memo(function ElevationProfile({
         tabIndex={0}
         aria-label="Elevation profile position"
         aria-valuemin={0}
-        aria-valuemax={total / MILE}
-        aria-valuenow={(cursor ?? 0) / MILE}
-        aria-valuetext={cursor === null ? "0 miles" : readout}
+        aria-valuemax={total / display.distance}
+        aria-valuenow={(cursor ?? 0) / display.distance}
+        aria-valuetext={cursor === null ? `0 ${display.distanceLabel}` : readout}
         onPointerMove={(event) => {
           const bounds = event.currentTarget.getBoundingClientRect();
           const chartX = ((event.clientX - bounds.left) / bounds.width) * WIDTH;
@@ -257,52 +258,43 @@ export const ElevationProfile = memo(function ElevationProfile({
           event.preventDefault();
         }}
       >
-        <text className="profile-axis-label" x={LEFT} y={12}>
-          Elevation (ft)
-        </text>
         {ticks.map((tick) => (
-          <g key={tick}>
-            <line
-              className="profile-grid"
-              x1={LEFT}
-              x2={RIGHT}
-              y1={y(tick)}
-              y2={y(tick)}
-            />
-            <text
-              className="profile-tick"
-              x={LEFT - 7}
-              y={y(tick) + 3}
-              textAnchor="end"
-            >
-              {feet(tick)}
-            </text>
-          </g>
+          <line
+            key={tick}
+            className="profile-grid"
+            x1={LEFT}
+            x2={RIGHT}
+            y1={y(tick)}
+            y2={y(tick)}
+          />
         ))}
         <path className="profile-line" d={path} fill="none" />
+        {ticks.map((tick) => (
+          <text
+            key={tick}
+            className="profile-tick profile-elevation-tick"
+            x={LEFT + 3}
+            y={Math.max(TOP + 11, y(tick) - 4)}
+            textAnchor="start"
+          >
+            {`${Math.round(tick).toLocaleString()}${tick === ticks.at(-1) ? ` ${display.elevationLabel}` : ""}`}
+          </text>
+        ))}
         {[0, total / 2, total]
           .filter((distance, i, values) => values.indexOf(distance) === i)
-          .map((distance, i) => (
+          .map((tickDistance, i) => (
             <text
               className="profile-tick"
-              key={distance}
-              x={x(distance)}
+              key={tickDistance}
+              x={x(tickDistance)}
               y={BOTTOM + 15}
               textAnchor={
-                i === 0 ? "start" : distance === total ? "end" : "middle"
+                i === 0 ? "start" : tickDistance === total ? "end" : "middle"
               }
             >
-              {miles(distance)}
+              {`${distance(tickDistance)}${tickDistance === total ? ` ${display.distanceLabel}` : ""}`}
             </text>
           ))}
-        <text
-          className="profile-axis-label"
-          x={(LEFT + RIGHT) / 2}
-          y={HEIGHT - 3}
-          textAnchor="middle"
-        >
-          Distance (mi)
-        </text>
         {cursor !== null && (
           <line
             className="profile-cursor"
@@ -316,7 +308,7 @@ export const ElevationProfile = memo(function ElevationProfile({
           <circle
             className="profile-point"
             cx={x(cursor)}
-            cy={y(elevation! / FOOT)}
+            cy={y(elevation! / display.elevation)}
             r={3}
           />
         )}

@@ -1,5 +1,19 @@
 {
   "objective": "Replace Alpine Loop with the smallest trustworthy app that finds useful constraint-based loop hikes, proven on real Washington data.",
+  "drawnBoundaryDecision": {
+    "date": "2026-10-07",
+    "userDecision": "Use one Search area label with the region selector and an adjacent Draw button. Drawing is an alternative to named regions; the entry button stays outside the dropdown and map. After drawing, show Drawn area, Redraw and Clear together. The drawing toolbar stays on the map. Only the starting point must stay inside; hikes may extend outside the drawn polygon.",
+    "toolbar": "Compact toolbar with one contextual drawing instruction, primary Finish, secondary Undo and a text Cancel action. No point counter or explanatory paragraphs. Show Enter, Backspace and Esc as small keycaps next to their actions. Verified all three keyboard shortcuts and the compact layout in the browser; build and typecheck pass.",
+    "boundaryAppearance": "Shade the interior only while actively drawing. Finished and restored boundaries show their outline without interior shading, like named regions.",
+    "behavior": "Click to draw a simple polygon, undo points, finish or cancel. Select all overlapping prepared sections automatically and search every eligible start inside or on the boundary. Keep prepared highway partitions and route constraints. Save the boundary with immutable jobs, restore it for results and copied settings, and allow returning to full prepared regions. Reject invalid or unsupported areas; complete supported areas with no starts honestly. Panning and zooming never change scope.",
+    "validation": {
+      "offline": "Build, typecheck and 29 focused geometry, client and whole-app checks pass, including multiple sections, boundary-edge starts, excluded outside starts, routes leaving the polygon, empty searches, malformed areas and saved results after source removal/restart.",
+      "browser": "Drawing, Undo, Finish, self-crossing rejection, Escape cancellation, returning to full regions, Copy settings and saved-result URL restoration verified in the local app. The adjacent Search area selector and Draw button, named-region-only dropdown, Redraw, clear with focus returned to Draw, and drawing cancellation/finish verified after the placement change; no browser errors.",
+      "realData": "A small rectangle at Horse Lake Trailhead searched all five independently counted eligible starts in 10.05 seconds, producing four hikes whose starts stay inside and whose geometry extends outside. Existing saved route detail stayed identical. Evidence: .local-data/boundary-review.json; saved job 0ee030e7-e887-4938-9b29-f0ce9812fc1b.",
+      "maintainedSourceLines": 9114,
+      "newDependencies": 0
+    }
+  },
   "baseline": {
     "commit": "ff3c69c57917f2bb649565aee6a89a437d6ca68c",
     "archiveTag": "archive/before-product-rewrite-2026-09-30",
@@ -10,12 +24,14 @@
   },
   "acceptance": {
     "experience": [
-      "exact prepared-region selection, shared by search, map and downloads",
-      "distance/gain/repetition",
+      "exact prepared-region selection, shared by search, map and downloads; optional drawn polygon restricts starting points within overlapping prepared sections",
+      "draw the combined selected-region boundary without shared internal borders; retain disconnected outlines and holes",
+      "distance/elevation gain/absolute stem distance",
       "loops and lollipops",
       "route inspection with a distance/elevation profile, hover grade and map tracking",
       "GPX",
-      "adjustable maximum road distance and share; trails remain the main experience",
+      "adjustable maximum road distance; trails remain the main experience",
+      "include uncertain access automatically, with no access toggle or result indicator; respect explicit prohibitions",
       "hikes remain within reviewed hard highway partitions; disclose that crossings of selected dividers, including bridges and underpasses, are excluded",
       "durable immutable FIFO jobs and manually retained history",
       "completed-only map browsing with continuous scrolling and all-result map locations; bounded diverse discovery with exact route limits and no mileage or displayed-result cap",
@@ -64,7 +80,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The updated local app is running at http://127.0.0.1:3000 with all five Washington regions installed and all eight existing saved jobs preserved. New jobs save one preferred valid walk per displayed hike; loop/start/direction alternatives are removed from results and UI. The real all-region default completed all 10,187 starts in 488.3 seconds, retaining 918 displayed hikes and 918 walks in 14.9 MB instead of 1,286,407 walks in 8.45 GB. Backend OS peak RSS fell from 660.2 MB to 356.7 MB; active search averages 43.7% of one core. All 918 walks and their 803,177 geometry points independently pass route, road, drawing and main-loop checks. Build, typecheck, 102 Vitest checks, five Node checks and two preparation fixture checks pass. Native continuous scrolling, keyboard navigation, history pages, old/new saved URLs and GPX pass browser/live checks. Browser/GPU memory remains material and can spike on cold loading/zoom; details and primary-source research are in benchmarks/local-resource-improvements.json. No new dependency; maintained source is 8,028 lines across 41 files. Task worktrees are archived and task branches removed.",
+  "state": "The updated local app is running at http://127.0.0.1:3000 with all five Washington regions installed and all eight existing saved jobs preserved. New jobs save one preferred valid walk per displayed hike; loop/start/direction alternatives are removed from results and UI. The real all-region default completed all 10,187 starts in 488.3 seconds, retaining 918 displayed hikes and 918 walks in 14.9 MB instead of 1,286,407 walks in 8.45 GB. Backend OS peak RSS fell from 660.2 MB to 356.7 MB; active search averages 43.7% of one core. All 918 walks and their 803,177 geometry points independently pass route, road, drawing and main-loop checks. Build, typecheck, 102 Vitest checks, five Node checks and two preparation fixture checks pass. Native continuous scrolling, keyboard navigation, history pages, old/new saved URLs and GPX pass browser/live checks. Browser/GPU memory remains material and can spike on cold loading/zoom; details and primary-source research are in benchmarks/local-resource-improvements.json. No new dependency; maintained source is 8,727 lines across 44 files after the dock, unit, stem and map-browsing refinements. The latest 45 focused client, saved-route, query and whole-app checks pass; 62 independent engine/query/diversity checks also pass. Absolute stem limits and remembered imperial/metric units are implemented. Markers use charcoal and white, with constant-size selection; route traces use a single burnt-orange stroke without an outline. Task worktrees are archived and task branches removed. Muted deduplicated route paths now support area comparison from zoom 9; orange remains reserved for hover/selection.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -97,7 +113,7 @@
     "preparationRequirements": [
       "Partition source work before materializing each region's topology; splitting final output alone does not bound preparation memory.",
       "Use highway geometry to establish partitions. Removing highway traversal alone leaves bridges, tunnels and other crossing paths connected.",
-      "Search regions and prepared data sections are identical. Select exact section IDs and explore every eligible start in them; map panning and zooming never change scope. No separate named rectangles or custom drawing scopes.",
+      "Search and download regions are exact prepared sections. Select whole sections or draw a starting-point boundary across all overlapping sections; hikes may extend outside the drawn polygon but retain hard highway partitions. Explore every eligible start within the selected scope; map panning and zooming never change scope.",
       "Preserve distinct starts and same-side access connections; a shared start or highway junction must not reconnect hard partitions."
     ],
     "sourceAssessment": {
@@ -165,7 +181,7 @@
         "compilerMatchesCurrentSource": true,
         "sections": [
           {
-            "name": "Washington Cascades — south of I90, south of US12",
+            "name": "Washington Cascades \u2014 south of I90, south of US12",
             "id": "mountain-43069d2bc1ec7e5c1adadc37",
             "before": 1847,
             "after": 1609,
@@ -174,7 +190,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades — south of I90, north of US12",
+            "name": "Washington Cascades \u2014 south of I90, north of US12",
             "id": "mountain-5eb288f06c4d713a80317882",
             "before": 2241,
             "after": 2098,
@@ -183,7 +199,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades — north of I90, south of US2",
+            "name": "Washington Cascades \u2014 north of I90, south of US2",
             "id": "mountain-bdc595cbf8bd73d977872e38",
             "before": 2920,
             "after": 2669,
@@ -192,7 +208,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades — north of I90, north of US2, south of WA20",
+            "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20",
             "id": "mountain-67fc323ad847dfc7fc74d474",
             "before": 2323,
             "after": 2156,
@@ -201,7 +217,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades — north of I90, north of US2, north of WA20",
+            "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20",
             "id": "mountain-36500543cf317add4204f998",
             "before": 1818,
             "after": 1655,
@@ -248,7 +264,7 @@
         "hasFailures": false
       },
       "localEvidence": ".local-data/vehicle-start-review/",
-      "browser": "Corrected preview at http://127.0.0.1:3181/ restores the original 13–17 mile, 3000–6000 foot, 10% repetition, 1 mile/10% roads and uncertain-access constraints. All 1609 eligible starts are attempted, exploration continues, reload reconnects, and route detail/map/GPX work. Prior stopped results and route inspection remain available on port 3180 with preserved immutable files.",
+      "browser": "Corrected preview at http://127.0.0.1:3181/ restores the original 13\u201317 mile, 3000\u20136000 foot, 10% repetition, 1 mile/10% roads and uncertain-access constraints. All 1609 eligible starts are attempted, exploration continues, reload reconnects, and route detail/map/GPX work. Prior stopped results and route inspection remain available on port 3180 with preserved immutable files.",
       "liveSearch": {
         "searchId": "f9465f06-cc2b-4744-af2d-84a5e039d7d3",
         "snapshotId": "mountains-9945983146f58b01a859aa02e6e696a94f4b9b9c8a41b8a22cc6f985496f624e",
@@ -434,7 +450,7 @@
     "validation": {
       "buildAndTypecheck": "Passed",
       "offline": "12 focused client checks pass, including analytic signed slopes, reversed direction, short routes, endpoint windows, flat and zero-length geometry, local averaging and missing elevation within the window.",
-      "realData": "An independent calculation on the 1,353 saved Johnson-Medra/Koppen samples gives 5,351.900581567743 ft and +11.877394426305045% at 12,124.156334758038 m; the hover displays 7.5 mi · 5,352 ft · +11.9% grade.",
+      "realData": "An independent calculation on the 1,353 saved Johnson-Medra/Koppen samples gives 5,351.900581567743 ft and +11.877394426305045% at 12,124.156334758038 m; the hover displays 7.5 mi \u00b7 5,352 ft \u00b7 +11.9% grade.",
       "browser": "Hover grade and map tracking are verified on the saved route. Reversal clears tracking and produces downhill grade. The complete readout fits on one line in the 280 px right panel at the 960 px breakpoint without horizontal overflow. No browser errors.",
       "sourceBefore": 7823,
       "sourceAfter": 7853,
@@ -450,5 +466,112 @@
     "supersedes": "Earlier requirements to retain qualifying circuit versions, alternative starts and directions.",
     "review": "benchmarks/local-resource-improvements.json",
     "status": "Implemented and verified; resource measurements and limits recorded in the review."
+  },
+  "desktopDockDecision": {
+    "date": "2026-10-07",
+    "approved": [
+      "Implement the selected Single dock direction for desktop: maximize map space with compact visible constraints and a collapsible comparison/inspection dock.",
+      "Remove the Access uncertain route indicator, retaining the explicit uncertain-access query option.",
+      "Place elevation tick labels inside a nearly full-width plot; keep units, gridlines, contrast and route tracking.",
+      "Selecting a result automatically fits its whole route; remove the Show on map button.",
+      "Remove superseded UI code and styles while improving structure and quality.",
+      "Gain steps by 500 ft and repetition by five percentage points, without restricting typed values.",
+      "Clicking the selected result row deselects it. Remove the route close button, classification banner and collapsible profile heading; place a restrained GPX action beneath the hike name and metrics."
+    ],
+    "supersedes": "The earlier left search/right results arrangement, list replacement on selection, and decision not to fit a selected route.",
+    "architecture": "SearchControls owns draft conversion and validation; RouteDock owns comparison ordering, virtual rows and selected-walk presentation. App retains job, download and map orchestration. Lightweight saved location metadata now includes gain and repetition without loading route geometry for rows. Removed the old two-panel markup, obsolete styles, duplicate sorting and separate field state. No dependency or persistence-schema changes.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "41 focused client, saved-route-store and whole-app checks pass; the 18 client checks pass again after the final profile, stepped-control and selection changes. Download fixture checks require local networking.",
+      "browser": "Real current and older saved searches verified at 1024 and 1280 px, plus the normal desktop app viewport. Dock collapse fills the map without losing selection. Lists remain visible during inspection, sort correctly, scroll to the last result by keyboard with bounded DOM, and switch In view/All without changing query scope. Keyboard endpoint tracking places the map marker correctly. The selected profile uses about 96% of chart width. The hike name comes first; Download GPX is a plain text link beside road metrics. Clicking a selected row again closes its details. The profile has no heading or disclosure control. Pointer and keyboard steppers verify exact 2,200 to 2,700 ft and 20 to 25% increments while retaining valid typed values. Draft/restoration, unavailable saved-region names, automatic route framing and pinned GPX links verified. A 1,653-point saved GPX parses successfully. Browser search submission was blocked by approval review; no search job was created during verification.",
+      "sourceBefore": 8028,
+      "sourceAfter": 8407,
+      "sourceFiles": 43,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/single-dock.jpg"
+    }
+  },
+  "mapBrowsingRefinement": {
+    "date": "2026-10-07",
+    "approved": [
+      "Keep only global app information in the header. Place saved region, result count and request together at the top of the results dock; remove the redundant header Hide results control.",
+      "Remove middle-dot separators throughout visible UI.",
+      "Jump directly to route and group views without animation. Frame a selected route with nearby terrain visible.",
+      "A grouped-marker click lists exactly its associated hikes and frames all of their full walks, so previewing a result stays in view."
+    ],
+    "supersedes": "Earlier fixed marker zoom steps, start-only group framing and camera easing.",
+    "architecture": "Saved locations include full-walk bounds computed from immutable saved trail drawings. Each shared drawing is read once per locations request; only four bounds numbers per hike cross the API. App owns one route/group framing policy with 15% geographic margins and existing viewport padding. Map owns direct fitBounds and no competing marker camera transition. No dependency, persistent cache or schema change.",
+    "markerDesign": "Restored the original 14 px individual rings and 32 px numbered circles; removed all experimental pin assets, points and plus glyphs. Groups may represent multiple nearby starts at an average position, while individual circles center on the actual start. A contrast comparison proposes compact dark trailhead points with light halos and an added selection ring; this proposal is not applied to the app.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "27 focused client/saved-route checks and 14 whole-app checks pass. Full-walk extents are asserted independently, exclude unrelated stored drawings and preserve legacy immutable files.",
+      "realData": "The 71-hike saved location response is 48,615 bytes and takes 0.075 seconds locally; coordinates are not sent for every hike.",
+      "browser": "The 61-hike Bellingham-area group frames all associated walks. Keyboard preview of its longest route leaves all marker transforms unchanged and the full walk visible. Original circle balance is restored. Header and results metadata are separated, with no visible middle-dot separators or horizontal overflow.",
+      "sourceBefore": 8407,
+      "sourceAfter": 8424,
+      "sourceFiles": 43,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/route-context.jpg"
+    }
+  },
+  "stemUnitsAndMapDecision": {
+    "date": "2026-10-07",
+    "approved": [
+      "Replace visible Repeat percentages with absolute Stem distance in search, rows, details and sorting. Stem is the one-way approach walked again on the return. Search steps by 1 mile, or 1 kilometer in metric.",
+      "Settings offers imperial/metric units for all search, results, saved-job summaries and elevation profiles. Remember the preference locally and preserve exact physical limits through repeated conversions.",
+      "Use identical up/down triangle geometry and one stepped-number control for numeric search fields. Elevation gain steps by 500 feet or 100 meters; use Elevation gain or Elev. Gain consistently.",
+      "Place n routes in the results title row, remove dock Copy settings and large draft/restoration notices, and show a subtle Settings changed status beside Search. Do not show compatibility/conversion notices.",
+      "Use plain Distance, Elev. Gain and Stem sorting labels with a separate Asc/Desc control.",
+      "Keep compact circular markers. All trailheads and numbered groups use charcoal and white; individual starts are hollow circles and the active one fills charcoal at the same size. No extra outer ring or focus decoration.",
+      "Restore the original burnt-orange route color. Use one route stroke with no white outline; do not color all group members as active.",
+      "Use compact 28 px grouping circles with centered 13 px semibold tabular numbers, expanding only for larger counts. Asc/Desc is an underlined text control without a box."
+    ],
+    "supersedes": "Earlier percentage repetition controls, separate saved-hike count/copy row, draft banners, added selection rings, active size changes, orange trailheads and blue route traces.",
+    "architecture": "Shared unit formatting and exact editable-limit conversion live in the client units/SearchControls modules. New queries store an absolute SI stem limit; the engine validates actual return-approach distance and bounds discovery conservatively. Immutable existing saved requests remain readable without a migration or notices. Remove group-wide marker selection props and the experimental route outline layer. No dependency or persistence-schema change.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "45 focused client, saved-route, query and whole-app checks pass. 62 engine/query/diversity checks pass, including independent exact-boundary, asymmetric-approach and same-stem/different-circuit cases. Unit round trips preserve exact limits; fixture whole-app publication stores an absolute stem query.",
+      "browser": "Saved real routes verified with imperial and metric search, rows, detail metrics and profile units; preference survives reload. Imperial stem 3.6 to 4.6 miles and elevation gain 3000 to 3500 feet verified; metric stem steps by 1 kilometer. Absolute stem descending sort is correct and direction reads Desc. Original draft status returns after values are restored. Final markers are 12 pixels both idle and active, with no second pseudo-element or added focus ring. Route inspection shows the burnt-orange stroke and distinct charcoal start; no browser errors.",
+      "sourceBefore": 8424,
+      "sourceAfter": 8727,
+      "sourceFiles": 44,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/stem-units.jpg"
+    }
+  },
+  "routeOverviewDecision": {
+    "date": "2026-10-07",
+    "approved": "Show saved-route paths for comparing an area without panel hovering. Final user refinements: begin at zoom 9, increase muted strokes to 2\u20133 px, and use 95% opacity. Burnt orange identifies only a hovered or selected route.",
+    "architecture": "A completed-only, revision-pinned paths endpoint sends unique referenced physical trail drawings within the view, without elevation data. Shared and returning sections draw once. The map retains one surrounding window, reuses it on short pans, aborts replaced requests and releases overview data below the threshold or on job changes. Hover/click hit testing reuses existing route inspection, with an 8 px target and no hover updates during panning. No new dependencies, schema, cache subsystem or search changes.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "42 focused client/store/whole-app checks pass, including viewport filtering, shared/return-path deduplication, preferred-only legacy drawings, completion gating, invalid bounds and unchanged geometry after source removal/restart. The localhost download fixture needs networking outside the sandbox; all 14 whole-app checks pass with that access.",
+      "realData": {
+        "savedJob": "dbdfef03-4ff8-4a96-8324-50ddf4dde600",
+        "bounds": [
+          -122.8,
+          48.3,
+          -122,
+          49
+        ],
+        "paths": 1029,
+        "hikes": 62,
+        "points": 24294,
+        "bytes": 865927,
+        "responseMs": 90.6
+      },
+      "browser": "Real Bellingham-area results show a muted connected route network and one distinct burnt-orange inspected route at wider comparison scale. Cluster labels are centered at 28 px, with 13 px semibold numbers and a 2 px border. Asc/Desc has no box. No new search or saved-job mutation is required. Clicking a muted path on Bigfoot Hill selects the saved 13.8-mile #5 / #8 / Hedgehog route and opens its complete details/profile. Returning to the wider area retains gray paths and the orange selected walk.",
+      "sourceAfter": 8727,
+      "sourceFiles": 44,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/route-overview.jpg"
+    }
+  },
+  "stemPercentageDecision": {
+    "date": "2026-10-07",
+    "approved": [
+      "Add a compact maximum Stem % search input beside Stem distance. Both limits apply independently. Percentage measures the one-way stem relative to the full hike distance.",
+      "Keep result stats in distance units. New search defaults are 2 miles of stem, 20% stem, and 0.5 miles of road. Restore saved limits, using 100% for absolute-only saved searches."
+    ]
   }
 }
