@@ -35,5 +35,43 @@
       "Zooming and panning preserve the selected prepared region; no browser errors."
     ],
     "limitation": "No claim of measured frame-rate or improvement in raster label quality. The existing live server serves the new client build without restart or interruption of jobs."
+  },
+  "basemapIntegration": {
+    "date": "2026-10-06",
+    "baselineCommit": "fe6a2da",
+    "style": "https://styles.maptoolkit.org/hiking.json",
+    "rationale": "Use a ready-made vector hiking basemap with contours and terrain shading, without an account, API key, extra SDK or tile-preparation subsystem.",
+    "addedDependencies": 0,
+    "maintainedSource": {
+      "before": 6889,
+      "after": 6905,
+      "addedLines": 16,
+      "mapModuleLines": 402
+    },
+    "javascriptGzipBytes": {
+      "Map-DDYE3Dj1.js": 284881,
+      "index-gLb7qyz6.js": 69675,
+      "maplibre-gl-worker-C24SsKwV.js": 144651
+    },
+    "implementation": [
+      "Load the provider style once; add the existing two GeoJSON sources and four app overlay layers after style.load.",
+      "Keep the provider logo at 24px height and copyright permanently expanded; move the map caption above attribution.",
+      "Report a failed style request in the map panel."
+    ],
+    "comparison": {
+      "hiking": "Marked hiking-route layers and shields, darker paths, narrower roads, rock texture and four hillshade passes.",
+      "summer": "Same main OSM and contour tile services, calmer presentation and one gentle hillshade pass."
+    },
+    "verification": {
+      "build": "passed",
+      "typecheck": "passed",
+      "browser": [
+        "Real north-region saved job retains all 46 hike locations; Iron Peak / Fourth Creek geometry and GPX link render over contours and trail labels.",
+        "The prepared polygon toggles its matching checkbox; panning and zooming preserve its selected state.",
+        "Provider logo loads at 24px height; both attribution links remain expanded during pan and zoom.",
+        "No browser errors or warnings during these checks."
+      ],
+      "limitation": "Basemap appearance and flows verified in the browser; no new frame-rate, GPU-memory or remote-service availability measurement. Route discovery is unchanged."
+    }
   }
 }

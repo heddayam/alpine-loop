@@ -128,7 +128,11 @@ Real-data timing and capacity measurements are separate from the offline suite.
 The map uses MapLibre for continuous zoom and pan. Its implementation stays in
 one client module; Vite builds the pinned worker directly from the dependency.
 The map code loads separately so the form and saved jobs can render first.
-OpenStreetMap raster tiles remain the basemap. Region selection updates feature
-state, and hike selection updates existing marker styling. The
+The basemap uses [Maptoolkit Hiking](https://www.maptoolkit.org/hiking), with
+vector trails, contours and shaded relief. No account or API key is needed;
+the community service requires a visible logo and copyright line, uses fair-use
+rate limits, and excludes offline basemap downloads and printed map exports.
+Region selection updates feature state, and hike selection updates existing
+marker styling. The
 [renderer review](benchmarks/map-renderer-review.json) records the source and
 compressed-build cost and browser verification.

@@ -97,57 +97,8 @@ export function HikeMap({
         dragRotate: false,
         touchPitch: false,
         renderWorldCopies: false,
-        attributionControl: { compact: true },
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tileSize: 256,
-              maxzoom: 19,
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              attribution:
-                '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            },
-            sections: { type: "geojson", data: empty, promoteId: "id" },
-            route: { type: "geojson", data: empty },
-          },
-          layers: [
-            { id: "osm", type: "raster", source: "osm" },
-            {
-              id: "sections-fill",
-              type: "fill",
-              source: "sections",
-              paint: {
-                "fill-color": "#315e49",
-                "fill-opacity": ["case", selected, 0.14, 0.015],
-              },
-            },
-            {
-              id: "sections-solid",
-              type: "line",
-              source: "sections",
-              filter: ["==", ["get", "installed"], true],
-              paint: border,
-            },
-            {
-              id: "sections-dotted",
-              type: "line",
-              source: "sections",
-              filter: ["==", ["get", "installed"], false],
-              paint: { ...border, "line-dasharray": [2, 3] },
-            },
-            {
-              id: "route",
-              type: "line",
-              source: "route",
-              layout: { "line-cap": "round", "line-join": "round" },
-              paint: {
-                "line-color": "#b95b2c", "line-width": 5, "line-opacity": 0.9,
-              },
-            },
-          ],
-        },
+        attributionControl: { compact: false, customAttribution: "" },
+        style: "https://styles.maptoolkit.org/hiking.json",
       });
     } catch {
       setMapError(
@@ -184,7 +135,50 @@ export function HikeMap({
       const id = event.features?.[0]?.properties.id;
       if (typeof id === "string") callbacks.current.onSelect(id);
     });
-    instance.once("style.load", () => setMap(instance));
+    instance.on("error", () => {
+      if (!instance.getStyle())
+        setMapError("The basemap could not load. Check your connection and reload the page.");
+    });
+    instance.once("style.load", () => {
+      instance.addSource("sections", {
+        type: "geojson", data: empty, promoteId: "id",
+      });
+      instance.addSource("route", { type: "geojson", data: empty });
+      instance.addLayer({
+        id: "sections-fill",
+        type: "fill",
+        source: "sections",
+        paint: {
+          "fill-color": "#315e49",
+          "fill-opacity": ["case", selected, 0.14, 0.015],
+        },
+      });
+      instance.addLayer({
+        id: "sections-solid",
+        type: "line",
+        source: "sections",
+        filter: ["==", ["get", "installed"], true],
+        paint: border,
+      });
+      instance.addLayer({
+        id: "sections-dotted",
+        type: "line",
+        source: "sections",
+        filter: ["==", ["get", "installed"], false],
+        paint: { ...border, "line-dasharray": [2, 3] },
+      });
+      instance.addLayer({
+        id: "route",
+        type: "line",
+        source: "route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#b95b2c", "line-width": 5, "line-opacity": 0.9,
+        },
+      });
+      setMapError("");
+      setMap(instance);
+    });
     const resize = new ResizeObserver(() => instance.resize());
     resize.observe(container.current!);
     return () => {
@@ -385,6 +379,18 @@ export function HikeMap({
           </ul>
         </section>
       )}
+      <a
+        className="map-provider"
+        href="https://www.maptoolkit.org/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src="https://www.maptoolkit.org/assets/maptoolkit-attribution.png"
+          alt="Maptoolkit"
+          height={24}
+        />
+      </a>
       <span className="map-caption">
         {editing
           ? "Shaded regions are selected. Solid borders: downloaded. Dotted borders: download available."

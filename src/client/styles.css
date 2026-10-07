@@ -710,10 +710,20 @@ summary {
   font-family: inherit;
   background: #e8ece4;
 }
+.map-provider {
+  position: absolute;
+  z-index: 500;
+  bottom: 10px;
+  left: 10px;
+}
+.map-provider img {
+  display: block;
+  height: 24px;
+}
 .map-caption {
   position: absolute;
   z-index: 500;
-  bottom: 16px;
+  bottom: 50px;
   left: 16px;
   max-width: calc(100% - 85px);
   padding: 6px 9px;
