@@ -5,7 +5,6 @@ import {
   Popup,
   NavigationControl,
   MercatorCoordinate,
-  LngLatBounds,
   setWorkerUrl,
   type GeoJSONSource,
   type ExpressionSpecification,
@@ -15,6 +14,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Bounds, HikeRoute, RouteLocation } from "../model.js";
 import type { CatalogView } from "../data-format.js";
 import { clusterLocations } from "./clusters.js";
+import { regionLabel } from "./RegionPicker.js";
 
 setWorkerUrl(workerUrl);
 const empty = { type: "FeatureCollection" as const, features: [] };
@@ -76,7 +76,7 @@ export function HikeMap({
   const [mapError, setMapError] = useState("");
   const sectionTooltip = useRef<Popup | null>(null);
   const starts = useRef<{ marker: Marker; routes: RouteLocation[] }[]>([]);
-  const [chooser, setChooser] = useState<RouteLocation[]>([]);
+  const [chooser, setChooser] = useState<RouteLocation[] | null>(null);
   const callbacks = useRef({
     onToggleSection,
     onSelect,
@@ -96,7 +96,7 @@ export function HikeMap({
     locked,
   };
   useEffect(() => {
-    if (chooser.length) document.getElementById("map-chooser-title")?.focus();
+    if (chooser) document.getElementById("map-chooser-title")?.focus();
   }, [chooser]);
 
   useEffect(() => {
@@ -146,6 +146,7 @@ export function HikeMap({
     instance.on("movestart", () => tooltip.remove());
     instance.on("click", "sections-fill", (event) => {
       if (!callbacks.current.editing || callbacks.current.locked) return;
+      if (instance.queryRenderedFeatures(event.point, { layers: ["route"] }).length) return;
       const id = event.features?.[0]?.properties.id;
       if (typeof id === "string") callbacks.current.onToggleSection(id);
     });
@@ -248,7 +249,7 @@ export function HikeMap({
         id: section.id,
         geometry: section.boundary,
         properties: {
-          id: section.id, name: section.name,
+          id: section.id, name: regionLabel(section.name),
         },
       })),
     });
@@ -286,11 +287,11 @@ export function HikeMap({
   };
   useEffect(() => {
     highlightStarts();
-    setChooser([]);
+    setChooser(null);
   }, [map, selectedId, selectedGroupId]);
   useEffect(() => {
     if (!map) return;
-    setChooser([]);
+    setChooser(null);
     const clear = () => {
       for (const start of starts.current) start.marker.remove();
       starts.current = [];
@@ -311,7 +312,7 @@ export function HikeMap({
         button.className = `hike-marker${multiple ? " hike-cluster" : ""}`;
         button.textContent = multiple ? choices.length.toLocaleString() : "";
         button.title = multiple
-          ? `${choices.length} hikes · ${cluster.coincident ? "choose a hike" : "zoom to explore"}`
+          ? `${choices.length} hikes · choose a hike`
           : choices[0]!.startName || "Unnamed start";
         button.setAttribute("aria-label", button.title);
         if (!multiple) {
@@ -326,20 +327,9 @@ export function HikeMap({
           event.stopPropagation();
           callbacks.current.onPreview(null);
           if (!multiple) {
-            setChooser([]);
+            setChooser(null);
             callbacks.current.onSelect(choices[0]!.id);
-          } else if (cluster.coincident || map.getZoom() >= 19)
-            setChooser(choices);
-          else {
-            setChooser([]);
-            map.fitBounds(
-              choices.reduce((bounds, route) => {
-                const [longitude, latitude] = route.startPosition;
-                return bounds.extend([longitude, latitude]);
-              }, new LngLatBounds()),
-              { padding: 60, maxZoom: 19, duration: 350 },
-            );
-          }
+          } else setChooser(choices);
         });
         starts.current.push({
           marker: new Marker({ element: button }).setLngLat(cluster.position).addTo(map),
@@ -366,10 +356,28 @@ export function HikeMap({
   return (
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
+      {!!routes.length && (
+        <button
+          type="button"
+          className="map-browse"
+          disabled={!map}
+          aria-expanded={chooser !== null}
+          aria-controls="map-hike-chooser"
+          onClick={() => {
+            callbacks.current.onPreview(null);
+            const bounds = map!.getBounds();
+            setChooser(routes.filter(({ startPosition: [longitude, latitude] }) =>
+              bounds.contains([longitude, latitude]),
+            ));
+          }}
+        >
+          Hikes in view
+        </button>
+      )}
       {mapError && (
         <div className="map-notice preview-notice" role="alert">{mapError}</div>
       )}
-      {!editing && routeNotice && (
+      {routeNotice && (
         <div
           className="map-notice preview-notice"
           role={onRetryRoute ? "alert" : "status"}
@@ -382,8 +390,18 @@ export function HikeMap({
           )}
         </div>
       )}
-      {!!chooser.length && !editing && (
-        <section className="map-chooser" aria-labelledby="map-chooser-title">
+      {chooser !== null && (
+        <section
+          id="map-hike-chooser"
+          className="map-chooser"
+          aria-labelledby="map-chooser-title"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              callbacks.current.onPreview(null);
+              setChooser(null);
+            }
+          }}
+        >
           <header>
             <h2 id="map-chooser-title" tabIndex={-1}>
               Choose a hike
@@ -393,14 +411,14 @@ export function HikeMap({
               aria-label="Close hike chooser"
               onClick={() => {
                 callbacks.current.onPreview(null);
-                setChooser([]);
+                setChooser(null);
               }}
             >
               ×
             </button>
           </header>
-          <p>{chooser.length} hikes at this location</p>
-          <ul>
+          <p>{chooser.length ? `${chooser.length} hikes` : "No hikes in view."}</p>
+          {!!chooser.length && <ul>
             {chooser.map((route) => (
               <li key={route.id}>
                 <button
@@ -412,7 +430,7 @@ export function HikeMap({
                   onClick={() => {
                     callbacks.current.onPreview(null);
                     callbacks.current.onSelect(route.id);
-                    setChooser([]);
+                    setChooser(null);
                   }}
                 >
                   <strong>
@@ -427,7 +445,7 @@ export function HikeMap({
                 </button>
               </li>
             ))}
-          </ul>
+          </ul>}
         </section>
       )}
       <a
