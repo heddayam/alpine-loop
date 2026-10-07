@@ -14,16 +14,30 @@ export function canonical(order: number[]): number[] {
 }
 
 export function walkKey(graph: TrailGraph, route: RouteCandidate, reverse = false): string {
-  const edges = reverse ? route.edges.toReversed() : route.edges;
-  return JSON.stringify([graph.starts[route.start]!.id,
-    edges.map(id => [graph.edges[id]!.trail, reverse ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse])]);
+  const steps: string[] = [];
+  for (let at = 0; at < route.edges.length; at++) {
+    const edge = graph.edges[route.edges[reverse ? route.edges.length - at - 1 : at]!]!;
+    steps.push(`[${edge.trail},${edge.reverse !== reverse}]`);
+  }
+  return `[${JSON.stringify(graph.starts[route.start]!.id)},[${steps.join(',')}]]`;
+}
+export type RouteMetrics = Pick<RouteCandidate, 'uncertain' | 'roadDistance' | 'repetition' | 'distance'>;
+export function compareMetrics(a: RouteMetrics, b: RouteMetrics): number {
+  return Number(a.uncertain) - Number(b.uncertain) || a.roadDistance - b.roadDistance
+    || a.repetition - b.repetition || a.distance - b.distance;
 }
 export function quality(graph: TrailGraph, a: RouteCandidate, b: RouteCandidate): number {
-  for (const difference of [Number(a.uncertain) - Number(b.uncertain), a.roadDistance - b.roadDistance,
-    a.repetition - b.repetition, a.distance - b.distance]) if (difference) return difference;
+  const difference = compareMetrics(a, b);
+  if (difference) return difference;
   const pair = (route: RouteCandidate) => {
     const forward = walkKey(graph, route), back = walkKey(graph, route, true);
     return forward < back ? forward : back;
   };
   return pair(a).localeCompare(pair(b)) || a.id.localeCompare(b.id);
+}
+
+const startRank = { trailhead: 0, parking: 1, 'road-contact': 2 };
+export function preference(graph: TrailGraph, a: RouteCandidate, b: RouteCandidate): number {
+  return startRank[graph.starts[a.start]!.kind] - startRank[graph.starts[b.start]!.kind]
+    || quality(graph, a, b) || graph.starts[a.start]!.id.localeCompare(graph.starts[b.start]!.id);
 }

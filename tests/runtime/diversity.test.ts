@@ -1,10 +1,6 @@
 import { expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { solveSection, type CandidatePool } from '../../src/diversity.js';
-import { createRouteStore } from '../../src/route-store.js';
+import { solveSection } from '../../src/diversity.js';
+import { createWorkBudget } from '../../src/work-budget.js';
 import { search } from '../../src/engine/search.js';
 import type { SearchQuery } from '../../src/model.js';
 import { distinct, fixture, groupPool, measure, normalized } from '../engine/oracle.js';
@@ -13,7 +9,7 @@ const query: SearchQuery = { sections: ['fixture'], distance: [0, 30_000], gain:
   includeUnknown: true, roads: { distance: 30_000, fraction: 1 } };
 const families = (routes: Awaited<ReturnType<typeof solveSection>>) => new Set(routes.map(route => route.groupId));
 
-async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false, savedPool?: CandidatePool, stream = false) {
+async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteria: SearchQuery, foundPool = false) {
   const references = normalized(graph, criteria);
   const key = (route: { start: number; edges: number[] }) => `${route.start}:${route.edges.join(',')}`;
   const byWalk = new Map(references.map(route => [key(route), route]));
@@ -27,15 +23,12 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
   const exhaustive = distinct(graph, criteria);
   const expected = foundPool ? groupPool(graph, pool) : exhaustive;
   if (foundPool) {
-    // This committed tiny corpus still discovers every family/start/direction.
-    // Preference may differ when a sensible approach omits a winding detour.
-    const coverage = (groups: typeof exhaustive) => groups.map(group => JSON.stringify([group.seed,
-      group.witnesses.map(item => `${item.route.start}:${item.direction}`).sort()])).sort();
+    // This tiny corpus still discovers every displayed family. Start/direction
+    // witnesses are private checks and no longer part of the returned results.
+    const coverage = (groups: typeof exhaustive) => groups.map(group => JSON.stringify(group.seed)).sort();
     expect(coverage(expected)).toEqual(coverage(exhaustive));
   }
-  const emitted: Awaited<ReturnType<typeof solveSection>> = [];
-  const returned = await solveSection(graph, criteria, undefined, savedPool, stream ? route => { emitted.push(route); } : undefined);
-  const actual = stream ? emitted : returned;
+  const actual = await solveSection(graph, criteria);
   for (const { route } of actual) {
     const valid = measure(graph, criteria, route.start, route.edges);
     expect(valid).toBeDefined();
@@ -43,44 +36,23 @@ async function compareOutputs(graph: Parameters<typeof solveSection>[0], criteri
     expect([route.distance, route.gain, route.roadDistance, route.repetition])
       .toEqual([valid!.distance, valid!.gain, valid!.roadDistance, valid!.repetition]);
   }
-  const physicalWalk = (route: { start: number; edges: number[] }, reverse = false) => JSON.stringify([route.start,
-    (reverse ? route.edges.toReversed() : route.edges).map(id => [graph.edges[id]!.trail, graph.edges[id]!.reverse !== reverse])]);
-  const byPhysicalWalk = new Map(actual.map(item => [physicalWalk(item.route), item.route.id]));
-  for (const item of actual) {
-    expect(item.reverseId).toBe(byPhysicalWalk.get(physicalWalk(item.route, true)));
-    const opposite = actual.find(other => other.variantId === item.variantId && other.route.start === item.route.start
-      && other.direction !== item.direction);
-    expect(item.oppositeId).toBe(opposite?.route.id);
-  }
-  const describe = (item: { route: { start: number; edges: number[] }; direction: number; preferred: boolean; preferredVariant: boolean; preferredStart: boolean }) =>
-    `${item.route.start}:${item.route.edges.join(',')}:${item.direction}:${item.preferred}:${item.preferredVariant}:${item.preferredStart}`;
-  const actualGroups = [...families(actual)].map(group => actual.filter(item => item.groupId === group).map(describe).sort());
-  expect(actualGroups.sort()).toEqual(expected.map(group => group.witnesses.map(describe).sort()).sort());
+  expect(families(actual).size).toBe(actual.length);
+  expect(actual.map(item => key(item.route)).sort()).toEqual(expected.map(group => key(group.route)).sort());
+  for (const item of actual) expect(Object.keys(item).sort()).toEqual(['groupId', 'route']);
   return actual;
 }
 
-it('keeps private disk candidates exact across consecutive sections without publishing the scratch table', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'alpine-candidate-pool-'));
-  const file = join(directory, 'results.sqlite'), store = createRouteStore(file, true);
-  try {
-    const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
-      [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
-    store.begin();
-    const grouped = await compareOutputs(graph, { ...query, distance: [7000, 7000], repetition: 0 }, false, store.candidatePool, true);
-    expect(families(grouped).size).toBe(1);
-    store.commit();
-    // Numeric trail/start IDs overlap, but the next section has different facts.
-    const directed = fixture([[0, 1, 900, { backDistance: 100 }], [1, 2, 200],
-      [2, 3, 100], [3, 1, 200]], [0, 1, 2]);
-    store.begin();
-    const next = await compareOutputs(directed, { ...query, distance: [1500, 1500], repetition: 100 / 1500 }, false, store.candidatePool, true);
-    expect(next).toHaveLength(2);
-    expect(store.counts).toEqual({ groupCount: 0, routeCount: 0 });
-    store.commit(); store.close();
-    const saved = new DatabaseSync(file, { readOnly: true });
-    try { expect(saved.prepare("SELECT name FROM sqlite_master WHERE name = 'candidates'").all()).toEqual([]); }
-    finally { saved.close(); }
-  } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
+it('streams only displayed walks, awaits storage, and keeps consecutive sections independent', async () => {
+  const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
+    [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
+  const criteria = { ...query, distance: [7000, 7000] as SearchQuery['distance'], repetition: 0 };
+  const expected = await compareOutputs(graph, criteria), saved: typeof expected = [];
+  expect(await solveSection(graph, criteria, { onRoute: async route => {
+    await new Promise<void>(resolve => setTimeout(resolve, 1)); saved.push(route);
+  } })).toEqual([]);
+  expect(saved).toEqual(expected);
+  const directed = fixture([[0, 1, 900, { backDistance: 100 }], [1, 2, 200], [2, 3, 100], [3, 1, 200]], [0, 1, 2]);
+  expect(await compareOutputs(directed, { ...query, distance: [1500, 1500], repetition: 100 / 1500 })).toHaveLength(1);
 });
 
 it('combines the same circuit across approaches and starts, preferring explicit start metadata', async () => {
@@ -91,32 +63,28 @@ it('combines the same circuit across approaches and starts, preferring explicit 
   graph.starts[3]!.access = 'unknown';
   const routes = await compareOutputs(graph, { ...query, distance: [9000, 15_000], repetition: 0.2 });
   expect(families(routes).size).toBe(1);
-  expect(routes).toHaveLength(8);
-  expect(routes.filter(route => route.preferred).map(route => route.route.start)).toEqual([2]);
-  expect(new Set(routes.map(route => `${route.route.start}:${route.direction}`)).size).toBe(8);
-  expect(routes.every(route => route.reverseId)).toBe(true);
+  expect(routes).toHaveLength(1);
+  expect(routes.map(route => route.route.start)).toEqual([2]);
 });
 
-it('groups longer path differences while keeping every exact circuit as a version', async () => {
+it('groups longer path differences and saves only the displayed representative', async () => {
   const graph = fixture([[0, 1, 9500], [1, 0, 100], [1, 0, 200], [1, 2, 700], [2, 0, 700]]);
   const routes = await compareOutputs(graph, { ...query, distance: [9000, 12_000], repetition: 0 });
   expect(families(routes).size).toBe(1);
-  expect(routes).toHaveLength(6);
-  expect(routes.filter(route => route.preferred)).toHaveLength(1);
-  expect(routes.filter(route => route.preferredVariant)).toHaveLength(3);
+  expect(routes).toHaveLength(1);
 });
 
 it('finds a minor shortcut or longer trail variation when it alone satisfies strict minimums or maximums', async () => {
   const graph = fixture([[0, 1, 9500, { gain: 9, backGain: 9 }],
     [1, 0, 500, { gain: 1, backGain: 1 }], [1, 0, 400, { gain: 2, backGain: 2 }]]);
   const shortcut = await compareOutputs(graph, { ...query, distance: [9900, 9900], repetition: 0 });
-  expect(shortcut).toHaveLength(2);
+  expect(shortcut).toHaveLength(1);
   expect(shortcut.every(route => route.route.distance === 9900)).toBe(true);
   const longer = await compareOutputs(graph, { ...query, distance: [10_000, 10_000], repetition: 0 });
-  expect(longer).toHaveLength(2);
+  expect(longer).toHaveLength(1);
   expect(longer.every(route => route.route.distance === 10_000)).toBe(true);
   const climb = await compareOutputs(graph, { ...query, distance: [0, 11_000], gain: [11, 11], repetition: 0 });
-  expect(climb).toHaveLength(2);
+  expect(climb).toHaveLength(1);
   expect(climb.every(route => route.route.gain === 11)).toBe(true);
 });
 
@@ -127,7 +95,7 @@ it('rejects road mileage and climb padding before minimum qualification', async 
   expect(await compareOutputs(graph, { ...query, distance: [0, 1200], gain: [20, 40], repetition: 0 })).toEqual([]);
   graph.edges.filter(edge => edge.trail === 2).forEach(edge => { edge.gain = 100; });
   const necessary = await compareOutputs(graph, { ...query, distance: [0, 1200], gain: [20, 40], repetition: 0 });
-  expect(necessary).toHaveLength(2); // The shorter road violates another upper limit.
+  expect(necessary).toHaveLength(1); // The shorter road violates another upper limit.
   expect(necessary.every(route => route.route.roadDistance === 100)).toBe(true);
 });
 
@@ -135,12 +103,12 @@ it('preserves equal-road metric witnesses and does not let uncertain shortcuts s
   const tied = fixture([[0, 1, 1000], [1, 0, 100, { connector: true }],
     [1, 0, 100, { connector: true, gain: 20, backGain: 20 }]]);
   const routes = await compareOutputs(tied, { ...query, gain: [20, 20], repetition: 0 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(route => route.route.gain === 20)).toBe(true);
   const unknown = fixture([[0, 1, 1000], [1, 0, 50, { connector: true, unknown: true }],
     [1, 0, 100, { connector: true }]]);
   const known = await compareOutputs(unknown, { ...query, distance: [1075, 1100], repetition: 0 });
-  expect(known).toHaveLength(2);
+  expect(known).toHaveLength(1);
   expect(known.every(route => !route.route.uncertain && route.route.roadDistance === 100)).toBe(true);
 });
 
@@ -149,7 +117,7 @@ it('prefers a qualifying known approach before less road walking on an uncertain
     [0, 1, 200, { connector: true }], [1, 2, 1000], [2, 1, 1000]]);
   const routes = await compareOutputs(graph, { ...query, distance: [0, 3000], repetition: 0.2,
     roads: { distance: 1000, fraction: 0.5 } });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => !item.route.uncertain && item.route.roadDistance === 400
     && item.route.distance === 2400)).toBe(true);
 });
@@ -162,33 +130,31 @@ it('keeps road-minimum certificates separate for known and uncertain starts at t
   const routes = await compareOutputs(graph, { ...query, distance: [1075, 1100], repetition: 0 });
   // The below-minimum unknown shortcut cannot suppress a certain hike, but
   // it is equally uncertain from the second entrance and prevents padding.
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.start === 0 && !item.route.uncertain
     && item.route.roadDistance === 100)).toBe(true);
 });
 
-it('does not link reverse directions represented by different minor witnesses', async () => {
+it('chooses one qualifying direction when minor witnesses differ', async () => {
   const graph = fixture([[0, 1, 9000], [1, 0, 100, { connector: true, gain: 10 }],
     [1, 0, 100, { connector: true, backGain: 10 }]]);
   const routes = await compareOutputs(graph, { ...query, gain: [10, 10], repetition: 0 });
   expect(families(routes).size).toBe(1);
-  expect(new Set(routes.map(route => route.direction))).toEqual(new Set([0, 1]));
-  expect(new Set(routes.map(route => route.variantId)).size).toBe(2);
-  expect(routes.every(route => !route.reverseId && !route.oppositeId)).toBe(true);
+  expect(routes).toHaveLength(1);
 });
 
-it('keeps all similar combinations and assigns identical IDs despite graph storage order', async () => {
+it('collapses similar combinations and assigns identical IDs despite graph storage order', async () => {
   const graph = fixture([[0, 1, 1500], [1, 2, 500], [1, 2, 500], [2, 3, 1500],
     [3, 4, 500], [3, 4, 500], [4, 0, 3000]], [0, 2]);
   const criteria = { ...query, distance: [7000, 7000] as SearchQuery['distance'], repetition: 0 };
   const routes = await compareOutputs(graph, criteria);
   // All four exact circuits belong together, regardless of their combined footprint.
   expect(families(routes).size).toBe(1);
-  expect(routes.filter(item => item.preferredVariant)).toHaveLength(4);
+  expect(routes).toHaveLength(families(routes).size);
   graph.edges.reverse(); graph.starts.reverse();
   const reordered = await compareOutputs(graph, criteria);
-  expect(reordered.map(route => [route.route.id, route.groupId, route.variantId, route.direction, route.preferred]).sort())
-    .toEqual(routes.map(route => [route.route.id, route.groupId, route.variantId, route.direction, route.preferred]).sort());
+  expect(reordered.map(route => [route.route.id, route.groupId]).sort())
+    .toEqual(routes.map(route => [route.route.id, route.groupId]).sort());
 });
 
 it('preserves cyclic common-trail order even when footprints match', async () => {
@@ -204,24 +170,19 @@ it('keeps displayed hikes distinct even when hidden versions differ', async () =
   const routes = await compareOutputs(graph, { ...query, distance: [10_000, 10_000], repetition: 0 });
   // Neighbors share 75%; opposite combinations share only 50%.
   expect(families(routes).size).toBe(2);
-  expect(routes.filter(item => item.preferredVariant)).toHaveLength(4);
+  expect(routes).toHaveLength(families(routes).size);
   const trails = (item: (typeof routes)[number]) => new Set(item.route.edges.map(id => graph.edges[id]!.trail));
   const share = (a: (typeof routes)[number], b: (typeof routes)[number]) => [...trails(a)].filter(trail => trails(b).has(trail))
     .reduce((length, trail) => length + graph.edges.find(edge => edge.trail === trail)!.distance, 0) / 10_000;
-  const shown = routes.filter(item => item.preferred);
+  const shown = routes;
   expect(share(shown[0]!, shown[1]!)).toBe(0.5);
-  for (const representative of shown) for (const version of routes.filter(item => item.groupId === representative.groupId)) {
-    expect(share(representative, version)).toBeGreaterThanOrEqual(0.6);
-  }
-  const sizes = [...families(routes)].map(group => new Set(routes.filter(item => item.groupId === group).map(item => item.variantId)).size);
-  expect(sizes.sort()).toEqual([1, 3]);
 });
 
 it('includes roads in main-loop similarity and accepts the exact 60% boundary', async () => {
   const road = fixture([[0, 1, 7000, { connector: true }], [1, 0, 3000], [1, 0, 3000]]);
   const routes = await compareOutputs(road, { ...query, distance: [10_000, 10_000], repetition: 0 });
   expect(families(routes).size).toBe(1);
-  expect(routes.filter(item => item.preferredVariant)).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   const boundary = fixture([[0, 1, 6000], [1, 0, 4000], [1, 0, 4000]]);
   expect(families(await compareOutputs(boundary, { ...query, distance: [10_000, 10_000], repetition: 0 })).size).toBe(1);
 });
@@ -230,21 +191,21 @@ it('does not group unrelated circuits because they share a long approach', async
   const graph = fixture([[0, 1, 6000], [1, 2, 1000], [2, 3, 1000], [3, 1, 1000],
     [1, 4, 1000], [4, 5, 1000], [5, 1, 1000]]);
   const routes = await compareOutputs(graph, { ...query, distance: [15_000, 15_000], repetition: 0.4 });
-  expect(routes).toHaveLength(4);
+  expect(routes).toHaveLength(2);
   expect(families(routes).size).toBe(2);
 });
 
-it('keeps both road-circuit directions reached through a trail approach', async () => {
+it('keeps a preferred road-circuit direction reached through a trail approach', async () => {
   const graph = fixture([[0, 1, 100], [1, 2, 1000, { connector: true }], [2, 3, 1000, { connector: true }], [3, 1, 1000, { connector: true }]]);
   const routes = await compareOutputs(graph, query);
-  expect(routes).toHaveLength(2);
-  expect(routes.every(route => route.reverseId && route.route.kind === 'lollipop')).toBe(true);
+  expect(routes).toHaveLength(1);
+  expect(routes.every(route => route.route.kind === 'lollipop')).toBe(true);
 });
 
 it('keeps asymmetric long outward approaches under tight repetition and strict decimal limits', async () => {
   const graph = fixture([[0, 1, 900, { backDistance: 100 }], [1, 2, 200], [2, 3, 100], [3, 1, 200]], [0, 1, 2]);
   const routes = await compareOutputs(graph, { ...query, distance: [1500, 1500], repetition: 100 / 1500 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.start === 0 && item.route.repetition === 100 / 1500)).toBe(true);
   const decimal = fixture([[0, 1, 0.9000000000000001, { backDistance: 0.10000000000000002, gain: 0.1, backGain: 0.2 }],
     [1, 2, 0.1, { gain: 0.1, backGain: 0.1 }], [2, 3, 0.2, { gain: 0.2, backGain: 0.2 }],
@@ -256,12 +217,12 @@ it('keeps asymmetric long outward approaches under tight repetition and strict d
     repetition: decimal.edges[1]!.distance / distance })).length).toBeGreaterThan(0);
 });
 
-it('finds every start and direction when only a longer trail approach supplies both minimums', async () => {
+it('finds a qualifying start when only a longer trail approach supplies both minimums', async () => {
   const graph = fixture([[0, 1, 100, { gain: 5, backGain: 5 }], [0, 2, 80, { gain: 20, backGain: 20 }],
     [2, 1, 80, { gain: 20, backGain: 20 }], [1, 3, 300], [3, 4, 300], [4, 1, 300]], [0, 1, 3, 4]);
   graph.starts[0]!.kind = 'road-contact';
   const routes = await compareOutputs(graph, { ...query, distance: [1210, 1230], gain: [70, 90], repetition: 0.2 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.start === 0 && item.route.distance === 1220 && item.route.gain === 80)).toBe(true);
 });
 
@@ -271,7 +232,7 @@ it('discovers a sensible intermediate approach when distance and climb extremes 
     [2, 3, 2000, { gain: 100, backGain: 100 }], [3, 1, 2000, { gain: 100, backGain: 100 }]]);
   const routes = await compareOutputs(graph, { ...query, distance: [8800, 9200], gain: [650, 750], repetition: 0.2,
     roads: { distance: 0, fraction: 0 } });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.distance === 9000 && item.route.gain === 700)).toBe(true);
 });
 
@@ -279,7 +240,7 @@ it('checks both access directions of an approach while retaining qualifying circ
   const graph = fixture([[0, 1, 100], [1, 2, 300], [2, 3, 300], [3, 1, 300]], [0, 1]);
   graph.edges[1]!.access = 'unknown';
   const routes = await compareOutputs(graph, { ...query, includeUnknown: false, repetition: 0.2 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.start === 1 && item.route.kind === 'loop' && !item.route.uncertain)).toBe(true);
 });
 
@@ -290,7 +251,7 @@ it('rejects a padded road approach using a below-minimum substitute with the sam
   expect(await compareOutputs(graph, criteria)).toHaveLength(0);
   graph.edges.filter(edge => edge.trail === 0).forEach(edge => { edge.access = 'unknown'; });
   const known = await compareOutputs(graph, criteria);
-  expect(known).toHaveLength(2);
+  expect(known).toHaveLength(1);
   expect(known.every(item => !item.route.uncertain && item.route.roadDistance === 240)).toBe(true);
 });
 
@@ -298,7 +259,7 @@ it('retains a longer road approach when a shorter asymmetric substitute violates
   const graph = fixture([[0, 1, 100, { connector: true, backDistance: 300 }],
     [0, 1, 400, { connector: true, backDistance: 100 }], [1, 2, 400], [2, 3, 300], [3, 1, 300]]);
   const routes = await compareOutputs(graph, { ...query, distance: [1500, 1500], repetition: 0.2 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.roadDistance === 500 && item.route.repetition === 100 / 1500)).toBe(true);
 });
 
@@ -310,18 +271,15 @@ it('does not use a shorter road substitute that intersects another part of the m
   expect(routes.some(item => item.route.roadDistance === 400 && item.route.kind === 'lollipop')).toBe(true);
 });
 
-it('keeps directions within each circuit when similar circuits use different short branches', async () => {
+it('chooses a qualifying direction when similar circuits use different short branches', async () => {
   const graph = fixture([[0, 1, 100, { gain: 10 }], [0, 1, 200, { backGain: 10 }], [1, 2, 4500], [2, 0, 4500]], [0, 1, 2]);
   graph.starts[0]!.kind = 'road-contact';
   graph.starts[1]!.kind = 'parking';
   graph.starts[2]!.access = 'unknown';
   const routes = await compareOutputs(graph, { ...query, distance: [9100, 9200], gain: [10, 10], repetition: 0 });
   expect(families(routes).size).toBe(1);
-  expect(routes).toHaveLength(6);
-  expect(new Set(routes.map(item => `${item.route.start}:${item.direction}`)).size).toBe(6);
-  expect(routes.find(item => item.preferred)!.route.start).toBe(2);
-  expect(new Set(routes.map(item => item.variantId)).size).toBe(2);
-  expect(routes.every(item => !item.oppositeId && !item.reverseId)).toBe(true);
+  expect(routes).toHaveLength(1);
+  expect(routes[0]!.route.start).toBe(2);
 });
 
 it('retains a road-only main circuit when an asymmetric trail stem satisfies the road and repetition limits', async () => {
@@ -329,7 +287,7 @@ it('retains a road-only main circuit when an asymmetric trail stem satisfies the
     [2, 3, 30, { connector: true }], [3, 1, 40, { connector: true }]]);
   const routes = await compareOutputs(graph, { ...query, distance: [1101, 1101], repetition: 0.2,
     roads: { distance: 100, fraction: 0.1 } });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.roadDistance === 100 && item.route.repetition === 1 / 1101)).toBe(true);
 });
 
@@ -337,7 +295,7 @@ it('keeps a different trail approach after a better-looking road witness is elim
   const graph = fixture([[0, 1, 10, { connector: true }], [0, 1, 5, { connector: true }],
     [0, 2, 20, { connector: true }], [2, 1, 10], [1, 3, 300], [3, 4, 300], [4, 1, 300]]);
   const routes = await compareOutputs(graph, { ...query, distance: [919, 1000], repetition: 0.2 });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.distance === 960 && item.route.roadDistance === 40)).toBe(true);
 });
 
@@ -346,7 +304,7 @@ it('keeps preferred approaches when a finite asymmetric edge makes ratio bounds 
     [10, 11, 1, { backDistance: Number.MIN_VALUE }]]);
   const routes = await compareOutputs(graph, { ...query, distance: [500, 501], repetition: 0.2,
     roads: { distance: 0, fraction: 0 } });
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.edges.length === 7)).toBe(true);
 });
 
@@ -361,14 +319,13 @@ it('preserves actual gain order when the climb limit disables integer bounds', a
   expect(routes[0]!.route.edges).toEqual(edges);
 });
 
-it('retains every qualifying circuit when tied road mileage moves a road from approach into the core', async () => {
+it('groups qualified circuits when tied road mileage moves a road from approach into the core', async () => {
   const graph = fixture([[0, 1, 100], [3, 4, 1000], [4, 3, 100, { connector: true }],
     [1, 3, 5, { connector: true }], [4, 1, 105, { connector: true }]]);
   const routes = await compareOutputs(graph, { ...query, distance: [1310, 1310] });
-  expect(routes).toHaveLength(4);
-  expect(routes.filter(item => item.preferredVariant)).toHaveLength(2);
+  expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.roadDistance === 110)).toBe(true);
-  expect(new Set(routes.map(item => item.route.repetition))).toEqual(new Set([100 / 1310, 105 / 1310]));
+  expect(routes[0]!.route.repetition).toBe(100 / 1310);
 });
 
 it('extends the normal candidate pool when searching deeper and regroups the expanded discoveries deterministically', async () => {
@@ -411,4 +368,10 @@ it('retains independently qualified witnesses on weighted directed tiny graphs',
         .toEqual([reference!.distance, reference!.gain, reference!.roadDistance, reference!.repetition]);
     }
   }
+});
+
+it('scheduling leaves displayed route choices and stable family IDs unchanged', async () => {
+  const graph = fixture([[0, 1, 2500], [0, 1, 2500], [1, 2, 2500], [1, 2, 2500], [2, 0, 5000]], [0, 1, 2]);
+  const criteria: SearchQuery = { ...query, distance: [10_000, 10_000], repetition: 0, effort: 'deep' };
+  expect(await solveSection(graph, criteria, { budget: createWorkBudget() })).toEqual(await solveSection(graph, criteria));
 });

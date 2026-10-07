@@ -122,7 +122,7 @@ export function normalized(graph: TrailGraph, query: SearchQuery): OracleRoute[]
       && (!uncertain(other) || uncertain(route))));
 }
 
-export type OracleFamily = { seed: number[]; witnesses: { route: OracleRoute; direction: 0 | 1; preferred: boolean; preferredVariant: boolean; preferredStart: boolean }[] };
+export type OracleFamily = { seed: number[]; route: OracleRoute };
 
 /** Exhaustive output reference. Select each circuit's route first, then assign
  * it to the most similar fixed displayed route. No production grouping helpers. */
@@ -175,31 +175,13 @@ export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily
   const preference = (a: { route: OracleRoute }, b: { route: OracleRoute }) => rank[graph.starts[a.route.start]!.kind] - rank[graph.starts[b.route.start]!.kind]
     || quality(a.route, b.route) || graph.starts[a.route.start]!.id.localeCompare(graph.starts[b.route.start]!.id);
   const versions = circuits.map(member => {
-    const anchor = member.key[0]!, first = member.edges.findIndex(edge => edge.trail === anchor);
-    const order = [...member.edges.slice(first), ...member.edges.slice(0, first)].map(edge => edge.trail);
-    const reversed = member.edges.length < 3 ? member.edges[first]!.reverse : compare(order, member.key) !== 0;
-    const reference = member.edges[first]!;
-    const forward = reversed ? !reference.reverse : reference.reverse;
-    const eligible = paths.filter(route => !compare(core(route).key, member.key)).map(route => ({ route,
-      direction: (core(route).edges.find(edge => edge.trail === anchor)!.reverse === forward ? 0 : 1) as 0 | 1,
-      preferred: false, preferredVariant: false, preferredStart: false }));
-    const choices = eligible.filter((item, at) => !eligible.some((other, before) => other.route.start === item.route.start
-      && other.direction === item.direction && (quality(other.route, item.route) < 0 || (quality(other.route, item.route) === 0 && before < at))));
+    const choices = paths.filter(route => !compare(core(route).key, member.key)).map(route => ({ route }));
     choices.sort(preference);
-    choices[0]!.preferredVariant = true;
-    for (const item of choices) item.preferredStart = choices.find(other => other.route.start === item.route.start) === item;
-    return { member, choices };
-  }).sort((a, b) => preference(a.choices[0]!, b.choices[0]!) || compare(a.member.key, b.member.key));
-  const groups: { representative: Member; witnesses: OracleFamily['witnesses'] }[] = [];
+    return { member, route: choices[0]!.route };
+  }).sort((a, b) => preference(a, b) || compare(a.member.key, b.member.key));
+  const groups: { representative: Member; route: OracleRoute }[] = [];
   for (const version of versions) {
-    const matches = groups.map((group, index) => ({ group, index, score: similarity(version.member, group.representative) }))
-      .filter(match => match.score >= 0.6).sort((a, b) => b.score - a.score || a.index - b.index);
-    const group = matches[0]?.group;
-    if (group) group.witnesses.push(...version.choices);
-    else {
-      version.choices[0]!.preferred = true;
-      groups.push({ representative: version.member, witnesses: version.choices });
-    }
+    if (!groups.some(group => similarity(version.member, group.representative) >= 0.6)) groups.push({ representative: version.member, route: version.route });
   }
-  return groups.map(group => ({ seed: group.representative.key, witnesses: group.witnesses }));
+  return groups.map(group => ({ seed: group.representative.key, route: group.route }));
 }
