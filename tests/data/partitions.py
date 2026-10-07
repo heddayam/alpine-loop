@@ -132,6 +132,52 @@ class Partitions(unittest.TestCase):
         self.assertEqual(len(audit["frontiers"]), 2)
         self.assertEqual(audit["counts"]["duplicateSegments"], 1)
 
+    def test_decimal_highway_source_segments_stay_blocked_after_footprint_clipping(self):
+        # Real US12 and US2 segments whose clipped coordinates round off the
+        # selected divider. Checking the clipped geometry alone admits them.
+        cases = [
+            ((-120.7198569, 46.7337251), (-120.7134153, 46.7319414),
+             box(-120.73, 46.72, -120.714, 46.75)),
+            ((-121.8766805, 47.8533647), (-121.8845884, 47.8547243),
+             box(-121.884, 47.85, -121.88, 47.86)),
+        ]
+        a, b, _ = cases[0]
+        outer = box(-120.73, 46.72, -120.70, 46.75)
+        hole = box(-120.718, 46.73, -120.716, 46.74)
+        cases.extend([
+            (a, b, Polygon(outer.exterior.coords, [hole.exterior.coords])),
+            (a, b, MultiPolygon([box(-120.73, 46.72, -120.718, 46.75),
+                                 box(-120.716, 46.72, -120.714, 46.75)])),
+        ])
+        for a, b, geometry in cases:
+            for left, right in ((a, b), (b, a)):
+                with self.subTest(a=left, b=right, geometry=geometry.geom_type):
+                    footprint = Footprint(geometry, [LineString([a, b])])
+                    self.assertTrue(Footprint(geometry).intervals(left, right), "The fixture really contains highway geometry")
+                    self.assertEqual(footprint.intervals(left, right), [])
+                    ways = {"highway": {"id": "highway", "nodes": ["1", "2"],
+                                        "tags": {"highway": "primary", "foot": "yes"}}}
+                    corridors, _, _, _ = topology(ways, [], {}, {"1": left, "2": right}, footprint)
+                    self.assertEqual(corridors, [], "No selected highway becomes a walkable corridor after clipping")
+
+    def test_partial_highway_overlap_excludes_only_the_overlap_and_keeps_tangent_contacts(self):
+        divider = LineString([(2, 0), (4, 0), (4, 1)])
+        self.assertEqual(Footprint(box(0, -2, 10, 2), [divider]).intervals((0, 0), (10, 0)),
+                         [(0, .2), (.4, 1)])
+        geometry = Polygon(box(0, -2, 10, 2).exterior.coords,
+                           [box(6, -1, 8, 1).exterior.coords])
+        footprint = Footprint(geometry, [divider])
+        self.assertEqual(footprint.intervals((0, 0), (10, 0)), [(0, .2), (.4, .6), (.8, 1)],
+                         "A partial selected-highway overlap must not block valid source portions or bridge a hole")
+        self.assertEqual(footprint.intervals((10, 0), (0, 0)), [(0, .2), (.4, .6), (.8, 1)])
+        divider = LineString([(0, 0), (4, 4), (8, 0)])
+        side = Footprint(Polygon([(0, 0), (4, 4), (8, 0), (8, 6), (0, 6)]), [divider])
+        self.assertEqual(side.intervals((2, 4), (6, 4)), [(0, 1)],
+                         "Touching a highway bend within the same section cannot invent a split")
+        nearby = Footprint(box(0, -1, 10, 1), [LineString([(0, 0), (10, 0)])])
+        self.assertEqual(nearby.intervals((0, 1e-10), (10, 1e-10)), [(0, 1)],
+                         "Exact divider exclusion cannot buffer away a nearby walking path")
+
 
 if __name__ == "__main__":
     unittest.main()
