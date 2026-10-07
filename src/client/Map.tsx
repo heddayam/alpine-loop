@@ -331,6 +331,7 @@ export function HikeMap({
         if (!entry) {
           const button = document.createElement("button");
           button.type = "button";
+          button.className = "hike-marker";
           entry = {
             marker: new Marker({ element: button }),
             routes: cluster.routes,
@@ -362,7 +363,8 @@ export function HikeMap({
         entry.marker.setLngLat(cluster.position);
         const button = entry.marker.getElement();
         const multiple = cluster.routes.length > 1;
-        button.className = `hike-marker${multiple ? " hike-cluster" : ""}`;
+        // MapLibre owns the positioning and anchor classes on this element.
+        button.classList.toggle("hike-cluster", multiple);
         button.textContent = multiple ? cluster.routes.length.toLocaleString() : "";
         button.title = multiple ? `${cluster.routes.length} hikes · browse` : cluster.routes[0]!.startName || "Unnamed start";
         button.setAttribute("aria-label", button.title);
