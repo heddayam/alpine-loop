@@ -108,8 +108,8 @@ export function HikeMap({
         fitBoundsOptions: { padding: camera.padding ?? 40 },
         maxZoom: 19,
         // Bound inactive tiles per source; visible tiles remain available at every zoom.
-        maxTileCacheSize: 64,
-        maxTileCacheZoomLevels: 2,
+        maxTileCacheSize: 16,
+        maxTileCacheZoomLevels: 1,
         dragRotate: false,
         touchPitch: false,
         renderWorldCopies: false,
