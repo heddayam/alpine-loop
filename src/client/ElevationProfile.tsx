@@ -38,6 +38,17 @@ function finitePosition(position: Position): Position {
     : [position[0], position[1]];
 }
 
+function sampleIndex(samples: ProfileSample[], distance: number): number {
+  let low = 0;
+  let high = samples.length - 1;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (samples[middle]!.distance < distance) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 /** Repeated trail segments remain separate positions along the ordered walk. */
 export function elevationPosition(
   samples: ProfileSample[],
@@ -47,16 +58,10 @@ export function elevationPosition(
   if (distance <= 0) return finitePosition(samples[0]!.position);
   if (distance >= samples.at(-1)!.distance)
     return finitePosition(samples.at(-1)!.position);
-  let low = 0;
-  let high = samples.length - 1;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (samples[middle]!.distance < distance) low = middle + 1;
-    else high = middle;
-  }
-  const after = samples[low]!;
+  const index = sampleIndex(samples, distance);
+  const after = samples[index]!;
   if (after.distance === distance) return finitePosition(after.position);
-  const before = samples[low - 1]!;
+  const before = samples[index - 1]!;
   const fraction =
     (distance - before.distance) / (after.distance - before.distance);
   const a = before.position;
@@ -70,6 +75,29 @@ export function elevationPosition(
     position.push(a[2]! + (b[2]! - a[2]!) * fraction);
   }
   return position;
+}
+
+/** Signed rise/run over a 100 m window, clipped at the walk's endpoints. */
+export function elevationGrade(
+  samples: ProfileSample[],
+  distance: number,
+): number | null {
+  const total = samples.at(-1)?.distance ?? 0;
+  if (!total || !Number.isFinite(distance)) return null;
+  const center = Math.max(0, Math.min(total, distance));
+  const start = Math.max(0, center - 50);
+  const end = Math.min(total, center + 50);
+  const a = elevationPosition(samples, start)?.[2];
+  const b = elevationPosition(samples, end)?.[2];
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  for (
+    let i = sampleIndex(samples, start);
+    i < samples.length && samples[i]!.distance < end;
+    i++
+  ) {
+    if (!Number.isFinite(samples[i]!.position[2])) return null;
+  }
+  return ((b! - a!) / (end - start)) * 100;
 }
 
 function tickStep(range: number) {
@@ -149,10 +177,12 @@ export function ElevationProfile({
     Math.round(elevation).toLocaleString("en-US");
   const position = cursor === null ? null : elevationPosition(samples, cursor);
   const elevation = position?.[2];
+  const grade = cursor === null ? null : elevationGrade(samples, cursor);
+  const roundedGrade = grade === null ? null : Math.round(grade * 10) / 10;
   const readout =
     cursor === null
       ? `${miles(total)} mi`
-      : `${miles(cursor)} mi${Number.isFinite(elevation) ? ` · ${feet(elevation! / FOOT)} ft` : ""}`;
+      : `${miles(cursor)} mi${Number.isFinite(elevation) ? ` · ${feet(elevation! / FOOT)} ft` : ""}${roundedGrade === null ? "" : ` · ${roundedGrade > 0 ? "+" : ""}${roundedGrade.toFixed(1)}% grade`}`;
   const move = (distance: number | null) => {
     const next =
       distance === null ? null : Math.max(0, Math.min(total, distance));

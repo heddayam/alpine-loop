@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { HikeRoute, Position } from "../../src/model.js";
 import {
   ElevationProfile,
+  elevationGrade,
   elevationPosition,
   elevationSamples,
 } from "../../src/client/ElevationProfile.js";
@@ -133,5 +134,43 @@ describe("distance-indexed saved elevation geometry", () => {
     expect(elevationPosition(samples, samples.at(-1)!.distance / 2)).toEqual([
       -180, 0, 150,
     ]);
+  });
+
+  it("reports signed rise over horizontal run, including short routes and one-sided endpoints", () => {
+    for (const length of [40, 200]) {
+      const geometry = [
+        point(0, 100),
+        point(length / DEGREE, 100 + length / 10),
+      ];
+      const samples = elevationSamples(geometry);
+      const reversed = elevationSamples([...geometry].reverse());
+      for (const distance of [0, length / 2, length]) {
+        expect(elevationGrade(samples, distance)).toBeCloseTo(10, 8);
+        expect(elevationGrade(reversed, length - distance)).toBeCloseTo(-10, 8);
+      }
+    }
+    expect(
+      elevationGrade(elevationSamples([point(0, 10), point(1, 10)]), 100),
+    ).toBe(0);
+    expect(
+      elevationGrade(elevationSamples([point(0, 10), point(0, 20)]), 0),
+    ).toBeNull();
+    expect(elevationGrade([], 0)).toBeNull();
+  });
+
+  it("averages a local stretch and refuses to bridge missing elevation inside it", () => {
+    const geometry = [
+      point(0, 100),
+      point(50 / DEGREE, 105),
+      point(100 / DEGREE, 125),
+      point(150 / DEGREE, 115),
+      point(200 / DEGREE, 120),
+    ];
+    expect(elevationGrade(elevationSamples(geometry), 100)).toBeCloseTo(10, 8);
+    geometry[2] = point(100 / DEGREE);
+    const samples = elevationSamples(geometry);
+    expect(elevationGrade(samples, 100)).toBeNull();
+    expect(elevationGrade(samples, 75)).toBeNull();
+    expect(elevationGrade(samples, 0)).toBeCloseTo(10, 8);
   });
 });
